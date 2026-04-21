@@ -21,6 +21,10 @@ void Log::Init(const std::string &local)
 
 void Log::Stop()
 {
+    if (run_)
+    {
+        log_semaphore_.release();
+    }
     run_ = false;
 }
 
