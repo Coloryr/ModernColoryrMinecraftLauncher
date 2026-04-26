@@ -1,4 +1,12 @@
-use crate::objs::{enums::update_type::UpdateType, file_item_obj::FileItemObj};
+use crate::net::downloader::download_item::DownloadItem;
+
+pub enum UpdateType {
+    /// 添加下载项目
+    /// 添加了多少个任务
+    AddItem(i32),
+    /// 下载项目完成
+    ItemDone
+}
 
 pub trait DownloadGuiHandel: Send + Sync {
     /// 下载器更新
@@ -14,5 +22,5 @@ pub trait DownloadGuiHandel: Send + Sync {
     /// 下载项目状态更新
     /// thread 下载线程
     /// file 下载项目 
-    fn update_item(&self, thread: i32, file: &FileItemObj);
+    fn update_item(&self, thread: i32, file: &DownloadItem);
 }

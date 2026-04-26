@@ -13,11 +13,11 @@ pub enum DownloadItemState {
     Error,    // 错误
 }
 
-pub trait FileItemLater: Send + Sync {
+pub trait DownloadLater: Send + Sync {
     fn run(&self, reader: &mut dyn AsyncRead);
 }
 
-pub struct FileItemObj {
+pub struct DownloadItem {
     /// 文件名
     pub name: String,
     /// 下载地址
@@ -41,12 +41,12 @@ pub struct FileItemObj {
     /// 校验
     pub sha256: Option<String>,
     /// 下载完成后调用
-    pub later: Option<Box<dyn FileItemLater>>,
+    pub later: Option<Box<dyn DownloadLater>>,
 }
 
-impl FileItemObj {
+impl DownloadItem {
     pub fn new(name: String, url: String, local: String) -> Self {
-        FileItemObj {
+        DownloadItem {
             name,
             url,
             local,
@@ -62,7 +62,7 @@ impl FileItemObj {
         }
     }
 
-    pub fn with_later(mut self, later: impl FileItemLater + 'static) -> Self {
+    pub fn with_later(mut self, later: impl DownloadLater + 'static) -> Self {
         self.later = Some(Box::new(later));
         self
     }

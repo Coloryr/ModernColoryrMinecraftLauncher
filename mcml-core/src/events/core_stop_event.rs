@@ -1,4 +1,4 @@
-pub mod core_event {
+pub mod core_stop_event {
     use std::sync::RwLock;
 
     type StopHandler = Box<dyn Fn() + Send + Sync + 'static>;
@@ -17,8 +17,4 @@ pub mod core_event {
             handler();
         }
     }
-
-    // pub fn clear_stop_handlers() {
-    //     STOP_HANDLERS.write().clear();
-    // }
 }
