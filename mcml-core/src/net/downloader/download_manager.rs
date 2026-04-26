@@ -2,8 +2,11 @@ pub mod download_manager {
     use crossbeam_queue::SegQueue;
 
     use crate::{
-        core_event::core_event,
-        net::downloader::{download_item::DownloadItem, download_task::DownloadTask, download_thread::DownloadThread},
+        events::core_stop_event::core_stop_event,
+        net::downloader::{
+            download_item::DownloadItem, download_task::DownloadTask,
+            download_thread::DownloadThread,
+        },
     };
 
     static DOWNLOAD_LIST: SegQueue<DownloadItem> = SegQueue::new();
@@ -13,7 +16,7 @@ pub mod download_manager {
     static STOP: bool = false;
 
     pub fn init() {
-        core_event::add_stop_handler(stop);
+        core_stop_event::add_stop_handler(stop);
     }
 
     fn stop() {
@@ -26,7 +29,7 @@ pub mod download_manager {
         for item in TASKS.iter().clone() {
             item.cancel();
         }
-        for item in THREADS.iter_mut() {
+        for item in THREADS.iter() {
             item.download_stop();
         }
     }
