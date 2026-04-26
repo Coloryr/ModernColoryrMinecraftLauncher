@@ -1,9 +1,9 @@
 pub mod config {
     use std::sync::OnceLock;
 
-    use crate::config::config_obj::Config;
+    use crate::config::config_obj::ConfigObj;
 
-    static CONFIG: OnceLock<Config> = OnceLock::new();
+    static CONFIG: OnceLock<ConfigObj> = OnceLock::new();
 
     pub fn init(local: String) {
         

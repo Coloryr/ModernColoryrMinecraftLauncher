@@ -80,10 +80,11 @@ pub mod log {
                 if item.is_some() {
                     let item1 = item.unwrap();
                     file.write_fmt(format_args!(
-                        "[{}][{}]{}\r\n",
+                        "[{}][{}]{}{}",
                         item1.get_time(),
                         item1.get_level(),
-                        item1.log
+                        item1.log,
+                        if cfg!(windows) { "\r\n" } else { "\n" }
                     ))
                     .unwrap();
                 }
