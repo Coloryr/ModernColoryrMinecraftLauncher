@@ -5,6 +5,8 @@
 use std::error::Error;
 use std::env;
 
+use mcml_core::core::{CoreInitObj, core};
+
 slint::include_modules!();
 
 fn main() -> Result<(), Box<dyn Error>> {
@@ -15,6 +17,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let ui = AppWindow::new()?;
 
     ui.run()?;
+
+    core::init(CoreInitObj::new(String::new(), String::new(), String::new()));
 
     Ok(())
 }
