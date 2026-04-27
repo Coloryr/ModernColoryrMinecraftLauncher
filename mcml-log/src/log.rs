@@ -13,10 +13,7 @@ pub mod log {
         thread::{self, JoinHandle},
     };
 
-    use crate::{
-        events::core_stop_event::core_stop_event,
-        log::{log_item::LogItem, log_level::LogLevel},
-    };
+    use crate::{log_item::LogItem, log_level::LogLevel};
 
     static LOG_QUEUE: RwLock<SegQueue<LogItem>> = RwLock::new(SegQueue::new());
     static LOG_LOCAL: OnceLock<PathBuf> = OnceLock::new();
@@ -25,7 +22,7 @@ pub mod log {
     static LOG_RUN: AtomicBool = AtomicBool::new(true);
     static LOG_SEM: OnceLock<Arc<Semaphore>> = OnceLock::new();
 
-    pub fn init(local: String) {
+    pub fn start(local: String) {
         LOG_SEM.get_or_init(|| Arc::new(Semaphore::new(0)));
 
         let log_path = PathBuf::from(local).join("logs.log");
@@ -61,8 +58,6 @@ pub mod log {
         if LOG_THREAD.set(thread.unwrap()).is_err() {
             panic!("LOG_THREAD fail")
         }
-
-        core_stop_event::add_stop_handler(stop);
     }
 
     pub fn stop() {
