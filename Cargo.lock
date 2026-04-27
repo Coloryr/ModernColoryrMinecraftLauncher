@@ -878,11 +878,12 @@ dependencies = [
 
 [[package]]
 name = "const_format"
-version = "0.2.35"
+version = "0.2.36"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7faa7469a93a566e9ccc1c73fe783b4a65c274c5ace346038dca9c39fe0030ad"
+checksum = "4481a617ad9a412be3b97c5d403fef8ed023103368908b9c50af598ff467cc1e"
 dependencies = [
  "const_format_proc_macros",
+ "konst",
 ]
 
 [[package]]
@@ -1492,7 +1493,7 @@ dependencies = [
  "bitflags 2.11.0",
  "bytemuck",
  "fnv",
- "glow",
+ "glow 0.16.0",
  "image",
  "imgref",
  "itertools 0.14.0",
@@ -1904,6 +1905,18 @@ name = "glow"
 version = "0.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c5e5ea60d70410161c8bf5da3fdfeaa1c72ed2c15f8bbb9d19fe3a4fad085f08"
+dependencies = [
+ "js-sys",
+ "slotmap",
+ "wasm-bindgen",
+ "web-sys",
+]
+
+[[package]]
+name = "glow"
+version = "0.17.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "29038e1c483364cc6bb3cf78feee1816002e127c331a1eec55a4d202b9e1adb5"
 dependencies = [
  "js-sys",
  "slotmap",
@@ -2412,7 +2425,7 @@ dependencies = [
  "const-field-offset",
  "derive_more 2.1.1",
  "femtovg",
- "glow",
+ "glow 0.16.0",
  "i-slint-common",
  "i-slint-core",
  "i-slint-core-macros",
@@ -2436,7 +2449,7 @@ dependencies = [
  "cfg_aliases",
  "const-field-offset",
  "derive_more 2.1.1",
- "glow",
+ "glow 0.16.0",
  "glutin",
  "i-slint-common",
  "i-slint-core",
@@ -2877,6 +2890,21 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e2db585e1d738fc771bf08a151420d3ed193d9d895a36df7f6f8a9456b911ddc"
 
 [[package]]
+name = "konst"
+version = "0.2.20"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "128133ed7824fcd73d6e7b17957c5eb7bacb885649bd8c69708b2331a10bcefb"
+dependencies = [
+ "konst_macro_rules",
+]
+
+[[package]]
+name = "konst_macro_rules"
+version = "0.2.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a4933f3f57a8e9d9da04db23fb153356ecaf00cbd14aee46279c33dc80925c37"
+
+[[package]]
 name = "kurbo"
 version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3121,6 +3149,8 @@ name = "mcml"
 version = "0.1.0"
 dependencies = [
  "mcml-core",
+ "mcml-log",
+ "mcml-skin-render",
  "slint",
  "slint-build",
  "tauri-winres",
@@ -3134,6 +3164,7 @@ dependencies = [
  "chrono",
  "const_format",
  "crossbeam-queue",
+ "mcml-log",
  "reqwest 0.13.2",
  "semrs",
  "serde",
@@ -3141,6 +3172,23 @@ dependencies = [
  "serde_repr",
  "tokio",
  "tokio-util",
+]
+
+[[package]]
+name = "mcml-log"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "crossbeam-queue",
+ "semrs",
+]
+
+[[package]]
+name = "mcml-skin-render"
+version = "0.1.0"
+dependencies = [
+ "glow 0.17.0",
+ "image",
 ]
 
 [[package]]

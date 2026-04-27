@@ -1,0 +1,8 @@
+[package]
+name = "mcml-skin-render"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+glow.workspace = true
+image.workspace = true

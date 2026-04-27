@@ -2,7 +2,7 @@ use std::time::SystemTime;
 
 use chrono::{DateTime, Datelike, Local, Timelike};
 
-use crate::log::log_level::LogLevel;
+use crate::log_level::LogLevel;
 
 pub struct LogItem {
     /// 日志内容
