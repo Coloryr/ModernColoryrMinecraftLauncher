@@ -7,7 +7,7 @@ use skia_safe::{Bitmap, ColorType, ImageInfo};
 use crate::{
     base_render::{BaseSkinRender, ErrorType, ModelPartType},
     cube::cube,
-    cube_model::{CubeModelItemObj},
+    cube_model::CubeModelItemObj,
     model::model,
     renders::gl_render::{
         gl_model::{ModelVao, VaoItem, VertexOpenGL},
@@ -325,9 +325,8 @@ impl SkinRenderOpenGL {
                 let model_loc = self.gl.get_uniform_location(self.pg, "self");
                 if let Some(loc) = model_loc {
                     let mat = self.base.get_matrix(ModelPartType::Cape);
-                    let mat_slice = std::slice::from_raw_parts(mat.as_ptr(), 16);
                     self.gl
-                        .uniform_matrix_4_f32_slice(Some(&loc), false, mat_slice);
+                        .uniform_matrix_4_f32_slice(Some(&loc), false, &mat.to_cols_array());
                     self.gl
                         .bind_vertex_array(Some(self.normal_vao.cape.vertex_array_object));
                     self.gl.draw_elements(
@@ -342,86 +341,88 @@ impl SkinRenderOpenGL {
         }
     }
 
-    unsafe fn draw_skin(&mut self) {
-        self.gl
-            .bind_texture(glow::TEXTURE_2D, Some(self.texture_skin));
+    fn draw_skin(&mut self) {
+        unsafe {
+            self.gl
+                .bind_texture(glow::TEXTURE_2D, Some(self.texture_skin));
 
-        let model_loc = self.gl.get_uniform_location(self.pg, "self");
-        if let Some(loc) = model_loc {
-            let model_mat = Mat4::default();
-            self.gl
-                .uniform_matrix_4_f32_slice(Some(&loc), false, model_mat.as_ref());
-            self.gl
-                .bind_vertex_array(Some(self.normal_vao.body.vertex_array_object));
-            self.gl.draw_elements(
-                glow::TRIANGLES,
-                self.steve_model_draw_order_count,
-                glow::UNSIGNED_SHORT,
-                0,
-            );
+            let model_loc = self.gl.get_uniform_location(self.pg, "self");
+            if let Some(loc) = model_loc {
+                let model_mat = Mat4::default();
+                self.gl
+                    .uniform_matrix_4_f32_slice(Some(&loc), false, model_mat.as_ref());
+                self.gl
+                    .bind_vertex_array(Some(self.normal_vao.body.vertex_array_object));
+                self.gl.draw_elements(
+                    glow::TRIANGLES,
+                    self.steve_model_draw_order_count,
+                    glow::UNSIGNED_SHORT,
+                    0,
+                );
 
-            let model_mat = self.base.get_matrix(ModelPartType::Head);
-            self.gl
-                .uniform_matrix_4_f32_slice(Some(&loc), false, model_mat.as_ref());
-            self.gl
-                .bind_vertex_array(Some(self.normal_vao.head.vertex_array_object));
-            self.gl.draw_elements(
-                glow::TRIANGLES,
-                self.steve_model_draw_order_count,
-                glow::UNSIGNED_SHORT,
-                0,
-            );
+                let model_mat = self.base.get_matrix(ModelPartType::Head);
+                self.gl
+                    .uniform_matrix_4_f32_slice(Some(&loc), false, model_mat.as_ref());
+                self.gl
+                    .bind_vertex_array(Some(self.normal_vao.head.vertex_array_object));
+                self.gl.draw_elements(
+                    glow::TRIANGLES,
+                    self.steve_model_draw_order_count,
+                    glow::UNSIGNED_SHORT,
+                    0,
+                );
 
-            let model_mat = self.base.get_matrix(ModelPartType::LeftArm);
-            self.gl
-                .uniform_matrix_4_f32_slice(Some(&loc), false, model_mat.as_ref());
-            self.gl
-                .bind_vertex_array(Some(self.normal_vao.left_arm.vertex_array_object));
-            self.gl.draw_elements(
-                glow::TRIANGLES,
-                self.steve_model_draw_order_count,
-                glow::UNSIGNED_SHORT,
-                0,
-            );
+                let model_mat = self.base.get_matrix(ModelPartType::LeftArm);
+                self.gl
+                    .uniform_matrix_4_f32_slice(Some(&loc), false, model_mat.as_ref());
+                self.gl
+                    .bind_vertex_array(Some(self.normal_vao.left_arm.vertex_array_object));
+                self.gl.draw_elements(
+                    glow::TRIANGLES,
+                    self.steve_model_draw_order_count,
+                    glow::UNSIGNED_SHORT,
+                    0,
+                );
 
-            let model_mat = self.base.get_matrix(ModelPartType::RightArm);
-            self.gl
-                .uniform_matrix_4_f32_slice(Some(&loc), false, model_mat.as_ref());
-            self.gl
-                .bind_vertex_array(Some(self.normal_vao.right_arm.vertex_array_object));
-            self.gl.draw_elements(
-                glow::TRIANGLES,
-                self.steve_model_draw_order_count,
-                glow::UNSIGNED_SHORT,
-                0,
-            );
+                let model_mat = self.base.get_matrix(ModelPartType::RightArm);
+                self.gl
+                    .uniform_matrix_4_f32_slice(Some(&loc), false, model_mat.as_ref());
+                self.gl
+                    .bind_vertex_array(Some(self.normal_vao.right_arm.vertex_array_object));
+                self.gl.draw_elements(
+                    glow::TRIANGLES,
+                    self.steve_model_draw_order_count,
+                    glow::UNSIGNED_SHORT,
+                    0,
+                );
 
-            let model_mat = self.base.get_matrix(ModelPartType::LeftLeg);
-            self.gl
-                .uniform_matrix_4_f32_slice(Some(&loc), false, model_mat.as_ref());
-            self.gl
-                .bind_vertex_array(Some(self.normal_vao.left_leg.vertex_array_object));
-            self.gl.draw_elements(
-                glow::TRIANGLES,
-                self.steve_model_draw_order_count,
-                glow::UNSIGNED_SHORT,
-                0,
-            );
+                let model_mat = self.base.get_matrix(ModelPartType::LeftLeg);
+                self.gl
+                    .uniform_matrix_4_f32_slice(Some(&loc), false, model_mat.as_ref());
+                self.gl
+                    .bind_vertex_array(Some(self.normal_vao.left_leg.vertex_array_object));
+                self.gl.draw_elements(
+                    glow::TRIANGLES,
+                    self.steve_model_draw_order_count,
+                    glow::UNSIGNED_SHORT,
+                    0,
+                );
 
-            let model_mat = self.base.get_matrix(ModelPartType::RightLeg);
-            self.gl
-                .uniform_matrix_4_f32_slice(Some(&loc), false, model_mat.as_ref());
-            self.gl
-                .bind_vertex_array(Some(self.normal_vao.right_leg.vertex_array_object));
-            self.gl.draw_elements(
-                glow::TRIANGLES,
-                self.steve_model_draw_order_count,
-                glow::UNSIGNED_SHORT,
-                0,
-            );
+                let model_mat = self.base.get_matrix(ModelPartType::RightLeg);
+                self.gl
+                    .uniform_matrix_4_f32_slice(Some(&loc), false, model_mat.as_ref());
+                self.gl
+                    .bind_vertex_array(Some(self.normal_vao.right_leg.vertex_array_object));
+                self.gl.draw_elements(
+                    glow::TRIANGLES,
+                    self.steve_model_draw_order_count,
+                    glow::UNSIGNED_SHORT,
+                    0,
+                );
+            }
+            
+            self.gl.bind_texture(glow::TEXTURE_2D, None);
         }
-
-        self.gl.bind_texture(glow::TEXTURE_2D, None);
     }
 
     unsafe fn draw_skin_top(&mut self) {
