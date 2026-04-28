@@ -1,5 +1,6 @@
 use glam::{Mat4, Vec2, Vec3, Vec4};
 use skia_safe::Bitmap;
+use std::f32::consts::PI;
 use std::sync::{Arc, Mutex};
 
 use crate::cube::cube;
@@ -453,11 +454,11 @@ impl BaseSkinRender {
             }
             ModelPartType::Proj => {
                 let aspect = self.width as f32 / self.height as f32;
-                cgmath::perspective(cgmath::Deg(45.0), aspect, 0.1, 10.0)
+                Mat4::perspective_lh(PI / 4.0, aspect, 0.1, 10.0)
             }
             ModelPartType::View => Mat4::look_at_rh(
-                cgmath::Point3::new(0.0, 0.0, 7.0),
-                cgmath::Point3::new(0.0, 0.0, 0.0),
+                Vec3::new(0.0, 0.0, 7.0),
+                Vec3::new(0.0, 0.0, 0.0),
                 Vec3::new(0.0, 1.0, 0.0),
             ),
             ModelPartType::Model => {
