@@ -5,4 +5,5 @@ edition = "2024"
 
 [dependencies]
 glow.workspace = true
-image.workspace = true
+skia-safe.workspace = true
+glam.workspace = true

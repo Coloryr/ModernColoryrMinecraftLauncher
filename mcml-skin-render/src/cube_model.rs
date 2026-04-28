@@ -13,7 +13,7 @@ impl CubeModelItemObj {
 
 /// 一个史蒂夫模型数据
 #[derive(Debug, Clone)]
-pub struct SteveModelObj {
+pub struct SteveModel {
     pub head: CubeModelItemObj,
     pub body: CubeModelItemObj,
     pub left_arm: CubeModelItemObj,
@@ -23,7 +23,7 @@ pub struct SteveModelObj {
     pub cape: CubeModelItemObj,
 }
 
-impl SteveModelObj {
+impl SteveModel {
     pub fn new(
         head: CubeModelItemObj,
         body: CubeModelItemObj,
@@ -47,7 +47,7 @@ impl SteveModelObj {
 
 /// 模型贴图数据
 #[derive(Debug, Clone)]
-pub struct SteveTextureObj {
+pub struct SteveTexture {
     pub head: Vec<f32>,
     pub body: Vec<f32>,
     pub left_arm: Vec<f32>,
@@ -57,24 +57,16 @@ pub struct SteveTextureObj {
     pub cape: Vec<f32>,
 }
 
-impl SteveTextureObj {
-    pub fn new(
-        head: Vec<f32>,
-        body: Vec<f32>,
-        left_arm: Vec<f32>,
-        right_arm: Vec<f32>,
-        left_leg: Vec<f32>,
-        right_leg: Vec<f32>,
-        cape: Vec<f32>,
-    ) -> Self {
+impl SteveTexture {
+    pub fn new() -> Self {
         Self {
-            head,
-            body,
-            left_arm,
-            right_arm,
-            left_leg,
-            right_leg,
-            cape,
+            head: Vec::new(),
+            body: Vec::new(),
+            left_arm: Vec::new(),
+            right_arm: Vec::new(),
+            left_leg: Vec::new(),
+            right_leg: Vec::new(),
+            cape: Vec::new(),
         }
     }
 }
@@ -88,7 +80,7 @@ impl Default for CubeModelItemObj {
     }
 }
 
-impl Default for SteveTextureObj {
+impl Default for SteveTexture {
     fn default() -> Self {
         Self {
             head: Vec::new(),

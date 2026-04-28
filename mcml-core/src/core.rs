@@ -24,8 +24,9 @@ pub mod core {
     use std::sync::OnceLock;
 
     use const_format::formatcp;
+    use mcml_log::log::log;
 
-    use crate::{core::CoreInitObj, log::log::log};
+    use crate::{core::CoreInitObj};
 
     /// 启动器主版本号
     pub const VERSION_NUM: i32 = 1;
@@ -50,6 +51,6 @@ pub mod core {
 
         BASE_DIR.set(CORE_ARG.get().unwrap().local.clone()).unwrap();
 
-        log::init(BASE_DIR.get().unwrap().to_string());
+        log::start(BASE_DIR.get().unwrap().to_string());
     }
 }
