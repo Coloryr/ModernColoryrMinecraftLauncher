@@ -1,16 +1,15 @@
 pub mod skin_type_checker {
-    use super::*;
-    use crate::texture::SkinType;
+    use skia_safe::{Bitmap, Color, IPoint};
+
+    use crate::texture::texture::SkinType;
 
     /// 获取皮肤类型
-    pub fn get_text_type<P: AsRef<[u8]>>(
-        width: u32,
-        height: u32,
-        pixels: &[P],
-    ) -> SkinType {
+    pub fn get_text_type(image: &Bitmap) -> SkinType {
+        let width = image.width();
+        let height = image.height();
+
         if width >= 64 && height >= 64 && width == height {
-            // 需要实现像素访问逻辑
-            if is_slim_skin(width, pixels) {
+            if is_slim_skin(image) {
                 SkinType::NewSlim
             } else {
                 SkinType::New
@@ -22,25 +21,35 @@ pub mod skin_type_checker {
         }
     }
 
-    fn is_slim_skin<P: AsRef<[u8]>>(width: u32, pixels: &[P]) -> bool {
-        let scale = (width / 64) as i32;
-        
-        check_pixel_area(width, pixels, 50 * scale, 16 * scale, 2 * scale, 4 * scale)
-            && check_pixel_area(width, pixels, 54 * scale, 20 * scale, 2 * scale, 12 * scale)
-            && check_pixel_area(width, pixels, 42 * scale, 48 * scale, 2 * scale, 4 * scale)
-            && check_pixel_area(width, pixels, 46 * scale, 52 * scale, 2 * scale, 12 * scale)
+    /// 是否为1.8新版皮肤（纤细手臂）
+    fn is_slim_skin(image: &Bitmap) -> bool {
+        let scale = image.width() / 64;
+
+        // 检查右臂上方的透明像素
+        check_pixel_area(image, 50 * scale, 16 * scale, 2 * scale, 4 * scale, &[Color::TRANSPARENT])
+            // 检查右臂下方的透明像素
+            && check_pixel_area(image, 54 * scale, 20 * scale, 2 * scale, 12 * scale, &[Color::TRANSPARENT])
+            // 检查左臂上方的透明像素
+            && check_pixel_area(image, 42 * scale, 48 * scale, 2 * scale, 4 * scale, &[Color::TRANSPARENT])
+            // 检查左臂下方的透明像素
+            && check_pixel_area(image, 46 * scale, 52 * scale, 2 * scale, 12 * scale, &[Color::TRANSPARENT])
     }
 
-    fn check_pixel_area<P: AsRef<[u8]>>(
-        width: u32,
-        pixels: &[P],
-        x: i32,
-        y: i32,
-        w: i32,
-        h: i32,
-    ) -> bool {
-        // 需要根据实际像素格式实现
-        // 这里只是一个示例框架
+    /// 检查像素区域是否所有像素都匹配指定颜色
+    fn check_pixel_area(image: &Bitmap, x: i32, y: i32, w: i32, h: i32, colors: &[Color]) -> bool {
+        // 边界检查
+        if x < 0 || y < 0 || x + w > image.width() || y + h > image.height() {
+            return false;
+        }
+
+        for wi in 0..w {
+            for hi in 0..h {
+                let pixel = image.get_color(IPoint::new(x + wi, y + hi));
+                if !colors.contains(&pixel) {
+                    return false;
+                }
+            }
+        }
         true
     }
 }

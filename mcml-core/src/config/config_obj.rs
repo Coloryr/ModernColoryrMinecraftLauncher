@@ -25,7 +25,7 @@ impl Default for JvmConfigObj {
 }
 
 /// 下载源
-#[derive(Serialize_repr, Deserialize_repr, Debug, PartialEq)]
+#[derive(Serialize_repr, Deserialize_repr, Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum SourceLocal {
     /// 官方下载源
@@ -123,7 +123,7 @@ impl Default for DnsObj {
 }
 
 /// JVM Gc模式
-#[derive(Serialize_repr, Deserialize_repr, Debug, PartialEq)]
+#[derive(Serialize_repr, Deserialize_repr, Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum GCType {
     /// 自动选择

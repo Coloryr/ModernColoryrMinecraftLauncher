@@ -1,4 +1,6 @@
 pub mod texture {
+    use crate::cube_model::SteveTexture;
+
     /// 皮肤类型枚举
     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
     pub enum SkinType {
@@ -9,39 +11,7 @@ pub mod texture {
         /// 1.8新版纤细
         NewSlim,
         /// 未知的类型
-        Unkonw
-    }
-
-    /// 史蒂夫纹理对象
-    #[derive(Debug, Clone)]
-    pub struct SteveTextureObj {
-        pub head: Vec<f32>,
-        pub body: Vec<f32>,
-        pub left_arm: Vec<f32>,
-        pub right_arm: Vec<f32>,
-        pub left_leg: Vec<f32>,
-        pub right_leg: Vec<f32>,
-        pub cape: Vec<f32>,
-    }
-
-    impl SteveTextureObj {
-        pub fn new() -> Self {
-            Self {
-                head: Vec::new(),
-                body: Vec::new(),
-                left_arm: Vec::new(),
-                right_arm: Vec::new(),
-                left_leg: Vec::new(),
-                right_leg: Vec::new(),
-                cape: Vec::new(),
-            }
-        }
-    }
-
-    impl Default for SteveTextureObj {
-        fn default() -> Self {
-            Self::new()
-        }
+        Unknown,
     }
 
     const HEAD_TEX: [f32; 48] = [
@@ -132,8 +102,8 @@ pub mod texture {
     }
 
     /// 顶层数据
-    pub fn get_steve_texture_top(skin_type: SkinType) -> SteveTextureObj {
-        let mut tex = SteveTextureObj::new();
+    pub fn get_steve_texture_top(skin_type: SkinType) -> SteveTexture {
+        let mut tex = SteveTexture::new();
         tex.head = get_tex(&HEAD_TEX, skin_type, 32.0, 0.0);
 
         if skin_type != SkinType::Old {
@@ -154,8 +124,8 @@ pub mod texture {
     }
 
     /// 本体数据
-    pub fn get_steve_texture(skin_type: SkinType) -> SteveTextureObj {
-        let mut tex = SteveTextureObj::new();
+    pub fn get_steve_texture(skin_type: SkinType) -> SteveTexture {
+        let mut tex = SteveTexture::new();
         tex.head = get_tex(&HEAD_TEX, skin_type, 0.0, 0.0);
         tex.body = get_tex(&BODY_TEX, skin_type, 16.0, 16.0);
         tex.cape = get_cap_tex(&CAPE_TEX);
