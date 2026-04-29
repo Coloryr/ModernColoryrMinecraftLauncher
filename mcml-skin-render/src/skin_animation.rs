@@ -1,4 +1,4 @@
-use cgmath::Vector3;
+use glam::Vec3;
 
 use crate::texture::texture::SkinType;
 
@@ -10,9 +10,9 @@ pub struct SkinAnimation {
     close: bool,
     pub run: bool,
     pub skin_type: SkinType,
-    pub arm: Vector3<f32>,
-    pub leg: Vector3<f32>,
-    pub head: Vector3<f32>,
+    pub arm: Vec3,
+    pub leg: Vec3,
+    pub head: Vec3,
     pub cape: f32,
 }
 
@@ -24,9 +24,9 @@ impl SkinAnimation {
             close: false,
             run: false,
             skin_type: SkinType::Unknown,
-            arm: Vector3::new(40.0, 0.0, 0.0),
-            leg: Vector3::new(0.0, 0.0, 0.0),
-            head: Vector3::new(0.0, 0.0, 0.0),
+            arm: Vec3::new(40.0, 0.0, 0.0),
+            leg: Vec3::new(0.0, 0.0, 0.0),
+            head: Vec3::new(0.0, 0.0, 0.0),
             cape: 0.0,
         }
     }
@@ -103,9 +103,9 @@ impl SkinAnimation {
         self.frame = 0;
         self.count = 0.0;
         self.close = false;
-        self.arm = Vector3::new(40.0, 0.0, 0.0);
-        self.leg = Vector3::new(0.0, 0.0, 0.0);
-        self.head = Vector3::new(0.0, 0.0, 0.0);
+        self.arm = Vec3::new(40.0, 0.0, 0.0);
+        self.leg = Vec3::new(0.0, 0.0, 0.0);
+        self.head = Vec3::new(0.0, 0.0, 0.0);
         self.cape = 0.0;
     }
 

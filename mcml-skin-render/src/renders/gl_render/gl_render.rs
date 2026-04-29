@@ -1,11 +1,11 @@
 use std::{slice, sync::Arc};
 
-use glam::{Mat4, Vec2, Vec3};
+use glam::{Vec2, Vec3};
 use glow::*;
 use skia_safe::{Bitmap, ColorType, ImageInfo};
 
 use crate::{
-    base_render::{BaseSkinRender, ErrorType, ModelPartType},
+    base_render::{BaseSkinRender, ErrorType, ModelPartType, SkinRender},
     cube::cube,
     cube_model::CubeModelItemObj,
     model::model,
@@ -87,21 +87,23 @@ fn change_color_type(image: &Bitmap) -> Option<Bitmap> {
         image.dimensions(),
         ColorType::RGBA8888,
         image.alpha_type(),
-        None,
+        image.color_space(),
     );
-    let mut rgba_bitmap = Bitmap::new();
-    rgba_bitmap.set_info(&rgba_info, image.row_bytes());
-    rgba_bitmap.alloc_pixels();
+    let mut bitmap = Bitmap::new();
+    if !bitmap.set_info(&rgba_info, image.row_bytes()) {
+        return None;
+    }
+    bitmap.alloc_pixels();
 
     unsafe {
         if image.read_pixels(
             &rgba_info,
-            rgba_bitmap.pixels(),
-            rgba_bitmap.row_bytes(),
+            bitmap.pixels(),
+            bitmap.row_bytes(),
             0,
             0,
         ) {
-            Some(rgba_bitmap)
+            Some(bitmap)
         } else {
             None
         }
@@ -326,7 +328,7 @@ impl SkinRenderOpenGL {
                 if let Some(loc) = model_loc {
                     let mat = self.base.get_matrix(ModelPartType::Cape);
                     self.gl
-                        .uniform_matrix_4_f32_slice(Some(&loc), false, &mat.to_cols_array());
+                        .uniform_matrix_4_f32_slice(Some(&loc), false, mat.as_ref());
                     self.gl
                         .bind_vertex_array(Some(self.normal_vao.cape.vertex_array_object));
                     self.gl.draw_elements(
@@ -343,162 +345,167 @@ impl SkinRenderOpenGL {
 
     fn draw_skin(&mut self) {
         unsafe {
-            self.gl
-                .bind_texture(glow::TEXTURE_2D, Some(self.texture_skin));
+            self.gl.bind_texture(TEXTURE_2D, Some(self.texture_skin));
 
-            let model_loc = self.gl.get_uniform_location(self.pg, "self");
-            if let Some(loc) = model_loc {
-                let model_mat = Mat4::default();
+            if let Some(loc) = self.gl.get_uniform_location(self.pg, "self") {
+                let mat = self.base.get_matrix(ModelPartType::Body);
                 self.gl
-                    .uniform_matrix_4_f32_slice(Some(&loc), false, model_mat.as_ref());
+                    .uniform_matrix_4_f32_slice(Some(&loc), false, mat.as_ref());
                 self.gl
                     .bind_vertex_array(Some(self.normal_vao.body.vertex_array_object));
                 self.gl.draw_elements(
-                    glow::TRIANGLES,
+                    TRIANGLES,
                     self.steve_model_draw_order_count,
-                    glow::UNSIGNED_SHORT,
+                    UNSIGNED_SHORT,
                     0,
                 );
 
-                let model_mat = self.base.get_matrix(ModelPartType::Head);
+                let mat = self.base.get_matrix(ModelPartType::Head);
                 self.gl
-                    .uniform_matrix_4_f32_slice(Some(&loc), false, model_mat.as_ref());
+                    .uniform_matrix_4_f32_slice(Some(&loc), false, mat.as_ref());
                 self.gl
                     .bind_vertex_array(Some(self.normal_vao.head.vertex_array_object));
                 self.gl.draw_elements(
-                    glow::TRIANGLES,
+                    TRIANGLES,
                     self.steve_model_draw_order_count,
-                    glow::UNSIGNED_SHORT,
+                    UNSIGNED_SHORT,
                     0,
                 );
 
-                let model_mat = self.base.get_matrix(ModelPartType::LeftArm);
+                let mat = self.base.get_matrix(ModelPartType::LeftArm);
                 self.gl
-                    .uniform_matrix_4_f32_slice(Some(&loc), false, model_mat.as_ref());
+                    .uniform_matrix_4_f32_slice(Some(&loc), false, mat.as_ref());
                 self.gl
                     .bind_vertex_array(Some(self.normal_vao.left_arm.vertex_array_object));
                 self.gl.draw_elements(
-                    glow::TRIANGLES,
+                    TRIANGLES,
                     self.steve_model_draw_order_count,
-                    glow::UNSIGNED_SHORT,
+                    UNSIGNED_SHORT,
                     0,
                 );
 
-                let model_mat = self.base.get_matrix(ModelPartType::RightArm);
+                let mat = self.base.get_matrix(ModelPartType::RightArm);
                 self.gl
-                    .uniform_matrix_4_f32_slice(Some(&loc), false, model_mat.as_ref());
+                    .uniform_matrix_4_f32_slice(Some(&loc), false, mat.as_ref());
                 self.gl
                     .bind_vertex_array(Some(self.normal_vao.right_arm.vertex_array_object));
                 self.gl.draw_elements(
-                    glow::TRIANGLES,
+                    TRIANGLES,
                     self.steve_model_draw_order_count,
-                    glow::UNSIGNED_SHORT,
+                    UNSIGNED_SHORT,
                     0,
                 );
 
-                let model_mat = self.base.get_matrix(ModelPartType::LeftLeg);
+                let mat = self.base.get_matrix(ModelPartType::LeftLeg);
                 self.gl
-                    .uniform_matrix_4_f32_slice(Some(&loc), false, model_mat.as_ref());
+                    .uniform_matrix_4_f32_slice(Some(&loc), false, mat.as_ref());
                 self.gl
                     .bind_vertex_array(Some(self.normal_vao.left_leg.vertex_array_object));
                 self.gl.draw_elements(
-                    glow::TRIANGLES,
+                    TRIANGLES,
                     self.steve_model_draw_order_count,
-                    glow::UNSIGNED_SHORT,
+                    UNSIGNED_SHORT,
                     0,
                 );
 
-                let model_mat = self.base.get_matrix(ModelPartType::RightLeg);
+                let mat = self.base.get_matrix(ModelPartType::RightLeg);
                 self.gl
-                    .uniform_matrix_4_f32_slice(Some(&loc), false, model_mat.as_ref());
+                    .uniform_matrix_4_f32_slice(Some(&loc), false, mat.as_ref());
                 self.gl
                     .bind_vertex_array(Some(self.normal_vao.right_leg.vertex_array_object));
                 self.gl.draw_elements(
-                    glow::TRIANGLES,
+                    TRIANGLES,
                     self.steve_model_draw_order_count,
-                    glow::UNSIGNED_SHORT,
+                    UNSIGNED_SHORT,
                     0,
                 );
             }
-            
-            self.gl.bind_texture(glow::TEXTURE_2D, None);
+
+            self.gl.bind_vertex_array(None);
+            self.gl.bind_texture(TEXTURE_2D, None);
         }
     }
 
-    unsafe fn draw_skin_top(&mut self) {
-        self.gl
-            .bind_texture(glow::TEXTURE_2D, Some(self.texture_skin));
+    fn draw_skin_top(&mut self) {
+        unsafe {
+            self.gl.bind_texture(TEXTURE_2D, Some(self.texture_skin));
 
-        let model_loc = self.gl.get_uniform_location(self.pg, "self");
-        if let Some(loc) = model_loc {
-            let model_mat = self.base.get_matrix(ModelPartType::Body);
-            self.gl
-                .uniform_matrix_4_f32_slice(Some(&loc), false, model_mat.as_ref());
-            self.gl.bind_vertex_array(Some(self.top_vao.body));
-            self.gl.draw_elements(
-                glow::TRIANGLES,
-                self.steve_model_draw_order_count,
-                glow::UNSIGNED_SHORT,
-                0,
-            );
+            if let Some(loc) = self.gl.get_uniform_location(self.pg, "self") {
+                let mat = self.base.get_matrix(ModelPartType::Body);
+                self.gl
+                    .uniform_matrix_4_f32_slice(Some(&loc), false, mat.as_ref());
+                self.gl
+                    .bind_vertex_array(Some(self.top_vao.body.vertex_array_object));
+                self.gl.draw_elements(
+                    TRIANGLES,
+                    self.steve_model_draw_order_count,
+                    UNSIGNED_SHORT,
+                    0,
+                );
 
-            let model_mat = self.base.get_matrix(ModelPartType::Head);
-            self.gl
-                .uniform_matrix_4_f32_slice(loc, false, model_mat.as_ref());
-            self.gl.bind_vertex_array(Some(self.top_vao.head));
-            self.gl.draw_elements(
-                glow::TRIANGLES,
-                self.steve_model_draw_order_count,
-                glow::UNSIGNED_SHORT,
-                0,
-            );
+                let mat = self.base.get_matrix(ModelPartType::Head);
+                self.gl
+                    .uniform_matrix_4_f32_slice(Some(&loc), false, mat.as_ref());
+                self.gl
+                    .bind_vertex_array(Some(self.top_vao.head.vertex_array_object));
+                self.gl.draw_elements(
+                    TRIANGLES,
+                    self.steve_model_draw_order_count,
+                    UNSIGNED_SHORT,
+                    0,
+                );
 
-            let model_mat = self.base.get_matrix(ModelPartType::LeftArm);
-            self.gl
-                .uniform_matrix_4_f32_slice(loc, false, model_mat.as_ref());
-            self.gl.bind_vertex_array(Some(self.top_vao.left_arm));
-            self.gl.draw_elements(
-                glow::TRIANGLES,
-                self.steve_model_draw_order_count,
-                glow::UNSIGNED_SHORT,
-                0,
-            );
+                let mat = self.base.get_matrix(ModelPartType::LeftArm);
+                self.gl
+                    .uniform_matrix_4_f32_slice(Some(&loc), false, mat.as_ref());
+                self.gl
+                    .bind_vertex_array(Some(self.top_vao.left_arm.vertex_array_object));
+                self.gl.draw_elements(
+                    TRIANGLES,
+                    self.steve_model_draw_order_count,
+                    UNSIGNED_SHORT,
+                    0,
+                );
 
-            let model_mat = self.base.get_matrix(ModelPartType::RightArm);
-            self.gl
-                .uniform_matrix_4_f32_slice(loc, false, model_mat.as_ref());
-            self.gl.bind_vertex_array(Some(self.top_vao.right_arm));
-            self.gl.draw_elements(
-                glow::TRIANGLES,
-                self.steve_model_draw_order_count,
-                glow::UNSIGNED_SHORT,
-                0,
-            );
+                let mat = self.base.get_matrix(ModelPartType::RightArm);
+                self.gl
+                    .uniform_matrix_4_f32_slice(Some(&loc), false, mat.as_ref());
+                self.gl
+                    .bind_vertex_array(Some(self.top_vao.right_arm.vertex_array_object));
+                self.gl.draw_elements(
+                    TRIANGLES,
+                    self.steve_model_draw_order_count,
+                    UNSIGNED_SHORT,
+                    0,
+                );
 
-            let model_mat = self.base.get_matrix(ModelPartType::LeftLeg);
-            self.gl
-                .uniform_matrix_4_f32_slice(loc, false, model_mat.as_ref());
-            self.gl.bind_vertex_array(Some(self.top_vao.left_leg));
-            self.gl.draw_elements(
-                glow::TRIANGLES,
-                self.steve_model_draw_order_count,
-                glow::UNSIGNED_SHORT,
-                0,
-            );
+                let mat = self.base.get_matrix(ModelPartType::LeftLeg);
+                self.gl
+                    .uniform_matrix_4_f32_slice(Some(&loc), false, mat.as_ref());
+                self.gl
+                    .bind_vertex_array(Some(self.top_vao.left_leg.vertex_array_object));
+                self.gl.draw_elements(
+                    TRIANGLES,
+                    self.steve_model_draw_order_count,
+                    UNSIGNED_SHORT,
+                    0,
+                );
 
-            let model_mat = self.base.get_matrix(ModelPartType::RightLeg);
-            self.gl
-                .uniform_matrix_4_f32_slice(loc, false, model_mat.as_ref());
-            self.gl.bind_vertex_array(Some(self.top_vao.right_leg));
-            self.gl.draw_elements(
-                glow::TRIANGLES,
-                self.steve_model_draw_order_count,
-                glow::UNSIGNED_SHORT,
-                0,
-            );
+                let mat = self.base.get_matrix(ModelPartType::RightLeg);
+                self.gl
+                    .uniform_matrix_4_f32_slice(Some(&loc), false, mat.as_ref());
+                self.gl
+                    .bind_vertex_array(Some(self.top_vao.right_leg.vertex_array_object));
+                self.gl.draw_elements(
+                    TRIANGLES,
+                    self.steve_model_draw_order_count,
+                    UNSIGNED_SHORT,
+                    0,
+                );
+            }
+
+            self.gl.bind_texture(TEXTURE_2D, None);
         }
-
-        self.gl.bind_texture(glow::TEXTURE_2D, None);
     }
 
     fn load_model(&mut self) {
@@ -624,165 +631,141 @@ impl SkinRenderOpenGL {
         if self.base.width != self.width || self.base.height != self.height {
             self.width = self.base.width;
             self.height = self.base.height;
-            self.delete_frame_buffer();
-            self.init_frame_buffer();
         }
 
         if self.width == 0 || self.height == 0 {
             return;
         }
 
-        // match self.base.render_type {
-        //     SkinRenderType::MSAA => {
-        //         self.gl
-        //             .bind_framebuffer(glow::FRAMEBUFFER, Some(self.msaa_frame_buffer));
-        //     }
-        //     SkinRenderType::FXAA => {
-        //         self.gl
-        //             .bind_framebuffer(glow::FRAMEBUFFER, Some(self.fxaa_frame_buffer));
-        //     }
-        //     _ => {
-        //         self.gl.bind_framebuffer(glow::FRAMEBUFFER, fb);
-        //     }
-        // }
+        unsafe {
+            // match self.base.render_type {
+            //     SkinRenderType::MSAA => {
+            //         self.gl
+            //             .bind_framebuffer(glow::FRAMEBUFFER, Some(self.msaa_frame_buffer));
+            //     }
+            //     SkinRenderType::FXAA => {
+            //         self.gl
+            //             .bind_framebuffer(glow::FRAMEBUFFER, Some(self.fxaa_frame_buffer));
+            //     }
+            //     _ => {
+            //         self.gl.bind_framebuffer(glow::FRAMEBUFFER, fb);
+            //     }
+            // }
 
-        self.gl.bind_framebuffer(glow::FRAMEBUFFER, fb);
+            self.gl.bind_framebuffer(glow::FRAMEBUFFER, fb);
 
-        self.gl.viewport(0, 0, self.width, self.height);
+            self.gl.viewport(0, 0, self.width, self.height);
 
-        // if self.base.render_type == SkinRenderType::FXAA {
-        //     self.gl.clear_color(1.0, 1.0, 1.0, 1.0);
-        // } else {
-        //     self.gl.clear_color(
-        //         self.base.back_color.x,
-        //         self.base.back_color.y,
-        //         self.base.back_color.z,
-        //         self.base.back_color.w,
-        //     );
-        // }
+            // if self.base.render_type == SkinRenderType::FXAA {
+            //     self.gl.clear_color(1.0, 1.0, 1.0, 1.0);
+            // } else {
+            //     self.gl.clear_color(
+            //         self.base.back_color.x,
+            //         self.base.back_color.y,
+            //         self.base.back_color.z,
+            //         self.base.back_color.w,
+            //     );
+            // }
 
-        self.gl.clear_color(1.0, 1.0, 1.0, 1.0);
+            self.gl.clear_color(1.0, 1.0, 1.0, 1.0);
 
-        self.gl.clear_depth(1.0);
-        self.gl
-            .clear(glow::COLOR_BUFFER_BIT | glow::DEPTH_BUFFER_BIT);
-
-        self.check_error();
-
-        self.gl.enable(glow::CULL_FACE);
-        self.gl.enable(glow::DEPTH_TEST);
-        self.gl.active_texture(glow::TEXTURE0);
-        self.gl.use_program(Some(self.pg));
-
-        self.check_error();
-
-        let view_loc = self.gl.get_uniform_location(self.pg, "view");
-        let projection_loc = self.gl.get_uniform_location(self.pg, "projection");
-        let model_loc = self.gl.get_uniform_location(self.pg, "model");
-
-        let matr = self.base.get_matrix(ModelPartType::Proj);
-        if let Some(loc) = projection_loc {
+            self.gl.clear_depth(1.0);
             self.gl
-                .uniform_matrix_4_f32_slice(loc, false, matr.as_ref());
-        }
+                .clear(COLOR_BUFFER_BIT | DEPTH_BUFFER_BIT);
 
-        let matr = self.base.get_matrix(ModelPartType::View);
-        if let Some(loc) = view_loc {
-            self.gl
-                .uniform_matrix_4_f32_slice(loc, false, matr.as_ref());
-        }
+            self.gl.enable(CULL_FACE);
+            self.gl.enable(DEPTH_TEST);
+            self.gl.active_texture(TEXTURE0);
 
-        let matr = self.base.get_matrix(ModelPartType::Model);
-        if let Some(loc) = model_loc {
-            self.gl
-                .uniform_matrix_4_f32_slice(loc, false, matr.as_ref());
-        }
+            self.gl.use_program(Some(self.pg));
 
-        self.check_error();
+            let matr = self.base.get_matrix(ModelPartType::Proj);
+            if let Some(loc) = self.gl.get_uniform_location(self.pg, "projection") {
+                self.gl
+                    .uniform_matrix_4_f32_slice(Some(&loc), false, matr.as_ref());
+            }
 
-        self.gl.depth_mask(true);
-        self.gl.disable(glow::BLEND);
+            let matr = self.base.get_matrix(ModelPartType::View);
+            if let Some(loc) = self.gl.get_uniform_location(self.pg, "view") {
+                self.gl
+                    .uniform_matrix_4_f32_slice(Some(&loc), false, matr.as_ref());
+            }
 
-        self.draw_skin();
-        self.draw_cape();
-
-        if self.base.enable_top {
-            self.gl.depth_mask(false);
-            self.gl.enable(glow::BLEND);
-            self.gl.enable(glow::SAMPLE_ALPHA_TO_COVERAGE);
-            self.gl
-                .blend_func(glow::SRC_ALPHA, glow::ONE_MINUS_SRC_ALPHA);
-
-            self.draw_skin_top();
+            let matr = self.base.get_matrix(ModelPartType::Model);
+            if let Some(loc) = self.gl.get_uniform_location(self.pg, "model") {
+                self.gl
+                    .uniform_matrix_4_f32_slice(Some(&loc), false, matr.as_ref());
+            }
 
             self.gl.depth_mask(true);
-            self.gl.disable(glow::BLEND);
-        }
+            self.gl.disable(BLEND);
 
-        // MSAA 后处理
-        if self.base.render_type == SkinRenderGLType::MSAA {
-            self.gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, fb);
-            self.gl
-                .bind_framebuffer(glow::READ_FRAMEBUFFER, Some(self.msaa_frame_buffer));
-            self.gl.blit_framebuffer(
-                0,
-                0,
-                self.width,
-                self.height,
-                0,
-                0,
-                self.width,
-                self.height,
-                glow::COLOR_BUFFER_BIT,
-                glow::NEAREST,
-            );
-            self.gl.bind_framebuffer(glow::FRAMEBUFFER, None);
-        }
-        // FXAA 后处理
-        else if self.base.render_type == SkinRenderGLType::FXAA {
-            self.gl.enable(glow::BLEND);
-            self.gl.disable(glow::DEPTH_TEST);
-            self.gl.bind_framebuffer(glow::FRAMEBUFFER, fb);
-            self.gl.viewport(0, 0, self.width, self.height);
-            self.gl.clear(glow::COLOR_BUFFER_BIT);
-            self.gl.use_program(Some(self.pg_fxaa));
-            self.gl.uniform_2_f32(
-                self.fxaa_step,
-                1.0 / self.width as f32,
-                1.0 / self.height as f32,
-            );
-            self.gl.active_texture(glow::TEXTURE0);
-            self.gl
-                .bind_texture(glow::TEXTURE_2D, Some(self.fxaa_texture));
-            self.gl.bind_vertex_array(Some(self.fxaa_vao));
-            self.gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
+            self.draw_skin();
+            self.draw_cape();
+
+            if self.base.enable_top {
+                self.gl.depth_mask(false);
+                self.gl.enable(BLEND);
+                self.gl.enable(SAMPLE_ALPHA_TO_COVERAGE);
+                self.gl
+                    .blend_func(SRC_ALPHA, ONE_MINUS_SRC_ALPHA);
+
+                self.draw_skin_top();
+
+                self.gl.depth_mask(true);
+                self.gl.disable(BLEND);
+            }
+
+            // // MSAA 后处理
+            // if self.base.render_type == SkinRenderGLType::MSAA {
+            //     self.gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, fb);
+            //     self.gl
+            //         .bind_framebuffer(glow::READ_FRAMEBUFFER, Some(self.msaa_frame_buffer));
+            //     self.gl.blit_framebuffer(
+            //         0,
+            //         0,
+            //         self.width,
+            //         self.height,
+            //         0,
+            //         0,
+            //         self.width,
+            //         self.height,
+            //         glow::COLOR_BUFFER_BIT,
+            //         glow::NEAREST,
+            //     );
+            //     self.gl.bind_framebuffer(glow::FRAMEBUFFER, None);
+            // }
+            // // FXAA 后处理
+            // else if self.base.render_type == SkinRenderGLType::FXAA {
+            //     self.gl.enable(glow::BLEND);
+            //     self.gl.disable(glow::DEPTH_TEST);
+            //     self.gl.bind_framebuffer(glow::FRAMEBUFFER, fb);
+            //     self.gl.viewport(0, 0, self.width, self.height);
+            //     self.gl.clear(glow::COLOR_BUFFER_BIT);
+            //     self.gl.use_program(Some(self.pg_fxaa));
+            //     self.gl.uniform_2_f32(
+            //         self.fxaa_step,
+            //         1.0 / self.width as f32,
+            //         1.0 / self.height as f32,
+            //     );
+            //     self.gl.active_texture(glow::TEXTURE0);
+            //     self.gl
+            //         .bind_texture(glow::TEXTURE_2D, Some(self.fxaa_texture));
+            //     self.gl.bind_vertex_array(Some(self.fxaa_vao));
+            //     self.gl.draw_arrays(glow::TRIANGLE_STRIP, 0, 4);
+            //     self.gl.bind_vertex_array(None);
+            //     self.gl.enable(glow::DEPTH_TEST);
+            //     self.gl.bind_texture(glow::TEXTURE_2D, None);
+            //     self.gl.bind_framebuffer(glow::FRAMEBUFFER, None);
+            // }
+
+            self.gl.bind_buffer(ARRAY_BUFFER, None);
+            self.gl.bind_buffer(ELEMENT_ARRAY_BUFFER, None);
             self.gl.bind_vertex_array(None);
-            self.gl.enable(glow::DEPTH_TEST);
-            self.gl.bind_texture(glow::TEXTURE_2D, None);
-            self.gl.bind_framebuffer(glow::FRAMEBUFFER, None);
+            self.gl.use_program(None);
+
+            check_error(&self.gl);
         }
-
-        self.check_error();
-    }
-
-    /// OpenGL 清理
-    pub unsafe fn open_gl_deinit(&mut self) {
-        self.base.skin_animation.close();
-
-        // Unbind everything
-        self.gl.bind_buffer(glow::ARRAY_BUFFER, None);
-        self.gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, None);
-        self.gl.bind_vertex_array(None);
-        self.gl.use_program(None);
-
-        // Delete all resources
-        self.delete_model();
-        self.delete_frame_buffer();
-        self.delete_texture();
-        self.delete_fxaa();
-
-        self.gl.delete_program(self.pg);
-        self.gl.delete_program(self.pg_fxaa);
     }
 
     fn load_skin(&mut self) {
@@ -810,8 +793,167 @@ impl SkinRenderOpenGL {
     }
 }
 
+impl SkinRender for SkinRenderOpenGL {
+    fn have_cape(&self) -> bool {
+        self.base.have_cape
+    }
+
+    fn have_skin(&self) -> bool {
+        self.base.have_skin
+    }
+
+    fn width(&self) -> i32 {
+        todo!()
+    }
+
+    fn height(&self) -> i32 {
+        todo!()
+    }
+
+    fn info(&self) -> &str {
+        todo!()
+    }
+
+    fn set_animation(&mut self, value: bool) {
+        todo!()
+    }
+
+    fn get_animation(&self) -> bool {
+        todo!()
+    }
+
+    fn set_skin_type(&mut self, value: SkinType) {
+        todo!()
+    }
+
+    fn get_skin_type(&self) -> SkinType {
+        todo!()
+    }
+
+    fn set_back_color(&mut self, color: glam::Vec4) {
+        todo!()
+    }
+
+    fn get_back_color(&self) -> glam::Vec4 {
+        todo!()
+    }
+
+    fn set_render_type(&mut self, value: crate::base_render::SkinRenderType) {
+        todo!()
+    }
+
+    fn get_render_type(&self) -> crate::base_render::SkinRenderType {
+        todo!()
+    }
+
+    fn set_enable_cape(&mut self, value: bool) {
+        todo!()
+    }
+
+    fn get_enable_cape(&self) -> bool {
+        todo!()
+    }
+
+    fn set_enable_top(&mut self, value: bool) {
+        todo!()
+    }
+
+    fn get_enable_top(&self) -> bool {
+        todo!()
+    }
+
+    fn set_arm_rotate(&mut self, rotate: Vec3) {
+        todo!()
+    }
+
+    fn get_arm_rotate(&self) -> Vec3 {
+        todo!()
+    }
+
+    fn set_leg_rotate(&mut self, rotate: Vec3) {
+        todo!()
+    }
+
+    fn get_leg_rotate(&self) -> Vec3 {
+        todo!()
+    }
+
+    fn set_head_rotate(&mut self, rotate: Vec3) {
+        todo!()
+    }
+
+    fn get_head_rotate(&self) -> Vec3 {
+        todo!()
+    }
+
+    fn pointer_pressed(&mut self, key_type: crate::base_render::KeyType, point: Vec2) {
+        todo!()
+    }
+
+    fn pointer_released(&mut self, key_type: crate::base_render::KeyType, point: Vec2) {
+        todo!()
+    }
+
+    fn pointer_moved(&mut self, key_type: crate::base_render::KeyType, point: Vec2) {
+        todo!()
+    }
+
+    fn pointer_wheel_changed(&mut self, is_post: bool) {
+        todo!()
+    }
+
+    fn rotate(&mut self, x: f32, y: f32) {
+        todo!()
+    }
+
+    fn position(&mut self, x: f32, y: f32) {
+        todo!()
+    }
+
+    fn add_distance(&mut self, x: f32) {
+        todo!()
+    }
+
+    fn set_skin_tex(&mut self, skin: Option<Bitmap>) -> Result<(), ErrorType> {
+        todo!()
+    }
+
+    fn set_cape_tex(&mut self, cape: Option<Bitmap>) -> Result<(), ErrorType> {
+        todo!()
+    }
+
+    fn reset_position(&mut self) {
+        todo!()
+    }
+
+    fn tick(&mut self, time: f64) {
+        todo!()
+    }
+
+    fn on_error(&self, error: ErrorType) {
+        todo!()
+    }
+
+    fn on_state_change(&self, state: crate::base_render::StateType) {
+        todo!()
+    }
+
+    fn on_fps_update(&self, fps: i32) {
+        todo!()
+    }
+
+    fn render(&mut self, model: &crate::cube_model::SteveModel, texture: &crate::cube_model::SteveTexture) -> Result<(), ErrorType> {
+        todo!()
+    }
+
+    fn get_matrix(&self, part_type: ModelPartType) -> glam::Mat4 {
+        todo!()
+    }
+}
+
 impl Drop for SkinRenderOpenGL {
     fn drop(&mut self) {
+
         unsafe {
             self.gl.delete_texture(self.texture_skin);
             self.gl.delete_texture(self.texture_cape);
