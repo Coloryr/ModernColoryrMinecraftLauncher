@@ -1,6 +1,6 @@
 use std::{slice, sync::Arc};
 
-use glam::{Vec2, Vec3};
+use glam::{Vec2, Vec3, Vec4};
 use glow::*;
 use skia_safe::{Bitmap, ColorType, ImageInfo};
 
@@ -96,13 +96,7 @@ fn change_color_type(image: &Bitmap) -> Option<Bitmap> {
     bitmap.alloc_pixels();
 
     unsafe {
-        if image.read_pixels(
-            &rgba_info,
-            bitmap.pixels(),
-            bitmap.row_bytes(),
-            0,
-            0,
-        ) {
+        if image.read_pixels(&rgba_info, bitmap.pixels(), bitmap.row_bytes(), 0, 0) {
             Some(bitmap)
         } else {
             None
@@ -263,8 +257,10 @@ pub struct SkinRenderOpenGL {
     gl: Arc<Context>,
     is_gles: bool,
 
-    width: i32,
-    height: i32,
+    info: String,
+
+    render_width: i32,
+    render_height: i32,
 
     // Shader programs
     pg: Program,
@@ -291,9 +287,7 @@ impl SkinRenderOpenGL {
             let model = ModelVao::new(&gl);
             let top = ModelVao::new(&gl);
 
-            let mut base = BaseSkinRender::new();
-
-            base.info = format!(
+            let info = format!(
                 "Renderer: {}\nOpenGL Version: {}\nGLSL Version: {}",
                 gl.get_parameter_string(glow::RENDERER),
                 gl.get_parameter_string(glow::VERSION),
@@ -305,12 +299,13 @@ impl SkinRenderOpenGL {
             gl.cull_face(BACK);
 
             Self {
-                base: base,
+                base: BaseSkinRender::new(),
                 gl,
                 is_gles,
-                width: 0,
-                height: 0,
+                info,
                 pg,
+                render_width: 0,
+                render_height: 0,
                 texture_skin: skin,
                 texture_cape: cape,
                 normal_vao: model,
@@ -612,7 +607,7 @@ impl SkinRenderOpenGL {
     }
 
     /// 开始渲染
-    pub unsafe fn open_gl_render(&mut self, fb: Option<glow::Framebuffer>) {
+    pub unsafe fn open_gl_render(&mut self, fb: Option<Framebuffer>) {
         if self.base.switch_skin {
             self.load_skin();
         }
@@ -628,12 +623,12 @@ impl SkinRenderOpenGL {
             return;
         }
 
-        if self.base.width != self.width || self.base.height != self.height {
-            self.width = self.base.width;
-            self.height = self.base.height;
+        if self.base.width != self.render_width || self.base.height != self.render_height {
+            self.render_width = self.base.width;
+            self.render_height = self.base.height;
         }
 
-        if self.width == 0 || self.height == 0 {
+        if self.render_width == 0 || self.render_height == 0 {
             return;
         }
 
@@ -654,7 +649,8 @@ impl SkinRenderOpenGL {
 
             self.gl.bind_framebuffer(glow::FRAMEBUFFER, fb);
 
-            self.gl.viewport(0, 0, self.width, self.height);
+            self.gl
+                .viewport(0, 0, self.render_width, self.render_height);
 
             // if self.base.render_type == SkinRenderType::FXAA {
             //     self.gl.clear_color(1.0, 1.0, 1.0, 1.0);
@@ -667,11 +663,15 @@ impl SkinRenderOpenGL {
             //     );
             // }
 
-            self.gl.clear_color(1.0, 1.0, 1.0, 1.0);
+            self.gl.clear_color(
+                self.base.back_color.x,
+                self.base.back_color.y,
+                self.base.back_color.z,
+                self.base.back_color.w,
+            );
 
             self.gl.clear_depth(1.0);
-            self.gl
-                .clear(COLOR_BUFFER_BIT | DEPTH_BUFFER_BIT);
+            self.gl.clear(COLOR_BUFFER_BIT | DEPTH_BUFFER_BIT);
 
             self.gl.enable(CULL_FACE);
             self.gl.enable(DEPTH_TEST);
@@ -707,8 +707,7 @@ impl SkinRenderOpenGL {
                 self.gl.depth_mask(false);
                 self.gl.enable(BLEND);
                 self.gl.enable(SAMPLE_ALPHA_TO_COVERAGE);
-                self.gl
-                    .blend_func(SRC_ALPHA, ONE_MINUS_SRC_ALPHA);
+                self.gl.blend_func(SRC_ALPHA, ONE_MINUS_SRC_ALPHA);
 
                 self.draw_skin_top();
 
@@ -793,167 +792,152 @@ impl SkinRenderOpenGL {
     }
 }
 
+// Safety: SkinRenderOpenGL is always used on a single rendering thread.
+// The GL handle types (Texture, Program, Buffer, VertexArray) are just integer
+// indices, and Bitmap is only accessed from the render thread.
+unsafe impl Send for SkinRenderOpenGL {}
+unsafe impl Sync for SkinRenderOpenGL {}
+
 impl SkinRender for SkinRenderOpenGL {
-    fn have_cape(&self) -> bool {
-        self.base.have_cape
-    }
-
-    fn have_skin(&self) -> bool {
-        self.base.have_skin
-    }
-
     fn width(&self) -> i32 {
-        todo!()
+        self.render_width
     }
 
     fn height(&self) -> i32 {
-        todo!()
+        self.render_height
     }
 
-    fn info(&self) -> &str {
-        todo!()
+    fn have_cape(&self) -> bool {
+        self.base.have_cape()
+    }
+
+    fn have_skin(&self) -> bool {
+        self.base.have_skin()
+    }
+
+    fn info(&self) -> String {
+        self.info.clone()
     }
 
     fn set_animation(&mut self, value: bool) {
-        todo!()
+        self.base.set_animation(value);
     }
 
     fn get_animation(&self) -> bool {
-        todo!()
+        self.base.get_animation()
     }
 
     fn set_skin_type(&mut self, value: SkinType) {
-        todo!()
+        self.base.set_skin_type(value);
     }
 
     fn get_skin_type(&self) -> SkinType {
-        todo!()
+        self.base.get_skin_type()
     }
 
-    fn set_back_color(&mut self, color: glam::Vec4) {
-        todo!()
+    fn set_back_color(&mut self, color: Vec4) {
+        self.base.set_back_color(color);
     }
 
-    fn get_back_color(&self) -> glam::Vec4 {
-        todo!()
+    fn get_back_color(&self) -> Vec4 {
+        self.base.get_back_color()
     }
 
     fn set_render_type(&mut self, value: crate::base_render::SkinRenderType) {
-        todo!()
+        self.base.set_render_type(value);
     }
 
     fn get_render_type(&self) -> crate::base_render::SkinRenderType {
-        todo!()
+        self.base.get_render_type()
     }
 
     fn set_enable_cape(&mut self, value: bool) {
-        todo!()
+        self.base.set_enable_cape(value);
     }
 
     fn get_enable_cape(&self) -> bool {
-        todo!()
+        self.base.get_enable_cape()
     }
 
     fn set_enable_top(&mut self, value: bool) {
-        todo!()
+        self.base.set_enable_top(value);
     }
 
     fn get_enable_top(&self) -> bool {
-        todo!()
+        self.base.get_enable_top()
     }
 
     fn set_arm_rotate(&mut self, rotate: Vec3) {
-        todo!()
+        self.base.set_arm_rotate(rotate);
     }
 
     fn get_arm_rotate(&self) -> Vec3 {
-        todo!()
+        self.base.get_arm_rotate()
     }
 
     fn set_leg_rotate(&mut self, rotate: Vec3) {
-        todo!()
+        self.base.set_leg_rotate(rotate);
     }
 
     fn get_leg_rotate(&self) -> Vec3 {
-        todo!()
+        self.base.get_leg_rotate()
     }
 
     fn set_head_rotate(&mut self, rotate: Vec3) {
-        todo!()
+        self.base.set_head_rotate(rotate);
     }
 
     fn get_head_rotate(&self) -> Vec3 {
-        todo!()
+        self.base.get_head_rotate()
     }
 
     fn pointer_pressed(&mut self, key_type: crate::base_render::KeyType, point: Vec2) {
-        todo!()
+        self.base.pointer_pressed(key_type, point);
     }
 
     fn pointer_released(&mut self, key_type: crate::base_render::KeyType, point: Vec2) {
-        todo!()
+        self.base.pointer_released(key_type, point);
     }
 
     fn pointer_moved(&mut self, key_type: crate::base_render::KeyType, point: Vec2) {
-        todo!()
+        self.base.pointer_moved(key_type, point);
     }
 
     fn pointer_wheel_changed(&mut self, is_post: bool) {
-        todo!()
+        self.base.pointer_wheel_changed(is_post);
     }
 
     fn rotate(&mut self, x: f32, y: f32) {
-        todo!()
+        self.base.rotate(x, y);
     }
 
     fn position(&mut self, x: f32, y: f32) {
-        todo!()
+        self.base.position(x, y);
     }
 
     fn add_distance(&mut self, x: f32) {
-        todo!()
+        self.base.add_distance(x);
     }
 
     fn set_skin_tex(&mut self, skin: Option<Bitmap>) -> Result<(), ErrorType> {
-        todo!()
+        self.base.set_skin_tex(skin)
     }
 
     fn set_cape_tex(&mut self, cape: Option<Bitmap>) -> Result<(), ErrorType> {
-        todo!()
+        self.base.set_cape_tex(cape)
     }
 
     fn reset_position(&mut self) {
-        todo!()
+        self.base.reset_position();
     }
 
     fn tick(&mut self, time: f64) {
-        todo!()
-    }
-
-    fn on_error(&self, error: ErrorType) {
-        todo!()
-    }
-
-    fn on_state_change(&self, state: crate::base_render::StateType) {
-        todo!()
-    }
-
-    fn on_fps_update(&self, fps: i32) {
-        todo!()
-    }
-
-    fn render(&mut self, model: &crate::cube_model::SteveModel, texture: &crate::cube_model::SteveTexture) -> Result<(), ErrorType> {
-        todo!()
-    }
-
-    fn get_matrix(&self, part_type: ModelPartType) -> glam::Mat4 {
-        todo!()
+        self.base.tick(time);
     }
 }
 
 impl Drop for SkinRenderOpenGL {
     fn drop(&mut self) {
-
         unsafe {
             self.gl.delete_texture(self.texture_skin);
             self.gl.delete_texture(self.texture_cape);

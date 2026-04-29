@@ -3098,6 +3098,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "mcml-skin-draw"
+version = "0.1.0"
+dependencies = [
+ "skia-safe",
+]
+
+[[package]]
 name = "mcml-skin-render"
 version = "0.1.0"
 dependencies = [

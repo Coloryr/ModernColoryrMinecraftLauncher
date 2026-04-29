@@ -21,7 +21,7 @@ codegen-units = 1
 lto = true
 
 [workspace]
-members = ["mcml-core", "mcml-log", "mcml-skin-render"]
+members = ["mcml-core", "mcml-log", "mcml-skin-draw", "mcml-skin-render"]
 
 [workspace.dependencies]
 const_format = "~0.2.35"
