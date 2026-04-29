@@ -480,3 +480,9 @@ impl BaseSkinRender {
         }
     }
 }
+
+impl Drop for BaseSkinRender {
+    fn drop(&mut self) {
+        self.skin_animation.close();
+    }
+}
