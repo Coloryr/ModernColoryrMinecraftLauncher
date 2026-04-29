@@ -4,7 +4,6 @@ use std::f32::consts::PI;
 use std::sync::{Arc, Mutex};
 
 use crate::cube::cube;
-use crate::cube_model::{SteveModel, SteveTexture};
 use crate::skin_animation::SkinAnimation;
 use crate::texture::texture::SkinType;
 
@@ -66,7 +65,7 @@ pub trait SkinRender: Send + Sync {
     fn have_skin(&self) -> bool;
     fn width(&self) -> i32;
     fn height(&self) -> i32;
-    fn info(&self) -> &str;
+    fn info(&self) -> String;
 
     // 属性设置器
     fn set_animation(&mut self, value: bool);
@@ -111,15 +110,6 @@ pub trait SkinRender: Send + Sync {
 
     fn reset_position(&mut self);
     fn tick(&mut self, time: f64);
-
-    // 事件
-    fn on_error(&self, error: ErrorType);
-    fn on_state_change(&self, state: StateType);
-    fn on_fps_update(&self, fps: i32);
-
-    // 渲染方法
-    fn render(&mut self, model: &SteveModel, texture: &SteveTexture) -> Result<(), ErrorType>;
-    fn get_matrix(&self, part_type: ModelPartType) -> Mat4;
 }
 
 /// 抽象皮肤渲染器基类
@@ -163,14 +153,12 @@ pub struct BaseSkinRender {
     // 状态
     pub have_cape: bool,
     pub have_skin: bool,
-    pub info: String,
 
     // 旋转角度
     pub arm_rotate: Vec3,
     pub leg_rotate: Vec3,
     pub head_rotate: Vec3,
 
-    // 事件回调 (使用Arc<Mutex<dyn Fn...>> 或者闭包)
     pub error_callback: Option<Arc<Mutex<dyn Fn(ErrorType) + Send + Sync>>>,
     pub state_callback: Option<Arc<Mutex<dyn Fn(StateType) + Send + Sync>>>,
     pub fps_callback: Option<Arc<Mutex<dyn Fn(i32) + Send + Sync>>>,
@@ -207,7 +195,6 @@ impl BaseSkinRender {
             skin_animation: SkinAnimation::new(),
             have_cape: false,
             have_skin: false,
-            info: String::new(),
             arm_rotate: Vec3::new(0.0, 0.0, 0.0),
             leg_rotate: Vec3::new(0.0, 0.0, 0.0),
             head_rotate: Vec3::new(0.0, 0.0, 0.0),
@@ -463,7 +450,8 @@ impl BaseSkinRender {
             ),
             ModelPartType::Model => {
                 let translation = Mat4::from_translation(Vec3::new(self.xy.x, self.xy.y, 0.0));
-                let scale = Mat4::from_scale(Vec3::new(self.distance, self.distance, self.distance));
+                let scale =
+                    Mat4::from_scale(Vec3::new(self.distance, self.distance, self.distance));
                 self.last * translation * scale
             }
             ModelPartType::Cape => {
@@ -478,6 +466,95 @@ impl BaseSkinRender {
             }
             ModelPartType::Body => Mat4::default(),
         }
+    }
+
+    pub fn set_animation(&mut self, value: bool) {
+        self.skin_animation.run = value;
+        self.animation = value;
+    }
+
+    pub fn get_animation(&self) -> bool {
+        self.animation
+    }
+
+    pub fn set_skin_type(&mut self, value: SkinType) {
+        if self.skin_type != value {
+            self.skin_animation.skin_type = value;
+            self.switch_model = true;
+            self.skin_type = value;
+        }
+    }
+
+    pub fn get_skin_type(&self) -> SkinType {
+        self.skin_type
+    }
+
+    pub fn set_back_color(&mut self, color: Vec4) {
+        self.back_color = color;
+        self.switch_back = true;
+    }
+
+    pub fn get_back_color(&self) -> Vec4 {
+        self.back_color
+    }
+
+    pub fn set_render_type(&mut self, value: crate::base_render::SkinRenderType) {
+        self.render_type = value;
+        self.switch_type = true;
+    }
+
+    pub fn get_render_type(&self) -> crate::base_render::SkinRenderType {
+        self.render_type
+    }
+
+    pub fn set_enable_cape(&mut self, value: bool) {
+        self.enable_cape = value;
+        self.switch_type = true;
+    }
+
+    pub fn get_enable_cape(&self) -> bool {
+        self.enable_cape
+    }
+
+    pub fn set_enable_top(&mut self, value: bool) {
+        self.enable_top = value;
+        self.switch_type = true;
+    }
+
+    pub fn get_enable_top(&self) -> bool {
+        self.enable_top
+    }
+
+    pub fn set_arm_rotate(&mut self, rotate: Vec3) {
+        self.arm_rotate = rotate;
+    }
+
+    pub fn get_arm_rotate(&self) -> Vec3 {
+        self.arm_rotate
+    }
+
+    pub fn set_leg_rotate(&mut self, rotate: Vec3) {
+        self.leg_rotate = rotate;
+    }
+
+    pub fn get_leg_rotate(&self) -> Vec3 {
+        self.leg_rotate
+    }
+
+    pub fn set_head_rotate(&mut self, rotate: Vec3) {
+        self.head_rotate = rotate;
+    }
+
+    pub fn get_head_rotate(&self) -> Vec3 {
+        self.head_rotate
+    }
+
+    pub fn have_cape(&self) -> bool {
+        self.have_cape
+    }
+
+    pub fn have_skin(&self) -> bool {
+        self.have_skin
     }
 }
 
