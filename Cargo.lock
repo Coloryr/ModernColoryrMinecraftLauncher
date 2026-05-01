@@ -3064,6 +3064,8 @@ version = "0.1.0"
 dependencies = [
  "mcml-core",
  "mcml-log",
+ "mcml-skin",
+ "mcml-skin-draw",
  "mcml-skin-render",
  "slint",
  "slint-build",
@@ -3098,9 +3100,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "mcml-skin"
+version = "0.1.0"
+dependencies = [
+ "skia-safe",
+]
+
+[[package]]
 name = "mcml-skin-draw"
 version = "0.1.0"
 dependencies = [
+ "mcml-skin",
  "skia-safe",
 ]
 
@@ -3110,6 +3120,7 @@ version = "0.1.0"
 dependencies = [
  "glam",
  "glow",
+ "mcml-skin",
  "skia-safe",
 ]
 

@@ -1,29 +1,44 @@
 pub mod cape_2d_draw;
 pub mod head_2d_draw;
+pub mod skin_2d_draw;
 
 pub mod skin_draw {
-    use skia_safe::{Bitmap, Color, IRect, ImageInfo};
+    use skia_safe::{Bitmap, Color, ImageInfo};
 
     pub const SCALE_TYPEA: usize = 16;
     pub const SCALE_TYPEB: usize = 2;
+    pub const SCALE_TYPEC: usize = 8;
 
-    pub fn draw(dest: &mut Bitmap, source: &mut Bitmap, subset: IRect) -> Option<()> {
-        // 边界检查
-        if subset.left < 0
-            || subset.top < 0
-            || subset.right > source.width()
-            || subset.bottom > source.height()
-            || subset.left >= subset.right
-            || subset.top >= subset.bottom
+    pub fn draw(
+        dest: &mut Bitmap,
+        source: &mut Bitmap,
+        dest_x: i32,
+        dest_y: i32,
+        src_x: i32,
+        src_y: i32,
+        width: i32,
+        height: i32,
+    ) -> Option<()> {
+        // 参数验证
+        if width <= 0 || height <= 0 {
+            return Some(());
+        }
+
+        if dest_x < 0
+            || dest_y < 0
+            || dest_x + width > dest.width()
+            || dest_y + height > dest.height()
+            || src_x < 0
+            || src_y < 0
+            || src_x + width > source.width()
+            || src_y + height > source.height()
         {
             return None;
         }
 
-        let width = subset.width();
-        let height = subset.height();
-
-        // 检查 dest 大小是否足够
-        if dest.width() < width || dest.height() < height {
+        let src_ptr = source.pixels() as *const u8;
+        let dst_ptr = dest.pixels() as *mut u8;
+        if src_ptr.is_null() || dst_ptr.is_null() {
             return None;
         }
 
@@ -43,9 +58,10 @@ pub mod skin_draw {
 
         // 批量复制每行数据
         for y in 0..height {
-            let src_offset = ((subset.top + y) as usize) * src_row_bytes
-                + (subset.left as usize) * bytes_per_pixel;
-            let dst_offset = (y as usize) * dst_row_bytes;
+            let src_offset =
+                ((src_y + y) as usize) * src_row_bytes + (src_x as usize) * bytes_per_pixel;
+            let dst_offset =
+                ((dest_y + y) as usize) * dst_row_bytes + (dest_x as usize) * bytes_per_pixel;
 
             unsafe {
                 let src_slice = std::slice::from_raw_parts(
@@ -70,29 +86,27 @@ pub mod skin_draw {
 
     impl ColorMix for Color {
         fn mix(&self, other: &Color) -> Color {
-            // 标准的 Alpha 混合 (SrcOver)
-            let src_a = other.a() as f32 / 255.0;
-            let dst_a = self.a() as f32 / 255.0;
+            let ap = other.a() as f32 / 255.0;
+            let dp = 1.0 - ap;
 
-            let out_a = src_a + dst_a * (1.0 - src_a);
+            let out_r = other.r() as f32 * ap + self.r() as f32 * dp;
+            let out_g = other.g() as f32 * ap + self.g() as f32 * dp;
+            let out_b = other.b() as f32 * ap + self.b() as f32 * dp;
 
-            if out_a <= 0.0 {
-                return Color::TRANSPARENT;
+            if self.a() == 0 && other.a() == 0 {
+                Color::from_argb(
+                    0,
+                    out_r as u8,
+                    out_g as u8,
+                    out_b as u8,
+                )
+            } else {
+                Color::from_rgb(
+                    out_r as u8,
+                    out_g as u8,
+                    out_b as u8,
+                )
             }
-
-            let out_r =
-                (other.r() as f32 * src_a + self.r() as f32 * dst_a * (1.0 - src_a)) / out_a;
-            let out_g =
-                (other.g() as f32 * src_a + self.g() as f32 * dst_a * (1.0 - src_a)) / out_a;
-            let out_b =
-                (other.b() as f32 * src_a + self.b() as f32 * dst_a * (1.0 - src_a)) / out_a;
-
-            Color::from_argb(
-                (out_a.clamp(0.0, 255.0) * 255.0) as u8,
-                (out_r.clamp(0.0, 255.0) * 255.0) as u8,
-                (out_g.clamp(0.0, 255.0) * 255.0) as u8,
-                (out_b.clamp(0.0, 255.0) * 255.0) as u8,
-            )
         }
     }
 
@@ -147,7 +161,6 @@ pub mod skin_draw {
                     let dst_slice =
                         std::slice::from_raw_parts_mut(dst_ptr.add(dst_offset), bytes_per_pixel);
 
-                    // 读取源和目标颜色
                     let src_color =
                         Color::from_argb(src_slice[3], src_slice[2], src_slice[1], src_slice[0]);
                     let dst_color =
@@ -155,7 +168,6 @@ pub mod skin_draw {
 
                     let mixed = dst_color.mix(&src_color);
 
-                    // 写入混合结果 (BGRA order)
                     dst_slice[0] = mixed.b();
                     dst_slice[1] = mixed.g();
                     dst_slice[2] = mixed.r();

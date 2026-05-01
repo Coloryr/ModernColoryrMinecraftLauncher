@@ -1,10 +1,10 @@
 pub mod skin_type_checker {
     use skia_safe::{Bitmap, Color, IPoint};
 
-    use crate::texture::texture::SkinType;
+    use crate::SkinType;
 
     /// 获取皮肤类型
-    pub fn get_text_type(image: &Bitmap) -> SkinType {
+    pub fn get_skin_type(image: &Bitmap) -> SkinType {
         let width = image.width();
         let height = image.height();
 
