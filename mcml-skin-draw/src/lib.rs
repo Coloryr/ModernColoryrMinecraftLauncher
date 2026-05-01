@@ -1,5 +1,6 @@
 pub mod cape_2d_draw;
 pub mod head_2d_draw;
+pub mod head_3d_draw;
 pub mod skin_2d_draw;
 
 pub mod skin_draw {
