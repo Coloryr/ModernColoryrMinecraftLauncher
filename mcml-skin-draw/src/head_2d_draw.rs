@@ -1,5 +1,5 @@
 pub mod head_2d {
-    use skia_safe::{Bitmap, IRect, ImageInfo};
+    use skia_safe::{Bitmap, ImageInfo};
 
     use crate::skin_draw::{
         SCALE_TYPEA, SCALE_TYPEB, draw, draw_mix, draw_with_fill_image, draw_with_fill_image_mix,
@@ -9,7 +9,7 @@ pub mod head_2d {
     pub fn head_2d_draw_typea(image: &mut Bitmap) -> Option<Bitmap> {
         let mut dest = Bitmap::new();
         let image_info = ImageInfo::new(
-            (16, 16),
+            (8, 8),
             image.color_type(),
             image.alpha_type(),
             image.color_space().map(|cs| cs.clone()),
@@ -19,7 +19,7 @@ pub mod head_2d {
         }
         dest.alloc_pixels();
 
-        draw(&mut dest, image, IRect::new(8, 8, 16, 16))?;
+        draw(&mut dest, image, 0,0,8,8,8,8)?;
         draw_mix(&mut dest, image, 0, 0, 40, 8, 8, 8)?;
         scale(&mut dest, SCALE_TYPEA)
     }

@@ -1,19 +1,6 @@
 pub mod texture {
     use crate::cube_model::SteveTexture;
 
-    /// 皮肤类型枚举
-    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-    pub enum SkinType {
-        /// 1.7旧版
-        Old,
-        /// 1.8新版
-        New,
-        /// 1.8新版纤细
-        NewSlim,
-        /// 未知的类型
-        Unknown,
-    }
-
     const HEAD_TEX: [f32; 48] = [
         // back
         32.0, 8.0, 32.0, 16.0, 24.0, 16.0, 24.0, 8.0, // front

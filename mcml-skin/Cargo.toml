@@ -1,8 +1,7 @@
 [package]
-name = "mcml-skin-draw"
+name = "mcml-skin"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-mcml-skin = { path = "../mcml-skin" }
 skia-safe.workspace = true

@@ -8,6 +8,8 @@ edition = "2024"
 [dependencies]
 slint = { version = "~1.16", features = ["backend-winit", "renderer-skia"] }
 trpl = "~0.3.0"
+mcml-skin = { path = "./mcml-skin" }
+mcml-skin-draw = { path = "./mcml-skin-draw" }
 mcml-skin-render = { path = "./mcml-skin-render" }
 mcml-core = { path = "./mcml-core" }
 mcml-log = { path = "./mcml-log" }
@@ -21,7 +23,7 @@ codegen-units = 1
 lto = true
 
 [workspace]
-members = ["mcml-core", "mcml-log", "mcml-skin-draw", "mcml-skin-render"]
+members = ["mcml-core", "mcml-log", "mcml-skin", "mcml-skin-draw", "mcml-skin-render"]
 
 [workspace.dependencies]
 const_format = "~0.2.35"
