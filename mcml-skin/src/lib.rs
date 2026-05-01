@@ -15,7 +15,9 @@ pub enum SkinType {
 
 pub mod skin {
     use skia_safe::image::CachingHint;
-    use skia_safe::{AlphaType, Bitmap, ColorType, Data, Image, ImageInfo};
+    use skia_safe::{AlphaType, Bitmap, ColorType, Data, EncodedImageFormat, Image, ImageInfo};
+    use std::fs::File;
+    use std::io::Write;
     use std::path::Path;
     use std::slice;
 
@@ -53,5 +55,25 @@ pub mod skin {
             return None;
         }
         Some(bitmap)
+    }
+
+    pub fn save_bitmap(image: &Bitmap, file: &Path) {
+        let file = File::create(file);
+        assert!(file.is_ok());
+        let mut file = file.unwrap();
+        let data = image.encode(EncodedImageFormat::PNG, 100);
+        assert!(data.is_some());
+        let data = data.unwrap();
+        assert!(file.write_all(&data).is_ok());
+    }
+
+    pub fn save_image(image: &Image, file: &Path) {
+        let file = File::create(file);
+        assert!(file.is_ok());
+        let mut file = file.unwrap();
+        let data = image.encode(None, EncodedImageFormat::PNG, 100);
+        assert!(data.is_some());
+        let data = data.unwrap();
+        assert!(file.write_all(&data).is_ok());
     }
 }

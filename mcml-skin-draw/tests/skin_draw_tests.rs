@@ -1,8 +1,8 @@
-use std::{fs::File, io::Write, path::Path};
+use std::{ path::Path};
 
-use mcml_skin::skin;
-use mcml_skin_draw::{cape_2d_draw::cape_2d, head_2d_draw::head_2d, skin_2d_draw::skin_2d};
-use skia_safe::{Bitmap, EncodedImageFormat, image};
+use mcml_skin::skin::{self};
+use mcml_skin_draw::{cape_2d_draw::cape_2d, head_2d_draw::head_2d, skin_2d_draw::skin_2d, head_3d_draw::head_3d};
+use skia_safe::{Bitmap};
 
 /// 比较两个 Bitmap 的内容是否完全一致
 fn assert_bitmap_eq(a: &mut Bitmap, b: &mut Bitmap) {
@@ -37,16 +37,6 @@ fn assert_bitmap_eq(a: &mut Bitmap, b: &mut Bitmap) {
     }
 }
 
-fn write_res(image: &Bitmap, file: &Path) {
-    let file = File::create(file);
-    assert!(file.is_ok());
-    let mut file = file.unwrap();
-    let data = image.encode(EncodedImageFormat::PNG, 100);
-    assert!(data.is_some());
-    let data = data.unwrap();
-    assert!(file.write_all(&data).is_ok());
-}
-
 #[test]
 fn test_cape_draw() {
     let file = Path::new("tests").join("cape.png");
@@ -67,7 +57,7 @@ fn test_cape_draw() {
 
     assert_bitmap_eq(&mut res, &mut out);
 
-    // write_res(&res, file);
+    // skin::save_bitmap(&res, file);
 }
 
 #[test]
@@ -90,7 +80,7 @@ fn test_cape_back_draw() {
 
     assert_bitmap_eq(&mut res, &mut out);
 
-    // write_res(&res, file);
+    // skin::save_bitmap(&res, file);
 }
 
 #[test]
@@ -113,7 +103,7 @@ fn test_head_draw_typea() {
 
     assert_bitmap_eq(&mut res, &mut out);
 
-    // write_res(&res, file);
+    // skin::save_bitmap(&res, file);
 }
 
 #[test]
@@ -136,7 +126,7 @@ fn test_head_draw_typeb() {
 
     assert_bitmap_eq(&mut res, &mut out);
 
-    // write_res(&res, file);
+    // skin::save_bitmap(&res, file);
 }
 
 #[test]
@@ -159,7 +149,7 @@ fn test_skin_draw_typea() {
 
     assert_bitmap_eq(&mut res, &mut out);
 
-    // write_res(&res, file);
+    // skin::save_bitmap(&res, file);
 }
 
 #[test]
@@ -182,5 +172,28 @@ fn test_skin_draw_typeb() {
 
     assert_bitmap_eq(&mut res, &mut out);
 
-    // write_res(&res, file);
+    // skin::save_bitmap(&res, file);
+}
+
+#[test]
+fn test_head_3d_draw_typea() {
+    let file = Path::new("tests").join("skin_slim.png");
+    let file = file.as_path();
+    let image = skin::open_bitmap(file);
+    assert!(image.is_some());
+    let mut image = image.unwrap();
+    let res = head_3d::draw_head_3d(&mut image);
+    assert!(res.is_some());
+    let mut res = res.unwrap();
+
+    let file = Path::new("tests").join("out_head_3d_a.png");
+    let file = file.as_path();
+
+    // let out = skin::open_bitmap(file);
+    // assert!(out.is_some());
+    // let mut out = out.unwrap();
+
+    // assert_bitmap_eq(&mut res, &mut out);
+
+    skin::save_bitmap(&res, file);
 }

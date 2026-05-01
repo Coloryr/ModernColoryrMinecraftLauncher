@@ -3110,6 +3110,7 @@ dependencies = [
 name = "mcml-skin-draw"
 version = "0.1.0"
 dependencies = [
+ "glam",
  "mcml-skin",
  "skia-safe",
 ]
