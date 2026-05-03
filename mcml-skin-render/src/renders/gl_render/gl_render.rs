@@ -7,12 +7,12 @@ use skia_safe::{Bitmap, ColorType, ImageInfo};
 
 use crate::{
     base_render::{BaseSkinRender, ErrorType, ModelPartType, SkinRender},
-    cube::cube,
+    cube,
     cube_model::CubeModelItemObj,
-    model::model,
+    model,
     renders::gl_render::{
         gl_model::{ModelVao, VaoItem, VertexOpenGL},
-        gl_shader::gl_shader,
+        gl_shader,
     },
     texture::texture::{self},
 };
@@ -248,6 +248,20 @@ fn put_vao_item(gl: &Context, vao: &VaoItem, model: &CubeModelItemObj, uv: &Vec<
         gl.enable_vertex_attrib_array(normal);
 
         gl.bind_vertex_array(None);
+    }
+}
+
+/// 渲染类型枚举
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SkinRenderGLType {
+    Normal,
+    MSAA,
+    FXAA,
+}
+
+impl Default for SkinRenderGLType {
+    fn default() -> Self {
+        Self::Normal
     }
 }
 
@@ -948,19 +962,5 @@ impl Drop for SkinRenderOpenGL {
 
             self.gl.delete_program(self.pg);
         }
-    }
-}
-
-/// 渲染类型枚举
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SkinRenderGLType {
-    Normal,
-    MSAA,
-    FXAA,
-}
-
-impl Default for SkinRenderGLType {
-    fn default() -> Self {
-        Self::Normal
     }
 }

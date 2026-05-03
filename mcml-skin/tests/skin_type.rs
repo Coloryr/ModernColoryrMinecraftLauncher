@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use mcml_skin::{SkinType, skin, skin_type_checker::skin_type_checker};
+use mcml_skin::{SkinType, skin, skin_type_checker};
 
 #[test]
 fn test_skin_old() {

@@ -1,0 +1,184 @@
+{
+    // 使用 IntelliSense 了解相关属性。 
+    // 悬停以查看现有属性的描述。
+    // 欲了解更多信息，请访问: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug unit tests in library 'mcml_core'",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--package=mcml-core"
+                ]
+            }
+        },
+        {
+            "name": "Debug integration test 'config_tests'",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--test=config_tests",
+                    "--package=mcml-core"
+                ]
+            }
+        },
+        {
+            "name": "Debug integration test 'core_test'",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--test=core_test",
+                    "--package=mcml-core"
+                ]
+            }
+        },
+        {
+            "name": "Debug integration test 'download_tests'",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--test=download_tests",
+                    "--package=mcml-core"
+                ]
+            }
+        },
+        {
+            "name": "Debug integration test 'events_tests'",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--test=events_tests",
+                    "--package=mcml-core"
+                ]
+            }
+        },
+        {
+            "name": "Debug integration test 'nbt'",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--test=nbt",
+                    "--package=mcml-core"
+                ]
+            }
+        },
+        {
+            "name": "Debug unit tests in library 'mcml_log'",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--package=mcml-log"
+                ]
+            }
+        },
+        {
+            "name": "Debug integration test 'log_tests'",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--test=log_tests",
+                    "--package=mcml-log"
+                ]
+            }
+        },
+        {
+            "name": "Debug unit tests in library 'mcml_skin'",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--package=mcml-skin"
+                ]
+            }
+        },
+        {
+            "name": "Debug integration test 'skin_type'",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--test=skin_type",
+                    "--package=mcml-skin"
+                ]
+            }
+        },
+        {
+            "name": "Debug unit tests in library 'mcml_skin_draw'",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--package=mcml-skin-draw"
+                ]
+            }
+        },
+        {
+            "name": "Debug integration test 'skin_draw_tests'",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--test=skin_draw_tests",
+                    "--package=mcml-skin-draw"
+                ]
+            }
+        },
+        {
+            "name": "Debug unit tests in library 'mcml_skin_render'",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--package=mcml-skin-render"
+                ]
+            }
+        },
+        {
+            "name": "Debug executable 'mcml'",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": [
+                    "run",
+                    "--bin=mcml",
+                    "--package=mcml"
+                ]
+            },
+            "args": []
+        },
+        {
+            "name": "Debug unit tests in executable 'mcml'",
+            "type": "lldb",
+            "request": "launch",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--bin=mcml",
+                    "--package=mcml"
+                ]
+            }
+        }
+    ]
+}
