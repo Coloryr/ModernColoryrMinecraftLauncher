@@ -189,11 +189,11 @@ fn test_head_3d_draw_typea() {
     let file = Path::new("tests").join("out_head_3d_a.png");
     let file = file.as_path();
 
-    // let out = skin::open_bitmap(file);
-    // assert!(out.is_some());
-    // let mut out = out.unwrap();
+    let out = skin::open_bitmap(file);
+    assert!(out.is_some());
+    let mut out = out.unwrap();
 
-    // assert_bitmap_eq(&mut res, &mut out);
+    assert_bitmap_eq(&mut res, &mut out);
 
-    skin::save_bitmap(&res, file);
+    // skin::save_bitmap(&res, file);
 }

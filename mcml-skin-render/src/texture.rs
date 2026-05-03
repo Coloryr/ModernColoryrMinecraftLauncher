@@ -1,4 +1,6 @@
 pub mod texture {
+    use mcml_skin::SkinType;
+
     use crate::cube_model::SteveTexture;
 
     const HEAD_TEX: [f32; 48] = [

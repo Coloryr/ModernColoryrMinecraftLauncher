@@ -1,8 +1,9 @@
 pub mod model {
+    use mcml_skin::SkinType;
+
     use crate::{
         cube::cube,
         cube_model::{CubeModelItemObj, SteveModel},
-        texture::texture::SkinType,
     };
 
     /// 生成一个模型

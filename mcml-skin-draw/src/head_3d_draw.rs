@@ -1,8 +1,7 @@
 pub mod head_3d {
-    use std::{f32::consts::PI, path::Path, slice};
+    use std::{f32::consts::PI, slice};
 
     use glam::{Mat4, Vec3, Vec4};
-    use mcml_skin::skin;
     use skia_safe::{
         AlphaType, Bitmap, BlendMode, Canvas, Color, ColorType, IRect, ImageInfo, Paint, Point,
         Point3, Rect, SamplingOptions, TileMode,
