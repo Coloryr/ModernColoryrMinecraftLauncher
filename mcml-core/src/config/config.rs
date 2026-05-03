@@ -16,7 +16,10 @@ pub static CONFIG: RwLock<OnceLock<ConfigObj>> = RwLock::new(OnceLock::new());
 static FILE: OnceLock<PathBuf> = OnceLock::new();
 
 pub fn save_now() {
-    let file = File::create(FILE.get().unwrap());
+    let file = FILE.get().unwrap();
+    log::info(format!("Save config: {}", file.display()));
+
+    let file = File::create(file);
     if file.is_ok() {
         let file = file.unwrap();
         let res = serde_json::to_writer(file, &CONFIG.read().unwrap().get());
@@ -35,7 +38,7 @@ pub fn save() {
 }
 
 pub fn load(file: &PathBuf) {
-    log::info(format!("Load config: {}", file.to_str().unwrap()));
+    log::info(format!("Load config: {}", file.display()));
 
     if !Path::exists(file) {
         *core::NEW_START.write().unwrap() = true;
@@ -44,7 +47,7 @@ pub fn load(file: &PathBuf) {
 
         log::info(format!("Create new config"));
 
-        save();
+        save_now();
         return;
     }
 
@@ -80,8 +83,8 @@ pub fn load(file: &PathBuf) {
     }
 }
 
-pub fn init(local: String) {
-    FILE.get_or_init(|| Path::new(&local).join(names::NAME_CONFIG_FILE));
+pub fn init(local: PathBuf) {
+    FILE.get_or_init(|| local.join(names::NAME_CONFIG_FILE));
 
     load(FILE.get().unwrap());
 }

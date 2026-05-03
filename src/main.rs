@@ -2,14 +2,20 @@
 // #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 #![windows_subsystem = "windows"]
 
-use std::error::Error;
 use std::env;
+use std::error::Error;
 
-use mcml_core::core::{CoreInitObj, core};
+use mcml_core::core::{self, CoreInitObj};
 
 slint::include_modules!();
 
 fn main() -> Result<(), Box<dyn Error>> {
+    core::init(CoreInitObj::new(
+        String::from("./"),
+        String::new(),
+        String::new(),
+    ));
+
     unsafe {
         env::set_var("SLINT_BACKEND", "winit-skia");
     }
@@ -17,8 +23,6 @@ fn main() -> Result<(), Box<dyn Error>> {
     let ui = AppWindow::new()?;
 
     ui.run()?;
-
-    core::init(CoreInitObj::new(String::new(), String::new(), String::new()));
 
     Ok(())
 }

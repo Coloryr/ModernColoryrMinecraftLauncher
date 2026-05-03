@@ -13,8 +13,7 @@ use crate::{
     renders::gl_render::{
         gl_model::{ModelVao, VaoItem, VertexOpenGL},
         gl_shader,
-    },
-    texture::texture::{self},
+    }, texture
 };
 
 fn init_shader(gl: &Context) -> Program {

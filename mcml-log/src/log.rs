@@ -20,10 +20,10 @@ static LOG_FILE: OnceLock<Mutex<BufWriter<File>>> = OnceLock::new();
 static LOG_RUN: AtomicBool = AtomicBool::new(true);
 static LOG_SEM: OnceLock<Arc<Semaphore>> = OnceLock::new();
 
-pub fn start(local: String) {
+pub fn start(local: PathBuf) {
     LOG_SEM.get_or_init(|| Arc::new(Semaphore::new(0)));
 
-    let log_path = PathBuf::from(local).join("logs.log");
+    let log_path = local.join("logs.log");
 
     let file = match OpenOptions::new()
         .create(true)
@@ -72,8 +72,8 @@ fn save() {
                 item1.get_level(),
                 item1.log,
                 if cfg!(windows) { "\r\n" } else { "\n" }
-            ))
-            .unwrap();
+            )).unwrap();
+            file.flush().unwrap();
         }
     }
 }
