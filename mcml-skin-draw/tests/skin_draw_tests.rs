@@ -182,11 +182,34 @@ fn test_head_3d_draw_typea() {
     let image = skin::open_bitmap(file);
     assert!(image.is_some());
     let mut image = image.unwrap();
-    let res = head_3d::draw_head_3d(&mut image);
+    let res = head_3d::draw_head_3d_typea(&mut image);
     assert!(res.is_some());
     let mut res = res.unwrap();
 
     let file = Path::new("tests").join("out_head_3d_a.png");
+    let file = file.as_path();
+
+    let out = skin::open_bitmap(file);
+    assert!(out.is_some());
+    let mut out = out.unwrap();
+
+    assert_bitmap_eq(&mut res, &mut out);
+
+    // skin::save_bitmap(&res, file);
+}
+
+#[test]
+fn test_head_3d_draw_typeb() {
+    let file = Path::new("tests").join("skin_slim.png");
+    let file = file.as_path();
+    let image = skin::open_bitmap(file);
+    assert!(image.is_some());
+    let mut image = image.unwrap();
+    let res = head_3d::draw_head_3d_typeb(&mut image, 15.0, 65.0);
+    assert!(res.is_some());
+    let mut res = res.unwrap();
+
+    let file = Path::new("tests").join("out_head_3d_b.png");
     let file = file.as_path();
 
     let out = skin::open_bitmap(file);
