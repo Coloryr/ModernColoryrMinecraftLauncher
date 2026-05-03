@@ -1,9 +1,8 @@
-pub mod gl_shader {
-    pub const MACOS_HEADER: &str = r#"#version 150
+pub const MACOS_HEADER: &str = r#"#version 150
 #define Macos
 "#;
 
-    pub const VERTEX_SHADER_SOURCE: &str = r#"#if __VERSION__ >= 130
+pub const VERTEX_SHADER_SOURCE: &str = r#"#if __VERSION__ >= 130
 #define COMPAT_VARYING out
 #define COMPAT_ATTRIBUTE in
 #define COMPAT_TEXTURE texture
@@ -37,7 +36,7 @@ void main()
     gl_Position = projection * temp * vec4(a_position, 1.0);
 }"#;
 
-    pub const FRAGMENT_SHADER_SOURCE: &str = r#"#if defined(GL_ES)
+pub const FRAGMENT_SHADER_SOURCE: &str = r#"#if defined(GL_ES)
 precision mediump float;
 #endif
 
@@ -80,4 +79,3 @@ void main() {
     vec3 result = (ambient + diffuse);
     FragColor = COMPAT_TEXTURE(texture0, texIn) * vec4(result, 1.0);
 }"#;
-}

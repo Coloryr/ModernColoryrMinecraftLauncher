@@ -1,9 +1,11 @@
 pub struct DownloadThread {
-    id: usize,
+    index: u32,
 }
 
 impl DownloadThread {
-    pub fn download_stop(&self) {
-        
+    pub fn new(index: u32) -> Self {
+        Self { index }
     }
+
+    pub fn download_stop(&self) {}
 }

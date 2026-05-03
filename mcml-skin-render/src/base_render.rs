@@ -4,7 +4,7 @@ use skia_safe::Bitmap;
 use std::f32::consts::PI;
 use std::sync::{Arc, Mutex};
 
-use crate::cube::cube;
+use crate::cube;
 use crate::skin_animation::SkinAnimation;
 
 /// 错误类型

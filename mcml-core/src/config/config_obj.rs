@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
-use crate::core::core;
+use crate::core;
 
 /// Jvm配置
 #[derive(Serialize, Deserialize, Debug)]
@@ -262,6 +262,21 @@ pub struct WindowSettingObj {
     pub title_delay: Option<u32>,
 }
 
+impl WindowSettingObj {
+    pub fn new() -> Self {
+        Self {
+            full_screen: Some(false),
+            width: Some(1280),
+            height: Some(720),
+            game_title: None,
+            edit_title: None,
+            random_title: None,
+            cycle_title: None,
+            title_delay: None,
+        }
+    }
+}
+
 impl Default for WindowSettingObj {
     fn default() -> Self {
         Self {
@@ -273,6 +288,51 @@ impl Default for WindowSettingObj {
             random_title: Option::None,
             cycle_title: Option::None,
             title_delay: Option::None,
+        }
+    }
+}
+
+/// 游戏文件检查
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(default)]
+pub struct GameCheckObj {
+    /// 检查游戏核心
+    #[serde(rename = "CheckCore")]
+    pub core: bool,
+    /// 检查运行库
+    #[serde(rename = "CheckLib")]
+    pub lib: bool,
+    /// 检查资源文件
+    #[serde(rename = "CheckAssets")]
+    pub assets: bool,
+    /// 检查模组
+    #[serde(rename = "CheckMod")]
+    pub game_mod: bool,
+    /// 校验游戏核心
+    #[serde(rename = "CheckCoreSha1")]
+    pub core_sha1: bool,
+    /// 校验运行库
+    #[serde(rename = "CheckLibSha1")]
+    pub lib_sha1: bool,
+    /// 校验资源文件
+    #[serde(rename = "CheckAssetsSha1")]
+    pub assets_sha1: bool,
+    /// 校验模组
+    #[serde(rename = "CheckModSha1")]
+    pub mod_sha1: bool,
+}
+
+impl Default for GameCheckObj {
+    fn default() -> Self {
+        Self {
+            core: true,
+            lib: true,
+            assets: true,
+            game_mod: true,
+            core_sha1: true,
+            lib_sha1: true,
+            assets_sha1: true,
+            mod_sha1: true,
         }
     }
 }
@@ -299,6 +359,9 @@ pub struct ConfigObj {
     /// 游戏窗口设置
     #[serde(rename = "Window")]
     pub window: WindowSettingObj,
+    /// 游戏检查设置
+    #[serde(rename = "GameCheck")]
+    pub check: GameCheckObj,
 }
 
 impl Default for ConfigObj {
@@ -306,10 +369,11 @@ impl Default for ConfigObj {
         Self {
             version: String::from(core::VERSION),
             java_list: Vec::new(),
-            http: Default::default(),
-            dns: Default::default(),
+            http: HttpObj::default(),
+            dns: DnsObj::default(),
             jvm_arg: RunArgObj::new(),
-            window: Default::default(),
+            window: WindowSettingObj::new(),
+            check: GameCheckObj::default(),
         }
     }
 }

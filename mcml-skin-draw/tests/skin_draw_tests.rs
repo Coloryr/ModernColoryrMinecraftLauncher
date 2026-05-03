@@ -1,8 +1,11 @@
-use std::{ path::Path};
+use std::path::Path;
 
 use mcml_skin::skin::{self};
-use mcml_skin_draw::{cape_2d_draw::cape_2d, head_2d_draw::head_2d, skin_2d_draw::skin_2d, head_3d_draw::head_3d};
-use skia_safe::{Bitmap};
+use mcml_skin_draw::{
+    cape_2d_draw,
+    head_2d_draw, head_3d_draw, skin_2d_draw,
+};
+use skia_safe::Bitmap;
 
 /// 比较两个 Bitmap 的内容是否完全一致
 fn assert_bitmap_eq(a: &mut Bitmap, b: &mut Bitmap) {
@@ -44,7 +47,7 @@ fn test_cape_draw() {
     let image = skin::open_bitmap(file);
     assert!(image.is_some());
     let mut image = image.unwrap();
-    let res = cape_2d::draw_cape_2d(&mut image);
+    let res = cape_2d_draw::draw_cape_2d(&mut image);
     assert!(res.is_some());
     let mut res = res.unwrap();
 
@@ -67,7 +70,7 @@ fn test_cape_back_draw() {
     let image = skin::open_bitmap(file);
     assert!(image.is_some());
     let mut image = image.unwrap();
-    let res = cape_2d::draw_cape_back_2d(&mut image);
+    let res = cape_2d_draw::draw_cape_back_2d(&mut image);
     assert!(res.is_some());
     let mut res = res.unwrap();
 
@@ -90,7 +93,7 @@ fn test_head_draw_typea() {
     let image = skin::open_bitmap(file);
     assert!(image.is_some());
     let mut image = image.unwrap();
-    let res = head_2d::head_2d_draw_typea(&mut image);
+    let res = head_2d_draw::head_2d_draw_typea(&mut image);
     assert!(res.is_some());
     let mut res = res.unwrap();
 
@@ -113,7 +116,7 @@ fn test_head_draw_typeb() {
     let image = skin::open_bitmap(file);
     assert!(image.is_some());
     let mut image = image.unwrap();
-    let res = head_2d::head_2d_draw_typeb(&mut image);
+    let res = head_2d_draw::head_2d_draw_typeb(&mut image);
     assert!(res.is_some());
     let mut res = res.unwrap();
 
@@ -136,7 +139,7 @@ fn test_skin_draw_typea() {
     let image = skin::open_bitmap(file);
     assert!(image.is_some());
     let mut image = image.unwrap();
-    let res = skin_2d::skin_2d_draw_typea(&mut image, None);
+    let res = skin_2d_draw::skin_2d_draw_typea(&mut image, None);
     assert!(res.is_some());
     let mut res = res.unwrap();
 
@@ -159,7 +162,7 @@ fn test_skin_draw_typeb() {
     let image = skin::open_bitmap(file);
     assert!(image.is_some());
     let mut image = image.unwrap();
-    let res = skin_2d::skin_2d_draw_typeb(&mut image, None);
+    let res = skin_2d_draw::skin_2d_draw_typeb(&mut image, None);
     assert!(res.is_some());
     let mut res = res.unwrap();
 
@@ -182,7 +185,7 @@ fn test_head_3d_draw_typea() {
     let image = skin::open_bitmap(file);
     assert!(image.is_some());
     let mut image = image.unwrap();
-    let res = head_3d::draw_head_3d_typea(&mut image);
+    let res = head_3d_draw::draw_head_3d_typea(&mut image);
     assert!(res.is_some());
     let mut res = res.unwrap();
 
@@ -205,7 +208,7 @@ fn test_head_3d_draw_typeb() {
     let image = skin::open_bitmap(file);
     assert!(image.is_some());
     let mut image = image.unwrap();
-    let res = head_3d::draw_head_3d_typeb(&mut image, 15.0, 65.0);
+    let res = head_3d_draw::draw_head_3d_typeb(&mut image, 15.0, 65.0);
     assert!(res.is_some());
     let mut res = res.unwrap();
 
