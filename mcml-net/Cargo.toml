@@ -1,0 +1,14 @@
+[package]
+name = "mcml-net"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+mcml-log = { path = "../mcml-log" }
+mcml-http = { path = "../mcml-http" }
+mcml-config = { path = "../mcml-config" }
+tokio = { workspace = true, features = ["rt", "macros"] }
+tokio-util.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true

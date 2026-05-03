@@ -1,3 +1,6 @@
+pub mod config_obj;
+pub mod config_save;
+
 use std::{
     fs::File,
     path::{Path, PathBuf},
@@ -6,10 +9,7 @@ use std::{
 
 use mcml_log::log;
 
-use crate::{
-    config::{config_obj::ConfigObj, config_save},
-    core, names,
-};
+use crate::{config_obj::ConfigObj};
 
 pub static CONFIG: RwLock<OnceLock<ConfigObj>> = RwLock::new(OnceLock::new());
 
@@ -37,18 +37,16 @@ pub fn save() {
     );
 }
 
-pub fn load(file: &PathBuf) {
+pub fn load(file: &PathBuf) -> bool {
     log::info(format!("Load config: {}", file.display()));
 
     if !Path::exists(file) {
-        *core::NEW_START.write().unwrap() = true;
-
         CONFIG.write().unwrap().get_or_init(|| ConfigObj::default());
 
         log::info(format!("Create new config"));
 
         save_now();
-        return;
+        return true;
     }
 
     let file = File::open(file);
@@ -56,7 +54,7 @@ pub fn load(file: &PathBuf) {
         log::error(format!("Config load error: {}", err));
 
         CONFIG.write().unwrap().get_or_init(|| ConfigObj::default());
-        return;
+        return false;
     }
     let file = file.unwrap();
 
@@ -66,14 +64,14 @@ pub fn load(file: &PathBuf) {
         log::error(format!("Json read error: {}", err));
 
         CONFIG.write().unwrap().get_or_init(|| ConfigObj::default());
-        return;
+        return false;
     }
 
     CONFIG.write().unwrap().get_or_init(|| json.unwrap());
 
     let mut binding = CONFIG.write().unwrap();
     let config = binding.get_mut().unwrap();
-    let version = String::from(core::VERSION);
+    let version = String::from(mcml_names::VERSION);
     if config.version != version {
         config.version = version;
 
@@ -81,10 +79,12 @@ pub fn load(file: &PathBuf) {
 
         save();
     }
+
+    false
 }
 
-pub fn init(local: PathBuf) {
-    FILE.get_or_init(|| local.join(names::NAME_CONFIG_FILE));
+pub fn init(local: PathBuf) -> bool {
+    FILE.get_or_init(|| local.join(mcml_names::NAME_CONFIG_FILE));
 
-    load(FILE.get().unwrap());
+    load(FILE.get().unwrap())
 }

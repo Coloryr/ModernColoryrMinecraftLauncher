@@ -1,3 +1,12 @@
+use const_format::formatcp;
+
+/// 启动器主版本号
+pub const VERSION_NUM: i32 = 1;
+/// 启动器日期
+pub const DATE: &str = "20260503";
+/// 启动器版本号
+pub const VERSION: &str = formatcp!("1.{}.{DATE}", VERSION_NUM);
+
 pub const NAME_DOWNLOAD_DIR: &str = "download";
 pub const NAME_OVERRIDE_DIR: &str = "overrides";
 pub const NAME_LIB_DIR: &str = "libraries";

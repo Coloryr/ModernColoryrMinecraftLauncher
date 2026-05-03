@@ -1,6 +1,6 @@
 use std::{env};
 
-use mcml_core::core::{self, CoreInitObj};
+use mcml_core::{self, CoreInitObj};
 
 #[test]
 fn core_test() {
@@ -15,7 +15,7 @@ fn core_test() {
         oauth_key: String::new(),
         curseforge_key: String::new(),
     };
-    core::init(config);
-    assert!(core::get_state());
-    core::stop();
+    mcml_core::init(config);
+    assert!(mcml_core::get_state());
+    mcml_core::stop();
 }

@@ -1,8 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
-use crate::core;
-
 /// Jvm配置
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
@@ -40,6 +38,36 @@ impl Default for SourceLocal {
     }
 }
 
+/// 下载源
+#[derive(Serialize_repr, Deserialize_repr, Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum ProxyState {
+    Auto,
+    None,
+    User
+}
+
+impl Default for ProxyState {
+    fn default() -> Self {
+        ProxyState::Auto
+    }
+}
+
+/// 下载源
+#[derive(Serialize_repr, Deserialize_repr, Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum ProxyType {
+    Http,
+    Sock4,
+    Sock5
+}
+
+impl Default for ProxyType {
+    fn default() -> Self {
+        ProxyType::Http
+    }
+}
+
 /// 启动器网络配置
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
@@ -62,15 +90,25 @@ pub struct HttpObj {
     /// 代理密码
     #[serde(rename = "ProxyPassword")]
     pub proxy_password: String,
+
+    /// 总体请求使用代理
+    #[serde(rename = "ProxyWork")]
+    pub work_proxy: ProxyState,
+    /// 总体请求使用代理
+    #[serde(rename = "ProxyWorkType")]
+    pub work_proxy_type: ProxyType,
+
     /// 登录使用代理
-    #[serde(rename = "LoginProxy")]
-    pub login_proxy: bool,
-    /// 下载使用代理
-    #[serde(rename = "DownloadProxy")]
-    pub download_proxy: bool,
-    /// 游戏使用代理
-    #[serde(rename = "GameProxy")]
-    pub game_proxy: bool,
+    #[serde(rename = "ProxyLogin")]
+    pub login_proxy: ProxyState,
+    /// 登录使用代理
+    #[serde(rename = "ProxyLoginType")]
+    pub login_proxy_type: ProxyType,
+
+    // /// 游戏使用代理
+    // #[serde(rename = "ProxyGame")]
+    // pub game_proxy: ProxyState,
+
     /// 检查下载文件完整性
     #[serde(rename = "CheckFile")]
     pub check_file: bool,
@@ -88,11 +126,12 @@ impl Default for HttpObj {
             proxy_port: 7890,
             proxy_user: String::new(),
             proxy_password: String::new(),
-            login_proxy: false,
-            download_proxy: false,
-            game_proxy: false,
             check_file: true,
             auto_download: true,
+            work_proxy: ProxyState::Auto,
+            work_proxy_type: ProxyType::Http,
+            login_proxy: ProxyState::Auto,
+            login_proxy_type: ProxyType::Http,
         }
     }
 }
@@ -367,7 +406,7 @@ pub struct ConfigObj {
 impl Default for ConfigObj {
     fn default() -> Self {
         Self {
-            version: String::from(core::VERSION),
+            version: String::from(mcml_names::VERSION),
             java_list: Vec::new(),
             http: HttpObj::default(),
             dns: DnsObj::default(),

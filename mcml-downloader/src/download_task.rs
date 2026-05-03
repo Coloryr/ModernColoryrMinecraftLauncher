@@ -2,19 +2,16 @@ use std::sync::Arc;
 
 use tokio_util::sync::CancellationToken;
 
-use crate::{
-    gui_handels::{gui_download_handel::DownloadGuiHandel, gui_progress_handel::ProgressGuiHandel},
-    net::downloader::download_item::DownloadItem,
-};
+use crate::download_item::DownloadItem;
 
 /// 下载任务
 pub struct DownloadTask {
     /// 取消
     cancel: CancellationToken,
-    /// gui界面
-    gui: Option<Box<dyn DownloadGuiHandel>>,
-    /// p_gui 进度条
-    p_gui: Option<Box<dyn ProgressGuiHandel>>,
+    // /// gui界面
+    // gui: Option<Box<dyn DownloadGuiHandel>>,
+    // /// p_gui 进度条
+    // p_gui: Option<Box<dyn ProgressGuiHandel>>,
     /// 下载项目列表
     pub items: Vec<Arc<tokio::sync::Mutex<DownloadItem>>>,
     pub total_size: i64,
@@ -25,8 +22,8 @@ pub struct DownloadTask {
 
 impl DownloadTask {
     pub fn new(
-        gui: Option<Box<dyn DownloadGuiHandel>>,
-        p_gui: Option<Box<dyn ProgressGuiHandel>>,
+        // gui: Option<Box<dyn DownloadGuiHandel>>,
+        // p_gui: Option<Box<dyn ProgressGuiHandel>>,
     ) -> Self {
         DownloadTask {
             items: Vec::new(),
@@ -35,8 +32,8 @@ impl DownloadTask {
             completed_count: 0,
             failed_count: 0,
             cancel: CancellationToken::new(),
-            gui: gui,
-            p_gui: p_gui,
+            // gui: gui,
+            // p_gui: p_gui,
         }
     }
 
