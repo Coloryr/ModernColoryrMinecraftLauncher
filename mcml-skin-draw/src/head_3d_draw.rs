@@ -126,18 +126,42 @@ pub mod head_3d {
         tran * scale * rotx * roty
     }
 
-    fn project(tran: &Mat4, point: Point3) -> Point {
+    fn create_tran_rotate(x: f32, y: f32) -> Mat4 {
+        let roty = Mat4::from_rotation_y(y * PI / 180.0);
+        let rotx = Mat4::from_rotation_x(-x * PI / 180.0);
+
+        let scale = Mat4::from_scale(Vec3::new(100.0, -100.0, 100.0));
+
+        let tran = Mat4::from_translation(Vec3::new(200.0, 200.0, 0.0));
+
+        tran * scale * rotx * roty
+    }
+
+    fn project(tran: &Mat4, point: Point3, enable_z: bool) -> Point {
         let mut res = tran * Vec4::new(point.x, point.y, point.z, 1.0);
 
         if res.w != 0.0 {
             res.x /= res.w;
             res.y /= res.w;
+            res.z /= res.w;
+        }
+
+        if enable_z {
+            let z = res.z * 0.0001 + 1.0;
+            res.x /= z;
+            res.y /= z;
         }
 
         Point::new(res.x, res.y)
     }
 
-    fn draw_texture_face(canvas: &Canvas, texture: &mut Bitmap, tran: &Mat4, index: usize) {
+    fn draw_texture_face(
+        canvas: &Canvas,
+        texture: &mut Bitmap,
+        tran: &Mat4,
+        index: usize,
+        enable_z: bool,
+    ) {
         let face = FACE_POS[index];
 
         let info = ImageInfo::new((8, 8), ColorType::RGBA8888, AlphaType::Premul, None);
@@ -163,63 +187,57 @@ pub mod head_3d {
 
         let base_index = index * 4;
 
-        unsafe {
-            let mut builder = skia_safe::vertices::Builder::new(
-                VertexMode::TriangleFan,
-                4,
-                0,
-                BuilderFlags::HAS_TEX_COORDS,
-            );
-            let pos = builder.positions();
-            pos[0] = project(&tran, CUBE_VERTICES[CUBE_INDICES[base_index]]);
-            pos[1] = project(&tran, CUBE_VERTICES[CUBE_INDICES[base_index + 1]]);
-            pos[2] = project(&tran, CUBE_VERTICES[CUBE_INDICES[base_index + 2]]);
-            pos[3] = project(&tran, CUBE_VERTICES[CUBE_INDICES[base_index + 3]]);
+        let mut builder = skia_safe::vertices::Builder::new(
+            VertexMode::TriangleFan,
+            4,
+            0,
+            BuilderFlags::HAS_TEX_COORDS,
+        );
+        let pos = builder.positions();
+        pos[0] = project(&tran, CUBE_VERTICES[CUBE_INDICES[base_index]], enable_z);
+        pos[1] = project(&tran, CUBE_VERTICES[CUBE_INDICES[base_index + 1]], enable_z);
+        pos[2] = project(&tran, CUBE_VERTICES[CUBE_INDICES[base_index + 2]], enable_z);
+        pos[3] = project(&tran, CUBE_VERTICES[CUBE_INDICES[base_index + 3]], enable_z);
 
-            let tex = builder.tex_coords().unwrap();
-            tex[0] = Point::new(
-                SOURCE_VERTICES[base_index].x * 8.0,
-                SOURCE_VERTICES[base_index].y * 8.0,
-            );
-            tex[1] = Point::new(
-                SOURCE_VERTICES[base_index + 1].x * 8.0,
-                SOURCE_VERTICES[base_index + 1].y * 8.0,
-            );
-            tex[2] = Point::new(
-                SOURCE_VERTICES[base_index + 2].x * 8.0,
-                SOURCE_VERTICES[base_index + 2].y * 8.0,
-            );
-            tex[3] = Point::new(
-                SOURCE_VERTICES[base_index + 3].x * 8.0,
-                SOURCE_VERTICES[base_index + 3].y * 8.0,
-            );
+        let tex = builder.tex_coords().unwrap();
+        tex[0] = Point::new(
+            SOURCE_VERTICES[base_index].x * 8.0,
+            SOURCE_VERTICES[base_index].y * 8.0,
+        );
+        tex[1] = Point::new(
+            SOURCE_VERTICES[base_index + 1].x * 8.0,
+            SOURCE_VERTICES[base_index + 1].y * 8.0,
+        );
+        tex[2] = Point::new(
+            SOURCE_VERTICES[base_index + 2].x * 8.0,
+            SOURCE_VERTICES[base_index + 2].y * 8.0,
+        );
+        tex[3] = Point::new(
+            SOURCE_VERTICES[base_index + 3].x * 8.0,
+            SOURCE_VERTICES[base_index + 3].y * 8.0,
+        );
 
-            let vertices = builder.detach();
+        let vertices = builder.detach();
 
-            let shader = source_image.to_shader(
-                Some((TileMode::Clamp, TileMode::Clamp)),
-                SamplingOptions::default(),
-                None,
-            );
+        let shader = source_image.to_shader(
+            Some((TileMode::Clamp, TileMode::Clamp)),
+            SamplingOptions::default(),
+            None,
+        );
 
-            let mut paint = Paint::default();
-            let paint = paint.set_anti_alias(true);
-            let paint = paint.set_shader(shader);
+        let mut paint = Paint::default();
+        let paint = paint.set_anti_alias(true);
+        let paint = paint.set_shader(shader);
 
-            canvas.draw_vertices(&vertices, BlendMode::SrcOver, &paint);
-        }
+        canvas.draw_vertices(&vertices, BlendMode::SrcOver, &paint);
+
+        // mcml_skin::skin::save_image(
+        //     &canvas.surface().unwrap().image_snapshot(),
+        //     std::path::Path::new("tests").join("temp.png").as_path(),
+        // );
     }
 
-    fn draw_head_3d_inner(image: &mut Bitmap, canvas: &Canvas) {
-        let tran = create_tran();
-
-        let face_count = CUBE_INDICES.len() / 4;
-        for index in 0..face_count {
-            draw_texture_face(canvas, image, &tran, index);
-        }
-    }
-
-    pub fn draw_head_3d(image: &mut Bitmap) -> Option<Bitmap> {
+    pub fn draw_head_3d_typea(image: &mut Bitmap) -> Option<Bitmap> {
         let width = 400;
         let height = 400;
 
@@ -234,7 +252,55 @@ pub mod head_3d {
         let canvas = draw.canvas();
         canvas.clear(Color::new(0x00000000));
 
-        draw_head_3d_inner(image, canvas);
+        let tran = create_tran();
+
+        let face_count = CUBE_INDICES.len() / 4;
+        for index in 0..face_count {
+            draw_texture_face(canvas, image, &tran, index, false);
+        }
+
+        let image = draw.image_snapshot();
+
+        let mut bitmap = Bitmap::new();
+        if !bitmap.set_info(&info, None) {
+            return None;
+        }
+        bitmap.alloc_pixels();
+        let size = bitmap.compute_byte_size();
+        let pixels = unsafe { slice::from_raw_parts_mut(bitmap.pixels() as *mut u8, size) };
+        if !image.read_pixels(
+            &info,
+            pixels,
+            bitmap.row_bytes(),
+            (0, 0),
+            CachingHint::Disallow,
+        ) {
+            return None;
+        }
+        Some(bitmap)
+    }
+
+    pub fn draw_head_3d_typeb(image: &mut Bitmap, x: f32, y: f32) -> Option<Bitmap> {
+        let width = 400;
+        let height = 400;
+
+        let info = ImageInfo::new(
+            (width, height),
+            ColorType::RGBA8888,
+            AlphaType::Premul,
+            None,
+        );
+
+        let mut draw = surfaces::raster(&info, None, None)?;
+        let canvas = draw.canvas();
+        canvas.clear(Color::new(0x00000000));
+
+        let tran = create_tran_rotate(x, y);
+
+        let face_count = CUBE_INDICES.len() / 4;
+        for index in 0..face_count {
+            draw_texture_face(canvas, image, &tran, index, true);
+        }
 
         let image = draw.image_snapshot();
 
