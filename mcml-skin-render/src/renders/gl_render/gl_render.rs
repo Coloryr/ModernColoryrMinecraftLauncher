@@ -2,6 +2,7 @@ use std::{slice, sync::Arc};
 
 use glam::{Vec2, Vec3, Vec4};
 use glow::*;
+use mcml_skin::SkinType;
 use skia_safe::{Bitmap, ColorType, ImageInfo};
 
 use crate::{
@@ -13,7 +14,7 @@ use crate::{
         gl_model::{ModelVao, VaoItem, VertexOpenGL},
         gl_shader::gl_shader,
     },
-    texture::texture::{self, SkinType},
+    texture::texture::{self},
 };
 
 fn init_shader(gl: &Context) -> Program {

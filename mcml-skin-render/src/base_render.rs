@@ -1,11 +1,11 @@
 use glam::{Mat4, Vec2, Vec3, Vec4};
+use mcml_skin::SkinType;
 use skia_safe::Bitmap;
 use std::f32::consts::PI;
 use std::sync::{Arc, Mutex};
 
 use crate::cube::cube;
 use crate::skin_animation::SkinAnimation;
-use crate::texture::texture::SkinType;
 
 /// 错误类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

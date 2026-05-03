@@ -1,6 +1,5 @@
 use glam::Vec3;
-
-use crate::texture::texture::SkinType;
+use mcml_skin::SkinType;
 
 /// 皮肤的动画
 #[derive(Debug, Clone)]

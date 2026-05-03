@@ -4,5 +4,4 @@ pub mod cube_model;
 pub mod model;
 pub mod renders;
 pub mod skin_animation;
-pub mod skin_type_checker;
 pub mod texture;
