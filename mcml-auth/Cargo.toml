@@ -1,0 +1,15 @@
+[package]
+name = "mcml-auth"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+mcml-log = { path = "../mcml-log" }
+mcml-config = { path = "../mcml-config" }
+tokio.workspace = true
+tokio-util.workspace = true
+crossbeam-queue.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_repr.workspace = true

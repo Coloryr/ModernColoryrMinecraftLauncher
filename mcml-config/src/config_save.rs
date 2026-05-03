@@ -3,7 +3,6 @@ use std::{
     io::Write,
     path::PathBuf,
     sync::{
-        RwLock,
         atomic::{AtomicBool, Ordering},
     },
     thread::Builder,

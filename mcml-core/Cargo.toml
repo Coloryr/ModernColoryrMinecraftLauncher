@@ -4,14 +4,13 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-const_format.workspace = true
 crossbeam-queue.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
 semrs.workspace = true
-reqwest.workspace = true
 chrono.workspace = true
-serde.workspace = true
-serde_json.workspace = true
-serde_repr.workspace = true
 mcml-log = { path = "../mcml-log" }
+mcml-names = { path = "../mcml-names" }
+mcml-config = { path = "../mcml-config" }
+mcml-downloader = { path = "../mcml-downloader" }
+mcml-http = { path = "../mcml-http" }
