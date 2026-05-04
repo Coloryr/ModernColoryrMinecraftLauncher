@@ -3150,6 +3150,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "crossbeam-queue",
+ "mcml-names",
  "semrs",
 ]
 
@@ -3158,6 +3159,7 @@ name = "mcml-names"
 version = "0.1.0"
 dependencies = [
  "const_format",
+ "lazy_static",
 ]
 
 [[package]]
@@ -3171,6 +3173,7 @@ dependencies = [
  "mcml-config",
  "mcml-http",
  "mcml-log",
+ "mcml-names",
  "reqwest 0.13.3",
  "serde",
  "serde_json",

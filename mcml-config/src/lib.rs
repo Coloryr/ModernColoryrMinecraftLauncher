@@ -7,7 +7,8 @@ use std::{
     sync::{OnceLock, RwLock},
 };
 
-use mcml_log::log;
+use mcml_log;
+use mcml_names::names;
 
 use crate::{config_obj::ConfigObj};
 
@@ -17,14 +18,14 @@ static FILE: OnceLock<PathBuf> = OnceLock::new();
 
 pub fn save_now() {
     let file = FILE.get().unwrap();
-    log::info(format!("Save config: {}", file.display()));
+    mcml_log::info(format!("Save config: {}", file.display()));
 
     let file = File::create(file);
     if file.is_ok() {
         let file = file.unwrap();
         let res = serde_json::to_writer(file, &CONFIG.read().unwrap().get());
         if let Err(err) = res {
-            log::error(format!("Config save error: {}", err));
+            mcml_log::error(format!("Config save error: {}", err));
         }
     }
 }
@@ -38,12 +39,12 @@ pub fn save() {
 }
 
 pub fn load(file: &PathBuf) -> bool {
-    log::info(format!("Load config: {}", file.display()));
+    mcml_log::info(format!("Load config: {}", file.display()));
 
     if !Path::exists(file) {
         CONFIG.write().unwrap().get_or_init(|| ConfigObj::default());
 
-        log::info(format!("Create new config"));
+        mcml_log::info(format!("Create new config"));
 
         save_now();
         return true;
@@ -51,7 +52,7 @@ pub fn load(file: &PathBuf) -> bool {
 
     let file = File::open(file);
     if let Err(err) = file {
-        log::error(format!("Config load error: {}", err));
+        mcml_log::error(format!("Config load error: {}", err));
 
         CONFIG.write().unwrap().get_or_init(|| ConfigObj::default());
         return false;
@@ -61,7 +62,7 @@ pub fn load(file: &PathBuf) -> bool {
     let json = serde_json::from_reader::<_, ConfigObj>(file);
 
     if let Err(err) = json {
-        log::error(format!("Json read error: {}", err));
+        mcml_log::error(format!("Json read error: {}", err));
 
         CONFIG.write().unwrap().get_or_init(|| ConfigObj::default());
         return false;
@@ -75,7 +76,7 @@ pub fn load(file: &PathBuf) -> bool {
     if config.version != version {
         config.version = version;
 
-        log::info(format!("Upgrade config"));
+        mcml_log::info(format!("Upgrade config"));
 
         save();
     }
@@ -83,8 +84,8 @@ pub fn load(file: &PathBuf) -> bool {
     false
 }
 
-pub fn init(local: PathBuf) -> bool {
-    FILE.get_or_init(|| local.join(mcml_names::NAME_CONFIG_FILE));
+pub fn init(local: &PathBuf) -> bool {
+    FILE.get_or_init(|| local.join(names::NAME_CONFIG_FILE));
 
     load(FILE.get().unwrap())
 }

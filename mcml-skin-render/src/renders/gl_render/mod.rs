@@ -9,12 +9,7 @@ use mcml_skin::SkinType;
 use skia_safe::{Bitmap, ColorType, ImageInfo};
 
 use crate::{
-    base_render::{BaseSkinRender, ErrorType, ModelPartType},
-    cube,
-    cube_model::CubeModelItemObj,
-    model,
-    renders::gl_render::gl_model::{ModelVao, VaoItem, VertexOpenGL},
-    texture,
+    BaseSkinRender, ErrorType, ModelPartType, cube, cube_model::CubeModelItemObj, model, renders::gl_render::gl_model::{ModelVao, VaoItem, VertexOpenGL}, texture
 };
 
 /// 渲染类型
