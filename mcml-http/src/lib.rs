@@ -215,21 +215,38 @@ impl Default for Client {
 }
 
 pub static WORK_CLIENT: OnceLock<Arc<Client>> = OnceLock::new();
+pub static LOGIN_CLIENT: OnceLock<Arc<Client>> = OnceLock::new();
 
 pub fn init() {
     let binding = mcml_config::CONFIG.read().unwrap();
     let config = binding.get().unwrap();
     let http = &config.http;
 
-    if http.work_proxy == ProxyState::User {
-        let client = Client::new_proxy(
+    let client = if http.work_proxy == ProxyState::User {
+        Client::new_proxy(
             http.work_proxy_type,
             &http.proxy_ip,
             http.proxy_port,
             &http.proxy_user,
             &http.proxy_password,
-        );
+        )
+    } else {
+        Client::new(http.work_proxy)
+    };
 
-        WORK_CLIENT.get_or_init(|| Arc::new(client));
-    }
+    WORK_CLIENT.get_or_init(|| Arc::new(client));
+
+    let client = if http.login_proxy == ProxyState::User {
+        Client::new_proxy(
+            http.login_proxy_type,
+            &http.proxy_ip,
+            http.proxy_port,
+            &http.proxy_user,
+            &http.proxy_password,
+        )
+    } else {
+        Client::new(http.login_proxy)
+    };
+
+    LOGIN_CLIENT.get_or_init(|| Arc::new(client));
 }

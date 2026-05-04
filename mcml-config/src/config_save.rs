@@ -2,14 +2,12 @@ use std::{
     fs::File,
     io::Write,
     path::PathBuf,
-    sync::{
-        atomic::{AtomicBool, Ordering},
-    },
+    sync::atomic::{AtomicBool, Ordering},
     thread::Builder,
 };
 
 use crossbeam_queue::SegQueue;
-use mcml_log::log;
+use mcml_log;
 use serde::Serialize;
 
 pub struct ConfigSaveObj {
@@ -60,12 +58,12 @@ where
 }
 
 fn run() {
-    log::info(String::from("Config save thread start"));
+    mcml_log::info(String::from("Config save thread start"));
 
     while RUN.load(Ordering::Acquire) {
         while let Some(save_obj) = SAVE_QUEUE.pop() {
             if let Err(e) = save_obj.save() {
-                log::error(format!("Failed to save {}: {}", save_obj.name, e));
+                mcml_log::error(format!("Failed to save {}: {}", save_obj.name, e));
             }
         }
         std::thread::sleep(std::time::Duration::from_millis(100));
@@ -73,11 +71,11 @@ fn run() {
 
     while let Some(save_obj) = SAVE_QUEUE.pop() {
         if let Err(e) = save_obj.save() {
-            log::error(format!("Failed to save {}: {}", save_obj.name, e));
+            mcml_log::error(format!("Failed to save {}: {}", save_obj.name, e));
         }
     }
 
-    log::info(String::from("Config save thread stop"));
+    mcml_log::info(String::from("Config save thread stop"));
 }
 
 // 后台保存线程

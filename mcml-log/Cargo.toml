@@ -7,3 +7,4 @@ edition = "2024"
 crossbeam-queue.workspace = true
 semrs.workspace = true
 chrono.workspace = true
+mcml-names = { path = "../mcml-names" }

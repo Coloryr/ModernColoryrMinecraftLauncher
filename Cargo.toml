@@ -23,7 +23,20 @@ codegen-units = 1
 lto = true
 
 [workspace]
-members = ["mcml-auth","mcml-config","mcml-core", "mcml-downloader", "mcml-http", "mcml-log", "mcml-names", "mcml-nbt", "mcml-net", "mcml-skin", "mcml-skin-draw", "mcml-skin-render"]
+members = [
+    "mcml-auth",
+    "mcml-config",
+    "mcml-core",
+    "mcml-downloader",
+    "mcml-http",
+    "mcml-log",
+    "mcml-names",
+    "mcml-nbt",
+    "mcml-net",
+    "mcml-skin",
+    "mcml-skin-draw",
+    "mcml-skin-render",
+]
 
 [workspace.dependencies]
 const_format = "~0.2.35"
@@ -39,3 +52,4 @@ serde_repr = "~0.1.20"
 glow = "~0.17.0"
 skia-safe = "~0.90.0"
 glam = "~0.32.1"
+lazy_static = "~1.5.0"

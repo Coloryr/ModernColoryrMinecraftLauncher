@@ -29,7 +29,8 @@ use std::{
 };
 
 use mcml_config::config_save;
-use mcml_log::log;
+use mcml_log;
+use mcml_names::info_type::InfoType;
 
 use crate::events::core_stop_event;
 
@@ -58,19 +59,15 @@ pub fn init(arg: CoreInitObj) {
 
     CORE_ARG.set(arg).unwrap();
 
-    BASE_DIR
-        .set(CORE_ARG.get().unwrap().local.to_path_buf())
-        .unwrap();
+    let dir = BASE_DIR.get_or_init(|| CORE_ARG.get().unwrap().local.to_path_buf());
 
-    log::start(BASE_DIR.get().unwrap().to_path_buf());
-
-    log::info(format!("MCML start {}", mcml_names::VERSION));
-
+    mcml_names::init(dir);
+    mcml_log::start(dir);
+    mcml_log::info_type(InfoType::CoreStart);
     config_save::start();
     mcml_downloader::start();
-    
     mcml_http::init();
-    mcml_config::init(BASE_DIR.get().unwrap().to_path_buf());
+    mcml_config::init(dir);
 
     core_stop_event::add_stop_handler(|| config_save::stop());
     core_stop_event::add_stop_handler(|| mcml_downloader::stop());
