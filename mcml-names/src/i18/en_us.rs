@@ -1,4 +1,4 @@
-use crate::{error_type::ErrorType, i18::I18Lang, info_type::InfoType};
+use crate::{error_type::ErrorType, i18::I18Lang, info_type::InfoType, panic_type::PanicType, thread_type::ThreadType};
 
 pub struct EnUs;
 
@@ -6,6 +6,7 @@ impl I18Lang for EnUs {
     fn get_info(&self, info: InfoType) -> String {
         match info {
             InfoType::CoreStart => todo!(),
+            _ => todo!(),
         }
     }
 
@@ -13,5 +14,15 @@ impl I18Lang for EnUs {
         match error {
             ErrorType::AdoptiumGetError(_) => todo!(),
         }
+    }
+
+    fn get_panic(&self, panic: PanicType) -> String {
+        match panic {
+            _ => todo!(),
+        }
+    }
+    
+    fn get_thread(&self, thread: ThreadType) -> String {
+        todo!()
     }
 }
