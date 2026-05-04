@@ -29,6 +29,7 @@ pub const NAME_DEFAULT_DIR: &str = "default";
 pub const NAME_OPEN_LOADER_DIR: &str = "openloader";
 pub const NAME_DATA_DIR: &str = "data";
 
+pub const NAME_LOG_FILE: &str = "logs.log";
 pub const NAME_LANG_FILE: &str = "lang.txt";
 pub const NAME_MOD_INFO_FILE: &str = "modfileinfo.json";
 pub const NAME_GAME_FILE: &str = "game.json";

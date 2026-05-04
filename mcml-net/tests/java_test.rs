@@ -5,10 +5,10 @@ use mcml_net::net::adoptium_api;
 fn init() {
     let exe_path = env::current_exe().expect("Failed to get exe path");
     let exe_dir = exe_path.parent().expect("Failed to get exe directory");
-    let run_dir = exe_dir.parent().unwrap();
+    let run_dir = exe_dir.parent().unwrap().to_path_buf();
 
-    mcml_log::start(run_dir.to_path_buf());
-    mcml_config::init(run_dir.to_path_buf());
+    mcml_log::start(&run_dir);
+    mcml_config::init(&run_dir);
     mcml_http::init();
 }
 

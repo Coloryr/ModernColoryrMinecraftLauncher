@@ -1,4 +1,5 @@
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum InfoType {
-    CoreStart
+    CoreStart,
+    CoreStop,
 }

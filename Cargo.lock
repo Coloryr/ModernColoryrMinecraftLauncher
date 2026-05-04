@@ -3092,7 +3092,6 @@ dependencies = [
 name = "mcml-config"
 version = "0.1.0"
 dependencies = [
- "crossbeam-queue",
  "mcml-log",
  "mcml-names",
  "serde",

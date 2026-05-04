@@ -28,9 +28,8 @@ use std::{
     sync::{OnceLock, RwLock},
 };
 
-use mcml_config::config_save;
 use mcml_log;
-use mcml_names::info_type::InfoType;
+use mcml_names::{i18, info_type::InfoType, panic_type::PanicType};
 
 use crate::events::core_stop_event;
 
@@ -50,10 +49,16 @@ pub fn get_state() -> bool {
 /// 初始化核心
 /// arg 核心参数
 pub fn init(arg: CoreInitObj) {
+    if arg.local.as_os_str().is_empty() {
+        panic!("{}", i18::get_panic(PanicType::CoreArgLocalEmpty));
+    }
     if !arg.local.exists() {
         let res = fs::DirBuilder::new().recursive(true).create(&arg.local);
         if let Err(err) = res {
-            panic!("Run local is not exists {}", err);
+            panic!(
+                "{}",
+                i18::get_panic(PanicType::CoreArgLocalError(err.to_string()))
+            );
         }
     }
 
@@ -62,22 +67,24 @@ pub fn init(arg: CoreInitObj) {
     let dir = BASE_DIR.get_or_init(|| CORE_ARG.get().unwrap().local.to_path_buf());
 
     mcml_names::init(dir);
-    mcml_log::start(dir);
+
     mcml_log::info_type(InfoType::CoreStart);
-    config_save::start();
+
+    mcml_log::start(dir);
+    mcml_config::config_save::start();
     mcml_downloader::start();
     mcml_http::init();
     mcml_config::init(dir);
 
-    core_stop_event::add_stop_handler(|| config_save::stop());
+    core_stop_event::add_stop_handler(|| mcml_config::config_save::stop());
     core_stop_event::add_stop_handler(|| mcml_downloader::stop());
-    core_stop_event::add_stop_handler(|| log::stop());
+    core_stop_event::add_stop_handler(|| mcml_log::stop());
 
     *STATE.write().unwrap() = true;
 }
 
 pub fn stop() {
-    log::info(String::from("MCML stop"));
+    mcml_log::info(String::from("MCML stop"));
 
     core_stop_event::invoke_stop();
 
