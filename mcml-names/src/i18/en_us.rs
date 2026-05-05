@@ -13,6 +13,7 @@ impl I18Lang for EnUs {
     fn get_error(&self, error: ErrorType) -> String {
         match error {
             ErrorType::AdoptiumGetError(_) => todo!(),
+            _ => todo!(),
         }
     }
 

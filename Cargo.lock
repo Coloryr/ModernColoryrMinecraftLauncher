@@ -782,6 +782,7 @@ dependencies = [
  "iana-time-zone",
  "js-sys",
  "num-traits",
+ "serde",
  "wasm-bindgen",
  "windows-link 0.2.1",
 ]
@@ -3094,9 +3095,11 @@ version = "0.1.0"
 dependencies = [
  "mcml-log",
  "mcml-names",
+ "semrs",
  "serde",
  "serde_json",
  "serde_repr",
+ "uuid",
 ]
 
 [[package]]
@@ -3131,11 +3134,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "mcml-game"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "mcml-names",
+ "serde",
+ "serde_json",
+ "serde_repr",
+ "uuid",
+]
+
+[[package]]
 name = "mcml-http"
 version = "0.1.0"
 dependencies = [
  "mcml-config",
  "mcml-log",
+ "mcml-names",
  "reqwest 0.13.3",
  "serde",
  "serde_json",
@@ -3159,6 +3175,7 @@ version = "0.1.0"
 dependencies = [
  "const_format",
  "lazy_static",
+ "uuid",
 ]
 
 [[package]]
@@ -6194,6 +6211,7 @@ version = "1.23.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ddd74a9687298c6858e9b88ec8935ec45d22e8fd5e6394fa1bd4e99a87789c76"
 dependencies = [
+ "getrandom 0.4.2",
  "js-sys",
  "serde_core",
  "wasm-bindgen",

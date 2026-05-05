@@ -8,61 +8,74 @@ use std::{
 };
 
 use mcml_log;
-use mcml_names::names;
+use mcml_names::{error_type::ErrorType, names, uuids};
 
-use crate::{config_obj::ConfigObj};
+use crate::config_obj::ConfigObj;
 
 pub static CONFIG: RwLock<OnceLock<ConfigObj>> = RwLock::new(OnceLock::new());
 
 static FILE: OnceLock<PathBuf> = OnceLock::new();
 
+/// 立即保存配置文件
 pub fn save_now() {
     let file = FILE.get().unwrap();
-    mcml_log::info(format!("Save config: {}", file.display()));
 
-    let file = File::create(file);
-    if file.is_ok() {
-        let file = file.unwrap();
-        let res = serde_json::to_writer(file, &CONFIG.read().unwrap().get());
-        if let Err(err) = res {
-            mcml_log::error(format!("Config save error: {}", err));
+    let stream = File::create(file);
+
+    match stream {
+        Ok(stream) => {
+            let res = serde_json::to_writer(stream, &CONFIG.read().unwrap().get());
+            if let Err(err) = res {
+                mcml_log::error_type(ErrorType::ConfigSaveError(
+                    err.to_string(),
+                    file.display().to_string(),
+                ));
+            }
+        }
+        Err(err) => {
+            mcml_log::error_type(ErrorType::ConfigSaveError(
+                err.to_string(),
+                file.display().to_string(),
+            ));
         }
     }
 }
 
 pub fn save() {
     config_save::save(
-        String::from("config"),
+        uuids::CONFIG_UUID,
         CONFIG.read().unwrap().get().unwrap(),
         FILE.get().unwrap(),
     );
 }
 
 pub fn load(file: &PathBuf) -> bool {
-    mcml_log::info(format!("Load config: {}", file.display()));
-
     if !Path::exists(file) {
         CONFIG.write().unwrap().get_or_init(|| ConfigObj::default());
-
-        mcml_log::info(format!("Create new config"));
 
         save_now();
         return true;
     }
 
-    let file = File::open(file);
-    if let Err(err) = file {
-        mcml_log::error(format!("Config load error: {}", err));
+    let stream = File::open(file);
+    if let Err(err) = stream {
+        mcml_log::error_type(ErrorType::ConfigReadError(
+            err.to_string(),
+            file.display().to_string(),
+        ));
 
         CONFIG.write().unwrap().get_or_init(|| ConfigObj::default());
         return false;
     }
-    let file = file.unwrap();
+    let stream = stream.unwrap();
 
-    let json = serde_json::from_reader::<_, ConfigObj>(file);
+    let json = serde_json::from_reader::<_, ConfigObj>(stream);
 
     if let Err(err) = json {
-        mcml_log::error(format!("Json read error: {}", err));
+        mcml_log::error_type(ErrorType::ConfigReadError(
+            err.to_string(),
+            file.display().to_string(),
+        ));
 
         CONFIG.write().unwrap().get_or_init(|| ConfigObj::default());
         return false;
@@ -75,8 +88,6 @@ pub fn load(file: &PathBuf) -> bool {
     let version = String::from(mcml_names::VERSION);
     if config.version != version {
         config.version = version;
-
-        mcml_log::info(format!("Upgrade config"));
 
         save();
     }

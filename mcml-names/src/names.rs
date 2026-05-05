@@ -1,4 +1,3 @@
-
 pub const NAME_DOWNLOAD_DIR: &str = "download";
 pub const NAME_OVERRIDE_DIR: &str = "overrides";
 pub const NAME_LIB_DIR: &str = "libraries";
@@ -134,3 +133,9 @@ pub const NAME_GCARG_G1_GC: [&str; 8] = [
 ];
 
 pub const NAME_GCZGC: [&str; 2] = ["-XX:+UseZGC", "-XX:+ZGenerational"];
+
+pub const NAME_V1_JVM_ARG: [&str; 3] = [
+    "-Djava.library.path=${natives_directory}",
+    "-cp",
+    "${classpath}",
+];
