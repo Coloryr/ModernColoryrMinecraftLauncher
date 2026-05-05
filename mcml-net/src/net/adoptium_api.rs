@@ -137,7 +137,7 @@ pub async fn get_java_version() -> Result<Vec<String>, ErrorType> {
 }
 
 /// 获取Java文件列表
-/// 
+///
 /// - `version`: Java主版本
 /// - `os`: 系统类型
 pub async fn get_java_list(version: String, os: Os) -> Result<Vec<AdoptiumObj>, ErrorType> {

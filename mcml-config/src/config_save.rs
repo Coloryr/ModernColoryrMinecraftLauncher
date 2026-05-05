@@ -3,35 +3,36 @@ use std::{
     io::Write,
     path::PathBuf,
     sync::{
-        atomic::{AtomicBool, Ordering},
-        Mutex,
+        Arc, Mutex, OnceLock, atomic::{AtomicBool, Ordering}
     },
     thread::Builder,
 };
 
 use mcml_log;
-use mcml_names::{i18, thread_type::ThreadType};
+use mcml_names::{error_type::ErrorType, i18, thread_type::ThreadType};
+use semrs::Semaphore;
 use serde::Serialize;
+use uuid::Uuid;
 
 pub struct ConfigSaveObj {
     /// 保存的内容
     json: String,
     /// 保存的文件
     file: PathBuf,
-    /// 任务名字
-    name: String,
+    /// 任务标识
+    uuid: Uuid,
 }
 
 impl ConfigSaveObj {
     pub fn new<T: Serialize>(
         obj: &T,
         file: PathBuf,
-        name: String,
+        uuid: Uuid,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         Ok(ConfigSaveObj {
             json: serde_json::to_string_pretty(obj)?,
             file,
-            name,
+            uuid,
         })
     }
 
@@ -50,56 +51,59 @@ impl ConfigSaveObj {
 static QUEUE: Mutex<Vec<ConfigSaveObj>> = Mutex::new(Vec::new());
 /// 是否在运行
 static IS_RUN: AtomicBool = AtomicBool::new(true);
+// 锁定信号量
+static SEM: OnceLock<Arc<Semaphore>> = OnceLock::new();
 
 /// 保存一个内容
-pub fn save<T>(name: String, value: &T, file: &PathBuf)
+pub fn save<T>(uuid: Uuid, value: &T, file: &PathBuf)
 where
     T: ?Sized + Serialize,
 {
     let mut queue = QUEUE.lock().unwrap();
     // 移除所有同名的旧任务
-    queue.retain(|obj| obj.name != name);
+    queue.retain(|obj| obj.uuid != uuid);
     queue.push(ConfigSaveObj {
-        name,
+        uuid,
         file: file.to_path_buf(),
         json: serde_json::to_string(value).unwrap(),
     });
+
+    SEM.get().unwrap().up();
 }
 
-fn run() {
-    mcml_log::info(String::from("Config save thread start"));
-
-    while IS_RUN.load(Ordering::Acquire) {
-        let items = {
-            let mut queue = QUEUE.lock().unwrap();
-            std::mem::take(&mut *queue)
-        };
-        for save_obj in items {
-            if let Err(e) = save_obj.save() {
-                mcml_log::error(format!("Failed to save {}: {}", save_obj.name, e));
-            }
-        }
-        std::thread::sleep(std::time::Duration::from_millis(100));
-    }
-
+fn save_now() {
     let items = {
         let mut queue = QUEUE.lock().unwrap();
         std::mem::take(&mut *queue)
     };
     for save_obj in items {
         if let Err(e) = save_obj.save() {
-            mcml_log::error(format!("Failed to save {}: {}", save_obj.name, e));
+            mcml_log::error_type(ErrorType::ConfigSaveError(
+                e.to_string(),
+                save_obj.file.display().to_string(),
+            ));
         }
     }
+}
 
-    mcml_log::info(String::from("Config save thread stop"));
+fn run() {
+    while IS_RUN.load(Ordering::Acquire) {
+        SEM.get().unwrap().down();
+
+        save_now();
+    }
+
+    save_now();
 }
 
 // 后台保存线程
 pub fn start() {
+    SEM.get_or_init(|| Arc::new(Semaphore::new(0)));
+
     Builder::new()
         .name(i18::get_thread(ThreadType::ConfigSaveThread))
-        .spawn(|| run()).unwrap();
+        .spawn(|| run())
+        .unwrap();
 }
 
 pub fn stop() {

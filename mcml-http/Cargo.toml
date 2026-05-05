@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 mcml-log = { path = "../mcml-log" }
 mcml-config = { path = "../mcml-config" }
+mcml-names = { path = "../mcml-names" }
 tokio = { workspace = true, features = ["rt", "macros"] }
 tokio-util.workspace = true
 reqwest.workspace = true

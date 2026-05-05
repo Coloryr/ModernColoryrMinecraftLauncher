@@ -5,6 +5,7 @@ pub mod names;
 pub mod os;
 pub mod panic_type;
 pub mod thread_type;
+pub mod uuids;
 
 use std::{
     fs::File,

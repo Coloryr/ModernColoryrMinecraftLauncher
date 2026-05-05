@@ -87,7 +87,7 @@ fn save() {
     }
 }
 
-pub fn run() {
+fn run() {
     while IS_RUN.load(Ordering::Acquire) {
         SEM.get().unwrap().down();
 

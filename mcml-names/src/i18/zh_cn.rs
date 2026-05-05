@@ -15,7 +15,17 @@ impl I18Lang for ZhCn {
 
     fn get_error(&self, error: ErrorType) -> String {
         match error {
-            ErrorType::AdoptiumGetError(_) => todo!(),
+            ErrorType::ConfigSaveError(data, data1) => {
+                format!("配置文件保存失败：{} 位置：{}", data, data1)
+            }
+            ErrorType::ConfigReadError(data, data1) => {
+                format!("配置文件读取失败：{} 位置：{}", data, data1)
+            }
+            ErrorType::AdoptiumGetError(data) => format!("Adoptium返回错误：{}", data),
+            ErrorType::ColoryrApiGetError(data) => format!("ColoryrApi请求错误：{}", data),
+            ErrorType::ColoryrApiServerError(data) => format!("ColoryrApi返回错误：{}", data),
+            ErrorType::HttpReqError(data) => format!("网络请求错误：{}", data),
+            ErrorType::JsonDecError(data) => format!("Json解析失败：{}", data),
         }
     }
 

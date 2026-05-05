@@ -1,4 +1,6 @@
 use mcml_config::config_obj::{ProxyState, ProxyType};
+use mcml_names::error_type::ErrorType;
+use mcml_names::i18;
 use reqwest::Proxy;
 use reqwest::header::{CONTENT_TYPE, HeaderMap, HeaderValue, USER_AGENT};
 use serde::Serialize;
@@ -29,8 +31,10 @@ pub enum NetError {
 impl std::fmt::Display for NetError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            NetError::Reqwest(e) => write!(f, "请求错误: {e}"),
-            NetError::Json(e) => write!(f, "JSON 错误: {e}"),
+            NetError::Reqwest(e) => {
+                write!(f, "{}", i18::get_error(ErrorType::HttpReqError(e.to_string())))
+            }
+            NetError::Json(e) => write!(f, "{}", i18::get_error(ErrorType::JsonDecError(e.to_string()))),
             NetError::Custom(msg) => write!(f, "{msg}"),
         }
     }
@@ -173,6 +177,16 @@ impl Client {
             .body(body.to_owned())
             .send()
             .await?;
+        Self::handle_response(resp).await
+    }
+
+    /// 发送 POST 请求，请求体为 JSON，返回JSON
+    pub async fn post_json<B: Serialize, T: DeserializeOwned>(
+        &self,
+        url: &str,
+        json: &B,
+    ) -> NetResult<T> {
+        let resp = self.inner.post(url).json(json).send().await?;
         Self::handle_response(resp).await
     }
 
