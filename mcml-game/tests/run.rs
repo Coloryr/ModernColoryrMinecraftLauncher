@@ -1,4 +1,4 @@
-use mcml_game::launcher::game_instance::GameTimeObj;
+use mcml_game::launcher::game_setting_obj::GameTimeObj;
 
 pub fn format_game_time(time: &GameTimeObj) -> String {
     let total_seconds = time.game_time.num_seconds();
