@@ -1,6 +1,7 @@
 pub mod log_item;
 
 use crossbeam_queue::SegQueue;
+use mcml_names::{i18, i18_items::{error_type::ErrorType, info_type::InfoType, panic_type::PanicType, thread_type::ThreadType}, names};
 use semrs::Semaphore;
 
 use std::{
@@ -15,7 +16,6 @@ use std::{
 };
 
 use crate::log_item::{LogItem, LogLevel};
-use mcml_names::{error_type::ErrorType, i18, info_type::InfoType, names, panic_type::PanicType, thread_type::ThreadType};
 
 // 日志写入队列
 static QUEUE: RwLock<SegQueue<LogItem>> = RwLock::new(SegQueue::new());

@@ -29,7 +29,7 @@ use std::{
 };
 
 use mcml_log;
-use mcml_names::{i18, info_type::InfoType, panic_type::PanicType};
+use mcml_names::{i18, i18_items::info_type::InfoType, i18_items::panic_type::PanicType};
 
 use crate::events::core_stop_event;
 

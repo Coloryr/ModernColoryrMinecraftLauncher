@@ -6,5 +6,6 @@ pub enum ErrorType {
     ColoryrApiGetError(String),
     ColoryrApiServerError(i32),
     HttpReqError(String),
-    JsonDecError(String)
+    JsonDecError(String),
+    FileNotExists(String),
 }

@@ -1,2 +1,21 @@
+use serde_repr::{Deserialize_repr, Serialize_repr};
+
 pub mod assets_obj;
-pub mod game_obj;
+pub mod game_arg_obj;
+
+/// 游戏版本类型
+#[derive(Serialize_repr, Deserialize_repr, Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum GameType {
+    /// 发布版
+    Release,
+    Snapshot,
+    Other,
+    All
+}
+
+impl Default for GameType {
+    fn default() -> Self {
+        GameType::Release
+    }
+}

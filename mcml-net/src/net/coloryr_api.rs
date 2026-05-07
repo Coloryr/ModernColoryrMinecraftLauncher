@@ -150,4 +150,6 @@ pub async fn get_mcmod_from_mo(
     get_list(1, ids, mcmod_type).await
 }
 
-pub async fn get_mcmod(name: String, page:i32, loader: GameLoader) {}
+pub async fn get_mcmod(name: String, page:i32, loader: i32) {
+    
+}

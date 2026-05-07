@@ -1,9 +1,13 @@
 use std::sync::{OnceLock, RwLock};
 
-use crate::{error_type::ErrorType, info_type::InfoType, panic_type::PanicType, thread_type::ThreadType};
+use crate::{
+    i18_items::{
+        error_type::ErrorType, info_type::InfoType, panic_type::PanicType, thread_type::ThreadType,
+    },
+};
 
-pub mod zh_cn;
 pub mod en_us;
+pub mod zh_cn;
 
 pub trait I18Lang {
     fn get_info(&self, info: InfoType) -> String;
