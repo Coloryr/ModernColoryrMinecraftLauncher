@@ -252,7 +252,7 @@ impl Default for LoggingObj {
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
-pub struct GameObj {
+pub struct GameArgObj {
     #[serde(rename = "assetIndex")]
     pub asset_index: Option<GameAssetIndexObj>,
     pub downloads: GameDownloadsObj,
@@ -272,7 +272,7 @@ pub struct GameObj {
     pub arguments: Option<GameArgumentsObj>,
 }
 
-impl Default for GameObj {
+impl Default for GameArgObj {
     fn default() -> Self {
         Self {
             asset_index: Default::default(),

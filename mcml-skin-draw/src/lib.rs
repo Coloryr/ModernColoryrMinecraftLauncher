@@ -95,18 +95,9 @@ pub mod skin_draw {
             let out_b = other.b() as f32 * ap + self.b() as f32 * dp;
 
             if self.a() == 0 && other.a() == 0 {
-                Color::from_argb(
-                    0,
-                    out_r as u8,
-                    out_g as u8,
-                    out_b as u8,
-                )
+                Color::from_argb(0, out_r as u8, out_g as u8, out_b as u8)
             } else {
-                Color::from_rgb(
-                    out_r as u8,
-                    out_g as u8,
-                    out_b as u8,
-                )
+                Color::from_rgb(out_r as u8, out_g as u8, out_b as u8)
             }
         }
     }

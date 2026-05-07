@@ -9,7 +9,7 @@ use std::{
 };
 
 use mcml_log;
-use mcml_names::{error_type::ErrorType, i18, thread_type::ThreadType};
+use mcml_names::{i18, i18_items::{error_type::ErrorType, thread_type::ThreadType}};
 use semrs::Semaphore;
 use serde::Serialize;
 use uuid::Uuid;

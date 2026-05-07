@@ -1,6 +1,10 @@
+use crate::VERSION;
+
 use crate::{
-    VERSION, error_type::ErrorType, i18::I18Lang, info_type::InfoType, panic_type::PanicType,
-    thread_type::ThreadType,
+    i18::I18Lang,
+    i18_items::{
+        error_type::ErrorType, info_type::InfoType, panic_type::PanicType, thread_type::ThreadType,
+    },
 };
 
 pub struct ZhCn;
@@ -26,6 +30,7 @@ impl I18Lang for ZhCn {
             ErrorType::ColoryrApiServerError(data) => format!("ColoryrApi返回错误：{}", data),
             ErrorType::HttpReqError(data) => format!("网络请求错误：{}", data),
             ErrorType::JsonDecError(data) => format!("Json解析失败：{}", data),
+            ErrorType::FileNotExists(data) => format!("文件不存在：{}", data),
         }
     }
 

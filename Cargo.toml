@@ -24,7 +24,7 @@ lto = true
 
 [workspace]
 members = [
-    "mcml-auth",
+    "mcml-auth", "mcml-base",
     "mcml-config",
     "mcml-core",
     "mcml-downloader", "mcml-game",

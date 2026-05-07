@@ -1,5 +1,4 @@
-use crate::{error_type::ErrorType, i18::I18Lang, info_type::InfoType, panic_type::PanicType, thread_type::ThreadType};
-
+use crate::{i18::I18Lang, i18_items::{error_type::ErrorType, info_type::InfoType, panic_type::PanicType, thread_type::ThreadType}};
 pub struct EnUs;
 
 impl I18Lang for EnUs {

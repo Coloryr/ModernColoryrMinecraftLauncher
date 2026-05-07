@@ -1,6 +1,6 @@
 use mcml_config::config_obj::{ProxyState, ProxyType};
-use mcml_names::error_type::ErrorType;
 use mcml_names::i18;
+use mcml_names::i18_items::error_type::ErrorType;
 use reqwest::Proxy;
 use reqwest::header::{CONTENT_TYPE, HeaderMap, HeaderValue, USER_AGENT};
 use serde::Serialize;

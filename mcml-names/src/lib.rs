@@ -1,10 +1,7 @@
-pub mod error_type;
 pub mod i18;
-pub mod info_type;
+pub mod i18_items;
 pub mod names;
 pub mod os;
-pub mod panic_type;
-pub mod thread_type;
 pub mod uuids;
 
 use std::{

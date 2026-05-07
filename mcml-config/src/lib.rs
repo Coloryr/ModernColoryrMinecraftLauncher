@@ -8,7 +8,7 @@ use std::{
 };
 
 use mcml_log;
-use mcml_names::{error_type::ErrorType, names, uuids};
+use mcml_names::{i18_items::error_type::ErrorType, names, uuids};
 
 use crate::config_obj::ConfigObj;
 
