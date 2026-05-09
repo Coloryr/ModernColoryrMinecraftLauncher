@@ -25,12 +25,12 @@ impl I18Lang for ZhCn {
             ErrorType::ConfigReadError(data, data1) => {
                 format!("配置文件读取失败：{} 位置：{}", data, data1)
             }
-            ErrorType::AdoptiumGetError(data) => format!("Adoptium返回错误：{}", data),
             ErrorType::ColoryrApiGetError(data) => format!("ColoryrApi请求错误：{}", data),
             ErrorType::ColoryrApiServerError(data) => format!("ColoryrApi返回错误：{}", data),
-            ErrorType::HttpReqError(data) => format!("网络请求错误：{}", data),
+            ErrorType::HttpReqError(data) => format!("网络发送请求错误：{}", data),
             ErrorType::JsonDecError(data) => format!("Json解析失败：{}", data),
             ErrorType::FileNotExists(data) => format!("文件不存在：{}", data),
+            ErrorType::HttpReadError(data) => format!("网络请求错误：{}", data),
         }
     }
 

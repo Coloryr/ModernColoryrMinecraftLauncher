@@ -54,6 +54,16 @@ impl From<serde_json::Error> for NetError {
     }
 }
 
+impl From<NetError> for ErrorType {
+    fn from(value: NetError) -> Self {
+        match value {
+            NetError::Custom(error) => ErrorType::HttpReadError(error),
+            NetError::Reqwest(error) => ErrorType::HttpReqError(error.to_string()),
+            NetError::Json(error) => ErrorType::JsonDecError(error.to_string()),
+        }
+    }
+}
+
 /// HTTP 客户端
 #[derive(Clone)]
 pub struct Client {
@@ -140,6 +150,12 @@ impl Client {
     pub async fn get_bytes(&self, url: &str) -> NetResult<Vec<u8>> {
         let resp = self.inner.get(url).send().await?;
         Ok(resp.bytes().await?.to_vec())
+    }
+
+    /// 发送 GET 请求，返回反序列化后的 JSON 响应
+    pub async fn get_json<T: DeserializeOwned>(&self, url: &str) -> NetResult<T> {
+        let resp = self.inner.get(url).send().await?;
+        Self::handle_response(resp).await
     }
 
     /// 发送 POST 请求，请求体为 JSON，返回反序列化后的 JSON 响应
