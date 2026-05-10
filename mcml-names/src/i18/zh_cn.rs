@@ -31,8 +31,11 @@ impl I18Lang for ZhCn {
             ErrorType::JsonDecError(data) => format!("Json解析失败：{}", data),
             ErrorType::FileNotExists(data) => format!("文件不存在：{}", data),
             ErrorType::HttpReadError(data) => format!("网络请求错误：{}", data),
-            ErrorType::LoginFail(data) => format!("登录失败：{}", data),
-            ErrorType::LoginNoProfile => String::from("登录错误，没有账户"),
+            ErrorType::AuthLoginFail(data) => format!("账户登录失败：{}", data),
+            ErrorType::AuthLoginNoProfile => String::from("账户登录错误，没有找到账户"),
+            ErrorType::AuthRefreshFail(data) => format!("账户刷新失败：{}", data),
+            ErrorType::AuthRefreshNoProfile => String::from("账户刷新错误，没有找到账户"),
+            _ => String::new()
         }
     }
 

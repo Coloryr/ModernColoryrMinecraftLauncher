@@ -32,9 +32,17 @@ impl std::fmt::Display for NetError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             NetError::Reqwest(e) => {
-                write!(f, "{}", i18::get_error(ErrorType::HttpReqError(e.to_string())))
+                write!(
+                    f,
+                    "{}",
+                    i18::get_error(ErrorType::HttpReqError(e.to_string()))
+                )
             }
-            NetError::Json(e) => write!(f, "{}", i18::get_error(ErrorType::JsonDecError(e.to_string()))),
+            NetError::Json(e) => write!(
+                f,
+                "{}",
+                i18::get_error(ErrorType::JsonDecError(e.to_string()))
+            ),
             NetError::Custom(msg) => write!(f, "{msg}"),
         }
     }
@@ -65,7 +73,7 @@ impl From<NetError> for ErrorType {
 }
 
 /// HTTP 客户端
-#[derive(Clone)]
+#[derive(Debug)]
 pub struct Client {
     inner: reqwest::Client,
 }
@@ -158,18 +166,13 @@ impl Client {
         Self::handle_response(resp).await
     }
 
-    /// 发送 POST 请求，请求体为 JSON，返回反序列化后的 JSON 响应
+    /// 发送 POST 请求，请求体为 JSON
     ///
     /// # 参数
     /// - `url`: 请求地址
     /// - `body`: 请求体，需要实现 `Serialize`
-    pub async fn post<T: DeserializeOwned, B: Serialize>(
-        &self,
-        url: &str,
-        body: &B,
-    ) -> NetResult<T> {
-        let resp = self.inner.post(url).json(body).send().await?;
-        Self::handle_response(resp).await
+    pub async fn post<B: Serialize>(&self, url: &str, body: &B) -> NetResult<reqwest::Response> {
+        Ok(self.inner.post(url).json(body).send().await?)
     }
 
     /// 发送 POST 请求，请求体为 JSON，返回原始文本响应
