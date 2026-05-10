@@ -10,12 +10,20 @@ pub struct RefreshObj {
     #[serde(rename = "clientToken")]
     pub client_token: String,
     #[serde(rename = "selectedProfile")]
-    pub selected_profile: SelectedProfileObj,
+    pub selected_profile: Option<SelectedProfileObj>,
 }
 
 impl RefreshObj {
-    pub fn new(access_token: String, client_token: String, selected_profile: SelectedProfileObj) -> Self {
-
+    pub fn new(
+        access_token: String,
+        client_token: String,
+        selected_profile: Option<SelectedProfileObj>,
+    ) -> Self {
+        RefreshObj {
+            access_token,
+            client_token,
+            selected_profile,
+        }
     }
 }
 

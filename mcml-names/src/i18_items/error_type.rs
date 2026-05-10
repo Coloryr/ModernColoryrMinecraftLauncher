@@ -8,6 +8,9 @@ pub enum ErrorType {
     HttpReadError(String),
     JsonDecError(String),
     FileNotExists(String),
-    LoginFail(String),
-    LoginNoProfile
+    AuthLoginFail(String),
+    AuthLoginNoProfile,
+    AuthRefreshFail(String),
+    AuthRefreshNoProfile,
+    AuthTokenTimeout,
 }
