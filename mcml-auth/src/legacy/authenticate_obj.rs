@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::legacy::selected_profile_obj::SelectedProfileObj;
+
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct AgentObj {
@@ -63,31 +65,15 @@ impl Default for AuthenticateObj {
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
-pub struct AuthenticateResSelectedProfileObj {
-    pub name: String,
-    pub id: String,
-}
-
-impl Default for AuthenticateResSelectedProfileObj {
-    fn default() -> Self {
-        Self {
-            name: Default::default(),
-            id: Default::default(),
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(default)]
 pub struct AuthenticateResObj {
     #[serde(rename = "accessToken")]
     pub access_token: String,
     #[serde(rename = "clientToken")]
     pub client_token: String,
     #[serde(rename = "selectedProfile")]
-    pub selected_profile: AuthenticateResSelectedProfileObj,
+    pub selected_profile: Option<SelectedProfileObj>,
     #[serde(rename = "availableProfiles")]
-    pub available_profiles: Vec<AuthenticateResSelectedProfileObj>,
+    pub available_profiles: Option<Vec<SelectedProfileObj>>,
     #[serde(rename = "errorMessage")]
     pub error_message: Option<String>,
 }
