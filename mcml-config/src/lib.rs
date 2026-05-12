@@ -8,7 +8,10 @@ use std::{
 };
 
 use mcml_log;
-use mcml_names::{i18_items::error_type::ErrorType, names, uuids};
+use mcml_names::{
+    i18_items::error_type::{ConfigErrorData, ErrorType},
+    names, uuids,
+};
 
 use crate::config_obj::ConfigObj;
 
@@ -26,17 +29,17 @@ pub fn save_now() {
         Ok(stream) => {
             let res = serde_json::to_writer(stream, &CONFIG.read().unwrap().get());
             if let Err(err) = res {
-                mcml_log::error_type(ErrorType::ConfigSaveError(
-                    err.to_string(),
-                    file.display().to_string(),
-                ));
+                mcml_log::error_type(ErrorType::ConfigSaveError(ConfigErrorData {
+                    error: err.to_string(),
+                    file: file.display().to_string(),
+                }));
             }
         }
         Err(err) => {
-            mcml_log::error_type(ErrorType::ConfigSaveError(
-                err.to_string(),
-                file.display().to_string(),
-            ));
+            mcml_log::error_type(ErrorType::ConfigSaveError(ConfigErrorData {
+                error: err.to_string(),
+                file: file.display().to_string(),
+            }));
         }
     }
 }
@@ -59,10 +62,10 @@ pub fn load(file: &PathBuf) -> bool {
 
     let stream = File::open(file);
     if let Err(err) = stream {
-        mcml_log::error_type(ErrorType::ConfigReadError(
-            err.to_string(),
-            file.display().to_string(),
-        ));
+        mcml_log::error_type(ErrorType::ConfigReadError(ConfigErrorData {
+            error: err.to_string(),
+            file: file.display().to_string(),
+        }));
 
         CONFIG.write().unwrap().get_or_init(|| ConfigObj::default());
         return false;
@@ -72,10 +75,10 @@ pub fn load(file: &PathBuf) -> bool {
     let json = serde_json::from_reader::<_, ConfigObj>(stream);
 
     if let Err(err) = json {
-        mcml_log::error_type(ErrorType::ConfigReadError(
-            err.to_string(),
-            file.display().to_string(),
-        ));
+        mcml_log::error_type(ErrorType::ConfigReadError(ConfigErrorData {
+            error: err.to_string(),
+            file: file.display().to_string(),
+        }));
 
         CONFIG.write().unwrap().get_or_init(|| ConfigObj::default());
         return false;

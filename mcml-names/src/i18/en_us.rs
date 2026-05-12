@@ -22,6 +22,8 @@ impl I18Lang for EnUs {
     }
     
     fn get_thread(&self, thread: ThreadType) -> String {
-        todo!()
+        match thread {
+            _ => todo!(),
+        }
     }
 }

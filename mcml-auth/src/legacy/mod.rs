@@ -12,10 +12,12 @@ use crate::{
 };
 
 pub mod authenticate_obj;
-pub mod refresh_obj;
-pub mod selected_profile_obj;
 pub mod authlib_injector;
 pub mod gui_select_handel;
+pub mod little_skin;
+pub mod refresh_obj;
+pub mod selected_profile_obj;
+pub mod nide8;
 
 /// 旧版方式登录结果
 pub struct LegacyLoginRes {
@@ -82,7 +84,9 @@ pub async fn authenticate(
             } else {
                 match obj.available_profiles {
                     Some(list) => {
-                        if list.len() == 1 {
+                        if list.len() == 0 {
+                            Err(ErrorType::AuthLoginNoProfile)
+                        } else if list.len() == 1 {
                             let temp = list.first().unwrap();
 
                             Ok(LegacyLoginRes::new(LoginObj::new(

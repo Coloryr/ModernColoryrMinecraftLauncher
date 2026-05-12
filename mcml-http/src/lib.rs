@@ -1,8 +1,9 @@
 use mcml_config::config_obj::{ProxyState, ProxyType};
-use mcml_names::i18;
-use mcml_names::i18_items::error_type::ErrorType;
+use mcml_names::i18_items::error_type::{
+    ErrorType, HttpReadErrorData, HttpReqErrorData, JsonErrorData,
+};
 use reqwest::Proxy;
-use reqwest::header::{CONTENT_TYPE, HeaderMap, HeaderValue, USER_AGENT};
+use reqwest::header::{HeaderMap, HeaderValue, USER_AGENT};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use std::sync::{Arc, OnceLock};
@@ -15,40 +16,14 @@ const DEFAULT_TIMEOUT: u64 = 10;
 const DEFAULT_USER_AGENT: &str = "mcml/1.0.0";
 
 /// HTTP 请求的通用结果类型
-pub type NetResult<T> = Result<T, NetError>;
+pub type NetResult<T> = Result<T, ErrorType>;
 
 /// 网络请求错误
 #[derive(Debug)]
 pub enum NetError {
-    /// reqwest 库错误
     Reqwest(reqwest::Error),
-    /// JSON 解析错误
     Json(serde_json::Error),
-    /// 自定义错误消息
-    Custom(String),
 }
-
-impl std::fmt::Display for NetError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            NetError::Reqwest(e) => {
-                write!(
-                    f,
-                    "{}",
-                    i18::get_error(ErrorType::HttpReqError(e.to_string()))
-                )
-            }
-            NetError::Json(e) => write!(
-                f,
-                "{}",
-                i18::get_error(ErrorType::JsonDecError(e.to_string()))
-            ),
-            NetError::Custom(msg) => write!(f, "{msg}"),
-        }
-    }
-}
-
-impl std::error::Error for NetError {}
 
 impl From<reqwest::Error> for NetError {
     fn from(e: reqwest::Error) -> Self {
@@ -65,9 +40,16 @@ impl From<serde_json::Error> for NetError {
 impl From<NetError> for ErrorType {
     fn from(value: NetError) -> Self {
         match value {
-            NetError::Custom(error) => ErrorType::HttpReadError(error),
-            NetError::Reqwest(error) => ErrorType::HttpReqError(error.to_string()),
-            NetError::Json(error) => ErrorType::JsonDecError(error.to_string()),
+            NetError::Reqwest(error) => ErrorType::HttpReqError(HttpReqErrorData {
+                error: error.to_string(),
+                url: match error.url() {
+                    Some(url) => url.to_string(),
+                    None => Default::default(),
+                },
+            }),
+            NetError::Json(error) => ErrorType::JsonError(JsonErrorData {
+                error: error.to_string(),
+            }),
         }
     }
 }
@@ -139,30 +121,36 @@ impl Client {
         }
     }
 
-    /// 发送 GET 请求，返回反序列化后的 JSON 响应
-    ///
-    /// # 参数
-    /// - `url`: 请求地址
-    pub async fn get<T: DeserializeOwned>(&self, url: &str) -> NetResult<T> {
-        let resp = self.inner.get(url).send().await?;
-        Self::handle_response(resp).await
-    }
-
     /// 发送 GET 请求，返回原始文本响应
     pub async fn get_text(&self, url: &str) -> NetResult<String> {
-        let resp = self.inner.get(url).send().await?;
-        Ok(resp.text().await?)
+        let resp = self
+            .inner
+            .get(url)
+            .send()
+            .await
+            .map_err(NetError::Reqwest)?;
+        Ok(resp.text().await.map_err(NetError::Reqwest)?)
     }
 
     /// 发送 GET 请求，返回原始字节响应
     pub async fn get_bytes(&self, url: &str) -> NetResult<Vec<u8>> {
-        let resp = self.inner.get(url).send().await?;
-        Ok(resp.bytes().await?.to_vec())
+        let resp = self
+            .inner
+            .get(url)
+            .send()
+            .await
+            .map_err(NetError::Reqwest)?;
+        Ok(resp.bytes().await.map_err(NetError::Reqwest)?.to_vec())
     }
 
     /// 发送 GET 请求，返回反序列化后的 JSON 响应
     pub async fn get_json<T: DeserializeOwned>(&self, url: &str) -> NetResult<T> {
-        let resp = self.inner.get(url).send().await?;
+        let resp = self
+            .inner
+            .get(url)
+            .send()
+            .await
+            .map_err(NetError::Reqwest)?;
         Self::handle_response(resp).await
     }
 
@@ -171,72 +159,93 @@ impl Client {
     /// # 参数
     /// - `url`: 请求地址
     /// - `body`: 请求体，需要实现 `Serialize`
-    pub async fn post<B: Serialize>(&self, url: &str, body: &B) -> NetResult<reqwest::Response> {
-        Ok(self.inner.post(url).json(body).send().await?)
+    pub async fn post_json_get_req<B: Serialize>(
+        &self,
+        url: &str,
+        body: &B,
+    ) -> NetResult<reqwest::Response> {
+        Ok(self
+            .inner
+            .post(url)
+            .json(body)
+            .send()
+            .await
+            .map_err(NetError::Reqwest)?)
     }
 
     /// 发送 POST 请求，请求体为 JSON，返回原始文本响应
-    pub async fn post_text<B: Serialize>(&self, url: &str, body: &B) -> NetResult<String> {
-        let resp = self.inner.post(url).json(body).send().await?;
-        Ok(resp.text().await?)
-    }
-
-    /// 发送 POST 请求，请求体为 JSON，返回原始字节响应
-    pub async fn post_bytes<B: Serialize>(&self, url: &str, body: &B) -> NetResult<Vec<u8>> {
-        let resp = self.inner.post(url).json(body).send().await?;
-        Ok(resp.bytes().await?.to_vec())
-    }
-
-    /// 发送 POST 请求，请求体为原始字符串（如 JSON 字符串）
-    pub async fn post_raw<T: DeserializeOwned>(&self, url: &str, body: &str) -> NetResult<T> {
+    pub async fn post_json_get_text<B: Serialize>(&self, url: &str, body: &B) -> NetResult<String> {
         let resp = self
             .inner
             .post(url)
-            .header(CONTENT_TYPE, "application/json")
-            .body(body.to_owned())
+            .json(body)
             .send()
-            .await?;
-        Self::handle_response(resp).await
+            .await
+            .map_err(NetError::Reqwest)?;
+        Ok(resp.text().await.map_err(NetError::Reqwest)?)
+    }
+
+    /// 发送 POST 请求，请求体为 JSON，返回原始字节响应
+    pub async fn post_json_get_bytes<B: Serialize>(
+        &self,
+        url: &str,
+        body: &B,
+    ) -> NetResult<Vec<u8>> {
+        let resp = self
+            .inner
+            .post(url)
+            .json(body)
+            .send()
+            .await
+            .map_err(NetError::Reqwest)?;
+        Ok(resp.bytes().await.map_err(NetError::Reqwest)?.to_vec())
     }
 
     /// 发送 POST 请求，请求体为 JSON，返回JSON
-    pub async fn post_json<B: Serialize, T: DeserializeOwned>(
+    pub async fn post_json_get_json<B: Serialize, T: DeserializeOwned>(
         &self,
         url: &str,
         json: &B,
     ) -> NetResult<T> {
-        let resp = self.inner.post(url).json(json).send().await?;
+        let resp = self
+            .inner
+            .post(url)
+            .json(json)
+            .send()
+            .await
+            .map_err(NetError::Reqwest)?;
         Self::handle_response(resp).await
     }
 
     /// 发送 POST 请求，请求体为表单数据
-    pub async fn post_form<T: DeserializeOwned>(
+    pub async fn post_form_get_json<T: DeserializeOwned>(
         &self,
         url: &str,
         params: &[(&str, &str)],
     ) -> NetResult<T> {
-        let resp = self.inner.post(url).form(params).send().await?;
+        let resp = self
+            .inner
+            .post(url)
+            .form(params)
+            .send()
+            .await
+            .map_err(NetError::Reqwest)?;
         Self::handle_response(resp).await
-    }
-
-    /// 获取底层 reqwest 客户端的引用
-    pub fn inner(&self) -> &reqwest::Client {
-        &self.inner
     }
 
     /// 处理响应，检查状态码并解析 JSON
     async fn handle_response<T: DeserializeOwned>(resp: reqwest::Response) -> NetResult<T> {
         let status = resp.status();
         if !status.is_success() {
-            let text = resp.text().await.unwrap_or_default();
-            return Err(NetError::Custom(format!(
-                "HTTP {}: {}",
-                status.as_u16(),
-                text
-            )));
+            let url = resp.url().to_string();
+            let error = resp.text().await.unwrap_or_default();
+            return Err(ErrorType::HttpReadError(HttpReadErrorData {
+                error,
+                url
+            }));
         }
-        let bytes = resp.bytes().await?;
-        let value: T = serde_json::from_slice(&bytes)?;
+        let bytes = resp.bytes().await.map_err(NetError::Reqwest)?;
+        let value: T = serde_json::from_slice(&bytes).map_err(NetError::Json)?;
         Ok(value)
     }
 }
