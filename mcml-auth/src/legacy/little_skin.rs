@@ -1,12 +1,12 @@
-/// 外置登录
-use mcml_names::i18_items::error_type::ErrorType;
+/// LittleSkin登录
+use mcml_names::{i18_items::error_type::ErrorType, urls::LITTLE_SKIN_URL};
 
 use crate::{
     AuthType, LoginObj,
     legacy::{self, gui_select_handel::GuiSelectHandel},
 };
 
-/// 外置登录
+/// 皮肤站登录
 /// - `client_token`: 客户端代码
 /// - `user`: 用户名
 /// - `password`: 密码
@@ -19,13 +19,30 @@ pub async fn authenticate(
     server: &String,
     gui: Option<Box<dyn GuiSelectHandel>>,
 ) -> Result<LoginObj, ErrorType> {
-    let obj = legacy::authenticate(&server, client_token, user, password, true).await?;
+    let mut auth_type = AuthType::LittleSkin;
+    let server = if server.is_empty() {
+        String::from(LITTLE_SKIN_URL)
+    } else {
+        auth_type = AuthType::SelfLittleSkin;
+        let mut server = server.clone();
+        if server.ends_with("/api/yggdrasil") {
+            server = server.replace("/api/yggdrasil", "/");
+        }
+        if server.ends_with("/user") {
+            server = server.replace("/user", "/");
+        }
+        if !server.ends_with('/') {
+            server.push('/');
+        }
+
+        server
+    };
+
+    let server1 = server.clone() + "api/yggdrasil";
+
+    let obj = legacy::authenticate(&server1, client_token, user, password, true).await?;
 
     let mut auth = obj.auth;
-    auth.auth_type = AuthType::AuthlibInjector;
-    auth.text1 = Some(server.clone());
-
-    let need_select = false;
 
     if let Some(list) = obj.logins {
         match gui {
@@ -45,13 +62,25 @@ pub async fn authenticate(
         };
     }
 
-    Ok(legacy::refresh(&server, &auth, need_select).await?)
+    auth.auth_type = auth_type;
+    if auth_type == AuthType::SelfLittleSkin {
+        auth.text1 = Some(server.clone());
+    }
+
+    Ok(legacy::refresh(&server1, &auth, true).await?)
 }
 
 /// 刷新登录
 /// - `auth`: 保存的账户
 pub async fn refresh(auth: &LoginObj) -> Result<LoginObj, ErrorType> {
-    let server = auth.text1.clone().unwrap();
+    let mut server = if auth.auth_type == AuthType::LittleSkin {
+        String::from(LITTLE_SKIN)
+    } else {
+        auth.text1.clone().unwrap()
+    };
+
+    server.push_str("api/yggdrasil");
+
     if legacy::validate(&server, auth).await? {
         Ok(legacy::refresh(&server, auth, false).await?)
     } else {

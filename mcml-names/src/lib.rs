@@ -3,6 +3,7 @@ pub mod i18_items;
 pub mod names;
 pub mod os;
 pub mod uuids;
+pub mod urls;
 
 use std::{
     fs::File,

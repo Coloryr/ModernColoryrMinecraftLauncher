@@ -8,7 +8,7 @@ mcml-log = { path = "../mcml-log" }
 mcml-names = { path = "../mcml-names" }
 mcml-http = { path = "../mcml-http" }
 mcml-config = { path = "../mcml-config" }
-tokio = { workspace = true, features = ["rt", "macros"] }
+tokio.workspace = true
 tokio-util.workspace = true
 reqwest.workspace = true
 serde.workspace = true

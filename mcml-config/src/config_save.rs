@@ -9,7 +9,7 @@ use std::{
 };
 
 use mcml_log;
-use mcml_names::{i18, i18_items::{error_type::ErrorType, thread_type::ThreadType}};
+use mcml_names::{i18, i18_items::{error_type::{ConfigErrorData, ErrorType}, thread_type::ThreadType}};
 use semrs::Semaphore;
 use serde::Serialize;
 use uuid::Uuid;
@@ -79,8 +79,10 @@ fn save_now() {
     for save_obj in items {
         if let Err(e) = save_obj.save() {
             mcml_log::error_type(ErrorType::ConfigSaveError(
-                e.to_string(),
-                save_obj.file.display().to_string(),
+                ConfigErrorData {
+                    error: e.to_string(),
+                    file: save_obj.file.display().to_string(),
+                }
             ));
         }
     }

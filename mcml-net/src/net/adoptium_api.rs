@@ -1,9 +1,7 @@
 use std::sync::OnceLock;
 
-use mcml_names::{error_type::ErrorType, os::Os};
+use mcml_names::{i18_items::error_type::ErrorType, os::Os, urls::ADOPTIUM_URL};
 use serde::{Deserialize, Serialize};
-
-const ADOPTIUM_URL: &str = "https://api.adoptium.net/";
 
 static JAVA_VERSION: OnceLock<Vec<String>> = OnceLock::new();
 
@@ -112,28 +110,20 @@ pub async fn get_java_version() -> Result<Vec<String>, ErrorType> {
         return Ok(list.to_vec());
     }
 
-    let mut url = String::from(ADOPTIUM_URL);
-    url.push_str("v3/info/available_releases");
+    let url = String::from(ADOPTIUM_URL) + "v3/info/available_releases";
 
-    let res = mcml_http::WORK_CLIENT.get().unwrap().get_text(&url).await;
+    let res = mcml_http::WORK_CLIENT
+        .get()
+        .unwrap()
+        .get_json::<AdoptiumJavaVersionObj>(&url)
+        .await?;
 
-    match res {
-        Ok(data) => {
-            let json = serde_json::from_str::<AdoptiumJavaVersionObj>(&data);
-            match json {
-                Ok(data1) => {
-                    let mut list = Vec::new();
-                    for item in data1.available_releases.iter() {
-                        list.push(item.to_string());
-                    }
-
-                    Ok(list)
-                }
-                Err(err) => Err(ErrorType::AdoptiumGetError(err.to_string())),
-            }
-        }
-        Err(err) => Err(ErrorType::AdoptiumGetError(err.to_string())),
+    let mut list = Vec::new();
+    for item in res.available_releases.iter() {
+        list.push(item.to_string());
     }
+
+    Ok(list)
 }
 
 /// 获取Java文件列表
@@ -148,16 +138,11 @@ pub async fn get_java_list(version: String, os: Os) -> Result<Vec<AdoptiumObj>, 
         url += &format!("v3/assets/latest/{}/hotspot?os={}", version, get_os(os));
     }
 
-    let res = mcml_http::WORK_CLIENT.get().unwrap().get_text(&url).await;
+    let res = mcml_http::WORK_CLIENT
+        .get()
+        .unwrap()
+        .get_json::<Vec<AdoptiumObj>>(&url)
+        .await?;
 
-    match res {
-        Ok(data) => {
-            let json = serde_json::from_str::<Vec<AdoptiumObj>>(&data);
-            match json {
-                Ok(data1) => Ok(data1),
-                Err(err) => Err(ErrorType::AdoptiumGetError(err.to_string())),
-            }
-        }
-        Err(err) => Err(ErrorType::AdoptiumGetError(err.to_string())),
-    }
+    Ok(res)
 }

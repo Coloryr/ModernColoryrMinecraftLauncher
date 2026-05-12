@@ -19,23 +19,27 @@ impl I18Lang for ZhCn {
 
     fn get_error(&self, error: ErrorType) -> String {
         match error {
-            ErrorType::ConfigSaveError(data, data1) => {
-                format!("配置文件保存失败：{} 位置：{}", data, data1)
+            ErrorType::ConfigSaveError(data) => {
+                format!("配置文件 {} 保存失败：{}", data.file, data.error)
             }
-            ErrorType::ConfigReadError(data, data1) => {
-                format!("配置文件读取失败：{} 位置：{}", data, data1)
+            ErrorType::ConfigReadError(data) => {
+                format!("配置文件 {} 读取失败：{}", data.file, data.error)
             }
-            ErrorType::ColoryrApiGetError(data) => format!("ColoryrApi请求错误：{}", data),
-            ErrorType::ColoryrApiServerError(data) => format!("ColoryrApi返回错误：{}", data),
-            ErrorType::HttpReqError(data) => format!("网络发送请求错误：{}", data),
-            ErrorType::JsonDecError(data) => format!("Json解析失败：{}", data),
-            ErrorType::FileNotExists(data) => format!("文件不存在：{}", data),
-            ErrorType::HttpReadError(data) => format!("网络请求错误：{}", data),
+            ErrorType::HttpReqError(data) => {
+                format!("发送网络请求 {} 错误：{}", data.url, data.error)
+            }
+            ErrorType::HttpReadError(data) => {
+                format!("发送网络请求 {} 读取失败：{}", data.url, data.error)
+            }
+
+            ErrorType::JsonError(data) => format!("Json解析失败：{}", data.error),
+            ErrorType::FileNotExists(data) => format!("文件不存在：{}", data.file),
+
             ErrorType::AuthLoginFail(data) => format!("账户登录失败：{}", data),
             ErrorType::AuthLoginNoProfile => String::from("账户登录错误，没有找到账户"),
             ErrorType::AuthRefreshFail(data) => format!("账户刷新失败：{}", data),
             ErrorType::AuthRefreshNoProfile => String::from("账户刷新错误，没有找到账户"),
-            _ => String::new()
+            _ => String::new(),
         }
     }
 
