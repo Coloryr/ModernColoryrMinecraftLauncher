@@ -1,6 +1,6 @@
 use std::sync::OnceLock;
 
-use mcml_names::{i18_items::error_type::ErrorType, os::Os, urls::ADOPTIUM_URL};
+use mcml_names::{i18_items::error_type::ErrorType, urls::ADOPTIUM_URL};
 use serde::{Deserialize, Serialize};
 
 static JAVA_VERSION: OnceLock<Vec<String>> = OnceLock::new();

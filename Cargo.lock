@@ -3080,6 +3080,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "crossbeam-queue",
+ "mcml-base",
  "mcml-config",
  "mcml-http",
  "mcml-log",
@@ -3096,6 +3097,7 @@ dependencies = [
 name = "mcml-base"
 version = "0.1.0"
 dependencies = [
+ "lazy_static",
  "tokio",
  "windows-sys 0.61.2",
 ]
@@ -3149,12 +3151,14 @@ name = "mcml-game"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "mcml-auth",
  "mcml-base",
  "mcml-config",
  "mcml-names",
  "serde",
  "serde_json",
  "serde_repr",
+ "url",
  "uuid",
 ]
 
@@ -3199,6 +3203,7 @@ version = "0.1.0"
 name = "mcml-net"
 version = "0.1.0"
 dependencies = [
+ "mcml-base",
  "mcml-config",
  "mcml-http",
  "mcml-log",

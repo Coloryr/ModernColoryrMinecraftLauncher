@@ -2,8 +2,8 @@ use std::{sync::OnceLock, time::Duration};
 
 use chrono::Local;
 use mcml_names::{
-    i18_items::error_type::ErrorType,
-    urls::{OAUTH_CODE, OAUTH_TOKEN, XBOX_LIVE},
+    i18_items::error_type::{ErrorType, OAuthErrorData},
+    urls::{OAUTH_CODE, OAUTH_TOKEN, XBOX_LIVE, XSTS},
 };
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
@@ -11,7 +11,10 @@ use tokio_util::sync::CancellationToken;
 use crate::oauth::{
     oauth_get_code::OAuthGetCodeRes,
     oauth_obj::{OAuthGetCodeObj, OAuthObj},
-    xbox_obj::{OAuthXBoxLiveRes, XBoxLoginObj, XBoxLoginPropertiesObj, XBoxLoginResObj},
+    xbox_obj::{
+        XBoxLiveRes, XBoxLoginObj, XBoxLoginPropertiesObj, XBoxLoginResObj, XSTSLoginObj,
+        XSTSLoginPropertiesObj,
+    },
 };
 
 pub mod oauth_get_code;
@@ -54,11 +57,11 @@ pub async fn get_code() -> Result<OAuthGetCodeRes, ErrorType> {
     let data = mcml_http::LOGIN_CLIENT
         .get()
         .unwrap()
-        .post_form::<OAuthObj>(OAUTH_CODE, obj)
+        .post_form_get_json::<OAuthObj>(OAUTH_CODE, obj)
         .await?;
 
     match data.error {
-        Some(err) => Err(ErrorType::AuthGetDataFail(err)),
+        Some(err) => Err(ErrorType::OAuthGetTokenError(OAuthErrorData { error: err })),
         None => Ok(OAuthGetCodeRes::new(
             data.user_code,
             data.verification_uri,
@@ -100,7 +103,7 @@ pub async fn run_get_code(
         let data = mcml_http::LOGIN_CLIENT
             .get()
             .unwrap()
-            .post_form::<OAuthGetCodeObj>(OAUTH_TOKEN, obj)
+            .post_form_get_json::<OAuthGetCodeObj>(OAUTH_TOKEN, obj)
             .await?;
 
         if data.error.is_some() {
@@ -110,7 +113,7 @@ pub async fn run_get_code(
             } else if error == "slow_down" {
                 delay += 5;
             } else if error == "expired_token" {
-                return Err(ErrorType::AuthGetDataFail(error));
+                return Err(ErrorType::OAuthGetTokenError(OAuthErrorData { error }));
             }
         } else {
             return Ok(data);
@@ -143,7 +146,7 @@ pub async fn refresh_oauth_token(token: String) -> Result<OAuthGetCodeObj, Error
 
 /// Xbox登录
 /// - `token`: OAuth的密钥
-pub async fn get_xbox(token: String) -> Result<OAuthXBoxLiveRes, ErrorType> {
+pub async fn get_xbox(token: String) -> Result<XBoxLiveRes, ErrorType> {
     let obj = XBoxLoginObj::new(
         XBoxLoginPropertiesObj::new(
             String::from("RPS"),
@@ -159,9 +162,36 @@ pub async fn get_xbox(token: String) -> Result<OAuthXBoxLiveRes, ErrorType> {
         .unwrap()
         .post_json_get_json::<_, XBoxLoginResObj>(XBOX_LIVE, &obj)
         .await?;
-    if data.display_claims.xui.is_empty() {
-        Err(ErrorType::AuthGetDataFails)
-    }
+    let item = data.display_claims.xui.first().unwrap();
+    let xsts = data.token;
+    let uhs = item.uhs.clone();
 
-    Err(ErrorType::AuthLoginNoProfile)
+    if xsts.is_empty() || uhs.is_empty() {
+        Err(ErrorType::OAuthGetTokenEmpty)
+    } else {
+        Ok(XBoxLiveRes::new(xsts, uhs))
+    }
+}
+
+pub async fn get_xsts(token: String) -> Result<XBoxLiveRes, ErrorType> {
+    let obj = XSTSLoginObj::new(
+        XSTSLoginPropertiesObj::new(String::from("RETAIL"), vec![token]),
+        String::from("rp://api.minecraftservices.com/"),
+        String::from("JWT"),
+    );
+
+    let data = mcml_http::LOGIN_CLIENT
+        .get()
+        .unwrap()
+        .post_json_get_json::<_, XBoxLoginResObj>(XSTS, &obj)
+        .await?;
+    let item = data.display_claims.xui.first().unwrap();
+    let xsts = data.token;
+    let uhs = item.uhs.clone();
+
+    if xsts.is_empty() || uhs.is_empty() {
+        Err(ErrorType::OAuthGetTokenEmpty)
+    } else {
+        Ok(XBoxLiveRes::new(xsts, uhs))
+    }
 }

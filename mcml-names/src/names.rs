@@ -139,3 +139,6 @@ pub const NAME_V1_JVM_ARG: [&str; 3] = [
     "-cp",
     "${classpath}",
 ];
+
+pub const LANG_ZH_CN: &str = "zh_CN";
+pub const LANG_EN_US: &str = "en_US";

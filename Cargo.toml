@@ -56,3 +56,4 @@ skia-safe = "~0.90.0"
 glam = "~0.32.1"
 lazy_static = "~1.5.0"
 uuid = { version = "~1.23.1", features = ["v4", "serde"] }
+url = "2.5.8"
