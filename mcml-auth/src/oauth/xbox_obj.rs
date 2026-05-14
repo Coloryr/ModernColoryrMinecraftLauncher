@@ -68,6 +68,68 @@ impl Default for XBoxLoginObj {
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
+pub struct XSTSLoginPropertiesObj {
+    #[serde(rename = "SandboxId")]
+    pub sandbox_id: String,
+    #[serde(rename = "UserTokens")]
+    pub user_tokens: Vec<String>,
+}
+
+impl XSTSLoginPropertiesObj {
+    pub fn new(sandbox_id: String, user_tokens: Vec<String>) -> Self {
+        XSTSLoginPropertiesObj {
+            sandbox_id,
+            user_tokens,
+        }
+    }
+}
+
+impl Default for XSTSLoginPropertiesObj {
+    fn default() -> Self {
+        Self {
+            sandbox_id: Default::default(),
+            user_tokens: Default::default(),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(default)]
+pub struct XSTSLoginObj {
+    #[serde(rename = "Properties")]
+    pub properties: XSTSLoginPropertiesObj,
+    #[serde(rename = "RelyingParty")]
+    pub relying_party: String,
+    #[serde(rename = "TokenType")]
+    pub token_type: String,
+}
+
+impl XSTSLoginObj {
+    pub fn new(
+        properties: XSTSLoginPropertiesObj,
+        relying_party: String,
+        token_type: String,
+    ) -> Self {
+        XSTSLoginObj {
+            properties,
+            relying_party,
+            token_type,
+        }
+    }
+}
+
+impl Default for XSTSLoginObj {
+    fn default() -> Self {
+        Self {
+            properties: Default::default(),
+            relying_party: Default::default(),
+            token_type: Default::default(),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(default)]
 pub struct XBoxLoginDisplayClaimsXuiObj {
     pub uhs: String,
 }
@@ -112,13 +174,13 @@ impl Default for XBoxLoginResObj {
     }
 }
 
-pub struct OAuthXBoxLiveRes {
+pub struct XBoxLiveRes {
     pub xbl_token: String,
     pub xbl_uhs: String,
 }
 
-impl OAuthXBoxLiveRes {
+impl XBoxLiveRes {
     pub fn new(xbl_token: String, xbl_uhs: String) -> Self {
-        OAuthXBoxLiveRes { xbl_token, xbl_uhs }
+        XBoxLiveRes { xbl_token, xbl_uhs }
     }
 }

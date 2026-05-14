@@ -2,11 +2,12 @@ use chrono::{DateTime, FixedOffset, Local};
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
+pub mod auths;
 pub mod legacy;
 pub mod oauth;
 
 /// 账户类型
-#[derive(Serialize_repr, Deserialize_repr, Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Serialize_repr, Deserialize_repr, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum AuthType {
     /// 离线账户
@@ -30,7 +31,7 @@ impl Default for AuthType {
 }
 
 /// 保存的账户
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(default)]
 pub struct LoginObj {
     #[serde(rename = "UserName")]
@@ -98,6 +99,13 @@ impl LoginObj {
             last_login: Default::default(),
         }
     }
+
+    pub fn get_key(&self) -> UserKeyObj {
+        UserKeyObj {
+            uuid: self.uuid.clone(),
+            auth_type: self.auth_type.clone(),
+        }
+    }
 }
 
 impl Default for LoginObj {
@@ -112,5 +120,17 @@ impl Default for LoginObj {
             text2: Default::default(),
             last_login: Default::default(),
         }
+    }
+}
+
+#[derive(Eq, Hash, PartialEq, Debug)]
+pub struct UserKeyObj {
+    pub uuid: String,
+    pub auth_type: AuthType,
+}
+
+impl UserKeyObj {
+    pub fn new(uuid: String, auth_type: AuthType) -> Self {
+        UserKeyObj { uuid, auth_type }
     }
 }

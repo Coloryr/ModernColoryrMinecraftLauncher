@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 tokio.workspace = true
+lazy_static.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "~0.61.2", features = [

@@ -64,7 +64,7 @@ pub async fn authenticate(
     let obj = mcml_http::LOGIN_CLIENT
         .get()
         .unwrap()
-        .post_json::<_, AuthenticateResObj>(&server, &obj)
+        .post_json_get_json::<_, AuthenticateResObj>(&server, &obj)
         .await?;
 
     match obj.error_message {
@@ -166,7 +166,7 @@ pub async fn refresh(
     let obj = mcml_http::LOGIN_CLIENT
         .get()
         .unwrap()
-        .post_json::<_, AuthenticateResObj>(&server, &obj)
+        .post_json_get_json::<_, AuthenticateResObj>(&server, &obj)
         .await?;
 
     match obj.error_message {
@@ -211,7 +211,7 @@ pub async fn validate(server: &String, login: &LoginObj) -> Result<bool, ErrorTy
     let obj = mcml_http::LOGIN_CLIENT
         .get()
         .unwrap()
-        .post(&server, &obj)
+        .post_json_get_req(&server, &obj)
         .await?;
 
     if obj.status() == StatusCode::NO_CONTENT {

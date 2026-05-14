@@ -1,9 +1,8 @@
 pub mod i18;
 pub mod i18_items;
 pub mod names;
-pub mod os;
-pub mod uuids;
 pub mod urls;
+pub mod uuids;
 
 use std::{
     fs::File,
@@ -14,7 +13,7 @@ use std::{
 
 use const_format::formatcp;
 
-use crate::i18::{I18Lang, en_us::EnUs, zh_cn::ZhCn};
+use crate::{i18::{I18Lang, en_us::EnUs, zh_cn::ZhCn}, names::{LANG_EN_US, LANG_ZH_CN}};
 
 /// 启动器主版本号
 pub const VERSION_NUM: i32 = 1;
@@ -34,19 +33,35 @@ static FILE: OnceLock<PathBuf> = OnceLock::new();
 
 fn get_lang(lang: Lang) -> &'static str {
     match lang {
-        Lang::ZhCn => "zh_CN",
-        Lang::EnUs => "en_US",
+        Lang::ZhCn => LANG_ZH_CN,
+        Lang::EnUs => LANG_EN_US,
     }
 }
 
 fn check_lang(data: &String) -> Lang {
-    if data.eq("zh_CN") {
+    if data.eq(LANG_ZH_CN) {
         return Lang::ZhCn;
-    } else if data.eq("en_US") {
+    } else if data.eq(LANG_EN_US) {
         return Lang::EnUs;
     }
 
-    return Lang::EnUs;
+    return Lang::ZhCn;
+}
+
+fn load_lang() {
+    let i18: Box<dyn I18Lang + Send + Sync> = match *LANG.get().unwrap().read().unwrap() {
+        Lang::ZhCn => Box::new(ZhCn),
+        Lang::EnUs => Box::new(EnUs),
+    };
+
+    i18::set(i18);
+}
+
+fn load(file: &PathBuf) {
+    let mut file = File::open(file).unwrap();
+    let mut str = String::new();
+    file.read_to_string(&mut str).unwrap();
+    LANG.get_or_init(|| RwLock::new(check_lang(&str)));
 }
 
 fn save() {
@@ -57,28 +72,25 @@ fn save() {
     file.write_all(str.as_bytes()).unwrap();
 }
 
+pub fn set_lang(lang: Lang) {
+    *LANG.get().unwrap().write().unwrap() = lang;
+    save();
+
+    load_lang();
+}
+
 pub fn init(local: &PathBuf) {
     let file = local.with_file_name(names::NAME_LANG_FILE);
 
-    FILE.get_or_init(|| file);
-    let file = FILE.get().unwrap();
+    let file = FILE.get_or_init(|| file);
 
     if file.exists() {
-        let mut file = File::open(file).unwrap();
-        let mut str = String::new();
-        file.read_to_string(&mut str).unwrap();
-
-        LANG.get_or_init(|| RwLock::new(check_lang(&str)));
+        load(file);
     } else {
         LANG.get_or_init(|| RwLock::new(Lang::ZhCn));
 
         save();
     }
 
-    let i18: Box<dyn I18Lang + Send + Sync> = match *LANG.get().unwrap().read().unwrap() {
-        Lang::ZhCn => Box::new(ZhCn),
-        Lang::EnUs => Box::new(EnUs),
-    };
-
-    i18::set(i18);
+    load_lang();
 }

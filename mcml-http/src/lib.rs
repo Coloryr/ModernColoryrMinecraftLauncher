@@ -241,7 +241,8 @@ impl Client {
             let error = resp.text().await.unwrap_or_default();
             return Err(ErrorType::HttpReadError(HttpReadErrorData {
                 error,
-                url
+                url,
+                status: status.as_u16()
             }));
         }
         let bytes = resp.bytes().await.map_err(NetError::Reqwest)?;

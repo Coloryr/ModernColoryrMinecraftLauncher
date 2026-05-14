@@ -74,7 +74,7 @@ pub async fn authenticate(
 /// - `auth`: 保存的账户
 pub async fn refresh(auth: &LoginObj) -> Result<LoginObj, ErrorType> {
     let mut server = if auth.auth_type == AuthType::LittleSkin {
-        String::from(LITTLE_SKIN)
+        String::from(LITTLE_SKIN_URL)
     } else {
         auth.text1.clone().unwrap()
     };
