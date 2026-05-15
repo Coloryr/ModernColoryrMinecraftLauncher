@@ -36,27 +36,27 @@ static SKIN_DIR: OnceLock<PathBuf> = OnceLock::new();
 pub fn init(dir: &PathBuf) {
     let dir = BASE_DIR.get_or_init(|| dir.join(names::NAME_GAME_ASSETS_DIR));
 
-    OBJECTS_DIR.set(dir.join(names::NAME_GAME_INDEX_DIR));
-    INDEX_DIR.set(dir.join(names::NAME_GAME_OBJECT_DIR));
-    SKIN_DIR.set(dir.join(names::NAME_GAME_SKIN_DIR));
+    OBJECTS_DIR.set(dir.join(names::NAME_GAME_INDEX_DIR)).unwrap();
+    INDEX_DIR.set(dir.join(names::NAME_GAME_OBJECT_DIR)).unwrap();
+    SKIN_DIR.set(dir.join(names::NAME_GAME_SKIN_DIR)).unwrap();
 
     let dir = dir.as_path();
-    if !dir.exists() {
+    if !dir.is_dir() {
         fs::create_dir(dir).unwrap();
     }
 
     let dir = OBJECTS_DIR.get().unwrap();
-    if !dir.exists() {
+    if !dir.is_dir() {
         fs::create_dir(dir).unwrap();
     }
 
     let dir = INDEX_DIR.get().unwrap();
-    if !dir.exists() {
+    if !dir.is_dir() {
         fs::create_dir(dir).unwrap();
     }
 
     let dir = SKIN_DIR.get().unwrap();
-    if !dir.exists() {
+    if !dir.is_dir() {
         fs::create_dir(dir).unwrap();
     }
 }
@@ -67,7 +67,7 @@ pub fn init(dir: &PathBuf) {
 pub fn add_index(obj: &GameArgObj, data: &mut Cursor<Vec<u8>>) {
     let index = obj.asset_index.as_ref().unwrap();
     let file = INDEX_DIR.get().unwrap().join(format!("{}.json", index.id));
-    path_helper::write_bytes_from_stream(&file, data);
+    path_helper::write_bytes_from_stream(&file, data).unwrap();
 }
 
 /// 获取资源数据
@@ -99,7 +99,7 @@ pub fn save_skin(obj: LoginObj, file: PathBuf) {
         .get()
         .unwrap()
         .join(format!("{}_skin.png", obj.uuid));
-    path_helper::copy_file(&file, &path);
+    path_helper::copy_file(&file, &path).unwrap();
 }
 
 /// 获取url的皮肤位置

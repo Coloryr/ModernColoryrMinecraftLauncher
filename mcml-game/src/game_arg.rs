@@ -24,12 +24,12 @@ fn make_v2_game_arg(game: &GameArgObj) -> Vec<String> {
     }
 }
 
-fn make_loader_v1_game_arg(obj: &GameSettingObj, game: &GameArgObj) -> Vec<String> {
-    match obj.loader {
-        LoaderType::Forge | LoaderType::NeoForge => {
+// fn make_loader_v1_game_arg(obj: &GameSettingObj, game: &GameArgObj) -> Vec<String> {
+//     match obj.loader {
+//         LoaderType::Forge | LoaderType::NeoForge => {
             
-        }
-    }
+//         }
+//     }
 
-    Vec::new()
-}
+//     Vec::new()
+// }

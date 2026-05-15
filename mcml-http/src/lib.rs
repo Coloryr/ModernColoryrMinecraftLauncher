@@ -261,8 +261,7 @@ pub static WORK_CLIENT: OnceLock<Arc<Client>> = OnceLock::new();
 pub static LOGIN_CLIENT: OnceLock<Arc<Client>> = OnceLock::new();
 
 pub fn init() {
-    let binding = mcml_config::CONFIG.read().unwrap();
-    let config = binding.get().unwrap();
+    let config = mcml_config::CONFIG.get().unwrap().read().unwrap();
     let http = &config.http;
 
     let client = if http.work_proxy == ProxyState::User {

@@ -80,4 +80,6 @@ pub enum ErrorType {
 
     TaskCancel,
     TaskTimeout,
+
+    GetVersionMetaFail,
 }
