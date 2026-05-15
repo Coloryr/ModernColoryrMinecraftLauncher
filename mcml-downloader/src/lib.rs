@@ -16,8 +16,7 @@ static TASKS: RwLock<Vec<DownloadTask>> = RwLock::new(Vec::new());
 static STOP: bool = false;
 
 pub fn start() {
-    let binding = mcml_config::CONFIG.read().unwrap();
-    let config = binding.get().unwrap();
+    let config = mcml_config::CONFIG.get().unwrap().read().unwrap();
     let mut thread = config.http.download_thread;
     if thread <= 0 {
         thread = 5;

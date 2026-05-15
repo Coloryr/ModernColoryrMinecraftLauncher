@@ -9,6 +9,7 @@ pub mod game_arg;
 pub mod launcher;
 pub mod mojang;
 pub mod launch_path;
+pub mod loader;
 
 pub struct GameInstanceObj {
     pub setting: GameSettingObj,

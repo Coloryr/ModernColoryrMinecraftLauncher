@@ -8,6 +8,9 @@ mcml-names = { path = "../mcml-names" }
 mcml-config = { path = "../mcml-config" }
 mcml-auth = { path = "../mcml-auth" }
 mcml-base = { path = "../mcml-base" }
+mcml-log = { path = "../mcml-log" }
+mcml-net = { path = "../mcml-net" }
+mcml-http = { path = "../mcml-http" }
 serde.workspace = true
 serde_json.workspace = true
 serde_repr.workspace = true

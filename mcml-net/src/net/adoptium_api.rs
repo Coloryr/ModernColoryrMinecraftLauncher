@@ -1,5 +1,6 @@
 use std::sync::OnceLock;
 
+use mcml_base::Os;
 use mcml_names::{i18_items::error_type::ErrorType, urls::ADOPTIUM_URL};
 use serde::{Deserialize, Serialize};
 

@@ -15,7 +15,7 @@ use mcml_names::{
 
 use crate::config_obj::ConfigObj;
 
-pub static CONFIG: RwLock<OnceLock<ConfigObj>> = RwLock::new(OnceLock::new());
+pub static CONFIG: OnceLock<RwLock<ConfigObj>> = OnceLock::new();
 
 static FILE: OnceLock<PathBuf> = OnceLock::new();
 
@@ -27,7 +27,7 @@ pub fn save_now() {
 
     match stream {
         Ok(stream) => {
-            let res = serde_json::to_writer(stream, &CONFIG.read().unwrap().get());
+            let res = serde_json::to_writer(stream, &*CONFIG.get().unwrap().read().unwrap());
             if let Err(err) = res {
                 mcml_log::error_type(ErrorType::ConfigSaveError(ConfigErrorData {
                     error: err.to_string(),
@@ -45,17 +45,14 @@ pub fn save_now() {
 }
 
 pub fn save() {
-    config_save::save(
-        uuids::CONFIG_UUID,
-        CONFIG.read().unwrap().get().unwrap(),
-        FILE.get().unwrap(),
-    );
+    let config = &*CONFIG.get().unwrap().read().unwrap();
+    config_save::save(uuids::CONFIG_UUID, config, FILE.get().unwrap());
 }
 
 pub fn load(file: &PathBuf) -> bool {
-    if !Path::exists(file) {
-        CONFIG.write().unwrap().get_or_init(|| ConfigObj::default());
+    let config = CONFIG.get_or_init(|| RwLock::new(ConfigObj::default()));
 
+    if !Path::exists(file) {
         save_now();
         return true;
     }
@@ -67,7 +64,6 @@ pub fn load(file: &PathBuf) -> bool {
             file: file.display().to_string(),
         }));
 
-        CONFIG.write().unwrap().get_or_init(|| ConfigObj::default());
         return false;
     }
     let stream = stream.unwrap();
@@ -80,14 +76,11 @@ pub fn load(file: &PathBuf) -> bool {
             file: file.display().to_string(),
         }));
 
-        CONFIG.write().unwrap().get_or_init(|| ConfigObj::default());
         return false;
     }
 
-    CONFIG.write().unwrap().get_or_init(|| json.unwrap());
-
-    let mut binding = CONFIG.write().unwrap();
-    let config = binding.get_mut().unwrap();
+    let mut config = config.write().unwrap();
+    *config = json.unwrap();
     let version = String::from(mcml_names::VERSION);
     if config.version != version {
         config.version = version;
