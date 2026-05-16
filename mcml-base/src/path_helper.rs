@@ -190,7 +190,6 @@ fn move_to_trash_windows(dir: &str) -> io::Result<bool> {
     use std::ffi::OsStr;
     use std::iter::once;
     use std::os::windows::ffi::OsStrExt;
-    use windows_sys::Win32::Foundation::BOOL;
     use windows_sys::Win32::Foundation::HWND;
     use windows_sys::Win32::UI::Shell::FO_DELETE;
     use windows_sys::Win32::UI::Shell::FOF_ALLOWUNDO;
@@ -218,7 +217,7 @@ fn move_to_trash_windows(dir: &str) -> io::Result<bool> {
         wFunc: FO_DELETE,
         pFrom: wide_path.as_ptr(),
         pTo: std::ptr::null(),
-        fFlags: FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_SILENT | FOF_NOERRORUI,
+        fFlags: (FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_SILENT | FOF_NOERRORUI) as u16,
         fAnyOperationsAborted: 0,
         hNameMappings: std::ptr::null_mut(),
         lpszProgressTitle: std::ptr::null(),

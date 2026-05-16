@@ -1,5 +1,6 @@
-pub mod path_helper;
+pub mod hash_helper;
 pub mod inner_path;
+pub mod path_helper;
 
 use std::{env, fmt};
 
@@ -62,12 +63,29 @@ pub struct SystemInfo {
     pub system_arch: ArchEnum,
     /// 系统名称（完整描述）
     pub system_name: String,
+    /// Linux系统名
+    pub distribution: String,
     /// 格式化的系统字符串
     pub system: String,
     /// 是否为 ARM 处理器
     pub is_arm: bool,
     /// 是否为 64 位操作系统
     pub is_64_bit: bool,
+}
+
+fn get_linux_distribution() -> String {
+    // 读取 /etc/os-release
+    let content = std::fs::read_to_string("/etc/os-release").ok();
+    if content.is_some() {
+        let content = content.unwrap();
+        for line in content.lines() {
+            if line.starts_with("ID=") {
+                return line[3..].trim_matches('"').to_string();
+            }
+        }
+    }
+
+    String::new()
 }
 
 impl SystemInfo {
@@ -94,6 +112,12 @@ impl SystemInfo {
             Os::None
         };
 
+        let distribution = if os == Os::Linux {
+            get_linux_distribution()
+        } else {
+            String::new()
+        };
+
         let system_name = std::env::consts::OS.to_string();
         let culture_info = Self::get_current_locale();
 
@@ -106,6 +130,7 @@ impl SystemInfo {
             system_name,
             system,
             is_arm,
+            distribution,
             is_64_bit,
         }
     }

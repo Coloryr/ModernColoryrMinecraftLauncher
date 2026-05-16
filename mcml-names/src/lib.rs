@@ -13,7 +13,10 @@ use std::{
 
 use const_format::formatcp;
 
-use crate::{i18::{I18Lang, en_us::EnUs, zh_cn::ZhCn}, names::{LANG_EN_US, LANG_ZH_CN}};
+use crate::{
+    i18::{I18Lang, en_us::EnUs, zh_cn::ZhCn},
+    names::{LANG_EN_US, LANG_ZH_CN},
+};
 
 /// 启动器主版本号
 pub const VERSION_NUM: i32 = 1;

@@ -30,7 +30,7 @@ members = [
     "mcml-core",
     "mcml-downloader",
     "mcml-game",
-    "mcml-http",
+    "mcml-http", "mcml-jvms",
     "mcml-log",
     "mcml-names",
     "mcml-nbt",
@@ -43,7 +43,7 @@ members = [
 [workspace.dependencies]
 const_format = "~0.2.36"
 crossbeam-queue = "~0.3.12"
-tokio = { version = "~1.52.3", features = ["rt", "macros"] }
+tokio = { version = "~1.52.3", features = ["rt", "macros", "io-util", "process"] }
 tokio-util = "~0.7.18"
 semrs = "~0.5.2"
 reqwest = { version = "~0.13.3", features = ["json", "stream", "form"] }
@@ -56,4 +56,9 @@ skia-safe = "~0.90.0"
 glam = "~0.32.1"
 lazy_static = "~1.5.0"
 uuid = { version = "~1.23.1", features = ["v4", "serde"] }
-url = "2.5.8"
+url = "~2.5.8"
+md5 = "~0.8.0"
+sha1 = "~0.11.0"
+sha2 = "~0.11.0"
+base64 = "~0.22.1"
+winreg = "~0.56.0"
