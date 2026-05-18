@@ -1,9 +1,24 @@
-use std::{collections::HashSet, path::{Path, PathBuf}, process::Stdio};
+use std::{
+    collections::HashSet,
+    path::{Path, PathBuf},
+    process::{Command, Stdio},
+};
 
-use crate::java_info_obj::{ArchEnum, JavaInfoObj};
+use crate::java_info_obj::JavaInfoObj;
 
-use mcml_base::{Os, SystemInfo, get_system_info};
-use tokio::process::Command;
+use mcml_base::{ArchEnum, Os, get_system_info, path_helper};
+use mcml_names::names;
+
+/// 查找Java文件
+/// - `dir`: 查找路径
+pub fn find(dir: &PathBuf) -> Option<PathBuf> {
+    let sys = get_system_info();
+    match sys.os {
+        Os::Windows => path_helper::get_file(dir, names::NAME_JAVAW_FILE),
+        Os::Linux | Os::MacOS => path_helper::get_file(dir, names::NAME_JAVA_FILE),
+        _ => None,
+    }
+}
 
 /// 获取主版本号
 fn get_major_version(version: &str) -> i32 {
@@ -29,7 +44,7 @@ fn get_major_version(version: &str) -> i32 {
 }
 
 /// 异步版本的获取 Java 信息
-pub async fn get_java_info(file: &PathBuf) -> Option<JavaInfoObj> {
+pub fn get_java_info(file: &PathBuf) -> Option<JavaInfoObj> {
     let path = file.clone();
 
     if !path.exists() || !path.is_file() {
@@ -48,7 +63,6 @@ pub async fn get_java_info(file: &PathBuf) -> Option<JavaInfoObj> {
         .stderr(Stdio::piped())
         .stdout(Stdio::piped())
         .output()
-        .await
     {
         Ok(output) => output,
         Err(_) => return None,
@@ -70,7 +84,7 @@ pub async fn get_java_info(file: &PathBuf) -> Option<JavaInfoObj> {
 
                 let arch = if cfg!(target_arch = "aarch64") {
                     if is64 {
-                        ArchEnum::Aarch64
+                        ArchEnum::AArch64
                     } else {
                         ArchEnum::Arm
                     }
@@ -99,17 +113,10 @@ pub async fn get_java_info(file: &PathBuf) -> Option<JavaInfoObj> {
     None
 }
 
-pub async fn find_java() -> Option<Vec<JavaInfoObj>> {
-    let system_info = get_system_info();
+pub fn find_java() -> Option<Vec<JavaInfoObj>> {
     let mut java_paths = HashSet::new();
 
-    if system_info.os == Os::Windows {
-        find_java_on_windows(&mut java_paths).await;
-    } else if system_info.os == Os::Linux {
-        find_java_on_linux(&system_info, &mut java_paths).await;
-    } else if system_info.os == Os::MacOS {
-        find_java_on_macos(&mut java_paths).await;
-    }
+    find_java_inner(&mut java_paths);
 
     if java_paths.is_empty() {
         return None;
@@ -118,7 +125,7 @@ pub async fn find_java() -> Option<Vec<JavaInfoObj>> {
     // 获取详细信息
     let mut java_list = Vec::new();
     for path in java_paths {
-        if let Some(info) = get_java_info(&path).await {
+        if let Some(info) = get_java_info(&path) {
             java_list.push(info);
         }
     }
@@ -135,12 +142,12 @@ pub async fn find_java() -> Option<Vec<JavaInfoObj>> {
 }
 
 /// 执行命令并返回输出行列表
-async fn get_list<I, S>(command: &str, args: I) -> Result<Vec<String>, std::io::Error>
+fn get_list<I, S>(command: &str, args: I) -> Result<Vec<String>, std::io::Error>
 where
     I: IntoIterator<Item = S>,
     S: AsRef<std::ffi::OsStr>,
 {
-    let output = Command::new(command).args(args).output().await?;
+    let output = Command::new(command).args(args).output()?;
 
     if !output.status.success() {
         return Ok(Vec::new());
@@ -154,41 +161,33 @@ where
         .collect())
 }
 
-/// Windows 注册表读取（需要 winreg crate）
 #[cfg(target_os = "windows")]
-fn get_java_from_registry(key_path: &str) -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
-    use winreg::{RegKey, enums::HKEY_LOCAL_MACHINE};
+async fn find_java_inner(java_paths: &mut HashSet<PathBuf>) {
+    /// Windows 注册表读取（需要 winreg crate）
+    fn get_java_from_registry(key_path: &str) -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
+        use winreg::{RegKey, enums::HKEY_LOCAL_MACHINE};
 
-    let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
-    let subkey = hklm.open_subkey(key_path)?;
-    let mut paths = Vec::new();
+        let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
+        let subkey = hklm.open_subkey(key_path)?;
+        let mut paths = Vec::new();
 
-    for name in subkey.enum_keys() {
-        let key_name = name?;
-        let key = subkey.open_subkey(&key_name)?;
-        if let Ok(java_home) = key.get_value::<String, _>("JavaHome") {
-            paths.push(PathBuf::from(java_home));
+        for name in subkey.enum_keys() {
+            let key_name = name?;
+            let key = subkey.open_subkey(&key_name)?;
+            if let Ok(java_home) = key.get_value::<String, _>("JavaHome") {
+                paths.push(PathBuf::from(java_home));
+            }
         }
+
+        Ok(paths)
     }
 
-    Ok(paths)
-}
-
-#[cfg(not(target_os = "windows"))]
-fn get_java_from_registry(_key_path: &str) -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
-    Ok(Vec::new())
-}
-
-/// Windows 平台查找 Java
-async fn find_java_on_windows(java_paths: &mut HashSet<PathBuf>) {
-    // 1. 从 PATH 中查找
-    if let Ok(paths) = get_list("where", &["javaw.exe"]).await {
+    if let Ok(paths) = get_list("where", &["javaw.exe"]) {
         for path in paths {
             java_paths.insert(PathBuf::from(path));
         }
     }
 
-    // 2. 从注册表查找
     let registry_paths = [
         (
             r"SOFTWARE\JavaSoft\Java Runtime Environment",
@@ -210,7 +209,6 @@ async fn find_java_on_windows(java_paths: &mut HashSet<PathBuf>) {
         }
     }
 
-    // 3. 常见安装路径
     let common_paths = [
         r"C:\Program Files\Java",
         r"C:\Program Files (x86)\Java",
@@ -230,19 +228,63 @@ async fn find_java_on_windows(java_paths: &mut HashSet<PathBuf>) {
     }
 }
 
-/// 解析符号链接
-fn resolve_symlink(path: &str) -> Result<PathBuf, std::io::Error> {
-    let path = Path::new(path);
-    if path.is_symlink() {
-        std::fs::read_link(path)
-    } else {
-        Ok(path.to_path_buf())
+#[cfg(target_os = "linux")]
+fn find_java_inner(java_paths: &mut HashSet<PathBuf>) {
+    fn resolve_symlink(path: &str) -> Result<PathBuf, std::io::Error> {
+        let path = Path::new(path);
+        if path.is_symlink() {
+            std::fs::read_link(path)
+        } else {
+            Ok(path.to_path_buf())
+        }
     }
-}
 
-/// Linux 平台查找 Java
-async fn find_java_on_linux(system_info: &SystemInfo, java_paths: &mut HashSet<PathBuf>) {
-    if let Ok(paths) = get_list("which", &["java"]).await {
+    /// Arch Linux 查找 Java
+    fn find_java_on_arch(java_paths: &mut HashSet<PathBuf>) {
+        // 查询已安装的 JDK/JRE 包
+        if let Ok(packages) = get_list("pacman", &["-Qs", "jre|jdk"]) {
+            for package_line in packages {
+                // 提取包名
+                let parts: Vec<&str> = package_line.split_whitespace().collect();
+                if parts.is_empty() {
+                    continue;
+                }
+                let package_name = parts[0];
+
+                // 查询包文件列表
+                if let Ok(files) = get_list("pacman", &["-Ql", package_name]) {
+                    for file in files {
+                        if file.ends_with("/bin/java") {
+                            let parts: Vec<&str> = file.split_whitespace().collect();
+                            if parts.len() >= 2 {
+                                if let Ok(resolved) = resolve_symlink(parts[1]) {
+                                    java_paths.insert(resolved);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// 扫描常见 Java 安装目录
+    fn scan_common_java_dirs(java_paths: &mut HashSet<PathBuf>) {
+        let common_dirs = ["/usr/lib/jvm", "/usr/java", "/opt/java", "/opt/jdk"];
+
+        for dir in common_dirs {
+            if let Ok(entries) = std::fs::read_dir(dir) {
+                for entry in entries.flatten() {
+                    let java_exe = entry.path().join("bin").join("java");
+                    if java_exe.exists() {
+                        java_paths.insert(java_exe);
+                    }
+                }
+            }
+        }
+    }
+
+    if let Ok(paths) = get_list("which", &["java"]) {
         for path in paths {
             if let Ok(resolved) = resolve_symlink(&path) {
                 java_paths.insert(resolved);
@@ -250,9 +292,11 @@ async fn find_java_on_linux(system_info: &SystemInfo, java_paths: &mut HashSet<P
         }
     }
 
+    let system_info = get_system_info();
+
     match system_info.distribution.as_str() {
         "ubuntu" | "debian" => {
-            if let Ok(paths) = get_list("update-alternatives", &["--list", "java"]).await {
+            if let Ok(paths) = get_list("update-alternatives", &["--list", "java"]) {
                 for path in paths {
                     if let Ok(resolved) = resolve_symlink(&path) {
                         java_paths.insert(resolved);
@@ -261,65 +305,24 @@ async fn find_java_on_linux(system_info: &SystemInfo, java_paths: &mut HashSet<P
             }
         }
         "arch" | "manjaro" => {
-            find_java_on_arch(java_paths).await;
+            find_java_on_arch(java_paths);
         }
         _ => {
-            scan_common_java_dirs(java_paths).await;
+            scan_common_java_dirs(java_paths);
         }
     }
 
-    scan_common_java_dirs(java_paths).await;
+    scan_common_java_dirs(java_paths);
 }
 
-/// Arch Linux 查找 Java
-async fn find_java_on_arch(java_paths: &mut HashSet<PathBuf>) {
-    // 查询已安装的 JDK/JRE 包
-    if let Ok(packages) = get_list("pacman", &["-Qs", "jre|jdk"]).await {
-        for package_line in packages {
-            // 提取包名
-            let parts: Vec<&str> = package_line.split_whitespace().collect();
-            if parts.is_empty() {
-                continue;
-            }
-            let package_name = parts[0];
-
-            // 查询包文件列表
-            if let Ok(files) = get_list("pacman", &["-Ql", package_name]).await {
-                for file in files {
-                    if file.ends_with("/bin/java") {
-                        let parts: Vec<&str> = file.split_whitespace().collect();
-                        if parts.len() >= 2 {
-                            if let Ok(resolved) = resolve_symlink(parts[1]) {
-                                java_paths.insert(resolved);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-/// 扫描常见 Java 安装目录
-async fn scan_common_java_dirs(java_paths: &mut HashSet<PathBuf>) {
-    let common_dirs = ["/usr/lib/jvm", "/usr/java", "/opt/java", "/opt/jdk"];
-
-    for dir in common_dirs {
-        if let Ok(entries) = std::fs::read_dir(dir) {
-            for entry in entries.flatten() {
-                let java_exe = entry.path().join("bin").join("java");
-                if java_exe.exists() {
-                    java_paths.insert(java_exe);
-                }
-            }
-        }
-    }
-}
-
-/// macOS 平台查找 Java
-async fn find_java_on_macos(java_paths: &mut HashSet<PathBuf>) {
+#[cfg(target_os = "macos")]
+async fn find_java(java_paths: &mut HashSet<PathBuf>) {
     // 使用 /usr/libexec/java_home
-    if let Ok(output) = Command::new("/usr/libexec/java_home").arg("-V").output().await {
+    if let Ok(output) = Command::new("/usr/libexec/java_home")
+        .arg("-V")
+        .output()
+        .await
+    {
         let stderr = String::from_utf8_lossy(&output.stderr);
         for line in stderr.lines() {
             if line.contains("Java SE") || line.contains("JDK") {

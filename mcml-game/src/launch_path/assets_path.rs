@@ -9,7 +9,7 @@ use std::{
 use mcml_auth::LoginObj;
 use mcml_base::path_helper;
 use mcml_names::{
-    i18_items::error_type::{ErrorType, FileErrorData, JsonErrorData},
+    i18_items::error_type::{ErrorType, FileNotExistsData, JsonErrorData},
     names,
 };
 use url::Url;
@@ -76,7 +76,7 @@ pub fn get_index(obj: &GameAssetIndexObj) -> Result<AssetsObj, ErrorType> {
     let file = INDEX_DIR.get().unwrap().join(format!("{}.json", obj.id));
     let stream = path_helper::open_read(&file);
     match stream {
-        None => Err(ErrorType::FileNotExists(FileErrorData {
+        None => Err(ErrorType::FileNotExists(FileNotExistsData {
             file: file.display().to_string(),
         })),
         Some(stream) => {

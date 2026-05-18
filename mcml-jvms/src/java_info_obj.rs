@@ -1,22 +1,5 @@
+use mcml_base::ArchEnum;
 use serde::{Deserialize, Serialize};
-use serde_repr::{Deserialize_repr, Serialize_repr};
-
-/// 二进制格式
-#[derive(Serialize_repr, Deserialize_repr, Debug, Clone, Copy, PartialEq, Eq)]
-#[repr(u8)]
-pub enum ArchEnum {
-    X86,
-    X86_64,
-    Aarch64,
-    Arm,
-    Unknow,
-}
-
-impl Default for ArchEnum {
-    fn default() -> Self {
-        ArchEnum::Unknow
-    }
-}
 
 /// Java信息
 #[derive(Serialize, Deserialize, Debug)]

@@ -1,5 +1,3 @@
-pub mod events;
-
 /// 核心初始化参数
 #[derive(Debug)]
 pub struct CoreInitObj {
@@ -28,10 +26,9 @@ use std::{
     sync::{OnceLock, RwLock},
 };
 
+use mcml_base::events::core_stop;
 use mcml_log;
 use mcml_names::{i18, i18_items::info_type::InfoType, i18_items::panic_type::PanicType};
-
-use crate::events::core_stop_event;
 
 /// 基础运行路径
 pub static BASE_DIR: OnceLock<PathBuf> = OnceLock::new();
@@ -76,9 +73,9 @@ pub fn init(arg: CoreInitObj) {
     mcml_http::init();
     mcml_config::init(dir);
 
-    core_stop_event::add_stop_handler(|| mcml_config::config_save::stop());
-    core_stop_event::add_stop_handler(|| mcml_downloader::stop());
-    core_stop_event::add_stop_handler(|| mcml_log::stop());
+    core_stop::add_stop_handler(|| mcml_config::config_save::stop());
+    core_stop::add_stop_handler(|| mcml_downloader::stop());
+    core_stop::add_stop_handler(|| mcml_log::stop());
 
     *STATE.write().unwrap() = true;
 }
@@ -86,7 +83,7 @@ pub fn init(arg: CoreInitObj) {
 pub fn stop() {
     mcml_log::info(String::from("MCML stop"));
 
-    core_stop_event::invoke_stop();
+    core_stop::invoke_stop();
 
     *STATE.write().unwrap() = false;
 }

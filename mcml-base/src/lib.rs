@@ -1,8 +1,11 @@
 pub mod hash_helper;
 pub mod inner_path;
 pub mod path_helper;
+pub mod events;
+pub mod zip_runner;
 
 use std::{env, fmt};
+use serde_repr::{Deserialize_repr, Serialize_repr};
 
 /// 操作系统类型枚举
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -31,13 +34,20 @@ impl fmt::Display for Os {
 }
 
 /// 系统架构枚举
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Serialize_repr, Deserialize_repr, Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
 pub enum ArchEnum {
     X86,
     X86_64,
     Arm,
     AArch64,
     Unknown,
+}
+
+impl Default for ArchEnum {
+    fn default() -> Self {
+        ArchEnum::Unknown
+    }
 }
 
 impl fmt::Display for ArchEnum {
