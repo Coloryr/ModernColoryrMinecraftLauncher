@@ -461,18 +461,12 @@ pub async fn write_bytes_async(local: &PathBuf, data: Vec<u8>) -> io::Result<()>
 }
 
 /// 替换文件名非法字符
-pub fn replace_file_name(name: Option<&str>) -> String {
-    let name = name.unwrap_or_default();
-    let invalid_chars: Vec<char> = vec!['<', '>', ':', '"', '/', '\\', '|', '?', '*', '\0'];
-
-    name.chars()
-        .map(|c| if invalid_chars.contains(&c) { '_' } else { c })
-        .collect()
+pub fn replace_file_name(name: &str) -> String {
+    name.replace(|c: char| "<>:\"/\\|?*\0".contains(c), "_")
 }
 
 /// 替换文件名非法字符
-pub fn replace_path_name(name: Option<&str>) -> String {
-    let name = name.unwrap_or_default();
+pub fn replace_path_name(name: &str) -> String {
     let invalid_chars: Vec<char> = vec!['\0'];
 
     #[cfg(windows)]

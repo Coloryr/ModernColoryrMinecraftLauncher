@@ -26,15 +26,29 @@ pub struct JsonErrorData {
     pub error: String,
 }
 
-/// 配置文件保存时错误信息
+/// 文件找不到
 #[derive(Clone, Debug)]
-pub struct FileErrorData {
+pub struct FileNotExistsData {
     pub file: String,
 }
 
-/// 
+/// OAuth处理错误
 #[derive(Clone, Debug)]
 pub struct OAuthErrorData {
+    pub error: String,
+}
+
+/// 文件系统错误
+#[derive(Clone, Debug)]
+pub struct FileSystemErrorData {
+    pub dir: String,
+    pub error: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct ZipErrorData {
+    pub source: String,
+    pub target: String,
     pub error: String,
 }
 
@@ -54,7 +68,7 @@ pub enum ErrorType {
     JsonError(JsonErrorData),
 
     /// 文件不存在
-    FileNotExists(FileErrorData),
+    FileNotExists(FileNotExistsData),
 
     /// 登录返回数据错误
     AuthDataError(String),
@@ -77,6 +91,12 @@ pub enum ErrorType {
     OAuthGetTokenError(OAuthErrorData),
     /// OAuth获取不到登录码
     OAuthGetTokenEmpty,
+
+    /// 文件系统处理错误
+    FileSystemError(FileSystemErrorData),
+
+    /// 压缩文件处理错误
+    ZipError(ZipErrorData),
 
     TaskCancel,
     TaskTimeout,
