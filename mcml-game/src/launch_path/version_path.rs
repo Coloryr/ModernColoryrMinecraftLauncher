@@ -8,7 +8,7 @@ use std::{
 use mcml_base::{hash_helper, path_helper};
 use mcml_config::{config_obj::SourceLocal, config_save};
 use mcml_names::{
-    i18_items::error_type::{ErrorType, JsonErrorData},
+    i18_items::error_type::{ErrorData, ErrorType, FileSystemErrorData},
     names, uuids,
 };
 use mcml_net::url_helper;
@@ -113,13 +113,18 @@ pub fn init(dir: &PathBuf) {
 
 /// 加载高清修复版本信息
 fn load_optifine() {
-    let file = OPTIFINE_FILE.get().unwrap();
-    if !file.exists() {
+    let local = OPTIFINE_FILE.get().unwrap();
+    if !local.exists() {
         return;
     }
 
-    let file = path_helper::open_read(file);
-    if file.is_none() {
+    let file = path_helper::open_read(local);
+    if let Err(err) = file {
+        mcml_log::error_type(ErrorType::FileSystemError(FileSystemErrorData {
+            path: local.clone(),
+            error: err.to_string(),
+        }));
+
         return;
     }
     let file = file.unwrap();
@@ -127,7 +132,7 @@ fn load_optifine() {
 
     match json {
         Err(err) => {
-            mcml_log::error_type(ErrorType::JsonError(JsonErrorData {
+            mcml_log::error_type(ErrorType::JsonError(ErrorData {
                 error: err.to_string(),
             }));
         }
@@ -189,14 +194,21 @@ async fn get_version_from_online() {
 
 /// 读取版本信息
 async fn read_version() {
-    let file = BASE_DIR.get().unwrap().join(names::NAME_VERSION_FILE);
-    if file.exists() {
-        let file = path_helper::open_read(&file);
-        if file.is_some() {
+    let local = BASE_DIR.get().unwrap().join(names::NAME_VERSION_FILE);
+    if local.exists() {
+        let file = path_helper::open_read(&local);
+
+        if let Err(err) = file {
+            mcml_log::error_type(ErrorType::FileSystemError(FileSystemErrorData {
+                path: local.clone(),
+                error: err.to_string(),
+            }));
+        } else {
             let file = file.unwrap();
             let json = serde_json::from_reader::<_, VersionObj>(file);
             if json.is_ok() {
                 *VERSION.get().unwrap().write().unwrap() = Some(Arc::new(json.unwrap()));
+
                 return;
             }
         }
@@ -242,7 +254,7 @@ pub async fn add_game(obj: &VersionsObj) -> Option<Arc<GameArgObj>> {
             let json = serde_json::from_slice::<GameArgObj>(&data);
             match json {
                 Err(err) => {
-                    mcml_log::error_type(ErrorType::JsonError(JsonErrorData {
+                    mcml_log::error_type(ErrorType::JsonError(ErrorData {
                         error: err.to_string(),
                     }));
                     None
@@ -365,8 +377,17 @@ pub fn get_version(version: &String) -> Option<Arc<GameArgObj>> {
 
     match data {
         None => {
-            let file = BASE_DIR.get().unwrap().join(format!("{}.json", version));
-            let file = path_helper::open_read(&file)?;
+            let local = BASE_DIR.get().unwrap().join(format!("{}{}", version, names::NAME_JSON_EXT));
+            let file = path_helper::open_read(&local);
+            if let Err(err) = file {
+                mcml_log::error_type(ErrorType::FileSystemError(FileSystemErrorData {
+                    path: local.clone(),
+                    error: err.to_string(),
+                }));
+
+                return None;
+            }
+            let file = file.unwrap();
             let json = serde_json::from_reader::<_, GameArgObj>(file);
             match json {
                 Ok(json) => {
@@ -378,7 +399,7 @@ pub fn get_version(version: &String) -> Option<Arc<GameArgObj>> {
                     Some(data1)
                 }
                 Err(err) => {
-                    mcml_log::error_type(ErrorType::JsonError(JsonErrorData {
+                    mcml_log::error_type(ErrorType::JsonError(ErrorData {
                         error: err.to_string(),
                     }));
 
@@ -407,8 +428,18 @@ pub async fn check_update(version: &String) -> Option<Arc<GameArgObj>> {
             match item {
                 None => None,
                 Some(item) => {
-                    let file = BASE_DIR.get().unwrap().join(format!("{}.json", version));
-                    let mut file = path_helper::open_read(&file)?;
+                    let local = BASE_DIR.get().unwrap().join(format!("{}.json", version));
+                    let file = path_helper::open_read(&local);
+                    if let Err(err) = file {
+                        mcml_log::error_type(ErrorType::FileSystemError(FileSystemErrorData {
+                            path: local.clone(),
+                            error: err.to_string(),
+                        }));
+
+                        return None;
+                    }
+
+                    let mut file = file.unwrap();
 
                     let sha1 = hash_helper::gen_sha1_from_reader(&mut file).unwrap();
 
@@ -496,11 +527,20 @@ pub fn get_neoforge_install_obj(mc: &String, version: &String) -> Option<Arc<For
     match item {
         Some(item) => Some(item.clone()),
         None => {
-            let name = NEOFORGE_DIR
+            let local = NEOFORGE_DIR
                 .get()
                 .unwrap()
                 .join(get_forge_json_name(mc, version, true, true));
-            let file = path_helper::open_read(&name)?;
+            let file = path_helper::open_read(&local);
+            if let Err(err) = file {
+                mcml_log::error_type(ErrorType::FileSystemError(FileSystemErrorData {
+                    path: local.clone(),
+                    error: err.to_string(),
+                }));
+
+                return None;
+            }
+            let file = file.unwrap();
             let json = serde_json::from_reader::<_, ForgeInstallObj>(&file);
 
             match json {
@@ -514,7 +554,7 @@ pub fn get_neoforge_install_obj(mc: &String, version: &String) -> Option<Arc<For
                     Some(temp1)
                 }
                 Err(err) => {
-                    mcml_log::error_type(ErrorType::JsonError(JsonErrorData {
+                    mcml_log::error_type(ErrorType::JsonError(ErrorData {
                         error: err.to_string(),
                     }));
 
@@ -536,11 +576,20 @@ pub fn get_neoforge(mc: &String, version: &String) -> Option<Arc<ForgeLaunchObj>
     match item {
         Some(item) => Some(item.clone()),
         None => {
-            let name = NEOFORGE_DIR
+            let local = NEOFORGE_DIR
                 .get()
                 .unwrap()
                 .join(get_forge_json_name(mc, version, true, false));
-            let file = path_helper::open_read(&name)?;
+            let file = path_helper::open_read(&local);
+            if let Err(err) = file {
+                mcml_log::error_type(ErrorType::FileSystemError(FileSystemErrorData {
+                    path: local.clone(),
+                    error: err.to_string(),
+                }));
+
+                return None;
+            }
+            let file = file.unwrap();
             let json = serde_json::from_reader::<_, ForgeLaunchObj>(&file);
 
             match json {
@@ -554,7 +603,7 @@ pub fn get_neoforge(mc: &String, version: &String) -> Option<Arc<ForgeLaunchObj>
                     Some(temp1)
                 }
                 Err(err) => {
-                    mcml_log::error_type(ErrorType::JsonError(JsonErrorData {
+                    mcml_log::error_type(ErrorType::JsonError(ErrorData {
                         error: err.to_string(),
                     }));
 
@@ -576,11 +625,20 @@ pub fn get_forge_install_obj(mc: &String, version: &String) -> Option<Arc<ForgeI
     match item {
         Some(item) => Some(item.clone()),
         None => {
-            let name = FORGE_DIR
+            let local = FORGE_DIR
                 .get()
                 .unwrap()
                 .join(get_forge_json_name(mc, version, false, true));
-            let file = path_helper::open_read(&name)?;
+            let file = path_helper::open_read(&local);
+            if let Err(err) = file {
+                mcml_log::error_type(ErrorType::FileSystemError(FileSystemErrorData {
+                    path: local.clone(),
+                    error: err.to_string(),
+                }));
+
+                return None;
+            }
+            let file = file.unwrap();
             let json = serde_json::from_reader::<_, ForgeInstallObj>(&file);
 
             match json {
@@ -594,7 +652,7 @@ pub fn get_forge_install_obj(mc: &String, version: &String) -> Option<Arc<ForgeI
                     Some(temp1)
                 }
                 Err(err) => {
-                    mcml_log::error_type(ErrorType::JsonError(JsonErrorData {
+                    mcml_log::error_type(ErrorType::JsonError(ErrorData {
                         error: err.to_string(),
                     }));
 
@@ -616,12 +674,21 @@ pub fn get_forge(mc: &String, version: &String) -> Option<Arc<ForgeLaunchObj>> {
     match item {
         Some(item) => Some(item.clone()),
         None => {
-            let name = FORGE_DIR
+            let local = FORGE_DIR
                 .get()
                 .unwrap()
                 .join(get_forge_json_name(mc, version, false, false));
 
-            let file = path_helper::open_read(&name)?;
+            let file = path_helper::open_read(&local);
+            if let Err(err) = file {
+                mcml_log::error_type(ErrorType::FileSystemError(FileSystemErrorData {
+                    path: local.clone(),
+                    error: err.to_string(),
+                }));
+
+                return None;
+            }
+            let file = file.unwrap();
             let json = serde_json::from_reader::<_, ForgeLaunchObj>(&file);
 
             match json {
@@ -635,7 +702,7 @@ pub fn get_forge(mc: &String, version: &String) -> Option<Arc<ForgeLaunchObj>> {
                     Some(temp1)
                 }
                 Err(err) => {
-                    mcml_log::error_type(ErrorType::JsonError(JsonErrorData {
+                    mcml_log::error_type(ErrorType::JsonError(ErrorData {
                         error: err.to_string(),
                     }));
 
@@ -654,14 +721,23 @@ pub fn get_fabric(mc: &String, version: &String) -> Option<Arc<FabricLoaderObj>>
     let list = FABRIC_LOADERS.get().unwrap().read().unwrap();
     match list.get(&key) {
         None => {
-            let file = FABRIC_DIR.get().unwrap().join(format!(
+            let local = FABRIC_DIR.get().unwrap().join(format!(
                 "{}-{}-{}{}",
                 names::NAME_FABRIC_LOADER_KEY,
                 version,
                 mc,
                 names::NAME_JSON_EXT
             ));
-            let file = path_helper::open_read(&file)?;
+            let file = path_helper::open_read(&local);
+            if let Err(err) = file {
+                mcml_log::error_type(ErrorType::FileSystemError(FileSystemErrorData {
+                    path: local.clone(),
+                    error: err.to_string(),
+                }));
+
+                return None;
+            }
+            let file = file.unwrap();
             let json = serde_json::from_reader::<_, FabricLoaderObj>(&file);
             match json {
                 Ok(json) => {
@@ -674,7 +750,7 @@ pub fn get_fabric(mc: &String, version: &String) -> Option<Arc<FabricLoaderObj>>
                     Some(temp1)
                 }
                 Err(err) => {
-                    mcml_log::error_type(ErrorType::JsonError(JsonErrorData {
+                    mcml_log::error_type(ErrorType::JsonError(ErrorData {
                         error: err.to_string(),
                     }));
 
@@ -694,14 +770,23 @@ pub fn get_quilt(mc: &String, version: &String) -> Option<Arc<QuiltLoaderObj>> {
     let list = QUILT_LOADERS.get().unwrap().read().unwrap();
     match list.get(&key) {
         None => {
-            let file = FABRIC_DIR.get().unwrap().join(format!(
+            let local = FABRIC_DIR.get().unwrap().join(format!(
                 "{}-{}-{}{}",
                 names::NAME_FABRIC_LOADER_KEY,
                 version,
                 mc,
                 names::NAME_JSON_EXT
             ));
-            let file = path_helper::open_read(&file)?;
+            let file = path_helper::open_read(&local);
+            if let Err(err) = file {
+                mcml_log::error_type(ErrorType::FileSystemError(FileSystemErrorData {
+                    path: local.clone(),
+                    error: err.to_string(),
+                }));
+
+                return None;
+            }
+            let file = file.unwrap();
             let json = serde_json::from_reader::<_, QuiltLoaderObj>(&file);
             match json {
                 Ok(json) => {
@@ -714,7 +799,7 @@ pub fn get_quilt(mc: &String, version: &String) -> Option<Arc<QuiltLoaderObj>> {
                     Some(temp1)
                 }
                 Err(err) => {
-                    mcml_log::error_type(ErrorType::JsonError(JsonErrorData {
+                    mcml_log::error_type(ErrorType::JsonError(ErrorData {
                         error: err.to_string(),
                     }));
 

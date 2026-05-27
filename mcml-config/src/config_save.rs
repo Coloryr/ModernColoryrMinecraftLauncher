@@ -3,13 +3,20 @@ use std::{
     io::Write,
     path::PathBuf,
     sync::{
-        Arc, Mutex, OnceLock, atomic::{AtomicBool, Ordering}
+        Arc, Mutex, OnceLock,
+        atomic::{AtomicBool, Ordering},
     },
     thread::Builder,
 };
 
 use mcml_log;
-use mcml_names::{i18, i18_items::{error_type::{ConfigErrorData, ErrorType}, thread_type::ThreadType}};
+use mcml_names::{
+    i18,
+    i18_items::{
+        error_type::{FileSystemErrorData, ErrorType},
+        thread_type::ThreadType,
+    },
+};
 use semrs::Semaphore;
 use serde::Serialize;
 use uuid::Uuid;
@@ -78,12 +85,10 @@ fn save_now() {
     };
     for save_obj in items {
         if let Err(e) = save_obj.save() {
-            mcml_log::error_type(ErrorType::ConfigSaveError(
-                ConfigErrorData {
-                    error: e.to_string(),
-                    file: save_obj.file.display().to_string(),
-                }
-            ));
+            mcml_log::error_type(ErrorType::ConfigSaveError(FileSystemErrorData {
+                error: e.to_string(),
+                path: save_obj.file.clone(),
+            }));
         }
     }
 }

@@ -1,6 +1,6 @@
 use mcml_config::config_obj::{ProxyState, ProxyType};
 use mcml_names::i18_items::error_type::{
-    ErrorType, HttpReadErrorData, HttpReqErrorData, JsonErrorData,
+    ErrorData, ErrorType, HttpReadErrorData, HttpReqErrorData
 };
 use reqwest::Proxy;
 use reqwest::header::{HeaderMap, HeaderValue, USER_AGENT};
@@ -47,7 +47,7 @@ impl From<NetError> for ErrorType {
                     None => Default::default(),
                 },
             }),
-            NetError::Json(error) => ErrorType::JsonError(JsonErrorData {
+            NetError::Json(error) => ErrorType::JsonError(ErrorData {
                 error: error.to_string(),
             }),
         }

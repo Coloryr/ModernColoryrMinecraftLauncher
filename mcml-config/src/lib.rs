@@ -9,7 +9,7 @@ use std::{
 
 use mcml_log;
 use mcml_names::{
-    i18_items::error_type::{ConfigErrorData, ErrorType},
+    i18_items::error_type::{FileSystemErrorData, ErrorType},
     names, uuids,
 };
 
@@ -29,16 +29,16 @@ pub fn save_now() {
         Ok(stream) => {
             let res = serde_json::to_writer(stream, &*CONFIG.get().unwrap().read().unwrap());
             if let Err(err) = res {
-                mcml_log::error_type(ErrorType::ConfigSaveError(ConfigErrorData {
+                mcml_log::error_type(ErrorType::ConfigSaveError(FileSystemErrorData {
                     error: err.to_string(),
-                    file: file.display().to_string(),
+                    path: file.clone(),
                 }));
             }
         }
         Err(err) => {
-            mcml_log::error_type(ErrorType::ConfigSaveError(ConfigErrorData {
+            mcml_log::error_type(ErrorType::ConfigSaveError(FileSystemErrorData {
                 error: err.to_string(),
-                file: file.display().to_string(),
+                path: file.clone(),
             }));
         }
     }
@@ -59,9 +59,9 @@ pub fn load(file: &PathBuf) -> bool {
 
     let stream = File::open(file);
     if let Err(err) = stream {
-        mcml_log::error_type(ErrorType::ConfigReadError(ConfigErrorData {
+        mcml_log::error_type(ErrorType::ConfigReadError(FileSystemErrorData {
             error: err.to_string(),
-            file: file.display().to_string(),
+            path: file.clone(),
         }));
 
         return false;
@@ -71,9 +71,9 @@ pub fn load(file: &PathBuf) -> bool {
     let json = serde_json::from_reader::<_, ConfigObj>(stream);
 
     if let Err(err) = json {
-        mcml_log::error_type(ErrorType::ConfigReadError(ConfigErrorData {
+        mcml_log::error_type(ErrorType::ConfigReadError(FileSystemErrorData {
             error: err.to_string(),
-            file: file.display().to_string(),
+            path: file.clone(),
         }));
 
         return false;

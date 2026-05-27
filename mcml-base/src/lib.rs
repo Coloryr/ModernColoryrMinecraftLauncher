@@ -2,7 +2,7 @@ pub mod hash_helper;
 pub mod inner_path;
 pub mod path_helper;
 pub mod events;
-pub mod zip_runner;
+pub mod archives;
 
 use std::{env, fmt};
 use serde_repr::{Deserialize_repr, Serialize_repr};
