@@ -2,7 +2,7 @@ use std::{sync::OnceLock, time::Duration};
 
 use chrono::Local;
 use mcml_names::{
-    i18_items::error_type::{ErrorType, OAuthErrorData},
+    i18_items::error_type::{ErrorType, ErrorData},
     urls::{OAUTH_CODE, OAUTH_TOKEN, XBOX_LIVE, XSTS},
 };
 use tokio::time::sleep;
@@ -61,7 +61,7 @@ pub async fn get_code() -> Result<OAuthGetCodeRes, ErrorType> {
         .await?;
 
     match data.error {
-        Some(err) => Err(ErrorType::OAuthGetTokenError(OAuthErrorData { error: err })),
+        Some(err) => Err(ErrorType::OAuthGetTokenError(ErrorData { error: err })),
         None => Ok(OAuthGetCodeRes::new(
             data.user_code,
             data.verification_uri,
@@ -113,7 +113,7 @@ pub async fn run_get_code(
             } else if error == "slow_down" {
                 delay += 5;
             } else if error == "expired_token" {
-                return Err(ErrorType::OAuthGetTokenError(OAuthErrorData { error }));
+                return Err(ErrorType::OAuthGetTokenError(ErrorData { error }));
             }
         } else {
             return Ok(data);

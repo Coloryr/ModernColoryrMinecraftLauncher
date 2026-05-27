@@ -20,10 +20,18 @@ impl I18Lang for ZhCn {
     fn get_error(&self, error: ErrorType) -> String {
         match error {
             ErrorType::ConfigSaveError(data) => {
-                format!("配置文件 {} 保存失败：{}", data.file, data.error)
+                format!(
+                    "配置文件 {} 保存失败：{}",
+                    data.path.display().to_string(),
+                    data.error
+                )
             }
             ErrorType::ConfigReadError(data) => {
-                format!("配置文件 {} 读取失败：{}", data.file, data.error)
+                format!(
+                    "配置文件 {} 读取失败：{}",
+                    data.path.display().to_string(),
+                    data.error
+                )
             }
             ErrorType::HttpReqError(data) => {
                 format!("发送网络请求 {} 错误：{}", data.url, data.error)
@@ -33,7 +41,9 @@ impl I18Lang for ZhCn {
             }
 
             ErrorType::JsonError(data) => format!("Json解析失败：{}", data.error),
-            ErrorType::FileNotExists(data) => format!("文件不存在：{}", data.file),
+            ErrorType::FileNotExists(data) => {
+                format!("文件不存在：{}", data.file.display().to_string())
+            }
 
             ErrorType::AuthLoginFail(data) => format!("账户登录失败：{}", data),
             ErrorType::AuthLoginNoProfile => String::from("账户登录错误，没有找到账户"),

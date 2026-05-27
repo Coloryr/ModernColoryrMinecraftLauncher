@@ -368,18 +368,13 @@ pub fn get_file(local: &PathBuf, name: &str) -> Option<PathBuf> {
 }
 
 /// 读文件
-pub fn open_read(local: &PathBuf) -> Option<fs::File> {
-    let path = Path::new(local);
-    if path.exists() {
-        fs::File::open(path).ok()
-    } else {
-        None
-    }
+pub fn open_read(file: &PathBuf) -> io::Result<fs::File>  {
+    fs::File::open(file)
 }
 
 /// 写文件
-pub fn open_write(local: &PathBuf) -> io::Result<fs::File> {
-    let path = Path::new(local);
+pub fn open_write(file: &PathBuf) -> io::Result<fs::File> {
+    let path = Path::new(file);
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent)?;
     }
@@ -423,11 +418,11 @@ pub async fn write_text_async(local: &PathBuf, text: String) -> io::Result<()> {
 }
 
 /// 读文本
-pub fn read_text(local: &PathBuf) -> Option<String> {
+pub fn read_text(local: &PathBuf) -> io::Result<String> {
     let mut file = open_read(local)?;
     let mut content = String::new();
-    file.read_to_string(&mut content).ok()?;
-    Some(content)
+    file.read_to_string(&mut content)?;
+    Ok(content)
 }
 
 /// 删除文件
@@ -478,9 +473,9 @@ pub fn replace_path_name(name: &str) -> String {
 }
 
 /// 读取byte数据
-pub fn read_byte(local: &PathBuf) -> Option<Vec<u8>> {
+pub fn read_byte(local: &PathBuf) -> io::Result<Vec<u8>> {
     let mut file = open_read(local)?;
     let mut buffer = Vec::new();
-    file.read_to_end(&mut buffer).ok()?;
-    Some(buffer)
+    file.read_to_end(&mut buffer)?;
+    Ok(buffer)
 }

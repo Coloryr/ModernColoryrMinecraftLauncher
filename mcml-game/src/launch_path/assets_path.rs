@@ -9,7 +9,7 @@ use std::{
 use mcml_auth::LoginObj;
 use mcml_base::path_helper;
 use mcml_names::{
-    i18_items::error_type::{ErrorType, FileNotExistsData, JsonErrorData},
+    i18_items::error_type::{ErrorData, ErrorType, FileSystemErrorData},
     names,
 };
 use url::Url;
@@ -36,8 +36,12 @@ static SKIN_DIR: OnceLock<PathBuf> = OnceLock::new();
 pub fn init(dir: &PathBuf) {
     let dir = BASE_DIR.get_or_init(|| dir.join(names::NAME_GAME_ASSETS_DIR));
 
-    OBJECTS_DIR.set(dir.join(names::NAME_GAME_INDEX_DIR)).unwrap();
-    INDEX_DIR.set(dir.join(names::NAME_GAME_OBJECT_DIR)).unwrap();
+    OBJECTS_DIR
+        .set(dir.join(names::NAME_GAME_INDEX_DIR))
+        .unwrap();
+    INDEX_DIR
+        .set(dir.join(names::NAME_GAME_OBJECT_DIR))
+        .unwrap();
     SKIN_DIR.set(dir.join(names::NAME_GAME_SKIN_DIR)).unwrap();
 
     let dir = dir.as_path();
@@ -76,13 +80,14 @@ pub fn get_index(obj: &GameAssetIndexObj) -> Result<AssetsObj, ErrorType> {
     let file = INDEX_DIR.get().unwrap().join(format!("{}.json", obj.id));
     let stream = path_helper::open_read(&file);
     match stream {
-        None => Err(ErrorType::FileNotExists(FileNotExistsData {
-            file: file.display().to_string(),
+        Err(err) => Err(ErrorType::FileSystemError(FileSystemErrorData {
+            path: file.clone(),
+            error: err.to_string(),
         })),
-        Some(stream) => {
+        Ok(stream) => {
             let obj = serde_json::from_reader::<_, AssetsObj>(stream);
             match obj {
-                Err(err) => Err(ErrorType::JsonError(JsonErrorData {
+                Err(err) => Err(ErrorType::JsonError(ErrorData {
                     error: err.to_string(),
                 })),
                 Ok(ok) => Ok(ok),
@@ -129,7 +134,17 @@ pub fn read_assets_text(hash: String) -> Option<String> {
         .join(dir)
         .with_file_name(hash);
 
-    path_helper::read_text(&local)
+    let file = path_helper::read_text(&local);
+    match file {
+        Err(err) => {
+            mcml_log::error_type(ErrorType::FileSystemError(FileSystemErrorData { path: local.clone(), error: err.to_string() }));
+
+            None
+        },
+        Ok(file) => {
+            Some(file)
+        }
+    }
 }
 
 /// 读取资源文件
@@ -140,5 +155,15 @@ pub fn read_assets_stream(hash: String) -> Option<File> {
         .join(dir)
         .with_file_name(hash);
 
-    path_helper::open_read(&local)
+    let file = path_helper::open_read(&local);
+    match file {
+        Err(err) => {
+            mcml_log::error_type(ErrorType::FileSystemError(FileSystemErrorData { path: local.clone(), error: err.to_string() }));
+
+            None
+        },
+        Ok(file) => {
+            Some(file)
+        }
+    }
 }

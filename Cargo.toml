@@ -72,4 +72,7 @@ windows-sys = { version = "~0.61.2", features = [
     "Win32_Foundation",
     "Win32_UI_Shell",
 ] }
-zip = "~8.6.0"
+zip = { version = "~8.6.0", features = ["chrono"] }
+tar = "~0.4.46"
+flate2 = "~1.1.9"
+sevenz-rust2 = "~0.21.0"
