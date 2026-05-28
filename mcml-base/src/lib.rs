@@ -1,11 +1,11 @@
+pub mod archives;
+pub mod events;
 pub mod hash_helper;
 pub mod inner_path;
 pub mod path_helper;
-pub mod events;
-pub mod archives;
 
-use std::{env, fmt};
 use serde_repr::{Deserialize_repr, Serialize_repr};
+use std::{env, fmt};
 
 /// 操作系统类型枚举
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
