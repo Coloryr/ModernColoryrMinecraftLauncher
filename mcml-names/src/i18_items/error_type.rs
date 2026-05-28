@@ -89,6 +89,8 @@ pub enum ErrorType {
     ArchiveReadError(ErrorData),
     /// 压缩文件处理错误
     ArchiveError(ArchiveErrorData),
+    /// 压缩文件写错误
+    ArchiveWriteError(ErrorData),
 
     TaskCancel,
     TaskTimeout,

@@ -1,3 +1,5 @@
+#[cfg(not(unix))]
+use std::{io, path::Path};
 use std::path::PathBuf;
 #[cfg(unix)]
 use std::{fs, io, path::Path};
@@ -16,13 +18,13 @@ pub enum ArchiveType {
 pub trait IArchive: Send + Sync {
     /// 压缩文件夹
     /// 
-    /// - `zip_file`: 压缩包保存位置
+    /// - `archive_file`: 压缩包保存位置
     /// - `pack_dir`: 压缩的路径
     /// - `root_path`: 需要剔除的路径
     /// - `filter`: 过滤的文件
     fn compress(
         &self,
-        zip_file: &PathBuf,
+        archive_file: &PathBuf,
         pack_dir: &PathBuf,
         root_path: Option<&PathBuf>,
         filter: &Option<Vec<String>>,
@@ -68,8 +70,16 @@ fn set_perms(path: &Path, mode: u32) -> io::Result<()> {
     fs::set_permissions(path, fs::Permissions::from_mode(mode))
 }
 
-/// 非 Unix 平台无需恢复权限
-#[cfg(not(unix))]
-fn set_perms(_path: &Path, _mode: u32) -> io::Result<()> {
-    Ok(())
+fn normalize_path(path: &Path) -> String {
+    path.to_string_lossy()
+        .to_string()
+        .replace('\\', "/")  // Windows \ 转换为 /
+}
+
+fn should_exclude(path: &Path, patterns: &[String]) -> bool {
+    let normalized_path = normalize_path(path);
+    patterns.iter().any(|pattern| {
+        let normalized_pattern = pattern.replace('\\', "/");
+        normalized_path.contains(&normalized_pattern)
+    })
 }
