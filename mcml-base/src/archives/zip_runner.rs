@@ -9,7 +9,7 @@ use std::io::{self, Read};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use crate::archives::{IArchive, IArchiveGui, make_symlink};
+use crate::archives::{IArchive, IArchiveGui, make_symlink, should_exclude};
 use crate::path_helper;
 
 pub struct ZipProcess {
@@ -99,46 +99,45 @@ impl ZipProcess {
             .compression_method(CompressionMethod::Deflated)
             .unix_permissions(0o755);
 
-        for file_path in entries {
-            if let Some(filter) = filter {
-                let relative_path = file_path.strip_prefix(root_path).unwrap();
-                if filter.contains(&relative_path.to_string_lossy().to_string()) {
+        for path in entries {
+            if let Some(patterns) = filter {
+                if should_exclude(&path, patterns) {
                     continue;
                 }
             }
 
-            if file_path.is_dir() {
-                if let Err(err) = self.zip_inner(&file_path, zip, root_path, filter) {
+            if path.is_dir() {
+                if let Err(err) = self.zip_inner(&path, zip, root_path, filter) {
                     return Err(err);
                 }
             } else {
                 let now = self.now.fetch_add(1, Ordering::SeqCst) + 1;
 
                 if let Some(gui) = &self.gui {
-                    let filename = file_path
+                    let filename = path
                         .file_name()
                         .map(|n| n.to_string_lossy().to_string())
                         .unwrap_or_default();
                     gui.zip_update(Some(filename), now);
                 }
 
-                let buffer = path_helper::open_read(&file_path);
+                let buffer = path_helper::open_read(&path);
                 if let Err(err) = buffer {
                     return Err(ErrorType::FileSystemError(FileSystemErrorData {
-                        path: file_path.clone(),
+                        path: path.clone(),
                         error: err.to_string(),
                     }));
                 }
 
                 let mut buffer = buffer.unwrap();
 
-                let relative_path = file_path.strip_prefix(root_path).unwrap();
+                let relative_path = path.strip_prefix(root_path).unwrap();
                 let tempfile = relative_path.to_string_lossy().to_string();
 
                 let res = zip.start_file(&tempfile, options);
                 if let Err(err) = res {
                     return Err(ErrorType::ArchiveError(ArchiveErrorData {
-                        source: file_path.to_string_lossy().to_string(),
+                        source: path.to_string_lossy().to_string(),
                         target: tempfile.clone(),
                         error: err.to_string(),
                     }));
@@ -147,7 +146,7 @@ impl ZipProcess {
                 let res = std::io::copy(&mut buffer, zip);
                 if let Err(err) = res {
                     return Err(ErrorType::ArchiveError(ArchiveErrorData {
-                        source: file_path.to_string_lossy().to_string(),
+                        source: path.to_string_lossy().to_string(),
                         target: tempfile.clone(),
                         error: err.to_string(),
                     }));
