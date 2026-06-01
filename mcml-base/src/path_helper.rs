@@ -1,10 +1,17 @@
 /// 文件与路径处理
+
+#[cfg(not(windows))]
 use std::env;
+#[cfg(not(windows))]
+use std::process::{Command, Stdio};
+#[cfg(not(windows))]
+use std::time::UNIX_EPOCH;
+
 use std::fs;
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
-use std::time::UNIX_EPOCH;
+
+use mcml_names::i18_items::error_type::{CoreResult, ErrorType, FileSystemErrorData};
 
 /// 提升权限
 #[cfg(any(target_os = "linux", target_os = "macos"))]
@@ -368,21 +375,49 @@ pub fn get_file(local: &PathBuf, name: &str) -> Option<PathBuf> {
 }
 
 /// 读文件
-pub fn open_read(file: &PathBuf) -> io::Result<fs::File>  {
-    fs::File::open(file)
+pub fn open_read(file: &PathBuf) -> CoreResult<fs::File> {
+    match fs::File::open(file) {
+        Ok(ok) => Ok(ok),
+        Err(err) => Err(ErrorType::FileSystemError(FileSystemErrorData {
+            path: file.clone(),
+            error: err.to_string(),
+        })),
+    }
 }
 
 /// 写文件
-pub fn open_write(file: &PathBuf) -> io::Result<fs::File> {
-    let path = Path::new(file);
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
+pub fn open_write(file: &PathBuf) -> CoreResult<fs::File> {
+    if let Some(parent) = file.parent() {
+        if let Err(err) = fs::create_dir_all(parent) {
+            return Err(ErrorType::FileSystemError(FileSystemErrorData {
+                path: file.clone(),
+                error: err.to_string(),
+            }));
+        }
     }
-    fs::OpenOptions::new()
+
+    match fs::OpenOptions::new()
         .create(true)
         .read(true)
         .write(true)
-        .open(path)
+        .open(file)
+    {
+        Ok(ok) => Ok(ok),
+        Err(err) => Err(ErrorType::FileSystemError(FileSystemErrorData {
+            path: file.clone(),
+            error: err.to_string(),
+        })),
+    }
+}
+
+pub fn create_dir_all(dir: &PathBuf) -> CoreResult<()> {
+    match fs::create_dir_all(&dir) {
+        Ok(_) => Ok(()),
+        Err(err) => Err(ErrorType::FileSystemError(FileSystemErrorData {
+            path: dir.clone(),
+            error: err.to_string(),
+        })),
+    }
 }
 
 /// 继续写文件
@@ -418,10 +453,15 @@ pub async fn write_text_async(local: &PathBuf, text: String) -> io::Result<()> {
 }
 
 /// 读文本
-pub fn read_text(local: &PathBuf) -> io::Result<String> {
+pub fn read_text(local: &PathBuf) -> CoreResult<String> {
     let mut file = open_read(local)?;
     let mut content = String::new();
-    file.read_to_string(&mut content)?;
+    file.read_to_string(&mut content).map_err(|err| {
+        ErrorType::FileSystemError(FileSystemErrorData {
+            path: local.clone(),
+            error: err.to_string(),
+        })
+    })?;
     Ok(content)
 }
 
@@ -435,20 +475,30 @@ pub fn delete(local: &PathBuf) -> io::Result<()> {
 }
 
 /// 写文件
-pub fn write_bytes(local: &PathBuf, data: &[u8]) -> io::Result<()> {
+pub fn write_bytes(local: &PathBuf, data: &[u8]) -> CoreResult<()> {
     let mut file = open_write(local)?;
-    file.write_all(data)
+    file.write_all(data).map_err(|err| {
+        ErrorType::FileSystemError(FileSystemErrorData {
+            path: local.clone(),
+            error: err.to_string(),
+        })
+    })
 }
 
 /// 写文件
-pub fn write_bytes_from_stream(local: &PathBuf, mut data: impl Read) -> io::Result<()> {
+pub fn write_bytes_from_stream(local: &PathBuf, mut data: impl Read) -> CoreResult<()> {
     let mut file = open_write(local)?;
-    io::copy(&mut data, &mut file)?;
+    io::copy(&mut data, &mut file).map_err(|err| {
+        ErrorType::FileSystemError(FileSystemErrorData {
+            path: local.clone(),
+            error: err.to_string(),
+        })
+    })?;
     Ok(())
 }
 
 /// 写文件
-pub async fn write_bytes_async(local: &PathBuf, data: Vec<u8>) -> io::Result<()> {
+pub async fn write_bytes_async(local: &PathBuf, data: Vec<u8>) -> CoreResult<()> {
     let local = local.clone();
     tokio::task::spawn_blocking(move || write_bytes(&local, &data))
         .await
@@ -462,6 +512,7 @@ pub fn replace_file_name(name: &str) -> String {
 
 /// 替换文件名非法字符
 pub fn replace_path_name(name: &str) -> String {
+    #[cfg(not(windows))]
     let invalid_chars: Vec<char> = vec!['\0'];
 
     #[cfg(windows)]
@@ -473,9 +524,14 @@ pub fn replace_path_name(name: &str) -> String {
 }
 
 /// 读取byte数据
-pub fn read_byte(local: &PathBuf) -> io::Result<Vec<u8>> {
+pub fn read_byte(local: &PathBuf) -> CoreResult<Vec<u8>> {
     let mut file = open_read(local)?;
     let mut buffer = Vec::new();
-    file.read_to_end(&mut buffer)?;
+    file.read_to_end(&mut buffer).map_err(|err| {
+        ErrorType::FileSystemError(FileSystemErrorData {
+            path: local.clone(),
+            error: err.to_string(),
+        })
+    })?;
     Ok(buffer)
 }

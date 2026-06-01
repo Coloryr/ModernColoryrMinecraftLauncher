@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, result};
 
 #[derive(Clone, Debug)]
 pub struct ErrorData {
@@ -39,6 +39,8 @@ pub struct ArchiveErrorData {
     pub target: String,
     pub error: String,
 }
+
+pub type CoreResult<T> = result::Result<T, ErrorType>;
 
 #[derive(Clone, Debug)]
 pub enum ErrorType {

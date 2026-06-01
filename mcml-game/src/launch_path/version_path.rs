@@ -120,10 +120,7 @@ fn load_optifine() {
 
     let file = path_helper::open_read(local);
     if let Err(err) = file {
-        mcml_log::error_type(ErrorType::FileSystemError(FileSystemErrorData {
-            path: local.clone(),
-            error: err.to_string(),
-        }));
+        mcml_log::error_type(err);
 
         return;
     }
@@ -196,20 +193,16 @@ async fn get_version_from_online() {
 async fn read_version() {
     let local = BASE_DIR.get().unwrap().join(names::NAME_VERSION_FILE);
     if local.exists() {
-        let file = path_helper::open_read(&local);
-
-        if let Err(err) = file {
-            mcml_log::error_type(ErrorType::FileSystemError(FileSystemErrorData {
-                path: local.clone(),
-                error: err.to_string(),
-            }));
-        } else {
-            let file = file.unwrap();
-            let json = serde_json::from_reader::<_, VersionObj>(file);
-            if json.is_ok() {
-                *VERSION.get().unwrap().write().unwrap() = Some(Arc::new(json.unwrap()));
-
-                return;
+        match path_helper::open_read(&local) {
+            Err(err) => {
+                mcml_log::error_type(err);
+            }
+            Ok(file) => {
+                let json = serde_json::from_reader::<_, VersionObj>(file);
+                if json.is_ok() {
+                    *VERSION.get().unwrap().write().unwrap() = Some(Arc::new(json.unwrap()));
+                    return;
+                }
             }
         }
     }
@@ -377,13 +370,14 @@ pub fn get_version(version: &String) -> Option<Arc<GameArgObj>> {
 
     match data {
         None => {
-            let local = BASE_DIR.get().unwrap().join(format!("{}{}", version, names::NAME_JSON_EXT));
+            let local =
+                BASE_DIR
+                    .get()
+                    .unwrap()
+                    .join(format!("{}{}", version, names::NAME_JSON_EXT));
             let file = path_helper::open_read(&local);
             if let Err(err) = file {
-                mcml_log::error_type(ErrorType::FileSystemError(FileSystemErrorData {
-                    path: local.clone(),
-                    error: err.to_string(),
-                }));
+                mcml_log::error_type(err);
 
                 return None;
             }
@@ -431,10 +425,7 @@ pub async fn check_update(version: &String) -> Option<Arc<GameArgObj>> {
                     let local = BASE_DIR.get().unwrap().join(format!("{}.json", version));
                     let file = path_helper::open_read(&local);
                     if let Err(err) = file {
-                        mcml_log::error_type(ErrorType::FileSystemError(FileSystemErrorData {
-                            path: local.clone(),
-                            error: err.to_string(),
-                        }));
+                        mcml_log::error_type(err);
 
                         return None;
                     }
@@ -533,10 +524,7 @@ pub fn get_neoforge_install_obj(mc: &String, version: &String) -> Option<Arc<For
                 .join(get_forge_json_name(mc, version, true, true));
             let file = path_helper::open_read(&local);
             if let Err(err) = file {
-                mcml_log::error_type(ErrorType::FileSystemError(FileSystemErrorData {
-                    path: local.clone(),
-                    error: err.to_string(),
-                }));
+                mcml_log::error_type(err);
 
                 return None;
             }
@@ -582,10 +570,7 @@ pub fn get_neoforge(mc: &String, version: &String) -> Option<Arc<ForgeLaunchObj>
                 .join(get_forge_json_name(mc, version, true, false));
             let file = path_helper::open_read(&local);
             if let Err(err) = file {
-                mcml_log::error_type(ErrorType::FileSystemError(FileSystemErrorData {
-                    path: local.clone(),
-                    error: err.to_string(),
-                }));
+                mcml_log::error_type(err);
 
                 return None;
             }
@@ -631,10 +616,7 @@ pub fn get_forge_install_obj(mc: &String, version: &String) -> Option<Arc<ForgeI
                 .join(get_forge_json_name(mc, version, false, true));
             let file = path_helper::open_read(&local);
             if let Err(err) = file {
-                mcml_log::error_type(ErrorType::FileSystemError(FileSystemErrorData {
-                    path: local.clone(),
-                    error: err.to_string(),
-                }));
+                mcml_log::error_type(err);
 
                 return None;
             }
@@ -681,10 +663,7 @@ pub fn get_forge(mc: &String, version: &String) -> Option<Arc<ForgeLaunchObj>> {
 
             let file = path_helper::open_read(&local);
             if let Err(err) = file {
-                mcml_log::error_type(ErrorType::FileSystemError(FileSystemErrorData {
-                    path: local.clone(),
-                    error: err.to_string(),
-                }));
+                mcml_log::error_type(err);
 
                 return None;
             }
@@ -730,10 +709,7 @@ pub fn get_fabric(mc: &String, version: &String) -> Option<Arc<FabricLoaderObj>>
             ));
             let file = path_helper::open_read(&local);
             if let Err(err) = file {
-                mcml_log::error_type(ErrorType::FileSystemError(FileSystemErrorData {
-                    path: local.clone(),
-                    error: err.to_string(),
-                }));
+                mcml_log::error_type(err);
 
                 return None;
             }
@@ -779,10 +755,7 @@ pub fn get_quilt(mc: &String, version: &String) -> Option<Arc<QuiltLoaderObj>> {
             ));
             let file = path_helper::open_read(&local);
             if let Err(err) = file {
-                mcml_log::error_type(ErrorType::FileSystemError(FileSystemErrorData {
-                    path: local.clone(),
-                    error: err.to_string(),
-                }));
+                mcml_log::error_type(err);
 
                 return None;
             }

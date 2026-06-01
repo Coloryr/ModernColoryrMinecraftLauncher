@@ -76,3 +76,4 @@ zip = { version = "~8.6.0", features = ["chrono"] }
 tar = "~0.4.46"
 flate2 = "~1.1.9"
 sevenz-rust2 = "~0.21.0"
+xz2 = { version = "~0.1.7", features = ["static"] }
