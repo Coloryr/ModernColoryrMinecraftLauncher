@@ -8,7 +8,7 @@ use std::{
 use mcml_base::{hash_helper, path_helper};
 use mcml_config::{config_obj::SourceLocal, config_save};
 use mcml_names::{
-    i18_items::error_type::{ErrorData, ErrorType, FileSystemErrorData},
+    i18_items::error_type::{ErrorData, ErrorType},
     names, uuids,
 };
 use mcml_net::url_helper;

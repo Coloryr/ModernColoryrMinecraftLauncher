@@ -1,6 +1,6 @@
 use std::{
     collections::HashSet,
-    path::{Path, PathBuf},
+    path::{PathBuf},
     process::{Command, Stdio},
 };
 
@@ -162,7 +162,7 @@ where
 }
 
 #[cfg(target_os = "windows")]
-async fn find_java_inner(java_paths: &mut HashSet<PathBuf>) {
+fn find_java_inner(java_paths: &mut HashSet<PathBuf>) {
     /// Windows 注册表读取（需要 winreg crate）
     fn get_java_from_registry(key_path: &str) -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
         use winreg::{RegKey, enums::HKEY_LOCAL_MACHINE};

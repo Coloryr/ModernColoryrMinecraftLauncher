@@ -11,6 +11,7 @@ mcml-base = { path = "../mcml-base" }
 mcml-log = { path = "../mcml-log" }
 mcml-net = { path = "../mcml-net" }
 mcml-http = { path = "../mcml-http" }
+mcml-jvms = { path = "../mcml-jvms" }
 serde.workspace = true
 serde_json.workspace = true
 serde_repr.workspace = true
