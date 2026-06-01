@@ -9,7 +9,7 @@ use std::{
 use mcml_auth::LoginObj;
 use mcml_base::path_helper;
 use mcml_names::{
-    i18_items::error_type::{ErrorData, ErrorType, FileSystemErrorData},
+    i18_items::error_type::{CoreResult, ErrorData, ErrorType},
     names,
 };
 use url::Url;
@@ -76,23 +76,15 @@ pub fn add_index(obj: &GameArgObj, data: &mut Cursor<Vec<u8>>) {
 
 /// 获取资源数据
 /// - `obj`：版本数据资源
-pub fn get_index(obj: &GameAssetIndexObj) -> Result<AssetsObj, ErrorType> {
+pub fn get_index(obj: &GameAssetIndexObj) -> CoreResult<AssetsObj> {
     let file = INDEX_DIR.get().unwrap().join(format!("{}.json", obj.id));
-    let stream = path_helper::open_read(&file);
-    match stream {
-        Err(err) => Err(ErrorType::FileSystemError(FileSystemErrorData {
-            path: file.clone(),
+    let stream = path_helper::open_read(&file)?;
+    let obj = serde_json::from_reader::<_, AssetsObj>(stream);
+    match obj {
+        Err(err) => Err(ErrorType::JsonError(ErrorData {
             error: err.to_string(),
         })),
-        Ok(stream) => {
-            let obj = serde_json::from_reader::<_, AssetsObj>(stream);
-            match obj {
-                Err(err) => Err(ErrorType::JsonError(ErrorData {
-                    error: err.to_string(),
-                })),
-                Ok(ok) => Ok(ok),
-            }
-        }
+        Ok(ok) => Ok(ok),
     }
 }
 
@@ -137,13 +129,11 @@ pub fn read_assets_text(hash: String) -> Option<String> {
     let file = path_helper::read_text(&local);
     match file {
         Err(err) => {
-            mcml_log::error_type(ErrorType::FileSystemError(FileSystemErrorData { path: local.clone(), error: err.to_string() }));
+            mcml_log::error_type(err);
 
             None
-        },
-        Ok(file) => {
-            Some(file)
         }
+        Ok(file) => Some(file),
     }
 }
 
@@ -158,12 +148,10 @@ pub fn read_assets_stream(hash: String) -> Option<File> {
     let file = path_helper::open_read(&local);
     match file {
         Err(err) => {
-            mcml_log::error_type(ErrorType::FileSystemError(FileSystemErrorData { path: local.clone(), error: err.to_string() }));
+            mcml_log::error_type(err);
 
             None
-        },
-        Ok(file) => {
-            Some(file)
         }
+        Ok(file) => Some(file),
     }
 }

@@ -1,7 +1,4 @@
-use std::{
-    path::PathBuf,
-    sync::atomic::{AtomicUsize, Ordering},
-};
+use std::path::PathBuf;
 
 use mcml_names::i18_items::error_type::{
     ArchiveErrorData, ErrorData,
@@ -11,14 +8,12 @@ use mcml_names::i18_items::error_type::{
 use sevenz_rust2::{ArchiveEntry, ArchiveReader, ArchiveWriter, Password};
 
 use crate::{
-    archives::{IArchive, IArchiveGui, should_exclude},
+    archives::{ArchiveProcess, IArchive, should_exclude},
     path_helper,
 };
 
-pub struct R7zProcess {
-    gui: Option<Box<dyn IArchiveGui + Send + Sync>>,
-    size: AtomicUsize,
-    now: AtomicUsize,
+pub(crate) struct R7zProcess {
+    base: ArchiveProcess,
 }
 
 impl IArchive for R7zProcess {
@@ -43,88 +38,55 @@ impl IArchive for R7zProcess {
 }
 
 impl R7zProcess {
-    pub fn new(gui: Option<Box<dyn IArchiveGui + Send + Sync>>) -> Self {
-        Self {
-            gui,
-            size: AtomicUsize::new(0),
-            now: AtomicUsize::new(0),
-        }
+    pub fn new(base: ArchiveProcess) -> Self {
+        Self { base }
     }
 
     /// 将整个目录压缩为 7z 文件
-    pub fn r7z_compress(
+    fn r7z_compress(
         &self,
         archive_file: &PathBuf,
         pack_dir: &PathBuf,
         root_path: &PathBuf,
         filter: &Option<Vec<String>>,
     ) -> Result<(), ErrorType> {
-        let file = path_helper::open_write(archive_file);
-        if let Err(err) = file {
-            return Err(ErrorType::FileSystemError(FileSystemErrorData {
+        let file = path_helper::open_write(archive_file)?;
+        let mut archive = ArchiveWriter::new(file).map_err(|err| {
+            ErrorType::ArchiveOpenError(FileSystemErrorData {
                 path: archive_file.clone(),
                 error: err.to_string(),
-            }));
-        }
-        let file = file.unwrap();
-        let archive = ArchiveWriter::new(file);
-        if let Err(err) = archive {
-            return Err(ErrorType::ArchiveOpenError(FileSystemErrorData {
-                path: archive_file.clone(),
-                error: err.to_string(),
-            }));
-        }
+            })
+        })?;
 
-        let mut archive = archive.unwrap();
         let entries = path_helper::get_all_files(pack_dir);
-
-        if let Some(gui) = &self.gui {
-            let size = path_helper::get_all_files(pack_dir).len();
-            self.size.store(size, Ordering::SeqCst);
-            gui.start(size);
-        }
+        self.base.set_count(entries.len());
 
         for path in entries {
+            self.base.add_now(&path);
+
             if let Some(patterns) = filter {
                 if should_exclude(&path, patterns) {
                     continue;
                 }
             }
 
-            let now = self.now.fetch_add(1, Ordering::SeqCst) + 1;
-
-            if let Some(gui) = &self.gui {
-                let filename = path
-                    .file_name()
-                    .map(|n| n.to_string_lossy().to_string())
-                    .unwrap_or_default();
-                gui.zip_update(Some(filename), now);
-            }
-
-            let buffer = path_helper::open_read(&path);
-            if let Err(err) = buffer {
-                return Err(ErrorType::FileSystemError(FileSystemErrorData {
-                    path: path.clone(),
-                    error: err.to_string(),
-                }));
-            }
-
-            let buffer = buffer.unwrap();
+            let buffer = path_helper::open_read(&path)?;
 
             let relative_path = path.strip_prefix(root_path).unwrap();
             let tempfile = relative_path.to_string_lossy().to_string();
 
-            let res = archive.push_archive_entry(
-                ArchiveEntry::from_path(&path, tempfile.clone()),
-                Some(buffer),
-            );
-            if let Err(err) = res {
-                return Err(ErrorType::ArchiveError(ArchiveErrorData {
-                    source: path.display().to_string(),
-                    target: tempfile,
-                    error: err.to_string(),
-                }));
-            }
+            archive
+                .push_archive_entry(
+                    ArchiveEntry::from_path(&path, tempfile.clone()),
+                    Some(buffer),
+                )
+                .map_err(|err| {
+                    ErrorType::ArchiveError(ArchiveErrorData {
+                        source: path.display().to_string(),
+                        target: tempfile,
+                        error: err.to_string(),
+                    })
+                })?;
         }
 
         match archive.finish() {
@@ -136,45 +98,26 @@ impl R7zProcess {
     }
 
     /// 解压 7z 文件到指定目录
-    pub fn r7z_decompress(
+    fn r7z_decompress(
         &self,
         archive_file: &PathBuf,
         output_dir: &PathBuf,
     ) -> Result<(), ErrorType> {
-        let file = path_helper::open_read(archive_file);
-        if let Err(err) = file {
-            return Err(ErrorType::FileSystemError(FileSystemErrorData {
+        let file = path_helper::open_read(archive_file)?;
+        path_helper::create_dir_all(output_dir)?;
+        
+        let mut seven = ArchiveReader::new(file, Password::empty()).map_err(|err| {
+            ErrorType::ArchiveOpenError(FileSystemErrorData {
                 path: archive_file.clone(),
                 error: err.to_string(),
-            }));
-        }
-        let file = file.unwrap();
-        let seven = ArchiveReader::new(file, Password::empty());
-        if let Err(err) = seven {
-            return Err(ErrorType::ArchiveOpenError(FileSystemErrorData {
-                path: archive_file.clone(),
-                error: err.to_string(),
-            }));
-        }
+            })
+        })?;
 
-        let mut seven = seven.unwrap();
-
-        if let Some(gui) = &self.gui {
-            let size = seven.archive().files.len();
-            self.size.store(size, Ordering::SeqCst);
-            gui.start(size);
-        }
+        self.base.set_count(seven.archive().files.len());
 
         match seven.for_each_entries(|entry, reader| {
             let dest_path = output_dir.join(entry.name());
-
-            let now = self.now.fetch_add(1, Ordering::SeqCst) + 1;
-
-            if let Some(gui) = &self.gui {
-                let filename = entry.name.to_string();
-                gui.zip_update(Some(filename), now);
-            }
-
+            self.base.add_now(&dest_path);
             sevenz_rust2::default_entry_extract_fn(entry, reader, &dest_path)
         }) {
             Ok(_) => Ok(()),

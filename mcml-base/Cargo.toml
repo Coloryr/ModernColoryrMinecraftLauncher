@@ -19,6 +19,7 @@ tar.workspace = true
 flate2.workspace = true
 sevenz-rust2.workspace = true
 chrono.workspace = true
+xz2.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 windows-sys.workspace = true

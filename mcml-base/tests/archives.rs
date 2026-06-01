@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fs, path::{Path, PathBuf}};
 
-use mcml_base::archives::{IArchive, r7z_runner::R7zProcess, zip_runner::ZipProcess};
+use mcml_base::archives::{ArchiveType, TarMode, compress, decompress};
 
 /// 对比两个文件夹是否一致
 pub fn compare_folders(
@@ -153,111 +153,193 @@ fn matches_wildcard(text: &str, pattern: &str) -> bool {
 
 #[test]
 fn zip() {
-    let file = Path::new("tests");
-
-    let runner = ZipProcess::new(None);
-
+    let file = Path::new("test_run");
+    let source = Path::new("tests").join("test_compress/");
     let zip = file.join("test.zip");
-    let dir = file.join("test_compress/");
     let filter = Some(vec![
         String::from("skip.text"),
         String::from("dir1/skip.text"),
     ]);
-    let res = runner.compress(&zip, &dir, Some(&dir), &filter);
+    let res = compress(ArchiveType::Zip, &zip, &source, Some(&source), &filter, None);
     assert!(res.is_ok());
 }
 
 #[test]
 #[ignore]
 fn unzip() {
-    let file = Path::new("tests");
-
-    let runner = ZipProcess::new(None);
-
+    let file = Path::new("test_run");
     let zip = file.join("test.zip");
-    let dir = file.join("test_unzip/");
-    let res = runner.decompress(&zip, &dir);
-    assert!(res.is_ok());
-}
-
-#[test]
-#[ignore]
-fn r7z() {
-    let file = Path::new("tests");
-
-    let runner = R7zProcess::new(None);
-
-    let zip = file.join("test.7z");
-    let dir = file.join("test_compress/");
-    let filter = Some(vec![
-        String::from("skip.text"),
-        String::from("dir1/skip.text"),
-    ]);
-    let res = runner.compress(&zip, &dir, Some(&dir), &filter);
-    assert!(res.is_ok());
-}
-
-#[test]
-#[ignore]
-fn unr7z() {
-    let file = Path::new("tests");
-
-    let runner = R7zProcess::new(None);
-
-    let zip = file.join("test.7z");
-    let dir = file.join("test_un7z/");
-    let res = runner.decompress(&zip, &dir);
+    let dir = file.join("test_zip/");
+    let res = decompress(ArchiveType::Zip, &zip, &dir, None);
     assert!(res.is_ok());
 }
 
 #[test]
 #[ignore]
 fn zip_equal() {
-    let file = Path::new("tests");
-    let dir = file.join("test_compress/");
-    let dir1 = file.join("test_unzip/");
+    let file = Path::new("test_run");
+    let source = Path::new("tests").join("test_compress/");
+    let dir1 = file.join("test_zip/");
+    assert!(compare_folders(&source, &dir1, &[
+        String::from("skip.text"),
+        String::from("dir1/skip.text"),
+    ]));
+}
 
-    compare_folders(&dir, &dir1, &[
+#[test]
+#[ignore]
+fn r7z() {
+    let file = Path::new("test_run");
+    let source = Path::new("tests").join("test_compress/");
+    let zip = file.join("test.7z");
+    let filter = Some(vec![
         String::from("skip.text"),
         String::from("dir1/skip.text"),
     ]);
+    let res = compress(ArchiveType::R7Z, &zip, &source, Some(&source), &filter, None);
+    assert!(res.is_ok());
+}
+
+#[test]
+#[ignore]
+fn unr7z() {
+    let file = Path::new("test_run");
+    let zip = file.join("test.7z");
+    let dir = file.join("test_7z/");
+    let res = decompress(ArchiveType::R7Z, &zip, &dir, None);
+    assert!(res.is_ok());
 }
 
 #[test]
 #[ignore]
 fn r7z_equal() {
-    let file = Path::new("tests");
-    let dir = file.join("test_compress/");
-    let dir1 = file.join("test_un7z/");
+    let file = Path::new("test_run");
+    let source = Path::new("tests").join("test_compress/");
+    let dir1 = file.join("test_7z/");
+    assert!(compare_folders(&source, &dir1, &[
+        String::from("skip.text"),
+        String::from("dir1/skip.text"),
+    ]));
+}
 
-    compare_folders(&dir, &dir1, &[
+#[test]
+#[ignore]
+fn targz() {
+    let file = Path::new("test_run");
+    let source = Path::new("tests").join("test_compress/");
+    let zip = file.join("test.tar.gz");
+    let filter = Some(vec![
         String::from("skip.text"),
         String::from("dir1/skip.text"),
     ]);
+    let res = compress(ArchiveType::TarGz, &zip, &source, Some(&source), &filter, None);
+    assert!(res.is_ok());
+}
+
+#[test]
+#[ignore]
+fn untargz() {
+    let file = Path::new("test_run");
+    let zip = file.join("test.tar.gz");
+    let dir = file.join("test_targz/");
+    let res = decompress(ArchiveType::TarGz, &zip, &dir, None);
+    assert!(res.is_ok());
+}
+
+#[test]
+#[ignore]
+fn targz_equal() {
+    let file = Path::new("test_run");
+    let source = Path::new("tests").join("test_compress/");
+    let dir1 = file.join("test_targz/");
+    assert!(compare_folders(&source, &dir1, &[
+        String::from("skip.text"),
+        String::from("dir1/skip.text"),
+    ]));
+}
+
+#[test]
+#[ignore]
+fn tarxz() {
+   let file = Path::new("test_run");
+    let source = Path::new("tests").join("test_compress/");
+    let zip = file.join("test.tar.xz");
+    let filter = Some(vec![
+        String::from("skip.text"),
+        String::from("dir1/skip.text"),
+    ]);
+    let res = compress(ArchiveType::TarXz, &zip, &source, Some(&source), &filter, None);
+    assert!(res.is_ok());
+}
+
+#[test]
+#[ignore]
+fn untarxz() {
+    let file = Path::new("test_run");
+    let zip = file.join("test.tar.xz");
+    let dir = file.join("test_tarxz/");
+    let res = decompress(ArchiveType::TarXz, &zip, &dir, None);
+    assert!(res.is_ok());
+}
+
+#[test]
+#[ignore]
+fn tarxz_equal() {
+    let file = Path::new("test_run");
+    let source = Path::new("tests").join("test_compress/");
+    let dir1 = file.join("test_tarxz/");
+    assert!(compare_folders(&source, &dir1, &[
+        String::from("skip.text"),
+        String::from("dir1/skip.text"),
+    ]));
+}
+
+#[test]
+fn test_tar_mode_from_path() {
+    // 测试 .tar.gz
+    let path_gz = &Path::new("archive.tar.gz").to_path_buf();
+    assert_eq!(TarMode::try_from_path(path_gz), Some(TarMode::Gz));
+    
+    // 测试 .tgz
+    let path_tgz = &Path::new("archive.tgz").to_path_buf();
+    assert_eq!(TarMode::try_from_path(path_tgz), Some(TarMode::Gz));
+    
+    // 测试 .tar.xz
+    let path_xz = &Path::new("archive.tar.xz").to_path_buf();
+    assert_eq!(TarMode::try_from_path(path_xz), Some(TarMode::Xz));
+    
+    // 测试 .txz
+    let path_txz = &Path::new("archive.txz").to_path_buf();
+    assert_eq!(TarMode::try_from_path(path_txz), Some(TarMode::Xz));
+    
+    // 测试不支持的类型
+    let path_zip = &Path::new("archive.zip").to_path_buf();
+    assert!(TarMode::try_from_path(path_zip).is_none());
 }
 
 #[test]
 #[ignore]
 fn remove_file() {
-    let file = Path::new("tests");
-    let zip = file.join("test.zip");
-    fs::remove_file(zip).ok();
-    let zip = file.join("test.7z");
-    fs::remove_file(zip).ok();
-
-    let dir = file.join("test_unzip/");
-    fs::remove_dir_all(dir).ok();
-    let dir = file.join("test_un7z/");
-    fs::remove_dir_all(dir).ok();
+    let file = Path::new("test_run");
+    fs::remove_dir_all(file).ok();
 }
 
 #[test]
 fn archive_test() {
     zip();
-    unzip();
     r7z();
+    targz();
+    tarxz();
+
+    unzip();
     unr7z();
+    untargz();
+    untarxz();
+
     zip_equal();
     r7z_equal();
+    targz_equal();
+    tarxz_equal();
+
     remove_file();
 }
