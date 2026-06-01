@@ -3412,6 +3412,7 @@ dependencies = [
  "mcml-base",
  "mcml-config",
  "mcml-http",
+ "mcml-jvms",
  "mcml-log",
  "mcml-names",
  "mcml-net",
