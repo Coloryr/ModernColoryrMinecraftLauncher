@@ -5,13 +5,21 @@ use std::{
 
 use mcml_names::i18_items::error_type::{CoreResult, ErrorData, ErrorType};
 
-use crate::{NbtStream, NbtType, get_nbt, get_num, io_error, nbt_read, nbt_write};
+use crate::{NbtStream, NbtType, io_error, is_nbt_type};
 
 pub struct NbtEnd {}
 
 impl NbtEnd {
     pub fn new() -> Self {
         Self {}
+    }
+
+    pub fn eq(&self, nbt: &NbtType) -> bool {
+        matches!(nbt, NbtType::End(_))
+    }
+
+    pub fn to_nbt(self) -> NbtType {
+        NbtType::End(self)
     }
 }
 
@@ -35,7 +43,14 @@ impl NbtByte {
     }
 
     pub fn eq(&self, nbt: &NbtType) -> bool {
+        match nbt {
+            NbtType::Byte(nbt) => nbt.data == self.data,
+            _ => false,
+        }
+    }
 
+    pub fn to_nbt(self) -> NbtType {
+        NbtType::Byte(self)
     }
 }
 
@@ -65,6 +80,17 @@ impl NbtShort {
     pub fn new(data: i16) -> Self {
         Self { data }
     }
+
+    pub fn eq(&self, nbt: &NbtType) -> bool {
+        match nbt {
+            NbtType::Short(nbt) => nbt.data == self.data,
+            _ => false,
+        }
+    }
+
+    pub fn to_nbt(self) -> NbtType {
+        NbtType::Short(self)
+    }
 }
 
 impl NbtStream for NbtShort {
@@ -92,6 +118,17 @@ pub struct NbtInt {
 impl NbtInt {
     pub fn new(data: i32) -> Self {
         Self { data }
+    }
+
+    pub fn eq(&self, nbt: &NbtType) -> bool {
+        match nbt {
+            NbtType::Int(nbt) => nbt.data == self.data,
+            _ => false,
+        }
+    }
+
+    pub fn to_nbt(self) -> NbtType {
+        NbtType::Int(self)
     }
 }
 
@@ -121,6 +158,17 @@ impl NbtLong {
     pub fn new(data: i64) -> Self {
         Self { data }
     }
+
+    pub fn eq(&self, nbt: &NbtType) -> bool {
+        match nbt {
+            NbtType::Long(nbt) => nbt.data == self.data,
+            _ => false,
+        }
+    }
+
+    pub fn to_nbt(self) -> NbtType {
+        NbtType::Long(self)
+    }
 }
 
 impl NbtStream for NbtLong {
@@ -148,6 +196,17 @@ pub struct NbtFloat {
 impl NbtFloat {
     pub fn new(data: f32) -> Self {
         Self { data }
+    }
+
+    pub fn eq(&self, nbt: &NbtType) -> bool {
+        match nbt {
+            NbtType::Float(nbt) => nbt.data == self.data,
+            _ => false,
+        }
+    }
+
+    pub fn to_nbt(self) -> NbtType {
+        NbtType::Float(self)
     }
 }
 
@@ -177,6 +236,17 @@ impl NbtDouble {
     pub fn new(data: f64) -> Self {
         Self { data }
     }
+
+    pub fn eq(&self, nbt: &NbtType) -> bool {
+        match nbt {
+            NbtType::Double(nbt) => nbt.data == self.data,
+            _ => false,
+        }
+    }
+
+    pub fn to_nbt(self) -> NbtType {
+        NbtType::Double(self)
+    }
 }
 
 impl NbtStream for NbtDouble {
@@ -204,6 +274,17 @@ pub struct NbtByteArray {
 impl NbtByteArray {
     pub fn new(data: Vec<u8>) -> Self {
         Self { data }
+    }
+
+    pub fn eq(&self, nbt: &NbtType) -> bool {
+        match nbt {
+            NbtType::ByteArray(nbt) => nbt.data == self.data,
+            _ => false,
+        }
+    }
+
+    pub fn to_nbt(self) -> NbtType {
+        NbtType::ByteArray(self)
     }
 }
 
@@ -239,6 +320,17 @@ impl NbtString {
     pub fn new(data: String) -> Self {
         Self { data }
     }
+
+    pub fn eq(&self, nbt: &NbtType) -> bool {
+        match nbt {
+            NbtType::String(nbt) => nbt.data == self.data,
+            _ => false,
+        }
+    }
+
+    pub fn to_nbt(self) -> NbtType {
+        NbtType::String(self)
+    }
 }
 
 impl NbtStream for NbtString {
@@ -272,16 +364,66 @@ impl NbtStream for NbtString {
 }
 
 pub struct NbtList {
-    pub data: Vec<NbtType>,
-    pub base: Box<NbtType>,
+    /// 数据列表
+    data: Vec<NbtType>,
+    /// 存入的类型
+    nbt_type: u8,
 }
 
 impl NbtList {
-    pub fn new(base: NbtType) -> Self {
+    pub fn new(nbt_type: u8) -> Self {
         Self {
-            base: Box::new(base),
+            nbt_type,
             data: Vec::new(),
         }
+    }
+
+    pub fn set_type(&mut self, nbt_type: NbtType) {
+        self.nbt_type = nbt_type.get_num();
+        self.data.clear();
+    }
+
+    pub fn add_item(&mut self, nbt: NbtType) -> bool {
+        if nbt.get_num() != self.nbt_type {
+            false
+        } else {
+            self.data.push(nbt);
+
+            true
+        }
+    }
+
+    pub fn get_item(&self, index: usize) -> Option<&NbtType> {
+        self.data.get(index)
+    }
+
+    pub fn eq(&self, nbt: &NbtType) -> bool {
+        match nbt {
+            NbtType::List(nbt) => {
+                if self.nbt_type != nbt.nbt_type {
+                    return false;
+                }
+                if self.data.len() != nbt.data.len() {
+                    return false;
+                }
+
+                for index in 0..self.data.len() {
+                    let item1 = self.data.get(index).unwrap();
+                    let item2 = nbt.data.get(index).unwrap();
+
+                    if !item1.eq(item2) {
+                        return false;
+                    }
+                }
+
+                return true;
+            }
+            _ => false,
+        }
+    }
+
+    pub fn to_nbt(self) -> NbtType {
+        NbtType::List(self)
     }
 }
 
@@ -290,11 +432,8 @@ impl NbtStream for NbtList {
         let mut temp = [0u8; 1];
         stream.read_exact(&mut temp).map_err(|err| io_error(err))?;
 
-        let nbt_type = temp[0];
-        let base = get_nbt(nbt_type);
-        if base.is_some() {
-            self.base = Box::new(base.unwrap());
-        } else {
+        self.nbt_type = temp[0];
+        if !is_nbt_type(self.nbt_type) {
             return Err(ErrorType::NbtTypeError);
         }
 
@@ -304,8 +443,8 @@ impl NbtStream for NbtList {
         let len = i32::from_be_bytes(temp);
 
         for _i in 0..len {
-            let mut nbt = get_nbt(nbt_type).unwrap();
-            nbt_read(&mut nbt, stream)?;
+            let mut nbt = NbtType::get_nbt(self.nbt_type).unwrap();
+            nbt.nbt_read(stream)?;
             self.data.push(nbt);
         }
 
@@ -316,7 +455,7 @@ impl NbtStream for NbtList {
         let nbt_type = if self.data.len() == 0 {
             0
         } else {
-            get_num(&*self.base)
+            self.nbt_type
         };
 
         let temp = [nbt_type];
@@ -326,7 +465,7 @@ impl NbtStream for NbtList {
         stream.write_all(&temp).map_err(|err| io_error(err))?;
 
         for nbt in &self.data {
-            nbt_write(&nbt, stream)?;
+            nbt.nbt_write(stream)?;
         }
 
         Ok(())
@@ -343,49 +482,76 @@ impl NbtCompound {
             data: HashMap::new(),
         }
     }
+
+    pub fn eq(&self, nbt: &NbtType) -> bool {
+        match nbt {
+            NbtType::Compound(nbt) => {
+                if self.data.len() != nbt.data.len() {
+                    return false;
+                }
+
+                for (index, item1) in self.data.iter() {
+                    let item2 = nbt.data.get(index);
+                    if item2.is_none() {
+                        return false;
+                    }
+                    let item2 = item2.unwrap();
+
+                    if !item1.eq(item2) {
+                        return false;
+                    }
+                }
+
+                return true;
+            }
+            _ => false,
+        }
+    }
+
+    pub fn to_nbt(self) -> NbtType {
+        NbtType::Compound(self)
+    }
 }
 
 impl NbtStream for NbtCompound {
     fn read<R: Read>(&mut self, stream: &mut R) -> CoreResult<()> {
-        let mut temp = [0u8; 1];
-        stream.read_exact(&mut temp).map_err(|err| io_error(err))?;
+        loop {
+            let mut temp = [0u8; 1];
+            stream.read_exact(&mut temp).map_err(|err| io_error(err))?;
 
-        if temp[0] == 0 {
-            return Ok(());
+            if temp[0] == 0 {
+                return Ok(());
+            }
+
+            let nbt = NbtType::get_nbt(temp[0]);
+            if nbt.is_none() {
+                return Err(ErrorType::NbtTypeError);
+            }
+
+            let mut temp = [0u8; 2];
+            stream.read_exact(&mut temp).map_err(|err| io_error(err))?;
+
+            let len = i16::from_be_bytes(temp);
+
+            let mut temp = vec![0; len as usize];
+            stream.read_exact(&mut temp).map_err(|err| io_error(err))?;
+
+            let key = String::from_utf8(temp).map_err(|err| {
+                ErrorType::StreamError(ErrorData {
+                    error: err.to_string(),
+                })
+            })?;
+
+            let mut nbt = nbt.unwrap();
+            nbt.nbt_read(stream)?;
+
+            self.data.insert(key, nbt);
         }
-
-        let nbt_type = temp[0];
-        let nbt = get_nbt(nbt_type);
-        if nbt.is_none() {
-            return Err(ErrorType::NbtTypeError);
-        }
-
-        let mut nbt = nbt.unwrap();
-
-        let mut temp = [0u8; 2];
-        stream.read_exact(&mut temp).map_err(|err| io_error(err))?;
-
-        let len = i16::from_be_bytes(temp);
-
-        let mut temp = vec![0; len as usize];
-        stream.read_exact(&mut temp).map_err(|err| io_error(err))?;
-
-        let key = String::from_utf8(temp).map_err(|err| {
-            ErrorType::StreamError(ErrorData {
-                error: err.to_string(),
-            })
-        })?;
-
-        nbt_read(&mut nbt, stream)?;
-
-        self.data.insert(key, nbt);
-
-        Ok(())
     }
 
     fn write<W: Write>(&self, stream: &mut W) -> CoreResult<()> {
         for (key, nbt) in &self.data {
-            let temp = [get_num(nbt)];
+            let temp = [nbt.get_num()];
             stream.write_all(&temp).map_err(|err| io_error(err))?;
 
             if !matches!(nbt, NbtType::End(_)) {
@@ -395,7 +561,7 @@ impl NbtStream for NbtCompound {
                     .write_all(key.as_bytes())
                     .map_err(|err| io_error(err))?;
 
-                nbt_write(&nbt, stream)?;
+                nbt.nbt_write(stream)?;
             }
         }
 
@@ -413,6 +579,17 @@ pub struct NbtIntArray {
 impl NbtIntArray {
     pub fn new(data: Vec<i32>) -> Self {
         Self { data }
+    }
+
+    pub fn eq(&self, nbt: &NbtType) -> bool {
+        match nbt {
+            NbtType::IntArray(nbt) => nbt.data == self.data,
+            _ => false,
+        }
+    }
+
+    pub fn to_nbt(self) -> NbtType {
+        NbtType::IntArray(self)
     }
 }
 
@@ -456,6 +633,17 @@ impl NbtLongArray {
     pub fn new(data: Vec<i64>) -> Self {
         Self { data }
     }
+
+    pub fn eq(&self, nbt: &NbtType) -> bool {
+        match nbt {
+            NbtType::LongArray(nbt) => nbt.data == self.data,
+            _ => false,
+        }
+    }
+
+    pub fn to_nbt(self) -> NbtType {
+        NbtType::LongArray(self)
+    }
 }
 
 impl NbtStream for NbtLongArray {
@@ -488,4 +676,56 @@ impl NbtStream for NbtLongArray {
 
         Ok(())
     }
+}
+
+pub fn end() -> NbtEnd {
+    NbtEnd::new()
+}
+
+pub fn byte() -> NbtByte {
+    NbtByte::new(Default::default())
+}
+
+pub fn short() -> NbtShort {
+    NbtShort::new(Default::default())
+}
+
+pub fn int() -> NbtInt {
+    NbtInt::new(Default::default())
+}
+
+pub fn long() -> NbtLong {
+    NbtLong::new(Default::default())
+}
+
+pub fn float() -> NbtFloat {
+    NbtFloat::new(Default::default())
+}
+
+pub fn double() -> NbtDouble {
+    NbtDouble::new(Default::default())
+}
+
+pub fn byte_array() -> NbtByteArray {
+    NbtByteArray::new(Default::default())
+}
+
+pub fn string() -> NbtString {
+    NbtString::new(Default::default())
+}
+
+pub fn list() -> NbtList {
+    NbtList::new(Default::default())
+}
+
+pub fn compound() -> NbtCompound {
+    NbtCompound::new()
+}
+
+pub fn int_array() -> NbtIntArray {
+    NbtIntArray::new(Default::default())
+}
+
+pub fn long_array() -> NbtLongArray {
+    NbtLongArray::new(Default::default())
 }
