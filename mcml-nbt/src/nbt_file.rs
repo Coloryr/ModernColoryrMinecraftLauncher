@@ -6,7 +6,7 @@ use flate2::{
 };
 use mcml_names::i18_items::error_type::{CoreResult, ErrorType};
 
-use crate::{NbtType, get_nbt, get_num, io_error, nbt_read, nbt_write};
+use crate::{NbtType, io_error};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum CompressType {
@@ -16,12 +16,12 @@ pub enum CompressType {
     Lz4,
 }
 
-pub struct Nbt {
+pub struct NbtFile {
     pub nbt: NbtType,
     pub compress: CompressType,
 }
 
-impl Nbt {
+impl NbtFile {
     pub fn new(nbt: NbtType, compress: CompressType) -> Self {
         Self { nbt, compress }
     }
@@ -53,16 +53,15 @@ impl Nbt {
 
         let mut temp = [0u8; 1];
         stream.read_exact(&mut temp).map_err(|err| io_error(err))?;
-        let nbt = get_nbt(temp[0]);
+        let nbt = NbtType::get_nbt(temp[0]);
         if nbt.is_none() {
             return Err(ErrorType::NbtReadError);
         }
 
         let mut nbt = nbt.unwrap();
+        nbt.nbt_read(&mut stream)?;
 
-        nbt_read(&mut nbt, &mut stream)?;
-
-        Ok(Nbt {
+        Ok(NbtFile {
             nbt: nbt,
             compress: compress_type,
         })
@@ -79,9 +78,8 @@ impl Nbt {
             CompressType::Lz4 => Box::new(lz4_flex::frame::FrameEncoder::new(stream)),
         };
 
-        let temp = [get_num(&self.nbt)];
+        let temp = [self.nbt.get_num()];
         stream.write_all(&temp).map_err(|err| io_error(err))?;
-
-        nbt_write(&self.nbt, &mut stream)
+        self.nbt.nbt_write(&mut stream)
     }
 }
