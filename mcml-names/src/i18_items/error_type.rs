@@ -98,4 +98,12 @@ pub enum ErrorType {
     TaskTimeout,
 
     GetVersionMetaFail,
+
+    /// 流处理异常
+    StreamError(ErrorData),
+
+    /// NBT类型错误
+    NbtTypeError,
+    /// NBT读取失败
+    NbtReadError,
 }
