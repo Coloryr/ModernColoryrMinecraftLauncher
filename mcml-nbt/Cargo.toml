@@ -4,3 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+mcml-names = { path = "../mcml-names" }
+flate2.workspace = true
+lz4_flex.workspace = true
