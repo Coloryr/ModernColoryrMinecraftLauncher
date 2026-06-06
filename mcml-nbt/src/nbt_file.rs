@@ -6,7 +6,7 @@ use flate2::{
 };
 use mcml_names::i18_items::error_type::{CoreResult, ErrorType};
 
-use crate::{NbtType, io_error};
+use crate::{NBT_BYTE_ORDER, NBT_END_ORDER, NbtType, io_error, nbt_types};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum CompressType {
@@ -27,14 +27,30 @@ impl NbtFile {
     }
 
     /// 从流中读取NBT文件
-    /// 
+    ///
     /// - `stream`: 流
     pub fn read<R: Read + Seek>(stream: &mut R) -> CoreResult<Self> {
         let mut temp = [0u8; 3];
-        stream.read_exact(&mut temp).map_err(|err| io_error(err))?;
+        let size = stream.read(&mut temp).map_err(|err| io_error(err))?;
         stream
             .seek(SeekFrom::Start(0))
             .map_err(|err| io_error(err))?;
+
+        if size == 1 && temp[0] == NBT_END_ORDER {
+            return Ok(NbtFile {
+                nbt: NbtType::end(),
+                compress: CompressType::None,
+            });
+        } else if size == 2 && temp[0] == NBT_BYTE_ORDER {
+            return Ok(NbtFile {
+                nbt: nbt_types::byte(temp[1]).to_nbt(),
+                compress: CompressType::None,
+            });
+        }
+
+        if size != 3 {
+            return Err(ErrorType::NbtReadError);
+        }
 
         let mut compress_type = CompressType::None;
 
@@ -44,7 +60,9 @@ impl NbtFile {
         } else if temp[0] == 0x78 && (temp[1] == 0x01 || temp[1] == 0x9C || temp[1] == 0xDA) {
             compress_type = CompressType::Zlib;
             Box::new(ZlibDecoder::new(stream))
-        } else if temp[0] == 0x4C && temp[1] == 0x5A && temp[2] == 0x34 {
+        } else if (temp[0] == 0x4C && temp[1] == 0x5A && temp[2] == 0x34)
+            || (temp[0] == 0x04 && temp[1] == 0x22 && temp[2] == 0x4D)
+        {
             compress_type = CompressType::Lz4;
             Box::new(lz4_flex::frame::FrameDecoder::new(stream))
         } else {
@@ -59,7 +77,10 @@ impl NbtFile {
         }
 
         let mut nbt = nbt.unwrap();
-        nbt.nbt_read(&mut stream)?;
+        match nbt {
+            NbtType::Compound(ref mut nbt) => nbt.skip_read(&mut stream)?,
+            _ => nbt.nbt_read(&mut stream)?,
+        }
 
         Ok(NbtFile {
             nbt: nbt,
@@ -68,7 +89,7 @@ impl NbtFile {
     }
 
     /// 从流中保存NBT文件
-    /// 
+    ///
     /// - `stream`: 流
     pub fn save<W: Write>(&self, stream: &mut W) -> CoreResult<()> {
         let mut stream: Box<dyn Write> = match self.compress {
@@ -80,6 +101,10 @@ impl NbtFile {
 
         let temp = [self.nbt.get_num()];
         stream.write_all(&temp).map_err(|err| io_error(err))?;
-        self.nbt.nbt_write(&mut stream)
+        self.nbt.nbt_write(&mut stream)?;
+
+        stream.flush().map_err(|err| io_error(err))?;
+
+        Ok(())
     }
 }

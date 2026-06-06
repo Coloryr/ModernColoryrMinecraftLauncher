@@ -7,3 +7,5 @@ edition = "2024"
 mcml-names = { path = "../mcml-names" }
 flate2.workspace = true
 lz4_flex.workspace = true
+rayon.workspace = true
+chrono.workspace = true

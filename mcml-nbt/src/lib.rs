@@ -7,15 +7,33 @@ use crate::nbt_types::{
     NbtLong, NbtLongArray, NbtShort, NbtString,
 };
 
+pub mod chunk;
 pub mod nbt_file;
 pub mod nbt_types;
-pub mod chunky;
 
+pub const NBT_END_ORDER: u8 = 0;
+pub const NBT_BYTE_ORDER: u8 = 1;
+pub const NBT_SHORT_ORDER: u8 = 2;
+pub const NBT_INT_ORDER: u8 = 3;
+pub const NBT_LONG_ORDER: u8 = 4;
+pub const NBT_FLOAT_ORDER: u8 = 5;
+pub const NBT_DOUBLE_ORDER: u8 = 6;
+pub const NBT_BYTE_ARRAY_ORDER: u8 = 7;
+pub const NBT_STRING_ORDER: u8 = 8;
+pub const NBT_LIST_ORDER: u8 = 9;
+pub const NBT_COMPOUND_ORDER: u8 = 10;
+pub const NBT_INT_ARRAY_ORDER: u8 = 11;
+pub const NBT_LONG_ARRAY_ORDER: u8 = 12;
+
+/// NBT读写流接口
 pub(crate) trait NbtStream {
+    /// NBT标签读
     fn read<R: Read>(&mut self, stream: &mut R) -> CoreResult<()>;
+    /// NBT标签写
     fn write<W: Write>(&self, stream: &mut W) -> CoreResult<()>;
 }
 
+/// NBT类型
 pub enum NbtType {
     End(NbtEnd),
     Byte(NbtByte),
@@ -33,24 +51,25 @@ pub enum NbtType {
 }
 
 impl NbtType {
+    /// 从数字序号创建NBT标签
     pub fn get_nbt(nbt_type: u8) -> Option<NbtType> {
         if nbt_type > 12 {
             None
         } else {
             Some(match nbt_type {
-                1 => NbtType::Byte(nbt_types::byte()),
-                2 => NbtType::Short(nbt_types::short()),
-                3 => NbtType::Int(nbt_types::int()),
-                4 => NbtType::Long(nbt_types::long()),
-                5 => NbtType::Float(nbt_types::float()),
-                6 => NbtType::Double(nbt_types::double()),
-                7 => NbtType::ByteArray(nbt_types::byte_array()),
-                8 => NbtType::String(nbt_types::string()),
-                9 => NbtType::List(nbt_types::list()),
-                10 => NbtType::Compound(nbt_types::compound()),
-                11 => NbtType::IntArray(nbt_types::int_array()),
-                12 => NbtType::LongArray(nbt_types::long_array()),
-                _ => NbtType::End(nbt_types::end()),
+                NBT_BYTE_ORDER => Self::byte(),
+                NBT_SHORT_ORDER => Self::short(),
+                NBT_INT_ORDER => Self::int(),
+                NBT_LONG_ORDER => Self::long(),
+                NBT_FLOAT_ORDER => Self::float(),
+                NBT_DOUBLE_ORDER => Self::double(),
+                NBT_BYTE_ARRAY_ORDER => Self::byte_array(),
+                NBT_STRING_ORDER => Self::string(),
+                NBT_LIST_ORDER => Self::list(),
+                NBT_COMPOUND_ORDER => Self::compound(),
+                NBT_INT_ARRAY_ORDER => Self::int_array(),
+                NBT_LONG_ARRAY_ORDER => Self::long_array(),
+                _ => Self::end(),
             })
         }
     }
@@ -60,39 +79,39 @@ impl NbtType {
     }
 
     pub fn byte() -> NbtType {
-        NbtType::Byte(nbt_types::byte())
+        NbtType::Byte(nbt_types::byte(Default::default()))
     }
 
     pub fn short() -> NbtType {
-        NbtType::Short(nbt_types::short())
+        NbtType::Short(nbt_types::short(Default::default()))
     }
 
     pub fn int() -> NbtType {
-        NbtType::Int(nbt_types::int())
+        NbtType::Int(nbt_types::int(Default::default()))
     }
 
     pub fn long() -> NbtType {
-        NbtType::Long(nbt_types::long())
+        NbtType::Long(nbt_types::long(Default::default()))
     }
 
     pub fn float() -> NbtType {
-        NbtType::Float(nbt_types::float())
+        NbtType::Float(nbt_types::float(Default::default()))
     }
 
     pub fn double() -> NbtType {
-        NbtType::Double(nbt_types::double())
+        NbtType::Double(nbt_types::double(Default::default()))
     }
 
     pub fn byte_array() -> NbtType {
-        NbtType::ByteArray(nbt_types::byte_array())
+        NbtType::ByteArray(nbt_types::byte_array(Default::default()))
     }
 
     pub fn string() -> NbtType {
-        NbtType::String(nbt_types::string())
+        NbtType::String(nbt_types::string(Default::default()))
     }
 
     pub fn list() -> NbtType {
-        NbtType::List(nbt_types::list())
+        NbtType::List(nbt_types::list(Default::default()))
     }
 
     pub fn compound() -> NbtType {
@@ -100,28 +119,29 @@ impl NbtType {
     }
 
     pub fn int_array() -> NbtType {
-        NbtType::IntArray(nbt_types::int_array())
+        NbtType::IntArray(nbt_types::int_array(Default::default()))
     }
 
     pub fn long_array() -> NbtType {
-        NbtType::LongArray(nbt_types::long_array())
+        NbtType::LongArray(nbt_types::long_array(Default::default()))
     }
 
+    /// 从NBT标签读对应的数字序号
     pub fn get_num(&self) -> u8 {
         match self {
-            NbtType::End(_) => 0,
-            NbtType::Byte(_) => 1,
-            NbtType::Short(_) => 2,
-            NbtType::Int(_) => 3,
-            NbtType::Long(_) => 4,
-            NbtType::Float(_) => 5,
-            NbtType::Double(_) => 6,
-            NbtType::ByteArray(_) => 7,
-            NbtType::String(_) => 8,
-            NbtType::List(_) => 9,
-            NbtType::Compound(_) => 10,
-            NbtType::IntArray(_) => 11,
-            NbtType::LongArray(_) => 12,
+            NbtType::End(_) => NBT_END_ORDER,
+            NbtType::Byte(_) => NBT_BYTE_ORDER,
+            NbtType::Short(_) => NBT_SHORT_ORDER,
+            NbtType::Int(_) => NBT_INT_ORDER,
+            NbtType::Long(_) => NBT_LONG_ORDER,
+            NbtType::Float(_) => NBT_FLOAT_ORDER,
+            NbtType::Double(_) => NBT_DOUBLE_ORDER,
+            NbtType::ByteArray(_) => NBT_BYTE_ARRAY_ORDER,
+            NbtType::String(_) => NBT_STRING_ORDER,
+            NbtType::List(_) => NBT_LIST_ORDER,
+            NbtType::Compound(_) => NBT_COMPOUND_ORDER,
+            NbtType::IntArray(_) => NBT_INT_ARRAY_ORDER,
+            NbtType::LongArray(_) => NBT_LONG_ARRAY_ORDER,
         }
     }
 
@@ -213,6 +233,14 @@ impl NbtType {
         }
     }
 
+    pub fn get_compound(self) -> Option<NbtCompound> {
+        if let NbtType::Compound(nbt) = self {
+            Some(nbt)
+        } else {
+            None
+        }
+    }
+
     pub fn as_int_array(&self) -> Option<&NbtIntArray> {
         if let NbtType::IntArray(nbt) = self {
             Some(nbt)
@@ -229,6 +257,7 @@ impl NbtType {
         }
     }
 
+    /// 判断两个NBT标签是否一致
     pub fn eq(&self, nbt: &NbtType) -> bool {
         match self {
             NbtType::End(nbt_end) => nbt_end.eq(nbt),
@@ -247,6 +276,7 @@ impl NbtType {
         }
     }
 
+    /// NBT标签读
     pub(crate) fn nbt_read<R: Read>(&mut self, stream: &mut R) -> CoreResult<()> {
         match self {
             NbtType::End(nbt_end) => nbt_end.read(stream),
@@ -267,6 +297,7 @@ impl NbtType {
         Ok(())
     }
 
+    /// NBT标签写
     pub(crate) fn nbt_write<W: Write>(&self, stream: &mut W) -> CoreResult<()> {
         match self {
             NbtType::End(nbt_end) => nbt_end.write(stream),
@@ -288,8 +319,9 @@ impl NbtType {
     }
 }
 
-pub fn is_nbt_type(nbt_type: u8) -> bool {
-    nbt_type > 0 && nbt_type <= 12
+/// 是否为NBT标签数字
+pub fn is_nbt_num(nbt_type: u8) -> bool {
+    nbt_type >= NBT_END_ORDER && nbt_type <= NBT_LONG_ARRAY_ORDER
 }
 
 pub(crate) fn io_error(e: std::io::Error) -> ErrorType {

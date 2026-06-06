@@ -10,7 +10,7 @@ use mcml_nbt::{
 fn nbt_end() {
     let mut stream = Cursor::new(Vec::<u8>::new());
 
-    let nbt = NbtFile::new(nbt_types::end().to_nbt(), CompressType::GZip);
+    let nbt = NbtFile::new(nbt_types::end().to_nbt(), CompressType::None);
 
     nbt.save(&mut stream).unwrap();
 
@@ -26,10 +26,7 @@ fn nbt_end() {
 fn nbt_byte() {
     let mut stream = Cursor::new(Vec::<u8>::new());
 
-    let mut nbt = nbt_types::byte();
-    nbt.data = 1;
-
-    let nbt = NbtFile::new(nbt.to_nbt(), CompressType::GZip);
+    let nbt = NbtFile::new(nbt_types::byte(1).to_nbt(), CompressType::None);
 
     nbt.save(&mut stream).unwrap();
 
@@ -45,10 +42,7 @@ fn nbt_byte() {
 fn nbt_short() {
     let mut stream = Cursor::new(Vec::<u8>::new());
 
-    let mut nbt = nbt_types::short();
-    nbt.data = 1;
-
-    let nbt = NbtFile::new(nbt.to_nbt(), CompressType::GZip);
+    let nbt = NbtFile::new(nbt_types::short(1).to_nbt(), CompressType::None);
 
     nbt.save(&mut stream).unwrap();
 
@@ -64,10 +58,7 @@ fn nbt_short() {
 fn nbt_long() {
     let mut stream = Cursor::new(Vec::<u8>::new());
 
-    let mut nbt = nbt_types::long();
-    nbt.data = 1;
-
-    let nbt = NbtFile::new(nbt.to_nbt(), CompressType::GZip);
+    let nbt = NbtFile::new(nbt_types::long(1).to_nbt(), CompressType::None);
 
     nbt.save(&mut stream).unwrap();
 
@@ -83,10 +74,7 @@ fn nbt_long() {
 fn nbt_float() {
     let mut stream = Cursor::new(Vec::<u8>::new());
 
-    let mut nbt = nbt_types::float();
-    nbt.data = 1.0;
-
-    let nbt = NbtFile::new(nbt.to_nbt(), CompressType::GZip);
+    let nbt = NbtFile::new(nbt_types::float(1.0).to_nbt(), CompressType::None);
 
     nbt.save(&mut stream).unwrap();
 
@@ -102,10 +90,7 @@ fn nbt_float() {
 fn nbt_double() {
     let mut stream = Cursor::new(Vec::<u8>::new());
 
-    let mut nbt = nbt_types::double();
-    nbt.data = 1.0;
-
-    let nbt = NbtFile::new(nbt.to_nbt(), CompressType::GZip);
+    let nbt = NbtFile::new(nbt_types::double(1.0).to_nbt(), CompressType::None);
 
     nbt.save(&mut stream).unwrap();
 
@@ -121,10 +106,7 @@ fn nbt_double() {
 fn nbt_string() {
     let mut stream = Cursor::new(Vec::<u8>::new());
 
-    let mut nbt = nbt_types::string();
-    nbt.data = String::from("value");
-
-    let nbt = NbtFile::new(nbt.to_nbt(), CompressType::GZip);
+    let nbt = NbtFile::new(nbt_types::string("value").to_nbt(), CompressType::None);
 
     nbt.save(&mut stream).unwrap();
 
@@ -140,13 +122,8 @@ fn nbt_string() {
 fn nbt_byte_array() {
     let mut stream = Cursor::new(Vec::<u8>::new());
 
-    let mut nbt = nbt_types::byte_array();
-    nbt.data.push(0);
-    nbt.data.push(1);
-    nbt.data.push(2);
-    nbt.data.push(3);
-
-    let nbt = NbtFile::new(nbt.to_nbt(), CompressType::GZip);
+    let nbt = nbt_types::byte_array([0, 1, 2, 3, 4, 5].to_vec());
+    let nbt = NbtFile::new(nbt.to_nbt(), CompressType::None);
 
     nbt.save(&mut stream).unwrap();
 
@@ -162,13 +139,8 @@ fn nbt_byte_array() {
 fn nbt_int_array() {
     let mut stream = Cursor::new(Vec::<u8>::new());
 
-    let mut nbt = nbt_types::int_array();
-    nbt.data.push(0);
-    nbt.data.push(1);
-    nbt.data.push(2);
-    nbt.data.push(3);
-
-    let nbt = NbtFile::new(nbt.to_nbt(), CompressType::GZip);
+    let nbt = nbt_types::int_array([78, 89, 12, 23, 46].to_vec());
+    let nbt = NbtFile::new(nbt.to_nbt(), CompressType::None);
 
     nbt.save(&mut stream).unwrap();
 
@@ -184,13 +156,8 @@ fn nbt_int_array() {
 fn nbt_long_array() {
     let mut stream = Cursor::new(Vec::<u8>::new());
 
-    let mut nbt = nbt_types::long_array();
-    nbt.data.push(0);
-    nbt.data.push(1);
-    nbt.data.push(2);
-    nbt.data.push(3);
-
-    let nbt = NbtFile::new(nbt.to_nbt(), CompressType::GZip);
+    let nbt = nbt_types::long_array([234, 345, 456, 789, 3456].to_vec());
+    let nbt = NbtFile::new(nbt.to_nbt(), CompressType::None);
 
     nbt.save(&mut stream).unwrap();
 
@@ -206,17 +173,13 @@ fn nbt_long_array() {
 fn nbt_list() {
     let mut stream = Cursor::new(Vec::<u8>::new());
 
-    let mut nbt = nbt_types::list();
-    nbt.set_type(NbtType::byte());
+    let mut nbt = nbt_types::list(NbtType::byte().get_num());
 
     assert!(!nbt.add_item(NbtType::int()));
-    assert!(nbt.add_item(nbt_types::byte().to_nbt()));
+    assert!(nbt.add_item(nbt_types::byte(1).to_nbt()));
+    assert!(nbt.add_item(nbt_types::byte(2).to_nbt()));
 
-    let mut temp = nbt_types::byte();
-    temp.data = 1;
-    assert!(nbt.add_item(temp.to_nbt()));
-
-    let nbt = NbtFile::new(nbt.to_nbt(), CompressType::GZip);
+    let nbt = NbtFile::new(nbt.to_nbt_type(), CompressType::None);
 
     nbt.save(&mut stream).unwrap();
 
@@ -236,12 +199,10 @@ fn nbt_compound() {
     nbt.data.insert(String::new(), NbtType::compound());
     nbt.data.insert(String::from("byte"), NbtType::byte());
     nbt.data.insert(String::from("int"), NbtType::int());
+    nbt.data
+        .insert(String::from("long"), nbt_types::long(1).to_nbt());
 
-    let mut temp = nbt_types::long();
-    temp.data = 1;
-    nbt.data.insert(String::from("long"), temp.to_nbt());
-
-    let nbt = NbtFile::new(nbt.to_nbt(), CompressType::GZip);
+    let nbt = NbtFile::new(nbt.to_nbt(), CompressType::None);
 
     nbt.save(&mut stream).unwrap();
 
