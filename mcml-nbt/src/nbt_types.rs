@@ -5,7 +5,7 @@ use std::{
 
 use mcml_names::i18_items::error_type::{CoreResult, ErrorData, ErrorType};
 
-use crate::{NbtStream, NbtType, io_error, is_nbt_type};
+use crate::{NbtStream, NbtType, io_error, is_nbt_num};
 
 pub struct NbtEnd {}
 
@@ -127,7 +127,7 @@ impl NbtInt {
         }
     }
 
-    pub fn to_nbt(self) -> NbtType {
+    pub fn to_nbt_type(self) -> NbtType {
         NbtType::Int(self)
     }
 }
@@ -367,24 +367,31 @@ pub struct NbtList {
     /// 数据列表
     data: Vec<NbtType>,
     /// 存入的类型
-    nbt_type: u8,
+    nbt_num: u8,
 }
 
 impl NbtList {
-    pub fn new(nbt_type: u8) -> Self {
+    pub fn new(nbt_num: u8) -> Self {
         Self {
-            nbt_type,
+            nbt_num,
             data: Vec::new(),
         }
     }
 
     pub fn set_type(&mut self, nbt_type: NbtType) {
-        self.nbt_type = nbt_type.get_num();
+        self.nbt_num = nbt_type.get_num();
         self.data.clear();
     }
 
+    pub fn set_num(&mut self, nbt_num: u8) {
+        if is_nbt_num(nbt_num) {
+            self.nbt_num = nbt_num;
+            self.data.clear();
+        }
+    }
+
     pub fn add_item(&mut self, nbt: NbtType) -> bool {
-        if nbt.get_num() != self.nbt_type {
+        if nbt.get_num() != self.nbt_num {
             false
         } else {
             self.data.push(nbt);
@@ -400,7 +407,7 @@ impl NbtList {
     pub fn eq(&self, nbt: &NbtType) -> bool {
         match nbt {
             NbtType::List(nbt) => {
-                if self.nbt_type != nbt.nbt_type {
+                if self.nbt_num != nbt.nbt_num {
                     return false;
                 }
                 if self.data.len() != nbt.data.len() {
@@ -422,7 +429,7 @@ impl NbtList {
         }
     }
 
-    pub fn to_nbt(self) -> NbtType {
+    pub fn to_nbt_type(self) -> NbtType {
         NbtType::List(self)
     }
 }
@@ -432,8 +439,8 @@ impl NbtStream for NbtList {
         let mut temp = [0u8; 1];
         stream.read_exact(&mut temp).map_err(|err| io_error(err))?;
 
-        self.nbt_type = temp[0];
-        if !is_nbt_type(self.nbt_type) {
+        self.nbt_num = temp[0];
+        if !is_nbt_num(self.nbt_num) {
             return Err(ErrorType::NbtTypeError);
         }
 
@@ -443,7 +450,7 @@ impl NbtStream for NbtList {
         let len = i32::from_be_bytes(temp);
 
         for _i in 0..len {
-            let mut nbt = NbtType::get_nbt(self.nbt_type).unwrap();
+            let mut nbt = NbtType::get_nbt(self.nbt_num).unwrap();
             nbt.nbt_read(stream)?;
             self.data.push(nbt);
         }
@@ -455,7 +462,7 @@ impl NbtStream for NbtList {
         let nbt_type = if self.data.len() == 0 {
             0
         } else {
-            self.nbt_type
+            self.nbt_num
         };
 
         let temp = [nbt_type];
@@ -510,6 +517,29 @@ impl NbtCompound {
 
     pub fn to_nbt(self) -> NbtType {
         NbtType::Compound(self)
+    }
+
+    pub fn skip_read<R: Read>(&mut self, stream: &mut R) -> CoreResult<()> {
+        let mut temp = [0u8; 2];
+        stream.read_exact(&mut temp).map_err(|err| io_error(err))?;
+
+        let len = i16::from_be_bytes(temp);
+
+        let mut temp = vec![0; len as usize];
+        stream.read_exact(&mut temp).map_err(|err| io_error(err))?;
+
+        let key = String::from_utf8(temp).map_err(|err| {
+            ErrorType::StreamError(ErrorData {
+                error: err.to_string(),
+            })
+        })?;
+
+        let mut compound = compound();
+        compound.read(stream)?;
+
+        self.data.insert(key, compound.to_nbt());
+
+        Ok(())
     }
 }
 
@@ -682,50 +712,50 @@ pub fn end() -> NbtEnd {
     NbtEnd::new()
 }
 
-pub fn byte() -> NbtByte {
-    NbtByte::new(Default::default())
+pub fn byte(data: u8) -> NbtByte {
+    NbtByte::new(data)
 }
 
-pub fn short() -> NbtShort {
-    NbtShort::new(Default::default())
+pub fn short(data: i16) -> NbtShort {
+    NbtShort::new(data)
 }
 
-pub fn int() -> NbtInt {
-    NbtInt::new(Default::default())
+pub fn int(data: i32) -> NbtInt {
+    NbtInt::new(data)
 }
 
-pub fn long() -> NbtLong {
-    NbtLong::new(Default::default())
+pub fn long(data: i64) -> NbtLong {
+    NbtLong::new(data)
 }
 
-pub fn float() -> NbtFloat {
-    NbtFloat::new(Default::default())
+pub fn float(data: f32) -> NbtFloat {
+    NbtFloat::new(data)
 }
 
-pub fn double() -> NbtDouble {
-    NbtDouble::new(Default::default())
+pub fn double(data: f64) -> NbtDouble {
+    NbtDouble::new(data)
 }
 
-pub fn byte_array() -> NbtByteArray {
-    NbtByteArray::new(Default::default())
+pub fn byte_array(data: Vec<u8>) -> NbtByteArray {
+    NbtByteArray::new(data)
 }
 
-pub fn string() -> NbtString {
-    NbtString::new(Default::default())
+pub fn string(data: &str) -> NbtString {
+    NbtString::new(String::from(data))
 }
 
-pub fn list() -> NbtList {
-    NbtList::new(Default::default())
+pub fn list(nbt_num: u8) -> NbtList {
+    NbtList::new(nbt_num)
 }
 
 pub fn compound() -> NbtCompound {
     NbtCompound::new()
 }
 
-pub fn int_array() -> NbtIntArray {
-    NbtIntArray::new(Default::default())
+pub fn int_array(data: Vec<i32>) -> NbtIntArray {
+    NbtIntArray::new(data)
 }
 
-pub fn long_array() -> NbtLongArray {
-    NbtLongArray::new(Default::default())
+pub fn long_array(data: Vec<i64>) -> NbtLongArray {
+    NbtLongArray::new(data)
 }

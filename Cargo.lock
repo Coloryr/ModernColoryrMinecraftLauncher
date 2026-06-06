@@ -3483,9 +3483,11 @@ dependencies = [
 name = "mcml-nbt"
 version = "0.1.0"
 dependencies = [
+ "chrono",
  "flate2",
  "lz4_flex",
  "mcml-names",
+ "rayon",
 ]
 
 [[package]]
