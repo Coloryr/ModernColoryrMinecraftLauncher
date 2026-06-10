@@ -77,10 +77,11 @@ impl NbtFile {
         }
 
         let mut nbt = nbt.unwrap();
-        match nbt {
-            NbtType::Compound(ref mut nbt) => nbt.skip_read(&mut stream)?,
-            _ => nbt.nbt_read(&mut stream)?,
+        if matches!(nbt, NbtType::Compound(_)) {
+            let mut temp = [0u8; 2];
+            stream.read_exact(&mut temp).map_err(|err| io_error(err))?;
         }
+        nbt.read(&mut stream)?;
 
         Ok(NbtFile {
             nbt: nbt,
@@ -91,7 +92,7 @@ impl NbtFile {
     /// 从流中保存NBT文件
     ///
     /// - `stream`: 流
-    pub fn save<W: Write>(&self, stream: &mut W) -> CoreResult<()> {
+    pub fn write<W: Write>(&self, stream: &mut W) -> CoreResult<()> {
         let mut stream: Box<dyn Write> = match self.compress {
             CompressType::None => Box::new(stream),
             CompressType::GZip => Box::new(GzEncoder::new(stream, Default::default())),
@@ -101,7 +102,11 @@ impl NbtFile {
 
         let temp = [self.nbt.get_num()];
         stream.write_all(&temp).map_err(|err| io_error(err))?;
-        self.nbt.nbt_write(&mut stream)?;
+        if matches!(self.nbt, NbtType::Compound(_)) {
+            let mut temp = [0u8; 2];
+            stream.write_all(&mut temp).map_err(|err| io_error(err))?;
+        }
+        self.nbt.write(&mut stream)?;
 
         stream.flush().map_err(|err| io_error(err))?;
 

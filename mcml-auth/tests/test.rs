@@ -1,4 +1,5 @@
-use chrono::{DateTime, FixedOffset, Local, Utc};
+use chrono::{DateTime, FixedOffset, Local};
+use mcml_auth::oauth;
 
 #[test]
 fn test_time() {
@@ -7,4 +8,20 @@ fn test_time() {
 
     println!("Local: {}", dt);
     println!("FixedOffset结果: {}", time);
+}
+
+#[tokio::test]
+#[ignore = "skip"]
+async fn oauth_test() {
+    let code = oauth::get_code().await.unwrap();
+}
+
+#[tokio::test]
+async fn littleskin_test() {
+    let code = oauth::get_code().await.unwrap();
+}
+
+#[tokio::test]
+async fn nide8_test() {
+    let code = oauth::get_code().await.unwrap();
 }

@@ -2,25 +2,24 @@ use std::{sync::OnceLock, time::Duration};
 
 use chrono::Local;
 use mcml_names::{
-    i18_items::error_type::{ErrorType, ErrorData},
+    i18_items::error_type::{CoreResult, ErrorData, ErrorType},
     urls::{OAUTH_CODE, OAUTH_TOKEN, XBOX_LIVE, XSTS},
 };
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 
 use crate::oauth::{
-    oauth_get_code::OAuthGetCodeRes,
-    oauth_obj::{OAuthGetCodeObj, OAuthObj},
+    oauth_obj::{OAuthGetCodeObj, OAuthGetCodeRes, OAuthObj},
     xbox_obj::{
         XBoxLiveRes, XBoxLoginObj, XBoxLoginPropertiesObj, XBoxLoginResObj, XSTSLoginObj,
         XSTSLoginPropertiesObj,
     },
 };
 
-pub mod oauth_get_code;
 pub mod oauth_obj;
 pub mod xbox_obj;
 
+/// OAuth客户端密钥
 pub static KEY: OnceLock<String> = OnceLock::new();
 
 /// 目前登录状态
@@ -38,7 +37,8 @@ pub fn set_key(key: String) {
     KEY.get_or_init(|| key);
 }
 
-fn test_key() -> Result<String, ErrorType> {
+/// 是否设置了密钥
+fn have_key() -> CoreResult<String> {
     match KEY.get() {
         None => Err(ErrorType::OAuthKeyIsNull),
         Some(key) => Ok(key.clone()),
@@ -46,8 +46,8 @@ fn test_key() -> Result<String, ErrorType> {
 }
 
 /// 获取登录码
-pub async fn get_code() -> Result<OAuthGetCodeRes, ErrorType> {
-    let key = test_key()?;
+pub async fn get_code() -> CoreResult<OAuthGetCodeRes> {
+    let key = have_key()?;
 
     let obj: &[(&str, &str)] = &[
         ("client_id", &key),
@@ -62,12 +62,12 @@ pub async fn get_code() -> Result<OAuthGetCodeRes, ErrorType> {
 
     match data.error {
         Some(err) => Err(ErrorType::OAuthGetTokenError(ErrorData { error: err })),
-        None => Ok(OAuthGetCodeRes::new(
-            data.user_code,
-            data.verification_uri,
-            data.device_code,
-            data.expires_in,
-        )),
+        None => Ok(OAuthGetCodeRes {
+            code: data.user_code,
+            url: data.verification_uri,
+            device_code: data.device_code,
+            expires_in: data.expires_in,
+        }),
     }
 }
 
@@ -76,9 +76,9 @@ pub async fn get_code() -> Result<OAuthGetCodeRes, ErrorType> {
 /// - `token`: 是否取消获取
 pub async fn run_get_code(
     res: &OAuthGetCodeRes,
-    token: &CancellationToken,
-) -> Result<OAuthGetCodeObj, ErrorType> {
-    let key = test_key()?;
+    cancel: &CancellationToken,
+) -> CoreResult<OAuthGetCodeObj> {
+    let key = have_key()?;
 
     let obj: &[(&str, &str)] = &[
         ("client_id", &key),
@@ -91,7 +91,7 @@ pub async fn run_get_code(
 
     loop {
         sleep(Duration::from_secs(delay)).await;
-        if token.is_cancelled() {
+        if cancel.is_cancelled() {
             return Err(ErrorType::TaskCancel);
         }
 
@@ -106,8 +106,7 @@ pub async fn run_get_code(
             .post_form_get_json::<OAuthGetCodeObj>(OAUTH_TOKEN, obj)
             .await?;
 
-        if data.error.is_some() {
-            let error = data.error.unwrap();
+        if let Some(error) = data.error {
             if error == "authorization_pending" {
                 continue;
             } else if error == "slow_down" {
@@ -123,8 +122,8 @@ pub async fn run_get_code(
 
 /// 刷新密匙
 /// - `token`: 登录密钥
-pub async fn refresh_oauth_token(token: String) -> Result<OAuthGetCodeObj, ErrorType> {
-    let key = test_key()?;
+pub async fn refresh_oauth_token(token: String) -> CoreResult<OAuthGetCodeObj> {
+    let key = have_key()?;
 
     let obj: &[(&str, &str)] = &[
         ("client_id", &key),
@@ -145,17 +144,17 @@ pub async fn refresh_oauth_token(token: String) -> Result<OAuthGetCodeObj, Error
 }
 
 /// Xbox登录
-/// - `token`: OAuth的密钥
-pub async fn get_xbox(token: String) -> Result<XBoxLiveRes, ErrorType> {
-    let obj = XBoxLoginObj::new(
-        XBoxLoginPropertiesObj::new(
-            String::from("RPS"),
-            String::from("user.auth.xboxlive.com"),
-            format!("d={}", token),
-        ),
-        String::from("http://auth.xboxlive.com"),
-        String::from("JWT"),
-    );
+/// - `token`: Xbox的密钥
+pub async fn get_xbox(token: String) -> CoreResult<XBoxLiveRes> {
+    let obj = XBoxLoginObj {
+        properties: XBoxLoginPropertiesObj {
+            auth_method: String::from("RPS"),
+            site_name: String::from("user.auth.xboxlive.com"),
+            rps_ticket: format!("d={}", token),
+        },
+        relying_party: String::from("http://auth.xboxlive.com"),
+        token_type: String::from("JWT"),
+    };
 
     let data = mcml_http::LOGIN_CLIENT
         .get()
@@ -173,12 +172,17 @@ pub async fn get_xbox(token: String) -> Result<XBoxLiveRes, ErrorType> {
     }
 }
 
-pub async fn get_xsts(token: String) -> Result<XBoxLiveRes, ErrorType> {
-    let obj = XSTSLoginObj::new(
-        XSTSLoginPropertiesObj::new(String::from("RETAIL"), vec![token]),
-        String::from("rp://api.minecraftservices.com/"),
-        String::from("JWT"),
-    );
+/// XSTS登陆
+/// - `token`: XSTS的密钥
+pub async fn get_xsts(token: String) -> CoreResult<XBoxLiveRes> {
+    let obj = XSTSLoginObj {
+        properties: XSTSLoginPropertiesObj {
+            sandbox_id: String::from("RETAIL"),
+            user_tokens: vec![token],
+        },
+        relying_party: String::from("rp://api.minecraftservices.com/"),
+        token_type: String::from("JWT"),
+    };
 
     let data = mcml_http::LOGIN_CLIENT
         .get()

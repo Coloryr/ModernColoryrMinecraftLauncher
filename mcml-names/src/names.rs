@@ -126,6 +126,9 @@ pub const NAME_NEO_TOML_FILE: &str = "META-INF/neoforge.mods.toml";
 pub const NAME_NEO_TOML1_FILE: &str = "neoforge.mods.toml";
 pub const NAME_MOD_JAR_JAR_DIR: &str = "META-INF/jarjar/";
 
+pub const NAME_MCML: &str = "Mcml";
+pub const NAME_MINECRAFT: &str = "Minecraft";
+
 pub const NAME_GCARG_G1_GC: [&str; 8] = [
     "-XX:+UnlockExperimentalVMOptions",
     "-XX:+UseG1GC",

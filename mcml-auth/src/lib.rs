@@ -53,6 +53,11 @@ pub struct LoginObj {
 }
 
 impl LoginObj {
+    /// 创建账户
+    /// - `user_name`: 名字
+    /// - `uuid`: 标识
+    /// - `access_token`: 密钥
+    /// - `client_token`: 客户端标识
     pub fn new(
         user_name: String,
         uuid: String,
@@ -62,7 +67,7 @@ impl LoginObj {
         let dt = Local::now();
         let dt_new: DateTime<FixedOffset> = dt.fixed_offset();
 
-        LoginObj {
+        Self {
             user_name,
             uuid,
             access_token,
@@ -74,8 +79,11 @@ impl LoginObj {
         }
     }
 
+    /// 创建空白账户
+    /// - `user_name`: 名字
+    /// - `uuid`: 标识
     pub fn new_empty(user_name: String, uuid: String) -> Self {
-        LoginObj {
+        Self {
             user_name,
             uuid,
             access_token: Default::default(),
@@ -87,8 +95,11 @@ impl LoginObj {
         }
     }
 
+    /// 创建空白账户
+    /// - `access_token`: 密钥
+    /// - `client_token`: 客户端标识
     pub fn new_token(access_token: String, client_token: String) -> Self {
-        LoginObj {
+        Self {
             user_name: Default::default(),
             uuid: Default::default(),
             access_token,
@@ -100,7 +111,8 @@ impl LoginObj {
         }
     }
 
-    pub fn get_key(&self) -> UserKeyObj {
+    /// 获取账户键
+    pub fn as_key(&self) -> UserKeyObj {
         UserKeyObj {
             uuid: self.uuid.clone(),
             auth_type: self.auth_type.clone(),
@@ -125,12 +137,8 @@ impl Default for LoginObj {
 
 #[derive(Eq, Hash, PartialEq, Debug)]
 pub struct UserKeyObj {
+    /// 账户标识
     pub uuid: String,
+    /// 账户类型
     pub auth_type: AuthType,
-}
-
-impl UserKeyObj {
-    pub fn new(uuid: String, auth_type: AuthType) -> Self {
-        UserKeyObj { uuid, auth_type }
-    }
 }

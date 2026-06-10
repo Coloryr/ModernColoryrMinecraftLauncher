@@ -31,6 +31,7 @@ pub struct ChunkNbt {
 }
 
 /// 区块头数据
+#[derive(Debug, PartialEq, Eq)]
 pub struct ChunkInfo {
     /// 序号
     pub index: u32,
@@ -77,7 +78,7 @@ pub struct ChunkData {
 }
 
 /// 读区块头
-pub fn read_chunk_head<R: Read>(stream: &mut R) -> CoreResult<Vec<ChunkInfo>> {
+fn read_chunk_head<R: Read>(stream: &mut R) -> CoreResult<Vec<ChunkInfo>> {
     let mut temp = [0u8; 8192];
 
     stream.read_exact(&mut temp).map_err(|err| io_error(err))?;
@@ -137,7 +138,7 @@ pub fn read_chunk<R: Read + Seek + Sync + Send>(stream: &mut R) -> CoreResult<Ch
                 buffer
             };
 
-            let mut cursor = std::io::Cursor::new(buffer);
+            let mut cursor = Cursor::new(buffer);
             let nbt_file = NbtFile::read(&mut cursor)?;
             let nbt = nbt_file.nbt.as_compound();
 
@@ -176,7 +177,7 @@ pub fn read_chunk<R: Read + Seek + Sync + Send>(stream: &mut R) -> CoreResult<Ch
     })
 }
 
-pub fn save_head<W: Write + Seek>(chunk: &mut ChunkData, stream: &mut W) -> CoreResult<()> {
+fn write_chunk_data<W: Write + Seek>(chunk: &mut ChunkData, stream: &mut W) -> CoreResult<()> {
     if chunk.nbt.len() == 0 {
         return Ok(());
     }
@@ -194,7 +195,7 @@ pub fn save_head<W: Write + Seek>(chunk: &mut ChunkData, stream: &mut W) -> Core
         let nbt = item.as_ref().unwrap();
         let nbt_data = {
             let mut stream = Cursor::new(Vec::<u8>::new());
-            nbt.nbt.save(&mut stream)?;
+            nbt.nbt.write(&mut stream)?;
             stream.into_inner()
         };
 
@@ -213,11 +214,49 @@ pub fn save_head<W: Write + Seek>(chunk: &mut ChunkData, stream: &mut W) -> Core
         now += len as u32;
         let less = len % 4096;
         if less > 0 {
-            let buf = vec![0u8; less];
+            let buf = vec![0u8; 4096 - less];
             stream.write_all(&buf).map_err(|err| io_error(err))?;
-            now += less as u32;
+            now += buf.len() as u32;
         }
     }
+
+    Ok(())
+}
+
+fn write_head<W: Write + Seek>(chunk: &mut ChunkData, stream: &mut W) -> CoreResult<()> {
+    stream
+        .seek(SeekFrom::Start(0))
+        .map_err(|err| io_error(err))?;
+
+    for item in chunk.pos.iter() {
+        if item.count == 0 {
+            let data = [0u8; 4];
+            stream.write_all(&data).map_err(|err| io_error(err))?;
+        } else {
+            let mut data = u32::to_be_bytes(item.pos);
+            data[0] = data[1];
+            data[1] = data[2];
+            data[2] = data[3];
+            data[3] = item.count;
+            stream.write_all(&data).map_err(|err| io_error(err))?;
+        }
+    }
+    for item in chunk.pos.iter() {
+        if item.count == 0 {
+            let data = [0u8; 4];
+            stream.write_all(&data).map_err(|err| io_error(err))?;
+        } else {
+            let data = u32::to_be_bytes(item.time);
+            stream.write_all(&data).map_err(|err| io_error(err))?;
+        }
+    }
+
+    Ok(())
+}
+
+pub fn write_chunk<W: Write + Seek>(chunk: &mut ChunkData, stream: &mut W) -> CoreResult<()> {
+    write_chunk_data(chunk, stream)?;
+    write_head(chunk, stream)?;
 
     Ok(())
 }

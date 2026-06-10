@@ -1,33 +1,30 @@
 [package]
-name = "mcml"
+name = "mcml-core"
 version = "0.1.0"
 edition = "2024"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
-slint = { version = "~1.16", features = ["backend-winit", "renderer-skia"] }
-trpl = "~0.3.0"
-mcml-skin = { path = "./mcml-skin" }
-mcml-skin-draw = { path = "./mcml-skin-draw" }
-mcml-skin-render = { path = "./mcml-skin-render" }
-mcml-core = { path = "./mcml-core" }
-mcml-log = { path = "./mcml-log" }
+mcml-log = { path = "mcml-log" }
+mcml-names = { path = "mcml-names" }
+mcml-config = { path = "mcml-config" }
+mcml-downloader = { path = "mcml-downloader" }
+mcml-http = { path = "mcml-http" }
+mcml-base = { path = "mcml-base" }
+crossbeam-queue.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+semrs.workspace = true
+chrono.workspace = true
 
 [build-dependencies]
-slint-build = "~1.16"
-tauri-winres = "~0.3.6"
 
 [profile.release]
-codegen-units = 1
-lto = true
 
 [workspace]
 members = [
     "mcml-auth",
     "mcml-base",
     "mcml-config",
-    "mcml-core",
     "mcml-downloader",
     "mcml-game",
     "mcml-http",
@@ -52,16 +49,15 @@ tokio = { version = "~1.52.3", features = [
 ] }
 tokio-util = "~0.7.18"
 semrs = "~0.5.2"
-reqwest = { version = "~0.13.3", features = ["json", "stream", "form"] }
-chrono = { version = "~0.4.44", features = ["serde"] }
+reqwest = { version = "~0.13.4", features = ["json", "stream", "form"] }
+chrono = { version = "~0.4.45", features = ["serde"] }
 serde = { version = "~1.0.228", features = ["derive"] }
-serde_json = "~1.0.149"
+serde_json = "~1.0.150"
 serde_repr = "~0.1.20"
 glow = "~0.17.0"
-skia-safe = "~0.90.0"
-glam = "~0.32.1"
-lazy_static = "~1.5.0"
-uuid = { version = "~1.23.1", features = ["v4", "serde"] }
+skia-safe = "~0.97.2"
+glam = "~0.33.1"
+uuid = { version = "~1.23.3", features = ["v4", "serde"] }
 url = "~2.5.8"
 md5 = "~0.8.0"
 sha1 = "~0.11.0"
@@ -79,3 +75,4 @@ sevenz-rust2 = "~0.21.0"
 xz2 = { version = "~0.1.7", features = ["static"] }
 lz4_flex = "~0.13.1"
 rayon = "~1.12.0"
+sys-locale = "~0.3.2"

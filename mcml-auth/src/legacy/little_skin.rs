@@ -3,11 +3,11 @@ use mcml_names::{i18_items::error_type::ErrorType, urls::LITTLE_SKIN_URL};
 
 use crate::{
     AuthType, LoginObj,
-    legacy::{self, gui_select_handel::GuiSelectHandel},
+    legacy::{self, GuiSelectHandel},
 };
 
 /// 皮肤站登录
-/// - `client_token`: 客户端代码
+/// - `client_token`: 客户端标识
 /// - `user`: 用户名
 /// - `password`: 密码
 /// - `server`: 服务器地址
@@ -16,28 +16,29 @@ pub async fn authenticate(
     client_token: String,
     user: String,
     password: String,
-    server: &String,
+    server: Option<String>,
     gui: Option<Box<dyn GuiSelectHandel>>,
 ) -> Result<LoginObj, ErrorType> {
     let mut auth_type = AuthType::LittleSkin;
-    let server = if server.is_empty() {
-        String::from(LITTLE_SKIN_URL)
-    } else {
-        auth_type = AuthType::SelfLittleSkin;
-        let mut server = server.clone();
-        if server.ends_with("/api/yggdrasil") {
-            server = server.replace("/api/yggdrasil", "/");
-        }
-        if server.ends_with("/user") {
-            server = server.replace("/user", "/");
-        }
-        if !server.ends_with('/') {
-            server.push('/');
-        }
+    let server = match server {
+        None => String::from(LITTLE_SKIN_URL),
+        Some(server) => {
+            auth_type = AuthType::SelfLittleSkin;
+            let mut server = server.clone();
+            if server.ends_with("/api/yggdrasil") {
+                server = server.replace("/api/yggdrasil", "/");
+            }
+            if server.ends_with("/user") {
+                server = server.replace("/user", "/");
+            }
+            if !server.ends_with('/') {
+                server.push('/');
+            }
 
-        server
+            server
+        }
     };
-
+    
     let server1 = server.clone() + "api/yggdrasil";
 
     let obj = legacy::authenticate(&server1, client_token, user, password, true).await?;

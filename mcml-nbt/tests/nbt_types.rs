@@ -12,7 +12,7 @@ fn nbt_end() {
 
     let nbt = NbtFile::new(nbt_types::end().to_nbt(), CompressType::None);
 
-    nbt.save(&mut stream).unwrap();
+    nbt.write(&mut stream).unwrap();
 
     stream.seek(SeekFrom::Start(0)).unwrap();
 
@@ -28,7 +28,7 @@ fn nbt_byte() {
 
     let nbt = NbtFile::new(nbt_types::byte(1).to_nbt(), CompressType::None);
 
-    nbt.save(&mut stream).unwrap();
+    nbt.write(&mut stream).unwrap();
 
     stream.seek(SeekFrom::Start(0)).unwrap();
 
@@ -44,7 +44,7 @@ fn nbt_short() {
 
     let nbt = NbtFile::new(nbt_types::short(1).to_nbt(), CompressType::None);
 
-    nbt.save(&mut stream).unwrap();
+    nbt.write(&mut stream).unwrap();
 
     stream.seek(SeekFrom::Start(0)).unwrap();
 
@@ -60,7 +60,7 @@ fn nbt_long() {
 
     let nbt = NbtFile::new(nbt_types::long(1).to_nbt(), CompressType::None);
 
-    nbt.save(&mut stream).unwrap();
+    nbt.write(&mut stream).unwrap();
 
     stream.seek(SeekFrom::Start(0)).unwrap();
 
@@ -76,7 +76,7 @@ fn nbt_float() {
 
     let nbt = NbtFile::new(nbt_types::float(1.0).to_nbt(), CompressType::None);
 
-    nbt.save(&mut stream).unwrap();
+    nbt.write(&mut stream).unwrap();
 
     stream.seek(SeekFrom::Start(0)).unwrap();
 
@@ -92,7 +92,7 @@ fn nbt_double() {
 
     let nbt = NbtFile::new(nbt_types::double(1.0).to_nbt(), CompressType::None);
 
-    nbt.save(&mut stream).unwrap();
+    nbt.write(&mut stream).unwrap();
 
     stream.seek(SeekFrom::Start(0)).unwrap();
 
@@ -108,7 +108,7 @@ fn nbt_string() {
 
     let nbt = NbtFile::new(nbt_types::string("value").to_nbt(), CompressType::None);
 
-    nbt.save(&mut stream).unwrap();
+    nbt.write(&mut stream).unwrap();
 
     stream.seek(SeekFrom::Start(0)).unwrap();
 
@@ -125,7 +125,7 @@ fn nbt_byte_array() {
     let nbt = nbt_types::byte_array([0, 1, 2, 3, 4, 5].to_vec());
     let nbt = NbtFile::new(nbt.to_nbt(), CompressType::None);
 
-    nbt.save(&mut stream).unwrap();
+    nbt.write(&mut stream).unwrap();
 
     stream.seek(SeekFrom::Start(0)).unwrap();
 
@@ -142,7 +142,7 @@ fn nbt_int_array() {
     let nbt = nbt_types::int_array([78, 89, 12, 23, 46].to_vec());
     let nbt = NbtFile::new(nbt.to_nbt(), CompressType::None);
 
-    nbt.save(&mut stream).unwrap();
+    nbt.write(&mut stream).unwrap();
 
     stream.seek(SeekFrom::Start(0)).unwrap();
 
@@ -159,7 +159,7 @@ fn nbt_long_array() {
     let nbt = nbt_types::long_array([234, 345, 456, 789, 3456].to_vec());
     let nbt = NbtFile::new(nbt.to_nbt(), CompressType::None);
 
-    nbt.save(&mut stream).unwrap();
+    nbt.write(&mut stream).unwrap();
 
     stream.seek(SeekFrom::Start(0)).unwrap();
 
@@ -181,7 +181,7 @@ fn nbt_list() {
 
     let nbt = NbtFile::new(nbt.to_nbt_type(), CompressType::None);
 
-    nbt.save(&mut stream).unwrap();
+    nbt.write(&mut stream).unwrap();
 
     stream.seek(SeekFrom::Start(0)).unwrap();
 
@@ -204,7 +204,7 @@ fn nbt_compound() {
 
     let nbt = NbtFile::new(nbt.to_nbt(), CompressType::None);
 
-    nbt.save(&mut stream).unwrap();
+    nbt.write(&mut stream).unwrap();
 
     stream.seek(SeekFrom::Start(0)).unwrap();
 

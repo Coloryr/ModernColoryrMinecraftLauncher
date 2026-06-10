@@ -1,18 +1,28 @@
+use mcml_names::names;
 use serde::{Deserialize, Serialize};
 
 use crate::legacy::selected_profile_obj::SelectedProfileObj;
 
+/// 启动器登陆信息
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct AgentObj {
+    /// 启动器名字
     pub name: String,
+    /// 启动器版本
     pub version: i32,
 }
 
 impl AgentObj {
+    /// 创建启动器信息
+    /// - `use_minecraft`: 是否为原版头
     pub fn new(use_minecraft: bool) -> Self {
         AgentObj {
-            name: String::from(if use_minecraft { "Minecraft" } else { "Mcml" }),
+            name: String::from(if use_minecraft {
+                names::NAME_MINECRAFT
+            } else {
+                names::NAME_MCML
+            }),
             version: if use_minecraft {
                 1
             } else {
@@ -31,25 +41,19 @@ impl Default for AgentObj {
     }
 }
 
+/// 账户登陆信息
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct AuthenticateObj {
+    /// 启动器登陆信息
     pub agent: AgentObj,
+    /// 用户名
     pub username: String,
+    /// 密码
     pub password: String,
+    /// 客户端标识
     #[serde(rename = "clientToken")]
     pub client_token: String,
-}
-
-impl AuthenticateObj {
-    pub fn new(agent: AgentObj, username: String, password: String, client_token: String) -> Self {
-        AuthenticateObj {
-            agent,
-            username,
-            password,
-            client_token,
-        }
-    }
 }
 
 impl Default for AuthenticateObj {
@@ -63,13 +67,17 @@ impl Default for AuthenticateObj {
     }
 }
 
+/// 登陆验证返回
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct AuthenticateResObj {
+    /// 登陆密钥
     #[serde(rename = "accessToken")]
     pub access_token: String,
+    /// 客户端标识
     #[serde(rename = "clientToken")]
     pub client_token: String,
+    /// 选中的账户
     #[serde(rename = "selectedProfile")]
     pub selected_profile: Option<SelectedProfileObj>,
     #[serde(rename = "availableProfiles")]

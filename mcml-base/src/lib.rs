@@ -5,7 +5,7 @@ pub mod inner_path;
 pub mod path_helper;
 
 use serde_repr::{Deserialize_repr, Serialize_repr};
-use std::{env, fmt};
+use std::{fmt, sync::LazyLock};
 
 /// 操作系统类型枚举
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -65,8 +65,6 @@ impl fmt::Display for ArchEnum {
 /// 系统信息结构体
 #[derive(Debug)]
 pub struct SystemInfo {
-    /// 当前语言/区域设置
-    pub culture_info: String,
     /// 操作系统类型
     pub os: Os,
     /// 系统架构
@@ -81,6 +79,13 @@ pub struct SystemInfo {
     pub is_arm: bool,
     /// 是否为 64 位操作系统
     pub is_64_bit: bool,
+}
+
+/// 系统信息
+static SYSTEM_INFO: LazyLock<SystemInfo> = LazyLock::new(|| SystemInfo::new());
+
+pub fn get_system_info() -> &'static SystemInfo {
+    &SYSTEM_INFO
 }
 
 fn get_linux_distribution() -> String {
@@ -100,7 +105,7 @@ fn get_linux_distribution() -> String {
 
 impl SystemInfo {
     /// 初始化并获取系统信息
-    pub fn init() -> Self {
+    fn new() -> Self {
         let arch = std::env::consts::ARCH;
         let is_arm = arch.starts_with("arm") || arch.starts_with("aarch64");
         let is_64_bit = cfg!(target_pointer_width = "64");
@@ -129,12 +134,9 @@ impl SystemInfo {
         };
 
         let system_name = std::env::consts::OS.to_string();
-        let culture_info = Self::get_current_locale();
-
         let system = format!("Os:{} Arch:{}", os, system_arch);
 
         Self {
-            culture_info,
             os,
             system_arch,
             system_name,
@@ -144,40 +146,10 @@ impl SystemInfo {
             is_64_bit,
         }
     }
-
-    /// 获取当前区域设置/语言
-    fn get_current_locale() -> String {
-        // 方法1：检查环境变量
-        if let Ok(lang) = env::var("LANG") {
-            return lang;
-        }
-        if let Ok(lang) = env::var("LC_ALL") {
-            return lang;
-        }
-        if let Ok(lang) = env::var("LANGUAGE") {
-            return lang;
-        }
-
-        // 默认值
-        "zh_CN".to_string()
-    }
-
-    /// 刷新系统信息（如果需要动态更新）
-    pub fn refresh(&mut self) {
-        *self = Self::init();
-    }
 }
 
 impl fmt::Display for SystemInfo {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.system)
     }
-}
-
-lazy_static::lazy_static! {
-    static ref SYSTEM_INFO: SystemInfo = SystemInfo::init();
-}
-
-pub fn get_system_info() -> &'static SystemInfo {
-    &SYSTEM_INFO
 }

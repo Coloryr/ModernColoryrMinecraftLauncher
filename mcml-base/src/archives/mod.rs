@@ -111,7 +111,11 @@ fn should_exclude(path: &Path, patterns: &[String]) -> bool {
 
 /// 压缩文件
 /// - `archive_type`: 压缩包类型
-/// - ``
+/// - `archive_file`: 压缩包位置
+/// - `pack_dir`: 需要压缩的位置
+/// - `root_path`: 相对路径
+/// - `filter`: 文件过滤
+/// - `gui`: 显示回调
 pub fn compress(
     archive_type: ArchiveType,
     archive_file: &PathBuf,
@@ -137,7 +141,9 @@ pub fn compress(
 
 /// 压缩文件
 /// - `archive_type`: 压缩包类型
-/// - ``
+/// - `archive_file`: 压缩包位置
+/// - `output_dir`: 解压路径
+/// - `gui`: 显示回调
 pub fn decompress(
     archive_type: ArchiveType,
     archive_file: &PathBuf,

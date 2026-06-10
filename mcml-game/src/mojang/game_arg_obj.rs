@@ -20,7 +20,7 @@ impl Default for GameOsObj {
 #[serde(default)]
 pub struct GameRulesObj {
     pub action: String,
-    pub os: GameOsObj,
+    pub os: Option<GameOsObj>,
 }
 
 impl Default for GameRulesObj {

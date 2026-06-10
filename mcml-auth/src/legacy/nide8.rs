@@ -7,7 +7,7 @@ use crate::{
 };
 
 /// 统一通行证登录
-/// - `client_token`: 客户端代码
+/// - `client_token`: 客户端标识
 /// - `user`: 用户名
 /// - `password`: 密码
 /// - `server`: 服务器UUID
@@ -15,9 +15,9 @@ pub async fn authenticate(
     client_token: String,
     user: String,
     password: String,
-    server: &String,
+    server: String,
 ) -> Result<LoginObj, ErrorType> {
-    let url = String::from(NIDE8_URL) + server;
+    let url = String::from(NIDE8_URL) + &server;
 
     let obj = legacy::authenticate(&url, client_token, user, password, false).await?;
 

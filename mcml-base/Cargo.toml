@@ -6,7 +6,6 @@ edition = "2024"
 [dependencies]
 mcml-names = { path = "../mcml-names" }
 tokio.workspace = true
-lazy_static.workspace = true
 md5.workspace = true
 sha1.workspace = true
 sha2.workspace = true
