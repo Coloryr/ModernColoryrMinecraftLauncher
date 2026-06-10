@@ -1,9 +1,7 @@
 use std::sync::{OnceLock, RwLock};
 
-use crate::{
-    i18_items::{
-        error_type::ErrorType, info_type::InfoType, panic_type::PanicType, thread_type::ThreadType,
-    },
+use crate::i18_items::{
+    error_type::ErrorType, info_type::InfoType, panic_type::PanicType, thread_type::ThreadType,
 };
 
 pub mod en_us;

@@ -793,6 +793,14 @@ pub fn get_optifine(version: &String) -> Option<Arc<OptifineObj>> {
 
 impl GameSettingObj {
     /// 获取neoforge加载器信息
+    pub fn get_forge(&self) -> Option<Arc<ForgeLaunchObj>> {
+        match &self.loader_version {
+            None => None,
+            Some(data) => get_forge(&self.version, &data),
+        }
+    }
+
+    /// 获取neoforge加载器信息
     pub fn get_neoforge(&self) -> Option<Arc<ForgeLaunchObj>> {
         match &self.loader_version {
             None => None,
@@ -828,6 +836,20 @@ impl GameSettingObj {
             None
         } else {
             get_optifine(&self.loader_version.clone().unwrap())
+        }
+    }
+
+    /// 获取自定义加载器游戏参数
+    pub fn get_custom_loader_game_args(&self) -> Vec<String> {
+        if let Some(data) = self.get_custom_loader() {
+            match data.as_ref() {
+                CustomLoaderType::ForgeLaunch(forge) => {
+                    let args: Vec<&str> = forge.minecraft_arguments.split(' ').collect();
+                    args.iter().map(|item| String::from(*item)).collect()
+                }
+            }
+        } else {
+            Default::default()
         }
     }
 }

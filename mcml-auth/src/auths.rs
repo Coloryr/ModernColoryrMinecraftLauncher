@@ -1,46 +1,45 @@
 use std::{
     collections::HashMap,
     path::PathBuf,
-    sync::{OnceLock, RwLock},
+    sync::{LazyLock, RwLock},
 };
 
 use mcml_base::{inner_path, path_helper};
 use mcml_config::config_save;
-use mcml_names::{names, uuids::AUTH_UUID};
+use mcml_names::{
+    i18_items::error_type::{CoreResult, ErrorData, ErrorType},
+    names,
+    uuids::AUTH_UUID,
+};
 
 use crate::{AuthType, LoginObj, UserKeyObj};
 
 /// 保存的账户
-static AUTHS: OnceLock<RwLock<HashMap<UserKeyObj, LoginObj>>> = OnceLock::new();
-/// 账户数据库保存位置s
-static LOCAL: OnceLock<PathBuf> = OnceLock::new();
+static AUTHS: LazyLock<RwLock<HashMap<UserKeyObj, LoginObj>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
 
-fn load() {
-    import(LOCAL.get().unwrap());
+/// 加载登陆的账户列表
+fn load(local: &PathBuf) {
+    if let Err(err) = import(local) {
+        mcml_log::error_type(err);
+
+        save();
+    }
 }
 
+/// 保持账户列表
 fn save() {
-    let auths: Vec<LoginObj> = AUTHS
-        .get()
-        .unwrap()
-        .read()
-        .unwrap()
-        .values()
-        .cloned()
-        .collect();
-
-    config_save::save(AUTH_UUID, &auths, LOCAL.get().unwrap());
+    let auths: Vec<LoginObj> = AUTHS.read().unwrap().values().cloned().collect();
+    let local = inner_path::inner().join(names::NAME_AUTH_FILE);
+    config_save::save(AUTH_UUID, &auths, &local);
 }
 
 /// 初始化
 pub fn init() {
-    LOCAL
-        .set(inner_path::inner().join(names::NAME_AUTH_FILE))
-        .unwrap();
-    AUTHS.set(RwLock::new(HashMap::new())).unwrap();
+    let local = inner_path::inner().join(names::NAME_AUTH_FILE);
 
-    if LOCAL.get().unwrap().exists() {
-        load();
+    if local.exists() {
+        load(&local);
     } else {
         save();
     }
@@ -50,26 +49,32 @@ pub fn init() {
 /// - `uuid`: 账户标识
 /// - `auth_type`: 账户类型
 pub fn get(uuid: String, auth_type: AuthType) -> Option<LoginObj> {
-    let auths = AUTHS.get().unwrap().read().unwrap();
+    let auths = AUTHS.read().unwrap();
     auths.get(&UserKeyObj { uuid, auth_type }).cloned()
 }
 
-pub fn import(file: &PathBuf) {
-    let temp = path_helper::open_read(file).unwrap();
-    let json = serde_json::from_reader::<_, Vec<LoginObj>>(temp);
+/// 导入账户列表
+/// - `file`: 文件位置
+pub fn import(file: &PathBuf) -> CoreResult<()> {
+    let temp = path_helper::open_read(file)?;
+    let json = serde_json::from_reader::<_, Vec<LoginObj>>(temp).map_err(|err| {
+        ErrorType::JsonError(ErrorData {
+            error: err.to_string(),
+        })
+    })?;
 
-    let mut auths = AUTHS.get().unwrap().write().unwrap();
+    let mut auths = AUTHS.write().unwrap();
 
-    if json.is_ok() {
-        let json = json.unwrap();
-        for item in json.into_iter() {
-            auths.insert(item.get_key(), item);
-        }
+    for item in json.into_iter() {
+        auths.insert(item.as_key(), item);
     }
+
+    Ok(())
 }
 
+/// 清理所有账户
 pub fn clear_auths() {
-    let mut auths = AUTHS.get().unwrap().write().unwrap();
+    let mut auths = AUTHS.write().unwrap();
     auths.clear();
 
     save();
@@ -78,8 +83,8 @@ pub fn clear_auths() {
 impl LoginObj {
     /// 保存账户
     pub fn save(&self) {
-        let key = self.get_key();
-        let mut auths = AUTHS.get().unwrap().write().unwrap();
+        let key = self.as_key();
+        let mut auths = AUTHS.write().unwrap();
 
         auths.insert(key, self.clone());
 
@@ -88,9 +93,9 @@ impl LoginObj {
 
     /// 删除账户
     pub fn delete(&self) {
-        let key = self.get_key();
+        let key = self.as_key();
 
-        let mut auths = AUTHS.get().unwrap().write().unwrap();
+        let mut auths = AUTHS.write().unwrap();
 
         auths.remove(&key);
 

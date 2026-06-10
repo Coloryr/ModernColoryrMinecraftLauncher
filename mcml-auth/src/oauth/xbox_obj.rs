@@ -11,16 +11,6 @@ pub struct XBoxLoginPropertiesObj {
     pub rps_ticket: String,
 }
 
-impl XBoxLoginPropertiesObj {
-    pub fn new(auth_method: String, site_name: String, rps_ticket: String) -> Self {
-        XBoxLoginPropertiesObj {
-            auth_method,
-            site_name,
-            rps_ticket,
-        }
-    }
-}
-
 impl Default for XBoxLoginPropertiesObj {
     fn default() -> Self {
         Self {
@@ -42,20 +32,6 @@ pub struct XBoxLoginObj {
     pub token_type: String,
 }
 
-impl XBoxLoginObj {
-    pub fn new(
-        properties: XBoxLoginPropertiesObj,
-        relying_party: String,
-        token_type: String,
-    ) -> Self {
-        XBoxLoginObj {
-            properties,
-            relying_party,
-            token_type,
-        }
-    }
-}
-
 impl Default for XBoxLoginObj {
     fn default() -> Self {
         Self {
@@ -73,15 +49,6 @@ pub struct XSTSLoginPropertiesObj {
     pub sandbox_id: String,
     #[serde(rename = "UserTokens")]
     pub user_tokens: Vec<String>,
-}
-
-impl XSTSLoginPropertiesObj {
-    pub fn new(sandbox_id: String, user_tokens: Vec<String>) -> Self {
-        XSTSLoginPropertiesObj {
-            sandbox_id,
-            user_tokens,
-        }
-    }
 }
 
 impl Default for XSTSLoginPropertiesObj {
@@ -102,20 +69,6 @@ pub struct XSTSLoginObj {
     pub relying_party: String,
     #[serde(rename = "TokenType")]
     pub token_type: String,
-}
-
-impl XSTSLoginObj {
-    pub fn new(
-        properties: XSTSLoginPropertiesObj,
-        relying_party: String,
-        token_type: String,
-    ) -> Self {
-        XSTSLoginObj {
-            properties,
-            relying_party,
-            token_type,
-        }
-    }
 }
 
 impl Default for XSTSLoginObj {

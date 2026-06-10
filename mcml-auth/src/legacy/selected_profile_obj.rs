@@ -1,16 +1,13 @@
 use serde::{Deserialize, Serialize};
 
+/// 账户列表
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct SelectedProfileObj {
+    /// 账户名
     pub name: String,
+    /// 账户标识
     pub id: String,
-}
-
-impl SelectedProfileObj {
-    pub fn new(name: String, id: String) -> Self {
-        SelectedProfileObj { name, id }
-    }
 }
 
 impl Default for SelectedProfileObj {

@@ -277,7 +277,7 @@ impl NbtType {
     }
 
     /// NBT标签读
-    pub(crate) fn nbt_read<R: Read>(&mut self, stream: &mut R) -> CoreResult<()> {
+    pub(crate) fn read<R: Read>(&mut self, stream: &mut R) -> CoreResult<()> {
         match self {
             NbtType::End(nbt_end) => nbt_end.read(stream),
             NbtType::Byte(nbt_byte) => nbt_byte.read(stream),
@@ -298,7 +298,7 @@ impl NbtType {
     }
 
     /// NBT标签写
-    pub(crate) fn nbt_write<W: Write>(&self, stream: &mut W) -> CoreResult<()> {
+    pub(crate) fn write<W: Write>(&self, stream: &mut W) -> CoreResult<()> {
         match self {
             NbtType::End(nbt_end) => nbt_end.write(stream),
             NbtType::Byte(nbt_byte) => nbt_byte.write(stream),

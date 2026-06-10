@@ -1,5 +1,5 @@
 /// 旧版账户验证
-use mcml_names::i18_items::error_type::ErrorType;
+use mcml_names::i18_items::error_type::{CoreResult, ErrorType};
 use reqwest::StatusCode;
 
 use crate::{
@@ -13,11 +13,16 @@ use crate::{
 
 pub mod authenticate_obj;
 pub mod authlib_injector;
-pub mod gui_select_handel;
 pub mod little_skin;
+pub mod nide8;
 pub mod refresh_obj;
 pub mod selected_profile_obj;
-pub mod nide8;
+
+pub trait GuiSelectHandel {
+    /// 选择登陆的账户
+    /// - `auths`: 账户列表
+    fn select_auth(&self, auths: Vec<String>) -> i32;
+}
 
 /// 旧版方式登录结果
 pub struct LegacyLoginRes {
@@ -25,12 +30,6 @@ pub struct LegacyLoginRes {
     pub auth: LoginObj,
     /// 可选的账户列表
     pub logins: Option<Vec<LoginObj>>,
-}
-
-impl LegacyLoginRes {
-    pub fn new(auth: LoginObj) -> Self {
-        LegacyLoginRes { auth, logins: None }
-    }
 }
 
 /// 登录
@@ -45,13 +44,13 @@ pub async fn authenticate(
     user: String,
     password: String,
     use_minecraft: bool,
-) -> Result<LegacyLoginRes, ErrorType> {
-    let obj = AuthenticateObj::new(
-        AgentObj::new(use_minecraft),
-        user.clone(),
+) -> CoreResult<LegacyLoginRes> {
+    let obj = AuthenticateObj {
+        agent: AgentObj::new(use_minecraft),
+        username: user.clone(),
         password,
         client_token,
-    );
+    };
 
     let mut server = server.clone();
 
@@ -67,69 +66,58 @@ pub async fn authenticate(
         .post_json_get_json::<_, AuthenticateResObj>(&server, &obj)
         .await?;
 
-    match obj.error_message {
-        Some(err) => Err(ErrorType::AuthLoginFail(err)),
-        None => {
-            if obj.selected_profile.is_none() && obj.available_profiles.is_none() {
-                Err(ErrorType::AuthLoginNoProfile)
-            } else if obj.selected_profile.is_some() {
-                let temp = obj.selected_profile.unwrap();
+    if let Some(data) = obj.error_message {
+        Err(ErrorType::AuthLoginFail(data))
+    } else if obj.selected_profile.is_none() && obj.available_profiles.is_none() {
+        Err(ErrorType::AuthLoginNoProfile)
+    } else if let Some(data) = obj.selected_profile {
+        Ok(LegacyLoginRes {
+            auth: LoginObj::new(data.name, data.id, obj.access_token, obj.client_token),
+            logins: None,
+        })
+    } else if let Some(list) = obj.available_profiles {
+        if list.len() == 0 {
+            Err(ErrorType::AuthLoginNoProfile)
+        } else if list.len() == 1 {
+            let temp = list.first().unwrap();
 
-                Ok(LegacyLoginRes::new(LoginObj::new(
-                    temp.name,
-                    temp.id,
+            Ok(LegacyLoginRes {
+                auth: LoginObj::new(
+                    temp.name.clone(),
+                    temp.id.clone(),
                     obj.access_token,
                     obj.client_token,
-                )))
+                ),
+                logins: None,
+            })
+        } else {
+            if let Some(item) = list
+                .iter()
+                .find(|item| item.name.eq_ignore_ascii_case(&user))
+            {
+                Ok(LegacyLoginRes {
+                    auth: LoginObj::new(
+                        item.name.clone(),
+                        item.id.clone(),
+                        obj.access_token,
+                        obj.client_token,
+                    ),
+                    logins: None,
+                })
             } else {
-                match obj.available_profiles {
-                    Some(list) => {
-                        if list.len() == 0 {
-                            Err(ErrorType::AuthLoginNoProfile)
-                        } else if list.len() == 1 {
-                            let temp = list.first().unwrap();
-
-                            Ok(LegacyLoginRes::new(LoginObj::new(
-                                temp.name.clone(),
-                                temp.id.clone(),
-                                obj.access_token,
-                                obj.client_token,
-                            )))
-                        } else {
-                            let temp = list
-                                .iter()
-                                .find(|item| item.name.eq_ignore_ascii_case(&user));
-                            match temp {
-                                Some(item) => Ok(LegacyLoginRes::new(LoginObj::new(
-                                    item.name.clone(),
-                                    item.id.clone(),
-                                    obj.access_token,
-                                    obj.client_token,
-                                ))),
-                                None => {
-                                    let mut logins: Vec<LoginObj> = Vec::new();
-                                    for item in list.iter() {
-                                        logins.push(LoginObj::new_empty(
-                                            item.name.clone(),
-                                            item.id.clone(),
-                                        ));
-                                    }
-
-                                    Ok(LegacyLoginRes {
-                                        auth: LoginObj::new_token(
-                                            obj.access_token,
-                                            obj.client_token,
-                                        ),
-                                        logins: Some(logins),
-                                    })
-                                }
-                            }
-                        }
-                    }
-                    None => Err(ErrorType::AuthLoginNoProfile),
+                let mut logins: Vec<LoginObj> = Vec::new();
+                for item in list.iter() {
+                    logins.push(LoginObj::new_empty(item.name.clone(), item.id.clone()));
                 }
+
+                Ok(LegacyLoginRes {
+                    auth: LoginObj::new_token(obj.access_token, obj.client_token),
+                    logins: Some(logins),
+                })
             }
         }
+    } else {
+        Err(ErrorType::AuthLoginNoProfile)
     }
 }
 
@@ -143,16 +131,20 @@ pub async fn refresh(
     select: bool,
 ) -> Result<LoginObj, ErrorType> {
     let obj = if select {
-        RefreshObj::new(
-            login.access_token.clone(),
-            login.client_token.clone(),
-            Some(SelectedProfileObj::new(
-                login.user_name.clone(),
-                login.uuid.clone(),
-            )),
-        )
+        RefreshObj {
+            access_token: login.access_token.clone(),
+            client_token: login.client_token.clone(),
+            selected_profile: Some(SelectedProfileObj {
+                name: login.user_name.clone(),
+                id: login.uuid.clone(),
+            }),
+        }
     } else {
-        RefreshObj::new(login.access_token.clone(), login.client_token.clone(), None)
+        RefreshObj {
+            access_token: login.access_token.clone(),
+            client_token: login.client_token.clone(),
+            selected_profile: None,
+        }
     };
 
     let mut server = server.clone();
@@ -169,36 +161,37 @@ pub async fn refresh(
         .post_json_get_json::<_, AuthenticateResObj>(&server, &obj)
         .await?;
 
-    match obj.error_message {
-        Some(err) => Err(ErrorType::AuthLoginFail(err)),
-        None => {
-            if obj.selected_profile.is_none() && !select {
-                Err(ErrorType::AuthRefreshNoProfile)
-            } else if obj.selected_profile.is_some() {
-                let temp = obj.selected_profile.unwrap();
-                Ok(LoginObj::new(
-                    temp.name,
-                    temp.id,
-                    obj.access_token,
-                    obj.client_token,
-                ))
-            } else {
-                Ok(LoginObj::new(
-                    login.user_name.clone(),
-                    login.uuid.clone(),
-                    obj.access_token,
-                    obj.client_token,
-                ))
-            }
-        }
+    if let Some(data) = obj.error_message {
+        Err(ErrorType::AuthLoginFail(data))
+    } else if obj.selected_profile.is_none() && !select {
+        Err(ErrorType::AuthRefreshNoProfile)
+    } else if obj.selected_profile.is_some() {
+        let temp = obj.selected_profile.unwrap();
+        Ok(LoginObj::new(
+            temp.name,
+            temp.id,
+            obj.access_token,
+            obj.client_token,
+        ))
+    } else {
+        Ok(LoginObj::new(
+            login.user_name.clone(),
+            login.uuid.clone(),
+            obj.access_token,
+            obj.client_token,
+        ))
     }
 }
 
-/// 检测Token可用性
+/// 检测密钥可用性
 /// - `server`: 检测地址
 /// - `login`: 保存的账户
 pub async fn validate(server: &String, login: &LoginObj) -> Result<bool, ErrorType> {
-    let obj = RefreshObj::new(login.access_token.clone(), login.client_token.clone(), None);
+    let obj = RefreshObj {
+        access_token: login.access_token.clone(),
+        client_token: login.client_token.clone(),
+        selected_profile: None,
+    };
 
     let mut server = server.clone();
 
@@ -214,9 +207,5 @@ pub async fn validate(server: &String, login: &LoginObj) -> Result<bool, ErrorTy
         .post_json_get_req(&server, &obj)
         .await?;
 
-    if obj.status() == StatusCode::NO_CONTENT {
-        Ok(true)
-    } else {
-        Ok(false)
-    }
+    Ok(obj.status() == StatusCode::NO_CONTENT)
 }

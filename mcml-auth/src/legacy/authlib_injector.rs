@@ -3,11 +3,11 @@ use mcml_names::i18_items::error_type::ErrorType;
 
 use crate::{
     AuthType, LoginObj,
-    legacy::{self, gui_select_handel::GuiSelectHandel},
+    legacy::{self, GuiSelectHandel},
 };
 
 /// 外置登录
-/// - `client_token`: 客户端代码
+/// - `client_token`: 客户端标识
 /// - `user`: 用户名
 /// - `password`: 密码
 /// - `server`: 服务器地址
@@ -16,7 +16,7 @@ pub async fn authenticate(
     client_token: String,
     user: String,
     password: String,
-    server: &String,
+    server: String,
     gui: Option<Box<dyn GuiSelectHandel>>,
 ) -> Result<LoginObj, ErrorType> {
     let obj = legacy::authenticate(&server, client_token, user, password, true).await?;

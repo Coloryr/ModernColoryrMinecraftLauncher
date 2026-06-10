@@ -2,29 +2,19 @@ use serde::{Deserialize, Serialize};
 
 use crate::legacy::selected_profile_obj::SelectedProfileObj;
 
+/// 刷新账户
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct RefreshObj {
+    /// 登陆密钥
     #[serde(rename = "accessToken")]
     pub access_token: String,
+    /// 客户端标识
     #[serde(rename = "clientToken")]
     pub client_token: String,
+    /// 选中的账户
     #[serde(rename = "selectedProfile")]
     pub selected_profile: Option<SelectedProfileObj>,
-}
-
-impl RefreshObj {
-    pub fn new(
-        access_token: String,
-        client_token: String,
-        selected_profile: Option<SelectedProfileObj>,
-    ) -> Self {
-        RefreshObj {
-            access_token,
-            client_token,
-            selected_profile,
-        }
-    }
 }
 
 impl Default for RefreshObj {

@@ -451,7 +451,7 @@ impl NbtStream for NbtList {
 
         for _i in 0..len {
             let mut nbt = NbtType::get_nbt(self.nbt_num).unwrap();
-            nbt.nbt_read(stream)?;
+            nbt.read(stream)?;
             self.data.push(nbt);
         }
 
@@ -472,7 +472,7 @@ impl NbtStream for NbtList {
         stream.write_all(&temp).map_err(|err| io_error(err))?;
 
         for nbt in &self.data {
-            nbt.nbt_write(stream)?;
+            nbt.write(stream)?;
         }
 
         Ok(())
@@ -518,29 +518,6 @@ impl NbtCompound {
     pub fn to_nbt(self) -> NbtType {
         NbtType::Compound(self)
     }
-
-    pub fn skip_read<R: Read>(&mut self, stream: &mut R) -> CoreResult<()> {
-        let mut temp = [0u8; 2];
-        stream.read_exact(&mut temp).map_err(|err| io_error(err))?;
-
-        let len = i16::from_be_bytes(temp);
-
-        let mut temp = vec![0; len as usize];
-        stream.read_exact(&mut temp).map_err(|err| io_error(err))?;
-
-        let key = String::from_utf8(temp).map_err(|err| {
-            ErrorType::StreamError(ErrorData {
-                error: err.to_string(),
-            })
-        })?;
-
-        let mut compound = compound();
-        compound.read(stream)?;
-
-        self.data.insert(key, compound.to_nbt());
-
-        Ok(())
-    }
 }
 
 impl NbtStream for NbtCompound {
@@ -573,7 +550,7 @@ impl NbtStream for NbtCompound {
             })?;
 
             let mut nbt = nbt.unwrap();
-            nbt.nbt_read(stream)?;
+            nbt.read(stream)?;
 
             self.data.insert(key, nbt);
         }
@@ -591,7 +568,7 @@ impl NbtStream for NbtCompound {
                     .write_all(key.as_bytes())
                     .map_err(|err| io_error(err))?;
 
-                nbt.nbt_write(stream)?;
+                nbt.write(stream)?;
             }
         }
 

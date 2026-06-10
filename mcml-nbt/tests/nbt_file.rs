@@ -1,11 +1,13 @@
 use std::{
     fs::File,
-    io::{Cursor, Read, Seek, SeekFrom},
-    path::{Path, PathBuf},
+    io::{Cursor, Seek, SeekFrom},
+    path::Path,
 };
 
 use mcml_nbt::{
-    NBT_COMPOUND_ORDER, NbtType, nbt_file::{CompressType, NbtFile}, nbt_types
+    NBT_COMPOUND_ORDER, NbtType,
+    nbt_file::{CompressType, NbtFile},
+    nbt_types,
 };
 
 #[test]
@@ -23,7 +25,7 @@ fn nbt_gzip() {
 
     let nbt = NbtFile::new(nbt.to_nbt(), CompressType::GZip);
 
-    nbt.save(&mut stream).unwrap();
+    nbt.write(&mut stream).unwrap();
 
     stream.seek(SeekFrom::Start(0)).unwrap();
 
@@ -48,7 +50,7 @@ fn nbt_zlib() {
 
     let nbt = NbtFile::new(nbt.to_nbt(), CompressType::Zlib);
 
-    nbt.save(&mut stream).unwrap();
+    nbt.write(&mut stream).unwrap();
 
     stream.seek(SeekFrom::Start(0)).unwrap();
 
@@ -73,7 +75,7 @@ fn nbt_lz4() {
 
     let nbt = NbtFile::new(nbt.to_nbt(), CompressType::Lz4);
 
-    nbt.save(&mut stream).unwrap();
+    nbt.write(&mut stream).unwrap();
 
     stream.seek(SeekFrom::Start(0)).unwrap();
 
@@ -93,10 +95,12 @@ fn load_dat() {
     assert_eq!(nbt.nbt.get_num(), NBT_COMPOUND_ORDER);
 
     let mut stream1 = Cursor::new(Vec::<u8>::new());
-    nbt.save(&mut stream1).unwrap();
+    nbt.write(&mut stream1).unwrap();
 
-    stream.seek(SeekFrom::Start(0)).unwrap();
+    stream1.seek(SeekFrom::Start(0)).unwrap();
 
-    let mut temp = Vec::<u8>::new();
-    stream.read_to_end(&mut temp).unwrap();
+    let nbt1 = NbtFile::read(&mut stream1).unwrap();
+
+    assert_eq!(nbt.compress, nbt1.compress);
+    assert!(nbt.nbt.eq(&nbt1.nbt));
 }
