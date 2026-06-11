@@ -31,7 +31,6 @@ static INDEX_DIR: OnceLock<PathBuf> = OnceLock::new();
 static SKIN_DIR: OnceLock<PathBuf> = OnceLock::new();
 
 /// 初始化
-///
 /// - `dir`: 运行目录
 pub fn init(dir: &PathBuf) {
     let dir = BASE_DIR.get_or_init(|| dir.join(names::NAME_GAME_ASSETS_DIR));

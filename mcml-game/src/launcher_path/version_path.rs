@@ -844,8 +844,42 @@ impl GameSettingObj {
         if let Some(data) = self.get_custom_loader() {
             match data.as_ref() {
                 CustomLoaderType::ForgeLaunch(forge) => {
-                    let args: Vec<&str> = forge.minecraft_arguments.split(' ').collect();
-                    args.iter().map(|item| String::from(*item)).collect()
+                    let mut args = Vec::<String>::new();
+                    if let Some(data) = &forge.minecraft_arguments {
+                        let args1: Vec<&str> = data.split(' ').collect();
+                        args1.iter().map(|item| {
+                            args.push(String::from(*item));
+                        });
+                    }
+
+                    if let Some(data) = &forge.arguments {
+                        for item in data.game.iter() {
+                            args.push(item.clone());
+                        }
+                    }
+
+                    args
+                }
+            }
+        } else {
+            Default::default()
+        }
+    }
+
+    /// 获取自定义加载器的JVM启动参数
+    pub fn get_custom_loader_jvm_args(&self) -> Vec<String> {
+        if let Some(data) = self.get_custom_loader() {
+            match data.as_ref() {
+                CustomLoaderType::ForgeLaunch(forge) => {
+                    let mut args = Vec::<String>::new();
+
+                    if let Some(data) = &forge.arguments {
+                        for item in data.jvm.iter() {
+                            args.push(item.clone());
+                        }
+                    }
+
+                    args
                 }
             }
         } else {

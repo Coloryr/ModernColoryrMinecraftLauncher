@@ -1,5 +1,6 @@
 pub mod archives;
 pub mod events;
+pub mod file_item;
 pub mod hash_helper;
 pub mod inner_path;
 pub mod path_helper;

@@ -36,7 +36,7 @@ impl Default for ForgeLibrariesObj {
 #[serde(default)]
 pub struct ForgeArgumentsObj {
     pub game: Vec<String>,
-    pub jvm: Option<Vec<String>>,
+    pub jvm: Vec<String>,
 }
 
 impl Default for ForgeArgumentsObj {
@@ -54,8 +54,8 @@ pub struct ForgeLaunchObj {
     #[serde(rename = "mainClass")]
     pub main_class: String,
     #[serde(rename = "minecraftArguments")]
-    pub minecraft_arguments: String,
-    pub arguments: ForgeArgumentsObj,
+    pub minecraft_arguments: Option<String>,
+    pub arguments: Option<ForgeArgumentsObj>,
     pub libraries: Vec<ForgeLibrariesObj>,
 }
 

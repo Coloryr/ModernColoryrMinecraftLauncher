@@ -100,6 +100,12 @@ pub enum ArgValue {
     Multi(Vec<String>),
 }
 
+impl Default for ArgValue {
+    fn default() -> Self {
+        ArgValue::Single(Default::default())
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct GameJvmObj {
@@ -111,7 +117,7 @@ impl Default for GameJvmObj {
     fn default() -> Self {
         Self {
             rules: Default::default(),
-            value: ArgValue::Single(Default::default()),
+            value: Default::default(),
         }
     }
 }

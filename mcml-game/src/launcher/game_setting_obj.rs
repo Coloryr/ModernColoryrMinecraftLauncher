@@ -85,7 +85,7 @@ impl Default for AdvanceJvmObj {
 pub struct CustomLoaderObj {
     /// 后加载原版运行库
     #[serde(rename = "OffLib")]
-    pub off_list: bool,
+    pub offset_lib: bool,
     /// 删除原版运行库
     #[serde(rename = "RemoveLib")]
     pub remove_lib: bool,
@@ -100,7 +100,7 @@ pub struct CustomLoaderObj {
 impl Default for CustomLoaderObj {
     fn default() -> Self {
         Self {
-            off_list: Default::default(),
+            offset_lib: Default::default(),
             remove_lib: Default::default(),
             custom_json: Default::default(),
             remove_json: Default::default(),
