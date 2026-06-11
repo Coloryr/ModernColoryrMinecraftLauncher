@@ -27,6 +27,7 @@ pub const NAME_JSON_DIR: &str = "patches";
 pub const NAME_DEFAULT_DIR: &str = "default";
 pub const NAME_OPEN_LOADER_DIR: &str = "openloader";
 pub const NAME_DATA_DIR: &str = "data";
+pub const NAME_NATIVE_DIR: &str = "native";
 
 pub const NAME_LOG_FILE: &str = "logs.log";
 pub const NAME_LANG_FILE: &str = "lang.txt";
@@ -141,12 +142,6 @@ pub const NAME_GCARG_G1_GC: [&str; 8] = [
 ];
 
 pub const NAME_GCZGC: [&str; 2] = ["-XX:+UseZGC", "-XX:+ZGenerational"];
-
-pub const NAME_V1_JVM_ARG: [&str; 3] = [
-    "-Djava.library.path=${natives_directory}",
-    "-cp",
-    "${classpath}",
-];
 
 pub const LANG_ZH_CN: &str = "zh_CN";
 pub const LANG_EN_US: &str = "en_US";

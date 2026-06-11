@@ -1,6 +1,6 @@
 use crate::{
-    launch_path::version_path,
     launcher::game_setting_obj::GameSettingObj,
+    launcher_path::version_path,
     mojang::{game_arg_obj::GameArgObj, version_parse::parse_game_version},
 };
 
