@@ -4,6 +4,8 @@ use mcml_base::Os;
 use mcml_names::{i18_items::error_type::ErrorType, urls::ADOPTIUM_URL};
 use serde::{Deserialize, Serialize};
 
+use crate::WORK_CLIENT;
+
 static JAVA_VERSION: OnceLock<Vec<String>> = OnceLock::new();
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -113,7 +115,7 @@ pub async fn get_java_version() -> Result<Vec<String>, ErrorType> {
 
     let url = String::from(ADOPTIUM_URL) + "v3/info/available_releases";
 
-    let res = mcml_http::WORK_CLIENT
+    let res = WORK_CLIENT
         .get()
         .unwrap()
         .get_json::<AdoptiumJavaVersionObj>(&url)
@@ -139,7 +141,7 @@ pub async fn get_java_list(version: String, os: Os) -> Result<Vec<AdoptiumObj>, 
         url += &format!("v3/assets/latest/{}/hotspot?os={}", version, get_os(os));
     }
 
-    let res = mcml_http::WORK_CLIENT
+    let res = WORK_CLIENT
         .get()
         .unwrap()
         .get_json::<Vec<AdoptiumObj>>(&url)

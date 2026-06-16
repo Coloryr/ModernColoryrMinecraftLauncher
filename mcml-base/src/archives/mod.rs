@@ -1,7 +1,5 @@
-#[cfg(not(unix))]
-use std::path::Path;
 use std::{
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::atomic::{AtomicUsize, Ordering},
 };
 
@@ -29,7 +27,7 @@ pub enum TarMode {
 
 impl TarMode {
     /// 根据文件名后缀自动判断（不返回 Result，失败时返回 None）
-    pub fn try_from_path(path: &PathBuf) -> Option<Self> {
+    pub fn try_from_path(path: &Path) -> Option<Self> {
         let file_name = path.file_name()?.to_string_lossy().to_lowercase();
 
         if file_name.ends_with(names::NAME_TAR_GZ_EXT) || file_name.ends_with(names::NAME_TGZ_EXT) {
@@ -76,20 +74,14 @@ impl ArchiveProcess {
 }
 
 pub(crate) trait IArchive: Send + Sync {
-    /// 压缩文件夹
-    ///
-    /// - `archive_file`: 压缩包保存位置
-    /// - `pack_dir`: 压缩的路径
-    /// - `root_path`: 需要剔除的路径
-    /// - `filter`: 过滤的文件
     fn compress(
         &self,
-        archive_file: &PathBuf,
-        pack_dir: &PathBuf,
-        root_path: Option<&PathBuf>,
+        archive_file: &Path,
+        pack_dir: &Path,
+        root_path: Option<&Path>,
         filter: &Option<Vec<String>>,
     ) -> Result<(), ErrorType>;
-    fn decompress(&self, archive_file: &PathBuf, output_dir: &PathBuf) -> Result<(), ErrorType>;
+    fn decompress(&self, archive_file: &Path, output_dir: &Path) -> Result<(), ErrorType>;
 }
 
 pub trait IArchiveGui: Send + Sync {
@@ -116,11 +108,11 @@ fn should_exclude(path: &Path, patterns: &[String]) -> bool {
 /// - `root_path`: 相对路径
 /// - `filter`: 文件过滤
 /// - `gui`: 显示回调
-pub fn compress(
+pub fn compress<P: AsRef<Path>>(
     archive_type: ArchiveType,
-    archive_file: &PathBuf,
-    pack_dir: &PathBuf,
-    root_path: Option<&PathBuf>,
+    archive_file: P,
+    pack_dir: P,
+    root_path: Option<P>,
     filter: &Option<Vec<String>>,
     gui: Option<Box<dyn IArchiveGui + Send + Sync>>,
 ) -> Result<(), ErrorType> {
@@ -136,7 +128,12 @@ pub fn compress(
         }
     };
 
-    precess.compress(archive_file, pack_dir, root_path, filter)
+    precess.compress(
+        archive_file.as_ref(),
+        pack_dir.as_ref(),
+        root_path.as_ref().map(|p| p.as_ref()),
+        filter,
+    )
 }
 
 /// 压缩文件
@@ -144,10 +141,10 @@ pub fn compress(
 /// - `archive_file`: 压缩包位置
 /// - `output_dir`: 解压路径
 /// - `gui`: 显示回调
-pub fn decompress(
+pub fn decompress<P: AsRef<Path>>(
     archive_type: ArchiveType,
-    archive_file: &PathBuf,
-    output_dir: &PathBuf,
+    archive_file: P,
+    output_dir: P,
     gui: Option<Box<dyn IArchiveGui + Send + Sync>>,
 ) -> Result<(), ErrorType> {
     let precess: Box<dyn IArchive + Send + Sync> = match archive_type {
@@ -162,5 +159,5 @@ pub fn decompress(
         }
     };
 
-    precess.decompress(archive_file, output_dir)
+    precess.decompress(archive_file.as_ref(), output_dir.as_ref())
 }

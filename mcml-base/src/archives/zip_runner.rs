@@ -10,7 +10,6 @@ use std::fs::{self};
 use std::io::{self, Read};
 #[cfg(windows)]
 use std::path::Path;
-use std::path::PathBuf;
 use std::sync::atomic::Ordering;
 
 #[cfg(unix)]
@@ -26,19 +25,19 @@ pub(crate) struct ZipProcess {
 impl IArchive for ZipProcess {
     fn compress(
         &self,
-        archive_file: &PathBuf,
-        pack_dir: &PathBuf,
-        root_path: Option<&PathBuf>,
+        archive_file: &Path,
+        pack_dir: &Path,
+        root_path: Option<&Path>,
         filter: &Option<Vec<String>>,
     ) -> Result<(), ErrorType> {
         let root_path = match root_path {
             Some(path) => path,
-            None => &pack_dir.clone(),
+            None => pack_dir,
         };
         self.zip(archive_file, pack_dir, root_path, filter)
     }
 
-    fn decompress(&self, archive_file: &PathBuf, output_dir: &PathBuf) -> Result<(), ErrorType> {
+    fn decompress(&self, archive_file: &Path, output_dir: &Path) -> Result<(), ErrorType> {
         self.unzip(archive_file, output_dir)
     }
 }
@@ -50,9 +49,9 @@ impl ZipProcess {
 
     fn zip(
         &self,
-        archive_file: &PathBuf,
-        pack_dir: &PathBuf,
-        root_path: &PathBuf,
+        archive_file: &Path,
+        pack_dir: &Path,
+        root_path: &Path,
         filter: &Option<Vec<String>>,
     ) -> Result<(), ErrorType> {
         let file = path_helper::open_write(archive_file)?;
@@ -112,11 +111,11 @@ impl ZipProcess {
         Ok(())
     }
 
-    fn unzip(&self, archive_file: &PathBuf, output_dir: &PathBuf) -> Result<(), ErrorType> {
+    fn unzip(&self, archive_file: &Path, output_dir: &Path) -> Result<(), ErrorType> {
         let file = path_helper::open_read(archive_file)?;
         let mut archive = ZipArchive::new(file).map_err(|err| {
             ErrorType::ArchiveOpenError(FileSystemErrorData {
-                path: archive_file.clone(),
+                path: archive_file.to_path_buf(),
                 error: err.to_string(),
             })
         })?;
@@ -125,7 +124,7 @@ impl ZipProcess {
         path_helper::create_dir_all(output_dir)?;
         let output_dir_canonical = output_dir.canonicalize().map_err(|err| {
             ErrorType::FileSystemError(FileSystemErrorData {
-                path: output_dir.clone(),
+                path: output_dir.to_path_buf(),
                 error: err.to_string(),
             })
         })?;
@@ -159,7 +158,7 @@ impl ZipProcess {
                     use crate::archives::set_perms;
                     set_perms(&outpath, 0o700).map_err(|err| {
                         ErrorType::FileSystemError(FileSystemErrorData {
-                            path: output_dir.clone(),
+                            path: output_dir.to_path_buf(),
                             error: err.to_string(),
                         })
                     })?;

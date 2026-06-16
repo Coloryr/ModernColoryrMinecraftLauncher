@@ -5,7 +5,6 @@ use crate::mojang::game_arg_obj::GameRulesObj;
 
 pub mod assets_obj;
 pub mod game_arg_obj;
-pub mod mojang_api;
 pub mod version_checker;
 pub mod version_obj;
 pub mod version_parse;

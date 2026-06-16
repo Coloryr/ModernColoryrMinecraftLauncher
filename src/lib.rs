@@ -70,7 +70,7 @@ pub fn init(arg: CoreInitObj) {
     mcml_log::start(dir);
     mcml_config::config_save::start();
     mcml_downloader::start();
-    mcml_http::init();
+    mcml_net::init();
     mcml_config::init(dir);
 
     core_stop::add_stop_handler(|| mcml_config::config_save::stop());

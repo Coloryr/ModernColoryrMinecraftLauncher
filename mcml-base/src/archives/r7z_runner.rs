@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::Path;
 
 use mcml_names::i18_items::error_type::{
     ArchiveErrorData, ErrorData,
@@ -19,20 +19,20 @@ pub(crate) struct R7zProcess {
 impl IArchive for R7zProcess {
     fn compress(
         &self,
-        archive_file: &PathBuf,
-        pack_dir: &PathBuf,
-        root_path: Option<&PathBuf>,
+        archive_file: &Path,
+        pack_dir: &Path,
+        root_path: Option<&Path>,
         filter: &Option<Vec<String>>,
     ) -> Result<(), ErrorType> {
         let root_path = match root_path {
             Some(path) => path,
-            None => &pack_dir.clone(),
+            None => pack_dir,
         };
 
         self.r7z_compress(archive_file, pack_dir, root_path, filter)
     }
 
-    fn decompress(&self, archive_file: &PathBuf, output_dir: &PathBuf) -> Result<(), ErrorType> {
+    fn decompress(&self, archive_file: &Path, output_dir: &Path) -> Result<(), ErrorType> {
         self.r7z_decompress(archive_file, output_dir)
     }
 }
@@ -45,15 +45,15 @@ impl R7zProcess {
     /// 将整个目录压缩为 7z 文件
     fn r7z_compress(
         &self,
-        archive_file: &PathBuf,
-        pack_dir: &PathBuf,
-        root_path: &PathBuf,
+        archive_file: &Path,
+        pack_dir: &Path,
+        root_path: &Path,
         filter: &Option<Vec<String>>,
     ) -> Result<(), ErrorType> {
         let file = path_helper::open_write(archive_file)?;
         let mut archive = ArchiveWriter::new(file).map_err(|err| {
             ErrorType::ArchiveOpenError(FileSystemErrorData {
-                path: archive_file.clone(),
+                path: archive_file.to_path_buf(),
                 error: err.to_string(),
             })
         })?;
@@ -100,15 +100,15 @@ impl R7zProcess {
     /// 解压 7z 文件到指定目录
     fn r7z_decompress(
         &self,
-        archive_file: &PathBuf,
-        output_dir: &PathBuf,
+        archive_file: &Path,
+        output_dir: &Path,
     ) -> Result<(), ErrorType> {
         let file = path_helper::open_read(archive_file)?;
         path_helper::create_dir_all(output_dir)?;
-        
+
         let mut seven = ArchiveReader::new(file, Password::empty()).map_err(|err| {
             ErrorType::ArchiveOpenError(FileSystemErrorData {
-                path: archive_file.clone(),
+                path: archive_file.to_path_buf(),
                 error: err.to_string(),
             })
         })?;

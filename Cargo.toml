@@ -8,8 +8,8 @@ mcml-log = { path = "mcml-log" }
 mcml-names = { path = "mcml-names" }
 mcml-config = { path = "mcml-config" }
 mcml-downloader = { path = "mcml-downloader" }
-mcml-http = { path = "mcml-http" }
 mcml-base = { path = "mcml-base" }
+mcml-net = { path = "mcml-net" }
 crossbeam-queue.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
@@ -27,7 +27,6 @@ members = [
     "mcml-config",
     "mcml-downloader",
     "mcml-game",
-    "mcml-http",
     "mcml-jvms",
     "mcml-log",
     "mcml-names",
@@ -46,6 +45,7 @@ tokio = { version = "~1.52.3", features = [
     "macros",
     "io-util",
     "process",
+    "fs",
 ] }
 tokio-util = "~0.7.18"
 semrs = "~0.5.2"
@@ -59,8 +59,9 @@ skia-safe = "~0.97.2"
 glam = "~0.33.1"
 uuid = { version = "~1.23.3", features = ["v4", "serde"] }
 url = "~2.5.8"
-md5 = "~0.8.0"
+md-5 = "~0.11.0"
 sha1 = "~0.11.0"
+digest = "~0.11.3"
 sha2 = "~0.11.0"
 base64 = "~0.22.1"
 winreg = "~0.56.0"
@@ -76,3 +77,6 @@ xz2 = { version = "~0.1.7", features = ["static"] }
 lz4_flex = "~0.13.1"
 rayon = "~1.12.0"
 sys-locale = "~0.3.2"
+regex = "~1.12.4"
+scraper = "~0.27.0"
+itertools = "~0.14.0"

@@ -1,5 +1,6 @@
 /// 旧版账户验证
 use mcml_names::i18_items::error_type::{CoreResult, ErrorType};
+use mcml_net::LOGIN_CLIENT;
 use reqwest::StatusCode;
 
 use crate::{
@@ -60,7 +61,7 @@ pub async fn authenticate(
 
     server.push_str("authserver/authenticate");
 
-    let obj = mcml_http::LOGIN_CLIENT
+    let obj = LOGIN_CLIENT
         .get()
         .unwrap()
         .post_json_get_json::<_, AuthenticateResObj>(&server, &obj)
@@ -155,7 +156,7 @@ pub async fn refresh(
 
     server.push_str("authserver/refresh");
 
-    let obj = mcml_http::LOGIN_CLIENT
+    let obj = LOGIN_CLIENT
         .get()
         .unwrap()
         .post_json_get_json::<_, AuthenticateResObj>(&server, &obj)
@@ -201,7 +202,7 @@ pub async fn validate(server: &String, login: &LoginObj) -> Result<bool, ErrorTy
 
     server.push_str("authserver/validate");
 
-    let obj = mcml_http::LOGIN_CLIENT
+    let obj = LOGIN_CLIENT
         .get()
         .unwrap()
         .post_json_get_req(&server, &obj)

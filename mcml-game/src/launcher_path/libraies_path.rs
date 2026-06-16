@@ -1,13 +1,18 @@
-use std::{
-    collections::{HashMap, HashSet},
-    fs,
-    hash::Hasher,
-    path::PathBuf,
-    sync::OnceLock,
-};
+use std::{collections::HashMap, fs, hash::Hasher, path::PathBuf, sync::OnceLock};
 
-use mcml_base::get_system_info;
-use mcml_names::names;
+use mcml_base::{
+    file_item::{
+        FileHash::{Sha1, Sha256},
+        FileItemObj,
+    },
+    get_system_info,
+    hash_helper::{self, HashType},
+};
+use mcml_names::{i18_items::error_type::CoreResult, names, urls};
+use mcml_net::net::{
+    authlib_api::{self, AuthlibInjectorObj},
+    nide8_api::{self, Nide8Obj},
+};
 
 use crate::{
     game_launch::GameLaunchObj,
@@ -20,8 +25,23 @@ static BASE_DIR: OnceLock<PathBuf> = OnceLock::new();
 /// 资源文件路径
 static NATIVE_DIR: OnceLock<PathBuf> = OnceLock::new();
 
+static AUTHLIB_FILE: OnceLock<FileItemObj> = OnceLock::new();
+static NIDE8_FILE: OnceLock<FileItemObj> = OnceLock::new();
+
 pub fn get_base_dir() -> PathBuf {
     BASE_DIR.get().unwrap().clone()
+}
+
+pub fn get_authlib_file() -> Option<PathBuf> {
+    let file = AUTHLIB_FILE.get()?;
+
+    Some(file.local.clone())
+}
+
+pub fn get_nide8_file() -> Option<PathBuf> {
+    let file = AUTHLIB_FILE.get()?;
+
+    Some(file.local.clone())
 }
 
 /// 运行库信息
@@ -268,4 +288,117 @@ fn add_or_update_lib_kv(
 ) {
     map.retain(|k, _| !k.eq_without_version(&key));
     map.insert(key, value);
+}
+
+/// 创建AuthlibInjector下载实例
+/// - `obj`: AuthlibInjector信息
+pub fn build_authlib_injector_item(obj: &AuthlibInjectorObj) -> FileItemObj {
+    FileItemObj {
+        name: format!("moe.yushi:authlibinjector:{}", obj.version),
+        local: BASE_DIR
+            .get()
+            .unwrap()
+            .join("moe")
+            .join("yushi")
+            .join("authlibinjector")
+            .join(&obj.version)
+            .join(format!("authlib-injector-{}.jar", obj.version)),
+        url: obj.download_url.clone(),
+        hash: Sha256(obj.checksums.sha256.clone()),
+    }
+}
+
+async fn read_authlib_injector() -> CoreResult<Option<FileItemObj>> {
+    let obj = authlib_api::get_obj().await?;
+    let item = build_authlib_injector_item(&obj);
+
+    if item.local.exists() {
+        let sha256 = hash_helper::gen_hash_from_file_async(HashType::Sha256, &item.local).await?;
+        if obj.checksums.sha256 != sha256 {
+            Ok(Some(item))
+        } else {
+            AUTHLIB_FILE.set(item.clone());
+
+            Ok(None)
+        }
+    } else {
+        Ok(Some(item))
+    }
+}
+
+/// 初始化AuthlibInjector，不存在返回下载项目
+pub async fn ready_authlib_injector() -> CoreResult<Option<FileItemObj>> {
+    match AUTHLIB_FILE.get() {
+        Some(obj) => {
+            let path = &obj.local;
+            if !path.exists() {
+                Ok(Some(obj.clone()))
+            } else {
+                let sha256 = hash_helper::gen_hash_from_file_async(HashType::Sha256, &path).await?;
+                if !obj.hash.eq(&sha256) {
+                    Ok(Some(obj.clone()))
+                } else {
+                    Ok(None)
+                }
+            }
+        }
+        None => read_authlib_injector().await,
+    }
+}
+
+/// 创建Nide8Injector下载实例
+/// - `obj`: 下载信息
+pub fn build_nide8_item(obj: &Nide8Obj) -> FileItemObj {
+    FileItemObj {
+        name: format!("com.nide8.login2:nide8auth:{}", obj.jar_version),
+        local: BASE_DIR
+            .get()
+            .unwrap()
+            .join("com")
+            .join("nide8")
+            .join("login2")
+            .join("nide8auth")
+            .join(&obj.jar_version)
+            .join(format!("nide8auth-{}.jar", obj.jar_version)),
+        url: String::from(urls::NIDE8_JAR_URL),
+        hash: Sha1(obj.jar_hash.clone()),
+    }
+}
+
+async fn read_nide8() -> CoreResult<Option<FileItemObj>> {
+    let obj = nide8_api::get_obj().await?;
+    let item = build_nide8_item(&obj);
+
+    if item.local.exists() {
+        let sha1 = hash_helper::gen_hash_from_file_async(HashType::Sha1, &item.local).await?;
+        if obj.jar_hash != sha1 {
+            Ok(Some(item))
+        } else {
+            NIDE8_FILE.set(item.clone());
+
+            Ok(None)
+        }
+    } else {
+        Ok(Some(item))
+    }
+}
+
+/// 初始化Nide8Injector，不存在返回下载项目
+pub async fn ready_nide8() -> CoreResult<Option<FileItemObj>> {
+    match NIDE8_FILE.get() {
+        Some(obj) => {
+            let path = &obj.local;
+            if !path.exists() {
+                Ok(Some(obj.clone()))
+            } else {
+                let sha256 = hash_helper::gen_hash_from_file_async(HashType::Sha256, &path).await?;
+                if !obj.hash.eq(&sha256) {
+                    Ok(Some(obj.clone()))
+                } else {
+                    Ok(None)
+                }
+            }
+        }
+        None => read_nide8().await,
+    }
 }

@@ -64,6 +64,11 @@ pub fn init(dir: &PathBuf) {
     }
 }
 
+/// 获取路径
+pub fn get_obj_dir() -> PathBuf {
+    OBJECTS_DIR.get().unwrap().clone()
+}
+
 /// 添加资源数据
 ///
 /// - `data`: 资源文件

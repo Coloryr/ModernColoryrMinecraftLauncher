@@ -1,142 +1,137 @@
-use std::{
-    error::Error,
-    fs::File,
-    io::{BufReader, Read},
-    path::Path,
-};
+use std::{io::Read, path::Path};
 
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
-use sha1::{Digest, Sha1};
-use sha2::{Sha256, Sha512};
-use tokio::io::AsyncReadExt;
+use mcml_names::i18_items::error_type::{CoreResult, ErrorData, ErrorType};
+use md5::Md5;
+use sha1::Sha1;
+use sha2::Sha256;
+use tokio::io::{AsyncRead, AsyncReadExt};
+
+use digest::{Digest, DynDigest};
+
+use crate::path_helper;
+
+/// 校验类型
+pub enum HashType {
+    Md5,
+    Sha1,
+    Sha256,
+}
 
 /// 将字节数组格式化为十六进制字符串（小写）
 fn bytes_to_hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{:02x}", b)).collect()
 }
 
-/// 获取 MD5 值（字节数组）
-pub fn gen_md5_from_bytes(data: &[u8]) -> String {
-    let digest = md5::compute(data);
-    bytes_to_hex(&digest.0)
+fn create_hasher(hash_type: HashType) -> Box<dyn DynDigest> {
+    match hash_type {
+        HashType::Md5 => Box::new(Md5::new()),
+        HashType::Sha1 => Box::new(Sha1::new()),
+        HashType::Sha256 => Box::new(Sha256::new()),
+    }
 }
 
-/// 获取 SHA1 值（字节数组）
-pub fn gen_sha1_from_bytes(data: &[u8]) -> String {
-    let mut hasher = Sha1::new();
+/// 生成校验值
+/// - `hash_type`: 校验类型
+/// - `data`: 需要校验的数据
+pub fn gen_hash(hash_type: HashType, data: &[u8]) -> String {
+    let mut hasher = create_hasher(hash_type);
     hasher.update(data);
-    let result = hasher.finalize();
-    bytes_to_hex(&result)
+    bytes_to_hex(&hasher.finalize())
 }
 
-/// 获取 SHA1 值（字符串）
-pub fn gen_sha1_from_string(input: &str) -> String {
-    gen_sha1_from_bytes(input.as_bytes())
+/// 从字符串生成校验值
+/// - `hash_type`: 校验类型
+/// - `data`: 需要计算的数据
+pub fn gen_hash_from_string(hash_type: HashType, data: &str) -> String {
+    let mut hasher = create_hasher(hash_type);
+    hasher.update(data.as_bytes());
+    bytes_to_hex(&hasher.finalize())
 }
 
-/// 获取 SHA256 值（字符串）
-pub fn gen_sha256_from_string(input: &str) -> String {
-    gen_sha256_from_bytes(input.as_bytes())
+/// 从数据流生成校验值
+/// - `hash_type`: 校验类型
+/// - `reader`: 需要计算的数据流
+pub fn gen_hash_from_reader<R: Read>(hash_type: HashType, reader: &mut R) -> CoreResult<String> {
+    let mut hasher = create_hasher(hash_type);
+    let mut buffer = [0u8; 1024];
+
+    loop {
+        let len = reader.read(&mut buffer).map_err(|err| {
+            ErrorType::StreamError(ErrorData {
+                error: err.to_string(),
+            })
+        })?;
+
+        if len == 0 {
+            break;
+        }
+        hasher.update(&buffer[..len]);
+    }
+    Ok(bytes_to_hex(&hasher.finalize()))
 }
 
-/// 获取 SHA256 值（文件路径）
-pub fn gen_sha256_from_file<P: AsRef<Path>>(file: P) -> Result<String, Box<dyn Error>> {
-    let file = File::open(file)?;
-    let mut reader = BufReader::new(file);
-    let mut hasher = Sha256::new();
-    let mut buffer = Vec::new();
-    reader.read_to_end(&mut buffer)?;
-    hasher.update(&buffer);
-    let result = hasher.finalize();
-    Ok(bytes_to_hex(&result))
-}
-
-/// 获取 SHA1 值（Stream 流）
-pub fn gen_sha1_from_reader<R: Read>(reader: &mut R) -> Result<String, Box<dyn Error>> {
-    let mut hasher = Sha1::new();
-    let mut buffer = Vec::new();
-    reader.read_to_end(&mut buffer)?;
-    hasher.update(&buffer);
-    let result = hasher.finalize();
-    Ok(bytes_to_hex(&result))
-}
-
-/// 获取 SHA1 值（文件路径）
-pub fn gen_sha1_from_file<P: AsRef<Path>>(file: P) -> Result<String, Box<dyn Error>> {
-    let file = File::open(file)?;
-    let mut reader = BufReader::new(file);
-    gen_sha1_from_reader(&mut reader)
-}
-
-/// 获取 MD5 值（Stream 流）
-pub fn gen_md5_from_reader<R: Read>(reader: &mut R) -> Result<String, Box<dyn Error>> {
-    let mut buffer = Vec::new();
-    reader.read_to_end(&mut buffer)?;
-    let digest = md5::compute(&buffer);
-    Ok(bytes_to_hex(&digest.0))
-}
-
-/// 获取 SHA1 值（异步 Stream 流）
-pub async fn gen_sha1_from_reader_async<R: tokio::io::AsyncRead + Unpin>(
+/// 异步从数据流生成校验值
+/// - `hash_type`: 校验类型
+/// - `reader`: 需要计算的数据流
+pub async fn gen_hash_from_reader_async<R: AsyncRead + Unpin>(
+    hash_type: HashType,
     reader: &mut R,
-) -> Result<String, Box<dyn Error>> {
-    let mut hasher = Sha1::new();
-    let mut buffer = Vec::new();
-    reader.read_to_end(&mut buffer).await?;
-    hasher.update(&buffer);
-    let result = hasher.finalize();
-    Ok(bytes_to_hex(&result))
+) -> CoreResult<String> {
+    let mut hasher = create_hasher(hash_type);
+    let mut buffer = [0u8; 1024];
+
+    loop {
+        let len = reader.read(&mut buffer).await.map_err(|err| {
+            ErrorType::StreamError(ErrorData {
+                error: err.to_string(),
+            })
+        })?;
+
+        if len == 0 {
+            break;
+        }
+        hasher.update(&buffer[..len]);
+    }
+    Ok(bytes_to_hex(&hasher.finalize()))
 }
 
-/// 获取 SHA256 值（字节数组）
-pub fn gen_sha256_from_bytes(data: &[u8]) -> String {
-    let mut hasher = Sha256::new();
-    hasher.update(data);
-    let result = hasher.finalize();
-    bytes_to_hex(&result)
+/// 从文件生成校验值
+/// - `hash_type`: 校验类型
+/// - `file`: 文件路径
+pub fn gen_hash_from_file<P: AsRef<Path>>(hash_type: HashType, file: P) -> CoreResult<String> {
+    let mut file = path_helper::open_read(file)?;
+    gen_hash_from_reader(hash_type, &mut file)
 }
 
-/// 获取 SHA256 值（Stream 流）
-pub fn gen_sha256_from_reader<R: Read>(reader: &mut R) -> Result<String, Box<dyn Error>> {
-    let mut hasher = Sha256::new();
-    let mut buffer = Vec::new();
-    reader.read_to_end(&mut buffer)?;
-    hasher.update(&buffer);
-    let result = hasher.finalize();
-    Ok(bytes_to_hex(&result))
-}
-
-/// 获取 SHA256 值（异步 Stream 流）
-pub async fn gen_sha256_from_reader_async<R: tokio::io::AsyncRead + Unpin>(
-    reader: &mut R,
-) -> Result<String, Box<dyn Error>> {
-    let mut hasher = Sha256::new();
-    let mut buffer = Vec::new();
-    reader.read_to_end(&mut buffer).await?;
-    hasher.update(&buffer);
-    let result = hasher.finalize();
-    Ok(bytes_to_hex(&result))
-}
-
-/// 获取 SHA512 值（异步 Stream 流）
-pub async fn gen_sha512_from_reader_async<R: tokio::io::AsyncRead + Unpin>(
-    reader: &mut R,
-) -> Result<String, Box<dyn Error>> {
-    let mut hasher = Sha512::new();
-    let mut buffer = Vec::new();
-    reader.read_to_end(&mut buffer).await?;
-    hasher.update(&buffer);
-    let result = hasher.finalize();
-    Ok(bytes_to_hex(&result))
+/// 异步从文件生成校验值
+/// - `hash_type`: 校验类型
+/// - `file`: 文件路径
+pub async fn gen_hash_from_file_async<P: AsRef<Path>>(
+    hash_type: HashType,
+    file: P,
+) -> CoreResult<String> {
+    let mut file = path_helper::open_read_async(file).await?;
+    gen_hash_from_reader_async(hash_type, &mut file).await
 }
 
 /// 生成 Base64（字符串）
+/// - `input`: 需要生成的数据
 pub fn gen_base64(input: &str) -> String {
     BASE64.encode(input.as_bytes())
 }
 
 /// 反解 Base64
-pub fn de_base64(input: &str) -> Result<String, Box<dyn Error>> {
-    let bytes = BASE64.decode(input)?;
-    Ok(String::from_utf8(bytes)?)
+/// - `input`: Base64字符串
+pub fn de_base64(input: &str) -> CoreResult<String> {
+    let bytes = BASE64.decode(input).map_err(|err| {
+        ErrorType::Base64Error(ErrorData {
+            error: err.to_string(),
+        })
+    })?;
+    Ok(String::from_utf8(bytes).map_err(|err| {
+        ErrorType::Base64Error(ErrorData {
+            error: err.to_string(),
+        })
+    })?)
 }

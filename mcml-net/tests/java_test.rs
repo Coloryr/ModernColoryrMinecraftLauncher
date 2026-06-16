@@ -9,7 +9,7 @@ fn init() {
 
     mcml_log::start(&run_dir);
     mcml_config::init(&run_dir);
-    mcml_http::init();
+    mcml_net::init();
 }
 
 fn stop() {
