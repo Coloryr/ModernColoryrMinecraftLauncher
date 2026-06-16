@@ -36,18 +36,18 @@ impl GameArgObj {
 
 /// 判断是否是 1.17 以上版本
 /// - `version`: 版本号字符串
-pub fn is_game_version_117(version: &String) -> bool {
+pub fn is_game_version_117(version: &str) -> bool {
     is_game_version_greater(version, "1.17") || version == "1.17"
 }
 
 /// 判断是否是 1.20.2 以上版本
 /// - `version`: 版本号字符串
-pub fn is_game_version_120(version: &String) -> bool {
+pub fn is_game_version_120(version: &str) -> bool {
     is_game_version_greater(version, "1.20") || version == "1.20"
 }
 
 /// 判断是否是 1.20.2 以上版本
 /// - `version`: 版本号字符串
-pub fn is_game_version_1202(version: &String) -> bool {
+pub fn is_game_version_1202(version: &str) -> bool {
     is_game_version_greater(version, "1.20.2") || version == "1.20.2"
 }

@@ -14,8 +14,8 @@ use mcml_names::names;
 pub fn find(dir: &PathBuf) -> Option<PathBuf> {
     let sys = get_system_info();
     match sys.os {
-        Os::Windows => path_helper::get_file(dir, names::NAME_JAVAW_FILE),
-        Os::Linux | Os::MacOS => path_helper::get_file(dir, names::NAME_JAVA_FILE),
+        Os::Windows => path_helper::get_file(dir, names::JAVAW_FILE),
+        Os::Linux | Os::MacOS => path_helper::get_file(dir, names::JAVA_FILE),
         _ => None,
     }
 }

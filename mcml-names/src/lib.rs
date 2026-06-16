@@ -107,7 +107,7 @@ pub fn set_lang(lang: Lang) {
 
 /// 初始化语言
 pub fn init(local: &PathBuf) {
-    let file = local.with_file_name(names::NAME_LANG_FILE);
+    let file = local.with_file_name(names::LANG_FILE);
     let file = FILE.get_or_init(|| file);
 
     if file.exists() {

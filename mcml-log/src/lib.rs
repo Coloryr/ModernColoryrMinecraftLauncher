@@ -32,7 +32,7 @@ static SEM: OnceLock<Arc<Semaphore>> = OnceLock::new();
 pub fn start(local: &PathBuf) {
     SEM.get_or_init(|| Arc::new(Semaphore::new(0)));
 
-    let log_path = local.join(names::NAME_LOG_FILE);
+    let log_path = local.join(names::LOG_FILE);
 
     let file = match OpenOptions::new()
         .create(true)

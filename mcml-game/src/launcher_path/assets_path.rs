@@ -33,15 +33,15 @@ static SKIN_DIR: OnceLock<PathBuf> = OnceLock::new();
 /// 初始化
 /// - `dir`: 运行目录
 pub fn init(dir: &PathBuf) {
-    let dir = BASE_DIR.get_or_init(|| dir.join(names::NAME_GAME_ASSETS_DIR));
+    let dir = BASE_DIR.get_or_init(|| dir.join(names::GAME_ASSETS_DIR));
 
     OBJECTS_DIR
-        .set(dir.join(names::NAME_GAME_INDEX_DIR))
+        .set(dir.join(names::GAME_INDEX_DIR))
         .unwrap();
     INDEX_DIR
-        .set(dir.join(names::NAME_GAME_OBJECT_DIR))
+        .set(dir.join(names::GAME_OBJECT_DIR))
         .unwrap();
-    SKIN_DIR.set(dir.join(names::NAME_GAME_SKIN_DIR)).unwrap();
+    SKIN_DIR.set(dir.join(names::GAME_SKIN_DIR)).unwrap();
 
     let dir = dir.as_path();
     if !dir.is_dir() {
@@ -75,7 +75,7 @@ pub fn get_obj_dir() -> PathBuf {
 pub fn add_index(obj: &GameArgObj, data: &mut Cursor<Vec<u8>>) {
     let index = obj.asset_index.as_ref().unwrap();
     let file = INDEX_DIR.get().unwrap().join(format!("{}.json", index.id));
-    path_helper::write_bytes_from_stream(&file, data).unwrap();
+    path_helper::write_stream(&file, data).unwrap();
 }
 
 /// 获取资源数据

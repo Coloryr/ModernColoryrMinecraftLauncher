@@ -1,4 +1,11 @@
+use std::{collections::{HashMap, HashSet}, path::Path, sync::Mutex};
+
+use mcml_base::file_item::FileItemObj;
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
+use tokio::task::spawn_blocking;
+
+use crate::launcher::game_setting_obj::GameSettingObj;
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
@@ -32,7 +39,7 @@ impl Default for GameRulesObj {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(default)]
 pub struct ArtifactObj {
     pub path: String,
@@ -50,7 +57,7 @@ impl Default for ArtifactObj {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(default)]
 pub struct ClassifiersObj {
     #[serde(rename = "natives-linux")]
@@ -77,7 +84,7 @@ impl Default for ClassifiersObj {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(default)]
 pub struct GameLibrariesDownloadsObj {
     pub classifiers: ClassifiersObj,
@@ -206,7 +213,7 @@ impl Default for GameJavaVersionObj {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(default)]
 pub struct GameLibrariesObj {
     pub downloads: GameLibrariesDownloadsObj,
@@ -293,5 +300,39 @@ impl Default for GameArgObj {
             release_time: Default::default(),
             arguments: Default::default(),
         }
+    }
+}
+
+impl GameArgObj {
+    /// 创建游戏运行库项目
+    /// - `native`: 本地库路径
+    /// - `game`: 游戏实例
+    pub async fn build_game_libs(&self, native: &Path, game: Option<GameSettingObj>) {
+        let mut list = Mutex::new(Vec::<FileItemObj>::new());
+        let mut keys = HashSet::<String>::new();
+        let mut natives = Mutex::new(HashMap::<String, bool>::new());
+        let mut natives_arm = Mutex::new(Vec::<String>::new());
+
+        fn process_library() {
+            
+        }
+
+        let list = self.libraries.clone().unwrap();
+        spawn_blocking(move || {
+            #[cfg(debug_assertions)] 
+            {
+                self.libraries.par_iter().for_each(|itme| {
+
+                });
+            }
+            #[cfg(not(debug_assertions))]
+            {
+                self.libraries.iter().for_each(|itme| {
+
+                });
+            }
+        })
+        .await
+        .unwrap();
     }
 }
