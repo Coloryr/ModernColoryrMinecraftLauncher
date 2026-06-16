@@ -17,3 +17,5 @@ serde_repr.workspace = true
 chrono.workspace = true
 uuid.workspace = true
 url.workspace = true
+rayon.workspace = true
+tokio.workspace = true

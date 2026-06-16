@@ -92,7 +92,7 @@ pub fn load(file: &PathBuf) -> bool {
 }
 
 pub fn init(local: &PathBuf) -> bool {
-    FILE.get_or_init(|| local.join(names::NAME_CONFIG_FILE));
+    FILE.get_or_init(|| local.join(names::CONFIG_FILE));
 
     load(FILE.get().unwrap())
 }

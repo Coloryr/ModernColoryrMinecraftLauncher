@@ -30,10 +30,10 @@ impl TarMode {
     pub fn try_from_path(path: &Path) -> Option<Self> {
         let file_name = path.file_name()?.to_string_lossy().to_lowercase();
 
-        if file_name.ends_with(names::NAME_TAR_GZ_EXT) || file_name.ends_with(names::NAME_TGZ_EXT) {
+        if file_name.ends_with(names::TAR_GZ_EXT) || file_name.ends_with(names::TGZ_EXT) {
             Some(TarMode::Gz)
-        } else if file_name.ends_with(names::NAME_TAR_XZ_EXT)
-            || file_name.ends_with(names::NAME_TXZ_EXT)
+        } else if file_name.ends_with(names::TAR_XZ_EXT)
+            || file_name.ends_with(names::TXZ_EXT)
         {
             Some(TarMode::Xz)
         } else {

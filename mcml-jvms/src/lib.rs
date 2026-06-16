@@ -23,7 +23,7 @@ static JVMS: OnceLock<RwLock<HashMap<String, Arc<JavaInfoObj>>>> = OnceLock::new
 /// - `dir`:  运行的路径
 pub fn init(dir: &PathBuf) {
     let dir = DIR.get_or_init(|| dir.clone());
-    let dir = JAVA_DIR.get_or_init(|| dir.join(names::NAME_JAVA_DIR));
+    let dir = JAVA_DIR.get_or_init(|| dir.join(names::JAVA_DIR));
     if !dir.is_dir() || !dir.exists() {
         fs::create_dir(dir).unwrap();
     }
@@ -86,7 +86,7 @@ pub fn add_item(name: String, file: String) -> Option<String> {
 
     remove(&name);
 
-    let path = if local.starts_with(names::NAME_JAVA_DIR) {
+    let path = if local.starts_with(names::JAVA_DIR) {
         dir.join(&local)
     } else {
         Path::new(&local).to_path_buf()
@@ -127,7 +127,7 @@ fn add_list(list: &Vec<JvmConfigObj>) {
         let mut empty: bool = false;
         for item in list_cloned.iter() {
             let path = item.local.clone();
-            let path = if path.starts_with(names::NAME_JAVA_DIR) {
+            let path = if path.starts_with(names::JAVA_DIR) {
                 dir.join(path)
             } else {
                 PathBuf::from(path)

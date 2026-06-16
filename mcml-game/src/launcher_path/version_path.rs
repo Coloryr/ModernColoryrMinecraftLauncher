@@ -5,7 +5,10 @@ use std::{
     sync::{Arc, OnceLock, RwLock},
 };
 
-use mcml_base::{hash_helper, path_helper};
+use mcml_base::{
+    hash_helper::{self, HashType},
+    path_helper,
+};
 use mcml_config::{config_obj::SourceLocal, config_save};
 use mcml_names::{
     i18_items::error_type::{ErrorData, ErrorType},
@@ -55,20 +58,20 @@ static CUSTOM_LOADERS: OnceLock<RwLock<HashMap<Uuid, Arc<CustomLoaderType>>>> = 
 /// 初始化版本路径
 /// - `dir`: 运行路径
 pub fn init(dir: &PathBuf) {
-    let dir = BASE_DIR.get_or_init(|| dir.join(names::NAME_VERSION_DIR));
+    let dir = BASE_DIR.get_or_init(|| dir.join(names::VERSION_DIR));
 
-    FORGE_DIR.set(dir.join(names::NAME_FORGE_KEY)).unwrap();
-    FABRIC_DIR.set(dir.join(names::NAME_FABRIC_KEY)).unwrap();
-    QUILT_DIR.set(dir.join(names::NAME_QUILT_KEY)).unwrap();
+    FORGE_DIR.set(dir.join(names::FORGE_KEY)).unwrap();
+    FABRIC_DIR.set(dir.join(names::FABRIC_KEY)).unwrap();
+    QUILT_DIR.set(dir.join(names::QUILT_KEY)).unwrap();
     NEOFORGE_DIR
-        .set(dir.join(names::NAME_NEOFORGED_KEY))
+        .set(dir.join(names::NEOFORGED_KEY))
         .unwrap();
 
     OPTIFINE_FILE
-        .set(dir.join(names::NAME_OPTIFINE_FILE))
+        .set(dir.join(names::OPTIFINE_FILE))
         .unwrap();
     LITELOADER_FILE
-        .set(dir.join(names::NAME_LITELOADER_FILE))
+        .set(dir.join(names::LITELOADER_FILE))
         .unwrap();
 
     OPTIFINE_LOADER.set(RwLock::new(HashMap::new())).unwrap();
@@ -162,7 +165,7 @@ fn save_optifine() {
 /// 从在线获取版本信息
 async fn get_version_from_online() {
     fn save_versions(data: &Vec<u8>) {
-        let file = BASE_DIR.get().unwrap().join(names::NAME_VERSION_FILE);
+        let file = BASE_DIR.get().unwrap().join(names::VERSION_FILE);
         path_helper::write_bytes(&file, data).unwrap();
     }
 
@@ -196,7 +199,7 @@ async fn get_version_from_online() {
 
 /// 读取版本信息
 async fn read_version() {
-    let local = BASE_DIR.get().unwrap().join(names::NAME_VERSION_FILE);
+    let local = BASE_DIR.get().unwrap().join(names::VERSION_FILE);
     if local.exists() {
         match path_helper::open_read(&local) {
             Err(err) => {
@@ -275,23 +278,23 @@ pub async fn add_game(obj: &VersionsObj) -> Option<Arc<GameArgObj>> {
 /// 保存Fabric-Loader信息
 /// - `mc`: 游戏版本
 /// - `version`: 加载器版本
-pub fn add_fabric(obj: FabricLoaderObj, data: &Vec<u8>, mc: &String, version: &String) {
+pub fn add_fabric(obj: FabricLoaderObj, data: &Vec<u8>, mc: &str, version: &str) {
     let file = FABRIC_DIR.get().unwrap().join(format!("{}.json", obj.id));
     path_helper::write_bytes(&file, &data).unwrap();
 
-    let key = LoaderKey::new(mc.clone(), version.clone());
+    let key = LoaderKey::new(mc, version);
     let mut list = FABRIC_LOADERS.get().unwrap().write().unwrap();
     list.insert(key.clone(), Arc::new(obj));
 }
 
 /// 添加Forge启动信息
 /// - `obj`: 信息
-pub fn add_forge(obj: ForgeLaunchObj, data: &Vec<u8>, mc: &String, version: &String, neo: bool) {
-    let v222 = version_checker::is_game_version_1202(&mc);
+pub fn add_forge(obj: ForgeLaunchObj, data: &Vec<u8>, mc: &str, version: &str, neo: bool) {
+    let v222 = version_checker::is_game_version_1202(mc);
     let name = if neo && v222 {
-        format!("{}-{}", names::NAME_NEOFORGE_KEY, version)
+        format!("{}-{}", names::NEOFORGE_KEY, version)
     } else {
-        format!("{}-{}-{}", names::NAME_FORGE_KEY, mc, version)
+        format!("{}-{}-{}", names::FORGE_KEY, mc, version)
     };
     let file = if neo {
         NEOFORGE_DIR.get().unwrap().join(format!("{}.json", name))
@@ -312,13 +315,7 @@ pub fn add_forge(obj: ForgeLaunchObj, data: &Vec<u8>, mc: &String, version: &Str
 /// 添加Forge安装信息
 /// - `obj`: 信息
 /// - `data`: 文本
-pub fn add_forge_install(
-    obj: ForgeInstallObj,
-    data: &Vec<u8>,
-    mc: &String,
-    version: &String,
-    neo: bool,
-) {
+pub fn add_forge_install(obj: ForgeInstallObj, data: &Vec<u8>, mc: &str, version: &str, neo: bool) {
     let name = get_forge_json_name(mc, version, true, true);
     let file = if neo {
         NEOFORGE_DIR.get().unwrap().join(format!("{}.json", name))
@@ -341,11 +338,11 @@ pub fn add_forge_install(
 /// - `data`: 文本
 /// - `mc`: 游戏版本
 /// - `version`: 加载器版本
-pub fn add_quilt_loader(obj: QuiltLoaderObj, data: &Vec<u8>, mc: &String, version: &String) {
+pub fn add_quilt_loader(obj: QuiltLoaderObj, data: &Vec<u8>, mc: &str, version: &str) {
     let file = QUILT_DIR.get().unwrap().join(format!("{}.json", obj.id));
     path_helper::write_bytes(&file, &data).unwrap();
 
-    let key = LoaderKey::new(mc.clone(), version.clone());
+    let key = LoaderKey::new(mc, version);
     let mut list = QUILT_LOADERS.get().unwrap().write().unwrap();
     list.insert(key.clone(), Arc::new(obj));
 }
@@ -369,7 +366,7 @@ pub fn add_optifine(obj: OptifineObj) {
 
 /// 获取版本信息
 /// - `version`: 游戏版本
-pub fn get_version(version: &String) -> Option<Arc<GameArgObj>> {
+pub fn get_version(version: &str) -> Option<Arc<GameArgObj>> {
     let list = GAME_ARGS.get().unwrap().read().unwrap();
     let data = list.get(version);
 
@@ -379,7 +376,7 @@ pub fn get_version(version: &String) -> Option<Arc<GameArgObj>> {
                 BASE_DIR
                     .get()
                     .unwrap()
-                    .join(format!("{}{}", version, names::NAME_JSON_EXT));
+                    .join(format!("{}{}", version, names::JSON_EXT));
             let file = path_helper::open_read(&local);
             if let Err(err) = file {
                 mcml_log::error_type(err);
@@ -393,7 +390,7 @@ pub fn get_version(version: &String) -> Option<Arc<GameArgObj>> {
                     let mut list = GAME_ARGS.get().unwrap().write().unwrap();
                     let data = Arc::new(json);
                     let data1 = data.clone();
-                    list.insert(version.clone(), data);
+                    list.insert(String::from(version), data);
 
                     Some(data1)
                 }
@@ -412,7 +409,7 @@ pub fn get_version(version: &String) -> Option<Arc<GameArgObj>> {
 
 /// 检查游戏版本更新
 /// - `version`: 游戏版本
-pub async fn check_update(version: &String) -> Option<Arc<GameArgObj>> {
+pub async fn check_update(version: &str) -> Option<Arc<GameArgObj>> {
     get_version_from_online().await;
 
     match get_version_obj().await {
@@ -428,18 +425,10 @@ pub async fn check_update(version: &String) -> Option<Arc<GameArgObj>> {
                 None => None,
                 Some(item) => {
                     let local = BASE_DIR.get().unwrap().join(format!("{}.json", version));
-                    let file = path_helper::open_read(&local);
-                    if let Err(err) = file {
-                        mcml_log::error_type(err);
-
-                        return None;
-                    }
-
-                    let mut file = file.unwrap();
-
-                    let sha1 = hash_helper::gen_sha1_from_reader(&mut file).unwrap();
-
-                    if sha1 != item.sha1 {
+                    let sha1 = hash_helper::gen_hash_from_file_async(HashType::Sha1, &local).await;
+                    if sha1.is_err() {
+                        None
+                    } else if sha1.unwrap() != item.sha1 {
                         add_game(item).await
                     } else {
                         get_version(version)
@@ -451,7 +440,7 @@ pub async fn check_update(version: &String) -> Option<Arc<GameArgObj>> {
 }
 
 /// 获取json名字
-pub fn get_forge_json_name(mc: &String, version: &String, neo: bool, install: bool) -> String {
+pub fn get_forge_json_name(mc: &str, version: &str, neo: bool, install: bool) -> String {
     if neo {
         let v222 = version_checker::is_game_version_1202(&mc);
 
@@ -459,36 +448,36 @@ pub fn get_forge_json_name(mc: &String, version: &String, neo: bool, install: bo
             if v222 {
                 format!(
                     "{}-{}-{}{}",
-                    names::NAME_NEOFORGE_KEY,
+                    names::NEOFORGE_KEY,
                     version,
-                    names::NAME_FORGE_INSTALL,
-                    names::NAME_JSON_EXT
+                    names::FILE_INSTALL,
+                    names::JSON_EXT
                 )
             } else {
                 format!(
                     "{}-{}-{}-{}{}",
-                    names::NAME_FORGE_KEY,
+                    names::FORGE_KEY,
                     mc,
                     version,
-                    names::NAME_FORGE_INSTALL,
-                    names::NAME_JSON_EXT
+                    names::FILE_INSTALL,
+                    names::JSON_EXT
                 )
             }
         } else {
             if v222 {
                 format!(
                     "{}-{}{}",
-                    names::NAME_NEOFORGE_KEY,
+                    names::NEOFORGE_KEY,
                     version,
-                    names::NAME_JSON_EXT
+                    names::JSON_EXT
                 )
             } else {
                 format!(
                     "{}-{}-{}{}",
-                    names::NAME_FORGE_KEY,
+                    names::FORGE_KEY,
                     mc,
                     version,
-                    names::NAME_JSON_EXT
+                    names::JSON_EXT
                 )
             }
         }
@@ -496,17 +485,17 @@ pub fn get_forge_json_name(mc: &String, version: &String, neo: bool, install: bo
         if install {
             format!(
                 "{}-{}-{}{}",
-                names::NAME_FORGE_KEY,
+                names::FORGE_KEY,
                 version,
-                names::NAME_FORGE_INSTALL,
-                names::NAME_JSON_EXT
+                names::FILE_INSTALL,
+                names::JSON_EXT
             )
         } else {
             format!(
                 "{}-{}{}",
-                names::NAME_FORGE_KEY,
+                names::FORGE_KEY,
                 version,
-                names::NAME_JSON_EXT
+                names::JSON_EXT
             )
         }
     }
@@ -515,8 +504,8 @@ pub fn get_forge_json_name(mc: &String, version: &String, neo: bool, install: bo
 /// 获取NeoForge安装数据
 /// - `mc`: 游戏版本
 /// - `version`: 加载器版本
-pub fn get_neoforge_install_obj(mc: &String, version: &String) -> Option<Arc<ForgeInstallObj>> {
-    let key = LoaderKey::new(mc.clone(), version.clone());
+pub fn get_neoforge_install_obj(mc: &str, version: &str) -> Option<Arc<ForgeInstallObj>> {
+    let key = LoaderKey::new(mc, version);
 
     let list = NEOFORGE_INSTALLS.get().unwrap().read().unwrap();
     let item = list.get(&key);
@@ -561,8 +550,8 @@ pub fn get_neoforge_install_obj(mc: &String, version: &String) -> Option<Arc<For
 /// 获取NeoForge启动数据
 /// - `mc`: 游戏版本
 /// - `version`: 加载器版本
-pub fn get_neoforge(mc: &String, version: &String) -> Option<Arc<ForgeLaunchObj>> {
-    let key = LoaderKey::new(mc.clone(), version.clone());
+pub fn get_neoforge(mc: &str, version: &str) -> Option<Arc<ForgeLaunchObj>> {
+    let key = LoaderKey::new(mc, version);
 
     let list = NEOFORGE_LAUNCHS.get().unwrap().read().unwrap();
     let item = list.get(&key);
@@ -607,8 +596,8 @@ pub fn get_neoforge(mc: &String, version: &String) -> Option<Arc<ForgeLaunchObj>
 /// 获取Forge安装数据
 /// - `mc`: 游戏版本
 /// - `version`: 加载器版本
-pub fn get_forge_install_obj(mc: &String, version: &String) -> Option<Arc<ForgeInstallObj>> {
-    let key = LoaderKey::new(mc.clone(), version.clone());
+pub fn get_forge_install_obj(mc: &str, version: &str) -> Option<Arc<ForgeInstallObj>> {
+    let key = LoaderKey::new(mc, version);
 
     let list = FORGE_INSTALLS.get().unwrap().read().unwrap();
     let item = list.get(&key);
@@ -653,8 +642,8 @@ pub fn get_forge_install_obj(mc: &String, version: &String) -> Option<Arc<ForgeI
 /// 获取Forge启动数据
 /// - `mc`: 游戏版本
 /// - `version`: 加载器版本
-pub fn get_forge(mc: &String, version: &String) -> Option<Arc<ForgeLaunchObj>> {
-    let key = LoaderKey::new(mc.clone(), version.clone());
+pub fn get_forge(mc: &str, version: &str) -> Option<Arc<ForgeLaunchObj>> {
+    let key = LoaderKey::new(mc, version);
 
     let list = FORGE_LAUNCHS.get().unwrap().read().unwrap();
     let item = list.get(&key);
@@ -700,17 +689,17 @@ pub fn get_forge(mc: &String, version: &String) -> Option<Arc<ForgeLaunchObj>> {
 /// 获取Fabric加载器数据
 /// - `mc`: 游戏版本
 /// - `version`: 加载器版本
-pub fn get_fabric(mc: &String, version: &String) -> Option<Arc<FabricLoaderObj>> {
-    let key = LoaderKey::new(mc.clone(), version.clone());
+pub fn get_fabric(mc: &str, version: &str) -> Option<Arc<FabricLoaderObj>> {
+    let key = LoaderKey::new(mc, version);
     let list = FABRIC_LOADERS.get().unwrap().read().unwrap();
     match list.get(&key) {
         None => {
             let local = FABRIC_DIR.get().unwrap().join(format!(
                 "{}-{}-{}{}",
-                names::NAME_FABRIC_LOADER_KEY,
+                names::FABRIC_LOADER_KEY,
                 version,
                 mc,
-                names::NAME_JSON_EXT
+                names::JSON_EXT
             ));
             let file = path_helper::open_read(&local);
             if let Err(err) = file {
@@ -746,17 +735,17 @@ pub fn get_fabric(mc: &String, version: &String) -> Option<Arc<FabricLoaderObj>>
 /// 获取Quilt加载器数据
 /// - `mc`: 游戏版本
 /// - `version`: 加载器版本
-pub fn get_quilt(mc: &String, version: &String) -> Option<Arc<QuiltLoaderObj>> {
-    let key = LoaderKey::new(mc.clone(), version.clone());
+pub fn get_quilt(mc: &str, version: &str) -> Option<Arc<QuiltLoaderObj>> {
+    let key = LoaderKey::new(mc, version);
     let list = QUILT_LOADERS.get().unwrap().read().unwrap();
     match list.get(&key) {
         None => {
             let local = FABRIC_DIR.get().unwrap().join(format!(
                 "{}-{}-{}{}",
-                names::NAME_FABRIC_LOADER_KEY,
+                names::FABRIC_LOADER_KEY,
                 version,
                 mc,
-                names::NAME_JSON_EXT
+                names::JSON_EXT
             ));
             let file = path_helper::open_read(&local);
             if let Err(err) = file {
@@ -791,7 +780,7 @@ pub fn get_quilt(mc: &String, version: &String) -> Option<Arc<QuiltLoaderObj>> {
 
 /// 获取高清修复信息
 /// - `version`: 版本号
-pub fn get_optifine(version: &String) -> Option<Arc<OptifineObj>> {
+pub fn get_optifine(version: &str) -> Option<Arc<OptifineObj>> {
     let list = OPTIFINE_LOADER.get().unwrap().read().unwrap();
     Some(list.get(version)?.clone())
 }

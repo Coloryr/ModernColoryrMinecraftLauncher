@@ -19,9 +19,9 @@ impl AgentObj {
     pub fn new(use_minecraft: bool) -> Self {
         AgentObj {
             name: String::from(if use_minecraft {
-                names::NAME_MINECRAFT
+                names::MINECRAFT
             } else {
-                names::NAME_MCML
+                names::MCML
             }),
             version: if use_minecraft {
                 1

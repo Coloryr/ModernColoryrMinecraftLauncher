@@ -30,7 +30,7 @@ pub struct FileItemObj {
     /// 名字
     pub name: String,
     /// 文件位置
-    pub local: PathBuf,
+    pub file: PathBuf,
     /// 下载地址
     pub url: String,
     /// 文件校验

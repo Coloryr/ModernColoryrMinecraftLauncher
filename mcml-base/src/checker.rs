@@ -6,7 +6,7 @@ static REGEX_WORD: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"^[a-zA-Z0-9]+
 
 /// 检查是否为数字
 /// - `input`: 需要检查的内容
-pub fn check_is_not_number(input: &String) -> bool {
+pub fn check_is_not_number(input: &str) -> bool {
     if input.trim().is_empty() {
         return true;
     }

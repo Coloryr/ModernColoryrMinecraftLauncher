@@ -28,20 +28,23 @@ static NATIVE_DIR: OnceLock<PathBuf> = OnceLock::new();
 static AUTHLIB_FILE: OnceLock<FileItemObj> = OnceLock::new();
 static NIDE8_FILE: OnceLock<FileItemObj> = OnceLock::new();
 
+/// 获取基础路径
 pub fn get_base_dir() -> PathBuf {
     BASE_DIR.get().unwrap().clone()
 }
 
+/// 获取外部登陆jar
 pub fn get_authlib_file() -> Option<PathBuf> {
     let file = AUTHLIB_FILE.get()?;
 
-    Some(file.local.clone())
+    Some(file.file.clone())
 }
 
+/// 获取统一通行证jar
 pub fn get_nide8_file() -> Option<PathBuf> {
     let file = AUTHLIB_FILE.get()?;
 
-    Some(file.local.clone())
+    Some(file.file.clone())
 }
 
 /// 运行库信息
@@ -74,13 +77,13 @@ impl std::hash::Hash for LibVersionObj {
 }
 
 impl LibVersionObj {
-    pub fn new(name: &String) -> Self {
+    pub fn new(name: &str) -> Self {
         let arg: Vec<&str> = name.split(':').collect();
 
         if arg.len() < 3 {
             Self {
                 pack: String::new(),
-                name: name.clone(),
+                name: String::from(name),
                 version: String::new(),
                 extr: String::new(),
             }
@@ -114,12 +117,12 @@ impl LibVersionObj {
 /// 初始化版本路径
 /// - `dir`: 运行路径
 pub fn init(dir: &PathBuf) {
-    let dir = BASE_DIR.get_or_init(|| dir.join(names::NAME_LIB_DIR));
+    let dir = BASE_DIR.get_or_init(|| dir.join(names::LIB_DIR));
 
     let sys = get_system_info();
     NATIVE_DIR
         .set(
-            dir.join(names::NAME_NATIVE_DIR)
+            dir.join(names::NATIVE_DIR)
                 .join(sys.os.to_string().to_lowercase())
                 .join(sys.system_arch.to_string().to_lowercase()),
         )
@@ -154,7 +157,7 @@ pub fn get_native_dir(version: Option<String>) -> PathBuf {
 
 /// 获取游戏核心路径
 /// - `version`: 游戏版本
-pub fn get_game_file(version: &String) -> PathBuf {
+pub fn get_game_file(version: &str) -> PathBuf {
     BASE_DIR
         .get()
         .unwrap()
@@ -167,7 +170,7 @@ pub fn get_game_file(version: &String) -> PathBuf {
 
 /// 获取游戏核心路径
 /// - `custom`: 自定义版本号
-pub fn get_game_file_with_custom(custom: &String) -> PathBuf {
+pub fn get_game_file_with_custom(custom: &str) -> PathBuf {
     BASE_DIR
         .get()
         .unwrap()
@@ -180,7 +183,7 @@ pub fn get_game_file_with_custom(custom: &String) -> PathBuf {
 /// 获取OptiFine路径
 /// - `mc`: 游戏版本
 /// - `version`: optifine版本
-pub fn get_optifine_file(mc: &String, version: &String) -> PathBuf {
+pub fn get_optifine_file(mc: &str, version: &str) -> PathBuf {
     BASE_DIR
         .get()
         .unwrap()
@@ -207,7 +210,7 @@ impl GameSettingObj {
             {
                 game_list.remove(pos);
             }
-            game_list.push((key, item.local.clone()));
+            game_list.push((key, item.file.clone()));
         }
 
         if let Some(data) = &self.custom_loader
@@ -216,7 +219,7 @@ impl GameSettingObj {
             return game_list
                 .into_iter()
                 .map(|(_, path)| path)
-                .chain(std::iter::once(arg.game_jar.local.clone()))
+                .chain(std::iter::once(arg.game_jar.file.clone()))
                 .collect();
         }
 
@@ -229,7 +232,7 @@ impl GameSettingObj {
             {
                 loader_list.remove(pos);
             }
-            loader_list.push((key, item.local.clone()));
+            loader_list.push((key, item.file.clone()));
         }
 
         // 如果是自定义加载器则判断是否后置原版库
@@ -273,7 +276,7 @@ impl GameSettingObj {
         let mut output: Vec<PathBuf> = result.into_values().collect();
 
         if self.loader != LoaderType::NeoForge {
-            output.push(arg.game_jar.local.clone());
+            output.push(arg.game_jar.file.clone());
         }
 
         output
@@ -295,7 +298,7 @@ fn add_or_update_lib_kv(
 pub fn build_authlib_injector_item(obj: &AuthlibInjectorObj) -> FileItemObj {
     FileItemObj {
         name: format!("moe.yushi:authlibinjector:{}", obj.version),
-        local: BASE_DIR
+        file: BASE_DIR
             .get()
             .unwrap()
             .join("moe")
@@ -312,8 +315,8 @@ async fn read_authlib_injector() -> CoreResult<Option<FileItemObj>> {
     let obj = authlib_api::get_obj().await?;
     let item = build_authlib_injector_item(&obj);
 
-    if item.local.exists() {
-        let sha256 = hash_helper::gen_hash_from_file_async(HashType::Sha256, &item.local).await?;
+    if item.file.exists() {
+        let sha256 = hash_helper::gen_hash_from_file_async(HashType::Sha256, &item.file).await?;
         if obj.checksums.sha256 != sha256 {
             Ok(Some(item))
         } else {
@@ -330,7 +333,7 @@ async fn read_authlib_injector() -> CoreResult<Option<FileItemObj>> {
 pub async fn ready_authlib_injector() -> CoreResult<Option<FileItemObj>> {
     match AUTHLIB_FILE.get() {
         Some(obj) => {
-            let path = &obj.local;
+            let path = &obj.file;
             if !path.exists() {
                 Ok(Some(obj.clone()))
             } else {
@@ -351,7 +354,7 @@ pub async fn ready_authlib_injector() -> CoreResult<Option<FileItemObj>> {
 pub fn build_nide8_item(obj: &Nide8Obj) -> FileItemObj {
     FileItemObj {
         name: format!("com.nide8.login2:nide8auth:{}", obj.jar_version),
-        local: BASE_DIR
+        file: BASE_DIR
             .get()
             .unwrap()
             .join("com")
@@ -369,8 +372,8 @@ async fn read_nide8() -> CoreResult<Option<FileItemObj>> {
     let obj = nide8_api::get_obj().await?;
     let item = build_nide8_item(&obj);
 
-    if item.local.exists() {
-        let sha1 = hash_helper::gen_hash_from_file_async(HashType::Sha1, &item.local).await?;
+    if item.file.exists() {
+        let sha1 = hash_helper::gen_hash_from_file_async(HashType::Sha1, &item.file).await?;
         if obj.jar_hash != sha1 {
             Ok(Some(item))
         } else {
@@ -387,7 +390,7 @@ async fn read_nide8() -> CoreResult<Option<FileItemObj>> {
 pub async fn ready_nide8() -> CoreResult<Option<FileItemObj>> {
     match NIDE8_FILE.get() {
         Some(obj) => {
-            let path = &obj.local;
+            let path = &obj.file;
             if !path.exists() {
                 Ok(Some(obj.clone()))
             } else {

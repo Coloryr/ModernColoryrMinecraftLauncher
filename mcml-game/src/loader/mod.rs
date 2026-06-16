@@ -14,8 +14,11 @@ pub struct LoaderKey {
 }
 
 impl LoaderKey {
-    pub fn new(mc: String, version: String) -> Self {
-        LoaderKey { mc, version }
+    pub fn new(mc: &str, version: &str) -> Self {
+        LoaderKey {
+            mc: String::from(mc),
+            version: String::from(version),
+        }
     }
 }
 
