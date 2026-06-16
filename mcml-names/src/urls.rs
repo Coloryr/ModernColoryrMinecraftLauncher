@@ -1,5 +1,7 @@
 pub const LITTLE_SKIN_URL: &str = "https://littleskin.cn/";
+
 pub const NIDE8_URL: &str = "https://auth.mc-user.com:233/";
+pub const NIDE8_JAR_URL: &str = "https://login.mc-user.com:233/index/jar";
 
 pub const OAUTH_CODE: &str = "https://login.microsoftonline.com/consumers/oauth2/v2.0/devicecode";
 pub const OAUTH_TOKEN: &str = "https://login.microsoftonline.com/consumers/oauth2/v2.0/token";
@@ -22,4 +24,19 @@ pub const MOJANG: [&str; 4] = [
     MOJANG_PISTON_META,
 ];
 
+pub const MINECRAFT_LIBRARIES: &str = "https://libraries.minecraft.net/";
+pub const MINECRAFT_RESOURCES: &str = "https://resources.download.minecraft.net/";
+
+pub const FORGE: &str = "https://maven.minecraftforge.net/";
+
+pub const NEOFORGE: &str = "https://maven.neoforged.net/";
+
+pub const FABRIC: &str = "https://maven.fabricmc.net/";
 pub const FABRIC_META: &str = "https://meta.fabricmc.net/";
+
+pub const QUILT: &str = "https://maven.quiltmc.org/";
+pub const QUILT_META: &str = "https://meta.quiltmc.org/";
+
+pub const AUTHLIB: &str = "https://authlib-injector.yushi.moe/";
+
+pub const OPTIFINE: &str = "https://optifine.net/";

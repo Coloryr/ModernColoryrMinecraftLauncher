@@ -1,4 +1,5 @@
 pub mod archives;
+pub mod checker;
 pub mod events;
 pub mod file_item;
 pub mod hash_helper;

@@ -11,7 +11,7 @@ use mcml_names::{
     i18_items::error_type::{ErrorData, ErrorType},
     names, uuids,
 };
-use mcml_net::url_helper;
+use mcml_net::{net::mojang_api, url_helper};
 use uuid::Uuid;
 
 use crate::{
@@ -23,7 +23,7 @@ use crate::{
     },
     mojang::{
         game_arg_obj::GameArgObj,
-        mojang_api, version_checker,
+        version_checker,
         version_obj::{VersionObj, VersionsObj},
     },
 };
@@ -109,6 +109,11 @@ pub fn init(dir: &PathBuf) {
     }
 
     load_optifine();
+}
+
+/// 获取目录
+pub fn get_dir() -> PathBuf {
+    BASE_DIR.get().unwrap().clone()
 }
 
 /// 加载高清修复版本信息

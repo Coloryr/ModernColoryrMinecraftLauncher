@@ -57,9 +57,6 @@ pub enum ErrorType {
     /// Json处理错误
     JsonError(ErrorData),
 
-    /// 文件不存在
-    FileNotExists(FileNotExistsData),
-
     /// 登录返回数据错误
     AuthDataError(String),
     /// 登录错误
@@ -84,6 +81,10 @@ pub enum ErrorType {
 
     /// 文件系统处理错误
     FileSystemError(FileSystemErrorData),
+    /// 文件获取错误
+    FileReadError(ErrorData),
+    /// 文件不存在
+    FileNotExists(FileNotExistsData),
 
     /// 压缩包打开错误
     ArchiveOpenError(FileSystemErrorData),
@@ -94,7 +95,9 @@ pub enum ErrorType {
     /// 压缩文件写错误
     ArchiveWriteError(ErrorData),
 
+    /// 任务取消
     TaskCancel,
+    /// 任务执行超时
     TaskTimeout,
 
     GetVersionMetaFail,
@@ -106,4 +109,10 @@ pub enum ErrorType {
     NbtTypeError,
     /// NBT读取失败
     NbtReadError,
+
+    /// 项目不存在
+    DataNotFound,
+
+    /// BASE64错误
+    Base64Error(ErrorData)
 }

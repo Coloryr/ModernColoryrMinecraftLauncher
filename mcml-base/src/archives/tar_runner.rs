@@ -1,4 +1,4 @@
-use std::{io::Read, path::PathBuf};
+use std::{io::Read, path::Path};
 
 use flate2::read::GzDecoder;
 use flate2::{Compression, write::GzEncoder};
@@ -20,14 +20,14 @@ pub(crate) struct TarProcess {
 impl IArchive for TarProcess {
     fn compress(
         &self,
-        archive_file: &PathBuf,
-        pack_dir: &PathBuf,
-        root_path: Option<&PathBuf>,
+        archive_file: &Path,
+        pack_dir: &Path,
+        root_path: Option<&Path>,
         filter: &Option<Vec<String>>,
     ) -> Result<(), ErrorType> {
         let root_path = match root_path {
             Some(path) => path,
-            None => &pack_dir.clone(),
+            None => pack_dir,
         };
 
         let mode = self
@@ -37,7 +37,7 @@ impl IArchive for TarProcess {
         self.tar(archive_file, pack_dir, root_path, filter, mode)
     }
 
-    fn decompress(&self, archive_file: &PathBuf, output_dir: &PathBuf) -> Result<(), ErrorType> {
+    fn decompress(&self, archive_file: &Path, output_dir: &Path) -> Result<(), ErrorType> {
         let mode = self
             .mode
             .unwrap_or(TarMode::try_from_path(archive_file).unwrap_or(TarMode::Gz));
@@ -53,9 +53,9 @@ impl TarProcess {
 
     fn tar(
         &self,
-        archive_file: &PathBuf,
-        pack_dir: &PathBuf,
-        root_path: &PathBuf,
+        archive_file: &Path,
+        pack_dir: &Path,
+        root_path: &Path,
         filter: &Option<Vec<String>>,
         mode: TarMode,
     ) -> Result<(), ErrorType> {
@@ -122,8 +122,8 @@ impl TarProcess {
 
     fn un_tar(
         &self,
-        archive_file: &PathBuf,
-        output_dir: &PathBuf,
+        archive_file: &Path,
+        output_dir: &Path,
         mode: TarMode,
     ) -> Result<(), ErrorType> {
         path_helper::create_dir_all(output_dir)?;
@@ -183,7 +183,7 @@ impl TarProcess {
                     })
                 })?
                 .to_path_buf();
-            self.base.add_now(&path.to_path_buf());
+            self.base.add_now(&path);
             entry.unpack_in(output_dir).map_err(|err| {
                 ErrorType::ArchiveError(ArchiveErrorData {
                     source: path.display().to_string(),

@@ -6,7 +6,7 @@ edition = "2024"
 [dependencies]
 mcml-log = { path = "../mcml-log" }
 mcml-config = { path = "../mcml-config" }
-mcml-http = { path = "../mcml-http" }
+mcml-net = { path = "../mcml-net" }
 mcml-names = { path = "../mcml-names" }
 mcml-base = { path = "../mcml-base" }
 tokio.workspace = true
