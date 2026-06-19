@@ -1,4 +1,10 @@
-use std::{collections::HashMap, fs, hash::Hasher, path::PathBuf, sync::OnceLock};
+use std::{
+    collections::HashMap,
+    fs,
+    hash::Hasher,
+    path::{Path, PathBuf},
+    sync::OnceLock,
+};
 
 use mcml_base::{
     file_item::{
@@ -7,6 +13,7 @@ use mcml_base::{
     },
     get_system_info,
     hash_helper::{self, HashType},
+    path_helper,
 };
 use mcml_names::{i18_items::error_type::CoreResult, names, urls};
 use mcml_net::net::{
@@ -116,32 +123,30 @@ impl LibVersionObj {
 
 /// 初始化版本路径
 /// - `dir`: 运行路径
-pub fn init(dir: &PathBuf) {
-    let dir = BASE_DIR.get_or_init(|| dir.join(names::LIB_DIR));
+pub fn init(dir: &Path) -> CoreResult<()> {
+    let dir = BASE_DIR.get_or_init(|| dir.join(names::LIBRARIES_DIR));
 
     let sys = get_system_info();
-    NATIVE_DIR
-        .set(
-            dir.join(names::NATIVE_DIR)
-                .join(sys.os.to_string().to_lowercase())
-                .join(sys.system_arch.to_string().to_lowercase()),
-        )
-        .unwrap();
 
-    let dir = dir.as_path();
-    if !dir.is_dir() {
-        fs::create_dir(dir).unwrap();
+    if !dir.exists() {
+        path_helper::create_dir_all(dir)?;
     }
 
-    let dir = NATIVE_DIR.get().unwrap().as_path();
-    if !dir.is_dir() {
-        fs::create_dir(dir).unwrap();
+    let dir = NATIVE_DIR.get_or_init(|| {
+        dir.join(names::NATIVE_DIR)
+            .join(sys.os.to_string().to_lowercase())
+            .join(sys.system_arch.to_string().to_lowercase())
+    });
+    if !dir.exists() {
+        path_helper::create_dir_all(dir)?;
     }
+
+    Ok(())
 }
 
 /// 获取Native文件夹
 /// - `version`: 游戏版本
-pub fn get_native_dir(version: Option<String>) -> PathBuf {
+pub fn get_native_dir(version: Option<&str>) -> PathBuf {
     match version {
         Some(version) => {
             let dir = NATIVE_DIR.get().unwrap().join(version);
@@ -308,6 +313,7 @@ pub fn build_authlib_injector_item(obj: &AuthlibInjectorObj) -> FileItemObj {
             .join(format!("authlib-injector-{}.jar", obj.version)),
         url: obj.download_url.clone(),
         hash: Sha256(obj.checksums.sha256.clone()),
+        later: Default::default(),
     }
 }
 
@@ -365,6 +371,7 @@ pub fn build_nide8_item(obj: &Nide8Obj) -> FileItemObj {
             .join(format!("nide8auth-{}.jar", obj.jar_version)),
         url: String::from(urls::NIDE8_JAR_URL),
         hash: Sha1(obj.jar_hash.clone()),
+        later: Default::default(),
     }
 }
 

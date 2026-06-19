@@ -1,4 +1,12 @@
-use std::path::PathBuf;
+use std::{
+    io::{Seek, SeekFrom},
+    path::PathBuf,
+};
+
+use crate::{
+    hash_helper::{self, HashType},
+    path_helper,
+};
 
 /// 文件校验
 #[derive(Debug, Clone)]
@@ -8,6 +16,24 @@ pub enum FileHash {
     Sha1(String),
     Sha256(String),
     Sha1Sha256(String, String),
+}
+
+impl Default for FileHash {
+    fn default() -> Self {
+        FileHash::None
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum LaterRun {
+    None,
+    Unpack(PathBuf),
+}
+
+impl Default for LaterRun {
+    fn default() -> Self {
+        LaterRun::None
+    }
 }
 
 impl FileHash {
@@ -35,4 +61,67 @@ pub struct FileItemObj {
     pub url: String,
     /// 文件校验
     pub hash: FileHash,
+    /// 后续执行内容
+    pub later: LaterRun,
+}
+
+impl FileItemObj {
+    /// 检查文件是否正常
+    pub fn check_hash(&self) -> bool {
+        if self.file.exists() && self.file.is_file() {
+            if let Ok(mut stream) = path_helper::open_read(&self.file) {
+                match &self.hash {
+                    FileHash::None => true,
+                    FileHash::Md5(md5) => {
+                        if let Ok(hash) =
+                            hash_helper::gen_hash_from_reader(HashType::Md5, &mut stream)
+                        {
+                            hash.eq_ignore_ascii_case(md5)
+                        } else {
+                            false
+                        }
+                    }
+                    FileHash::Sha1(sha1) => {
+                        if let Ok(hash) =
+                            hash_helper::gen_hash_from_reader(HashType::Sha1, &mut stream)
+                        {
+                            hash.eq_ignore_ascii_case(sha1)
+                        } else {
+                            false
+                        }
+                    }
+                    FileHash::Sha256(sha256) => {
+                        if let Ok(hash) =
+                            hash_helper::gen_hash_from_reader(HashType::Sha256, &mut stream)
+                        {
+                            hash.eq_ignore_ascii_case(sha256)
+                        } else {
+                            false
+                        }
+                    }
+                    FileHash::Sha1Sha256(sha1, sha256) => {
+                        if let Ok(hash) =
+                            hash_helper::gen_hash_from_reader(HashType::Sha1, &mut stream)
+                            && hash.eq_ignore_ascii_case(sha1)
+                        {
+                            stream.seek(SeekFrom::Start(0)).unwrap();
+                            if let Ok(hash) =
+                                hash_helper::gen_hash_from_reader(HashType::Sha256, &mut stream)
+                            {
+                                hash.eq_ignore_ascii_case(sha256)
+                            } else {
+                                false
+                            }
+                        } else {
+                            false
+                        }
+                    }
+                }
+            } else {
+                false
+            }
+        } else {
+            false
+        }
+    }
 }

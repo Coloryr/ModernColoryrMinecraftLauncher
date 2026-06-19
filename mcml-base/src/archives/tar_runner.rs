@@ -8,7 +8,7 @@ use xz2::{read::XzDecoder, write::XzEncoder};
 
 use crate::archives::TarMode;
 use crate::{
-    archives::{ArchiveProcess, IArchive, should_exclude},
+    archives::{ArchiveProcess, ArchiveRun, should_exclude},
     path_helper,
 };
 
@@ -17,7 +17,7 @@ pub(crate) struct TarProcess {
     mode: Option<TarMode>,
 }
 
-impl IArchive for TarProcess {
+impl ArchiveRun for TarProcess {
     fn compress(
         &self,
         archive_file: &Path,

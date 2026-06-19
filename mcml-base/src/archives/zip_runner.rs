@@ -15,14 +15,14 @@ use std::sync::atomic::Ordering;
 #[cfg(unix)]
 use std::{fs, io, path::Path};
 
-use crate::archives::{ArchiveProcess, IArchive, should_exclude};
+use crate::archives::{ArchiveProcess, ArchiveRun, should_exclude};
 use crate::path_helper;
 
 pub(crate) struct ZipProcess {
     base: ArchiveProcess,
 }
 
-impl IArchive for ZipProcess {
+impl ArchiveRun for ZipProcess {
     fn compress(
         &self,
         archive_file: &Path,

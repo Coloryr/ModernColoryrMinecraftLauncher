@@ -32,6 +32,18 @@ impl GameArgObj {
     pub fn is_game_version_v2(&self) -> bool {
         self.minimum_launcher_version > 18
     }
+
+    pub fn is_game_version_117(&self) -> bool {
+        is_game_version_117(&self.id)
+    }
+
+    pub fn is_game_version_120(&self) -> bool {
+        is_game_version_120(&self.id)
+    }
+
+    pub fn is_game_version_1202(&self) -> bool {
+        is_game_version_1202(&self.id)
+    }
 }
 
 /// 判断是否是 1.17 以上版本

@@ -1,7 +1,8 @@
-use mcml_base::{Os, get_system_info};
+use mcml_base::{Os, file_item::{FileHash, FileItemObj}, get_system_info};
+use mcml_net::url_helper;
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
-use crate::mojang::game_arg_obj::GameRulesObj;
+use crate::{launcher_path::{assets_path, libraies_path, version_path}, mojang::game_arg_obj::{GameRulesObj, LoggingObj}};
 
 pub mod assets_obj;
 pub mod game_arg_obj;
@@ -72,4 +73,45 @@ pub fn check_allow(list: &Vec<GameRulesObj>) -> bool {
     }
 
     allow
+}
+
+/// 安全Log4j文件
+/// - `obj`: 游戏数据
+pub fn build_log4j_item(obj: &LoggingObj) -> FileItemObj {
+    FileItemObj {
+        name: String::from("log4j2-xml"),
+        file: version_path::get_dir().join("log4j2").join("log4j2.xml"),
+        url: obj.client.file.url.clone(),
+        hash: FileHash::Sha1(obj.client.file.sha1.clone()),
+        later: Default::default(),
+    }
+}
+
+/// 创建游戏资源下载项目
+/// - `name`: 名字
+/// - `hash`: 校验值
+pub fn build_assets_item(name: &str, hash: &str) -> FileItemObj {
+    let dir: String = hash.chars().take(2).collect();
+    FileItemObj {
+        name: String::from(name),
+        file: assets_path::get_obj_dir().join(dir).join(hash),
+        url: url_helper::get_download_assets(hash),
+        hash: FileHash::Sha1(String::from(hash)),
+        later: Default::default(),
+    }
+}
+
+/// 创建游戏本体下载项目
+/// - `version`: 游戏版本号
+pub fn build_game_item(version: &str) -> FileItemObj {
+    let game = version_path::get_version(version).unwrap();
+    let file = libraies_path::get_game_file(version);
+
+    FileItemObj {
+        name: format!("minecraft-clinet-{version}.jar"),
+        file,
+        url: url_helper::get_minecraft_client(&game.downloads.client.url, version),
+        hash: FileHash::Sha1(game.downloads.client.sha1.clone()),
+        later: Default::default(),
+    }
 }

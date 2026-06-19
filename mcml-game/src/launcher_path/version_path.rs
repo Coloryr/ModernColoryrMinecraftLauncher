@@ -1,8 +1,8 @@
 use std::{
     collections::HashMap,
     fs,
-    path::PathBuf,
-    sync::{Arc, OnceLock, RwLock},
+    path::{Path, PathBuf},
+    sync::{Arc, LazyLock, OnceLock, RwLock},
 };
 
 use mcml_base::{
@@ -11,7 +11,7 @@ use mcml_base::{
 };
 use mcml_config::{config_obj::SourceLocal, config_save};
 use mcml_names::{
-    i18_items::error_type::{ErrorData, ErrorType},
+    i18_items::error_type::{CoreResult, ErrorData, ErrorType},
     names, uuids,
 };
 use mcml_net::{net::mojang_api, url_helper};
@@ -32,86 +32,73 @@ use crate::{
 };
 
 static BASE_DIR: OnceLock<PathBuf> = OnceLock::new();
-
-static VERSION: OnceLock<RwLock<Option<Arc<VersionObj>>>> = OnceLock::new();
-
-static OPTIFINE_FILE: OnceLock<PathBuf> = OnceLock::new();
-static LITELOADER_FILE: OnceLock<PathBuf> = OnceLock::new();
-
 static FORGE_DIR: OnceLock<PathBuf> = OnceLock::new();
 static FABRIC_DIR: OnceLock<PathBuf> = OnceLock::new();
 static QUILT_DIR: OnceLock<PathBuf> = OnceLock::new();
 static NEOFORGE_DIR: OnceLock<PathBuf> = OnceLock::new();
 
-static OPTIFINE_LOADER: OnceLock<RwLock<HashMap<String, Arc<OptifineObj>>>> = OnceLock::new();
-static GAME_ARGS: OnceLock<RwLock<HashMap<String, Arc<GameArgObj>>>> = OnceLock::new();
-static FORGE_INSTALLS: OnceLock<RwLock<HashMap<LoaderKey, Arc<ForgeInstallObj>>>> = OnceLock::new();
-static NEOFORGE_INSTALLS: OnceLock<RwLock<HashMap<LoaderKey, Arc<ForgeInstallObj>>>> =
-    OnceLock::new();
-static FORGE_LAUNCHS: OnceLock<RwLock<HashMap<LoaderKey, Arc<ForgeLaunchObj>>>> = OnceLock::new();
-static NEOFORGE_LAUNCHS: OnceLock<RwLock<HashMap<LoaderKey, Arc<ForgeLaunchObj>>>> =
-    OnceLock::new();
-static FABRIC_LOADERS: OnceLock<RwLock<HashMap<LoaderKey, Arc<FabricLoaderObj>>>> = OnceLock::new();
-static QUILT_LOADERS: OnceLock<RwLock<HashMap<LoaderKey, Arc<QuiltLoaderObj>>>> = OnceLock::new();
-static CUSTOM_LOADERS: OnceLock<RwLock<HashMap<Uuid, Arc<CustomLoaderType>>>> = OnceLock::new();
+static OPTIFINE_FILE: OnceLock<PathBuf> = OnceLock::new();
+static LITELOADER_FILE: OnceLock<PathBuf> = OnceLock::new();
+
+static VERSION: LazyLock<RwLock<Option<Arc<VersionObj>>>> = LazyLock::new(|| RwLock::new(None));
+
+static OPTIFINE_LOADER: LazyLock<RwLock<HashMap<String, Arc<OptifineObj>>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
+static GAME_ARGS: LazyLock<RwLock<HashMap<String, Arc<GameArgObj>>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
+static FORGE_INSTALLS: LazyLock<RwLock<HashMap<LoaderKey, Arc<ForgeInstallObj>>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
+static NEOFORGE_INSTALLS: LazyLock<RwLock<HashMap<LoaderKey, Arc<ForgeInstallObj>>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
+static FORGE_LAUNCHS: LazyLock<RwLock<HashMap<LoaderKey, Arc<ForgeLaunchObj>>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
+static NEOFORGE_LAUNCHS: LazyLock<RwLock<HashMap<LoaderKey, Arc<ForgeLaunchObj>>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
+static FABRIC_LOADERS: LazyLock<RwLock<HashMap<LoaderKey, Arc<FabricLoaderObj>>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
+static QUILT_LOADERS: LazyLock<RwLock<HashMap<LoaderKey, Arc<QuiltLoaderObj>>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
+static CUSTOM_LOADERS: LazyLock<RwLock<HashMap<Uuid, Arc<CustomLoaderType>>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
 
 /// 初始化版本路径
 /// - `dir`: 运行路径
-pub fn init(dir: &PathBuf) {
+pub fn init(dir: &Path) -> CoreResult<()> {
     let dir = BASE_DIR.get_or_init(|| dir.join(names::VERSION_DIR));
 
-    FORGE_DIR.set(dir.join(names::FORGE_KEY)).unwrap();
-    FABRIC_DIR.set(dir.join(names::FABRIC_KEY)).unwrap();
-    QUILT_DIR.set(dir.join(names::QUILT_KEY)).unwrap();
-    NEOFORGE_DIR
-        .set(dir.join(names::NEOFORGED_KEY))
-        .unwrap();
-
-    OPTIFINE_FILE
-        .set(dir.join(names::OPTIFINE_FILE))
-        .unwrap();
+    OPTIFINE_FILE.set(dir.join(names::OPTIFINE_FILE)).unwrap();
     LITELOADER_FILE
         .set(dir.join(names::LITELOADER_FILE))
         .unwrap();
 
-    OPTIFINE_LOADER.set(RwLock::new(HashMap::new())).unwrap();
-
-    GAME_ARGS.set(RwLock::new(HashMap::new())).unwrap();
-    FORGE_INSTALLS.set(RwLock::new(HashMap::new())).unwrap();
-    NEOFORGE_INSTALLS.set(RwLock::new(HashMap::new())).unwrap();
-    FORGE_LAUNCHS.set(RwLock::new(HashMap::new())).unwrap();
-    NEOFORGE_LAUNCHS.set(RwLock::new(HashMap::new())).unwrap();
-    FABRIC_LOADERS.set(RwLock::new(HashMap::new())).unwrap();
-    QUILT_LOADERS.set(RwLock::new(HashMap::new())).unwrap();
-    CUSTOM_LOADERS.set(RwLock::new(HashMap::new())).unwrap();
-    VERSION.set(RwLock::new(None)).unwrap();
-
     let dir = dir.as_path();
     if !dir.is_dir() {
-        fs::create_dir(dir).unwrap();
+        path_helper::create_dir_all(dir)?;
     }
 
-    let dir = FORGE_DIR.get().unwrap();
-    if !dir.is_dir() {
-        fs::create_dir(dir).unwrap();
+    let forge = FORGE_DIR.get_or_init(|| dir.join(names::FORGE_KEY));
+    if !forge.is_dir() {
+        path_helper::create_dir_all(forge)?;
     }
 
-    let dir = FABRIC_DIR.get().unwrap();
-    if !dir.is_dir() {
-        fs::create_dir(dir).unwrap();
+    let fabric = FABRIC_DIR.get_or_init(|| dir.join(names::FABRIC_KEY));
+    if !fabric.is_dir() {
+        path_helper::create_dir_all(fabric)?;
     }
 
-    let dir = QUILT_DIR.get().unwrap();
-    if !dir.is_dir() {
-        fs::create_dir(dir).unwrap();
+    let quilt = QUILT_DIR.get_or_init(|| dir.join(names::QUILT_KEY));
+    if !quilt.is_dir() {
+        path_helper::create_dir_all(quilt)?;
     }
 
-    let dir = NEOFORGE_DIR.get().unwrap();
-    if !dir.is_dir() {
-        fs::create_dir(dir).unwrap();
+    let neoforge = NEOFORGE_DIR.get_or_init(|| dir.join(names::NEOFORGED_KEY));
+    if !neoforge.is_dir() {
+        path_helper::create_dir_all(neoforge)?;
     }
 
     load_optifine();
+
+    Ok(())
 }
 
 /// 获取目录
@@ -142,7 +129,7 @@ fn load_optifine() {
             }));
         }
         Ok(data) => {
-            let mut list = OPTIFINE_LOADER.get().unwrap().write().unwrap();
+            let mut list = OPTIFINE_LOADER.write().unwrap();
             list.clear();
 
             list.extend(data.into_iter().map(|(k, v)| (k, Arc::new(v))));
@@ -153,7 +140,7 @@ fn load_optifine() {
 /// 保存高清修复版本信息
 fn save_optifine() {
     let file = OPTIFINE_FILE.get().unwrap();
-    let list = OPTIFINE_LOADER.get().unwrap().read().unwrap();
+    let list = OPTIFINE_LOADER.read().unwrap();
     let value = &*list;
 
     let ref_map: HashMap<&String, &OptifineObj> =
@@ -174,7 +161,7 @@ async fn get_version_from_online() {
         let data: Vec<u8> = res.unwrap();
         let json = serde_json::from_slice::<VersionObj>(&data);
         if json.is_ok() {
-            *VERSION.get().unwrap().write().unwrap() = Some(Arc::new(json.unwrap()));
+            *VERSION.write().unwrap() = Some(Arc::new(json.unwrap()));
             save_versions(&data);
 
             return;
@@ -187,7 +174,7 @@ async fn get_version_from_online() {
         let data: Vec<u8> = res.unwrap();
         let json = serde_json::from_slice::<VersionObj>(&data);
         if json.is_ok() {
-            *VERSION.get().unwrap().write().unwrap() = Some(Arc::new(json.unwrap()));
+            *VERSION.write().unwrap() = Some(Arc::new(json.unwrap()));
             save_versions(&data);
 
             return;
@@ -208,7 +195,7 @@ async fn read_version() {
             Ok(file) => {
                 let json = serde_json::from_reader::<_, VersionObj>(file);
                 if json.is_ok() {
-                    *VERSION.get().unwrap().write().unwrap() = Some(Arc::new(json.unwrap()));
+                    *VERSION.write().unwrap() = Some(Arc::new(json.unwrap()));
                     return;
                 }
             }
@@ -220,11 +207,11 @@ async fn read_version() {
 
 /// 获取游戏版本列表
 pub async fn get_version_obj() -> Option<Arc<VersionObj>> {
-    if VERSION.get().is_none() {
+    if VERSION.read().unwrap().is_none() {
         read_version().await;
     }
 
-    let temp = VERSION.get().unwrap().read().unwrap();
+    let temp = VERSION.read().unwrap();
 
     if temp.is_none() {
         None
@@ -264,7 +251,7 @@ pub async fn add_game(obj: &VersionsObj) -> Option<Arc<GameArgObj>> {
                     let file = BASE_DIR.get().unwrap().join(format!("{}.json", obj.id));
                     path_helper::write_bytes(&file, &data).unwrap();
 
-                    let mut list = GAME_ARGS.get().unwrap().write().unwrap();
+                    let mut list = GAME_ARGS.write().unwrap();
 
                     list.insert(obj.id.clone(), Arc::new(json));
                     let json = list.get(&obj.id).unwrap();
@@ -283,7 +270,7 @@ pub fn add_fabric(obj: FabricLoaderObj, data: &Vec<u8>, mc: &str, version: &str)
     path_helper::write_bytes(&file, &data).unwrap();
 
     let key = LoaderKey::new(mc, version);
-    let mut list = FABRIC_LOADERS.get().unwrap().write().unwrap();
+    let mut list = FABRIC_LOADERS.write().unwrap();
     list.insert(key.clone(), Arc::new(obj));
 }
 
@@ -305,9 +292,9 @@ pub fn add_forge(obj: ForgeLaunchObj, data: &Vec<u8>, mc: &str, version: &str, n
 
     let key = LoaderKey::new(mc.clone(), version.clone());
     let mut list = if neo {
-        NEOFORGE_LAUNCHS.get().unwrap().write().unwrap()
+        NEOFORGE_LAUNCHS.write().unwrap()
     } else {
-        FORGE_LAUNCHS.get().unwrap().write().unwrap()
+        FORGE_LAUNCHS.write().unwrap()
     };
     list.insert(key, Arc::new(obj));
 }
@@ -326,9 +313,9 @@ pub fn add_forge_install(obj: ForgeInstallObj, data: &Vec<u8>, mc: &str, version
 
     let key = LoaderKey::new(mc.clone(), version.clone());
     let mut list = if neo {
-        NEOFORGE_INSTALLS.get().unwrap().write().unwrap()
+        NEOFORGE_INSTALLS.write().unwrap()
     } else {
-        FORGE_INSTALLS.get().unwrap().write().unwrap()
+        FORGE_INSTALLS.write().unwrap()
     };
     list.insert(key, Arc::new(obj));
 }
@@ -343,7 +330,7 @@ pub fn add_quilt_loader(obj: QuiltLoaderObj, data: &Vec<u8>, mc: &str, version: 
     path_helper::write_bytes(&file, &data).unwrap();
 
     let key = LoaderKey::new(mc, version);
-    let mut list = QUILT_LOADERS.get().unwrap().write().unwrap();
+    let mut list = QUILT_LOADERS.write().unwrap();
     list.insert(key.clone(), Arc::new(obj));
 }
 
@@ -351,14 +338,14 @@ pub fn add_quilt_loader(obj: QuiltLoaderObj, data: &Vec<u8>, mc: &str, version: 
 /// - `obj`: 自定义加载器
 /// - `uuid`: 游戏实例
 pub fn add_custom_loader(obj: CustomLoaderType, uuid: Uuid) {
-    let mut list = CUSTOM_LOADERS.get().unwrap().write().unwrap();
+    let mut list = CUSTOM_LOADERS.write().unwrap();
     list.insert(uuid, Arc::new(obj));
 }
 
 /// 添加高清修复信息
 /// - `obj`: 高清修复信息
 pub fn add_optifine(obj: OptifineObj) {
-    let mut list = OPTIFINE_LOADER.get().unwrap().write().unwrap();
+    let mut list = OPTIFINE_LOADER.write().unwrap();
     list.insert(obj.version.clone(), Arc::new(obj));
 
     save_optifine();
@@ -367,16 +354,15 @@ pub fn add_optifine(obj: OptifineObj) {
 /// 获取版本信息
 /// - `version`: 游戏版本
 pub fn get_version(version: &str) -> Option<Arc<GameArgObj>> {
-    let list = GAME_ARGS.get().unwrap().read().unwrap();
+    let list = GAME_ARGS.read().unwrap();
     let data = list.get(version);
 
     match data {
         None => {
-            let local =
-                BASE_DIR
-                    .get()
-                    .unwrap()
-                    .join(format!("{}{}", version, names::JSON_EXT));
+            let local = BASE_DIR
+                .get()
+                .unwrap()
+                .join(format!("{}{}", version, names::JSON_EXT));
             let file = path_helper::open_read(&local);
             if let Err(err) = file {
                 mcml_log::error_type(err);
@@ -387,7 +373,7 @@ pub fn get_version(version: &str) -> Option<Arc<GameArgObj>> {
             let json = serde_json::from_reader::<_, GameArgObj>(file);
             match json {
                 Ok(json) => {
-                    let mut list = GAME_ARGS.get().unwrap().write().unwrap();
+                    let mut list = GAME_ARGS.write().unwrap();
                     let data = Arc::new(json);
                     let data1 = data.clone();
                     list.insert(String::from(version), data);
@@ -465,20 +451,9 @@ pub fn get_forge_json_name(mc: &str, version: &str, neo: bool, install: bool) ->
             }
         } else {
             if v222 {
-                format!(
-                    "{}-{}{}",
-                    names::NEOFORGE_KEY,
-                    version,
-                    names::JSON_EXT
-                )
+                format!("{}-{}{}", names::NEOFORGE_KEY, version, names::JSON_EXT)
             } else {
-                format!(
-                    "{}-{}-{}{}",
-                    names::FORGE_KEY,
-                    mc,
-                    version,
-                    names::JSON_EXT
-                )
+                format!("{}-{}-{}{}", names::FORGE_KEY, mc, version, names::JSON_EXT)
             }
         }
     } else {
@@ -491,12 +466,7 @@ pub fn get_forge_json_name(mc: &str, version: &str, neo: bool, install: bool) ->
                 names::JSON_EXT
             )
         } else {
-            format!(
-                "{}-{}{}",
-                names::FORGE_KEY,
-                version,
-                names::JSON_EXT
-            )
+            format!("{}-{}{}", names::FORGE_KEY, version, names::JSON_EXT)
         }
     }
 }
@@ -507,7 +477,7 @@ pub fn get_forge_json_name(mc: &str, version: &str, neo: bool, install: bool) ->
 pub fn get_neoforge_install_obj(mc: &str, version: &str) -> Option<Arc<ForgeInstallObj>> {
     let key = LoaderKey::new(mc, version);
 
-    let list = NEOFORGE_INSTALLS.get().unwrap().read().unwrap();
+    let list = NEOFORGE_INSTALLS.read().unwrap();
     let item = list.get(&key);
     match item {
         Some(item) => Some(item.clone()),
@@ -530,7 +500,7 @@ pub fn get_neoforge_install_obj(mc: &str, version: &str) -> Option<Arc<ForgeInst
                     let temp = Arc::new(json);
                     let temp1 = temp.clone();
 
-                    let mut list = NEOFORGE_INSTALLS.get().unwrap().write().unwrap();
+                    let mut list = NEOFORGE_INSTALLS.write().unwrap();
                     list.insert(key, temp);
 
                     Some(temp1)
@@ -553,7 +523,7 @@ pub fn get_neoforge_install_obj(mc: &str, version: &str) -> Option<Arc<ForgeInst
 pub fn get_neoforge(mc: &str, version: &str) -> Option<Arc<ForgeLaunchObj>> {
     let key = LoaderKey::new(mc, version);
 
-    let list = NEOFORGE_LAUNCHS.get().unwrap().read().unwrap();
+    let list = NEOFORGE_LAUNCHS.read().unwrap();
     let item = list.get(&key);
     match item {
         Some(item) => Some(item.clone()),
@@ -576,7 +546,7 @@ pub fn get_neoforge(mc: &str, version: &str) -> Option<Arc<ForgeLaunchObj>> {
                     let temp = Arc::new(json);
                     let temp1 = temp.clone();
 
-                    let mut list = NEOFORGE_LAUNCHS.get().unwrap().write().unwrap();
+                    let mut list = NEOFORGE_LAUNCHS.write().unwrap();
                     list.insert(key, temp);
 
                     Some(temp1)
@@ -599,7 +569,7 @@ pub fn get_neoforge(mc: &str, version: &str) -> Option<Arc<ForgeLaunchObj>> {
 pub fn get_forge_install_obj(mc: &str, version: &str) -> Option<Arc<ForgeInstallObj>> {
     let key = LoaderKey::new(mc, version);
 
-    let list = FORGE_INSTALLS.get().unwrap().read().unwrap();
+    let list = FORGE_INSTALLS.read().unwrap();
     let item = list.get(&key);
     match item {
         Some(item) => Some(item.clone()),
@@ -622,7 +592,7 @@ pub fn get_forge_install_obj(mc: &str, version: &str) -> Option<Arc<ForgeInstall
                     let temp = Arc::new(json);
                     let temp1 = temp.clone();
 
-                    let mut list = FORGE_INSTALLS.get().unwrap().write().unwrap();
+                    let mut list = FORGE_INSTALLS.write().unwrap();
                     list.insert(key, temp);
 
                     Some(temp1)
@@ -645,7 +615,7 @@ pub fn get_forge_install_obj(mc: &str, version: &str) -> Option<Arc<ForgeInstall
 pub fn get_forge(mc: &str, version: &str) -> Option<Arc<ForgeLaunchObj>> {
     let key = LoaderKey::new(mc, version);
 
-    let list = FORGE_LAUNCHS.get().unwrap().read().unwrap();
+    let list = FORGE_LAUNCHS.read().unwrap();
     let item = list.get(&key);
     match item {
         Some(item) => Some(item.clone()),
@@ -669,7 +639,7 @@ pub fn get_forge(mc: &str, version: &str) -> Option<Arc<ForgeLaunchObj>> {
                     let temp = Arc::new(json);
                     let temp1 = temp.clone();
 
-                    let mut list = FORGE_LAUNCHS.get().unwrap().write().unwrap();
+                    let mut list = FORGE_LAUNCHS.write().unwrap();
                     list.insert(key, temp);
 
                     Some(temp1)
@@ -691,7 +661,7 @@ pub fn get_forge(mc: &str, version: &str) -> Option<Arc<ForgeLaunchObj>> {
 /// - `version`: 加载器版本
 pub fn get_fabric(mc: &str, version: &str) -> Option<Arc<FabricLoaderObj>> {
     let key = LoaderKey::new(mc, version);
-    let list = FABRIC_LOADERS.get().unwrap().read().unwrap();
+    let list = FABRIC_LOADERS.read().unwrap();
     match list.get(&key) {
         None => {
             let local = FABRIC_DIR.get().unwrap().join(format!(
@@ -714,7 +684,7 @@ pub fn get_fabric(mc: &str, version: &str) -> Option<Arc<FabricLoaderObj>> {
                     let temp = Arc::new(json);
                     let temp1 = temp.clone();
 
-                    let mut list = FABRIC_LOADERS.get().unwrap().write().unwrap();
+                    let mut list = FABRIC_LOADERS.write().unwrap();
                     list.insert(key, temp);
 
                     Some(temp1)
@@ -737,7 +707,7 @@ pub fn get_fabric(mc: &str, version: &str) -> Option<Arc<FabricLoaderObj>> {
 /// - `version`: 加载器版本
 pub fn get_quilt(mc: &str, version: &str) -> Option<Arc<QuiltLoaderObj>> {
     let key = LoaderKey::new(mc, version);
-    let list = QUILT_LOADERS.get().unwrap().read().unwrap();
+    let list = QUILT_LOADERS.read().unwrap();
     match list.get(&key) {
         None => {
             let local = FABRIC_DIR.get().unwrap().join(format!(
@@ -760,7 +730,7 @@ pub fn get_quilt(mc: &str, version: &str) -> Option<Arc<QuiltLoaderObj>> {
                     let temp = Arc::new(json);
                     let temp1 = temp.clone();
 
-                    let mut list = QUILT_LOADERS.get().unwrap().write().unwrap();
+                    let mut list = QUILT_LOADERS.write().unwrap();
                     list.insert(key, temp);
 
                     Some(temp1)
@@ -781,7 +751,7 @@ pub fn get_quilt(mc: &str, version: &str) -> Option<Arc<QuiltLoaderObj>> {
 /// 获取高清修复信息
 /// - `version`: 版本号
 pub fn get_optifine(version: &str) -> Option<Arc<OptifineObj>> {
-    let list = OPTIFINE_LOADER.get().unwrap().read().unwrap();
+    let list = OPTIFINE_LOADER.read().unwrap();
     Some(list.get(version)?.clone())
 }
 
@@ -820,7 +790,7 @@ impl GameSettingObj {
 
     /// 获取自定义加载器数据
     pub fn get_custom_loader(&self) -> Option<Arc<CustomLoaderType>> {
-        let list = CUSTOM_LOADERS.get().unwrap().read().unwrap();
+        let list = CUSTOM_LOADERS.read().unwrap();
         Some(list.get(&self.uuid)?.clone())
     }
 

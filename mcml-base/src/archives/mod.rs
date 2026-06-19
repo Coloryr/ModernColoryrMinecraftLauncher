@@ -43,13 +43,13 @@ impl TarMode {
 }
 
 pub(crate) struct ArchiveProcess {
-    gui: Option<Box<dyn IArchiveGui + Send + Sync>>,
+    gui: Option<Box<dyn ArchiveGui + Send + Sync>>,
     size: AtomicUsize,
     now: AtomicUsize,
 }
 
 impl ArchiveProcess {
-    pub fn new(gui: Option<Box<dyn IArchiveGui + Send + Sync>>) -> Self {
+    pub fn new(gui: Option<Box<dyn ArchiveGui + Send + Sync>>) -> Self {
         Self {
             gui,
             size: AtomicUsize::new(0),
@@ -73,7 +73,7 @@ impl ArchiveProcess {
     }
 }
 
-pub(crate) trait IArchive: Send + Sync {
+pub(crate) trait ArchiveRun: Send + Sync {
     fn compress(
         &self,
         archive_file: &Path,
@@ -84,7 +84,7 @@ pub(crate) trait IArchive: Send + Sync {
     fn decompress(&self, archive_file: &Path, output_dir: &Path) -> Result<(), ErrorType>;
 }
 
-pub trait IArchiveGui: Send + Sync {
+pub trait ArchiveGui: Send + Sync {
     fn start(&self, total: usize);
     fn update(&self, filename: Option<String>, current: usize);
 }
@@ -114,9 +114,9 @@ pub fn compress<P: AsRef<Path>>(
     pack_dir: P,
     root_path: Option<P>,
     filter: &Option<Vec<String>>,
-    gui: Option<Box<dyn IArchiveGui + Send + Sync>>,
+    gui: Option<Box<dyn ArchiveGui + Send + Sync>>,
 ) -> Result<(), ErrorType> {
-    let precess: Box<dyn IArchive + Send + Sync> = match archive_type {
+    let precess: Box<dyn ArchiveRun + Send + Sync> = match archive_type {
         ArchiveType::Zip => Box::new(ZipProcess::new(ArchiveProcess::new(gui))),
         ArchiveType::R7Z => Box::new(R7zProcess::new(ArchiveProcess::new(gui))),
         ArchiveType::Tar => Box::new(TarProcess::new(ArchiveProcess::new(gui), None)),
@@ -145,9 +145,9 @@ pub fn decompress<P: AsRef<Path>>(
     archive_type: ArchiveType,
     archive_file: P,
     output_dir: P,
-    gui: Option<Box<dyn IArchiveGui + Send + Sync>>,
+    gui: Option<Box<dyn ArchiveGui + Send + Sync>>,
 ) -> Result<(), ErrorType> {
-    let precess: Box<dyn IArchive + Send + Sync> = match archive_type {
+    let precess: Box<dyn ArchiveRun + Send + Sync> = match archive_type {
         ArchiveType::Zip => Box::new(ZipProcess::new(ArchiveProcess::new(gui))),
         ArchiveType::R7Z => Box::new(R7zProcess::new(ArchiveProcess::new(gui))),
         ArchiveType::Tar => Box::new(TarProcess::new(ArchiveProcess::new(gui), None)),

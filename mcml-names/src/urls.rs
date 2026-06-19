@@ -40,3 +40,6 @@ pub const QUILT_META: &str = "https://meta.quiltmc.org/";
 pub const AUTHLIB: &str = "https://authlib-injector.yushi.moe/";
 
 pub const OPTIFINE: &str = "https://optifine.net/";
+
+pub const MAVEN: &str = "https://repo1.maven.org/maven2/";
+pub const MAVEN_ALIYUN: &str = "https://maven.aliyun.com/repository/public/";

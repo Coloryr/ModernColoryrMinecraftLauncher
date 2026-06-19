@@ -32,36 +32,28 @@ static SKIN_DIR: OnceLock<PathBuf> = OnceLock::new();
 
 /// 初始化
 /// - `dir`: 运行目录
-pub fn init(dir: &PathBuf) {
+pub fn init(dir: &Path) -> CoreResult<()> {
     let dir = BASE_DIR.get_or_init(|| dir.join(names::GAME_ASSETS_DIR));
-
-    OBJECTS_DIR
-        .set(dir.join(names::GAME_INDEX_DIR))
-        .unwrap();
-    INDEX_DIR
-        .set(dir.join(names::GAME_OBJECT_DIR))
-        .unwrap();
-    SKIN_DIR.set(dir.join(names::GAME_SKIN_DIR)).unwrap();
-
-    let dir = dir.as_path();
-    if !dir.is_dir() {
-        fs::create_dir(dir).unwrap();
+    if !dir.exists() {
+        path_helper::create_dir_all(dir)?;
     }
 
-    let dir = OBJECTS_DIR.get().unwrap();
-    if !dir.is_dir() {
-        fs::create_dir(dir).unwrap();
+    let obj = OBJECTS_DIR.get_or_init(|| dir.join(names::GAME_INDEX_DIR));
+    if !obj.is_dir() {
+        path_helper::create_dir_all(obj)?;
     }
 
-    let dir = INDEX_DIR.get().unwrap();
-    if !dir.is_dir() {
-        fs::create_dir(dir).unwrap();
+    let index = INDEX_DIR.get_or_init(|| dir.join(names::GAME_OBJECT_DIR));
+    if !index.is_dir() {
+        path_helper::create_dir_all(index)?;
     }
 
-    let dir = SKIN_DIR.get().unwrap();
-    if !dir.is_dir() {
-        fs::create_dir(dir).unwrap();
+    let skin = SKIN_DIR.get_or_init(|| dir.join(names::GAME_SKIN_DIR));
+    if !skin.is_dir() {
+        path_helper::create_dir_all(skin)?;
     }
+
+    Ok(())
 }
 
 /// 获取路径

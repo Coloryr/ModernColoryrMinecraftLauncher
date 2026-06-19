@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-pub mod fabric_api;
+pub mod forge;
 pub mod fabric_loader_obj;
 pub mod forge_install_obj;
 pub mod forge_launch_obj;
