@@ -6,6 +6,8 @@ edition = "2024"
 [dependencies]
 mcml-log = { path = "../mcml-log" }
 mcml-config = { path = "../mcml-config" }
+mcml-base = { path = "../mcml-base" }
+mcml-names = { path = "../mcml-names" }
 crossbeam-queue.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true
@@ -13,3 +15,6 @@ reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde_repr.workspace = true
+zip.workspace = true
+semka.workspace = true
+uuid.workspace = true

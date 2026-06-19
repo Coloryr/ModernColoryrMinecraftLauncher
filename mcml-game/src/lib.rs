@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, path::PathBuf};
 
 use crate::launcher::{
     custom_game_arg_obj::CustomGameArgObj, game_setting_obj::GameSettingObj,
@@ -20,4 +20,6 @@ pub struct GameInstanceObj {
     pub custom: HashMap<String, CustomGameArgObj>,
 }
 
-impl GameInstanceObj {}
+impl GameInstanceObj {
+    
+}

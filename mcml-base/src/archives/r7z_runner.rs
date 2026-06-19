@@ -8,7 +8,7 @@ use mcml_names::i18_items::error_type::{
 use sevenz_rust2::{ArchiveEntry, ArchiveReader, ArchiveWriter, Password};
 
 use crate::{
-    archives::{ArchiveProcess, IArchive, should_exclude},
+    archives::{ArchiveProcess, ArchiveRun, should_exclude},
     path_helper,
 };
 
@@ -16,7 +16,7 @@ pub(crate) struct R7zProcess {
     base: ArchiveProcess,
 }
 
-impl IArchive for R7zProcess {
+impl ArchiveRun for R7zProcess {
     fn compress(
         &self,
         archive_file: &Path,
