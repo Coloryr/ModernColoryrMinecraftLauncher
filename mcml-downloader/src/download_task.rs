@@ -1,3 +1,5 @@
+use std::sync::atomic::{AtomicUsize, Ordering};
+
 use crossbeam_queue::SegQueue;
 use mcml_base::file_item::FileItemObj;
 use tokio::sync::Semaphore;
@@ -13,8 +15,8 @@ pub(crate) struct DownloadTask {
     /// 下载项目列表
     items: SegQueue<DownloadItem>,
     pub total_size: usize,
-    pub completed_count: usize,
-    pub failed_count: usize,
+    pub completed_count: AtomicUsize,
+    pub failed_count: AtomicUsize,
     sem: Semaphore,
 }
 
@@ -34,23 +36,23 @@ impl DownloadTask {
             id: gen_task_id(),
             items: vec,
             total_size: size,
-            completed_count: 0,
-            failed_count: 0,
+            completed_count: AtomicUsize::new(0),
+            failed_count: AtomicUsize::new(0),
             cancel: CancellationToken::new(),
             sem: Semaphore::new(0),
         }
     }
 
-    pub fn done(&mut self) {
-        self.completed_count += 1;
+    pub fn done(&self) {
+        self.completed_count.fetch_add(1, Ordering::SeqCst);
         update_task(self.id, self.progress());
         if self.items.is_empty() {
             task_done(self);
         }
     }
 
-    pub fn fail(&mut self) {
-        self.failed_count += 1;
+    pub fn fail(&self) {
+        self.failed_count.fetch_add(1, Ordering::SeqCst);
         update_task(self.id, self.progress());
         if self.items.is_empty() {
             task_done(self);
@@ -66,7 +68,7 @@ impl DownloadTask {
     pub async fn wait_done(&self) -> bool {
         let _ = self.sem.acquire().await.unwrap();
 
-        self.total_size == self.completed_count
+        self.total_size == self.completed_count.load(Ordering::SeqCst)
     }
 
     /// 取消下载任务
@@ -77,7 +79,9 @@ impl DownloadTask {
     /// 获取下载进度
     fn progress(&self) -> f64 {
         if self.total_size > 0 {
-            ((self.completed_count + self.failed_count) as f64 / self.total_size as f64) * 100.0
+            let completed = self.completed_count.load(Ordering::SeqCst);
+            let failed = self.failed_count.load(Ordering::SeqCst);
+            ((completed + failed) as f64 / self.total_size as f64) * 100.0
         } else {
             0.0
         }
