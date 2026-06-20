@@ -4,12 +4,17 @@ pub mod download_task;
 mod download_thread;
 mod later_tasks;
 
-use std::sync::{
-    Arc, OnceLock, RwLock,
-    atomic::{AtomicBool, AtomicU64, Ordering},
+use std::{
+    path::{Path, PathBuf},
+    sync::{
+        Arc, OnceLock, RwLock,
+        atomic::{AtomicBool, AtomicU64, Ordering},
+    },
 };
 
-use mcml_base::file_item::FileItemObj;
+use mcml_base::{file_item::FileItemObj, path_helper};
+use mcml_names::{i18_items::error_type::CoreResult, names};
+use uuid::Uuid;
 
 use crate::{
     download_item::DownloadItem, download_task::DownloadTask, download_thread::DownloadThread,
@@ -51,6 +56,33 @@ static DOWNLOAD_GUI: OnceLock<Box<dyn DownloadGui + Sync + Send>> = OnceLock::ne
 static STOP: AtomicBool = AtomicBool::new(false);
 
 static NEXT_TASK_ID: AtomicU64 = AtomicU64::new(1);
+
+static DOWNLOAD_PATH: OnceLock<PathBuf> = OnceLock::new();
+
+/// 初始化下载文件夹
+/// - `dir`: 基础文件夹
+pub fn init<P: AsRef<Path>>(dir: P) -> CoreResult<()> {
+    let dir = DOWNLOAD_PATH.get_or_init(|| dir.as_ref().join(names::DOWNLOAD_DIR));
+    if !dir.exists() {
+        path_helper::create_dir_all(dir)?;
+    }
+
+    Ok(())
+}
+
+/// 生成一个临时文件
+pub fn gen_temp_file() -> PathBuf {
+    loop {
+        let file = DOWNLOAD_PATH
+            .get()
+            .unwrap()
+            .join(Uuid::new_v4().to_string());
+        if file.exists() {
+            continue;
+        }
+        return file;
+    }
+}
 
 /// 设置界面
 pub fn set_gui_handel(gui: Box<dyn DownloadGui + Sync + Send>) {
