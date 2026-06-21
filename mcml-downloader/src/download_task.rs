@@ -43,20 +43,22 @@ impl DownloadTask {
         }
     }
 
-    pub fn done(&self) {
-        self.completed_count.fetch_add(1, Ordering::SeqCst);
+    fn check_done(&self) {
         update_task(self.id, self.progress());
         if self.items.is_empty() {
             task_done(self);
+            self.sem.add_permits(1);
         }
+    }
+
+    pub fn done(&self) {
+        self.completed_count.fetch_add(1, Ordering::SeqCst);
+        self.check_done();
     }
 
     pub fn fail(&self) {
         self.failed_count.fetch_add(1, Ordering::SeqCst);
-        update_task(self.id, self.progress());
-        if self.items.is_empty() {
-            task_done(self);
-        }
+        self.check_done();
     }
 
     /// 取一个下载项目

@@ -2,6 +2,7 @@ use std::{
     fs::File,
     future::Future,
     io::{Read, Seek, SeekFrom, Write},
+    path::PathBuf,
     sync::{
         Arc, OnceLock,
         atomic::{AtomicBool, Ordering},
@@ -10,19 +11,23 @@ use std::{
 };
 
 use mcml_base::{
-    file_item::FileHash,
+    file_item::{FileHash, LaterRun},
     hash_helper::{self, HashType},
     path_helper,
 };
 use mcml_names::i18_items::error_type::{
-    CoreResult, DownloadFileOverFailData, DownloadFileSizeErrorData, ErrorData,
+    CoreResult, DownloadFileHashErrorData, DownloadFileOverFailData, DownloadFileSizeErrorData,
+    ErrorData,
     ErrorType::{self, StreamError},
 };
 use mcml_net::WORK_CLIENT;
 use reqwest::Response;
 use semka::Sem;
 
-use crate::{DownloadObj, download_item::DownloadItemState, gen_temp_file, get_item, update};
+use crate::{
+    DownloadObj, download_item::DownloadItemState, gen_temp_file, get_item,
+    later_tasks::unpack_native, update,
+};
 
 /// 用于在下载线程中执行异步任务的运行时
 static RT: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
@@ -39,7 +44,6 @@ fn block_on<F: Future>(f: F) -> F::Output {
 }
 
 pub struct DownloadThread {
-    index: u32,
     handle: Option<JoinHandle<()>>,
     sem: Arc<Sem>,
     is_stop: Arc<AtomicBool>,
@@ -73,7 +77,6 @@ impl DownloadThread {
         });
 
         Self {
-            index,
             handle: Some(handle),
             sem,
             is_stop,
@@ -110,9 +113,14 @@ fn download(index: u32, mut obj: DownloadObj) {
         } else {
             let config = mcml_config::CONFIG.get().unwrap().read().unwrap();
             let mut file = path_helper::open_read(&obj.item.base.file).unwrap();
-            if config.http.check_file && check_hash(&obj.item.base.hash, &mut file) {
-                obj.task.done();
-                return;
+            if config.http.check_file {
+                let check = check_hash(&obj.item.base.file, &obj.item.base.hash, &mut file);
+                if let Err(err) = check {
+                    mcml_log::error_type(err);
+                } else {
+                    obj.task.done();
+                    return;
+                }
             }
         }
     }
@@ -132,8 +140,11 @@ fn download(index: u32, mut obj: DownloadObj) {
         return false;
     }
 
+    let mut temp_file;
+
     loop {
-        let temp_file = gen_temp_file();
+        temp_file = gen_temp_file();
+
         let file = if is_keep {
             path_helper::open_append(&temp_file)
         } else {
@@ -141,6 +152,7 @@ fn download(index: u32, mut obj: DownloadObj) {
         };
 
         if let Err(err) = file {
+            obj.item.add_error();
             if is_need_err(err, &mut times) {
                 break;
             } else {
@@ -158,6 +170,7 @@ fn download(index: u32, mut obj: DownloadObj) {
                     .get_ranges(&obj.item.base.url, obj.item.get_now_size()),
             );
             if let Err(err) = result {
+                obj.item.add_error();
                 if is_need_err(err, &mut times) {
                     break;
                 } else {
@@ -178,6 +191,7 @@ fn download(index: u32, mut obj: DownloadObj) {
         } else {
             let result = block_on(WORK_CLIENT.get().unwrap().get(&obj.item.base.url));
             if let Err(err) = result {
+                obj.item.add_error();
                 if is_need_err(err, &mut times) {
                     break;
                 } else {
@@ -196,8 +210,41 @@ fn download(index: u32, mut obj: DownloadObj) {
             resp
         };
 
+        if let Some(range) = resp.headers().get("Accept-Ranges")
+            && range.to_str().unwrap().starts_with("bytes")
+        {
+            use_break = true;
+        }
+
+        obj.item.set_state(DownloadItemState::GetInfo);
+        update(index, &obj.item);
+
         let result = block_on(write_file(index, &mut obj, &mut resp, &mut file));
+        if let Err(err) = result {
+            obj.item.add_error();
+            if is_need_err(err, &mut times) {
+                break;
+            } else {
+                continue;
+            }
+        }
+
+        break;
     }
+
+    path_helper::move_file(&temp_file, &obj.item.base.file).unwrap();
+
+    match &obj.item.base.later {
+        LaterRun::None => {}
+        LaterRun::Unpack(path_buf) => {
+            let file = path_helper::open_read(&obj.item.base.file).unwrap();
+            unpack_native(path_buf, file).unwrap();
+        }
+    }
+
+    obj.item.set_state(DownloadItemState::Done);
+    update(index, &obj.item);
+    obj.task.done();
 }
 
 async fn write_file(
@@ -205,7 +252,7 @@ async fn write_file(
     obj: &mut DownloadObj,
     resp: &mut Response,
     file: &mut File,
-) -> CoreResult<bool> {
+) -> CoreResult<()> {
     loop {
         match resp.chunk().await {
             Ok(None) => break,
@@ -249,48 +296,132 @@ async fn write_file(
         }
 
         file.seek(SeekFrom::Start(0)).unwrap();
-        return Ok(check_hash(&obj.item.base.hash, file));
+        return check_hash(&obj.item.base.file, &obj.item.base.hash, file);
     }
 
-    Ok(true)
+    Ok(())
 }
 
-fn check_hash<R: Read + Seek>(hash: &FileHash, stream: &mut R) -> bool {
+fn check_hash<R: Read + Seek>(file: &PathBuf, hash: &FileHash, stream: &mut R) -> CoreResult<()> {
     match hash {
-        FileHash::None => true,
-        FileHash::Md5(md5) => {
-            if let Ok(hash) = hash_helper::gen_hash_from_reader(HashType::Md5, stream) {
-                hash.eq_ignore_ascii_case(md5)
-            } else {
-                false
+        FileHash::None => Ok(()),
+        FileHash::Md5(md5) => match hash_helper::gen_hash_from_reader(HashType::Md5, stream) {
+            Ok(hash) => {
+                if hash.eq_ignore_ascii_case(md5) {
+                    Ok(())
+                } else {
+                    Err(ErrorType::DownloadFileHashError(
+                        DownloadFileHashErrorData {
+                            file: file.clone(),
+                            now: hash.clone(),
+                            hash: md5.clone(),
+                        },
+                    ))
+                }
             }
-        }
-        FileHash::Sha1(sha1) => {
-            if let Ok(hash) = hash_helper::gen_hash_from_reader(HashType::Sha1, stream) {
-                hash.eq_ignore_ascii_case(sha1)
-            } else {
-                false
+            Err(err) => Err(err),
+        },
+        FileHash::Sha1(sha1) => match hash_helper::gen_hash_from_reader(HashType::Sha1, stream) {
+            Ok(hash) => {
+                if hash.eq_ignore_ascii_case(sha1) {
+                    Ok(())
+                } else {
+                    Err(ErrorType::DownloadFileHashError(
+                        DownloadFileHashErrorData {
+                            file: file.clone(),
+                            now: hash.clone(),
+                            hash: sha1.clone(),
+                        },
+                    ))
+                }
             }
-        }
+            Err(err) => Err(err),
+        },
         FileHash::Sha256(sha256) => {
-            if let Ok(hash) = hash_helper::gen_hash_from_reader(HashType::Sha256, stream) {
-                hash.eq_ignore_ascii_case(sha256)
-            } else {
-                false
+            match hash_helper::gen_hash_from_reader(HashType::Sha256, stream) {
+                Ok(hash) => {
+                    if hash.eq_ignore_ascii_case(sha256) {
+                        Ok(())
+                    } else {
+                        Err(ErrorType::DownloadFileHashError(
+                            DownloadFileHashErrorData {
+                                file: file.clone(),
+                                now: hash.clone(),
+                                hash: sha256.clone(),
+                            },
+                        ))
+                    }
+                }
+                Err(err) => Err(err),
             }
         }
         FileHash::Sha1Sha256(sha1, sha256) => {
-            if let Ok(hash) = hash_helper::gen_hash_from_reader(HashType::Sha1, stream)
-                && hash.eq_ignore_ascii_case(sha1)
-            {
-                stream.seek(SeekFrom::Start(0)).unwrap();
-                if let Ok(hash) = hash_helper::gen_hash_from_reader(HashType::Sha256, stream) {
-                    hash.eq_ignore_ascii_case(sha256)
-                } else {
-                    false
+            let sha1 = match hash_helper::gen_hash_from_reader(HashType::Sha1, stream) {
+                Ok(hash) => {
+                    if hash.eq_ignore_ascii_case(sha1) {
+                        Ok(())
+                    } else {
+                        Err(ErrorType::DownloadFileHashError(
+                            DownloadFileHashErrorData {
+                                file: file.clone(),
+                                now: hash.clone(),
+                                hash: sha1.clone(),
+                            },
+                        ))
+                    }
                 }
-            } else {
-                false
+                Err(err) => Err(err),
+            };
+
+            if sha1.is_err() {
+                return sha1;
+            }
+
+            stream.seek(SeekFrom::Start(0)).map_err(|err| {
+                ErrorType::StreamError(ErrorData {
+                    error: err.to_string(),
+                })
+            })?;
+
+            let sha256 = match hash_helper::gen_hash_from_reader(HashType::Sha256, stream) {
+                Ok(hash) => {
+                    if hash.eq_ignore_ascii_case(sha256) {
+                        Ok(())
+                    } else {
+                        Err(ErrorType::DownloadFileHashError(
+                            DownloadFileHashErrorData {
+                                file: file.clone(),
+                                now: hash.clone(),
+                                hash: sha256.clone(),
+                            },
+                        ))
+                    }
+                }
+                Err(err) => Err(err),
+            };
+
+            if sha256.is_err() {
+                return sha256;
+            }
+
+            Ok(())
+        }
+        FileHash::Sha512(sha512) => {
+            match hash_helper::gen_hash_from_reader(HashType::Sha512, stream) {
+                Ok(hash) => {
+                    if hash.eq_ignore_ascii_case(sha512) {
+                        Ok(())
+                    } else {
+                        Err(ErrorType::DownloadFileHashError(
+                            DownloadFileHashErrorData {
+                                file: file.clone(),
+                                now: hash.clone(),
+                                hash: sha512.clone(),
+                            },
+                        ))
+                    }
+                }
+                Err(err) => Err(err),
             }
         }
     }
