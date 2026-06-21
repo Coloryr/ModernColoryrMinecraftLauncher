@@ -182,9 +182,11 @@ pub async fn run_download_task(items: Vec<FileItemObj>) -> bool {
         return false;
     }
     let task = DownloadTask::new(items);
+    let task = Arc::new(task);
+    let task_handel = task.clone();
     let id = task.id;
 
-    TASKS.write().unwrap().push(Arc::new(task));
+    TASKS.write().unwrap().push(task);
 
     add_task(id);
 
@@ -192,5 +194,5 @@ pub async fn run_download_task(items: Vec<FileItemObj>) -> bool {
         item.run();
     }
 
-    true
+    task_handel.wait_done().await
 }

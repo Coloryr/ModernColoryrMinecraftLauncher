@@ -54,6 +54,13 @@ pub struct DownloadFileOverFailData {
     pub error: Box<ErrorType>,
 }
 
+#[derive(Clone, Debug)]
+pub struct DownloadFileHashErrorData {
+    pub file: PathBuf,
+    pub now: String,
+    pub hash: String,
+}
+
 pub type CoreResult<T> = result::Result<T, ErrorType>;
 
 #[derive(Clone, Debug)]
@@ -134,4 +141,6 @@ pub enum ErrorType {
     DownloadFileOverFail(DownloadFileOverFailData),
     /// 下载文件的预期大小不符合
     DownloadFileSizeError(DownloadFileSizeErrorData),
+    /// 下载文件校验失败
+    DownloadFileHashError(DownloadFileHashErrorData),
 }
