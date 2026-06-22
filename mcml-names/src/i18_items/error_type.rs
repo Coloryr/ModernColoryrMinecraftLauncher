@@ -40,6 +40,27 @@ pub struct ArchiveErrorData {
     pub error: String,
 }
 
+#[derive(Clone, Debug)]
+pub struct DownloadFileSizeErrorData {
+    pub file: PathBuf,
+    pub url: String,
+    pub now: u64,
+    pub size: u64,
+}
+
+#[derive(Clone, Debug)]
+pub struct DownloadFileOverFailData {
+    pub file: PathBuf,
+    pub error: Box<ErrorType>,
+}
+
+#[derive(Clone, Debug)]
+pub struct DownloadFileHashErrorData {
+    pub file: PathBuf,
+    pub now: String,
+    pub hash: String,
+}
+
 pub type CoreResult<T> = result::Result<T, ErrorType>;
 
 #[derive(Clone, Debug)]
@@ -116,8 +137,12 @@ pub enum ErrorType {
     /// BASE64错误
     Base64Error(ErrorData),
 
-    /// 所需文件下载失败
-    FileDownloadError,
     /// 所需文件未能找到
-    InfoNotFound
+    InfoNotFound,
+    /// 下载文件覆盖错误
+    DownloadFileOverFail(DownloadFileOverFailData),
+    /// 下载文件的预期大小不符合
+    DownloadFileSizeError(DownloadFileSizeErrorData),
+    /// 下载文件校验失败
+    DownloadFileHashError(DownloadFileHashErrorData),
 }
