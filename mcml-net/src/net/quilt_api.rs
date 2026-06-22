@@ -8,7 +8,7 @@ use crate::{WORK_CLIENT, url_helper};
 pub async fn get_loader(mc: &str, version: &str) -> CoreResult<Vec<u8>> {
     let url = format!(
         "{}/loader/{mc}/{version}/profile/json",
-        url_helper::get_fabric_meta()
+        url_helper::get_quilt_meta()
     );
 
     WORK_CLIENT.get().unwrap().get_bytes(&url).await
@@ -16,7 +16,7 @@ pub async fn get_loader(mc: &str, version: &str) -> CoreResult<Vec<u8>> {
 
 /// 获取元数据
 pub async fn get_meta() -> CoreResult<Vec<u8>> {
-    let url = url_helper::get_fabric_meta();
+    let url = url_helper::get_quilt_meta();
 
     WORK_CLIENT.get().unwrap().get_bytes(&url).await
 }

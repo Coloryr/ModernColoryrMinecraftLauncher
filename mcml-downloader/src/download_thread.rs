@@ -12,7 +12,7 @@ use mcml_base::{
     hash_helper::{self, HashType},
     path_helper,
 };
-use mcml_names::i18_items::error_type::{CoreResult, ErrorData, ErrorType::StreamError};
+use mcml_names::i18_items::error_type::{CoreResult, ErrorData, ErrorType::{self, StreamError}};
 use semka::Sem;
 
 use crate::{DownloadObj, download_item::DownloadItemState, get_item, update};
@@ -119,7 +119,7 @@ fn write_file<R: Read + Seek>(
 
             update(index, &file.item);
 
-            return Err(ErrorType);
+            return Err(ErrorType::FileDownloadError);
         }
     }
 

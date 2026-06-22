@@ -1,6 +1,5 @@
 use std::{
     collections::HashMap,
-    fs,
     path::{Path, PathBuf},
     sync::{Arc, LazyLock, OnceLock, RwLock},
 };
@@ -265,18 +264,32 @@ pub async fn add_game(obj: &VersionsObj) -> Option<Arc<GameArgObj>> {
 /// 保存Fabric-Loader信息
 /// - `mc`: 游戏版本
 /// - `version`: 加载器版本
-pub fn add_fabric(obj: FabricLoaderObj, data: &Vec<u8>, mc: &str, version: &str) {
+pub fn add_fabric(
+    obj: FabricLoaderObj,
+    data: &Vec<u8>,
+    mc: &str,
+    version: &str,
+) -> Arc<FabricLoaderObj> {
     let file = FABRIC_DIR.get().unwrap().join(format!("{}.json", obj.id));
     path_helper::write_bytes(&file, &data).unwrap();
 
     let key = LoaderKey::new(mc, version);
     let mut list = FABRIC_LOADERS.write().unwrap();
-    list.insert(key.clone(), Arc::new(obj));
+    let info = Arc::new(obj);
+    list.insert(key.clone(), info.clone());
+
+    info
 }
 
 /// 添加Forge启动信息
 /// - `obj`: 信息
-pub fn add_forge(obj: ForgeLaunchObj, data: &Vec<u8>, mc: &str, version: &str, neo: bool) {
+pub fn add_forge(
+    obj: ForgeLaunchObj,
+    data: &Vec<u8>,
+    mc: &str,
+    version: &str,
+    neo: bool,
+) -> Arc<ForgeLaunchObj> {
     let v222 = version_checker::is_game_version_1202(mc);
     let name = if neo && v222 {
         format!("{}-{}", names::NEOFORGE_KEY, version)
@@ -296,14 +309,23 @@ pub fn add_forge(obj: ForgeLaunchObj, data: &Vec<u8>, mc: &str, version: &str, n
     } else {
         FORGE_LAUNCHS.write().unwrap()
     };
-    list.insert(key, Arc::new(obj));
+    let info = Arc::new(obj);
+    list.insert(key, info.clone());
+
+    info
 }
 
 /// 添加Forge安装信息
 /// - `obj`: 信息
 /// - `data`: 文本
-pub fn add_forge_install(obj: ForgeInstallObj, data: &Vec<u8>, mc: &str, version: &str, neo: bool) {
-    let name = get_forge_json_name(mc, version, true, true);
+pub fn add_forge_install(
+    obj: ForgeInstallObj,
+    data: &Vec<u8>,
+    mc: &str,
+    version: &str,
+    neo: bool,
+) -> Arc<ForgeInstallObj> {
+    let name = get_forge_json_name(mc, version, neo, true);
     let file = if neo {
         NEOFORGE_DIR.get().unwrap().join(format!("{}.json", name))
     } else {
@@ -317,7 +339,10 @@ pub fn add_forge_install(obj: ForgeInstallObj, data: &Vec<u8>, mc: &str, version
     } else {
         FORGE_INSTALLS.write().unwrap()
     };
-    list.insert(key, Arc::new(obj));
+    let info = Arc::new(obj);
+    list.insert(key, info.clone());
+
+    info
 }
 
 /// 添加Quilt信息
@@ -325,13 +350,21 @@ pub fn add_forge_install(obj: ForgeInstallObj, data: &Vec<u8>, mc: &str, version
 /// - `data`: 文本
 /// - `mc`: 游戏版本
 /// - `version`: 加载器版本
-pub fn add_quilt_loader(obj: QuiltLoaderObj, data: &Vec<u8>, mc: &str, version: &str) {
+pub fn add_quilt(
+    obj: QuiltLoaderObj,
+    data: &Vec<u8>,
+    mc: &str,
+    version: &str,
+) -> Arc<QuiltLoaderObj> {
     let file = QUILT_DIR.get().unwrap().join(format!("{}.json", obj.id));
     path_helper::write_bytes(&file, &data).unwrap();
 
     let key = LoaderKey::new(mc, version);
     let mut list = QUILT_LOADERS.write().unwrap();
-    list.insert(key.clone(), Arc::new(obj));
+    let info = Arc::new(obj);
+    list.insert(key.clone(), info.clone());
+
+    info
 }
 
 /// 添加自定义加载器信息
@@ -344,16 +377,19 @@ pub fn add_custom_loader(obj: CustomLoaderType, uuid: Uuid) {
 
 /// 添加高清修复信息
 /// - `obj`: 高清修复信息
-pub fn add_optifine(obj: OptifineObj) {
+pub fn add_optifine(obj: OptifineObj) -> Arc<OptifineObj> {
     let mut list = OPTIFINE_LOADER.write().unwrap();
-    list.insert(obj.version.clone(), Arc::new(obj));
+    let info = Arc::new(obj);
+    list.insert(info.version.clone(), info.clone());
 
     save_optifine();
+
+    info
 }
 
 /// 获取版本信息
 /// - `version`: 游戏版本
-pub fn get_version(version: &str) -> Option<Arc<GameArgObj>> {
+pub fn get_version(version: &str) -> CoreResult<Arc<GameArgObj>> {
     let list = GAME_ARGS.read().unwrap();
     let data = list.get(version);
 
@@ -363,33 +399,19 @@ pub fn get_version(version: &str) -> Option<Arc<GameArgObj>> {
                 .get()
                 .unwrap()
                 .join(format!("{}{}", version, names::JSON_EXT));
-            let file = path_helper::open_read(&local);
-            if let Err(err) = file {
-                mcml_log::error_type(err);
+            let file = path_helper::open_read(&local)?;
+            let json = serde_json::from_reader::<_, GameArgObj>(file).map_err(|err| {
+                ErrorType::JsonError(ErrorData {
+                    error: err.to_string(),
+                })
+            })?;
+            let mut list = GAME_ARGS.write().unwrap();
+            let data = Arc::new(json);
+            list.insert(String::from(version), data.clone());
 
-                return None;
-            }
-            let file = file.unwrap();
-            let json = serde_json::from_reader::<_, GameArgObj>(file);
-            match json {
-                Ok(json) => {
-                    let mut list = GAME_ARGS.write().unwrap();
-                    let data = Arc::new(json);
-                    let data1 = data.clone();
-                    list.insert(String::from(version), data);
-
-                    Some(data1)
-                }
-                Err(err) => {
-                    mcml_log::error_type(ErrorType::JsonError(ErrorData {
-                        error: err.to_string(),
-                    }));
-
-                    None
-                }
-            }
+            Ok(data)
         }
-        Some(data) => Some(data.clone()),
+        Some(data) => Ok(data.clone()),
     }
 }
 
@@ -417,7 +439,8 @@ pub async fn check_update(version: &str) -> Option<Arc<GameArgObj>> {
                     } else if sha1.unwrap() != item.sha1 {
                         add_game(item).await
                     } else {
-                        get_version(version)
+                        let res = get_version(version);
+                        if let Ok(res) = res { Some(res) } else { None }
                     }
                 }
             }
@@ -811,7 +834,7 @@ impl GameSettingObj {
                     let mut args = Vec::<String>::new();
                     if let Some(data) = &forge.minecraft_arguments {
                         let args1: Vec<&str> = data.split(' ').collect();
-                        args1.iter().map(|item| {
+                        args1.iter().for_each(|item| {
                             args.push(String::from(*item));
                         });
                     }

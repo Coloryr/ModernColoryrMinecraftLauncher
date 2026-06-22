@@ -1440,9 +1440,11 @@ dependencies = [
  "mcml-auth",
  "mcml-base",
  "mcml-config",
+ "mcml-downloader",
  "mcml-jvms",
  "mcml-log",
  "mcml-names",
+ "mcml-nbt",
  "mcml-net",
  "rayon",
  "serde",
@@ -1451,6 +1453,7 @@ dependencies = [
  "tokio",
  "url",
  "uuid",
+ "zip",
 ]
 
 [[package]]
