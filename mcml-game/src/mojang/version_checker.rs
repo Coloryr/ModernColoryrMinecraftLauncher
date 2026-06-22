@@ -21,8 +21,8 @@ impl GameSettingObj {
     pub fn is_game_version_v2(&self) -> bool {
         let version = version_path::get_version(&self.version);
         match version {
-            None => false,
-            Some(data) => data.is_game_version_v2(),
+            Err(_) => false,
+            Ok(data) => data.is_game_version_v2(),
         }
     }
 }
@@ -33,16 +33,36 @@ impl GameArgObj {
         self.minimum_launcher_version > 18
     }
 
+    /// 判断是否是 1.17 以上版本
     pub fn is_game_version_117(&self) -> bool {
         is_game_version_117(&self.id)
     }
 
+    /// 判断是否是 1.20 以上版本
     pub fn is_game_version_120(&self) -> bool {
         is_game_version_120(&self.id)
     }
 
+    /// 判断是否是 1.20.2 以上版本
     pub fn is_game_version_1202(&self) -> bool {
         is_game_version_1202(&self.id)
+    }
+}
+
+impl GameSettingObj {
+    /// 判断是否是 1.17 以上版本
+    pub fn is_game_version_117(&self) -> bool {
+        is_game_version_117(&self.version)
+    }
+
+    /// 判断是否是 1.20 以上版本
+    pub fn is_game_version_120(&self) -> bool {
+        is_game_version_120(&self.version)
+    }
+
+    /// 判断是否是 1.20.2 以上版本
+    pub fn is_game_version_1202(&self) -> bool {
+        is_game_version_1202(&self.version)
     }
 }
 
@@ -52,7 +72,7 @@ pub fn is_game_version_117(version: &str) -> bool {
     is_game_version_greater(version, "1.17") || version == "1.17"
 }
 
-/// 判断是否是 1.20.2 以上版本
+/// 判断是否是 1.20 以上版本
 /// - `version`: 版本号字符串
 pub fn is_game_version_120(version: &str) -> bool {
     is_game_version_greater(version, "1.20") || version == "1.20"

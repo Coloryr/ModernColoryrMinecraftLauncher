@@ -38,7 +38,8 @@ impl Default for OptifineListObj {
 }
 
 /// 高清修复信息
-pub struct OptifineObj {
+#[derive(Clone)]
+pub struct GetOptifineObj {
     /// 版本号
     pub version: String,
     /// 游戏版本号
@@ -60,9 +61,9 @@ pub struct OptifineObj {
 static OPTIFINE_MC_VERSION: OnceLock<HashSet<String>> = OnceLock::new();
 
 /// 获取高清修复版本
-pub async fn get_optifine_version() -> CoreResult<Option<Vec<OptifineObj>>> {
+pub async fn get_optifine_version() -> CoreResult<Vec<GetOptifineObj>> {
     let url = url_helper::get_optifine_meta();
-    let mut list = Vec::<OptifineObj>::new();
+    let mut list = Vec::<GetOptifineObj>::new();
 
     let data = WORK_CLIENT.get().unwrap().get_text(&url).await?;
     if get_source() == SourceLocal::Offical {
@@ -141,7 +142,7 @@ pub async fn get_optifine_version() -> CoreResult<Option<Vec<OptifineObj>>> {
 
             let version = temp4.replace("OptiFine ", "").replace(" ", "_");
 
-            list.push(OptifineObj {
+            list.push(GetOptifineObj {
                 file_name,
                 version,
                 mc_version: mc_version.to_string(),
@@ -154,7 +155,7 @@ pub async fn get_optifine_version() -> CoreResult<Option<Vec<OptifineObj>>> {
         }
 
         if list.is_empty() {
-            return Ok(None);
+            return Err(ErrorType::InfoNotFound);
         }
     } else {
         let mut obj = serde_json::from_str::<Vec<OptifineListObj>>(&data).map_err(|err| {
@@ -165,7 +166,7 @@ pub async fn get_optifine_version() -> CoreResult<Option<Vec<OptifineObj>>> {
 
         for item in obj.drain(..) {
             let url = url_helper::get_optifine_jar(&item);
-            list.push(OptifineObj {
+            list.push(GetOptifineObj {
                 version: format!("{}_{}", item.rtype, item.patch),
                 mc_version: item.mcversion,
                 forge: item.forge,
@@ -178,24 +179,28 @@ pub async fn get_optifine_version() -> CoreResult<Option<Vec<OptifineObj>>> {
         }
     }
 
-    Ok(Some(list))
+    Ok(list)
 }
 
 /// 获取Optifine下载地址
 /// - `obj`: 下载项目
-pub async fn get_optifine_download(obj: &OptifineObj) -> CoreResult<Option<String>> {
-    match obj.source {
+pub async fn get_optifine_download(
+    source: &SourceLocal,
+    url1: &Option<String>,
+    url2: &Option<String>,
+) -> CoreResult<Option<String>> {
+    match source {
         SourceLocal::Offical => {
             WORK_CLIENT
                 .get()
                 .unwrap()
-                .get_text(&obj.url1.as_ref().unwrap())
+                .get_text(&url1.as_ref().unwrap())
                 .await?;
 
             let data = WORK_CLIENT
                 .get()
                 .unwrap()
-                .get_text(&obj.url2.as_ref().unwrap())
+                .get_text(&url2.as_ref().unwrap())
                 .await?;
             let html = Html::parse_document(&data);
 
@@ -212,7 +217,7 @@ pub async fn get_optifine_download(obj: &OptifineObj) -> CoreResult<Option<Strin
 
             Ok(Some(format!("{}{href}", urls::OPTIFINE)))
         }
-        SourceLocal::Bmclapi => Ok(obj.url1.clone()),
+        SourceLocal::Bmclapi => Ok(url1.clone()),
     }
 }
 
@@ -222,19 +227,14 @@ pub async fn get_support_version() -> CoreResult<Option<HashSet<String>>> {
         Some(data) => Ok(Some(data.clone())),
         None => {
             let list = get_optifine_version().await?;
-            match list {
-                None => Ok(None),
-                Some(data) => {
-                    let list1 = data.iter().chunk_by(|item| &item.mc_version);
+            let list1 = list.iter().chunk_by(|item| &item.mc_version);
 
-                    let mut list2 = HashSet::<String>::new();
-                    for (key, _) in &list1 {
-                        list2.insert(key.clone());
-                    }
-
-                    Ok(Some(OPTIFINE_MC_VERSION.get_or_init(|| list2).clone()))
-                }
+            let mut list2 = HashSet::<String>::new();
+            for (key, _) in &list1 {
+                list2.insert(key.clone());
             }
+
+            Ok(Some(OPTIFINE_MC_VERSION.get_or_init(|| list2).clone()))
         }
     }
 }

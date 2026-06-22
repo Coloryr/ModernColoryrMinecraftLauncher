@@ -1,6 +1,22 @@
 use serde::{Deserialize, Serialize};
 
-use crate::loader::LibrariesObj;
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(default)]
+pub struct LibrariesObj {
+    pub name: String,
+    pub url: String,
+    pub sha256: String,
+}
+
+impl Default for LibrariesObj {
+    fn default() -> Self {
+        Self {
+            name: Default::default(),
+            url: Default::default(),
+            sha256: Default::default(),
+        }
+    }
+}
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]

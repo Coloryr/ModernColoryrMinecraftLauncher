@@ -203,6 +203,11 @@ impl GameSettingObj {
         get_optifine_file(&self.version, self.loader_version.as_ref().unwrap())
     }
 
+    /// 获取游戏核心路径
+    pub fn get_game_file(&self) -> PathBuf {
+        get_game_file(&self.version)
+    }
+
     /// 获取所有运行库
     /// - `arg`: 启动参数
     pub fn get_libs(&self, arg: &GameLaunchObj) -> Vec<PathBuf> {

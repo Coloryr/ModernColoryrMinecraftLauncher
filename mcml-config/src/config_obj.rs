@@ -272,7 +272,7 @@ impl RunArgObj {
 }
 
 /// 游戏窗口设置
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(default)]
 pub struct WindowSettingObj {
     /// 启动后运行

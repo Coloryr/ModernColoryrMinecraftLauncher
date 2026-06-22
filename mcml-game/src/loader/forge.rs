@@ -1,17 +1,21 @@
-use std::{collections::HashMap, path::PathBuf, sync::LazyLock};
+use std::{collections::HashMap, io::Read, path::PathBuf, sync::LazyLock};
 
 use mcml_base::{
     file_item::{FileHash, FileItemObj},
     path_helper,
 };
-use mcml_names::{names, urls};
+use mcml_names::{
+    i18_items::error_type::{CoreResult, ErrorData, ErrorType, FileSystemErrorData},
+    names, urls,
+};
 use mcml_net::url_helper;
+use zip::ZipArchive;
 
 use crate::{
-    GameInstanceObj,
+    launcher::{LoaderType, game_setting_obj::GameSettingObj},
     launcher_path::{libraies_path, version_path},
     loader::{
-        forge_install_obj::ForgeInstallObj,
+        forge_install_obj::{ForgeInstallObj, ForgeInstallOldObj},
         forge_launch_obj::{ForgeDownloadsObj, ForgeLaunchObj, ForgeLibrariesObj},
     },
     mojang::{game_arg_obj::ArtifactObj, version_checker},
@@ -432,53 +436,12 @@ pub fn build_forge_libs(
     list1
 }
 
-/// 从启动信息构建Forge运行库下载项目列表
-/// - `info`: 运行库列表
-/// - `mc`: 游戏版本号
-/// - `version`: forge版本号
-/// - `neo`: 是否为NeoForge
-/// - `v2`: 是否为1.13以上
-/// - `install`: 是否为安装器
-pub fn build_forge_libs_from_info(
-    info: &ForgeLaunchObj,
-    mc: &str,
-    version: &str,
-    neo: bool,
-    v2: bool,
-    install: bool,
-) -> Vec<FileItemObj> {
-    build_forge_libs(&info.libraries, mc, version, neo, v2, install)
-}
-
-/// 从安装信息构建Forge运行库下载项目列表
-/// - `info`: 运行库列表
-/// - `mc`: 游戏版本号
-/// - `version`: forge版本号
-/// - `neo`: 是否为NeoForge
-/// - `v2`: 是否为1.13以上
-/// - `install`: 是否为安装器
-pub fn build_forge_libs_from_install(
-    info: &ForgeInstallObj,
-    mc: &str,
-    version: &str,
-    neo: bool,
-    v2: bool,
-    install: bool,
-) -> Vec<FileItemObj> {
-    build_forge_libs(&info.libraries, mc, version, neo, v2, install)
-}
-
-impl GameInstanceObj {
-    /// 获取Forge下载项目
-    pub fn get_forge_files(&self) {}
-}
-
 pub struct ForgeGetFilesObj {
     pub loaders: Vec<FileItemObj>,
     pub installs: Vec<FileItemObj>,
 }
 
-async fn get_forge_files(mc: &str, version: &str, neo: bool) -> Option<ForgeGetFilesObj> {
+async fn get_forge_libs(mc: &str, version: &str, neo: bool) -> CoreResult<ForgeGetFilesObj> {
     let ver = version_path::get_version(mc)?;
     let v2 = ver.is_game_version_v2();
 
@@ -489,8 +452,200 @@ async fn get_forge_files(mc: &str, version: &str, neo: bool) -> Option<ForgeGetF
     };
 
     if !installer.check_hash() {
-        
+        let res = mcml_downloader::run_download_task(vec![installer.clone()]).await;
+        if !res {
+            return Err(ErrorType::FileDownloadError);
+        }
     }
 
-    None
+    let stream = path_helper::open_read(&installer.file)?;
+    let mut zip = ZipArchive::new(stream).map_err(|err| {
+        ErrorType::ArchiveOpenError(FileSystemErrorData {
+            path: installer.file.clone(),
+            error: err.to_string(),
+        })
+    })?;
+
+    // Read version.json
+    let mut version_json = String::new();
+    let version_ok = match zip.by_name(names::VERSION_FILE) {
+        Ok(mut file) => {
+            file.read_to_string(&mut version_json).map_err(|err| {
+                ErrorType::ArchiveReadError(ErrorData {
+                    error: err.to_string(),
+                })
+            })?;
+            true
+        }
+        Err(_) => false,
+    };
+
+    // Read install_profile.json
+    let mut install_json = String::new();
+    let install_ok = match zip.by_name(names::FILE_INSTALL_PROFILE) {
+        Ok(mut file) => {
+            file.read_to_string(&mut install_json).map_err(|err| {
+                ErrorType::ArchiveReadError(ErrorData {
+                    error: err.to_string(),
+                })
+            })?;
+            true
+        }
+        Err(_) => false,
+    };
+
+    if version_ok && install_ok {
+        // 1.12.2以上 新版Forge
+        let info = serde_json::from_str::<ForgeLaunchObj>(&version_json).map_err(|err| {
+            ErrorType::JsonError(ErrorData {
+                error: err.to_string(),
+            })
+        })?;
+        let info = version_path::add_forge(info, &version_json.into_bytes(), mc, version, neo);
+        let loaders = info.build_forge_libs(mc, version, neo, v2, false);
+
+        let install_info =
+            serde_json::from_str::<ForgeInstallObj>(&install_json).map_err(|err| {
+                ErrorType::JsonError(ErrorData {
+                    error: err.to_string(),
+                })
+            })?;
+        let install_info = version_path::add_forge_install(
+            install_info,
+            &install_json.into_bytes(),
+            mc,
+            version,
+            neo,
+        );
+        let installs = install_info.build_forge_libs(mc, version, neo, v2, true);
+
+        Ok(ForgeGetFilesObj { loaders, installs })
+    } else if install_ok {
+        // 旧版Forge
+        let obj = serde_json::from_str::<ForgeInstallOldObj>(&install_json).map_err(|err| {
+            ErrorType::JsonError(ErrorData {
+                error: err.to_string(),
+            })
+        })?;
+
+        let mut libraries: Vec<ForgeLibrariesObj> = Vec::new();
+        for item in &obj.version_info.libraries {
+            if let Some(lib) = make_forge_libraries(&item.name) {
+                libraries.push(lib);
+            } else if !item.url.is_empty() {
+                let path = mcml_net::maven_utils::version_name_to_path(&item.name);
+                libraries.push(ForgeLibrariesObj {
+                    name: item.name.clone(),
+                    downloads: ForgeDownloadsObj {
+                        artifact: ArtifactObj {
+                            url: format!("{}{}", item.url, path),
+                            path,
+                            sha1: Default::default(),
+                        },
+                    },
+                });
+            }
+        }
+
+        let info = ForgeLaunchObj {
+            main_class: obj.version_info.main_class,
+            minecraft_arguments: Some(obj.version_info.minecraft_arguments),
+            libraries,
+            ..Default::default()
+        };
+
+        let json_bytes = serde_json::to_vec(&info).map_err(|err| {
+            ErrorType::JsonError(ErrorData {
+                error: err.to_string(),
+            })
+        })?;
+        let info = version_path::add_forge(info, &json_bytes, mc, version, neo);
+
+        Ok(ForgeGetFilesObj {
+            loaders: info.build_forge_libs(mc, version, neo, v2, true),
+            installs: Vec::new(),
+        })
+    } else {
+        Err(ErrorType::InfoNotFound)
+    }
+}
+
+impl ForgeLaunchObj {
+    /// 从启动信息构建Forge运行库下载项目列表
+    /// - `mc`: 游戏版本号
+    /// - `version`: forge版本号
+    /// - `neo`: 是否为NeoForge
+    /// - `v2`: 是否为1.13以上
+    /// - `install`: 是否为安装器
+    pub fn build_forge_libs(
+        &self,
+        mc: &str,
+        version: &str,
+        neo: bool,
+        v2: bool,
+        install: bool,
+    ) -> Vec<FileItemObj> {
+        build_forge_libs(&self.libraries, mc, version, neo, v2, install)
+    }
+}
+
+impl ForgeInstallObj {
+    /// 从安装信息构建Forge运行库下载项目列表
+    /// - `mc`: 游戏版本号
+    /// - `version`: forge版本号
+    /// - `neo`: 是否为NeoForge
+    /// - `v2`: 是否为1.13以上
+    /// - `install`: 是否为安装器
+    pub fn build_forge_libs(
+        &self,
+        mc: &str,
+        version: &str,
+        neo: bool,
+        v2: bool,
+        install: bool,
+    ) -> Vec<FileItemObj> {
+        build_forge_libs(&self.libraries, mc, version, neo, v2, install)
+    }
+}
+
+impl GameSettingObj {
+    /// 获取Forge下载项目
+    pub async fn get_forge_libs(&self) -> CoreResult<ForgeGetFilesObj> {
+        get_forge_libs(
+            &self.version,
+            &self.loader_version.as_ref().unwrap(),
+            self.loader == LoaderType::NeoForge,
+        )
+        .await
+    }
+
+    /// 创建Forge安装器下载项目
+    pub fn build_forge_installer(&self) -> FileItemObj {
+        build_forge_installer(&self.version, &self.loader_version.as_ref().unwrap())
+    }
+
+    /// 创建Forge安装器下载项目
+    pub fn build_forge_universal(&self) -> FileItemObj {
+        build_forge_universal(&self.version, &self.loader_version.as_ref().unwrap())
+    }
+
+    /// 创建Forge安装器下载项目
+    pub fn build_forge_client(&self) -> FileItemObj {
+        build_forge_client(&self.version, &self.loader_version.as_ref().unwrap())
+    }
+
+    /// 创建NeoForge安装器下载项目
+    pub fn build_neoforge_installer(&self) -> FileItemObj {
+        build_neoforge_installer(&self.version, &self.loader_version.as_ref().unwrap())
+    }
+
+    /// 创建NeoForge下载项目
+    pub fn build_neoforge_universal(&self) -> FileItemObj {
+        build_neoforge_universal(&self.version, &self.loader_version.as_ref().unwrap())
+    }
+
+    /// 创建NeoForge下载项目
+    pub fn build_neoforge_client(&self) -> FileItemObj {
+        build_neoforge_client(&self.version, &self.loader_version.as_ref().unwrap())
+    }
 }

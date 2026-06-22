@@ -1,4 +1,5 @@
 use mcml_config::config_obj::SourceLocal;
+use mcml_net::net::optifine_api::GetOptifineObj;
 use serde::{Deserialize, Serialize};
 
 /// 高清修复信息
@@ -10,7 +11,7 @@ pub struct OptifineObj {
     pub version: String,
     /// 游戏版本号
     #[serde(rename = "MCVersion")]
-    pub mcversion: String,
+    pub mc_version: String,
     /// Forge加载器信息
     #[serde(rename = "Forge")]
     pub forge: String,
@@ -26,20 +27,35 @@ pub struct OptifineObj {
     pub url2: Option<String>,
     /// 下载源
     #[serde(rename = "Local")]
-    pub local: SourceLocal,
+    pub source: SourceLocal,
+}
+
+impl From<GetOptifineObj> for OptifineObj {
+    fn from(value: GetOptifineObj) -> Self {
+        OptifineObj {
+            version: value.version,
+            mc_version: value.mc_version,
+            forge: value.forge,
+            file_name: value.file_name,
+            date: value.date,
+            url1: value.url1,
+            url2: value.url2,
+            source: value.source,
+        }
+    }
 }
 
 impl Default for OptifineObj {
     fn default() -> Self {
         Self {
             version: Default::default(),
-            mcversion: Default::default(),
+            mc_version: Default::default(),
             forge: Default::default(),
             file_name: Default::default(),
             date: Default::default(),
             url1: Default::default(),
             url2: Default::default(),
-            local: Default::default(),
+            source: Default::default(),
         }
     }
 }

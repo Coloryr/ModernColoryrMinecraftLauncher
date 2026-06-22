@@ -1,11 +1,17 @@
 use serde::{Deserialize, Serialize};
 
-pub mod forge;
+pub mod custom;
+pub mod fabric;
 pub mod fabric_loader_obj;
+pub mod fabric_meta_obj;
+pub mod forge;
 pub mod forge_install_obj;
 pub mod forge_launch_obj;
+pub mod optifine;
 pub mod optifine_obj;
+pub mod quilt;
 pub mod quilt_loader_obj;
+pub mod quilt_meta_obj;
 
 #[derive(Hash, Eq, PartialEq, Debug, Clone)]
 pub struct LoaderKey {

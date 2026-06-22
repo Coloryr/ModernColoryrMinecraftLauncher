@@ -1,8 +1,17 @@
+use mcml_config::config_obj::WindowSettingObj;
+
 use crate::{
-    launcher::{LoaderType, game_setting_obj::GameSettingObj}, launcher_path::libraies_path, mojang::{
+    game_saves::SaveObj,
+    launcher::{
+        LoaderType,
+        game_setting_obj::{GameSettingObj, ServerObj},
+    },
+    launcher_path::libraies_path,
+    mojang::{
         check_allow,
         game_arg_obj::{ArgValue, Argument, GameArgObj},
-    }
+        version_checker::is_game_version_120,
+    },
 };
 
 const V1_JVM_ARG: [&str; 3] = [
@@ -184,23 +193,166 @@ pub fn make_loader_jvm_arg(v2: bool, obj: &GameSettingObj) -> Vec<String> {
         LoaderType::Forge | LoaderType::NeoForge => {
             if v2 {
                 let mut list = Vec::<String>::new();
-                list.push(format!("-Dforgewrapper.librariesDir={}", libraies_path::get_base_dir().display()));
-list.push(format!("-Dforgewrapper.installer={}", (if obj.loader == LoaderType::NeoForge {
-    
-} else {
+                list.push(format!(
+                    "-Dforgewrapper.librariesDir={}",
+                    libraies_path::get_base_dir().display()
+                ));
+                let file = if obj.loader == LoaderType::NeoForge {
+                    obj.build_neoforge_installer()
+                } else {
+                    obj.build_forge_installer()
+                };
+                list.push(format!("-Dforgewrapper.installer={}", file.file.display()));
+                list.push(format!(
+                    "-Dforgewrapper.minecraft={}",
+                    libraies_path::get_game_file(&obj.version).display()
+                ));
 
-})));
-list.push(format!("-Dforgewrapper.minecraft={}", libraies_path::get_game_file(&obj.version).display()));
+                let obj = if obj.loader == LoaderType::NeoForge {
+                    obj.get_neoforge().unwrap()
+                } else {
+                    obj.get_forge().unwrap()
+                };
+
+                if let Some(args) = &obj.arguments {
+                    list.extend(args.jvm.clone());
+                }
 
                 list
-            }
-            else {
+            } else {
                 Default::default()
             }
-        },
-        LoaderType::Fabric => todo!(),
-        LoaderType::Quilt => todo!(),
-        LoaderType::OptiFine => todo!(),
+        }
+        LoaderType::Fabric => {
+            let fabric = obj.get_fabric().unwrap();
+
+            fabric.arguments.jvm.clone()
+        }
+        LoaderType::Quilt => Default::default(),
+        LoaderType::OptiFine => {
+            let mut list = vec![
+                format!(
+                    "-Dlibdir={}",
+                    libraies_path::get_base_dir().to_string_lossy()
+                ),
+                format!("-Dgamecore={}", obj.get_game_file().to_string_lossy()),
+                format!("-Doptifine={}", obj.get_optifine_file().to_string_lossy()),
+            ];
+
+            if v2 {
+                list.push(String::from("--add-opens"));
+                list.push(String::from("java.base/java.lang=ALL-UNNAMED"));
+                list.push(String::from("--add-opens"));
+                list.push(String::from("java.base/java.util=ALL-UNNAMED"));
+                list.push(String::from("--add-opens"));
+                list.push(String::from("java.base/java.net=ALL-UNNAMED"));
+                list.push(String::from("--add-opens"));
+                list.push(String::from("java.base/jdk.internal.loader=ALL-UNNAMED"));
+            }
+
+            list
+        }
         LoaderType::Custom => obj.get_custom_loader_game_args(),
+    }
+}
+
+impl GameSettingObj {
+    pub fn make_game_arg(
+        &self,
+        world: Option<&SaveObj>,
+        server: Option<&ServerObj>,
+    ) -> Vec<String> {
+        let mut args = Vec::new();
+
+        let config = mcml_config::CONFIG
+            .get()
+            .unwrap()
+            .read()
+            .unwrap()
+            .window
+            .clone();
+
+        let mut full_screen = false;
+        let mut width = 0;
+        let mut height = 0;
+
+        match &self.window {
+            Some(window) => {
+                if let Some(data) = window.full_screen {
+                    full_screen = data;
+                }
+                if let Some(data) = window.width {
+                    width = data;
+                }
+                if let Some(data) = window.height {
+                    height = data;
+                }
+            }
+            None => {
+                if let Some(data) = config.full_screen {
+                    full_screen = data;
+                }
+                if let Some(data) = config.width {
+                    width = data;
+                }
+                if let Some(data) = config.height {
+                    height = data;
+                }
+            }
+        }
+
+        if full_screen {
+            args.push(String::from("--fullscreen"));
+        } else {
+            if width > 0 {
+                args.push(String::from("--width"));
+                args.push(format!("{width}"));
+            }
+            if height > 0 {
+                args.push(String::from("--height"));
+                args.push(format!("{height}"));
+            }
+        }
+
+        match world {
+            Some(world) => {
+                args.push(String::from("--quickPlaySingleplayer"));
+                args.push(world.level_name.clone());
+            }
+            None => {
+                let server = match &self.start_server {
+                    Some(server) => Some(server),
+                    None => server,
+                };
+
+                if let Some(server) = server
+                    && let Some(ip) = &server.ip
+                    && !ip.is_empty()
+                {
+                    let port = match server.port {
+                        Some(port) => port,
+                        None => 25565,
+                    };
+                    if self.is_game_version_120() {
+                        args.push(String::from("--quickPlayMultiplayer"));
+                        args.push(format!("{ip}:{port}"));
+                    } else {
+                        args.push(String::from("--server"));
+                        args.push(ip.clone());
+                        args.push(String::from("--port"));
+                        args.push(format!("{port}"));
+                    }
+                }
+            }
+        }
+
+        if let Some(proxy) = &self.proxy_host {
+            if let Some(ip) = &proxy.ip {
+                args.push(String::from("--proxyHost"));
+                args.push(ip.clone());
+            }
+        }
+
+        args
     }
 }

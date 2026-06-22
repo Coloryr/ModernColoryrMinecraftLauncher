@@ -114,5 +114,10 @@ pub enum ErrorType {
     DataNotFound,
 
     /// BASE64错误
-    Base64Error(ErrorData)
+    Base64Error(ErrorData),
+
+    /// 所需文件下载失败
+    FileDownloadError,
+    /// 所需文件未能找到
+    InfoNotFound
 }
