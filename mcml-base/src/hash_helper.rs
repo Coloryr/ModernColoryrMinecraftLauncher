@@ -4,7 +4,7 @@ use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use mcml_names::i18_items::error_type::{CoreResult, ErrorData, ErrorType};
 use md5::Md5;
 use sha1::Sha1;
-use sha2::Sha256;
+use sha2::{Sha256, Sha512};
 use tokio::io::{AsyncRead, AsyncReadExt};
 
 use digest::{Digest, DynDigest};
@@ -16,6 +16,7 @@ pub enum HashType {
     Md5,
     Sha1,
     Sha256,
+    Sha512,
 }
 
 /// 将字节数组格式化为十六进制字符串（小写）
@@ -28,6 +29,7 @@ fn create_hasher(hash_type: HashType) -> Box<dyn DynDigest> {
         HashType::Md5 => Box::new(Md5::new()),
         HashType::Sha1 => Box::new(Sha1::new()),
         HashType::Sha256 => Box::new(Sha256::new()),
+        HashType::Sha512 => Box::new(Sha512::new()),
     }
 }
 

@@ -1,7 +1,4 @@
-use std::sync::{
-    Mutex,
-    atomic::{AtomicU32, AtomicU64, Ordering},
-};
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 
 use mcml_base::file_item::FileItemObj;
 
@@ -24,7 +21,7 @@ pub struct DownloadItem {
     /// 下载时是否覆盖
     pub overwrite: bool,
     /// 总体大小
-    all_size: u64,
+    all_size: AtomicU64,
     /// 已下载大小
     now_size: AtomicU64,
     /// 下载状态
@@ -40,7 +37,7 @@ impl DownloadItem {
         DownloadItem {
             base: file,
             overwrite: false,
-            all_size: 0,
+            all_size: AtomicU64::new(0),
             now_size: AtomicU64::new(0),
             state: AtomicU32::new(0),
             error: AtomicU32::new(0),
@@ -55,8 +52,9 @@ impl DownloadItem {
 
     /// 获取当前文件进度
     pub fn progress(&self) -> f64 {
-        if self.all_size > 0 {
-            (self.now_size.load(Ordering::Acquire) as f64 / self.all_size as f64) * 100.0
+        let size = self.all_size.load(Ordering::Acquire);
+        if size > 0 {
+            (self.now_size.load(Ordering::Acquire) as f64 / size as f64) * 100.0
         } else {
             0.0
         }
@@ -66,12 +64,16 @@ impl DownloadItem {
         self.now_size.fetch_add(size, Ordering::Relaxed);
     }
 
-    pub fn set_all_size(&mut self, size: u64) {
-        self.all_size = size;
+    pub fn set_now_size(&self, size: u64) {
+        self.now_size.store(size, Ordering::Relaxed);
+    }
+
+    pub fn set_all_size(&self, size: u64) {
+        self.all_size.store(size, Ordering::Relaxed);
     }
 
     pub fn get_all_size(&self) -> u64 {
-        self.all_size
+        self.all_size.load(Ordering::Acquire)
     }
 
     pub fn add_error(&self) {
@@ -85,6 +87,10 @@ impl DownloadItem {
 
     pub fn get_state(&self) -> DownloadItemState {
         Self::int_to_state(self.state.load(Ordering::Acquire))
+    }
+
+    pub fn get_now_size(&self) -> u64 {
+        self.now_size.load(Ordering::Acquire)
     }
 
     fn state_to_int(state: DownloadItemState) -> u32 {

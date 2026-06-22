@@ -6,10 +6,11 @@ use mcml_config::config_obj::{ProxyState, ProxyType};
 use mcml_names::i18_items::error_type::{
     ErrorData, ErrorType, HttpReadErrorData, HttpReqErrorData,
 };
-use reqwest::Proxy;
 use reqwest::header::{HeaderMap, HeaderValue, USER_AGENT};
+use reqwest::{Proxy, Response};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
+use std::io::Cursor;
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
@@ -126,6 +127,17 @@ impl Client {
     }
 
     /// 发送 GET 请求，返回原始文本响应
+    pub async fn get(&self, url: &str) -> NetResult<Response> {
+        let resp = self
+            .inner
+            .get(url)
+            .send()
+            .await
+            .map_err(NetError::Reqwest)?;
+        Ok(resp)
+    }
+
+    /// 发送 GET 请求，返回原始文本响应
     pub async fn get_text(&self, url: &str) -> NetResult<String> {
         let resp = self
             .inner
@@ -156,6 +168,20 @@ impl Client {
             .await
             .map_err(NetError::Reqwest)?;
         Self::handle_response(resp).await
+    }
+
+    /// 发送带有 Range 头的 GET 请求，用于断点续传
+    /// - `url`: 请求地址
+    /// - `pos`: 已下载的字节数，从该位置继续下载
+    pub async fn get_ranges(&self, url: &str, pos: u64) -> NetResult<Response> {
+        let resp = self
+            .inner
+            .get(url)
+            .header("Range", format!("bytes={}-", pos))
+            .send()
+            .await
+            .map_err(NetError::Reqwest)?;
+        Ok(resp)
     }
 
     /// 发送 POST 请求，请求体为 JSON

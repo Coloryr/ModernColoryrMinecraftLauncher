@@ -1,13 +1,19 @@
 pub mod log_item;
 
 use crossbeam_queue::SegQueue;
-use mcml_names::{i18, i18_items::{error_type::ErrorType, info_type::InfoType, panic_type::PanicType, thread_type::ThreadType}, names};
+use mcml_names::{
+    i18,
+    i18_items::{
+        error_type::ErrorType, info_type::InfoType, panic_type::PanicType, thread_type::ThreadType,
+    },
+    names,
+};
 use semrs::Semaphore;
 
 use std::{
     fs::{File, OpenOptions},
     io::{BufWriter, Write},
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{
         Arc, Mutex, OnceLock, RwLock,
         atomic::{AtomicBool, Ordering},
@@ -29,10 +35,10 @@ static SEM: OnceLock<Arc<Semaphore>> = OnceLock::new();
 /// 开始启动日志系统
 ///
 /// - `local`: 日志文件存储路径
-pub fn start(local: &PathBuf) {
+pub fn start<P: AsRef<Path>>(local: P) {
     SEM.get_or_init(|| Arc::new(Semaphore::new(0)));
 
-    let log_path = local.join(names::LOG_FILE);
+    let log_path = local.as_ref().join(names::LOG_FILE);
 
     let file = match OpenOptions::new()
         .create(true)

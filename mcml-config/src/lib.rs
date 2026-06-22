@@ -9,7 +9,7 @@ use std::{
 
 use mcml_log;
 use mcml_names::{
-    i18_items::error_type::{FileSystemErrorData, ErrorType},
+    i18_items::error_type::{ErrorType, FileSystemErrorData},
     names, uuids,
 };
 
@@ -44,24 +44,29 @@ pub fn save_now() {
     }
 }
 
+/// 保存配置文件
 pub fn save() {
     let config = &*CONFIG.get().unwrap().read().unwrap();
     config_save::save(uuids::CONFIG_UUID, config, FILE.get().unwrap());
 }
 
-pub fn load(file: &PathBuf) -> bool {
+/// 加载配置文件
+/// - `file`: 配置文件
+pub fn load<P: AsRef<Path>>(file: P) -> bool {
     let config = CONFIG.get_or_init(|| RwLock::new(ConfigObj::default()));
 
-    if !Path::exists(file) {
+    let path = file.as_ref();
+
+    if !Path::exists(&path) {
         save_now();
         return true;
     }
 
-    let stream = File::open(file);
+    let stream = File::open(&path);
     if let Err(err) = stream {
         mcml_log::error_type(ErrorType::ConfigReadError(FileSystemErrorData {
             error: err.to_string(),
-            path: file.clone(),
+            path: path.to_path_buf(),
         }));
 
         return false;
@@ -73,7 +78,7 @@ pub fn load(file: &PathBuf) -> bool {
     if let Err(err) = json {
         mcml_log::error_type(ErrorType::ConfigReadError(FileSystemErrorData {
             error: err.to_string(),
-            path: file.clone(),
+            path: path.to_path_buf(),
         }));
 
         return false;
@@ -91,8 +96,10 @@ pub fn load(file: &PathBuf) -> bool {
     false
 }
 
-pub fn init(local: &PathBuf) -> bool {
-    FILE.get_or_init(|| local.join(names::CONFIG_FILE));
+/// 初始化运行路径
+/// - `dir`: 运行路径
+pub fn init<P: AsRef<Path>>(dir: P) -> bool {
+    FILE.get_or_init(|| dir.as_ref().join(names::CONFIG_FILE));
 
     load(FILE.get().unwrap())
 }
