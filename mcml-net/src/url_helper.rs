@@ -1,14 +1,14 @@
 use mcml_config::config_obj::SourceLocal;
-use mcml_names::urls::{self};
 
-use crate::net::{
+use crate::{
     authlib_api::{ArtifactsObj, AuthlibInjectorObj},
     optifine_api::OptifineListObj,
+    urls,
 };
 
 /// 获取下载源
 pub fn get_source() -> SourceLocal {
-    let config = mcml_config::CONFIG.get().unwrap().read().unwrap();
+    let config = mcml_config::read_config();
 
     config.http.source
 }
@@ -232,7 +232,7 @@ pub fn replace_fabric_libraries(url: &str) -> String {
 }
 
 /// 修正Forge下载地址
-/// - `url`: 
+/// - `url`:
 pub fn forge_url_fix(version: &str) -> String {
     if version.eq_ignore_ascii_case("1.7.2") {
         String::from("-mc172")

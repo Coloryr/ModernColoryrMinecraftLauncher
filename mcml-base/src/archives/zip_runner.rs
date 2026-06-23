@@ -15,7 +15,7 @@ use std::sync::atomic::Ordering;
 #[cfg(unix)]
 use std::{fs, io, path::Path};
 
-use crate::archives::{ArchiveProcess, ArchiveRun, should_exclude};
+use crate::archives::{self, ArchiveProcess, ArchiveRun};
 use crate::path_helper;
 
 pub(crate) struct ZipProcess {
@@ -68,7 +68,7 @@ impl ZipProcess {
             self.base.add_now(&path);
 
             if let Some(patterns) = filter {
-                if should_exclude(&path, patterns) {
+                if archives::should_exclude(&path, patterns) {
                     continue;
                 }
             }

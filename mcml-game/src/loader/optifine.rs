@@ -1,10 +1,10 @@
 use mcml_base::file_item::{FileHash, FileItemObj, LaterRun};
 use mcml_names::i18_items::error_type::{CoreResult, ErrorType};
-use mcml_net::net::optifine_api;
+use mcml_net::optifine_api;
 
 use crate::{
     launcher::game_setting_obj::GameSettingObj,
-    launcher_path::{libraies_path, version_path},
+    launcher_path::{libraries_path, version_path},
     loader::optifine_obj::OptifineObj,
 };
 
@@ -29,7 +29,7 @@ pub async fn get_optifine_libs(mc: &str, version: &str) -> CoreResult<Vec<FileIt
             match url {
                 Some(url) => Ok(vec![FileItemObj {
                     name: item.file_name.clone(),
-                    file: libraies_path::get_optifine_file(mc, version),
+                    file: libraries_path::get_optifine_file(mc, version),
                     url: url.clone(),
                     hash: FileHash::None,
                     later: LaterRun::None,

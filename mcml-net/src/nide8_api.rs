@@ -1,7 +1,7 @@
-use mcml_names::{i18_items::error_type::CoreResult, urls};
+use mcml_names::{i18_items::error_type::CoreResult};
 use serde::{Deserialize, Serialize};
 
-use crate::WORK_CLIENT;
+use crate::{WORK_CLIENT, urls};
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]

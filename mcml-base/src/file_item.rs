@@ -28,7 +28,8 @@ impl Default for FileHash {
 #[derive(Debug, Clone)]
 pub enum LaterRun {
     None,
-    Unpack(PathBuf),
+    /// 解压
+    UnpackNative(PathBuf),
 }
 
 impl Default for LaterRun {

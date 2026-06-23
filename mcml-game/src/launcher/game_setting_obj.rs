@@ -4,7 +4,7 @@ use uuid::Uuid;
 
 use crate::{
     launcher::{LoaderType, LogEncoding, SourceType},
-    mojang::GameType,
+    mojang::VersionType,
 };
 
 /// 加入服务器设置
@@ -135,7 +135,7 @@ pub struct GameSettingObj {
     pub loader_version: Option<String>,
     /// Jvm参数
     #[serde(rename = "JvmArg")]
-    pub jvm_arm: Option<RunArgObj>,
+    pub jvm_arg: Option<RunArgObj>,
     /// Jvm名字
     #[serde(rename = "JvmName")]
     pub jvm_name: Option<String>,
@@ -162,7 +162,7 @@ pub struct GameSettingObj {
     pub source_type: SourceType,
     /// 游戏发布类型
     #[serde(rename = "GameType")]
-    pub game_type: GameType,
+    pub game_type: VersionType,
     /// 整合包项目
     #[serde(rename = "PID")]
     pub pid: Option<String>,
@@ -193,7 +193,7 @@ impl Default for GameSettingObj {
             version: Default::default(),
             loader: Default::default(),
             loader_version: Default::default(),
-            jvm_arm: Default::default(),
+            jvm_arg: Default::default(),
             jvm_name: Default::default(),
             jvm_local: Default::default(),
             window: Default::default(),

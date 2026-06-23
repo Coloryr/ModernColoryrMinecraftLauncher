@@ -30,13 +30,13 @@ fn load(local: &PathBuf) {
 /// 保持账户列表
 fn save() {
     let auths: Vec<LoginObj> = AUTHS.read().unwrap().values().cloned().collect();
-    let local = inner_path::inner().join(names::AUTH_FILE);
+    let local = inner_path::get_inner_path().join(names::AUTH_FILE);
     config_save::save(AUTH_UUID, &auths, &local);
 }
 
 /// 初始化
 pub fn init() {
-    let local = inner_path::inner().join(names::AUTH_FILE);
+    let local = inner_path::get_inner_path().join(names::AUTH_FILE);
 
     if local.exists() {
         load(&local);

@@ -149,7 +149,7 @@ pub(crate) fn task_done(task: &DownloadTask) {
 
 /// 启动下载器
 pub fn start() {
-    let config = mcml_config::CONFIG.get().unwrap().read().unwrap();
+    let config = mcml_config::read_config();
     let mut thread = config.http.download_thread;
     if thread <= 0 {
         thread = 5;

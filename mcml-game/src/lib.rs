@@ -1,4 +1,4 @@
-use std::{collections::HashMap};
+use std::collections::HashMap;
 
 use crate::launcher::{
     custom_game_arg_obj::CustomGameArgObj, game_setting_obj::GameSettingObj,
@@ -8,12 +8,14 @@ use crate::launcher::{
 pub mod game_arg;
 pub mod game_download;
 pub mod game_launch;
+pub mod game_libraries;
 pub mod game_saves;
 pub mod game_server;
 pub mod launcher;
 pub mod launcher_path;
 pub mod loader;
 pub mod mojang;
+pub mod game_log;
 
 pub struct GameInstanceObj {
     pub setting: GameSettingObj,

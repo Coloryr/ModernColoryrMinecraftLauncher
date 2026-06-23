@@ -1,6 +1,15 @@
+pub mod adoptium_api;
+pub mod authlib_api;
+pub mod coloryr_api;
+pub mod fabric_api;
+pub mod liteloader_api;
 pub mod maven_utils;
-pub mod net;
+pub mod mojang_api;
+pub mod nide8_api;
+pub mod optifine_api;
+pub mod quilt_api;
 pub mod url_helper;
+pub mod urls;
 
 use mcml_config::config_obj::{ProxyState, ProxyType};
 use mcml_names::i18_items::error_type::{
@@ -10,7 +19,6 @@ use reqwest::header::{HeaderMap, HeaderValue, USER_AGENT};
 use reqwest::{Proxy, Response};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
-use std::io::Cursor;
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
@@ -287,11 +295,12 @@ impl Default for Client {
     }
 }
 
-pub static WORK_CLIENT: OnceLock<Arc<Client>> = OnceLock::new();
-pub static LOGIN_CLIENT: OnceLock<Arc<Client>> = OnceLock::new();
+static WORK_CLIENT: OnceLock<Arc<Client>> = OnceLock::new();
+static LOGIN_CLIENT: OnceLock<Arc<Client>> = OnceLock::new();
 
+/// 初始化http客户端
 pub fn init() {
-    let config = mcml_config::CONFIG.get().unwrap().read().unwrap();
+    let config = mcml_config::read_config();
     let http = &config.http;
 
     let client = if http.work_proxy == ProxyState::User {
@@ -321,4 +330,12 @@ pub fn init() {
     };
 
     LOGIN_CLIENT.get_or_init(|| Arc::new(client));
+}
+
+pub fn get_work_client() -> Arc<Client> {
+    WORK_CLIENT.get().unwrap().clone()
+}
+
+pub fn get_login_client() -> Arc<Client> {
+    LOGIN_CLIENT.get().unwrap().clone()
 }

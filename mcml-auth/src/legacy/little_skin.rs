@@ -1,5 +1,6 @@
 /// LittleSkin登录
-use mcml_names::{i18_items::error_type::ErrorType, urls::LITTLE_SKIN_URL};
+use mcml_names::i18_items::error_type::{CoreResult, ErrorType};
+use mcml_net::urls;
 
 use crate::{
     AuthType, LoginObj,
@@ -18,10 +19,10 @@ pub async fn authenticate(
     password: String,
     server: Option<String>,
     gui: Option<Box<dyn GuiSelectHandel>>,
-) -> Result<LoginObj, ErrorType> {
+) -> CoreResult<LoginObj> {
     let mut auth_type = AuthType::LittleSkin;
     let server = match server {
-        None => String::from(LITTLE_SKIN_URL),
+        None => String::from(urls::LITTLE_SKIN_URL),
         Some(server) => {
             auth_type = AuthType::SelfLittleSkin;
             let mut server = server.clone();
@@ -38,7 +39,7 @@ pub async fn authenticate(
             server
         }
     };
-    
+
     let server1 = server.clone() + "api/yggdrasil";
 
     let obj = legacy::authenticate(&server1, client_token, user, password, true).await?;
@@ -73,9 +74,9 @@ pub async fn authenticate(
 
 /// 刷新登录
 /// - `auth`: 保存的账户
-pub async fn refresh(auth: &LoginObj) -> Result<LoginObj, ErrorType> {
+pub async fn refresh(auth: &LoginObj) -> CoreResult<LoginObj> {
     let mut server = if auth.auth_type == AuthType::LittleSkin {
-        String::from(LITTLE_SKIN_URL)
+        String::from(urls::LITTLE_SKIN_URL)
     } else {
         auth.text1.clone().unwrap()
     };
@@ -87,4 +88,17 @@ pub async fn refresh(auth: &LoginObj) -> Result<LoginObj, ErrorType> {
     } else {
         Err(ErrorType::AuthTokenTimeout)
     }
+}
+
+/// 获取启动时所需的密钥
+pub async fn get_key(auth: &LoginObj) -> CoreResult<String> {
+    let mut server = if auth.auth_type == AuthType::LittleSkin {
+        String::from(urls::LITTLE_SKIN_URL)
+    } else {
+        auth.text1.clone().unwrap()
+    };
+
+    server.push_str("api/yggdrasil");
+
+    Ok(mcml_net::get_login_client().get_text(&server).await?)
 }

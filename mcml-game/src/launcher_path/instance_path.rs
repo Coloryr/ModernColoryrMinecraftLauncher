@@ -13,12 +13,9 @@ use mcml_names::{
 };
 use uuid::Uuid;
 
-use crate::{
-    game_launch::GameLaunchObj,
-    launcher::{
-        custom_game_arg_obj::CustomGameArgObj, game_setting_obj::GameSettingObj,
-        game_time_obj::GameTimeObj, mod_info_obj::FileOnlineInfoObj,
-    },
+use crate::launcher::{
+    custom_game_arg_obj::CustomGameArgObj, game_setting_obj::GameSettingObj,
+    game_time_obj::GameTimeObj, mod_info_obj::FileOnlineInfoObj,
 };
 
 static BASE_DIR: OnceLock<PathBuf> = OnceLock::new();
@@ -28,8 +25,8 @@ static INSTANCES: LazyLock<RwLock<HashMap<Uuid, GameSettingObj>>> =
 
 /// 初始化版本路径
 /// - `dir`: 运行路径
-pub fn init(dir: &Path) -> CoreResult<()> {
-    let dir = BASE_DIR.get_or_init(|| dir.join(names::INSTANCE_DIR));
+pub(crate) fn init<P: AsRef<Path>>(dir: P) -> CoreResult<()> {
+    let dir = BASE_DIR.get_or_init(|| dir.as_ref().join(names::INSTANCE_DIR));
 
     if !dir.exists() {
         path_helper::create_dir_all(&dir)?;
@@ -399,7 +396,7 @@ impl GameSettingObj {
     }
 
     /// 保存启动统计数据
-    pub fn save_launch_count_data(&self, obj: &GameTimeObj)  {
+    pub fn save_launch_count_data(&self, obj: &GameTimeObj) {
         config_save::save(
             uuids::mix_uuid(self.uuid, uuids::LAUNCH_COUNT_DATA_FILE_UUID),
             obj,

@@ -1,5 +1,6 @@
 /// 统一通行证
-use mcml_names::{i18_items::error_type::ErrorType, urls::NIDE8_URL};
+use mcml_names::i18_items::error_type::{CoreResult, ErrorType};
+use mcml_net::urls;
 
 use crate::{
     AuthType, LoginObj,
@@ -16,8 +17,8 @@ pub async fn authenticate(
     user: String,
     password: String,
     server: String,
-) -> Result<LoginObj, ErrorType> {
-    let url = String::from(NIDE8_URL) + &server;
+) -> CoreResult<LoginObj> {
+    let url = String::from(urls::NIDE8_URL) + &server;
 
     let obj = legacy::authenticate(&url, client_token, user, password, false).await?;
 
@@ -30,8 +31,8 @@ pub async fn authenticate(
 
 /// 刷新登录
 /// - `auth`: 保存的账户
-pub async fn refresh(auth: &LoginObj) -> Result<LoginObj, ErrorType> {
-    let server = String::from(NIDE8_URL) + &auth.text1.clone().unwrap();
+pub async fn refresh(auth: &LoginObj) -> CoreResult<LoginObj> {
+    let server = String::from(urls::NIDE8_URL) + &auth.text1.clone().unwrap();
 
     if legacy::validate(&server, auth).await? {
         Ok(legacy::refresh(&server, auth, false).await?)

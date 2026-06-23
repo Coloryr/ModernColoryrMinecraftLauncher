@@ -1,11 +1,8 @@
 use std::{sync::OnceLock, time::Duration};
 
 use chrono::Local;
-use mcml_names::{
-    i18_items::error_type::{CoreResult, ErrorData, ErrorType},
-    urls::{OAUTH_CODE, OAUTH_TOKEN, XBOX_LIVE, XSTS},
-};
-use mcml_net::LOGIN_CLIENT;
+use mcml_names::i18_items::error_type::{CoreResult, ErrorData, ErrorType};
+use mcml_net::urls;
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 
@@ -55,10 +52,8 @@ pub async fn get_code() -> CoreResult<OAuthGetCodeRes> {
         ("scope", "XboxLive.signin offline_access"),
     ];
 
-    let data = LOGIN_CLIENT
-        .get()
-        .unwrap()
-        .post_form_get_json::<OAuthObj>(OAUTH_CODE, obj)
+    let data = mcml_net::get_login_client()
+        .post_form_get_json::<OAuthObj>(urls::OAUTH_CODE, obj)
         .await?;
 
     match data.error {
@@ -101,10 +96,8 @@ pub async fn run_get_code(
             return Err(ErrorType::TaskTimeout);
         }
 
-        let data = LOGIN_CLIENT
-            .get()
-            .unwrap()
-            .post_form_get_json::<OAuthGetCodeObj>(OAUTH_TOKEN, obj)
+        let data = mcml_net::get_login_client()
+            .post_form_get_json::<OAuthGetCodeObj>(urls::OAUTH_TOKEN, obj)
             .await?;
 
         if let Some(error) = data.error {
@@ -132,10 +125,8 @@ pub async fn refresh_oauth_token(token: String) -> CoreResult<OAuthGetCodeObj> {
         ("refresh_token", &token),
     ];
 
-    let data = LOGIN_CLIENT
-        .get()
-        .unwrap()
-        .post_form_get_json::<OAuthGetCodeObj>(OAUTH_TOKEN, obj)
+    let data = mcml_net::get_login_client()
+        .post_form_get_json::<OAuthGetCodeObj>(urls::OAUTH_TOKEN, obj)
         .await?;
 
     match data.error {
@@ -157,10 +148,8 @@ pub async fn get_xbox(token: String) -> CoreResult<XBoxLiveRes> {
         token_type: String::from("JWT"),
     };
 
-    let data = LOGIN_CLIENT
-        .get()
-        .unwrap()
-        .post_json_get_json::<_, XBoxLoginResObj>(XBOX_LIVE, &obj)
+    let data = mcml_net::get_login_client()
+        .post_json_get_json::<_, XBoxLoginResObj>(urls::XBOX_LIVE, &obj)
         .await?;
     let item = data.display_claims.xui.first().unwrap();
     let xsts = data.token;
@@ -185,10 +174,8 @@ pub async fn get_xsts(token: String) -> CoreResult<XBoxLiveRes> {
         token_type: String::from("JWT"),
     };
 
-    let data = LOGIN_CLIENT
-        .get()
-        .unwrap()
-        .post_json_get_json::<_, XBoxLoginResObj>(XSTS, &obj)
+    let data = mcml_net::get_login_client()
+        .post_json_get_json::<_, XBoxLoginResObj>(urls::XSTS, &obj)
         .await?;
     let item = data.display_claims.xui.first().unwrap();
     let xsts = data.token;

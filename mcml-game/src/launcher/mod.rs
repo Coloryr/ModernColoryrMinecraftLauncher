@@ -36,29 +36,3 @@ impl Default for LogEncoding {
         LogEncoding::UTF8
     }
 }
-
-/// 模组加载器类型
-#[derive(Serialize_repr, Deserialize_repr, Debug, Clone, Copy, PartialEq, Eq)]
-#[repr(u8)]
-pub enum LoaderType {
-    /// 无模组加载器
-    Normal,
-    /// Forge加载器 
-    Forge,
-    /// Fabric加载器
-    Fabric,
-    /// Quilt加载器
-    Quilt,
-    /// NeoForge加载器
-    NeoForge,
-    /// 高清修复
-    OptiFine,
-    /// 自定义
-    Custom
-}
-
-impl Default for LoaderType {
-    fn default() -> Self {
-        LoaderType::Normal
-    }
-}

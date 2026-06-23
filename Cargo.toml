@@ -38,7 +38,6 @@ members = [
 ]
 
 [workspace.dependencies]
-const_format = "~0.2.36"
 crossbeam-queue = "~0.3.12"
 tokio = { version = "~1.52.3", features = [
     "rt",

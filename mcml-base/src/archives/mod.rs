@@ -11,6 +11,7 @@ pub mod r7z_runner;
 pub mod tar_runner;
 pub mod zip_runner;
 
+/// 压缩包类型
 pub enum ArchiveType {
     Zip,
     R7Z,
@@ -19,8 +20,9 @@ pub enum ArchiveType {
     TarXz,
 }
 
+/// 压缩模式
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TarMode {
+pub(crate) enum TarMode {
     Gz,
     Xz,
 }

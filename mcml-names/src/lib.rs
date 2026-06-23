@@ -1,7 +1,6 @@
 pub mod i18;
 pub mod i18_items;
 pub mod names;
-pub mod urls;
 pub mod uuids;
 
 use std::{
@@ -9,10 +8,8 @@ use std::{
     fs::File,
     io::{Read, Write},
     path::PathBuf,
-    sync::{OnceLock, RwLock},
+    sync::{LazyLock, OnceLock, RwLock},
 };
-
-use const_format::formatcp;
 
 use crate::{
     i18::{I18Lang, en_us::EnUs, zh_cn::ZhCn},
@@ -24,7 +21,7 @@ pub const VERSION_NUM: i32 = 1;
 /// 启动器日期
 pub const DATE: &str = "20260503";
 /// 启动器版本号
-pub const VERSION: &str = formatcp!("1.{}.{DATE}", VERSION_NUM);
+pub const VERSION: LazyLock<String> = LazyLock::new(|| format!("1.{}.{DATE}", VERSION_NUM));
 
 #[allow(non_camel_case_types)]
 #[derive(Clone, Copy)]

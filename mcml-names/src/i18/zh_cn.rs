@@ -12,7 +12,7 @@ pub struct ZhCn;
 impl I18Lang for ZhCn {
     fn get_info(&self, info: InfoType) -> String {
         match info {
-            InfoType::CoreStart => format!("MCML启动，版本：{}", VERSION),
+            InfoType::CoreStart => format!("MCML启动，版本：{}", *VERSION),
             InfoType::CoreStop => format!("MCML停止"),
         }
     }

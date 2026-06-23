@@ -5,7 +5,7 @@ use mcml_base::file_item::FileItemObj;
 use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;
 
-use crate::{download_item::DownloadItem, gen_task_id, task_done, update_task};
+use crate::download_item::DownloadItem;
 
 /// 下载任务
 pub(crate) struct DownloadTask {
@@ -33,7 +33,7 @@ impl DownloadTask {
         let size = vec.len();
 
         DownloadTask {
-            id: gen_task_id(),
+            id: crate::gen_task_id(),
             items: vec,
             total_size: size,
             completed_count: AtomicUsize::new(0),
@@ -44,9 +44,9 @@ impl DownloadTask {
     }
 
     fn check_done(&self) {
-        update_task(self.id, self.progress());
+        crate::update_task(self.id, self.progress());
         if self.items.is_empty() {
-            task_done(self);
+            crate::task_done(self);
             self.sem.add_permits(1);
         }
     }

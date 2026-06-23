@@ -43,3 +43,5 @@ pub const OPTIFINE: &str = "https://optifine.net/";
 
 pub const MAVEN: &str = "https://repo1.maven.org/maven2/";
 pub const MAVEN_ALIYUN: &str = "https://maven.aliyun.com/repository/public/";
+
+pub const LITELOADER: &str = "https://dl.liteloader.com/";

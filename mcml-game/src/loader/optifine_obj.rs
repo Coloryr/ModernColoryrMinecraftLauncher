@@ -1,5 +1,5 @@
 use mcml_config::config_obj::SourceLocal;
-use mcml_net::net::optifine_api::GetOptifineObj;
+use mcml_net::optifine_api::GetOptifineObj;
 use serde::{Deserialize, Serialize};
 
 /// 高清修复信息

@@ -1,8 +1,15 @@
-use mcml_base::{Os, file_item::{FileHash, FileItemObj}, get_system_info};
+use mcml_base::{
+    Os,
+    file_item::{FileHash, FileItemObj},
+    get_system_info,
+};
 use mcml_net::url_helper;
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
-use crate::{launcher_path::{assets_path, libraies_path, version_path}, mojang::game_arg_obj::{GameRulesObj, LoggingObj}};
+use crate::{
+    launcher_path::{assets_path, libraries_path, version_path},
+    mojang::game_arg_obj::{GameRulesObj, LoggingObj},
+};
 
 pub mod assets_obj;
 pub mod game_arg_obj;
@@ -13,7 +20,7 @@ pub mod version_parse;
 /// 游戏版本类型
 #[derive(Serialize_repr, Deserialize_repr, Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
-pub enum GameType {
+pub enum VersionType {
     /// 发布版
     Release,
     Snapshot,
@@ -21,9 +28,9 @@ pub enum GameType {
     All,
 }
 
-impl Default for GameType {
+impl Default for VersionType {
     fn default() -> Self {
-        GameType::Release
+        VersionType::Release
     }
 }
 
@@ -105,7 +112,7 @@ pub fn build_assets_item(name: &str, hash: &str) -> FileItemObj {
 /// - `version`: 游戏版本号
 pub fn build_game_item(version: &str) -> FileItemObj {
     let game = version_path::get_version(version).unwrap();
-    let file = libraies_path::get_game_file(version);
+    let file = libraries_path::get_game_file(version);
 
     FileItemObj {
         name: format!("minecraft-clinet-{version}.jar"),
