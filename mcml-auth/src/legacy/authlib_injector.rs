@@ -1,5 +1,5 @@
 /// 外置登录
-use mcml_names::i18_items::error_type::ErrorType;
+use mcml_names::i18_items::error_type::{CoreResult, ErrorType};
 
 use crate::{
     AuthType, LoginObj,
@@ -18,7 +18,7 @@ pub async fn authenticate(
     password: String,
     server: String,
     gui: Option<Box<dyn GuiSelectHandel>>,
-) -> Result<LoginObj, ErrorType> {
+) -> CoreResult<LoginObj> {
     let obj = legacy::authenticate(&server, client_token, user, password, true).await?;
 
     let mut auth = obj.auth;
@@ -50,11 +50,18 @@ pub async fn authenticate(
 
 /// 刷新登录
 /// - `auth`: 保存的账户
-pub async fn refresh(auth: &LoginObj) -> Result<LoginObj, ErrorType> {
+pub async fn refresh(auth: &LoginObj) -> CoreResult<LoginObj> {
     let server = auth.text1.clone().unwrap();
     if legacy::validate(&server, auth).await? {
         Ok(legacy::refresh(&server, auth, false).await?)
     } else {
         Err(ErrorType::AuthTokenTimeout)
     }
+}
+
+/// 获取启动时所需的密钥
+pub async fn get_key(auth: &LoginObj) -> CoreResult<String> {
+    let server = auth.text1.clone().unwrap();
+
+    Ok(mcml_net::get_login_client().get_text(&server).await?)
 }

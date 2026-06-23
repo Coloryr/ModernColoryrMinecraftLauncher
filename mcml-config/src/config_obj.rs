@@ -182,7 +182,7 @@ impl Default for GCType {
 }
 
 /// 启动参数
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(default)]
 pub struct RunArgObj {
     /// 删除原有的Jvm参数
@@ -211,7 +211,7 @@ pub struct RunArgObj {
     pub min_memory: Option<u32>,
     /// 启用ColorASM
     #[serde(rename = "ColorASM")]
-    pub color_asm: Option<bool>,
+    pub colorasm: Option<bool>,
     /// 启动前运行
     #[serde(rename = "LaunchPre")]
     pub launch_pre_run: Option<bool>,
@@ -240,7 +240,7 @@ impl Default for RunArgObj {
             gc_mode: Option::None,
             max_memory: Option::None,
             min_memory: Option::None,
-            color_asm: Option::None,
+            colorasm: Option::None,
             launch_pre_run: Option::None,
             pre_run_with_game: Option::None,
             launch_post_run: Option::None,
@@ -261,7 +261,7 @@ impl RunArgObj {
             gc_mode: Option::Some(GCType::Auto),
             max_memory: Option::Some(512),
             min_memory: Option::Some(4096),
-            color_asm: Option::Some(false),
+            colorasm: Option::Some(false),
             launch_pre_run: Option::Some(false),
             pre_run_with_game: Option::Some(true),
             launch_post_run: Option::Some(false),
@@ -406,7 +406,7 @@ pub struct ConfigObj {
 impl Default for ConfigObj {
     fn default() -> Self {
         Self {
-            version: String::from(mcml_names::VERSION),
+            version: mcml_names::VERSION.clone(),
             java_list: Vec::new(),
             http: HttpObj::default(),
             dns: DnsObj::default(),

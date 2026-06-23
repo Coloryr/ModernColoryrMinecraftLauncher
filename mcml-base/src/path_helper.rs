@@ -91,7 +91,7 @@ fn get_trash_info_path() -> PathBuf {
 }
 
 /// 将文件夹挪到回收站
-pub fn move_to_trash(dir: &str) -> io::Result<bool> {
+pub fn move_to_trash<P: AsRef<Path>>(dir: P) -> CoreResult<bool> {
     #[cfg(target_os = "windows")]
     {
         move_to_trash_windows(dir)
@@ -196,8 +196,7 @@ fn move_to_trash_macos(dir: &str) -> io::Result<bool> {
 
 /// 将文件夹挪到回收站
 #[cfg(target_os = "windows")]
-fn move_to_trash_windows(dir: &str) -> io::Result<bool> {
-    use std::ffi::OsStr;
+fn move_to_trash_windows<P: AsRef<Path>>(dir: P) -> CoreResult<bool> {
     use std::iter::once;
     use std::os::windows::ffi::OsStrExt;
     use windows_sys::Win32::Foundation::HWND;
@@ -210,13 +209,14 @@ fn move_to_trash_windows(dir: &str) -> io::Result<bool> {
     use windows_sys::Win32::UI::Shell::SHFileOperationW;
 
     // Check if the path exists
-    let path = std::path::Path::new(dir);
-    if !path.exists() {
+    if !dir.as_ref().exists() {
         return Ok(false);
     }
 
     // Convert string to Windows wide string (double null terminated)
-    let wide_path: Vec<u16> = OsStr::new(dir)
+    let wide_path: Vec<u16> = dir
+        .as_ref()
+        .as_os_str()
         .encode_wide()
         .chain(once(0))
         .chain(once(0))

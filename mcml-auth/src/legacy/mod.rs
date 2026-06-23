@@ -1,6 +1,5 @@
 /// 旧版账户验证
 use mcml_names::i18_items::error_type::{CoreResult, ErrorType};
-use mcml_net::LOGIN_CLIENT;
 use reqwest::StatusCode;
 
 use crate::{
@@ -61,9 +60,7 @@ pub async fn authenticate(
 
     server.push_str("authserver/authenticate");
 
-    let obj = LOGIN_CLIENT
-        .get()
-        .unwrap()
+    let obj = mcml_net::get_login_client()
         .post_json_get_json::<_, AuthenticateResObj>(&server, &obj)
         .await?;
 
@@ -126,11 +123,7 @@ pub async fn authenticate(
 /// - `server`: 服务器地址
 /// - `login`: 保存的账户
 /// - `select`: 是否为选择模式
-pub async fn refresh(
-    server: &String,
-    login: &LoginObj,
-    select: bool,
-) -> Result<LoginObj, ErrorType> {
+pub async fn refresh(server: &String, login: &LoginObj, select: bool) -> CoreResult<LoginObj> {
     let obj = if select {
         RefreshObj {
             access_token: login.access_token.clone(),
@@ -156,9 +149,7 @@ pub async fn refresh(
 
     server.push_str("authserver/refresh");
 
-    let obj = LOGIN_CLIENT
-        .get()
-        .unwrap()
+    let obj = mcml_net::get_login_client()
         .post_json_get_json::<_, AuthenticateResObj>(&server, &obj)
         .await?;
 
@@ -187,7 +178,7 @@ pub async fn refresh(
 /// 检测密钥可用性
 /// - `server`: 检测地址
 /// - `login`: 保存的账户
-pub async fn validate(server: &String, login: &LoginObj) -> Result<bool, ErrorType> {
+pub async fn validate(server: &String, login: &LoginObj) -> CoreResult<bool> {
     let obj = RefreshObj {
         access_token: login.access_token.clone(),
         client_token: login.client_token.clone(),
@@ -202,9 +193,7 @@ pub async fn validate(server: &String, login: &LoginObj) -> Result<bool, ErrorTy
 
     server.push_str("authserver/validate");
 
-    let obj = LOGIN_CLIENT
-        .get()
-        .unwrap()
+    let obj = mcml_net::get_login_client()
         .post_json_get_req(&server, &obj)
         .await?;
 

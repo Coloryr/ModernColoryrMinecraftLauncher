@@ -130,7 +130,7 @@ pub const MOD_JAR_JAR_DIR: &str = "META-INF/jarjar/";
 pub const MCML: &str = "Mcml";
 pub const MINECRAFT: &str = "Minecraft";
 
-pub const GCARG_G1_GC: [&str; 8] = [
+pub const G1GC: [&str; 8] = [
     "-XX:+UnlockExperimentalVMOptions",
     "-XX:+UseG1GC",
     "-XX:MaxGCPauseMillis=200",

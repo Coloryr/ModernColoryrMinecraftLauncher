@@ -4,7 +4,7 @@ pub mod config_save;
 use std::{
     fs::File,
     path::{Path, PathBuf},
-    sync::{OnceLock, RwLock},
+    sync::{OnceLock, RwLock, RwLockReadGuard, RwLockWriteGuard},
 };
 
 use mcml_log;
@@ -15,9 +15,26 @@ use mcml_names::{
 
 use crate::config_obj::ConfigObj;
 
-pub static CONFIG: OnceLock<RwLock<ConfigObj>> = OnceLock::new();
-
+static CONFIG: OnceLock<RwLock<ConfigObj>> = OnceLock::new();
 static FILE: OnceLock<PathBuf> = OnceLock::new();
+
+/// 初始化运行路径
+/// - `dir`: 运行路径
+pub fn init<P: AsRef<Path>>(dir: P) -> bool {
+    FILE.get_or_init(|| dir.as_ref().join(names::CONFIG_FILE));
+
+    load(FILE.get().unwrap())
+}
+
+/// 获取配置文件
+pub fn read_config() -> RwLockReadGuard<'static, ConfigObj> {
+    CONFIG.get().unwrap().read().unwrap()
+}
+
+/// 写配置文件
+pub fn write_config() -> RwLockWriteGuard<'static, ConfigObj> {
+    CONFIG.get().unwrap().write().unwrap()
+}
 
 /// 立即保存配置文件
 pub fn save_now() {
@@ -53,7 +70,7 @@ pub fn save() {
 /// 加载配置文件
 /// - `file`: 配置文件
 pub fn load<P: AsRef<Path>>(file: P) -> bool {
-    let config = CONFIG.get_or_init(|| RwLock::new(ConfigObj::default()));
+    let config = CONFIG.get_or_init(|| RwLock::new(Default::default()));
 
     let path = file.as_ref();
 
@@ -84,22 +101,15 @@ pub fn load<P: AsRef<Path>>(file: P) -> bool {
         return false;
     }
 
-    let mut config = config.write().unwrap();
-    *config = json.unwrap();
-    let version = String::from(mcml_names::VERSION);
-    if config.version != version {
-        config.version = version;
+    let mut config_obj = json.unwrap();
+    let version = mcml_names::VERSION.clone();
+    if config_obj.version != version {
+        config_obj.version = version;
 
-        save();
+        config_save::save(uuids::CONFIG_UUID, &config_obj, FILE.get().unwrap());
     }
+    let mut guard = config.write().unwrap();
+    *guard = config_obj;
 
     false
-}
-
-/// 初始化运行路径
-/// - `dir`: 运行路径
-pub fn init<P: AsRef<Path>>(dir: P) -> bool {
-    FILE.get_or_init(|| dir.as_ref().join(names::CONFIG_FILE));
-
-    load(FILE.get().unwrap())
 }

@@ -7,7 +7,11 @@ pub mod inner_path;
 pub mod path_helper;
 
 use serde_repr::{Deserialize_repr, Serialize_repr};
-use std::{fmt, sync::LazyLock};
+use std::{
+    fmt,
+    path::{Path, PathBuf},
+    sync::{LazyLock, OnceLock},
+};
 
 /// 操作系统类型枚举
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -154,4 +158,16 @@ impl fmt::Display for SystemInfo {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.system)
     }
+}
+
+static BASE_DIR: OnceLock<PathBuf> = OnceLock::new();
+
+/// 初始化路径
+pub fn init<P: AsRef<Path>>(dir: P) {
+    BASE_DIR.get_or_init(|| dir.as_ref().to_path_buf());
+}
+
+/// 获取基础路径
+pub fn get_base_dir() -> PathBuf {
+    BASE_DIR.get().unwrap().clone()
 }

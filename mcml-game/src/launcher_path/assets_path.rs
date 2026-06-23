@@ -32,8 +32,8 @@ static SKIN_DIR: OnceLock<PathBuf> = OnceLock::new();
 
 /// 初始化
 /// - `dir`: 运行目录
-pub fn init(dir: &Path) -> CoreResult<()> {
-    let dir = BASE_DIR.get_or_init(|| dir.join(names::GAME_ASSETS_DIR));
+pub(crate) fn init<P: AsRef<Path>>(dir: P) -> CoreResult<()> {
+    let dir = BASE_DIR.get_or_init(|| dir.as_ref().join(names::GAME_ASSETS_DIR));
     if !dir.exists() {
         path_helper::create_dir_all(dir)?;
     }
@@ -54,6 +54,11 @@ pub fn init(dir: &Path) -> CoreResult<()> {
     }
 
     Ok(())
+}
+
+/// 获取资源文件夹
+pub fn get_assets_dir() -> PathBuf {
+    BASE_DIR.get().unwrap().clone()
 }
 
 /// 获取路径

@@ -28,7 +28,7 @@ pub fn init(dir: &PathBuf) {
         fs::create_dir(dir).unwrap();
     }
 
-    let config = mcml_config::CONFIG.get().unwrap().read().unwrap();
+    let config = mcml_config::read_config();
     let config = &config.java_list;
 
     add_list(config);
@@ -50,7 +50,7 @@ pub fn remove(name: &String) {
         core_jvm_change::invoke_jvm_change();
     }
 
-    let mut config = mcml_config::CONFIG.get().unwrap().write().unwrap();
+    let mut config = mcml_config::write_config();
     let javas = &mut config.java_list;
     let mut find = false;
     javas.retain(|item| {
@@ -68,7 +68,7 @@ pub fn remove_all() {
     let mut list = JVMS.get().unwrap().write().unwrap();
 
     list.clear();
-    let mut config = mcml_config::CONFIG.get().unwrap().write().unwrap();
+    let mut config = mcml_config::write_config();
     config.java_list.clear();
     mcml_config::save();
 }
@@ -101,7 +101,7 @@ pub fn add_item(name: String, file: String) -> Option<String> {
 
             core_jvm_change::invoke_jvm_change();
 
-            let mut config = mcml_config::CONFIG.get().unwrap().write().unwrap();
+            let mut config = mcml_config::write_config();
             let javas = &mut config.java_list;
             javas.push(JvmConfigObj {
                 name: name.clone(),

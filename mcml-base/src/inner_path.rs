@@ -1,16 +1,9 @@
 use std::{env, fs, path::PathBuf, sync::LazyLock};
 
-use crate::{Os, get_system_info};
+use crate::Os;
 
-static INNER: LazyLock<PathBuf> = LazyLock::new(|| get_inner_path());
-
-pub fn inner() -> PathBuf {
-    INNER.clone()
-}
-
-/// 初始化内部路径
-fn get_inner_path() -> PathBuf {
-    let inner_path = if get_system_info().os == Os::MacOS {
+static INNER: LazyLock<PathBuf> = LazyLock::new(|| {
+    let inner_path = if crate::get_system_info().os == Os::MacOS {
         let home = env::var("HOME").expect("");
         PathBuf::from(home).join(".mcml")
     } else {
@@ -25,4 +18,8 @@ fn get_inner_path() -> PathBuf {
     }
 
     inner_path
+});
+
+pub fn get_inner_path() -> PathBuf {
+    INNER.clone()
 }

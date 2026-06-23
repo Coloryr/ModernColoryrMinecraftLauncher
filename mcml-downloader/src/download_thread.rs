@@ -20,14 +20,10 @@ use mcml_names::i18_items::error_type::{
     ErrorData,
     ErrorType::{self, StreamError},
 };
-use mcml_net::WORK_CLIENT;
 use reqwest::Response;
 use semka::Sem;
 
-use crate::{
-    DownloadObj, download_item::DownloadItemState, gen_temp_file, get_item,
-    later_tasks::unpack_native, update,
-};
+use crate::{DownloadObj, download_item::DownloadItemState, later_tasks};
 
 /// 用于在下载线程中执行异步任务的运行时
 static RT: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
@@ -69,7 +65,7 @@ impl DownloadThread {
                     break;
                 }
 
-                let item = get_item();
+                let item = crate::get_item();
                 if let Some(item) = item {
                     download(index, item);
                 }
@@ -111,7 +107,7 @@ fn download(index: u32, mut obj: DownloadObj) {
                 return;
             }
         } else {
-            let config = mcml_config::CONFIG.get().unwrap().read().unwrap();
+            let config = mcml_config::read_config();
             let mut file = path_helper::open_read(&obj.item.base.file).unwrap();
             if config.http.check_file {
                 let check = check_hash(&obj.item.base.file, &obj.item.base.hash, &mut file);
@@ -143,7 +139,7 @@ fn download(index: u32, mut obj: DownloadObj) {
     let mut temp_file;
 
     loop {
-        temp_file = gen_temp_file();
+        temp_file = crate::gen_temp_file();
 
         let file = if is_keep {
             path_helper::open_append(&temp_file)
@@ -164,10 +160,7 @@ fn download(index: u32, mut obj: DownloadObj) {
 
         let mut resp = if use_break && server_ranges {
             let result = block_on(
-                WORK_CLIENT
-                    .get()
-                    .unwrap()
-                    .get_ranges(&obj.item.base.url, obj.item.get_now_size()),
+                mcml_net::get_work_client().get_ranges(&obj.item.base.url, obj.item.get_now_size()),
             );
             if let Err(err) = result {
                 obj.item.add_error();
@@ -189,7 +182,7 @@ fn download(index: u32, mut obj: DownloadObj) {
 
             resp
         } else {
-            let result = block_on(WORK_CLIENT.get().unwrap().get(&obj.item.base.url));
+            let result = block_on(mcml_net::get_work_client().get(&obj.item.base.url));
             if let Err(err) = result {
                 obj.item.add_error();
                 if is_need_err(err, &mut times) {
@@ -217,7 +210,7 @@ fn download(index: u32, mut obj: DownloadObj) {
         }
 
         obj.item.set_state(DownloadItemState::GetInfo);
-        update(index, &obj.item);
+        crate::update(index, &obj.item);
 
         let result = block_on(write_file(index, &mut obj, &mut resp, &mut file));
         if let Err(err) = result {
@@ -236,14 +229,14 @@ fn download(index: u32, mut obj: DownloadObj) {
 
     match &obj.item.base.later {
         LaterRun::None => {}
-        LaterRun::Unpack(path_buf) => {
+        LaterRun::UnpackNative(path_buf) => {
             let file = path_helper::open_read(&obj.item.base.file).unwrap();
-            unpack_native(path_buf, file).unwrap();
+            later_tasks::unpack_native(path_buf, file).unwrap();
         }
     }
 
     obj.item.set_state(DownloadItemState::Done);
-    update(index, &obj.item);
+    crate::update(index, &obj.item);
     obj.task.done();
 }
 
@@ -267,7 +260,7 @@ async fn write_file(
                 obj.item.set_state(DownloadItemState::Download);
                 obj.item.add_progress(data.len() as u64);
 
-                update(index, &obj.item);
+                crate::update(index, &obj.item);
             }
             Err(e) => {
                 return Err(StreamError(ErrorData {
@@ -277,13 +270,13 @@ async fn write_file(
         }
     }
 
-    let config = mcml_config::CONFIG.get().unwrap().read().unwrap();
+    let config = mcml_config::read_config();
     if config.http.check_file {
         let now = file.stream_position().unwrap();
         if now != obj.item.get_all_size() {
             obj.item.set_state(DownloadItemState::Error);
 
-            update(index, &obj.item);
+            crate::update(index, &obj.item);
 
             return Err(ErrorType::DownloadFileSizeError(
                 DownloadFileSizeErrorData {
@@ -302,6 +295,7 @@ async fn write_file(
     Ok(())
 }
 
+/// 检查文件
 fn check_hash<R: Read + Seek>(file: &PathBuf, hash: &FileHash, stream: &mut R) -> CoreResult<()> {
     match hash {
         FileHash::None => Ok(()),

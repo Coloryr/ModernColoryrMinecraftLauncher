@@ -1,10 +1,10 @@
 use mcml_base::file_item::{FileHash, FileItemObj, LaterRun};
 use mcml_names::i18_items::error_type::{CoreResult, ErrorData, ErrorType};
-use mcml_net::{maven_utils::version_name_to_path, net::fabric_api, url_helper};
+use mcml_net::{maven_utils::version_name_to_path, fabric_api, url_helper};
 
 use crate::{
     launcher::game_setting_obj::GameSettingObj,
-    launcher_path::{libraies_path, version_path},
+    launcher_path::{libraries_path, version_path},
     loader::{fabric_loader_obj::FabricLoaderObj, fabric_meta_obj::FabricMetaObj},
 };
 
@@ -45,7 +45,7 @@ pub async fn get_fabric_libs(mc: &str, version: Option<&str>) -> CoreResult<Vec<
             let name = version_name_to_path(&item.name);
             list.push(FileItemObj {
                 name: item.name.clone(),
-                file: libraies_path::get_base_dir().join(&name),
+                file: libraries_path::get_lib_dir().join(&name),
                 url: url_helper::replace_fabric_libraries(&item.url) + &name,
                 hash: FileHash::Sha256(item.sha256.clone()),
                 later: LaterRun::None,

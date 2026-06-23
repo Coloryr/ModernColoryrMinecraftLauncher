@@ -6,9 +6,9 @@ use mcml_names::i18_items::error_type::{ArchiveErrorData, ErrorData, ErrorType};
 use tar::{Archive, Builder};
 use xz2::{read::XzDecoder, write::XzEncoder};
 
-use crate::archives::TarMode;
+use crate::archives::{self, TarMode};
 use crate::{
-    archives::{ArchiveProcess, ArchiveRun, should_exclude},
+    archives::{ArchiveProcess, ArchiveRun},
     path_helper,
 };
 
@@ -78,7 +78,7 @@ impl TarProcess {
             self.base.add_now(&path);
 
             if let Some(patterns) = filter {
-                if should_exclude(&path, patterns) {
+                if archives::should_exclude(&path, patterns) {
                     continue;
                 }
             }

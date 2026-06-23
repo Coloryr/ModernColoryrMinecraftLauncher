@@ -15,10 +15,11 @@ use mcml_base::{
     hash_helper::{self, HashType},
     path_helper,
 };
-use mcml_names::{i18_items::error_type::CoreResult, names, urls};
-use mcml_net::net::{
+use mcml_names::{i18_items::error_type::CoreResult, names};
+use mcml_net::{
     authlib_api::{self, AuthlibInjectorObj},
     nide8_api::{self, Nide8Obj},
+    urls,
 };
 
 use crate::{
@@ -27,7 +28,7 @@ use crate::{
 };
 
 /// 基础路径
-static BASE_DIR: OnceLock<PathBuf> = OnceLock::new();
+static LIB_DIR: OnceLock<PathBuf> = OnceLock::new();
 
 /// 资源文件路径
 static NATIVE_DIR: OnceLock<PathBuf> = OnceLock::new();
@@ -36,8 +37,8 @@ static AUTHLIB_FILE: OnceLock<FileItemObj> = OnceLock::new();
 static NIDE8_FILE: OnceLock<FileItemObj> = OnceLock::new();
 
 /// 获取基础路径
-pub fn get_base_dir() -> PathBuf {
-    BASE_DIR.get().unwrap().clone()
+pub fn get_lib_dir() -> PathBuf {
+    LIB_DIR.get().unwrap().clone()
 }
 
 /// 获取外部登陆jar
@@ -49,7 +50,7 @@ pub fn get_authlib_file() -> Option<PathBuf> {
 
 /// 获取统一通行证jar
 pub fn get_nide8_file() -> Option<PathBuf> {
-    let file = AUTHLIB_FILE.get()?;
+    let file = NIDE8_FILE.get()?;
 
     Some(file.file.clone())
 }
@@ -123,8 +124,8 @@ impl LibVersionObj {
 
 /// 初始化版本路径
 /// - `dir`: 运行路径
-pub fn init(dir: &Path) -> CoreResult<()> {
-    let dir = BASE_DIR.get_or_init(|| dir.join(names::LIBRARIES_DIR));
+pub(crate) fn init<P: AsRef<Path>>(dir: P) -> CoreResult<()> {
+    let dir = LIB_DIR.get_or_init(|| dir.as_ref().join(names::LIBRARIES_DIR));
 
     let sys = get_system_info();
 
@@ -163,7 +164,7 @@ pub fn get_native_dir(version: Option<&str>) -> PathBuf {
 /// 获取游戏核心路径
 /// - `version`: 游戏版本
 pub fn get_game_file(version: &str) -> PathBuf {
-    BASE_DIR
+    LIB_DIR
         .get()
         .unwrap()
         .join("net")
@@ -176,7 +177,7 @@ pub fn get_game_file(version: &str) -> PathBuf {
 /// 获取游戏核心路径
 /// - `custom`: 自定义版本号
 pub fn get_game_file_with_custom(custom: &str) -> PathBuf {
-    BASE_DIR
+    LIB_DIR
         .get()
         .unwrap()
         .join("net")
@@ -189,7 +190,7 @@ pub fn get_game_file_with_custom(custom: &str) -> PathBuf {
 /// - `mc`: 游戏版本
 /// - `version`: optifine版本
 pub fn get_optifine_file(mc: &str, version: &str) -> PathBuf {
-    BASE_DIR
+    LIB_DIR
         .get()
         .unwrap()
         .join("optifine")
@@ -308,7 +309,7 @@ fn add_or_update_lib_kv(
 pub fn build_authlib_injector_item(obj: &AuthlibInjectorObj) -> FileItemObj {
     FileItemObj {
         name: format!("moe.yushi:authlibinjector:{}", obj.version),
-        file: BASE_DIR
+        file: LIB_DIR
             .get()
             .unwrap()
             .join("moe")
@@ -365,7 +366,7 @@ pub async fn ready_authlib_injector() -> CoreResult<Option<FileItemObj>> {
 pub fn build_nide8_item(obj: &Nide8Obj) -> FileItemObj {
     FileItemObj {
         name: format!("com.nide8.login2:nide8auth:{}", obj.jar_version),
-        file: BASE_DIR
+        file: LIB_DIR
             .get()
             .unwrap()
             .join("com")

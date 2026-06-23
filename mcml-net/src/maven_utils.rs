@@ -1,7 +1,7 @@
 use mcml_config::config_obj::SourceLocal;
-use mcml_names::{names, urls};
+use mcml_names::names;
 
-use crate::{WORK_CLIENT, url_helper};
+use crate::{WORK_CLIENT, url_helper, urls};
 
 /// 将一个 Maven 坐标库名转换为文件路径
 /// 例如 "com.example:artifact:1.0" -> "com/example/artifact/1.0/artifact-1.0.jar"

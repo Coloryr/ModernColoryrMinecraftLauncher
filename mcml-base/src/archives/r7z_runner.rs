@@ -8,7 +8,7 @@ use mcml_names::i18_items::error_type::{
 use sevenz_rust2::{ArchiveEntry, ArchiveReader, ArchiveWriter, Password};
 
 use crate::{
-    archives::{ArchiveProcess, ArchiveRun, should_exclude},
+    archives::{self, ArchiveProcess, ArchiveRun},
     path_helper,
 };
 
@@ -65,7 +65,7 @@ impl R7zProcess {
             self.base.add_now(&path);
 
             if let Some(patterns) = filter {
-                if should_exclude(&path, patterns) {
+                if archives::should_exclude(&path, patterns) {
                     continue;
                 }
             }
@@ -98,11 +98,7 @@ impl R7zProcess {
     }
 
     /// 解压 7z 文件到指定目录
-    fn r7z_decompress(
-        &self,
-        archive_file: &Path,
-        output_dir: &Path,
-    ) -> Result<(), ErrorType> {
+    fn r7z_decompress(&self, archive_file: &Path, output_dir: &Path) -> Result<(), ErrorType> {
         let file = path_helper::open_read(archive_file)?;
         path_helper::create_dir_all(output_dir)?;
 

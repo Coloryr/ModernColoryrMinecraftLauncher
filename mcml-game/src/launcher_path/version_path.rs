@@ -13,7 +13,7 @@ use mcml_names::{
     i18_items::error_type::{CoreResult, ErrorData, ErrorType},
     names, uuids,
 };
-use mcml_net::{net::mojang_api, url_helper};
+use mcml_net::{mojang_api, url_helper};
 use uuid::Uuid;
 
 use crate::{
@@ -62,8 +62,8 @@ static CUSTOM_LOADERS: LazyLock<RwLock<HashMap<Uuid, Arc<CustomLoaderType>>>> =
 
 /// 初始化版本路径
 /// - `dir`: 运行路径
-pub fn init(dir: &Path) -> CoreResult<()> {
-    let dir = BASE_DIR.get_or_init(|| dir.join(names::VERSION_DIR));
+pub(crate) fn init<P: AsRef<Path>>(dir: P) -> CoreResult<()> {
+    let dir = BASE_DIR.get_or_init(|| dir.as_ref().join(names::VERSION_DIR));
 
     OPTIFINE_FILE.set(dir.join(names::OPTIFINE_FILE)).unwrap();
     LITELOADER_FILE
@@ -303,7 +303,7 @@ pub fn add_forge(
     };
     path_helper::write_bytes(&file, &data).unwrap();
 
-    let key = LoaderKey::new(mc.clone(), version.clone());
+    let key = LoaderKey::new(mc, version);
     let mut list = if neo {
         NEOFORGE_LAUNCHS.write().unwrap()
     } else {
@@ -333,7 +333,7 @@ pub fn add_forge_install(
     };
     path_helper::write_bytes(&file, &data).unwrap();
 
-    let key = LoaderKey::new(mc.clone(), version.clone());
+    let key = LoaderKey::new(mc, version);
     let mut list = if neo {
         NEOFORGE_INSTALLS.write().unwrap()
     } else {
@@ -779,6 +779,28 @@ pub fn get_optifine(version: &str) -> Option<Arc<OptifineObj>> {
 }
 
 impl GameSettingObj {
+    /// 获取游戏版本类型
+    pub fn get_version_type(&self) -> String {
+        let temp = VERSION.read().unwrap();
+
+        if temp.is_none() {
+            Default::default()
+        } else {
+            let temp = temp.clone().unwrap();
+
+            if let Some(data) = temp
+                .versions
+                .iter()
+                .filter(|item| item.id.eq_ignore_ascii_case(&self.version))
+                .next()
+            {
+                data.version_type.clone()
+            } else {
+                Default::default()
+            }
+        }
+    }
+
     /// 获取neoforge加载器信息
     pub fn get_forge(&self) -> Option<Arc<ForgeLaunchObj>> {
         match &self.loader_version {

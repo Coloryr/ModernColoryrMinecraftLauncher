@@ -13,7 +13,7 @@ use zip::ZipArchive;
 
 use crate::{
     launcher::{custom_loader_obj::CustomLoaderType, game_setting_obj::GameSettingObj},
-    launcher_path::{libraies_path, version_path},
+    launcher_path::{libraries_path, version_path},
     loader::{
         forge_install_obj::ForgeInstallObj,
         forge_launch_obj::{ForgeLaunchObj, ForgeLibrariesObj},
@@ -90,7 +90,7 @@ impl GameSettingObj {
         })?;
 
         let mut list = Vec::new();
-        let libraries_path = libraies_path::get_base_dir();
+        let libraries_path = libraries_path::get_lib_dir();
 
         // Collect all libraries from both objects
         let all_libraries: Vec<&ForgeLibrariesObj> =

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, io::Read, path::PathBuf, sync::LazyLock};
+use std::{collections::HashMap, io::Read};
 
 use mcml_base::{
     file_item::{FileHash, FileItemObj},
@@ -6,44 +6,20 @@ use mcml_base::{
 };
 use mcml_names::{
     i18_items::error_type::{CoreResult, ErrorData, ErrorType, FileSystemErrorData},
-    names, urls,
+    names,
 };
-use mcml_net::url_helper;
+use mcml_net::{url_helper, urls};
 use zip::ZipArchive;
 
 use crate::{
     launcher::{LoaderType, game_setting_obj::GameSettingObj},
-    launcher_path::{libraies_path, version_path},
+    launcher_path::{libraries_path, version_path},
     loader::{
         forge_install_obj::{ForgeInstallObj, ForgeInstallOldObj},
         forge_launch_obj::{ForgeDownloadsObj, ForgeLaunchObj, ForgeLibrariesObj},
     },
     mojang::{game_arg_obj::ArtifactObj, version_checker},
 };
-
-const WRAPPER_FILE: &[u8] = include_bytes!("../../assets/ForgeWrapper-prism-2025-12-07.jar");
-
-static FORGE_WRAPPER: LazyLock<PathBuf> = LazyLock::new(|| {
-    let local = libraies_path::get_base_dir()
-        .join("io")
-        .join("github")
-        .join("zekerzhayard")
-        .join("prism-2025-12-07")
-        .join("ForgeWrapper-prism-2025-12-07.jar");
-
-    local
-});
-
-/// 准备ForgeWrapper jar
-pub fn ready_forge_wrapper() -> PathBuf {
-    let local = FORGE_WRAPPER.clone();
-
-    if !local.exists() {
-        path_helper::write_bytes(&local, WRAPPER_FILE);
-    }
-
-    local
-}
 
 /// 根据名字构建运行库信息
 /// - `name`: 运行库名字
@@ -240,7 +216,7 @@ fn build_forge_item(mc: &str, version: &str, jar: &str) -> FileItemObj {
 
     FileItemObj {
         name: format!("net.minecraftforge:{mc}-{version}-{jar}"),
-        file: libraies_path::get_base_dir()
+        file: libraries_path::get_lib_dir()
             .join("net")
             .join("minecraftforge")
             .join("forge")
@@ -265,7 +241,7 @@ fn build_neoforge_item(mc: &str, version: &str, jar: &str) -> FileItemObj {
     };
 
     let base_url = url_helper::get_neoforge_jar(v2222, mc, version);
-    let base_path = libraies_path::get_base_dir().join("net").join("neoforged");
+    let base_path = libraries_path::get_lib_dir().join("net").join("neoforged");
 
     FileItemObj {
         name: format!("net.neoforged:{name}"),
@@ -370,7 +346,7 @@ pub fn build_forge_libs(
         let obj = if item.downloads.artifact.url.is_empty() {
             FileItemObj {
                 name: item.name.clone(),
-                file: libraies_path::get_base_dir().join(&item.downloads.artifact.path),
+                file: libraries_path::get_lib_dir().join(&item.downloads.artifact.path),
                 url: Default::default(),
                 hash: FileHash::Sha1(item.downloads.artifact.sha1.clone()),
                 later: Default::default(),
@@ -378,7 +354,7 @@ pub fn build_forge_libs(
         } else {
             FileItemObj {
                 name: item.name.clone(),
-                file: libraies_path::get_base_dir().join(&item.downloads.artifact.path),
+                file: libraries_path::get_lib_dir().join(&item.downloads.artifact.path),
                 url: item.downloads.artifact.url.clone(),
                 hash: FileHash::Sha1(item.downloads.artifact.sha1.clone()),
                 later: Default::default(),
@@ -454,7 +430,7 @@ async fn get_forge_libs(mc: &str, version: &str, neo: bool) -> CoreResult<ForgeG
     if !installer.check_hash() {
         let res = mcml_downloader::run_download_task(vec![installer.clone()]).await;
         if !res {
-            return Err(ErrorType::FileDownloadError);
+            return Err(ErrorType::InfoNotFound);
         }
     }
 
