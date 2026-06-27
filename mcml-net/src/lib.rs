@@ -16,7 +16,7 @@ use mcml_names::i18_items::error_type::{
     ErrorData, ErrorType, HttpReadErrorData, HttpReqErrorData,
 };
 use reqwest::header::{HeaderMap, HeaderValue, USER_AGENT};
-use reqwest::{Proxy, Response};
+use reqwest::{Proxy, Request, Response};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use std::sync::{Arc, OnceLock};
@@ -84,6 +84,7 @@ impl Client {
 
         let builder = reqwest::Client::builder()
             .timeout(Duration::from_secs(DEFAULT_TIMEOUT))
+            .connect_timeout(Duration::from_secs(DEFAULT_TIMEOUT))
             .default_headers(headers);
 
         let builder = if proxy == ProxyState::None {
@@ -126,12 +127,18 @@ impl Client {
 
         let builder = reqwest::Client::builder()
             .timeout(Duration::from_secs(DEFAULT_TIMEOUT))
+            .connect_timeout(Duration::from_secs(DEFAULT_TIMEOUT))
             .default_headers(headers)
             .proxy(proxy);
 
         Client {
             inner: builder.build().unwrap(),
         }
+    }
+
+    /// 发送Http请求
+    pub async fn send(&self, build: Request) -> NetResult<Response> {
+        Ok(self.inner.execute(build).await.map_err(NetError::Reqwest)?)
     }
 
     /// 发送 GET 请求，返回原始文本响应
@@ -175,7 +182,7 @@ impl Client {
             .send()
             .await
             .map_err(NetError::Reqwest)?;
-        Self::handle_response(resp).await
+        handle_response(resp).await
     }
 
     /// 发送带有 Range 头的 GET 请求，用于断点续传
@@ -252,7 +259,7 @@ impl Client {
             .send()
             .await
             .map_err(NetError::Reqwest)?;
-        Self::handle_response(resp).await
+        handle_response(resp).await
     }
 
     /// 发送 POST 请求，请求体为表单数据
@@ -268,24 +275,7 @@ impl Client {
             .send()
             .await
             .map_err(NetError::Reqwest)?;
-        Self::handle_response(resp).await
-    }
-
-    /// 处理响应，检查状态码并解析 JSON
-    async fn handle_response<T: DeserializeOwned>(resp: reqwest::Response) -> NetResult<T> {
-        let status = resp.status();
-        if !status.is_success() {
-            let url = resp.url().to_string();
-            let error = resp.text().await.unwrap_or_default();
-            return Err(ErrorType::HttpReadError(HttpReadErrorData {
-                error,
-                url,
-                status: status.as_u16(),
-            }));
-        }
-        let bytes = resp.bytes().await.map_err(NetError::Reqwest)?;
-        let value: T = serde_json::from_slice(&bytes).map_err(NetError::Json)?;
-        Ok(value)
+        handle_response(resp).await
     }
 }
 
@@ -338,4 +328,21 @@ pub fn get_work_client() -> Arc<Client> {
 
 pub fn get_login_client() -> Arc<Client> {
     LOGIN_CLIENT.get().unwrap().clone()
+}
+
+/// 处理响应，检查状态码并解析 JSON
+pub async fn handle_response<T: DeserializeOwned>(resp: reqwest::Response) -> NetResult<T> {
+    let status = resp.status();
+    if !status.is_success() {
+        let url = resp.url().to_string();
+        let error = resp.text().await.unwrap_or_default();
+        return Err(ErrorType::HttpReadError(HttpReadErrorData {
+            error,
+            url,
+            status: status.as_u16(),
+        }));
+    }
+    let bytes = resp.bytes().await.map_err(NetError::Reqwest)?;
+    let value: T = serde_json::from_slice(&bytes).map_err(NetError::Json)?;
+    Ok(value)
 }

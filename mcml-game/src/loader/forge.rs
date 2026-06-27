@@ -8,13 +8,17 @@ use mcml_names::{
     i18_items::error_type::{CoreResult, ErrorData, ErrorType, FileSystemErrorData},
     names,
 };
-use mcml_net::{url_helper, urls};
+use mcml_net::{
+    maven_utils::{self},
+    url_helper, urls,
+};
 use zip::ZipArchive;
 
 use crate::{
-    launcher::{LoaderType, game_setting_obj::GameSettingObj},
+    launcher::game_setting_obj::GameSettingObj,
     launcher_path::{libraries_path, version_path},
     loader::{
+        LoaderType,
         forge_install_obj::{ForgeInstallObj, ForgeInstallOldObj},
         forge_launch_obj::{ForgeDownloadsObj, ForgeLaunchObj, ForgeLibrariesObj},
     },
@@ -210,20 +214,28 @@ pub fn make_forge_libraries(name: &str) -> Option<ForgeLibrariesObj> {
 /// - `mc`: 游戏版本号
 /// - `version`: forge版本号
 /// - `jar`: 类型
-fn build_forge_item(mc: &str, version: &str, jar: &str) -> FileItemObj {
+async fn build_forge_item(mc: &str, version: &str, jar_type: &str, hash: bool) -> FileItemObj {
     let mut version = String::from(version);
     version.push_str(&url_helper::forge_url_fix(&mc));
 
+    let name = format!("forge-{mc}-{version}-{jar_type}.jar");
+    let url = url_helper::get_forge_jar(mc, &version) + &name;
+
+    let hash = if hash {
+        maven_utils::try_get_hash(&url).await
+    } else {
+        FileHash::None
+    };
     FileItemObj {
-        name: format!("net.minecraftforge:{mc}-{version}-{jar}"),
+        name: format!("net.minecraftforge:{mc}-{version}-{jar_type}"),
         file: libraries_path::get_lib_dir()
             .join("net")
             .join("minecraftforge")
             .join("forge")
             .join(format!("{mc}-{version}"))
-            .join(format!("forge-{mc}-{version}-{jar}.jar")),
-        url: url_helper::get_forge_jar(mc, &version),
-        hash: Default::default(),
+            .join(name),
+        url,
+        hash,
         later: Default::default(),
     }
 }
@@ -232,7 +244,7 @@ fn build_forge_item(mc: &str, version: &str, jar: &str) -> FileItemObj {
 /// - `mc`: 游戏版本号
 /// - `version`: forge版本号
 /// - `jar`: 类型
-fn build_neoforge_item(mc: &str, version: &str, jar: &str) -> FileItemObj {
+async fn build_neoforge_item(mc: &str, version: &str, jar: &str, hash: bool) -> FileItemObj {
     let v2222 = version_checker::is_game_version_1202(mc);
     let name = if v2222 {
         format!("neoforge-{version}-{jar}")
@@ -243,6 +255,12 @@ fn build_neoforge_item(mc: &str, version: &str, jar: &str) -> FileItemObj {
     let base_url = url_helper::get_neoforge_jar(v2222, mc, version);
     let base_path = libraries_path::get_lib_dir().join("net").join("neoforged");
 
+    let url = format!("{base_url}{name}.jar");
+    let hash = if hash {
+        maven_utils::try_get_hash(&url).await
+    } else {
+        FileHash::None
+    };
     FileItemObj {
         name: format!("net.neoforged:{name}"),
         file: if v2222 {
@@ -256,8 +274,8 @@ fn build_neoforge_item(mc: &str, version: &str, jar: &str) -> FileItemObj {
                 .join(format!("{mc}-{version}"))
                 .join(format!("{name}.jar"))
         },
-        url: format!("{base_url}{name}.jar"),
-        hash: Default::default(),
+        url,
+        hash,
         later: Default::default(),
     }
 }
@@ -265,29 +283,29 @@ fn build_neoforge_item(mc: &str, version: &str, jar: &str) -> FileItemObj {
 /// 创建Forge安装器下载项目
 /// - `mc`: 游戏版本号
 /// - `version`: forge版本号
-pub fn build_forge_installer(mc: &str, version: &str) -> FileItemObj {
-    build_forge_item(mc, version, names::FILE_INSTALLER)
+pub async fn build_forge_installer(mc: &str, version: &str, hash: bool) -> FileItemObj {
+    build_forge_item(mc, version, names::FILE_INSTALLER, hash).await
 }
 
 /// 创建Forge安装器下载项目
 /// - `mc`: 游戏版本号
 /// - `version`: forge版本号
-pub fn build_forge_universal(mc: &str, version: &str) -> FileItemObj {
-    build_forge_item(mc, version, names::FILE_UNIVERSAL)
+pub async fn build_forge_universal(mc: &str, version: &str, hash: bool) -> FileItemObj {
+    build_forge_item(mc, version, names::FILE_UNIVERSAL, hash).await
 }
 
 /// 创建Forge安装器下载项目
 /// - `mc`: 游戏版本号
 /// - `version`: forge版本号
-pub fn build_forge_client(mc: &str, version: &str) -> FileItemObj {
-    build_forge_item(mc, version, names::FILE_CLIENT)
+pub async fn build_forge_client(mc: &str, version: &str, hash: bool) -> FileItemObj {
+    build_forge_item(mc, version, names::FILE_CLIENT, hash).await
 }
 
 /// 创建Forge安装器下载项目
 /// - `mc`: 游戏版本号
 /// - `version`: forge版本号
-pub fn build_forge_launcher(mc: &str, version: &str) -> FileItemObj {
-    let mut item = build_forge_item(mc, version, names::FILE_LAUNCHER);
+pub async fn build_forge_launcher(mc: &str, version: &str, hash: bool) -> FileItemObj {
+    let mut item = build_forge_item(mc, version, names::FILE_LAUNCHER, hash).await;
     item.url = format!(
         "{}net/minecraftforge/forge/{mc}-{version}/forge-{mc}-{version}-{}.jar",
         urls::FORGE,
@@ -299,22 +317,22 @@ pub fn build_forge_launcher(mc: &str, version: &str) -> FileItemObj {
 /// 创建NeoForge安装器下载项目
 /// - `mc`: 游戏版本号
 /// - `version`: forge版本号
-pub fn build_neoforge_installer(mc: &str, version: &str) -> FileItemObj {
-    build_neoforge_item(mc, version, names::FILE_INSTALLER)
+pub async fn build_neoforge_installer(mc: &str, version: &str, hash: bool) -> FileItemObj {
+    build_neoforge_item(mc, version, names::FILE_INSTALLER, hash).await
 }
 
 /// 创建NeoForge下载项目
 /// - `mc`: 游戏版本号
 /// - `version`: forge版本号
-pub fn build_neoforge_universal(mc: &str, version: &str) -> FileItemObj {
-    build_neoforge_item(mc, version, names::FILE_UNIVERSAL)
+pub async fn build_neoforge_universal(mc: &str, version: &str, hash: bool) -> FileItemObj {
+    build_neoforge_item(mc, version, names::FILE_UNIVERSAL, hash).await
 }
 
 /// 创建NeoForge下载项目
 /// - `mc`: 游戏版本号
 /// - `version`: forge版本号
-pub fn build_neoforge_client(mc: &str, version: &str) -> FileItemObj {
-    build_neoforge_item(mc, version, names::FILE_CLIENT)
+pub async fn build_neoforge_client(mc: &str, version: &str, hash: bool) -> FileItemObj {
+    build_neoforge_item(mc, version, names::FILE_CLIENT, hash).await
 }
 
 /// 构建Forge运行库下载项目列表
@@ -324,7 +342,7 @@ pub fn build_neoforge_client(mc: &str, version: &str) -> FileItemObj {
 /// - `neo`: 是否为NeoForge
 /// - `v2`: 是否为1.13以上
 /// - `install`: 是否为安装器
-pub fn build_forge_libs(
+pub async fn build_forge_libs(
     info: &Vec<ForgeLibrariesObj>,
     mc: &str,
     version: &str,
@@ -376,9 +394,9 @@ pub fn build_forge_libs(
         list.insert(
             String::from(names::FILE_INSTALLER),
             if neo {
-                build_neoforge_installer(mc, version)
+                build_neoforge_installer(mc, version, false).await
             } else {
-                build_forge_installer(mc, version)
+                build_forge_installer(mc, version, false).await
             },
         );
     }
@@ -388,9 +406,9 @@ pub fn build_forge_libs(
             list.insert(
                 String::from(names::FILE_UNIVERSAL),
                 if neo {
-                    build_neoforge_universal(mc, version)
+                    build_neoforge_universal(mc, version, false).await
                 } else {
-                    build_forge_universal(mc, version)
+                    build_forge_universal(mc, version, false).await
                 },
             );
         }
@@ -399,7 +417,7 @@ pub fn build_forge_libs(
     if v2 && !version_checker::is_game_version_117(mc) && !launcher {
         list.insert(
             String::from(names::FILE_LAUNCHER),
-            build_forge_launcher(mc, version),
+            build_forge_launcher(mc, version, false).await,
         );
     }
 
@@ -422,9 +440,9 @@ async fn get_forge_libs(mc: &str, version: &str, neo: bool) -> CoreResult<ForgeG
     let v2 = ver.is_game_version_v2();
 
     let installer = if neo {
-        build_neoforge_installer(mc, version)
+        build_neoforge_installer(mc, version, true).await
     } else {
-        build_forge_installer(mc, version)
+        build_forge_installer(mc, version, true).await
     };
 
     if !installer.check_hash() {
@@ -478,7 +496,7 @@ async fn get_forge_libs(mc: &str, version: &str, neo: bool) -> CoreResult<ForgeG
             })
         })?;
         let info = version_path::add_forge(info, &version_json.into_bytes(), mc, version, neo);
-        let loaders = info.build_forge_libs(mc, version, neo, v2, false);
+        let loaders = info.build_forge_libs(mc, version, neo, v2, false).await;
 
         let install_info =
             serde_json::from_str::<ForgeInstallObj>(&install_json).map_err(|err| {
@@ -493,7 +511,9 @@ async fn get_forge_libs(mc: &str, version: &str, neo: bool) -> CoreResult<ForgeG
             version,
             neo,
         );
-        let installs = install_info.build_forge_libs(mc, version, neo, v2, true);
+        let installs = install_info
+            .build_forge_libs(mc, version, neo, v2, true)
+            .await;
 
         Ok(ForgeGetFilesObj { loaders, installs })
     } else if install_ok {
@@ -538,7 +558,7 @@ async fn get_forge_libs(mc: &str, version: &str, neo: bool) -> CoreResult<ForgeG
         let info = version_path::add_forge(info, &json_bytes, mc, version, neo);
 
         Ok(ForgeGetFilesObj {
-            loaders: info.build_forge_libs(mc, version, neo, v2, true),
+            loaders: info.build_forge_libs(mc, version, neo, v2, true).await,
             installs: Vec::new(),
         })
     } else {
@@ -553,7 +573,7 @@ impl ForgeLaunchObj {
     /// - `neo`: 是否为NeoForge
     /// - `v2`: 是否为1.13以上
     /// - `install`: 是否为安装器
-    pub fn build_forge_libs(
+    pub async fn build_forge_libs(
         &self,
         mc: &str,
         version: &str,
@@ -561,7 +581,7 @@ impl ForgeLaunchObj {
         v2: bool,
         install: bool,
     ) -> Vec<FileItemObj> {
-        build_forge_libs(&self.libraries, mc, version, neo, v2, install)
+        build_forge_libs(&self.libraries, mc, version, neo, v2, install).await
     }
 }
 
@@ -572,7 +592,7 @@ impl ForgeInstallObj {
     /// - `neo`: 是否为NeoForge
     /// - `v2`: 是否为1.13以上
     /// - `install`: 是否为安装器
-    pub fn build_forge_libs(
+    pub async fn build_forge_libs(
         &self,
         mc: &str,
         version: &str,
@@ -580,7 +600,7 @@ impl ForgeInstallObj {
         v2: bool,
         install: bool,
     ) -> Vec<FileItemObj> {
-        build_forge_libs(&self.libraries, mc, version, neo, v2, install)
+        build_forge_libs(&self.libraries, mc, version, neo, v2, install).await
     }
 }
 
@@ -596,32 +616,32 @@ impl GameSettingObj {
     }
 
     /// 创建Forge安装器下载项目
-    pub fn build_forge_installer(&self) -> FileItemObj {
-        build_forge_installer(&self.version, &self.loader_version.as_ref().unwrap())
+    pub async fn build_forge_installer(&self, hash: bool) -> FileItemObj {
+        build_forge_installer(&self.version, &self.loader_version.as_ref().unwrap(), hash).await
     }
 
     /// 创建Forge安装器下载项目
-    pub fn build_forge_universal(&self) -> FileItemObj {
-        build_forge_universal(&self.version, &self.loader_version.as_ref().unwrap())
+    pub async fn build_forge_universal(&self, hash: bool) -> FileItemObj {
+        build_forge_universal(&self.version, &self.loader_version.as_ref().unwrap(), hash).await
     }
 
     /// 创建Forge安装器下载项目
-    pub fn build_forge_client(&self) -> FileItemObj {
-        build_forge_client(&self.version, &self.loader_version.as_ref().unwrap())
+    pub async fn build_forge_client(&self, hash: bool) -> FileItemObj {
+        build_forge_client(&self.version, &self.loader_version.as_ref().unwrap(), hash).await
     }
 
     /// 创建NeoForge安装器下载项目
-    pub fn build_neoforge_installer(&self) -> FileItemObj {
-        build_neoforge_installer(&self.version, &self.loader_version.as_ref().unwrap())
+    pub async fn build_neoforge_installer(&self, hash: bool) -> FileItemObj {
+        build_neoforge_installer(&self.version, &self.loader_version.as_ref().unwrap(), hash).await
     }
 
     /// 创建NeoForge下载项目
-    pub fn build_neoforge_universal(&self) -> FileItemObj {
-        build_neoforge_universal(&self.version, &self.loader_version.as_ref().unwrap())
+    pub async fn build_neoforge_universal(&self, hash: bool) -> FileItemObj {
+        build_neoforge_universal(&self.version, &self.loader_version.as_ref().unwrap(), hash).await
     }
 
     /// 创建NeoForge下载项目
-    pub fn build_neoforge_client(&self) -> FileItemObj {
-        build_neoforge_client(&self.version, &self.loader_version.as_ref().unwrap())
+    pub async fn build_neoforge_client(&self, hash: bool) -> FileItemObj {
+        build_neoforge_client(&self.version, &self.loader_version.as_ref().unwrap(), hash).await
     }
 }

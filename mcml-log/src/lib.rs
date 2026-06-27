@@ -13,7 +13,7 @@ use semrs::Semaphore;
 use std::{
     fs::{File, OpenOptions},
     io::{BufWriter, Write},
-    path::{Path, PathBuf},
+    path::Path,
     sync::{
         Arc, Mutex, OnceLock, RwLock,
         atomic::{AtomicBool, Ordering},
@@ -85,7 +85,7 @@ fn save() {
                 item1.get_time(),
                 item1.get_level(),
                 item1.log,
-                if cfg!(windows) { "\r\n" } else { "\n" }
+                mcml_names::get_line_ending()
             ))
             .unwrap();
             file.flush().unwrap();

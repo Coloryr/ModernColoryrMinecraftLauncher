@@ -1,10 +1,12 @@
 pub mod archives;
+pub mod builder;
 pub mod checker;
 pub mod events;
 pub mod file_item;
 pub mod hash_helper;
 pub mod inner_path;
 pub mod path_helper;
+pub mod process_utils;
 
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::{

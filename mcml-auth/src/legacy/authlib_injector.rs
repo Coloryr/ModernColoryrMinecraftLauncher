@@ -1,5 +1,6 @@
 /// 外置登录
 use mcml_names::i18_items::error_type::{CoreResult, ErrorType};
+use tokio_util::sync::CancellationToken;
 
 use crate::{
     AuthType, LoginObj,
@@ -45,23 +46,30 @@ pub async fn authenticate(
         };
     }
 
-    Ok(legacy::refresh(&server, &auth, need_select).await?)
+    legacy::refresh(&server, &mut auth, need_select).await?;
+    Ok(auth)
 }
 
-/// 刷新登录
-/// - `auth`: 保存的账户
-pub async fn refresh(auth: &LoginObj) -> CoreResult<LoginObj> {
-    let server = auth.text1.clone().unwrap();
-    if legacy::validate(&server, auth).await? {
-        Ok(legacy::refresh(&server, auth, false).await?)
-    } else {
-        Err(ErrorType::AuthTokenTimeout)
+impl LoginObj {
+    /// 刷新登录
+    /// - `auth`: 保存的账户
+    pub async fn refresh_authlib(&mut self, cancel: &CancellationToken) -> CoreResult<()> {
+        let server = self.text1.clone().unwrap();
+        if legacy::validate(&server, self).await? {
+            if cancel.is_cancelled() {
+                return Err(ErrorType::TaskCancel);
+            }
+
+            Ok(legacy::refresh(&server, self, false).await?)
+        } else {
+            Err(ErrorType::AuthTokenTimeout)
+        }
     }
-}
 
-/// 获取启动时所需的密钥
-pub async fn get_key(auth: &LoginObj) -> CoreResult<String> {
-    let server = auth.text1.clone().unwrap();
+    /// 获取启动时所需的密钥
+    pub async fn get_authlib_key(&self) -> CoreResult<String> {
+        let server = self.text1.clone().unwrap();
 
-    Ok(mcml_net::get_login_client().get_text(&server).await?)
+        Ok(mcml_net::get_login_client().get_text(&server).await?)
+    }
 }

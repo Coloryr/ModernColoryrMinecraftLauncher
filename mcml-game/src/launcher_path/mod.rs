@@ -3,7 +3,7 @@ use std::{
     sync::LazyLock,
 };
 
-use mcml_base::path_helper;
+use mcml_base::{file_item::FileItemObj, path_helper};
 use mcml_names::{i18_items::error_type::CoreResult, names};
 
 pub mod assets_path;
@@ -67,32 +67,62 @@ pub fn init<P: AsRef<Path>>(dir: P) -> CoreResult<()> {
 }
 
 /// 准备ForgeWrapper jar
-pub fn ready_forge_wrapper() -> CoreResult<PathBuf> {
+pub fn ready_forge_wrapper() -> CoreResult<()> {
     let local = FORGE_WRAPPER.clone();
 
     if !local.exists() {
         path_helper::write_bytes(&local, WRAPPER_FILE)?;
     }
 
-    Ok(local)
+    Ok(())
 }
 
-pub fn ready_colorasm() -> CoreResult<PathBuf> {
+pub fn ready_colorasm() -> CoreResult<()> {
     let local = COLORASM.clone();
 
     if !local.exists() {
         path_helper::write_bytes(&local, COLORASM_FILE)?;
     }
 
-    Ok(local)
+    Ok(())
 }
 
-pub fn ready_optifine_wrapper() -> CoreResult<PathBuf> {
+pub fn ready_optifine_wrapper() -> CoreResult<()> {
     let local = OPTIFINE_WRAPPER.clone();
 
     if !local.exists() {
         path_helper::write_bytes(&local, OPTIFINE_FILE)?;
     }
 
-    Ok(local)
+    Ok(())
+}
+
+pub fn get_colorasm() -> FileItemObj {
+    FileItemObj {
+        name: String::from("com.coloryr.colormc:colormcasm:1.1:all"),
+        file: COLORASM.clone(),
+        url: Default::default(),
+        hash: Default::default(),
+        later: Default::default(),
+    }
+}
+
+pub fn get_forge_wrapper() -> FileItemObj {
+    FileItemObj {
+        name: String::from("io.github.zekerzhayard:ForgeWrapper:prism-2025-12-07"),
+        file: FORGE_WRAPPER.clone(),
+        url: Default::default(),
+        hash: Default::default(),
+        later: Default::default(),
+    }
+}
+
+pub fn get_optifine_wrapper() -> FileItemObj {
+    FileItemObj {
+        name: String::from("com.coloryr:optifinewrapper:1.1"),
+        file: OPTIFINE_WRAPPER.clone(),
+        url: Default::default(),
+        hash: Default::default(),
+        later: Default::default(),
+    }
 }

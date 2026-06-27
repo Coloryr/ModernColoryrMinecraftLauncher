@@ -72,3 +72,17 @@ impl Default for LoaderType {
         LoaderType::Normal
     }
 }
+
+impl LoaderType {
+    /// 获取加载器版本名前缀
+    pub fn prefix(&self) -> &'static str {
+        match self {
+            LoaderType::Forge => "forge",
+            LoaderType::Fabric => "fabric",
+            LoaderType::Quilt => "quilt",
+            LoaderType::NeoForge => "neoforge",
+            LoaderType::OptiFine => "optifine",
+            _ => "custom",
+        }
+    }
+}

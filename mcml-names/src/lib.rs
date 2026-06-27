@@ -35,6 +35,14 @@ static LANG: OnceLock<RwLock<Lang>> = OnceLock::new();
 /// 语言配置
 static FILE: OnceLock<PathBuf> = OnceLock::new();
 
+static LINE_ENDING: LazyLock<String> =
+    LazyLock::new(|| String::from(if cfg!(windows) { "\r\n" } else { "\n" }));
+
+/// 获取换行符
+pub fn get_line_ending() -> String {
+    LINE_ENDING.clone()
+}
+
 /// 获取本地语言
 pub fn get_current_locale() -> String {
     if let Ok(lang) = env::var("LANG") {

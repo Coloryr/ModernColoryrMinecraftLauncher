@@ -45,3 +45,10 @@ pub const MAVEN: &str = "https://repo1.maven.org/maven2/";
 pub const MAVEN_ALIYUN: &str = "https://maven.aliyun.com/repository/public/";
 
 pub const LITELOADER: &str = "https://dl.liteloader.com/";
+
+pub const MINECRAFT_SERVICES: &str = "https://api.minecraftservices.com/minecraft/profile";
+pub const MINECRAFT_SESSION_SERVER: &str =
+    "https://sessionserver.mojang.com/session/minecraft/profile";
+pub const MINECRAFT_SERVICES_XBOX: &str =
+    "https://api.minecraftservices.com/authentication/login_with_xbox";
+pub const MINECRAFT_NEWS: &str = "https://www.minecraft.net/content/minecraftnet/language-masters/zh-hans/jcr:content/root/container/image_grid_a_copy_64.articles.page-";

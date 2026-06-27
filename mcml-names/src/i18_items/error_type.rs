@@ -139,10 +139,21 @@ pub enum ErrorType {
 
     /// 所需文件未能找到
     InfoNotFound,
+
     /// 下载文件覆盖错误
     DownloadFileOverFail(DownloadFileOverFailData),
     /// 下载文件的预期大小不符合
     DownloadFileSizeError(DownloadFileSizeErrorData),
     /// 下载文件校验失败
     DownloadFileHashError(DownloadFileHashErrorData),
+    /// 文件下载失败
+    DownloadFileFail,
+
+    /// 进程启动错误
+    ProcessError(ErrorData),
+
+    /// 版本号错误
+    VersionInfoError,
+    /// 找不到合适的Java
+    JavaNotFound,
 }

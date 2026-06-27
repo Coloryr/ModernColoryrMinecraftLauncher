@@ -41,11 +41,11 @@ pub struct BinaryObj {
 impl Default for BinaryObj {
     fn default() -> Self {
         Self {
-            architecture: String::new(),
-            image_type: String::new(),
-            os: String::new(),
-            package: PackageObj::default(),
-            scm_ref: String::new(),
+            architecture: Default::default(),
+            image_type: Default::default(),
+            os: Default::default(),
+            package: Default::default(),
+            scm_ref: Default::default(),
         }
     }
 }
@@ -59,7 +59,7 @@ pub struct AdoptiumVersionObj {
 impl Default for AdoptiumVersionObj {
     fn default() -> Self {
         Self {
-            openjdk_version: String::new(),
+            openjdk_version: Default::default(),
         }
     }
 }
@@ -74,8 +74,8 @@ pub struct AdoptiumObj {
 impl Default for AdoptiumObj {
     fn default() -> Self {
         Self {
-            binary: BinaryObj::default(),
-            version: AdoptiumVersionObj::default(),
+            binary: Default::default(),
+            version: Default::default(),
         }
     }
 }
@@ -113,7 +113,7 @@ pub async fn get_java_version() -> Result<Vec<String>, ErrorType> {
         return Ok(list.to_vec());
     }
 
-    let url = String::from(ADOPTIUM_URL) + "v3/info/available_releases";
+    let url = ADOPTIUM_URL.to_string() + "v3/info/available_releases";
 
     let res = WORK_CLIENT
         .get()

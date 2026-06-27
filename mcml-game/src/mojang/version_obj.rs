@@ -38,7 +38,9 @@ impl Default for VersionsObj {
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct VersionObj {
+    /// 最新版本
     pub latest: LastestObj,
+    /// 版本列表
     pub versions: Vec<VersionsObj>,
 }
 

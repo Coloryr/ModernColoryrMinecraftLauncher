@@ -3,7 +3,8 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
-    launcher::{LoaderType, LogEncoding, SourceType},
+    launcher::{LogEncoding, SourceType},
+    loader::LoaderType,
     mojang::VersionType,
 };
 

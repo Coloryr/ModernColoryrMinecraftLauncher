@@ -26,11 +26,13 @@ pub struct CutsomLoaderRes {
 }
 
 impl GameSettingObj {
+    /// 分析jar
     pub async fn decode_loader_jar(&self) -> CoreResult<CutsomLoaderRes> {
         self.decode_loader_jar_with_path(self.get_loader_file())
             .await
     }
 
+    /// 分析jar
     pub async fn decode_loader_jar_with_path<P: AsRef<Path>>(
         &self,
         path: P,
@@ -153,5 +155,66 @@ impl GameSettingObj {
         version_path::add_custom_loader(CustomLoaderType::ForgeLaunch(obj1), self.uuid);
 
         Ok(CutsomLoaderRes { name, libs: list })
+    }
+
+    /// 获取自定义加载器游戏参数
+    pub fn get_custom_loader_game_args(&self) -> Vec<String> {
+        if let Some(data) = self.get_custom_loader() {
+            match data.as_ref() {
+                CustomLoaderType::ForgeLaunch(forge) => {
+                    let mut args = Vec::<String>::new();
+                    if let Some(data) = &forge.minecraft_arguments {
+                        let args1: Vec<&str> = data.split(' ').collect();
+                        args1.iter().for_each(|item| {
+                            args.push(String::from(*item));
+                        });
+                    }
+
+                    if let Some(data) = &forge.arguments {
+                        for item in data.game.iter() {
+                            args.push(item.clone());
+                        }
+                    }
+
+                    args
+                }
+            }
+        } else {
+            Default::default()
+        }
+    }
+
+    /// 获取自定义加载器的JVM启动参数
+    pub fn get_custom_loader_jvm_args(&self) -> Vec<String> {
+        if let Some(data) = self.get_custom_loader() {
+            match data.as_ref() {
+                CustomLoaderType::ForgeLaunch(forge) => {
+                    let mut args = Vec::<String>::new();
+
+                    if let Some(data) = &forge.arguments {
+                        for item in data.jvm.iter() {
+                            args.push(item.clone());
+                        }
+                    }
+
+                    args
+                }
+            }
+        } else {
+            Default::default()
+        }
+    }
+
+    /// 获取自定义加载器主类
+    pub fn get_custom_loader_mainclass(&self) -> String {
+        if let Some(data) = self.get_custom_loader() {
+            match data.as_ref() {
+                CustomLoaderType::ForgeLaunch(forge) => {
+                    forge.main_class.clone()
+                }
+            }
+        } else {
+            Default::default()
+        }
     }
 }

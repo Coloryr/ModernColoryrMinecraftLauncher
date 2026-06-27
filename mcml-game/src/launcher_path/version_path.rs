@@ -14,14 +14,15 @@ use mcml_names::{
     names, uuids,
 };
 use mcml_net::{mojang_api, url_helper};
+use tokio::task;
 use uuid::Uuid;
 
 use crate::{
-    launcher::{LoaderType, custom_loader_obj::CustomLoaderType, game_setting_obj::GameSettingObj},
+    launcher::{custom_loader_obj::CustomLoaderType, game_setting_obj::GameSettingObj},
     loader::{
-        LoaderKey, fabric_loader_obj::FabricLoaderObj, forge_install_obj::ForgeInstallObj,
-        forge_launch_obj::ForgeLaunchObj, optifine_obj::OptifineObj,
-        quilt_loader_obj::QuiltLoaderObj,
+        LoaderKey, LoaderType, fabric_loader_obj::FabricLoaderObj,
+        forge_install_obj::ForgeInstallObj, forge_launch_obj::ForgeLaunchObj,
+        optifine_obj::OptifineObj, quilt_loader_obj::QuiltLoaderObj,
     },
     mojang::{
         game_arg_obj::GameArgObj,
@@ -101,7 +102,7 @@ pub(crate) fn init<P: AsRef<Path>>(dir: P) -> CoreResult<()> {
 }
 
 /// 获取目录
-pub fn get_dir() -> PathBuf {
+pub fn get_version_dir() -> PathBuf {
     BASE_DIR.get().unwrap().clone()
 }
 
@@ -149,7 +150,7 @@ fn save_optifine() {
 }
 
 /// 从在线获取版本信息
-async fn get_version_from_online() {
+async fn get_version_from_online() -> CoreResult<()> {
     fn save_versions(data: &Vec<u8>) {
         let file = BASE_DIR.get().unwrap().join(names::VERSION_FILE);
         path_helper::write_bytes(&file, data).unwrap();
@@ -163,7 +164,7 @@ async fn get_version_from_online() {
             *VERSION.write().unwrap() = Some(Arc::new(json.unwrap()));
             save_versions(&data);
 
-            return;
+            return Ok(());
         }
     }
 
@@ -176,89 +177,68 @@ async fn get_version_from_online() {
             *VERSION.write().unwrap() = Some(Arc::new(json.unwrap()));
             save_versions(&data);
 
-            return;
+            return Ok(());
         }
     }
 
-    mcml_log::error_type(ErrorType::GetVersionMetaFail);
+    Err(ErrorType::GetVersionMetaFail)
 }
 
-/// 读取版本信息
-async fn read_version() {
+/// 从文件读取版本信息
+/// 如果文件不存在就去在线读取
+async fn read_version() -> CoreResult<()> {
     let local = BASE_DIR.get().unwrap().join(names::VERSION_FILE);
-    if local.exists() {
-        match path_helper::open_read(&local) {
-            Err(err) => {
-                mcml_log::error_type(err);
-            }
-            Ok(file) => {
-                let json = serde_json::from_reader::<_, VersionObj>(file);
-                if json.is_ok() {
-                    *VERSION.write().unwrap() = Some(Arc::new(json.unwrap()));
-                    return;
-                }
-            }
-        }
+    if local.exists()
+        && local.is_file()
+        && let Ok(file) = path_helper::open_read(&local)
+        && let Ok(json) = serde_json::from_reader::<_, VersionObj>(file)
+    {
+        *VERSION.write().unwrap() = Some(Arc::new(json));
+        task::spawn(async { get_version_from_online().await });
+        return Ok(());
     }
 
-    get_version_from_online().await;
+    get_version_from_online().await?;
+
+    Ok(())
 }
 
 /// 获取游戏版本列表
-pub async fn get_version_obj() -> Option<Arc<VersionObj>> {
-    if VERSION.read().unwrap().is_none() {
-        read_version().await;
+/// 不存在就去读取文件
+pub async fn get_version_obj() -> CoreResult<Arc<VersionObj>> {
+    if let Some(v) = VERSION.read().unwrap().as_ref() {
+        return Ok(v.clone());
     }
+    read_version().await?;
 
-    let temp = VERSION.read().unwrap();
-
-    if temp.is_none() {
-        None
-    } else {
-        let temp = temp.clone().unwrap();
-        Some(temp.clone())
-    }
+    Ok(VERSION.read().unwrap().as_ref().unwrap().clone())
 }
 
 /// 是否存在版本信息
 pub async fn is_have_version_info() -> bool {
-    get_version_obj().await.is_some()
+    VERSION.read().unwrap().is_some()
 }
 
 /// 添加版本信息
 /// - `obj`: 游戏数据
-pub async fn add_game(obj: &VersionsObj) -> Option<Arc<GameArgObj>> {
+pub async fn add_game(obj: &VersionsObj) -> CoreResult<Arc<GameArgObj>> {
     let mut url = obj.url.clone();
     url_helper::change_source(&mut url);
 
-    let data = mojang_api::get_assets(&url).await;
-    match data {
-        Err(err) => {
-            mcml_log::error_type(err);
-            None
-        }
-        Ok(data) => {
-            let json = serde_json::from_slice::<GameArgObj>(&data);
-            match json {
-                Err(err) => {
-                    mcml_log::error_type(ErrorType::JsonError(ErrorData {
-                        error: err.to_string(),
-                    }));
-                    None
-                }
-                Ok(json) => {
-                    let file = BASE_DIR.get().unwrap().join(format!("{}.json", obj.id));
-                    path_helper::write_bytes(&file, &data).unwrap();
+    let data = mojang_api::get_assets(&url).await?;
+    let json = serde_json::from_slice::<GameArgObj>(&data).map_err(|err| {
+        ErrorType::JsonError(ErrorData {
+            error: err.to_string(),
+        })
+    })?;
+    let file = BASE_DIR.get().unwrap().join(format!("{}.json", obj.id));
+    path_helper::write_bytes(&file, &data).unwrap();
 
-                    let mut list = GAME_ARGS.write().unwrap();
+    let mut list = GAME_ARGS.write().unwrap();
 
-                    list.insert(obj.id.clone(), Arc::new(json));
-                    let json = list.get(&obj.id).unwrap();
-                    Some(json.clone())
-                }
-            }
-        }
-    }
+    list.insert(obj.id.clone(), Arc::new(json));
+    let json = list.get(&obj.id).unwrap();
+    Ok(json.clone())
 }
 
 /// 保存Fabric-Loader信息
@@ -417,32 +397,27 @@ pub fn get_version(version: &str) -> CoreResult<Arc<GameArgObj>> {
 
 /// 检查游戏版本更新
 /// - `version`: 游戏版本
-pub async fn check_update(version: &str) -> Option<Arc<GameArgObj>> {
-    get_version_from_online().await;
+pub async fn check_update(version: &str) -> CoreResult<Arc<GameArgObj>> {
+    // 直接从在线更新数据
+    get_version_from_online().await?;
 
-    match get_version_obj().await {
-        None => None,
-        Some(obj) => {
-            let item = obj
-                .versions
-                .iter()
-                .filter(|&item| item.id.eq_ignore_ascii_case(version))
-                .next();
+    let versions = get_version_obj().await?;
+    let item = versions
+        .versions
+        .iter()
+        .filter(|&item| item.id.eq_ignore_ascii_case(version))
+        .next();
 
-            match item {
-                None => None,
-                Some(item) => {
-                    let local = BASE_DIR.get().unwrap().join(format!("{}.json", version));
-                    let sha1 = hash_helper::gen_hash_from_file_async(HashType::Sha1, &local).await;
-                    if sha1.is_err() {
-                        None
-                    } else if sha1.unwrap() != item.sha1 {
-                        add_game(item).await
-                    } else {
-                        let res = get_version(version);
-                        if let Ok(res) = res { Some(res) } else { None }
-                    }
-                }
+    match item {
+        // 在线也没有这个版本号
+        None => Err(ErrorType::InfoNotFound),
+        Some(item) => {
+            let local = BASE_DIR.get().unwrap().join(format!("{}.json", version));
+            let sha1 = hash_helper::gen_hash_from_file_async(HashType::Sha1, &local).await?;
+            if sha1 != item.sha1 {
+                Ok(add_game(item).await?)
+            } else {
+                Ok(get_version(version)?)
             }
         }
     }
@@ -848,51 +823,8 @@ impl GameSettingObj {
         }
     }
 
-    /// 获取自定义加载器游戏参数
-    pub fn get_custom_loader_game_args(&self) -> Vec<String> {
-        if let Some(data) = self.get_custom_loader() {
-            match data.as_ref() {
-                CustomLoaderType::ForgeLaunch(forge) => {
-                    let mut args = Vec::<String>::new();
-                    if let Some(data) = &forge.minecraft_arguments {
-                        let args1: Vec<&str> = data.split(' ').collect();
-                        args1.iter().for_each(|item| {
-                            args.push(String::from(*item));
-                        });
-                    }
-
-                    if let Some(data) = &forge.arguments {
-                        for item in data.game.iter() {
-                            args.push(item.clone());
-                        }
-                    }
-
-                    args
-                }
-            }
-        } else {
-            Default::default()
-        }
-    }
-
-    /// 获取自定义加载器的JVM启动参数
-    pub fn get_custom_loader_jvm_args(&self) -> Vec<String> {
-        if let Some(data) = self.get_custom_loader() {
-            match data.as_ref() {
-                CustomLoaderType::ForgeLaunch(forge) => {
-                    let mut args = Vec::<String>::new();
-
-                    if let Some(data) = &forge.arguments {
-                        for item in data.jvm.iter() {
-                            args.push(item.clone());
-                        }
-                    }
-
-                    args
-                }
-            }
-        } else {
-            Default::default()
-        }
+    /// 更新游戏版本json
+    pub async fn check_version_update(&self) -> CoreResult<Arc<GameArgObj>> {
+        check_update(&self.version).await
     }
 }

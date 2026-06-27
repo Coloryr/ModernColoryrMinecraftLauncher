@@ -2,15 +2,18 @@ use std::{sync::OnceLock, time::Duration};
 
 use chrono::Local;
 use mcml_names::i18_items::error_type::{CoreResult, ErrorData, ErrorType};
-use mcml_net::urls;
+use mcml_net::{mojang_api, urls};
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
 
-use crate::oauth::{
-    oauth_obj::{OAuthGetCodeObj, OAuthGetCodeRes, OAuthObj},
-    xbox_obj::{
-        XBoxLiveRes, XBoxLoginObj, XBoxLoginPropertiesObj, XBoxLoginResObj, XSTSLoginObj,
-        XSTSLoginPropertiesObj,
+use crate::{
+    LoginObj,
+    oauth::{
+        oauth_obj::{OAuthGetCodeObj, OAuthGetCodeRes, OAuthObj},
+        xbox_obj::{
+            XBoxLiveRes, XBoxLoginObj, XBoxLoginPropertiesObj, XBoxLoginResObj, XSTSLoginObj,
+            XSTSLoginPropertiesObj,
+        },
     },
 };
 
@@ -31,8 +34,8 @@ pub enum AuthState {
 
 /// 设置OAuth客户端密钥
 /// - `key`: 客户端密钥
-pub fn set_key(key: String) {
-    KEY.get_or_init(|| key);
+pub fn set_key(key: &str) {
+    KEY.get_or_init(|| key.to_string());
 }
 
 /// 是否设置了密钥
@@ -116,7 +119,7 @@ pub async fn run_get_code(
 
 /// 刷新密匙
 /// - `token`: 登录密钥
-pub async fn refresh_oauth_token(token: String) -> CoreResult<OAuthGetCodeObj> {
+pub async fn refresh_oauth_token(token: &str) -> CoreResult<OAuthGetCodeObj> {
     let key = have_key()?;
 
     let obj: &[(&str, &str)] = &[
@@ -137,53 +140,95 @@ pub async fn refresh_oauth_token(token: String) -> CoreResult<OAuthGetCodeObj> {
 
 /// Xbox登录
 /// - `token`: Xbox的密钥
-pub async fn get_xbox(token: String) -> CoreResult<XBoxLiveRes> {
+pub async fn get_xbox(token: &str) -> CoreResult<XBoxLiveRes> {
     let obj = XBoxLoginObj {
         properties: XBoxLoginPropertiesObj {
-            auth_method: String::from("RPS"),
-            site_name: String::from("user.auth.xboxlive.com"),
+            auth_method: "RPS".to_string(),
+            site_name: "user.auth.xboxlive.com".to_string(),
             rps_ticket: format!("d={}", token),
         },
-        relying_party: String::from("http://auth.xboxlive.com"),
-        token_type: String::from("JWT"),
+        relying_party: "http://auth.xboxlive.com".to_string(),
+        token_type: "JWT".to_string(),
     };
 
     let data = mcml_net::get_login_client()
         .post_json_get_json::<_, XBoxLoginResObj>(urls::XBOX_LIVE, &obj)
         .await?;
     let item = data.display_claims.xui.first().unwrap();
-    let xsts = data.token;
+    let token = data.token;
     let uhs = item.uhs.clone();
 
-    if xsts.is_empty() || uhs.is_empty() {
+    if token.is_empty() || uhs.is_empty() {
         Err(ErrorType::OAuthGetTokenEmpty)
     } else {
-        Ok(XBoxLiveRes::new(xsts, uhs))
+        Ok(XBoxLiveRes {
+            xbl_token: token,
+            xbl_uhs: uhs,
+        })
     }
 }
 
 /// XSTS登陆
 /// - `token`: XSTS的密钥
-pub async fn get_xsts(token: String) -> CoreResult<XBoxLiveRes> {
+pub async fn get_xsts(token: &str) -> CoreResult<XBoxLiveRes> {
     let obj = XSTSLoginObj {
         properties: XSTSLoginPropertiesObj {
-            sandbox_id: String::from("RETAIL"),
-            user_tokens: vec![token],
+            sandbox_id: "RETAIL".to_string(),
+            user_tokens: vec![token.to_string()],
         },
-        relying_party: String::from("rp://api.minecraftservices.com/"),
-        token_type: String::from("JWT"),
+        relying_party: "rp://api.minecraftservices.com/".to_string(),
+        token_type: "JWT".to_string(),
     };
 
     let data = mcml_net::get_login_client()
         .post_json_get_json::<_, XBoxLoginResObj>(urls::XSTS, &obj)
         .await?;
     let item = data.display_claims.xui.first().unwrap();
-    let xsts = data.token;
+    let token = data.token;
     let uhs = item.uhs.clone();
 
-    if xsts.is_empty() || uhs.is_empty() {
+    if token.is_empty() || uhs.is_empty() {
         Err(ErrorType::OAuthGetTokenEmpty)
     } else {
-        Ok(XBoxLiveRes::new(xsts, uhs))
+        Ok(XBoxLiveRes {
+            xbl_token: token,
+            xbl_uhs: uhs,
+        })
+    }
+}
+
+impl LoginObj {
+    /// 微软登陆刷新
+    pub async fn refresh_oauth(&mut self, cancel: &CancellationToken) -> CoreResult<()> {
+        let profile = mojang_api::get_minecraft_profile(&self.access_token).await;
+        if profile.is_ok() {
+            return Ok(());
+        }
+
+        let oauth = refresh_oauth_token(&self.text1.clone().unwrap()).await?;
+        if cancel.is_cancelled() {
+            return Err(ErrorType::TaskCancel);
+        }
+        let xbox = get_xbox(&oauth.access_token).await?;
+        if cancel.is_cancelled() {
+            return Err(ErrorType::TaskCancel);
+        }
+        let xsts = get_xsts(&xbox.xbl_token).await?;
+        if cancel.is_cancelled() {
+            return Err(ErrorType::TaskCancel);
+        }
+        let token = mojang_api::get_minecraft_token(&xsts.xbl_uhs, &xsts.xbl_token).await?;
+        if cancel.is_cancelled() {
+            return Err(ErrorType::TaskCancel);
+        }
+        let profile = mojang_api::get_minecraft_profile(&token).await?;
+
+        self.user_name = profile.name;
+        self.uuid = profile.id;
+        self.text1 = Some(oauth.refresh_token);
+        self.access_token = token;
+        self.last_login = Local::now().fixed_offset();
+
+        Ok(())
     }
 }

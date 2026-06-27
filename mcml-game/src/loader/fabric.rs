@@ -1,6 +1,6 @@
 use mcml_base::file_item::{FileHash, FileItemObj, LaterRun};
 use mcml_names::i18_items::error_type::{CoreResult, ErrorData, ErrorType};
-use mcml_net::{maven_utils::version_name_to_path, fabric_api, url_helper};
+use mcml_net::{fabric_api, maven_utils::version_name_to_path, url_helper};
 
 use crate::{
     launcher::game_setting_obj::GameSettingObj,
@@ -39,9 +39,18 @@ pub async fn get_fabric_libs(mc: &str, version: Option<&str>) -> CoreResult<Vec<
 
         let obj = version_path::add_fabric(obj, &data, mc, &fabric.version);
 
+        Ok(obj.make_libs())
+    } else {
+        Err(ErrorType::InfoNotFound)
+    }
+}
+
+impl FabricLoaderObj {
+    /// 生成运行库列表
+    pub fn make_libs(&self) -> Vec<FileItemObj> {
         let mut list = Vec::new();
 
-        for item in &obj.libraries {
+        for item in &self.libraries {
             let name = version_name_to_path(&item.name);
             list.push(FileItemObj {
                 name: item.name.clone(),
@@ -52,18 +61,24 @@ pub async fn get_fabric_libs(mc: &str, version: Option<&str>) -> CoreResult<Vec<
             });
         }
 
-        Ok(list)
-    } else {
-        Err(ErrorType::InfoNotFound)
+        list
     }
 }
 
 impl GameSettingObj {
+    /// 获取fabric的所有运行库
     pub async fn get_fabric_libs(&self) -> CoreResult<Vec<FileItemObj>> {
-        get_fabric_libs(
-            &self.version,
-            self.loader_version.as_ref().map(|x| x.as_str()),
-        )
-        .await
+        let fabric =
+            version_path::get_fabric(&self.version, &self.loader_version.as_ref().unwrap());
+        match fabric {
+            Some(fabric) => Ok(fabric.make_libs()),
+            None => {
+                get_fabric_libs(
+                    &self.version,
+                    self.loader_version.as_ref().map(|x| x.as_str()),
+                )
+                .await
+            }
+        }
     }
 }

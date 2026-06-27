@@ -66,7 +66,7 @@ pub fn import(file: &PathBuf) -> CoreResult<()> {
     let mut auths = AUTHS.write().unwrap();
 
     for item in json.into_iter() {
-        auths.insert(item.as_key(), item);
+        auths.insert(item.get_key(), item);
     }
 
     Ok(())
@@ -83,7 +83,7 @@ pub fn clear_auths() {
 impl LoginObj {
     /// 保存账户
     pub fn save(&self) {
-        let key = self.as_key();
+        let key = self.get_key();
         let mut auths = AUTHS.write().unwrap();
 
         auths.insert(key, self.clone());
@@ -93,7 +93,7 @@ impl LoginObj {
 
     /// 删除账户
     pub fn delete(&self) {
-        let key = self.as_key();
+        let key = self.get_key();
 
         let mut auths = AUTHS.write().unwrap();
 

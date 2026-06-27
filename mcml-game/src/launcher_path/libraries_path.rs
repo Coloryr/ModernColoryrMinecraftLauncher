@@ -3,15 +3,15 @@ use std::{
     fs,
     hash::Hasher,
     path::{Path, PathBuf},
-    sync::OnceLock,
+    sync::{LazyLock, OnceLock, RwLock},
 };
 
+use mcml_auth::AuthType;
 use mcml_base::{
     file_item::{
         FileHash::{Sha1, Sha256},
         FileItemObj,
     },
-    get_system_info,
     hash_helper::{self, HashType},
     path_helper,
 };
@@ -23,8 +23,7 @@ use mcml_net::{
 };
 
 use crate::{
-    game_launch::GameLaunchObj,
-    launcher::{LoaderType, game_setting_obj::GameSettingObj},
+    game_arg::GameLaunchObj, launcher::game_setting_obj::GameSettingObj, loader::LoaderType,
 };
 
 /// 基础路径
@@ -33,8 +32,8 @@ static LIB_DIR: OnceLock<PathBuf> = OnceLock::new();
 /// 资源文件路径
 static NATIVE_DIR: OnceLock<PathBuf> = OnceLock::new();
 
-static AUTHLIB_FILE: OnceLock<FileItemObj> = OnceLock::new();
-static NIDE8_FILE: OnceLock<FileItemObj> = OnceLock::new();
+static AUTHLIB_FILE: LazyLock<RwLock<Option<FileItemObj>>> = LazyLock::new(|| RwLock::new(None));
+static NIDE8_FILE: LazyLock<RwLock<Option<FileItemObj>>> = LazyLock::new(|| RwLock::new(None));
 
 /// 获取基础路径
 pub fn get_lib_dir() -> PathBuf {
@@ -43,16 +42,16 @@ pub fn get_lib_dir() -> PathBuf {
 
 /// 获取外部登陆jar
 pub fn get_authlib_file() -> Option<PathBuf> {
-    let file = AUTHLIB_FILE.get()?;
-
-    Some(file.file.clone())
+    let guard = AUTHLIB_FILE.read().unwrap();
+    let data = guard.as_ref()?;
+    Some(data.file.clone())
 }
 
 /// 获取统一通行证jar
 pub fn get_nide8_file() -> Option<PathBuf> {
-    let file = NIDE8_FILE.get()?;
-
-    Some(file.file.clone())
+    let guard = NIDE8_FILE.read().unwrap();
+    let data = guard.as_ref()?;
+    Some(data.file.clone())
 }
 
 /// 运行库信息
@@ -127,7 +126,7 @@ impl LibVersionObj {
 pub(crate) fn init<P: AsRef<Path>>(dir: P) -> CoreResult<()> {
     let dir = LIB_DIR.get_or_init(|| dir.as_ref().join(names::LIBRARIES_DIR));
 
-    let sys = get_system_info();
+    let sys = mcml_base::get_system_info();
 
     if !dir.exists() {
         path_helper::create_dir_all(dir)?;
@@ -323,6 +322,7 @@ pub fn build_authlib_injector_item(obj: &AuthlibInjectorObj) -> FileItemObj {
     }
 }
 
+/// 读取authlibinjector是否存在
 async fn read_authlib_injector() -> CoreResult<Option<FileItemObj>> {
     let obj = authlib_api::get_obj().await?;
     let item = build_authlib_injector_item(&obj);
@@ -332,7 +332,7 @@ async fn read_authlib_injector() -> CoreResult<Option<FileItemObj>> {
         if obj.checksums.sha256 != sha256 {
             Ok(Some(item))
         } else {
-            AUTHLIB_FILE.set(item.clone());
+            *AUTHLIB_FILE.write().unwrap() = Some(item.clone());
 
             Ok(None)
         }
@@ -343,7 +343,8 @@ async fn read_authlib_injector() -> CoreResult<Option<FileItemObj>> {
 
 /// 初始化AuthlibInjector，不存在返回下载项目
 pub async fn ready_authlib_injector() -> CoreResult<Option<FileItemObj>> {
-    match AUTHLIB_FILE.get() {
+    let guard = AUTHLIB_FILE.read().unwrap();
+    match guard.as_ref() {
         Some(obj) => {
             let path = &obj.file;
             if !path.exists() {
@@ -381,6 +382,7 @@ pub fn build_nide8_item(obj: &Nide8Obj) -> FileItemObj {
     }
 }
 
+/// 读取nide8是否存在
 async fn read_nide8() -> CoreResult<Option<FileItemObj>> {
     let obj = nide8_api::get_obj().await?;
     let item = build_nide8_item(&obj);
@@ -390,7 +392,7 @@ async fn read_nide8() -> CoreResult<Option<FileItemObj>> {
         if obj.jar_hash != sha1 {
             Ok(Some(item))
         } else {
-            NIDE8_FILE.set(item.clone());
+            *NIDE8_FILE.write().unwrap() = Some(item.clone());
 
             Ok(None)
         }
@@ -401,14 +403,15 @@ async fn read_nide8() -> CoreResult<Option<FileItemObj>> {
 
 /// 初始化Nide8Injector，不存在返回下载项目
 pub async fn ready_nide8() -> CoreResult<Option<FileItemObj>> {
-    match NIDE8_FILE.get() {
+    let guard = NIDE8_FILE.read().unwrap();
+    match guard.as_ref() {
         Some(obj) => {
             let path = &obj.file;
             if !path.exists() {
                 Ok(Some(obj.clone()))
             } else {
-                let sha256 = hash_helper::gen_hash_from_file_async(HashType::Sha256, &path).await?;
-                if !obj.hash.eq(&sha256) {
+                let sha1 = hash_helper::gen_hash_from_file_async(HashType::Sha1, &path).await?;
+                if !obj.hash.eq(&sha1) {
                     Ok(Some(obj.clone()))
                 } else {
                     Ok(None)
@@ -416,5 +419,17 @@ pub async fn ready_nide8() -> CoreResult<Option<FileItemObj>> {
             }
         }
         None => read_nide8().await,
+    }
+}
+
+/// 检查外置登陆jar是否存在
+/// - `auth`: 账户类型
+pub async fn check_authlib(auth: &AuthType) -> CoreResult<Option<FileItemObj>> {
+    match auth {
+        AuthType::Nide8 => ready_nide8().await,
+        AuthType::AuthlibInjector | AuthType::LittleSkin | AuthType::SelfLittleSkin => {
+            read_authlib_injector().await
+        }
+        _ => Ok(None),
     }
 }

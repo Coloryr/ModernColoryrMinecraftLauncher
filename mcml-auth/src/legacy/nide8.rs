@@ -1,6 +1,7 @@
 /// 统一通行证
 use mcml_names::i18_items::error_type::{CoreResult, ErrorType};
 use mcml_net::urls;
+use tokio_util::sync::CancellationToken;
 
 use crate::{
     AuthType, LoginObj,
@@ -29,14 +30,20 @@ pub async fn authenticate(
     Ok(auth)
 }
 
-/// 刷新登录
-/// - `auth`: 保存的账户
-pub async fn refresh(auth: &LoginObj) -> CoreResult<LoginObj> {
-    let server = String::from(urls::NIDE8_URL) + &auth.text1.clone().unwrap();
+impl LoginObj {
+    /// 刷新登录
+    /// - `auth`: 保存的账户
+    pub async fn refresh_nide8(&mut self, cancel: &CancellationToken) -> CoreResult<()> {
+        let server = String::from(urls::NIDE8_URL) + &self.text1.clone().unwrap();
 
-    if legacy::validate(&server, auth).await? {
-        Ok(legacy::refresh(&server, auth, false).await?)
-    } else {
-        Err(ErrorType::AuthTokenTimeout)
+        if legacy::validate(&server, self).await? {
+            if cancel.is_cancelled() {
+                return Err(ErrorType::TaskCancel);
+            }
+
+            Ok(legacy::refresh(&server, self, false).await?)
+        } else {
+            Err(ErrorType::AuthTokenTimeout)
+        }
     }
 }

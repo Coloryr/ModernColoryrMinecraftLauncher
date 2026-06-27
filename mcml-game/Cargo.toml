@@ -22,4 +22,7 @@ uuid.workspace = true
 url.workspace = true
 rayon.workspace = true
 tokio.workspace = true
+tokio-util.workspace = true
 regex.workspace = true
+soft-canonicalize.workspace = true
+async-trait.workspace = true
