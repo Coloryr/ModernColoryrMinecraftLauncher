@@ -2,7 +2,7 @@ pub mod download_item;
 pub mod download_task;
 
 mod download_thread;
-mod later_tasks;
+pub mod later_tasks;
 
 use std::{
     path::{Path, PathBuf},

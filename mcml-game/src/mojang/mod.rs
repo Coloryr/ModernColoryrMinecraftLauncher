@@ -8,7 +8,7 @@ use serde_repr::{Deserialize_repr, Serialize_repr};
 
 use crate::{
     launcher_path::{assets_path, libraries_path, version_path},
-    mojang::game_arg_obj::{GameRulesObj, LoggingObj},
+    mojang::game_arg_obj::{GameArgObj, GameRulesObj, LoggingObj},
 };
 
 pub mod assets_obj;
@@ -87,7 +87,9 @@ pub fn check_allow(list: &Vec<GameRulesObj>) -> bool {
 pub fn build_log4j_item(obj: &LoggingObj) -> FileItemObj {
     FileItemObj {
         name: String::from("log4j2-xml"),
-        file: version_path::get_dir().join("log4j2").join("log4j2.xml"),
+        file: version_path::get_version_dir()
+            .join("log4j2")
+            .join("log4j2.xml"),
         url: obj.client.file.url.clone(),
         hash: FileHash::Sha1(obj.client.file.sha1.clone()),
         later: Default::default(),
@@ -111,14 +113,20 @@ pub fn build_assets_item(name: &str, hash: &str) -> FileItemObj {
 /// 创建游戏本体下载项目
 /// - `version`: 游戏版本号
 pub fn build_game_item(version: &str) -> FileItemObj {
-    let game = version_path::get_version(version).unwrap();
-    let file = libraries_path::get_game_file(version);
+    version_path::get_version(version)
+        .unwrap()
+        .build_game_item()
+}
 
-    FileItemObj {
-        name: format!("minecraft-clinet-{version}.jar"),
-        file,
-        url: url_helper::get_minecraft_client(&game.downloads.client.url, version),
-        hash: FileHash::Sha1(game.downloads.client.sha1.clone()),
-        later: Default::default(),
+impl GameArgObj {
+    /// 创建游戏本体下载项目
+    pub fn build_game_item(&self) -> FileItemObj {
+        FileItemObj {
+            name: format!("minecraft-clinet-{}.jar", self.id),
+            file: libraries_path::get_game_file(&self.id),
+            url: url_helper::get_minecraft_client(&self.downloads.client.url, &self.id),
+            hash: FileHash::Sha1(self.downloads.client.sha1.clone()),
+            later: Default::default(),
+        }
     }
 }

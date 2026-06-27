@@ -1,46 +1,78 @@
-use std::{collections::HashMap, path::PathBuf, sync::Arc};
-
-use mcml_auth::{
-    AuthType, LoginObj,
-    legacy::{authlib_injector, little_skin},
+use std::{
+    collections::{HashMap, HashSet},
+    io::Cursor,
+    path::{Path, PathBuf},
 };
-use mcml_base::{Os, hash_helper};
+
+use mcml_auth::{AuthType, LoginObj};
+use mcml_base::{
+    Os, builder,
+    file_item::{FileHash, FileItemObj, LaterRun},
+    hash_helper, path_helper,
+};
 use mcml_config::config_obj::GCType;
-use mcml_names::{i18_items::error_type::CoreResult, names};
-use mcml_net::urls;
+use mcml_names::i18_items::error_type::{CoreResult, ErrorData, ErrorType};
+use mcml_names::names;
+use mcml_net::{mojang_api, urls};
 
 use crate::{
-    game_launch::GameLaunchObj,
-    game_saves::SaveObj,
-    launcher::game_setting_obj::{GameSettingObj, ServerObj},
-    launcher_path::{self, assets_path, libraries_path},
+    game_launch::{AutoJoinType, GameLaunchArg},
+    game_log::GameLog,
+    launcher::game_setting_obj::GameSettingObj,
+    launcher_path::{self, assets_path, libraries_path, version_path},
     loader::LoaderType,
     mojang::{
         self,
-        game_arg_obj::{ArgValue, Argument, GameArgObj},
+        assets_obj::AssetsObj,
+        game_arg_obj::{ArgValue, Argument, GameArgObj, GameAssetIndexObj, LoggingObj},
     },
 };
 
-/// 启动后自动操作
-pub enum AutoJoinType {
-    None,
-    /// 进入存档
-    Save(Arc<SaveObj>),
-    /// 进入服务器
-    Server(Arc<ServerObj>),
+/// 游戏启动时的配置存储
+pub struct GameLaunchObj {
+    /// 游戏运行库
+    pub game_libs: Vec<FileItemObj>,
+    /// 加载器运行库
+    pub loader_libs: Vec<FileItemObj>,
+    /// 加载器安装运行库
+    pub installer_libs: Vec<FileItemObj>,
+    /// Jvm启动参数
+    pub jvm_args: Vec<String>,
+    /// 游戏启动参数
+    pub game_args: Vec<String>,
+    /// java版本
+    pub java_versions: HashSet<i32>,
+    /// 主类
+    pub main_class: String,
+    /// 本地库路径
+    pub native_dir: PathBuf,
+    /// 资源文件
+    pub assets: GameAssetIndexObj,
+    /// 游戏jar
+    pub game_jar: FileItemObj,
+    /// 安全log4j
+    pub log4j_xml: Option<FileItemObj>,
+    /// 是否使用ColorASM
+    pub use_asm: bool,
 }
 
-/// 游戏启动所使用的参数
-pub struct GameLaunchArg {
-    /// 登录账户
-    pub auth: Arc<LoginObj>,
-    /// 自动进入的操作
-    pub auto: AutoJoinType,
-    /// 是否以管理员方式启动
-    pub admin: bool,
-    // pub gui: ILaunchGui,
-    /// ASM端口
-    pub mixin: Option<u16>,
+impl GameLaunchObj {
+    pub fn new() -> Self {
+        Self {
+            game_libs: Default::default(),
+            loader_libs: Default::default(),
+            installer_libs: Default::default(),
+            jvm_args: Default::default(),
+            game_args: Default::default(),
+            java_versions: Default::default(),
+            main_class: Default::default(),
+            native_dir: Default::default(),
+            assets: Default::default(),
+            game_jar: Default::default(),
+            log4j_xml: Default::default(),
+            use_asm: Default::default(),
+        }
+    }
 }
 
 /// V1启动Jvm参数
@@ -62,20 +94,15 @@ fn make_v1_game_arg(game: &GameArgObj) -> Vec<String> {
 /// 创建V2游戏启动参数
 /// - `game`: 游戏启动参数
 fn make_v2_game_arg(game: &GameArgObj) -> Vec<String> {
-    match &game.arguments {
-        None => Vec::new(),
-        Some(args) => {
-            let mut vec: Vec<String> = Vec::new();
-
-            for item in args.game.iter() {
-                if let Argument::Plain(item) = item {
-                    vec.push(item.to_string());
-                }
-            }
-
-            vec
-        }
-    }
+    game.arguments.as_ref().map_or(Vec::new(), |args| {
+        args.game
+            .iter()
+            .filter_map(|item| match item {
+                Argument::Plain(s) => Some(s.clone()),
+                _ => None,
+            })
+            .collect()
+    })
 }
 
 /// 创建V1加载器启动参数
@@ -93,43 +120,34 @@ fn make_loader_v1_game_arg(obj: &GameSettingObj, game: &GameArgObj) -> Vec<Strin
             if let Some(data) = loader
                 && let Some(data1) = &data.minecraft_arguments
             {
-                let args: Vec<&str> = data1.split(' ').collect();
-                args.iter().map(|item| String::from(*item)).collect()
+                data1.split(' ').map(|s| s.to_string()).collect()
             } else {
-                Default::default()
+                Vec::new()
             }
         }
-        LoaderType::Normal => Default::default(),
+        LoaderType::Normal => Vec::new(),
         LoaderType::Fabric => {
-            let loader = obj.get_fabric();
-            if let Some(data) = loader {
+            if let Some(data) = obj.get_fabric() {
                 let mut args = make_v1_game_arg(game);
-                for item in data.arguments.game.iter() {
-                    args.push(item.clone());
-                }
-
+                args.extend(data.arguments.game.iter().cloned());
                 args
             } else {
-                Default::default()
+                Vec::new()
             }
         }
         LoaderType::Quilt => {
-            let loader = obj.get_quilt();
-            if let Some(data) = loader {
+            if let Some(data) = obj.get_quilt() {
                 let mut args = make_v1_game_arg(game);
-                for item in data.arguments.game.iter() {
-                    args.push(item.clone());
-                }
-
+                args.extend(data.arguments.game.iter().cloned());
                 args
             } else {
-                Default::default()
+                Vec::new()
             }
         }
         LoaderType::OptiFine => {
             let mut args = make_v1_game_arg(game);
-            args.push(String::from("--tweakClass"));
-            args.push(String::from("optifine.OptiFineTweaker"));
+            args.push("--tweakClass".to_string());
+            args.push("optifine.OptiFineTweaker".to_string());
             args
         }
         LoaderType::Custom => obj.get_custom_loader_game_args(),
@@ -138,7 +156,6 @@ fn make_loader_v1_game_arg(obj: &GameSettingObj, game: &GameArgObj) -> Vec<Strin
 
 /// 创建V2加载器启动参数
 /// - `obj`: 游戏启动参数
-/// - `game`: 游戏启动参数
 fn make_loader_v2_game_arg(obj: &GameSettingObj) -> Vec<String> {
     match obj.loader {
         LoaderType::Forge | LoaderType::NeoForge => {
@@ -148,117 +165,96 @@ fn make_loader_v2_game_arg(obj: &GameSettingObj) -> Vec<String> {
                 obj.get_neoforge()
             };
 
-            if let Some(data) = loader
-                && let Some(data1) = &data.arguments
-            {
-                data1.game.clone()
-            } else {
-                Default::default()
-            }
+            loader
+                .and_then(|data| data.arguments.as_ref().map(|a| a.game.clone()))
+                .unwrap_or_default()
         }
-        LoaderType::Normal => Default::default(),
-        LoaderType::Fabric => {
-            let loader = obj.get_fabric();
-            if let Some(data) = loader {
-                data.arguments.game.clone()
-            } else {
-                Default::default()
-            }
-        }
-        LoaderType::Quilt => {
-            let loader = obj.get_quilt();
-            if let Some(data) = loader {
-                data.arguments.game.clone()
-            } else {
-                Default::default()
-            }
-        }
-        LoaderType::OptiFine => {
-            vec![
-                String::from("--tweakClass"),
-                String::from("optifine.OptiFineTweaker"),
-            ]
-        }
+        LoaderType::Normal => Vec::new(),
+        LoaderType::Fabric => obj
+            .get_fabric()
+            .map(|data| data.arguments.game.clone())
+            .unwrap_or_default(),
+        LoaderType::Quilt => obj
+            .get_quilt()
+            .map(|data| data.arguments.game.clone())
+            .unwrap_or_default(),
+        LoaderType::OptiFine => vec![
+            "--tweakClass".to_string(),
+            "optifine.OptiFineTweaker".to_string(),
+        ],
         LoaderType::Custom => obj.get_custom_loader_game_args(),
     }
 }
 
-/// 创建V1游戏Jvm参数
+/// 创建V2游戏Jvm参数
 fn make_v2_jvm_arg(game: &GameArgObj) -> Vec<String> {
-    if let Some(data) = &game.arguments {
-        let mut args = Vec::<String>::new();
-
-        for item in data.jvm.iter() {
-            match item {
-                Argument::Plain(str) => args.push(str.clone()),
-                Argument::Conditional(obj) => {
-                    if !mojang::check_allow(&obj.rules) {
-                        continue;
-                    }
-
-                    match &obj.value {
-                        ArgValue::Single(str) => args.push(str.clone()),
-                        ArgValue::Multi(items) => {
-                            for item1 in items {
-                                args.push(item1.clone())
-                            }
-                        }
-                    }
+    let Some(data) = &game.arguments else {
+        return Vec::new();
+    };
+    let mut args = Vec::new();
+    for item in &data.jvm {
+        match item {
+            Argument::Plain(str) => args.push(str.clone()),
+            Argument::Conditional(obj) => {
+                if !mojang::check_allow(&obj.rules) {
+                    continue;
+                }
+                match &obj.value {
+                    ArgValue::Single(str) => args.push(str.clone()),
+                    ArgValue::Multi(items) => args.extend(items.iter().cloned()),
                 }
             }
         }
-
-        args
-    } else {
-        Default::default()
     }
+    args
 }
 
 /// 创建加载器Jvm参数
 /// - `v2`: 是否为V2版本
 /// - `obj`: 游戏实例
-pub fn make_loader_jvm_arg(v2: bool, obj: &GameSettingObj) -> Vec<String> {
+pub async fn make_loader_jvm_arg(v2: bool, obj: &GameSettingObj) -> Vec<String> {
     match obj.loader {
-        LoaderType::Normal => Default::default(),
+        LoaderType::Normal => Vec::new(),
         LoaderType::Forge | LoaderType::NeoForge => {
-            if v2 {
-                let mut list = Vec::<String>::new();
-                list.push(format!(
+            if !v2 {
+                return Vec::new();
+            }
+            let is_neoforge = obj.loader == LoaderType::NeoForge;
+            let mut list = vec![
+                format!(
                     "-Dforgewrapper.librariesDir={}",
                     libraries_path::get_lib_dir().display()
-                ));
-                let file = if obj.loader == LoaderType::NeoForge {
-                    obj.build_neoforge_installer()
-                } else {
-                    obj.build_forge_installer()
-                };
-                list.push(format!("-Dforgewrapper.installer={}", file.file.display()));
-                list.push(format!(
+                ),
+                format!(
+                    "-Dforgewrapper.installer={}",
+                    if is_neoforge {
+                        obj.build_neoforge_installer(false).await
+                    } else {
+                        obj.build_forge_installer(false).await
+                    }
+                    .file
+                    .display()
+                ),
+                format!(
                     "-Dforgewrapper.minecraft={}",
                     libraries_path::get_game_file(&obj.version).display()
-                ));
-
-                let obj = if obj.loader == LoaderType::NeoForge {
-                    obj.get_neoforge().unwrap()
-                } else {
-                    obj.get_forge().unwrap()
-                };
-
-                if let Some(args) = &obj.arguments {
-                    list.extend(args.jvm.clone());
-                }
-
-                list
+                ),
+            ];
+            let loader_obj = if is_neoforge {
+                obj.get_neoforge()
             } else {
-                Default::default()
+                obj.get_forge()
+            };
+            if let Some(args) = loader_obj.as_ref().and_then(|o| o.arguments.as_ref()) {
+                list.extend(args.jvm.clone());
             }
+            list
         }
-        LoaderType::Fabric => {
-            let fabric = obj.get_fabric().unwrap();
-
-            fabric.arguments.jvm.clone()
-        }
-        LoaderType::Quilt => Default::default(),
+        LoaderType::Fabric => obj
+            .get_fabric()
+            .map(|f| f.arguments.jvm.clone())
+            .unwrap_or_default(),
+        LoaderType::Quilt => Vec::new(),
         LoaderType::OptiFine => {
             let mut list = vec![
                 format!(
@@ -268,18 +264,18 @@ pub fn make_loader_jvm_arg(v2: bool, obj: &GameSettingObj) -> Vec<String> {
                 format!("-Dgamecore={}", obj.get_game_file().to_string_lossy()),
                 format!("-Doptifine={}", obj.get_optifine_file().to_string_lossy()),
             ];
-
             if v2 {
-                list.push(String::from("--add-opens"));
-                list.push(String::from("java.base/java.lang=ALL-UNNAMED"));
-                list.push(String::from("--add-opens"));
-                list.push(String::from("java.base/java.util=ALL-UNNAMED"));
-                list.push(String::from("--add-opens"));
-                list.push(String::from("java.base/java.net=ALL-UNNAMED"));
-                list.push(String::from("--add-opens"));
-                list.push(String::from("java.base/jdk.internal.loader=ALL-UNNAMED"));
+                list.extend([
+                    "--add-opens".to_string(),
+                    "java.base/java.lang=ALL-UNNAMED".to_string(),
+                    "--add-opens".to_string(),
+                    "java.base/java.util=ALL-UNNAMED".to_string(),
+                    "--add-opens".to_string(),
+                    "java.base/java.net=ALL-UNNAMED".to_string(),
+                    "--add-opens".to_string(),
+                    "java.base/jdk.internal.loader=ALL-UNNAMED".to_string(),
+                ]);
             }
-
             list
         }
         LoaderType::Custom => obj.get_custom_loader_game_args(),
@@ -287,83 +283,63 @@ pub fn make_loader_jvm_arg(v2: bool, obj: &GameSettingObj) -> Vec<String> {
 }
 
 impl GameSettingObj {
-    pub fn make_game_arg(
-        &self,
-        world: Option<&SaveObj>,
-        server: Option<&ServerObj>,
-    ) -> Vec<String> {
+    /// 创建游戏启动参数
+    /// - `world`: 自动加入的存档
+    pub fn make_game_arg(&self, auto: &AutoJoinType) -> Vec<String> {
         let mut args = Vec::new();
 
-        let config = mcml_config::read_config().window.clone();
+        let config = &mcml_config::read_config().window;
 
-        let mut full_screen = false;
-        let mut width = 0;
-        let mut height = 0;
-
-        match &self.window {
-            Some(window) => {
-                if let Some(data) = window.full_screen {
-                    full_screen = data;
-                }
-                if let Some(data) = window.width {
-                    width = data;
-                }
-                if let Some(data) = window.height {
-                    height = data;
-                }
-            }
-            None => {
-                if let Some(data) = config.full_screen {
-                    full_screen = data;
-                }
-                if let Some(data) = config.width {
-                    width = data;
-                }
-                if let Some(data) = config.height {
-                    height = data;
-                }
-            }
-        }
+        let full_screen = self
+            .window
+            .as_ref()
+            .and_then(|w| w.full_screen)
+            .or(config.full_screen)
+            .unwrap_or(false);
+        let width = self
+            .window
+            .as_ref()
+            .and_then(|w| w.width)
+            .or(config.width)
+            .unwrap_or(0);
+        let height = self
+            .window
+            .as_ref()
+            .and_then(|w| w.height)
+            .or(config.height)
+            .unwrap_or(0);
 
         if full_screen {
-            args.push(String::from("--fullscreen"));
+            args.push("--fullscreen".to_string());
         } else {
             if width > 0 {
-                args.push(String::from("--width"));
+                args.push("--width".to_string());
                 args.push(width.to_string());
             }
             if height > 0 {
-                args.push(String::from("--height"));
+                args.push("--height".to_string());
                 args.push(height.to_string());
             }
         }
 
-        match world {
-            Some(world) => {
-                args.push(String::from("--quickPlaySingleplayer"));
-                args.push(world.level_name.clone());
+        match auto {
+            AutoJoinType::None => {}
+            AutoJoinType::Save(save_obj) => {
+                args.push("--quickPlaySingleplayer".to_string());
+                args.push(save_obj.level_name.clone());
             }
-            None => {
-                let server = match &self.start_server {
-                    Some(server) => Some(server),
-                    None => server,
-                };
-
-                if let Some(server) = server
-                    && let Some(ip) = &server.ip
+            AutoJoinType::Server(server_obj) => {
+                if let Some(ip) = &server_obj.ip
                     && !ip.is_empty()
                 {
-                    let port = match server.port {
-                        Some(port) => port,
-                        None => 25565,
-                    };
+                    let port = server_obj.port.unwrap_or(25565);
                     if self.is_game_version_120() {
-                        args.push(String::from("--quickPlayMultiplayer"));
+                        args.push("--quickPlayMultiplayer".to_string());
                         args.push(format!("{ip}:{port}"));
                     } else {
-                        args.push(String::from("--server"));
+                        args.push("--server".to_string());
                         args.push(ip.clone());
-                        args.push(String::from("--port"));
+                        args.push("--port".to_string());
                         args.push(port.to_string());
                     }
                 }
@@ -372,19 +348,19 @@ impl GameSettingObj {
 
         if let Some(proxy) = &self.proxy_host {
             if let Some(ip) = &proxy.ip {
-                args.push(String::from("--proxyHost"));
+                args.push("--proxyHost".to_string());
                 args.push(ip.clone());
             }
             if let Some(port) = &proxy.port {
-                args.push(String::from("--proxyPort"));
+                args.push("--proxyPort".to_string());
                 args.push(port.to_string());
             }
             if let Some(user) = &proxy.user {
-                args.push(String::from("--proxyUser"));
+                args.push("--proxyUser".to_string());
                 args.push(user.clone());
             }
             if let Some(password) = &proxy.password {
-                args.push(String::from("--proxyPass"));
+                args.push("--proxyPass".to_string());
                 args.push(password.clone());
             }
         }
@@ -392,8 +368,7 @@ impl GameSettingObj {
         if let Some(arg) = &self.jvm_arg
             && let Some(arg) = &arg.game_args
         {
-            let arg: Vec<&str> = arg.split('\n').collect();
-            args.extend(arg.iter().map(|item| String::from(*item)));
+            args.extend(arg.split('\n').map(|s| s.to_string()));
         }
 
         args
@@ -409,58 +384,39 @@ impl GameSettingObj {
         java: u8,
         mixin: Option<u16>,
     ) -> CoreResult<Vec<String>> {
-        let mut jvm_args = String::new();
-        let mut gc = GCType::Auto;
-        let mut max = 0u32;
-        let mut min = 0u32;
-        let mut colorasm = false;
+        let config = &mcml_config::read_config().jvm_arg;
 
-        match &self.jvm_arg {
-            Some(arg) => {
-                if let Some(data) = &arg.jvm_args {
-                    jvm_args = data.clone();
-                }
-
-                if let Some(data) = arg.gc_mode {
-                    gc = data;
-                }
-
-                if let Some(data) = arg.max_memory {
-                    max = data;
-                }
-
-                if let Some(data) = arg.min_memory {
-                    min = data;
-                }
-
-                if let Some(data) = arg.colorasm {
-                    colorasm = data;
-                }
-            }
-            None => {
-                let config = &mcml_config::read_config().jvm_arg;
-
-                if let Some(data) = &config.jvm_args {
-                    jvm_args = data.clone();
-                }
-
-                if let Some(data) = config.gc_mode {
-                    gc = data;
-                }
-
-                if let Some(data) = config.max_memory {
-                    max = data;
-                }
-
-                if let Some(data) = config.min_memory {
-                    min = data;
-                }
-
-                if let Some(data) = config.colorasm {
-                    colorasm = data;
-                }
-            }
-        }
+        let jvm_args = self
+            .jvm_arg
+            .as_ref()
+            .and_then(|j| j.jvm_args.as_deref())
+            .or(config.jvm_args.as_deref())
+            .unwrap_or("")
+            .to_string();
+        let mut gc = self
+            .jvm_arg
+            .as_ref()
+            .and_then(|j| j.gc_mode)
+            .or(config.gc_mode)
+            .unwrap_or(GCType::Auto);
+        let max = self
+            .jvm_arg
+            .as_ref()
+            .and_then(|j| j.max_memory)
+            .or(config.max_memory)
+            .unwrap_or(0);
+        let min = self
+            .jvm_arg
+            .as_ref()
+            .and_then(|j| j.min_memory)
+            .or(config.min_memory)
+            .unwrap_or(0);
+        let colorasm = self
+            .jvm_arg
+            .as_ref()
+            .and_then(|j| j.colorasm)
+            .or(config.colorasm)
+            .unwrap_or(false);
 
         let mut args = Vec::new();
 
@@ -469,7 +425,7 @@ impl GameSettingObj {
             args.push(format!("-Dcolormc.mixin.uuid={}", self.uuid));
             args.push(format!(
                 "-javaagent:{}",
-                launcher_path::ready_colorasm()?.to_string_lossy()
+                launcher_path::get_colorasm().file.to_string_lossy()
             ));
         }
 
@@ -482,9 +438,9 @@ impl GameSettingObj {
         }
 
         if gc == GCType::ZGC {
-            args.extend(names::GCZGC.map(|item| String::from(item)));
+            args.extend(names::GCZGC.map(|item| item.to_string()));
         } else if gc == GCType::G1GC {
-            args.extend(names::G1GC.map(|item| String::from(item)));
+            args.extend(names::G1GC.map(|item| item.to_string()));
         }
 
         if min > 0 {
@@ -492,23 +448,25 @@ impl GameSettingObj {
         }
 
         if max > 0 {
-            args.push(format!("-Xms{max}m"));
+            args.push(format!("-Xmx{max}m"));
         }
 
         if !jvm_args.is_empty() {
-            args.extend(jvm_args.split('\n').map(|item| String::from(item.trim())));
+            args.extend(jvm_args.split('\n').map(|item| item.trim().to_string()));
         }
 
-        match &auth.auth_type {
+        // 统一处理外置登录认证参数
+        let auth_key: Option<String> = match &auth.auth_type {
             AuthType::Nide8 => {
                 args.push(format!(
                     "-javaagent:{}={}",
                     libraries_path::get_nide8_file().unwrap().to_string_lossy(),
                     auth.text1.as_ref().unwrap()
                 ));
+                None
             }
             AuthType::AuthlibInjector => {
-                let key = authlib_injector::get_key(&auth).await?;
+                let key = auth.get_authlib_key().await?;
                 args.push(format!(
                     "-javaagent:{}={}",
                     libraries_path::get_authlib_file()
@@ -516,43 +474,33 @@ impl GameSettingObj {
                         .to_string_lossy(),
                     auth.text1.as_ref().unwrap(),
                 ));
-                args.push(format!(
-                    "-Dauthlibinjector.yggdrasil.prefetched={}",
-                    hash_helper::gen_base64(&key)
-                ));
-                args.push(String::from("-Dauthlibinjector.side=client"));
+                Some(key)
             }
-            AuthType::LittleSkin => {
-                let key = little_skin::get_key(&auth).await?;
+            AuthType::LittleSkin | AuthType::SelfLittleSkin => {
+                let key = auth.get_littleskin_key().await?;
+                let endpoint = if matches!(auth.auth_type, AuthType::LittleSkin) {
+                    format!("{}api/yggdrasil", urls::LITTLE_SKIN_URL)
+                } else {
+                    auth.text1.as_ref().unwrap().clone()
+                };
                 args.push(format!(
-                    "-javaagent:{}={}api/yggdrasil",
+                    "-javaagent:{}={}",
                     libraries_path::get_authlib_file()
                         .unwrap()
                         .to_string_lossy(),
-                    urls::LITTLE_SKIN_URL,
+                    endpoint,
                 ));
-                args.push(format!(
-                    "-Dauthlibinjector.yggdrasil.prefetched={}",
-                    hash_helper::gen_base64(&key)
-                ));
-                args.push(String::from("-Dauthlibinjector.side=client"));
+                Some(key)
             }
-            AuthType::SelfLittleSkin => {
-                let key = little_skin::get_key(&auth).await?;
-                args.push(format!(
-                    "-javaagent:{}={}api/yggdrasil",
-                    libraries_path::get_authlib_file()
-                        .unwrap()
-                        .to_string_lossy(),
-                    auth.text1.as_ref().unwrap(),
-                ));
-                args.push(format!(
-                    "-Dauthlibinjector.yggdrasil.prefetched={}",
-                    hash_helper::gen_base64(&key)
-                ));
-                args.push(String::from("-Dauthlibinjector.side=client"));
-            }
-            _ => {}
+            _ => None,
+        };
+
+        if let Some(key) = auth_key {
+            args.push(format!(
+                "-Dauthlibinjector.yggdrasil.prefetched={}",
+                hash_helper::gen_base64(&key)
+            ));
+            args.push("-Dauthlibinjector.side=client".to_string());
         }
 
         args.push(format!(
@@ -570,50 +518,35 @@ impl GameSettingObj {
         Ok(args)
     }
 
+    /// 替换启动参数
+    /// - `auth`: 使用的账户
+    /// - `args`: 需要替换的参数列表
+    /// - `classpath`: 运行库列表
+    /// - `native`: 本地库路径
+    /// - `lang`: 启动时的语言
+    /// - `assets`: 资源文件
     fn replace_all_value(
         &self,
         auth: &LoginObj,
         args: &mut Vec<String>,
-        classpath: String,
-        native: PathBuf,
-        lang: Option<String>,
-        assets: Option<String>,
+        classpath: &str,
+        native: &Path,
+        lang: &Option<String>,
+        assets: &Option<String>,
     ) {
         let assets_path = assets_path::get_assets_dir();
         let game_dir = self.get_game_path();
-        let assets_index = match assets {
-            Some(assets) => assets,
-            None => String::from("legacy"),
-        };
+        let assets_index = assets.clone().unwrap_or_else(|| "legacy".to_string());
 
         let version_name = match self.loader {
             LoaderType::Normal => self.version.clone(),
-            LoaderType::Forge => format!(
-                "forge-{}-{}",
+            LoaderType::Custom => "custom".to_string(),
+            _ => format!(
+                "{}-{}-{}",
+                self.loader.prefix(),
                 self.version,
                 self.loader_version.as_ref().unwrap()
             ),
-            LoaderType::Fabric => format!(
-                "fabric-{}-{}",
-                self.version,
-                self.loader_version.as_ref().unwrap()
-            ),
-            LoaderType::Quilt => format!(
-                "quilt-{}-{}",
-                self.version,
-                self.loader_version.as_ref().unwrap()
-            ),
-            LoaderType::NeoForge => format!(
-                "neoforge-{}-{}",
-                self.version,
-                self.loader_version.as_ref().unwrap()
-            ),
-            LoaderType::OptiFine => format!(
-                "optifine-{}-{}",
-                self.version,
-                self.loader_version.as_ref().unwrap()
-            ),
-            LoaderType::Custom => String::from("custom"),
         };
 
         let sep = if mcml_base::get_system_info().os == Os::Windows {
@@ -623,20 +556,20 @@ impl GameSettingObj {
         };
 
         let token = if auth.access_token.is_empty() {
-            String::from("0")
+            "0".to_string()
         } else {
             auth.access_token.clone()
         };
 
-        let user_properties = match lang {
-            Some(lang) => format!("{{\"language\":\"{lang}\"}}"),
-            None => String::from("{}"),
-        };
+        let user_properties = lang
+            .as_ref()
+            .map(|l| format!("{{\"language\":\"{l}\"}}"))
+            .unwrap_or_else(|| "{}".to_string());
 
         let user_type = if auth.auth_type == AuthType::OAuth {
-            String::from("msa")
+            "msa"
         } else {
-            String::from("mojang")
+            "mojang"
         };
 
         let mut map = HashMap::new();
@@ -646,22 +579,19 @@ impl GameSettingObj {
         map.insert("{assets_root}", assets_path.to_string_lossy().to_string());
         map.insert("{assets_index_name}", assets_index);
         map.insert("{auth_uuid}", auth.uuid.clone());
-        map.insert(
-            "{auth_access_token}",
-            assets_path.to_string_lossy().to_string(),
-        );
+        map.insert("{auth_access_token}", token);
         map.insert("{user_properties}", user_properties);
-        map.insert("{user_type}", user_type);
+        map.insert("{user_type}", user_type.to_string());
         map.insert("{version_type}", self.get_version_type());
         map.insert("{natives_directory}", native.to_string_lossy().to_string());
         map.insert(
             "{library_directory}",
             libraries_path::get_lib_dir().to_string_lossy().to_string(),
         );
-        map.insert("{classpath_separator}", String::from(sep));
-        map.insert("{launcher_name}", String::from(names::MCML));
+        map.insert("{classpath_separator}", sep.to_string());
+        map.insert("{launcher_name}", names::MCML.to_string());
         map.insert("{launcher_version}", mcml_names::VERSION.clone());
-        map.insert("{classpath}", classpath);
+        map.insert("{classpath}", classpath.to_string());
 
         for index in 0..args.len() {
             for (key, value) in map.iter() {
@@ -670,22 +600,484 @@ impl GameSettingObj {
         }
     }
 
+    /// 创建启动参数
     pub fn make_run_arg(
         &self,
-        arg: GameLaunchArg,
-        obj: &GameLaunchObj,
+        arg: &GameLaunchArg,
+        obj: &mut GameLaunchObj,
         check: bool,
-    ) -> CoreResult<Vec<String>> {
-        let classpath = String::new();
+    ) -> Vec<String> {
         let sep = if mcml_base::get_system_info().os == Os::Windows {
             ';'
-        }
-        else {
+        } else {
             ':'
         };
 
-        
+        if obj.use_asm {
+            obj.game_libs.push(launcher_path::get_colorasm());
+        }
 
-        Ok()
+        let mut libs = self.get_libs(obj);
+        if let Some(jvm) = &self.advance_jvm
+            && let Some(classpath) = &jvm.class_path
+            && !classpath.is_empty()
+        {
+            let dir1 = self.get_game_path();
+            let dir2 = self.get_base_path();
+
+            for item in classpath.split(';') {
+                let path = item
+                    .replace(names::ARG_GAME_NAME, &self.name)
+                    .replace(names::ARG_GAME_UUID, &self.uuid.to_string())
+                    .replace(names::ARG_GAME_DIR, &dir1.to_string_lossy())
+                    .replace(names::ARG_GAME_BASE_DIR, &dir2.to_string_lossy())
+                    .replace(
+                        names::ARG_LAUNCHER_DIR,
+                        &mcml_base::get_base_dir().to_string_lossy(),
+                    );
+                if let Ok(path) = soft_canonicalize::soft_canonicalize(path.trim()) {
+                    if !check || (path.exists() && path.is_file()) {
+                        libs.push(path);
+                    }
+                }
+            }
+        }
+
+        let mut classpath_parts: Vec<String> = Vec::with_capacity(libs.len());
+        for item in &libs {
+            if !check || (item.exists() && item.is_file()) {
+                crate::add_game_log_item(&self.uuid, GameLog::RuntimeLib(item.clone()));
+                classpath_parts.push(item.to_string_lossy().to_string());
+            }
+        }
+        let classpath = classpath_parts.join(&sep.to_string());
+
+        let mut args = Vec::new();
+        self.replace_all_value(
+            &arg.auth,
+            &mut obj.jvm_args,
+            &classpath,
+            &obj.native_dir,
+            &arg.lang,
+            &Some(obj.assets.id.clone()),
+        );
+        self.replace_all_value(
+            &arg.auth,
+            &mut obj.game_args,
+            &classpath,
+            &obj.native_dir,
+            &arg.lang,
+            &Some(obj.assets.id.clone()),
+        );
+
+        args.extend(obj.jvm_args.clone());
+        args.push(obj.main_class.clone());
+        args.extend(obj.game_args.clone());
+
+        args
+    }
+
+    fn make_mainclass(&self) -> CoreResult<String> {
+        if let Some(arg) = &self.advance_jvm
+            && let Some(main) = &arg.main_class
+            && !main.is_empty()
+        {
+            return Ok(main.clone());
+        }
+
+        let version = version_path::get_version(&self.version)?;
+        let v2 = version.is_game_version_v2();
+
+        Ok(match self.loader {
+            LoaderType::Normal => version.main_class.clone(),
+            LoaderType::Forge | LoaderType::NeoForge => {
+                if v2 {
+                    "io.github.zekerzhayard.forgewrapper.installer.Main".to_string()
+                } else if self.loader == LoaderType::NeoForge {
+                    self.get_neoforge().unwrap().main_class.clone()
+                } else {
+                    self.get_forge().unwrap().main_class.clone()
+                }
+            }
+            LoaderType::Fabric => self.get_fabric().unwrap().main_class.clone(),
+            LoaderType::Quilt => self.get_quilt().unwrap().main_class.clone(),
+            LoaderType::OptiFine => "com.coloryr.optifinewrapper.OptifineWrapper".to_string(),
+            LoaderType::Custom => self.get_custom_loader_mainclass(),
+        })
+    }
+
+    /// 替换参数
+    pub fn replace_arg(&self, jvm: &str, arg: &Vec<String>, item: &str) -> String {
+        item.replace(names::ARG_GAME_NAME, &self.name)
+            .replace(names::ARG_GAME_UUID, &self.uuid.to_string())
+            .replace(names::ARG_GAME_DIR, &self.get_game_path().to_string_lossy())
+            .replace(
+                names::ARG_GAME_BASE_DIR,
+                &self.get_game_path().to_string_lossy(),
+            )
+            .replace(names::ARG_JAVA_LOCAL, jvm)
+            .replace(names::ARG_JAVA_ARG, &builder::build_vec_string(arg))
+    }
+}
+
+/// 辅助函数：处理运行库项
+fn do_lib_item(item: &FileItemObj, game_libs: &mut Vec<FileItemObj>) -> CoreResult<()> {
+    if !item.file.as_os_str().is_empty() {
+        game_libs.push(item.clone());
+    }
+    if let LaterRun::UnpackNative(native) = &item.later {
+        let reader = path_helper::open_read(&item.file)?;
+        mcml_downloader::later_tasks::unpack_native(native, reader)?;
+    }
+    Ok(())
+}
+
+impl GameSettingObj {
+    /// 创建常规启动内容
+    async fn make_normal_arg(
+        &self,
+        arg: &GameLaunchArg,
+        obj: &mut GameLaunchObj,
+        game_args: Vec<String>,
+    ) -> CoreResult<()> {
+        let game = self.check_version_update().await?;
+        let v2 = game.is_game_version_v2();
+
+        obj.java_versions
+            .insert(game.java_version.as_ref().unwrap().major_version);
+
+        // 处理运行库
+        {
+            let native_dir = obj.native_dir.clone();
+
+            // 构建游戏核心jar
+            obj.game_jar = game.build_game_item();
+
+            // 处理原版运行库
+            let skip_game_libs = self.loader == LoaderType::Custom
+                && self.custom_loader.as_ref().is_some_and(|c| c.remove_lib);
+
+            if !skip_game_libs {
+                let libs = game.build_game_libraries(&native_dir, None).await;
+                for item in &libs {
+                    do_lib_item(item, &mut obj.game_libs)?;
+                }
+            }
+
+            // 根据加载器处理
+            let mut loader_libs: Option<Vec<FileItemObj>> = None;
+            let mut install_libs: Option<Vec<FileItemObj>> = None;
+
+            match self.loader {
+                LoaderType::Forge | LoaderType::NeoForge => {
+                    let res = self.get_forge_libs().await?;
+                    loader_libs = Some(res.loaders);
+                    install_libs = Some(res.installs);
+
+                    if v2 {
+                        launcher_path::ready_forge_wrapper()?;
+                        if let Some(ref mut loader) = loader_libs {
+                            loader.push(launcher_path::get_forge_wrapper());
+                        }
+                    }
+                }
+                LoaderType::Fabric => {
+                    loader_libs = Some(self.get_fabric_libs().await?);
+                }
+                LoaderType::Quilt => {
+                    loader_libs = Some(self.get_quilt_libs().await?);
+                }
+                LoaderType::OptiFine => {
+                    loader_libs = Some(self.get_optifine_libs().await?);
+                    launcher_path::ready_optifine_wrapper()?;
+                    if let Some(ref mut loader) = loader_libs {
+                        loader.push(launcher_path::get_optifine_wrapper());
+                    }
+                }
+                LoaderType::Custom => {
+                    let loader_file = self.get_loader_file();
+                    if !loader_file.exists() {
+                        return Err(ErrorType::InfoNotFound);
+                    }
+                    let res = self.decode_loader_jar_with_path(&loader_file).await?;
+                    loader_libs = Some(res.libs);
+                }
+                LoaderType::Normal => {}
+            }
+
+            if let Some(loader) = loader_libs {
+                for item in &loader {
+                    if !item.file.as_os_str().is_empty() {
+                        obj.loader_libs.push(item.clone());
+                    }
+                }
+            }
+            if let Some(install) = install_libs {
+                for item in &install {
+                    if !item.file.as_os_str().is_empty() {
+                        obj.installer_libs.push(item.clone());
+                    }
+                }
+            }
+        }
+
+        // JVM参数
+        let remove_jvm = self
+            .jvm_arg
+            .as_ref()
+            .is_some_and(|j| j.remove_jvm_arg.unwrap_or(false));
+
+        if !remove_jvm {
+            if v2 {
+                obj.jvm_args.extend(make_v2_jvm_arg(&game));
+            } else {
+                obj.jvm_args
+                    .extend(V1_JVM_ARG.iter().map(|s| s.to_string()));
+            }
+            obj.jvm_args.extend(make_loader_jvm_arg(v2, &self).await);
+        }
+
+        // 创建启动器自定义JVM参数
+        let java_version = obj.java_versions.iter().next().copied().unwrap_or(8);
+        let jvm_args = self
+            .make_jvm_arg(&arg.auth, java_version as u8, arg.mixin)
+            .await?;
+
+        obj.jvm_args.extend(jvm_args);
+
+        // 游戏参数
+        let remove_game = self
+            .jvm_arg
+            .as_ref()
+            .is_some_and(|j| j.remove_game_arg.unwrap_or(false));
+
+        if !remove_game {
+            if v2 {
+                obj.game_args.extend(make_v2_game_arg(&game));
+                obj.game_args.extend(make_loader_v2_game_arg(&self));
+            } else if self.loader != LoaderType::Normal {
+                obj.game_args.extend(make_loader_v1_game_arg(&self, &game));
+            } else {
+                obj.game_args.extend(make_v1_game_arg(&game));
+            }
+        }
+
+        obj.game_args.extend(game_args);
+
+        // 资源文件
+        if let Some(asset_index) = &game.asset_index {
+            let assets = assets_path::get_index(asset_index);
+            if assets.is_err() {
+                let data = mojang_api::get_assets(&asset_index.url).await?;
+                let assets_obj = serde_json::from_slice::<AssetsObj>(&data).map_err(|err| {
+                    ErrorType::JsonError(ErrorData {
+                        error: err.to_string(),
+                    })
+                })?;
+                if assets_obj.objects.is_empty() {
+                    return Err(ErrorType::InfoNotFound);
+                }
+                assets_path::add_index(&game, &mut Cursor::new(data));
+            }
+            obj.assets = asset_index.clone();
+        }
+
+        obj.main_class = self.make_mainclass()?;
+
+        Ok(())
+    }
+
+    async fn make_custom_arg(
+        &self,
+        arg: &GameLaunchArg,
+        obj: &mut GameLaunchObj,
+        game_args: Vec<String>,
+    ) -> CoreResult<()> {
+        let mut log4j: Option<&LoggingObj> = None;
+        let custom = self.read_custom_json();
+        for (_, item) in custom.iter() {
+            // 安全log4j
+            if item.base.logging.is_some() {
+                log4j = item.base.logging.as_ref();
+            }
+
+            // 下载项
+            if !item.base.downloads.client.url.is_empty() {
+                if let Some(mc_version) = &item.minecraft_version {
+                    let file = libraries_path::get_game_file(mc_version);
+                    let source = mcml_config::read_config().http.source;
+                    obj.game_jar = FileItemObj {
+                        name: format!("{mc_version}.jar"),
+                        file,
+                        url: if source == mcml_config::config_obj::SourceLocal::Offical {
+                            item.base.downloads.client.url.clone()
+                        } else {
+                            mcml_net::url_helper::get_minecraft_client(
+                                &item.base.downloads.client.url,
+                                mc_version,
+                            )
+                        },
+                        hash: FileHash::Sha1(item.base.downloads.client.sha1.clone()),
+                        later: Default::default(),
+                    };
+                } else {
+                    let file = libraries_path::get_game_file_with_custom(&item.base.id);
+                    let mut url = item.base.downloads.client.url.clone();
+                    mcml_net::url_helper::change_source(&mut url);
+                    obj.game_jar = FileItemObj {
+                        name: format!("{}.jar", item.base.id),
+                        file,
+                        url,
+                        hash: FileHash::Sha1(item.base.downloads.client.sha1.clone()),
+                        later: Default::default(),
+                    };
+                }
+            }
+
+            // 资源文件
+            if let Some(asset_index) = &item.base.asset_index {
+                let assets = assets_path::get_index(asset_index);
+                if assets.is_err() {
+                    let data = mcml_net::mojang_api::get_assets(&asset_index.url).await?;
+                    let assets_obj = serde_json::from_slice::<AssetsObj>(&data).map_err(|err| {
+                        ErrorType::JsonError(ErrorData {
+                            error: err.to_string(),
+                        })
+                    })?;
+                    if assets_obj.objects.is_empty() {
+                        return Err(ErrorType::InfoNotFound);
+                    }
+                    assets_path::add_index(&item.base, &mut Cursor::new(data));
+                }
+                obj.assets = asset_index.clone();
+            }
+
+            // 运行库
+            if item.base.libraries.is_some() {
+                let native_dir = obj.native_dir.clone();
+                let libs = item.base.build_game_libraries(&native_dir, None).await;
+                for lib_item in &libs {
+                    do_lib_item(lib_item, &mut obj.game_libs)?;
+                }
+            }
+
+            // Java版本
+            if let Some(java_ver) = &item.base.java_version {
+                obj.java_versions.insert(java_ver.major_version);
+            }
+
+            // 主类
+            if !item.base.main_class.is_empty() {
+                obj.main_class = item.base.main_class.clone();
+            }
+
+            // 游戏参数 (V1)
+            if item.base.minecraft_arguments.is_some() {
+                obj.game_args.extend(make_v1_game_arg(&item.base));
+            }
+
+            // 启动参数 (V2)
+            if item.base.arguments.is_some() {
+                obj.game_args.extend(make_v2_game_arg(&item.base));
+                obj.jvm_args.extend(make_v2_jvm_arg(&item.base));
+            }
+
+            // MMC特性：MainJar
+            if !item.main_jar.name.is_empty() {
+                let allow = mojang::check_allow(&item.main_jar.rules);
+                if allow {
+                    let file = if item.main_jar.downloads.artifact.path.is_empty() {
+                        mcml_net::maven_utils::version_name_to_path(&item.main_jar.name)
+                    } else {
+                        item.main_jar.downloads.artifact.path.clone()
+                    };
+                    obj.game_jar = FileItemObj {
+                        name: item.main_jar.name.clone(),
+                        file: libraries_path::get_lib_dir().join(&file),
+                        url: mcml_net::url_helper::replace_minecraft_libraries(
+                            &item.main_jar.downloads.artifact.url,
+                        ),
+                        hash: FileHash::Sha1(item.main_jar.downloads.artifact.sha1.clone()),
+                        later: Default::default(),
+                    };
+                }
+            }
+
+            // MMC特性：CompatibleJavaMajors
+            if let Some(java_majors) = &item.compatible_java_majors {
+                for ver in java_majors {
+                    obj.java_versions.insert(*ver);
+                }
+            }
+
+            // MMC特性：AddJvmArgs
+            if let Some(add_jvm) = &item.add_jvm_args {
+                if obj.jvm_args.is_empty() {
+                    obj.jvm_args
+                        .extend(V1_JVM_ARG.iter().map(|s| s.to_string()));
+                }
+                obj.jvm_args.extend(add_jvm.iter().cloned());
+            }
+
+            // MMC特性：AddTweakers
+            if let Some(tweakers) = &item.add_tweakers {
+                obj.game_args.push("--tweakClass".to_string());
+                obj.game_args.extend(tweakers.iter().cloned());
+            }
+        }
+
+        // 如果没有任何JVM参数，使用V1默认
+        if obj.jvm_args.is_empty() {
+            obj.jvm_args
+                .extend(V1_JVM_ARG.iter().map(|s| s.to_string()));
+        }
+
+        // 创建启动器自定义JVM参数
+        let java_version = obj.java_versions.iter().next().copied().unwrap_or(8);
+        let jvm_args = self
+            .make_jvm_arg(&arg.auth, java_version as u8, arg.mixin)
+            .await?;
+
+        obj.jvm_args.extend(jvm_args);
+        obj.game_args.extend(game_args);
+
+        // log4j安全处理
+        if let Some(logging) = log4j {
+            let log4j_item = mojang::build_log4j_item(logging);
+            let arg_str = logging
+                .client
+                .argument
+                .replace("${path}", &log4j_item.file.to_string_lossy());
+            obj.log4j_xml = Some(log4j_item);
+            obj.jvm_args.push(arg_str);
+        }
+
+        Ok(())
+    }
+
+    /// 创建游戏完整启动内容
+    pub async fn make_game_launch_obj(&self, arg: &GameLaunchArg) -> CoreResult<GameLaunchObj> {
+        let mut obj = GameLaunchObj::new();
+
+        // 设置本地库路径
+        obj.native_dir = libraries_path::get_native_dir(Some(&self.version));
+
+        let is_custom_json = self.custom_loader.as_ref().is_some_and(|c| c.custom_json);
+
+        // 提前计算两个分支共用的参数
+        obj.use_asm = self
+            .jvm_arg
+            .as_ref()
+            .and_then(|j| j.colorasm)
+            .unwrap_or_else(|| mcml_config::read_config().jvm_arg.colorasm.unwrap_or(false));
+        let game_args = self.make_game_arg(&arg.auto);
+
+        if !is_custom_json {
+            self.make_normal_arg(arg, &mut obj, game_args).await?;
+        } else {
+            self.make_custom_arg(arg, &mut obj, game_args).await?;
+        }
+
+        Ok(obj)
     }
 }

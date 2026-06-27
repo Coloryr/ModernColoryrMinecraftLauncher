@@ -132,8 +132,3 @@ pub struct XBoxLiveRes {
     pub xbl_uhs: String,
 }
 
-impl XBoxLiveRes {
-    pub fn new(xbl_token: String, xbl_uhs: String) -> Self {
-        XBoxLiveRes { xbl_token, xbl_uhs }
-    }
-}

@@ -1,28 +1,42 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fs,
     path::{Path, PathBuf},
-    sync::{Arc, OnceLock, RwLock},
+    sync::{Arc, LazyLock, OnceLock, RwLock},
 };
 
-use mcml_base::{ArchEnum, events::core_jvm_change, get_system_info};
+use mcml_base::{ArchEnum, events::core_jvm_change};
 use mcml_config::config_obj::JvmConfigObj;
 use mcml_names::names;
 
-use crate::java_info_obj::JavaInfoObj;
-
 pub mod java_helper;
-pub mod java_info_obj;
+
+/// Java信息
+pub struct JavaInfoObj {
+    /// 名字
+    pub name: String,
+    /// 名字
+    pub path: PathBuf,
+    /// 版本号
+    pub version: String,
+    /// 主版本号
+    pub major_version: i32,
+    /// Java类型
+    pub java_type: String,
+    /// 进制
+    pub arch: ArchEnum,
+}
 
 static DIR: OnceLock<PathBuf> = OnceLock::new();
 static JAVA_DIR: OnceLock<PathBuf> = OnceLock::new();
 
-static JVMS: OnceLock<RwLock<HashMap<String, Arc<JavaInfoObj>>>> = OnceLock::new();
+static JVMS: LazyLock<RwLock<HashMap<String, Arc<JavaInfoObj>>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
 
 /// 初始化
 /// - `dir`:  运行的路径
-pub fn init(dir: &PathBuf) {
-    let dir = DIR.get_or_init(|| dir.clone());
+pub fn init<P: AsRef<Path>>(dir: P) {
+    let dir = DIR.get_or_init(|| dir.as_ref().to_path_buf());
     let dir = JAVA_DIR.get_or_init(|| dir.join(names::JAVA_DIR));
     if !dir.is_dir() || !dir.exists() {
         fs::create_dir(dir).unwrap();
@@ -36,16 +50,16 @@ pub fn init(dir: &PathBuf) {
 
 /// 获取Java信息
 /// - `name`: 名字
-pub fn get_info(name: &String) -> Option<Arc<JavaInfoObj>> {
-    let list = JVMS.get()?.read().ok()?;
-    let item = list.get(name)?;
+pub fn get_java_info(key: &str) -> Option<Arc<JavaInfoObj>> {
+    let list = JVMS.read().ok()?;
+    let item = list.get(key)?;
     Some(item.clone())
 }
 
 /// 删除Java
 /// - `name`: 名字
-pub fn remove(name: &String) {
-    let mut list = JVMS.get().unwrap().write().unwrap();
+pub fn remove(name: &str) {
+    let mut list = JVMS.write().unwrap();
     if list.remove(name).is_some() {
         core_jvm_change::invoke_jvm_change();
     }
@@ -65,7 +79,7 @@ pub fn remove(name: &String) {
 
 /// 删除所有Java
 pub fn remove_all() {
-    let mut list = JVMS.get().unwrap().write().unwrap();
+    let mut list = JVMS.write().unwrap();
 
     list.clear();
     let mut config = mcml_config::write_config();
@@ -92,11 +106,11 @@ pub fn add_item(name: String, file: String) -> Option<String> {
         Path::new(&local).to_path_buf()
     };
 
-    let info = java_helper::get_java_info(&path);
+    let info = java_helper::test_java(&path);
     match info {
         None => None,
         Some(info) => {
-            let mut list = JVMS.get().unwrap().write().unwrap();
+            let mut list = JVMS.write().unwrap();
             list.insert(name.clone(), Arc::new(info));
 
             core_jvm_change::invoke_jvm_change();
@@ -120,7 +134,7 @@ fn add_list(list: &Vec<JvmConfigObj>) {
     let dir = DIR.get().unwrap().clone();
     let list_cloned = list.clone();
 
-    let mut list1 = JVMS.get().unwrap().write().unwrap();
+    let mut list1 = JVMS.write().unwrap();
     list1.clear();
 
     tokio::task::spawn(async move {
@@ -133,8 +147,8 @@ fn add_list(list: &Vec<JvmConfigObj>) {
                 PathBuf::from(path)
             };
 
-            let info = java_helper::get_java_info(&path);
-            let mut list1 = JVMS.get().unwrap().write().unwrap();
+            let info = java_helper::test_java(&path);
+            let mut list1 = JVMS.write().unwrap();
             list1.remove(&item.name);
 
             if info.is_none() {
@@ -142,7 +156,7 @@ fn add_list(list: &Vec<JvmConfigObj>) {
                     item.name.clone(),
                     Arc::new(JavaInfoObj {
                         name: item.name.clone(),
-                        path: item.local.clone(),
+                        path,
                         version: String::new(),
                         major_version: -1,
                         java_type: String::new(),
@@ -159,15 +173,7 @@ fn add_list(list: &Vec<JvmConfigObj>) {
         }
 
         if empty {
-            let list2 = java_helper::find_java();
-            if list2.is_some() {
-                let list2 = list2.unwrap();
-                let mut list1 = JVMS.get().unwrap().write().unwrap();
-
-                for (_, item) in list2.into_iter().enumerate() {
-                    list1.insert(item.name.clone(), Arc::new(item));
-                }
-            }
+            scan_java();
         }
     });
 }
@@ -175,10 +181,9 @@ fn add_list(list: &Vec<JvmConfigObj>) {
 /// 查找对应主版本的Java
 /// - `version`: 主版本
 /// - `over`: 是否允许获取高版本
-pub fn find_java(version: i32, over: bool) -> Option<Arc<JavaInfoObj>> {
-    let list = JVMS.get()?.read().ok()?;
-
-    let system_arch = get_system_info().system_arch;
+pub fn get_java(version: i32, over: bool) -> Option<Arc<JavaInfoObj>> {
+    let list = JVMS.read().ok()?;
+    let system_arch = mcml_base::get_system_info().system_arch;
 
     let mut filtered: Vec<&Arc<JavaInfoObj>> = list
         .iter()
@@ -196,4 +201,56 @@ pub fn find_java(version: i32, over: bool) -> Option<Arc<JavaInfoObj>> {
     filtered.sort_by(|a, b| b.major_version.cmp(&a.major_version));
 
     filtered.first().map(|&info| info.clone())
+}
+
+/// 获取所有Java
+pub fn get_all_java() -> Vec<Arc<JavaInfoObj>> {
+    let read = JVMS.read().unwrap();
+    let mut vec = Vec::new();
+
+    for (_, value) in read.iter() {
+        vec.push(value.clone());
+    }
+
+    vec
+}
+
+/// 从注册表或者标准路径中查找java列表
+fn find_java() -> Option<Vec<JavaInfoObj>> {
+    let mut java_paths = HashSet::new();
+
+    java_helper::find_java_inner(&mut java_paths);
+
+    if java_paths.is_empty() {
+        return None;
+    }
+
+    // 获取详细信息
+    let mut java_list = Vec::new();
+    for path in java_paths {
+        if let Some(info) = java_helper::test_java(&path) {
+            java_list.push(info);
+        }
+    }
+
+    // 去重（基于路径）
+    java_list.sort_by(|a, b| a.path.cmp(&b.path));
+    java_list.dedup_by(|a, b| a.path == b.path);
+
+    if java_list.is_empty() {
+        None
+    } else {
+        Some(java_list)
+    }
+}
+
+/// 扫描Java并添加到列表中
+pub fn scan_java() {
+    if let Some(list) = find_java() {
+        let mut list1 = JVMS.write().unwrap();
+
+        for (_, item) in list.into_iter().enumerate() {
+            list1.insert(item.name.clone(), Arc::new(item));
+        }
+    }
 }

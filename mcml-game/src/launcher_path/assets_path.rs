@@ -1,6 +1,6 @@
 /// 游戏资源路径
 use std::{
-    fs::{self, File},
+    fs::File,
     io::Cursor,
     path::{Path, PathBuf},
     sync::OnceLock,

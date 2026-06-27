@@ -68,6 +68,18 @@ pub struct FileItemObj {
     pub later: LaterRun,
 }
 
+impl Default for FileItemObj {
+    fn default() -> Self {
+        Self {
+            name: Default::default(),
+            file: Default::default(),
+            url: Default::default(),
+            hash: Default::default(),
+            later: Default::default(),
+        }
+    }
+}
+
 impl FileItemObj {
     /// 检查文件是否正常
     pub fn check_hash(&self) -> bool {

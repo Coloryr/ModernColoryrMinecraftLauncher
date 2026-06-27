@@ -1,3 +1,4 @@
+use chrono::Local;
 /// 旧版账户验证
 use mcml_names::i18_items::error_type::{CoreResult, ErrorType};
 use reqwest::StatusCode;
@@ -123,7 +124,7 @@ pub async fn authenticate(
 /// - `server`: 服务器地址
 /// - `login`: 保存的账户
 /// - `select`: 是否为选择模式
-pub async fn refresh(server: &String, login: &LoginObj, select: bool) -> CoreResult<LoginObj> {
+pub async fn refresh(server: &String, login: &mut LoginObj, select: bool) -> CoreResult<()> {
     let obj = if select {
         RefreshObj {
             access_token: login.access_token.clone(),
@@ -158,20 +159,20 @@ pub async fn refresh(server: &String, login: &LoginObj, select: bool) -> CoreRes
     } else if obj.selected_profile.is_none() && !select {
         Err(ErrorType::AuthRefreshNoProfile)
     } else if obj.selected_profile.is_some() {
-        let temp = obj.selected_profile.unwrap();
-        Ok(LoginObj::new(
-            temp.name,
-            temp.id,
-            obj.access_token,
-            obj.client_token,
-        ))
+        let select = obj.selected_profile.unwrap();
+        login.user_name = select.name;
+        login.uuid = select.id;
+        login.access_token = obj.access_token;
+        login.client_token = obj.client_token;
+        login.last_login = Local::now().fixed_offset();
+
+        Ok(())
     } else {
-        Ok(LoginObj::new(
-            login.user_name.clone(),
-            login.uuid.clone(),
-            obj.access_token,
-            obj.client_token,
-        ))
+        login.access_token = obj.access_token;
+        login.client_token = obj.client_token;
+        login.last_login = Local::now().fixed_offset();
+
+        Ok(())
     }
 }
 

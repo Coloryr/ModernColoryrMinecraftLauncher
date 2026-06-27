@@ -1,3 +1,4 @@
+use mcml_base::file_item::FileHash;
 use mcml_config::config_obj::SourceLocal;
 use mcml_names::names;
 
@@ -57,5 +58,24 @@ pub async fn test_sha1(dir: &str) -> Option<UrlSha1Obj> {
         })
     } else {
         None
+    }
+}
+
+/// 尝试获取校验值
+pub async fn try_get_hash(url: &str) -> FileHash {
+    let sha1_url = url.to_string() + names::SHA1_EXT;
+    let sha256_url = url.to_string() + names::SHA256_EXT;
+    let sha512_url = url.to_string() + names::SHA512_EXT;
+
+    let client = crate::get_login_client();
+
+    if let Ok(data) = client.get_text(&sha256_url).await {
+        FileHash::Sha256(data)
+    } else if let Ok(data) = client.get_text(&sha512_url).await {
+        FileHash::Sha512(data)
+    } else if let Ok(data) = client.get_text(&sha1_url).await {
+        FileHash::Sha1(data)
+    } else {
+        FileHash::None
     }
 }

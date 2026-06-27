@@ -145,7 +145,7 @@ impl Default for GameArgumentsObj {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(default)]
 pub struct GameAssetIndexObj {
     pub id: String,
