@@ -707,7 +707,7 @@ impl GameSettingObj {
     }
 
     /// 替换参数
-    pub fn replace_arg(&self, jvm: &str, arg: &Vec<String>, item: &str) -> String {
+    pub fn replace_arg(&self, jvm: &Path, arg: &Vec<String>, item: &str) -> String {
         item.replace(names::ARG_GAME_NAME, &self.name)
             .replace(names::ARG_GAME_UUID, &self.uuid.to_string())
             .replace(names::ARG_GAME_DIR, &self.get_game_path().to_string_lossy())
@@ -715,7 +715,7 @@ impl GameSettingObj {
                 names::ARG_GAME_BASE_DIR,
                 &self.get_game_path().to_string_lossy(),
             )
-            .replace(names::ARG_JAVA_LOCAL, jvm)
+            .replace(names::ARG_JAVA_LOCAL, &jvm.to_string_lossy())
             .replace(names::ARG_JAVA_ARG, &builder::build_vec_string(arg))
     }
 }

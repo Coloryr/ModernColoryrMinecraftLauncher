@@ -50,10 +50,7 @@ pub fn start<P: AsRef<Path>>(local: P) {
         Err(e) => {
             panic!(
                 "{}",
-                i18::get_panic(PanicType::LogOpenFail(
-                    log_path.display().to_string(),
-                    e.to_string()
-                ))
+                PanicType::LogOpenFail(log_path.display().to_string(), e.to_string())
             );
         }
     };

@@ -26,7 +26,7 @@ use std::{
     sync::{OnceLock, RwLock},
 };
 
-use mcml_base::events::core_stop;
+use mcml_base::events::Events;
 use mcml_log;
 use mcml_names::{i18, i18_items::info_type::InfoType, i18_items::panic_type::PanicType};
 
@@ -38,6 +38,21 @@ pub static CORE_ARG: OnceLock<CoreInitObj> = OnceLock::new();
 pub static NEW_START: RwLock<bool> = RwLock::new(false);
 
 static STATE: RwLock<bool> = RwLock::new(false);
+
+type CoreStopHandler = Box<dyn Fn() + Send + Sync + 'static>;
+
+static CORE_STOP_HANDLERS: Events<CoreStopHandler> = Events::new();
+
+pub fn add_core_stop_handler<F>(handler: F)
+where
+    F: Fn() + Send + Sync + 'static,
+{
+    CORE_STOP_HANDLERS.add(Box::new(handler));
+}
+
+pub fn invoke_core_stop() {
+    CORE_STOP_HANDLERS.invoke();
+}
 
 pub fn get_state() -> bool {
     return *STATE.read().unwrap();
@@ -73,9 +88,9 @@ pub fn init(arg: CoreInitObj) {
     mcml_net::init();
     mcml_config::init(dir);
 
-    core_stop::add_stop_handler(|| mcml_config::config_save::stop());
-    core_stop::add_stop_handler(|| mcml_downloader::stop());
-    core_stop::add_stop_handler(|| mcml_log::stop());
+    add_core_stop_handler(|| mcml_config::config_save::stop());
+    add_core_stop_handler(|| mcml_downloader::stop());
+    add_core_stop_handler(|| mcml_log::stop());
 
     *STATE.write().unwrap() = true;
 }
@@ -83,7 +98,7 @@ pub fn init(arg: CoreInitObj) {
 pub fn stop() {
     mcml_log::info(String::from("MCML stop"));
 
-    core_stop::invoke_stop();
+    invoke_core_stop();
 
     *STATE.write().unwrap() = false;
 }

@@ -22,7 +22,7 @@ pub enum ArchiveType {
 
 /// 压缩模式
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) enum TarMode {
+pub enum TarMode {
     Gz,
     Xz,
 }

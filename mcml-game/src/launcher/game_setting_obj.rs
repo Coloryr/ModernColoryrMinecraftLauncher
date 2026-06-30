@@ -9,7 +9,7 @@ use crate::{
 };
 
 /// 加入服务器设置
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(default)]
 pub struct ServerObj {
     /// 服务器地址
@@ -30,7 +30,7 @@ impl Default for ServerObj {
 }
 
 /// 端口代理设置
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(default)]
 pub struct ProxyHostObj {
     /// 服务器地址
@@ -60,7 +60,7 @@ impl Default for ProxyHostObj {
 }
 
 /// 高级Jvm启动参数
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(default)]
 pub struct AdvanceJvmObj {
     /// 自定义mainclass
@@ -81,7 +81,7 @@ impl Default for AdvanceJvmObj {
 }
 
 /// 自定义模组加载器设置
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(default)]
 pub struct CustomLoaderObj {
     /// 后加载原版运行库
@@ -110,7 +110,7 @@ impl Default for CustomLoaderObj {
 }
 
 /// 游戏实例配置
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(default)]
 pub struct GameSettingObj {
     /// 实例标识

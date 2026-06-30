@@ -74,14 +74,14 @@ pub struct GameLogItemObj {
 }
 
 /// 游戏运行日志处理
-pub struct GameRuntimeLog {
+pub struct InstanceRuntimeLog {
     /// 日志列表
     pub logs: RwLock<VecDeque<GameLogItemObj>>,
     /// 日志文件，如果是打开日志文件时
     pub file: Option<PathBuf>,
 }
 
-impl GameRuntimeLog {
+impl InstanceRuntimeLog {
     pub fn new() -> Self {
         Self {
             logs: RwLock::new(VecDeque::new()),

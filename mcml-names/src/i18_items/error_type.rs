@@ -120,6 +120,8 @@ pub enum ErrorType {
     TaskCancel,
     /// 任务执行超时
     TaskTimeout,
+    /// 任务出错
+    TaskError(ErrorData),
 
     GetVersionMetaFail,
 
