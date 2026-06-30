@@ -1,17 +1,16 @@
 use std::{
     collections::HashMap,
-    fs,
+    fs::{self, DirEntry},
     path::{Path, PathBuf},
-    sync::{LazyLock, OnceLock, RwLock},
+    sync::OnceLock,
 };
 
-use mcml_base::path_helper::{self, open_read};
+use mcml_base::path_helper::{self};
 use mcml_config::config_save;
 use mcml_names::{
     i18_items::error_type::{CoreResult, ErrorType, FileSystemErrorData},
     names, uuids,
 };
-use uuid::Uuid;
 
 use crate::launcher::{
     custom_game_arg_obj::CustomGameArgObj, game_setting_obj::GameSettingObj,
@@ -19,9 +18,6 @@ use crate::launcher::{
 };
 
 static BASE_DIR: OnceLock<PathBuf> = OnceLock::new();
-
-static INSTANCES: LazyLock<RwLock<HashMap<Uuid, GameSettingObj>>> =
-    LazyLock::new(|| RwLock::new(HashMap::new()));
 
 /// 初始化版本路径
 /// - `dir`: 运行路径
@@ -32,12 +28,16 @@ pub(crate) fn init<P: AsRef<Path>>(dir: P) -> CoreResult<()> {
         path_helper::create_dir_all(&dir)?;
     }
 
-    load_instance()?;
-
     Ok(())
 }
 
-fn load_instance() -> CoreResult<()> {
+/// 获取实例目录
+pub fn get_instance_dir() -> PathBuf {
+    BASE_DIR.get().unwrap().clone()
+}
+
+/// 读取所有实例
+pub(crate) fn load_instance_dir() -> CoreResult<Vec<GameSettingObj>> {
     let dir = BASE_DIR.get().unwrap();
     let dirs = fs::read_dir(dir).map_err(|err| {
         ErrorType::FileSystemError(FileSystemErrorData {
@@ -46,33 +46,49 @@ fn load_instance() -> CoreResult<()> {
         })
     })?;
 
+    let mut list = Vec::new();
+
     for item in dirs {
-        if let Ok(dir) = item {
-            let file = dir.path();
-            if !file.is_dir() {
-                continue;
-            }
-
-            let config = file.join(names::GAME_FILE);
-            if !config.exists() || !config.is_file() {
-                continue;
-            }
-
-            let stream = path_helper::open_read(&config)?;
-            if let Ok(mut obj) = serde_json::from_reader::<_, GameSettingObj>(stream) {
-                let path = dir.file_name();
-                let path = path.to_string_lossy();
-                if !path.eq(&obj.dir) {
-                    obj.dir = path.to_string();
-                    obj.save();
-                }
-
-                INSTANCES.write().unwrap().insert(obj.uuid, obj);
-            }
+        if let Ok(dir) = item
+            && let Some(instance) = load_instance(dir.path())
+        {
+            list.push(instance);
         }
     }
 
-    Ok(())
+    Ok(list)
+}
+
+/// 从文件夹路径加载实例
+/// - `dir`: 路径
+pub(crate) fn load_instance<P: AsRef<Path>>(dir: P) -> Option<GameSettingObj> {
+    let file = dir.as_ref();
+    if !file.is_dir() {
+        return None;
+    }
+
+    let config = file.join(names::GAME_FILE);
+    if !config.exists() || !config.is_file() {
+        return None;
+    }
+
+    let stream = path_helper::open_read(&config);
+    if stream.is_err() {
+        return None;
+    }
+    let stream = stream.unwrap();
+    if let Ok(mut obj) = serde_json::from_reader::<_, GameSettingObj>(stream) {
+        let path = file.file_name().unwrap_or_default();
+        let path = path.to_string_lossy();
+        if !path.eq(&obj.dir) {
+            obj.dir = path.to_string();
+            obj.save();
+        }
+
+        Some(obj)
+    } else {
+        None
+    }
 }
 
 impl GameSettingObj {
@@ -327,7 +343,7 @@ impl GameSettingObj {
         let file = self.get_online_info_file();
         if file.exists()
             && file.is_file()
-            && let Ok(stream) = open_read(&file)
+            && let Ok(stream) = path_helper::open_read(&file)
         {
             let json = serde_json::from_reader::<_, HashMap<String, FileOnlineInfoObj>>(stream);
             if let Ok(data) = json {

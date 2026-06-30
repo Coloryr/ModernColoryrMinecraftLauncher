@@ -25,4 +25,7 @@ tokio.workspace = true
 tokio-util.workspace = true
 regex.workspace = true
 soft-canonicalize.workspace = true
+encoding_rs.workspace = true
 async-trait.workspace = true
+encoding_rs_io.workspace = true
+notify.workspace = true

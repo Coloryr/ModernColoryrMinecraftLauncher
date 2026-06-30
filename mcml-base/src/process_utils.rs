@@ -1,17 +1,47 @@
 use std::{
     collections::HashMap,
+    io::{self, Read},
     path::Path,
     process::{Child, Command, Stdio},
 };
 
 use mcml_names::i18_items::error_type::{CoreResult, ErrorData, ErrorType};
 
+/// 进程输出流，统一普通子进程的输出管道和提权进程的命名管道
+pub enum OutputStream {
+    /// 普通子进程的 stdout
+    Stdout(std::process::ChildStdout),
+    /// 普通子进程的 stderr
+    Stderr(std::process::ChildStderr),
+    /// 提权进程通过命名管道重定向的输出（Windows）
+    #[cfg(target_os = "windows")]
+    File(std::fs::File),
+}
+
+impl Read for OutputStream {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        match self {
+            OutputStream::Stdout(s) => s.read(buf),
+            OutputStream::Stderr(s) => s.read(buf),
+            #[cfg(target_os = "windows")]
+            OutputStream::File(f) => f.read(buf),
+        }
+    }
+}
+
 /// 进程启动结果
-pub enum LaunchResult {
-    /// 正常启动，返回进程句柄，可读取 stdout/stderr 并等待退出
-    Normal(Child),
-    /// 提权启动，无进程句柄（已通过平台机制独立启动）
-    Elevated,
+///
+/// 统一普通启动和提权启动的返回结构：
+/// - `child`: 进程句柄（普通启动=目标进程，提权启动=启动器进程）
+/// - `is_admin`: 是否为提权启动（通过外部启动器启动，非直接子进程）
+/// - `pid`: 目标进程 PID（仅 Windows 提权时用于 taskkill 强制结束）
+/// - `stdout` / `stderr`: 目标进程输出流（普通启动=管道，提权=命名管道/pkexec转发）
+pub struct LaunchResult {
+    pub child: Child,
+    pub is_admin: bool,
+    pub pid: Option<u32>,
+    pub stdout: Option<OutputStream>,
+    pub stderr: Option<OutputStream>,
 }
 
 /// 检查当前进程是否以管理员/root 权限运行
@@ -36,24 +66,22 @@ pub fn is_run_as_admin() -> bool {
 
 /// 启动进程
 ///
-/// 对应 C# 的 `ProcessUtils.Launch(Process, bool)`。
-///
 /// - `path`: 可执行文件路径
 /// - `args`: 程序参数
 /// - `env`: 环境变量
 /// - `working_dir`: 工作目录
 /// - `admin`: 是否请求管理员权限
-pub fn launch(
-    path: &Path,
-    args: &[String],
-    env: &HashMap<String, String>,
-    working_dir: &Path,
+pub fn launch<P: AsRef<Path>>(
+    path: P,
+    args: Vec<String>,
+    env: HashMap<String, String>,
+    working_dir: P,
     admin: bool,
 ) -> CoreResult<LaunchResult> {
     if admin && !is_run_as_admin() {
         launch_with_elevation(path, args, env, working_dir)
     } else {
-        let mut cmd = Command::new(path);
+        let mut cmd = Command::new(path.as_ref());
         cmd.current_dir(working_dir)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
@@ -66,60 +94,46 @@ pub fn launch(
             cmd.arg(arg);
         }
 
-        cmd.spawn()
-            .map_err(|err| {
-                ErrorType::ProcessError(ErrorData {
-                    error: err.to_string(),
-                })
+        let mut child = cmd.spawn().map_err(|err| {
+            ErrorType::ProcessError(ErrorData {
+                error: err.to_string(),
             })
-            .map(LaunchResult::Normal)
+        })?;
+        let stdout = child.stdout.take().map(OutputStream::Stdout);
+        let stderr = child.stderr.take().map(OutputStream::Stderr);
+
+        Ok(LaunchResult {
+            child,
+            is_admin: false,
+            pid: None,
+            stdout,
+            stderr,
+        })
     }
 }
 
 /// 以管理员权限启动进程（平台特定实现）
 ///
-/// 提权启动无法重定向 stdout/stderr，因此返回 `LaunchResult::Elevated`。
-fn launch_with_elevation(
-    path: &Path,
-    args: &[String],
-    env: &HashMap<String, String>,
-    working_dir: &Path,
+/// Windows: 使用命名管道捕获提权进程的 stdout/stderr，PowerShell Wait-Process 保持存活
+/// macOS: 使用 osascript 提权，启动器在目标进程运行期间保持存活
+/// Linux: 使用 pkexec 提权，启动器在目标进程运行期间保持存活
+fn launch_with_elevation<P: AsRef<Path>>(
+    path: P,
+    args: Vec<String>,
+    env: HashMap<String, String>,
+    working_dir: P,
 ) -> CoreResult<LaunchResult> {
     #[cfg(target_os = "windows")]
     {
-        // Windows: 使用 PowerShell Start-Process -Verb RunAs 提权
-
-        use mcml_names::i18_items::error_type::{ErrorData, ErrorType};
-        let mut ps_cmd = format!(
-            "Start-Process -FilePath '{}' -WorkingDirectory '{}' -Verb RunAs",
-            path.display(),
-            working_dir.display()
-        );
-        for arg in args {
-            ps_cmd.push_str(&format!(" -ArgumentList '{}'", arg));
-        }
-
-        let mut cmd = Command::new("powershell");
-        cmd.arg("-Command").arg(ps_cmd);
-
-        for (key, value) in env {
-            cmd.env(key, value);
-        }
-
-        cmd.stdout(Stdio::null()).stderr(Stdio::null());
-        cmd.spawn().map_err(|err| {
-            ErrorType::ProcessError(ErrorData {
-                error: err.to_string(),
-            })
-        })?;
-        Ok(LaunchResult::Elevated)
+        launch_with_elevation_windows(path, args, env, working_dir)
     }
 
     #[cfg(target_os = "macos")]
     {
+        // osascript 的 do shell script 只返回 stdout；用 2>&1 将 stderr 合并到 stdout
         let script = format!(
-            "do shell script \"'{}' {}\" with administrator privileges",
-            path.display(),
+            "do shell script \"'{}' {} 2>&1\" with administrator privileges",
+            path.as_ref().display(),
             args.iter()
                 .map(|a| format!("\\\"{}\\\"", a))
                 .collect::<Vec<_>>()
@@ -134,16 +148,28 @@ fn launch_with_elevation(
             cmd.env(key, value);
         }
 
-        cmd.stdout(Stdio::null()).stderr(Stdio::null());
-        cmd.spawn()?;
-        Ok(LaunchResult::Elevated)
+        cmd.stdout(Stdio::piped()).stderr(Stdio::null());
+        let mut child = cmd.spawn().map_err(|err| {
+            ErrorType::ProcessError(ErrorData {
+                error: err.to_string(),
+            })
+        })?;
+        let stdout = child.stdout.take().map(OutputStream::Stdout);
+        Ok(LaunchResult {
+            child,
+            is_admin: true,
+            pid: None,
+            stdout,
+            stderr: None, // stderr 已合并到 stdout（2>&1）
+        })
     }
 
     #[cfg(target_os = "linux")]
     {
+        // pkexec 作为目标进程的父进程，直接转发 stdin/stdout/stderr
         let mut cmd = Command::new("pkexec");
-        cmd.arg(path);
-        for arg in args {
+        cmd.arg(path.as_ref());
+        for arg in &args {
             cmd.arg(arg);
         }
         cmd.current_dir(working_dir);
@@ -152,18 +178,304 @@ fn launch_with_elevation(
             cmd.env(key, value);
         }
 
-        cmd.stdout(Stdio::null()).stderr(Stdio::null());
-        cmd.spawn()?;
-        Ok(LaunchResult::Elevated)
+        cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+        let mut child = cmd.spawn().map_err(|err| {
+            ErrorType::ProcessError(ErrorData {
+                error: err.to_string(),
+            })
+        })?;
+        let stdout = child.stdout.take().map(OutputStream::Stdout);
+        let stderr = child.stderr.take().map(OutputStream::Stderr);
+        Ok(LaunchResult {
+            child,
+            is_admin: true,
+            pid: None,
+            stdout,
+            stderr,
+        })
     }
 
     #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
     {
-        Err(std::io::Error::new(
-            std::io::ErrorKind::Unsupported,
-            "Admin elevation not supported on this platform",
-        ))
+        Err(ErrorType::ProcessError(ErrorData {
+            error: "Admin elevation not supported on this platform".to_string(),
+        }))
     }
+}
+
+// ============================================================================
+// Windows 提权 + 命名管道实现
+// ============================================================================
+
+#[cfg(target_os = "windows")]
+pub fn launch_with_elevation_windows<P: AsRef<Path>>(
+    path: P,
+    args: Vec<String>,
+    env: HashMap<String, String>,
+    working_dir: P,
+) -> CoreResult<LaunchResult> {
+    use std::io::{BufRead, BufReader};
+    use std::os::windows::io::{FromRawHandle, OwnedHandle};
+    use std::time::Duration;
+
+    use mcml_names::i18_items::error_type::{ErrorData, ErrorType};
+
+    let id = uuid::Uuid::new_v4().to_string().replace('-', "");
+    let stdout_pipe_name = format!("mcml_stdout_{}", id);
+    let stderr_pipe_name = format!("mcml_stderr_{}", id);
+
+    // 创建命名管道（服务器端）
+    let stdout_handle = create_named_pipe(&stdout_pipe_name)?;
+    let stderr_handle = create_named_pipe(&stderr_pipe_name)?;
+    let stdout_owned = unsafe { OwnedHandle::from_raw_handle(stdout_handle) };
+    let stderr_owned = unsafe { OwnedHandle::from_raw_handle(stderr_handle) };
+
+    // 构建目标进程参数（在 PowerShell 中作为字符串传递给 $psi.Arguments）
+    let arg_str = args
+        .iter()
+        .map(|a| {
+            // 空格参数用双引号包裹，内部双引号转义
+            if a.contains(' ') || a.contains('"') {
+                format!("\"{}\"", a.replace('"', "\"\"\""))
+            } else {
+                a.clone()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    // 环境变量
+    let mut env_block = String::new();
+    for (k, v) in &env {
+        env_block.push_str(&format!("$psi.Environment[\"{}\"]=\"{}\";", k, v));
+    }
+
+    // 提权 helper 脚本：在新进程中运行，负责连接管道 → 启动目标 → 转发输出
+    let helper_script = format!(
+        "$op=New-Object System.IO.Pipes.NamedPipeClientStream('.','{stdout}',[System.IO.Pipes.PipeDirection]::Out);\
+         $ep=New-Object System.IO.Pipes.NamedPipeClientStream('.','{stderr}',[System.IO.Pipes.PipeDirection]::Out);\
+         $op.Connect(10000);$ep.Connect(10000);\
+         $si=New-Object System.Diagnostics.ProcessStartInfo;\
+         $si.FileName='{path}';\
+         $si.Arguments='{args}';\
+         $si.WorkingDirectory='{dir}';\
+         $si.UseShellExecute=$false;$si.RedirectStandardOutput=$true;$si.RedirectStandardError=$true;\
+         {env}\
+         $p=[System.Diagnostics.Process]::Start($si);\
+         $buf=[byte[]]::new(4096);\
+         while($true){{$n=$p.StandardOutput.BaseStream.Read($buf,0,4096);if($n -gt 0){{$op.Write($buf,0,$n)}};if($n -eq 0 -and $p.HasExited){{break}}}};\
+         while($true){{$n=$p.StandardError.BaseStream.Read($buf,0,4096);if($n -gt 0){{$ep.Write($buf,0,$n)}};if($n -eq 0 -and $p.HasExited){{break}}}};\
+         $op.Close();$ep.Close()",
+        stdout = stdout_pipe_name,
+        stderr = stderr_pipe_name,
+        path = path.as_ref().display(),
+        args = arg_str,
+        dir = working_dir.as_ref().display(),
+        env = env_block,
+    );
+
+    // 初始 PowerShell：启动提权 helper → 输出 helper PID → 等待 helper 退出
+    let ps_cmd = format!(
+        "$h=Start-Process -FilePath powershell -Verb RunAs -PassThru \
+         -ArgumentList '-NoProfile','-Command','{helper}'; \
+         Write-Output $h.Id; \
+         $h.WaitForExit()",
+        helper = helper_script.replace('\'', "''")
+    );
+
+    let mut cmd = Command::new("powershell");
+    cmd.arg("-Command").arg(&ps_cmd);
+    cmd.stdout(Stdio::piped()).stderr(Stdio::null());
+
+    let mut launcher = cmd.spawn().map_err(|err| {
+        ErrorType::ProcessError(ErrorData {
+            error: err.to_string(),
+        })
+    })?;
+
+    // 从初始 PowerShell stdout 读取 helper 的 PID
+    let pid = launcher
+        .stdout
+        .take()
+        .and_then(|stdout| {
+            let mut reader = BufReader::new(stdout);
+            let mut line = String::new();
+            reader.read_line(&mut line).ok().map(|_| line)
+        })
+        .and_then(|line| line.trim().parse::<u32>().ok());
+
+    // 等待 helper PowerShell 连接管道
+    let (tx_stdout, rx_stdout) = std::sync::mpsc::channel();
+    let (tx_stderr, rx_stderr) = std::sync::mpsc::channel();
+
+    std::thread::spawn(move || {
+        tx_stdout
+            .send(connect_named_pipe_with_timeout(stdout_owned, 10_000))
+            .ok();
+    });
+    std::thread::spawn(move || {
+        tx_stderr
+            .send(connect_named_pipe_with_timeout(stderr_owned, 10_000))
+            .ok();
+    });
+
+    let mut stdout: Option<OutputStream> = None;
+    let mut stderr: Option<OutputStream> = None;
+    let deadline = std::time::Instant::now() + Duration::from_secs(15);
+
+    while std::time::Instant::now() < deadline {
+        if launcher.try_wait().ok().flatten().is_some() {
+            break;
+        }
+        if stdout.is_none() {
+            if let Ok(Ok(file)) = rx_stdout.try_recv() {
+                stdout = Some(OutputStream::File(file));
+            }
+        }
+        if stderr.is_none() {
+            if let Ok(Ok(file)) = rx_stderr.try_recv() {
+                stderr = Some(OutputStream::File(file));
+            }
+        }
+        if stdout.is_some() && stderr.is_some() {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+
+    Ok(LaunchResult {
+        child: launcher,
+        is_admin: true,
+        pid,
+        stdout,
+        stderr,
+    })
+}
+
+// 命名管道相关常量（避免 windows-sys 模块名称差异）
+#[cfg(target_os = "windows")]
+const FILE_FLAG_OVERLAPPED: u32 = 0x40000000;
+#[cfg(target_os = "windows")]
+const PIPE_ACCESS_INBOUND: u32 = 0x00000001;
+#[cfg(target_os = "windows")]
+const PIPE_TYPE_BYTE: u32 = 0x00000000;
+#[cfg(target_os = "windows")]
+const PIPE_READMODE_BYTE: u32 = 0x00000000;
+#[cfg(target_os = "windows")]
+const PIPE_WAIT: u32 = 0x00000000;
+
+/// 创建一个命名管道服务器并返回原始 HANDLE
+#[cfg(target_os = "windows")]
+pub fn create_named_pipe(name: &str) -> Result<windows_sys::Win32::Foundation::HANDLE, ErrorType> {
+    use windows_sys::Win32::Foundation::INVALID_HANDLE_VALUE;
+    use windows_sys::Win32::System::Pipes::CreateNamedPipeW;
+
+    let full_name: Vec<u16> = format!(r"\\.\pipe\{}", name)
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect();
+
+    let handle = unsafe {
+        CreateNamedPipeW(
+            full_name.as_ptr(),
+            PIPE_ACCESS_INBOUND | FILE_FLAG_OVERLAPPED,
+            PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
+            1,                // 最大实例数
+            8192,             // 输出缓冲区大小
+            8192,             // 输入缓冲区大小
+            0,                // 默认超时
+            std::ptr::null(), // 默认安全描述符
+        )
+    };
+
+    // INVALID_HANDLE_VALUE 比较（HANDLE 是 *mut c_void，需要转为 usize）
+    if handle as usize == INVALID_HANDLE_VALUE as usize {
+        return Err(ErrorType::ProcessError(ErrorData {
+            error: format!(
+                "CreateNamedPipeW failed: {}",
+                std::io::Error::last_os_error()
+            ),
+        }));
+    }
+
+    Ok(handle)
+}
+
+/// 连接到命名管道客户端（带超时），成功返回 `File` 可供读取
+///
+/// 接收 `OwnedHandle`（保证 Send），内部提取原始 HANDLE 进行操作，
+/// 连接成功后转移所有权给 `File`
+#[cfg(target_os = "windows")]
+pub fn connect_named_pipe_with_timeout(
+    handle: std::os::windows::io::OwnedHandle,
+    timeout_ms: u32,
+) -> Result<std::fs::File, ErrorType> {
+    use std::os::windows::io::{AsRawHandle, FromRawHandle, IntoRawHandle};
+
+    use windows_sys::Win32::Foundation::{
+        CloseHandle, ERROR_IO_PENDING, ERROR_PIPE_CONNECTED, GetLastError, WAIT_OBJECT_0,
+        WAIT_TIMEOUT,
+    };
+    use windows_sys::Win32::System::IO::{CancelIo, OVERLAPPED};
+    use windows_sys::Win32::System::Pipes::ConnectNamedPipe;
+    use windows_sys::Win32::System::Threading::{CreateEventW, WaitForSingleObject};
+
+    // 创建事件用于 Overlapped I/O
+    let event = unsafe { CreateEventW(std::ptr::null(), 1, 0, std::ptr::null()) };
+    if event.is_null() {
+        return Err(ErrorType::ProcessError(ErrorData {
+            error: format!("CreateEventW failed: {}", std::io::Error::last_os_error()),
+        }));
+    }
+
+    let raw_handle = handle.as_raw_handle();
+
+    let mut overlapped: OVERLAPPED = unsafe { std::mem::zeroed() };
+    overlapped.hEvent = event;
+
+    // 异步等待客户端连接
+    let result = unsafe { ConnectNamedPipe(raw_handle, &mut overlapped) };
+
+    if result == 0 {
+        let err = unsafe { GetLastError() };
+        if err == ERROR_IO_PENDING {
+            // 等待连接完成或超时
+            let wait_result = unsafe { WaitForSingleObject(event, timeout_ms) };
+            if wait_result != WAIT_OBJECT_0 {
+                unsafe {
+                    CancelIo(raw_handle);
+                    CloseHandle(event);
+                }
+                // handle 被 drop，CloseHandle 会被调用
+                return Err(ErrorType::ProcessError(ErrorData {
+                    error: if wait_result == WAIT_TIMEOUT {
+                        "Named pipe connection timed out (UAC declined?)".to_string()
+                    } else {
+                        format!(
+                            "WaitForSingleObject failed: {}",
+                            std::io::Error::last_os_error()
+                        )
+                    },
+                }));
+            }
+        } else if err == ERROR_PIPE_CONNECTED {
+            // 客户端已连接（在 ConnectNamedPipe 之前就连接了）
+        } else {
+            unsafe { CloseHandle(event) };
+            return Err(ErrorType::ProcessError(ErrorData {
+                error: format!("ConnectNamedPipe failed: error code {}", err),
+            }));
+        }
+    }
+    // result != 0 → 立即连接成功
+
+    // 清理事件句柄，将管道 HANDLE 所有权转移给 File
+    unsafe { CloseHandle(event) };
+
+    // 从 OwnedHandle 中取出原始 HANDLE（不关闭），转移给 File
+    let raw = handle.into_raw_handle();
+    let file = unsafe { std::fs::File::from_raw_handle(raw) };
+    Ok(file)
 }
 
 /// 以管理员权限重新启动 ColorMC 自身

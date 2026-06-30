@@ -5,7 +5,7 @@ use std::{
     sync::{Arc, LazyLock, OnceLock, RwLock},
 };
 
-use mcml_base::{ArchEnum, events::core_jvm_change};
+use mcml_base::{events::Events, ArchEnum};
 use mcml_config::config_obj::JvmConfigObj;
 use mcml_names::names;
 
@@ -32,6 +32,21 @@ static JAVA_DIR: OnceLock<PathBuf> = OnceLock::new();
 
 static JVMS: LazyLock<RwLock<HashMap<String, Arc<JavaInfoObj>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
+
+type GameExitHandler = Box<dyn Fn() + Send + Sync + 'static>;
+
+static JVM_CHANGE_HANDLERS: Events<GameExitHandler> = Events::new();
+
+pub fn add_jvm_change_handler<F>(handler: F)
+where
+    F: Fn() + Send + Sync + 'static,
+{
+    JVM_CHANGE_HANDLERS.add(Box::new(handler));
+}
+
+pub fn invoke_jvm_change() {
+    JVM_CHANGE_HANDLERS.invoke();
+}
 
 /// 初始化
 /// - `dir`:  运行的路径
@@ -61,7 +76,7 @@ pub fn get_java_info(key: &str) -> Option<Arc<JavaInfoObj>> {
 pub fn remove(name: &str) {
     let mut list = JVMS.write().unwrap();
     if list.remove(name).is_some() {
-        core_jvm_change::invoke_jvm_change();
+        invoke_jvm_change();
     }
 
     let mut config = mcml_config::write_config();
@@ -113,7 +128,7 @@ pub fn add_item(name: String, file: String) -> Option<String> {
             let mut list = JVMS.write().unwrap();
             list.insert(name.clone(), Arc::new(info));
 
-            core_jvm_change::invoke_jvm_change();
+            invoke_jvm_change();
 
             let mut config = mcml_config::write_config();
             let javas = &mut config.java_list;
