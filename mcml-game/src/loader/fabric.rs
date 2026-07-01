@@ -3,7 +3,7 @@ use mcml_names::i18_items::error_type::{CoreResult, ErrorData, ErrorType};
 use mcml_net::{fabric_api, maven_utils::version_name_to_path, url_helper};
 
 use crate::{
-    launcher::game_setting_obj::GameSettingObj,
+    launcher::game_setting_obj::InstanceSettingObj,
     launcher_path::{libraries_path, version_path},
     loader::{fabric_loader_obj::FabricLoaderObj, fabric_meta_obj::FabricMetaObj},
 };
@@ -65,7 +65,7 @@ impl FabricLoaderObj {
     }
 }
 
-impl GameSettingObj {
+impl InstanceSettingObj {
     /// 获取fabric的所有运行库
     pub async fn get_fabric_libs(&self) -> CoreResult<Vec<FileItemObj>> {
         let fabric =

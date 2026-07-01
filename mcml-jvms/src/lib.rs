@@ -2,10 +2,10 @@ use std::{
     collections::{HashMap, HashSet},
     fs,
     path::{Path, PathBuf},
-    sync::{Arc, LazyLock, OnceLock, RwLock},
+    sync::{Arc, LazyLock, Mutex, OnceLock, RwLock},
 };
 
-use mcml_base::{events::Events, ArchEnum};
+use mcml_base::{ArchEnum, events::EventNormalHandler};
 use mcml_config::config_obj::JvmConfigObj;
 use mcml_names::names;
 
@@ -33,19 +33,18 @@ static JAVA_DIR: OnceLock<PathBuf> = OnceLock::new();
 static JVMS: LazyLock<RwLock<HashMap<String, Arc<JavaInfoObj>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 
-type GameExitHandler = Box<dyn Fn() + Send + Sync + 'static>;
-
-static JVM_CHANGE_HANDLERS: Events<GameExitHandler> = Events::new();
+static JVM_CHANGE_HANDLERS: LazyLock<EventNormalHandler> =
+    LazyLock::new(|| EventNormalHandler::new());
 
 pub fn add_jvm_change_handler<F>(handler: F)
 where
     F: Fn() + Send + Sync + 'static,
 {
-    JVM_CHANGE_HANDLERS.add(Box::new(handler));
+    JVM_CHANGE_HANDLERS.add_handler(handler);
 }
 
 pub fn invoke_jvm_change() {
-    JVM_CHANGE_HANDLERS.invoke();
+    JVM_CHANGE_HANDLERS.emit();
 }
 
 /// 初始化

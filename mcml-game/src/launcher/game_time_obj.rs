@@ -1,4 +1,4 @@
-use chrono::{DateTime, Duration, FixedOffset};
+use chrono::{DateTime, Duration, FixedOffset, Local, TimeDelta};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 // 序列化：将 Duration 转换为统一格式（支持天）
@@ -182,6 +182,17 @@ impl Default for GameTimeObj {
             last_time: Default::default(),
             game_time: Default::default(),
             last_play: Default::default(),
+        }
+    }
+}
+
+impl GameTimeObj {
+    pub fn new() -> Self {
+        Self {
+            add_time: Local::now().fixed_offset(),
+            last_time: DateTime::default(),
+            game_time: TimeDelta::default(),
+            last_play: TimeDelta::default(),
         }
     }
 }

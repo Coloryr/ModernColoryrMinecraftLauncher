@@ -112,7 +112,7 @@ impl Default for CustomLoaderObj {
 /// 游戏实例配置
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(default)]
-pub struct GameSettingObj {
+pub struct InstanceSettingObj {
     /// 实例标识
     #[serde(rename = "UUID")]
     pub uuid: Uuid,
@@ -184,7 +184,7 @@ pub struct GameSettingObj {
     pub encoding: LogEncoding,
 }
 
-impl Default for GameSettingObj {
+impl Default for InstanceSettingObj {
     fn default() -> Self {
         Self {
             uuid: Default::default(),

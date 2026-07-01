@@ -15,7 +15,7 @@ use mcml_net::{
 use zip::ZipArchive;
 
 use crate::{
-    launcher::game_setting_obj::GameSettingObj,
+    launcher::game_setting_obj::InstanceSettingObj,
     launcher_path::{libraries_path, version_path},
     loader::{
         LoaderType,
@@ -604,7 +604,7 @@ impl ForgeInstallObj {
     }
 }
 
-impl GameSettingObj {
+impl InstanceSettingObj {
     /// 获取Forge下载项目
     pub async fn get_forge_libs(&self) -> CoreResult<ForgeGetFilesObj> {
         get_forge_libs(

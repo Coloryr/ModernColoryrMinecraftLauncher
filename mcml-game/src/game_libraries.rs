@@ -12,7 +12,7 @@ use mcml_net::{maven_utils, url_helper};
 use tokio::task;
 
 use crate::{
-    launcher::game_setting_obj::GameSettingObj,
+    launcher::game_setting_obj::InstanceSettingObj,
     launcher_path::libraries_path,
     loader::forge,
     mojang::{
@@ -29,7 +29,7 @@ impl GameArgObj {
     pub async fn build_game_libraries(
         &self,
         native: &Path,
-        game: Option<GameSettingObj>,
+        game: Option<InstanceSettingObj>,
     ) -> Vec<FileItemObj> {
         // Clone data needed inside the spawn_blocking closure to satisfy 'static requirement
         let libraries = self.libraries.clone();
@@ -160,7 +160,7 @@ fn process_one_library(
     natives: &Mutex<HashMap<String, bool>>,
     natives_arm: &Mutex<Vec<String>>,
     native: &Path,
-    game: &Option<GameSettingObj>,
+    game: &Option<InstanceSettingObj>,
 ) {
     // 检查规则是否允许
     if !mojang::check_allow(&item.rules) {

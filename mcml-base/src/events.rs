@@ -1,35 +1,49 @@
 use std::sync::RwLock;
 
-/// 通用事件处理器集合
-/// F 为处理器类型，例如 `Box<dyn Fn() + Send + Sync + 'static>`
-pub struct Events<F> {
-    handlers: RwLock<Vec<F>>,
+pub struct EventArgHandler<E> {
+    handlers: RwLock<Vec<Box<dyn Fn(&E) + Send + Sync>>>,
 }
 
-impl<F> Events<F> {
-    /// 创建空的事件处理器集合
-    pub const fn new() -> Self {
-        Events {
+impl<E> EventArgHandler<E> {
+    pub fn new() -> Self {
+        Self {
             handlers: RwLock::new(Vec::new()),
         }
     }
 
-    /// 添加一个事件处理器
-    pub fn add(&self, handler: F) {
-        self.handlers.write().unwrap().push(handler);
+    pub fn add_handler<F>(&self, handler: F)
+    where
+        F: Fn(&E) + Send + Sync + 'static,
+    {
+        self.handlers.write().unwrap().push(Box::new(handler));
     }
 
-    /// 遍历所有处理器并执行指定操作
-    pub fn for_each(&self, f: impl Fn(&F)) {
+    pub fn emit(&self, event: E) {
         for handler in self.handlers.read().unwrap().iter() {
-            f(handler);
+            handler(&event);
         }
     }
 }
 
-impl<F: Fn()> Events<F> {
-    /// 以无参方式调用所有处理器
-    pub fn invoke(&self) {
+pub struct EventNormalHandler {
+    handlers: RwLock<Vec<Box<dyn Fn() + Send + Sync>>>,
+}
+
+impl EventNormalHandler {
+    pub fn new() -> Self {
+        Self {
+            handlers: RwLock::new(Vec::new()),
+        }
+    }
+
+    pub fn add_handler<F>(&self, handler: F)
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
+        self.handlers.write().unwrap().push(Box::new(handler));
+    }
+
+    pub fn emit(&self) {
         for handler in self.handlers.read().unwrap().iter() {
             handler();
         }

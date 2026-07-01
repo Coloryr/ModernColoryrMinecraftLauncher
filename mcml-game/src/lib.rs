@@ -1,23 +1,31 @@
 use std::{
     collections::HashMap,
-    path::Path,
+    path::{Path, PathBuf},
     sync::{Arc, LazyLock, RwLock},
     thread,
     time::Duration,
 };
 
-use mcml_base::events::Events;
-use mcml_names::{i18_items::error_type::CoreResult, names};
+use async_trait::async_trait;
+use mcml_base::{Os, events::EventArgHandler, path_helper};
+use mcml_names::{
+    i18_items::error_type::{ArgEmptyData, CoreResult, ErrorType, FileSystemErrorData},
+    names,
+};
 
 use uuid::Uuid;
 
 use crate::{
     game_launch::InstanceHandle,
-    game_log::{GameLog, InstanceRuntimeLog},
-    launcher::game_setting_obj::GameSettingObj,
+    game_log::{GameLog, GameLogItemObj, InstanceRuntimeLog},
+    launcher::{
+        LogEncoding, custom_game_arg_obj::CustomGameArgObj, game_setting_obj::InstanceSettingObj,
+        game_time_obj::GameTimeObj, mod_info_obj::FileOnlineInfoObj,
+    },
     launcher_path::instance_path,
 };
 
+pub mod dyn_file;
 pub mod game_arg;
 pub mod game_check;
 pub mod game_download;
@@ -32,8 +40,33 @@ pub mod loader;
 pub mod mojang;
 pub mod path_watch;
 
-type InstanceExitHandler = Box<dyn Fn(Uuid, i32) + Send + Sync + 'static>;
-type InstanceChangeHandler = Box<dyn Fn(&InstanceChange) + Send + Sync + 'static>;
+/// 实例结束运行事件
+pub struct InstanceExit {
+    pub uuid: Uuid,
+    pub code: i32,
+}
+
+pub enum InstanceChange {
+    AddInstance(Uuid),
+    RemoveInstance(Uuid),
+    MoveGroup(Uuid, Option<String>),
+}
+
+pub enum LogType {
+    AddLog(GameLogItemObj),
+    ClearLog,
+}
+
+pub struct InstanceLog {
+    pub uuid: Uuid,
+    pub log: LogType,
+}
+
+pub struct InstanceData {
+    pub instance: InstanceSettingObj,
+    pub online: HashMap<String, FileOnlineInfoObj>,
+    pub custom: HashMap<String, CustomGameArgObj>,
+}
 
 static RUNTIME_LOGS: LazyLock<RwLock<HashMap<Uuid, InstanceRuntimeLog>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
@@ -47,37 +80,62 @@ static GROUPS: LazyLock<RwLock<HashMap<String, Vec<Uuid>>>> = LazyLock::new(|| {
     RwLock::new(group)
 });
 
-static INSTANCES: LazyLock<RwLock<HashMap<Uuid, Arc<GameSettingObj>>>> =
+static INSTANCES: LazyLock<RwLock<HashMap<Uuid, Arc<InstanceSettingObj>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 
-static EXIT_EVENT: Events<InstanceExitHandler> = Events::new();
-static CHANGE_EVENT: Events<InstanceChangeHandler> = Events::new();
+static EXIT_EVENT: LazyLock<EventArgHandler<InstanceExit>> =
+    LazyLock::new(|| EventArgHandler::new());
+static CHANGE_EVENT: LazyLock<EventArgHandler<InstanceChange>> =
+    LazyLock::new(|| EventArgHandler::new());
+static LOG_EVENT: LazyLock<EventArgHandler<InstanceLog>> = LazyLock::new(|| EventArgHandler::new());
 
-pub enum InstanceChange {
-    AddInstance(Uuid),
-    RemoveInstance(Uuid),
-}
-
-pub fn add_game_exit_handler<F>(handler: F)
+pub fn add_exit_handler<F>(handler: F)
 where
-    F: Fn(Uuid, i32) + Send + Sync + 'static,
+    F: Fn(&InstanceExit) + Send + Sync + 'static,
 {
-    EXIT_EVENT.add(Box::new(handler));
+    EXIT_EVENT.add_handler(handler);
 }
 
-pub fn add_game_change_handler<F>(handler: F)
+pub fn add_change_handler<F>(handler: F)
 where
     F: Fn(&InstanceChange) + Send + Sync + 'static,
 {
-    CHANGE_EVENT.add(Box::new(handler));
+    CHANGE_EVENT.add_handler(handler);
 }
 
-pub fn invoke_game_exit(uuid: Uuid, code: i32) {
-    EXIT_EVENT.for_each(|handler| handler(uuid, code));
+pub fn add_run_log_handler<F>(handler: F)
+where
+    F: Fn(&InstanceChange) + Send + Sync + 'static,
+{
+    CHANGE_EVENT.add_handler(handler);
 }
 
-pub fn invoke_game_change(change: InstanceChange) {
-    CHANGE_EVENT.for_each(|handler| handler(&change));
+pub fn invoke_exit(uuid: Uuid, code: i32) {
+    EXIT_EVENT.emit(InstanceExit { uuid, code });
+}
+
+pub fn invoke_change(change: InstanceChange) {
+    CHANGE_EVENT.emit(change);
+}
+
+pub fn invoke_run_log(uuid: Uuid, log: LogType) {
+    LOG_EVENT.emit(InstanceLog { uuid, log });
+}
+
+/// 实例创建界面回调
+#[async_trait]
+pub trait IInstanceGui {
+    /// 是否同意替换名字
+    async fn name_replace(&self, name: &str) -> bool;
+    /// 是否同意覆盖
+    async fn overwrite(&self, obj: Arc<InstanceSettingObj>) -> bool;
+}
+
+pub trait ICopyGui {
+    /// 更新数量
+    fn update(&self, index: usize, count: usize);
+    /// 当前文件
+    fn file(&self, file: PathBuf);
 }
 
 /// 初始化
@@ -98,7 +156,7 @@ pub fn init<P: AsRef<Path>>(dir: P) -> CoreResult<()> {
                 .collect();
 
             for (uuid, handel) in removed {
-                invoke_game_exit(uuid, handel.code());
+                invoke_exit(uuid, handel.code());
             }
 
             thread::sleep(Duration::from_secs(1));
@@ -126,9 +184,11 @@ pub(crate) fn add_game_log(uuid: &Uuid, data: &str) {
         log.add_game_log(&data);
     } else {
         let mut log = InstanceRuntimeLog::new();
-        log.add_game_log(&data);
+        let item = log.add_game_log(&data);
 
         logs.insert(uuid.clone(), log);
+
+        invoke_run_log(uuid.clone(), LogType::AddLog(item));
     }
 }
 
@@ -139,9 +199,10 @@ pub(crate) fn add_game_log_item(uuid: &Uuid, data: GameLog) {
         log.add_log_item(data);
     } else {
         let mut log = InstanceRuntimeLog::new();
-        log.add_log_item(data);
+        let item = log.add_log_item(data);
 
         logs.insert(uuid.clone(), log);
+        invoke_run_log(uuid.clone(), LogType::AddLog(item));
     }
 }
 
@@ -154,6 +215,8 @@ pub(crate) fn clear_game_log(uuid: &Uuid) {
         let log = InstanceRuntimeLog::new();
         logs.insert(uuid.clone(), log);
     }
+
+    invoke_run_log(uuid.clone(), LogType::ClearLog);
 }
 
 /// 添加启动的游戏实例
@@ -163,7 +226,7 @@ pub(crate) fn add_run_game(handel: InstanceHandle) {
 }
 
 /// 获取所有实例
-pub fn get_instances() -> Vec<Arc<GameSettingObj>> {
+pub fn get_instances() -> Vec<Arc<InstanceSettingObj>> {
     let mut list = Vec::new();
 
     for (_, value) in INSTANCES.read().unwrap().iter() {
@@ -174,7 +237,7 @@ pub fn get_instances() -> Vec<Arc<GameSettingObj>> {
 }
 
 /// 从uuid获取实例
-pub fn get_instance(uuid: &Uuid) -> Option<Arc<GameSettingObj>> {
+pub fn get_instance(uuid: &Uuid) -> Option<Arc<InstanceSettingObj>> {
     let list = INSTANCES.read().unwrap();
 
     Some(list.get(uuid)?.clone())
@@ -192,7 +255,8 @@ pub fn get_group_keys() -> Vec<String> {
 }
 
 /// 从分组名字获取对应的实例
-pub fn get_group(key: &str) -> Vec<Arc<GameSettingObj>> {
+/// - `key`: 分组名字
+pub fn get_group(key: &str) -> Vec<Arc<InstanceSettingObj>> {
     let mut list = Vec::new();
 
     let group = GROUPS.read().unwrap();
@@ -207,8 +271,102 @@ pub fn get_group(key: &str) -> Vec<Arc<GameSettingObj>> {
     list
 }
 
+/// 添加分组
+/// - `name`: 分组名
+pub fn add_group(name: &str) -> bool {
+    let mut groups = GROUPS.write().unwrap();
+    if groups.contains_key(name) {
+        false
+    } else {
+        groups.insert(name.to_string(), Vec::new());
+        true
+    }
+}
+
+/// 删除分组
+/// - `name`: 分组名
+pub fn remove_group(name: &str) -> bool {
+    let mut groups = GROUPS.write().unwrap();
+    let items = groups.remove(name);
+    match items {
+        Some(items) => {
+            let def = groups.get_mut(names::DEFAULT_GROUP).unwrap();
+            def.extend(items);
+            true
+        }
+        None => false,
+    }
+}
+
+/// 移动分组
+/// - `list`: 需要移动的列表
+/// - `new`: 新分组名字
+pub fn move_group(list: Vec<Uuid>, new: Option<String>) {
+    let mut groups = GROUPS.write().unwrap();
+    let mut instances = INSTANCES.write().unwrap();
+
+    for item in list.iter() {
+        let game = match instances.get_mut(item) {
+            Some(game) => Arc::make_mut(game),
+            None => continue,
+        };
+
+        if let Some(name) = &game.group {
+            let group = groups.get_mut(name);
+            if let Some(group) = group {
+                group.retain(|g| g != &game.uuid);
+            }
+        } else {
+            let group = groups.get_mut(names::DEFAULT_GROUP).unwrap();
+            group.retain(|g| g != &game.uuid);
+        }
+
+        match new {
+            Some(ref name) => {
+                if !groups.contains_key(name) {
+                    groups.insert(name.to_string(), Vec::new());
+                }
+                let group = groups.get_mut(name).unwrap();
+                group.push(game.uuid);
+            }
+            None => {
+                let group = groups.get_mut(names::DEFAULT_GROUP).unwrap();
+                group.push(game.uuid);
+            }
+        }
+
+        game.group = new.clone();
+        game.save();
+
+        invoke_change(InstanceChange::MoveGroup(game.uuid, game.group.clone()))
+    }
+}
+
+/// 从实例名字获取实例
+/// - `name`: 实例名字
+pub fn get_instance_by_name(name: &str) -> Option<Arc<InstanceSettingObj>> {
+    let list = INSTANCES.read().unwrap();
+    let temp = list
+        .iter()
+        .filter(|(_, value)| value.name.eq_ignore_ascii_case(name))
+        .next()?;
+
+    Some(temp.1.clone())
+}
+
+/// 是否存在这个名字的实例
+/// - `name`: 实例名字
+pub fn have_instance_name(name: &str) -> bool {
+    let list = INSTANCES.read().unwrap();
+    let temp = list
+        .iter()
+        .filter(|(_, value)| value.name.eq_ignore_ascii_case(name))
+        .next();
+    !temp.is_none()
+}
+
 /// 将实例添加到分组中
-fn add_to_group(mut obj: GameSettingObj) {
+fn add_to_group(mut obj: InstanceSettingObj) -> Arc<InstanceSettingObj> {
     while obj.uuid.is_nil() || matches!(get_instance(&obj.uuid), Some(_)) {
         obj.uuid = Uuid::new_v4();
     }
@@ -232,7 +390,9 @@ fn add_to_group(mut obj: GameSettingObj) {
         }
     }
 
-    invoke_game_change(InstanceChange::AddInstance(game.uuid));
+    invoke_change(InstanceChange::AddInstance(game.uuid));
+
+    game.clone()
 }
 
 /// 将实例从分组中删除
@@ -247,16 +407,174 @@ fn remove_from_group(uuid: &Uuid) {
     let mut games = INSTANCES.write().unwrap();
     games.remove(uuid);
 
-    invoke_game_change(InstanceChange::RemoveInstance(uuid.clone()));
+    invoke_change(InstanceChange::RemoveInstance(uuid.clone()));
 }
 
-impl GameSettingObj {
-    pub fn create_instance(self) -> Arc<GameSettingObj> {
-        todo!()
+impl InstanceSettingObj {
+    /// 创建实例
+    pub async fn create_instance(
+        mut self,
+        gui: &Option<impl IInstanceGui>,
+    ) -> CoreResult<Arc<InstanceSettingObj>> {
+        path_watch::stop_watch();
+
+        let old = get_instance_by_name(&self.name);
+        if let Some(instance) = &old {
+            if let Some(gui) = gui {
+                let over = gui.overwrite(instance.clone()).await;
+                if !over && !gui.name_replace(&self.name).await {
+                    return Err(ErrorType::TaskCancel);
+                }
+            }
+
+            let mut a = 1;
+            let mut name = format!("{}{a}", self.name);
+            while have_instance_name(&name) {
+                name = format!("{}{a}", self.name);
+                a += 1;
+            }
+
+            self.name = name;
+        }
+
+        if self.name.is_empty() {
+            return Err(ErrorType::ArgEmpty(ArgEmptyData {
+                arg: "name".to_string(),
+            }));
+        }
+
+        if let Some(instance) = old {
+            instance.remove()?;
+        }
+
+        self.dir = path_helper::replace_path_name(&self.name);
+
+        let dir = self.get_base_path();
+        if dir.exists() {
+            path_helper::move_to_trash(&dir)?
+        }
+
+        path_helper::create_dir_all(dir)?;
+        path_helper::create_dir_all(self.get_game_path())?;
+        path_helper::create_dir_all(self.get_mods_path())?;
+        path_helper::create_dir_all(self.get_config_path())?;
+        path_helper::create_dir_all(self.get_logs_path())?;
+        path_helper::create_dir_all(self.get_saves_path())?;
+        path_helper::create_dir_all(self.get_resourcepacks_path())?;
+
+        self.save_online_info(&HashMap::new());
+        self.save_launch_count_data(&GameTimeObj::new());
+
+        if mcml_base::get_system_info().os == Os::Windows {
+            self.encoding = LogEncoding::GBK;
+        }
+
+        self.save();
+
+        path_watch::start_watch();
+
+        Ok(add_to_group(self))
     }
-}
 
-//
-// pub fn create_instance(obj: GameSettingObj) -> Arc<GameSettingObj> {
-//     Arc::new(data)
-// }
+    /// 删除实例
+    pub fn remove(&self) -> CoreResult<()> {
+        remove_from_group(&self.uuid);
+
+        path_helper::move_to_trash(self.get_base_path())
+    }
+
+    /// 复制数据到新的实例
+    /// - `name`: 新的实例名字
+    pub async fn copy_to_other(
+        &self,
+        name: &str,
+        gui: &Option<impl IInstanceGui>,
+    ) -> CoreResult<Arc<InstanceSettingObj>> {
+        let mut instance = self.clone();
+        instance.name = name.to_string();
+        let instance = instance.create_instance(gui).await?;
+
+        let online = self.read_online_info();
+        let custom = self.read_custom_json();
+
+        instance.save_custom_json(&custom)?;
+        instance.save_online_info(&online);
+
+        Ok(instance)
+    }
+
+    /// 更新在线文件信息
+    pub async fn update_online(&self) {
+        let mut online = self.read_online_info();
+        let dir = self.get_game_path();
+        online.retain(|_, value| {
+            let file = dir.join(&value.path).join(&value.file);
+            if file.exists() {
+                false
+            } else {
+                if let Some(ext) = file.extension()
+                    && ext.eq_ignore_ascii_case(names::JAR_EXT)
+                {
+                    let file = file.join(names::DISABLE_EXT);
+                    if file.exists() {
+                        return false;
+                    }
+                }
+                true
+            }
+        });
+
+        self.save_online_info(&online);
+    }
+
+    /// 将文件复制到其他地方
+    pub async fn copy_files<P: AsRef<Path>>(
+        &self,
+        path: P,
+        skip: Option<Vec<PathBuf>>,
+        is_base: bool,
+        gui: &Option<impl ICopyGui>,
+    ) -> CoreResult<()> {
+        let dir = if is_base {
+            self.get_base_path()
+        } else {
+            self.get_game_path()
+        };
+
+        path_helper::create_dir_all(path.as_ref())?;
+
+        let mut index = 0usize;
+        let list = path_helper::get_all_files(&dir);
+        if let Some(gui) = gui {
+            gui.update(index, list.len());
+        }
+        for item in list.iter() {
+            let file = item.strip_prefix(&dir).map_err(|err| {
+                ErrorType::FileSystemError(FileSystemErrorData {
+                    path: item.clone(),
+                    error: err.to_string(),
+                })
+            })?;
+
+            if let Some(skip) = &skip {
+                if skip.contains(&file.to_path_buf()) {
+                    index += 1;
+                    if let Some(gui) = gui {
+                        gui.update(index, list.len());
+                    }
+                }
+            }
+
+            if let Some(gui) = gui {
+                gui.file(item.clone());
+            }
+
+            let now = path.as_ref().join(file);
+            path_helper::copy_file_async(item, &now).await?;
+        }
+
+        Ok(())
+    }
+
+    pub fn set_icon(&mut self, icon: InputFileType) {}
+}

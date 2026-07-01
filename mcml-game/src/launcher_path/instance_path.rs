@@ -8,12 +8,12 @@ use std::{
 use mcml_base::path_helper::{self};
 use mcml_config::config_save;
 use mcml_names::{
-    i18_items::error_type::{CoreResult, ErrorType, FileSystemErrorData},
+    i18_items::error_type::{CoreResult, ErrorData, ErrorType, FileSystemErrorData},
     names, uuids,
 };
 
 use crate::launcher::{
-    custom_game_arg_obj::CustomGameArgObj, game_setting_obj::GameSettingObj,
+    custom_game_arg_obj::CustomGameArgObj, game_setting_obj::InstanceSettingObj,
     game_time_obj::GameTimeObj, mod_info_obj::FileOnlineInfoObj,
 };
 
@@ -37,7 +37,7 @@ pub fn get_instance_dir() -> PathBuf {
 }
 
 /// 读取所有实例
-pub(crate) fn load_instance_dir() -> CoreResult<Vec<GameSettingObj>> {
+pub(crate) fn load_instance_dir() -> CoreResult<Vec<InstanceSettingObj>> {
     let dir = BASE_DIR.get().unwrap();
     let dirs = fs::read_dir(dir).map_err(|err| {
         ErrorType::FileSystemError(FileSystemErrorData {
@@ -61,7 +61,7 @@ pub(crate) fn load_instance_dir() -> CoreResult<Vec<GameSettingObj>> {
 
 /// 从文件夹路径加载实例
 /// - `dir`: 路径
-pub(crate) fn load_instance<P: AsRef<Path>>(dir: P) -> Option<GameSettingObj> {
+pub(crate) fn load_instance<P: AsRef<Path>>(dir: P) -> Option<InstanceSettingObj> {
     let file = dir.as_ref();
     if !file.is_dir() {
         return None;
@@ -77,7 +77,7 @@ pub(crate) fn load_instance<P: AsRef<Path>>(dir: P) -> Option<GameSettingObj> {
         return None;
     }
     let stream = stream.unwrap();
-    if let Ok(mut obj) = serde_json::from_reader::<_, GameSettingObj>(stream) {
+    if let Ok(mut obj) = serde_json::from_reader::<_, InstanceSettingObj>(stream) {
         let path = file.file_name().unwrap_or_default();
         let path = path.to_string_lossy();
         if !path.eq(&obj.dir) {
@@ -91,7 +91,7 @@ pub(crate) fn load_instance<P: AsRef<Path>>(dir: P) -> Option<GameSettingObj> {
     }
 }
 
-impl GameSettingObj {
+impl InstanceSettingObj {
     /// 保存
     pub fn save(&self) {
         config_save::save(self.uuid, self, &self.get_json_file());
@@ -364,7 +364,7 @@ impl GameSettingObj {
     }
 
     /// 读取自定义游戏启动配置
-    pub fn read_custom_json(&self) -> HashMap<PathBuf, CustomGameArgObj> {
+    pub fn read_custom_json(&self) -> HashMap<String, CustomGameArgObj> {
         let file = self.get_json_path();
         let mut list = HashMap::new();
         if file.exists()
@@ -377,7 +377,7 @@ impl GameSettingObj {
                 {
                     let json = serde_json::from_reader::<_, CustomGameArgObj>(stream);
                     if let Ok(data) = json {
-                        list.insert(item.path(), data);
+                        list.insert(item.file_name().to_string_lossy().to_string(), data);
                     }
                 }
             }
@@ -386,14 +386,23 @@ impl GameSettingObj {
         list
     }
 
-    // /// 保存自定义启动配置
-    // pub fn save_custom_json(&self, info: &Vec<CustomGameArgObj>) {
-    //     config_save::save(
-    //         uuids::mix_uuid(self.uuid, uuids::OPTIFINE_UUID),
-    //         info,
-    //         &self.get_json_file(),
-    //     );
-    // }
+    /// 保存自定义启动配置
+    pub fn save_custom_json(&self, info: &HashMap<String, CustomGameArgObj>) -> CoreResult<()> {
+        let dir = self.get_json_path();
+        path_helper::create_dir_all(&dir)?;
+        for (key, value) in info.iter() {
+            let file = dir.join(key);
+
+            let stream = path_helper::open_write(file)?;
+            serde_json::to_writer(stream, value).map_err(|err| {
+                ErrorType::JsonError(ErrorData {
+                    error: err.to_string(),
+                })
+            })?
+        }
+
+        Ok(())
+    }
 
     /// 读取启动统计数据
     pub fn read_launch_count_data(&self) -> GameTimeObj {

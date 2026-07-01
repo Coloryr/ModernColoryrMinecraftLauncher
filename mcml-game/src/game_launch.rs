@@ -28,7 +28,7 @@ use crate::{
     game_saves::SaveObj,
     launcher::{
         LogEncoding, SourceType,
-        game_setting_obj::{GameSettingObj, ServerObj},
+        game_setting_obj::{InstanceSettingObj, ServerObj},
     },
     launcher_path::libraries_path,
     loader::LoaderType,
@@ -43,7 +43,7 @@ pub enum ProcessRunType {
 #[async_trait]
 pub trait ILaunchGui {
     /// 启动状态修改
-    fn update_state(&self, setting: &GameSettingObj, state: LaunchState);
+    fn update_state(&self, setting: &InstanceSettingObj, state: LaunchState);
     /// 登陆失败
     async fn login_fail(&self, auth: &LoginObj) -> bool;
     /// 请求是否要下载文件
@@ -75,8 +75,6 @@ pub struct GameLaunchArg {
     pub mixin: Option<u16>,
     /// 启动时设置语言
     pub lang: Option<String>,
-    /// 界面显示回调
-    pub gui: Option<Box<dyn ILaunchGui>>,
 }
 
 /// 游戏实例处理完成后的参数
@@ -294,13 +292,14 @@ fn read_process_stream<R: std::io::Read>(
     }
 }
 
-impl GameSettingObj {
+impl InstanceSettingObj {
     /// 尝试刷新账户，若失败则询问是否离线模式
     /// - `arg`: 启动参数
     async fn auth_login(
         &self,
         arg: &mut GameLaunchArg,
         cancel: &CancellationToken,
+        gui: &Option<impl ILaunchGui>,
     ) -> CoreResult<()> {
         let start = Instant::now();
         let res = Arc::make_mut(&mut arg.auth).refresh(cancel).await;
@@ -317,7 +316,7 @@ impl GameSettingObj {
                 Ok(())
             }
             Err(err) => {
-                if let Some(gui) = &arg.gui
+                if let Some(gui) = gui
                     && gui.login_fail(&arg.auth).await
                 {
                     let old = &arg.auth;
@@ -341,8 +340,12 @@ impl GameSettingObj {
 
     /// 检查缺失的文件，自动下载，完成后返回启动配置
     /// - `arg`: 启动参数
-    async fn check_game_file(&self, arg: &mut GameLaunchArg) -> CoreResult<GameLaunchObj> {
-        if let Some(gui) = &arg.gui {
+    async fn check_game_file(
+        &self,
+        arg: &mut GameLaunchArg,
+        gui: &Option<impl ILaunchGui>,
+    ) -> CoreResult<GameLaunchObj> {
+        if let Some(gui) = gui {
             gui.update_state(self, LaunchState::Check);
         }
 
@@ -362,7 +365,7 @@ impl GameSettingObj {
             Ok(obj)
         } else {
             let download = if mcml_config::read_config().http.auto_download == false
-                && let Some(gui) = &arg.gui
+                && let Some(gui) = gui
             {
                 gui.requesst_download_file().await
             } else {
@@ -370,7 +373,7 @@ impl GameSettingObj {
             };
 
             if download {
-                if let Some(gui) = &arg.gui {
+                if let Some(gui) = gui {
                     gui.update_state(self, LaunchState::Download);
                 }
                 let start = Instant::now();
@@ -429,7 +432,7 @@ impl GameSettingObj {
     }
 
     /// 获取启动使用的java
-    fn get_java(&self, arg: &GameLaunchArg, obj: &GameLaunchObj) -> Option<PathBuf> {
+    fn get_java(&self, obj: &GameLaunchObj, gui: &Option<impl ILaunchGui>) -> Option<PathBuf> {
         if let Some(data) = &self.jvm_local {
             let path = PathBuf::from(data);
 
@@ -465,7 +468,7 @@ impl GameSettingObj {
             }
         }
 
-        if let Some(gui) = &arg.gui {
+        if let Some(gui) = &gui {
             gui.no_java(*list.first().unwrap());
         }
 
@@ -561,6 +564,7 @@ impl GameSettingObj {
         &self,
         arg: &mut GameLaunchArg,
         cancel: &CancellationToken,
+        gui: &Option<impl ILaunchGui>,
     ) -> CoreResult<LaunchCmd> {
         if self.version.is_empty() {
             return Err(ErrorType::VersionInfoError);
@@ -580,17 +584,17 @@ impl GameSettingObj {
             return Err(ErrorType::VersionInfoError);
         }
 
-        if let Some(gui) = &arg.gui {
+        if let Some(gui) = gui {
             gui.update_state(&self, LaunchState::Login);
         }
 
-        self.auth_login(arg, cancel).await?;
+        self.auth_login(arg, cancel, gui).await?;
 
         if cancel.is_cancelled() {
             return Err(ErrorType::TaskCancel);
         }
 
-        if let Some(gui) = &arg.gui {
+        if let Some(gui) = gui {
             gui.update_state(&self, LaunchState::ReadInfo);
         }
 
@@ -600,7 +604,7 @@ impl GameSettingObj {
             return Err(ErrorType::TaskCancel);
         }
 
-        let java = self.get_java(arg, &obj);
+        let java = self.get_java(&obj, gui);
 
         if java.is_none() {
             return Err(ErrorType::JavaNotFound);
@@ -610,7 +614,7 @@ impl GameSettingObj {
             return Err(ErrorType::TaskCancel);
         }
 
-        if let Some(gui) = &arg.gui {
+        if let Some(gui) = gui {
             gui.update_state(&self, LaunchState::Jvm);
         }
 
@@ -633,6 +637,7 @@ impl GameSettingObj {
         &self,
         arg: &mut GameLaunchArg,
         cancel: &CancellationToken,
+        gui: &Option<impl ILaunchGui>,
     ) -> CoreResult<()> {
         // 清理之前的日志
         crate::clear_game_log(&self.uuid);
@@ -657,7 +662,7 @@ impl GameSettingObj {
         }
 
         // 登陆账户
-        self.auth_login(arg, cancel).await?;
+        self.auth_login(arg, cancel, gui).await?;
 
         if cancel.is_cancelled() {
             return Err(ErrorType::TaskCancel);
@@ -670,19 +675,19 @@ impl GameSettingObj {
             return Err(ErrorType::TaskCancel);
         }
 
-        if let Some(gui) = &arg.gui {
+        if let Some(gui) = gui {
             gui.update_state(self, LaunchState::Check);
         }
 
         // 检查游戏文件
-        let mut obj = self.check_game_file(arg).await?;
+        let mut obj = self.check_game_file(arg, gui).await?;
 
         if cancel.is_cancelled() {
             return Err(ErrorType::TaskCancel);
         }
 
         // 获取启动用的JAVA
-        let jvm = self.get_java(arg, &mut obj);
+        let jvm = self.get_java(&mut obj, gui);
 
         if cancel.is_cancelled() {
             return Err(ErrorType::TaskCancel);
@@ -698,7 +703,7 @@ impl GameSettingObj {
             return Err(ErrorType::TaskCancel);
         }
 
-        if let Some(gui) = &arg.gui {
+        if let Some(gui) = gui {
             gui.update_state(self, LaunchState::Jvm);
         }
 
@@ -753,12 +758,12 @@ impl GameSettingObj {
                 .unwrap_or(default.pre_run_with_game.unwrap_or_default());
 
             let mut can_run = true;
-            if let Some(gui) = &arg.gui {
+            if let Some(gui) = gui {
                 can_run = gui.launch_process(ProcessRunType::PreLaunch);
             }
 
             if can_run {
-                if let Some(gui) = &arg.gui {
+                if let Some(gui) = gui {
                     gui.update_state(self, LaunchState::Pre);
                 }
                 let start = Instant::now();
@@ -799,12 +804,12 @@ impl GameSettingObj {
 
         if post_run && !post_run_cmd.is_empty() {
             let mut can_run = true;
-            if let Some(gui) = &arg.gui {
+            if let Some(gui) = gui {
                 can_run = gui.launch_process(ProcessRunType::PreLaunch);
             }
 
             if can_run {
-                if let Some(gui) = &arg.gui {
+                if let Some(gui) = gui {
                     gui.update_state(self, LaunchState::Post);
                 }
                 let start = Instant::now();

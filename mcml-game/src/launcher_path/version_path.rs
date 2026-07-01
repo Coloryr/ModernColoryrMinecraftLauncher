@@ -18,7 +18,7 @@ use tokio::task;
 use uuid::Uuid;
 
 use crate::{
-    launcher::{custom_loader_obj::CustomLoaderType, game_setting_obj::GameSettingObj},
+    launcher::{custom_loader_obj::CustomLoaderType, game_setting_obj::InstanceSettingObj},
     loader::{
         LoaderKey, LoaderType, fabric_loader_obj::FabricLoaderObj,
         forge_install_obj::ForgeInstallObj, forge_launch_obj::ForgeLaunchObj,
@@ -753,7 +753,7 @@ pub fn get_optifine(version: &str) -> Option<Arc<OptifineObj>> {
     Some(list.get(version)?.clone())
 }
 
-impl GameSettingObj {
+impl InstanceSettingObj {
     /// 获取游戏版本类型
     pub fn get_version_type(&self) -> String {
         let temp = VERSION.read().unwrap();
