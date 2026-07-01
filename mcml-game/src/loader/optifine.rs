@@ -3,7 +3,7 @@ use mcml_names::i18_items::error_type::{CoreResult, ErrorType};
 use mcml_net::optifine_api;
 
 use crate::{
-    launcher::game_setting_obj::GameSettingObj,
+    launcher::game_setting_obj::InstanceSettingObj,
     launcher_path::{libraries_path, version_path},
     loader::optifine_obj::OptifineObj,
 };
@@ -41,7 +41,7 @@ pub async fn get_optifine_libs(mc: &str, version: &str) -> CoreResult<Vec<FileIt
     }
 }
 
-impl GameSettingObj {
+impl InstanceSettingObj {
     /// 创建optifine下载项目
     pub async fn get_optifine_libs(&self) -> CoreResult<Vec<FileItemObj>> {
         get_optifine_libs(&self.version, &self.loader_version.as_ref().unwrap()).await

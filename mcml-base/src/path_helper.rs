@@ -91,7 +91,12 @@ fn get_trash_info_path() -> PathBuf {
 }
 
 /// 将文件夹挪到回收站
-pub fn move_to_trash<P: AsRef<Path>>(dir: P) -> CoreResult<bool> {
+pub fn move_to_trash<P: AsRef<Path>>(dir: P) -> CoreResult<()> {
+    // Check if the path exists
+    if !dir.as_ref().exists() {
+        return Ok(());
+    }
+
     #[cfg(target_os = "windows")]
     {
         move_to_trash_windows(dir)
@@ -196,7 +201,7 @@ fn move_to_trash_macos(dir: &str) -> io::Result<bool> {
 
 /// 将文件夹挪到回收站
 #[cfg(target_os = "windows")]
-fn move_to_trash_windows<P: AsRef<Path>>(dir: P) -> CoreResult<bool> {
+fn move_to_trash_windows<P: AsRef<Path>>(dir: P) -> CoreResult<()> {
     use std::iter::once;
     use std::os::windows::ffi::OsStrExt;
     use windows_sys::Win32::Foundation::HWND;
@@ -207,11 +212,6 @@ fn move_to_trash_windows<P: AsRef<Path>>(dir: P) -> CoreResult<bool> {
     use windows_sys::Win32::UI::Shell::FOF_SILENT;
     use windows_sys::Win32::UI::Shell::SHFILEOPSTRUCTW;
     use windows_sys::Win32::UI::Shell::SHFileOperationW;
-
-    // Check if the path exists
-    if !dir.as_ref().exists() {
-        return Ok(false);
-    }
 
     // Convert string to Windows wide string (double null terminated)
     let wide_path: Vec<u16> = dir
@@ -240,12 +240,12 @@ fn move_to_trash_windows<P: AsRef<Path>>(dir: P) -> CoreResult<bool> {
     // 0x71 = No error but user aborted (we treat as success since nothing was moved)
     // Other values indicate errors
     match result {
-        0 => Ok(true),
-        0x71 => Ok(false), // User cancelled
-        _ => {
-            eprintln!("SHFileOperationW failed with error code: 0x{:X}", result);
-            Ok(false)
-        }
+        0 => Ok(()),
+        0x71 => Err(ErrorType::TaskCancel), // User cancelled
+        _ => Err(ErrorType::FileSystemError(FileSystemErrorData {
+            path: dir.as_ref().to_path_buf(),
+            error: format!("SHFileOperationW failed with error code: 0x{:X}", result),
+        })),
     }
 }
 

@@ -61,6 +61,11 @@ pub struct DownloadFileHashErrorData {
     pub hash: String,
 }
 
+#[derive(Clone, Debug)]
+pub struct ArgEmptyData {
+    pub arg: String,
+}
+
 pub type CoreResult<T> = result::Result<T, ErrorType>;
 
 #[derive(Clone, Debug)]
@@ -158,4 +163,7 @@ pub enum ErrorType {
     VersionInfoError,
     /// 找不到合适的Java
     JavaNotFound,
+
+    /// 输入参数错误
+    ArgEmpty(ArgEmptyData),
 }

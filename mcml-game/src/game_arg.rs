@@ -18,7 +18,7 @@ use mcml_net::{mojang_api, urls};
 use crate::{
     game_launch::{AutoJoinType, GameLaunchArg},
     game_log::GameLog,
-    launcher::game_setting_obj::GameSettingObj,
+    launcher::game_setting_obj::InstanceSettingObj,
     launcher_path::{self, assets_path, libraries_path, version_path},
     loader::LoaderType,
     mojang::{
@@ -108,7 +108,7 @@ fn make_v2_game_arg(game: &GameArgObj) -> Vec<String> {
 /// 创建V1加载器启动参数
 /// - `obj`: 游戏启动参数
 /// - `game`: 游戏启动参数
-fn make_loader_v1_game_arg(obj: &GameSettingObj, game: &GameArgObj) -> Vec<String> {
+fn make_loader_v1_game_arg(obj: &InstanceSettingObj, game: &GameArgObj) -> Vec<String> {
     match obj.loader {
         LoaderType::Forge | LoaderType::NeoForge => {
             let loader = if obj.loader == LoaderType::Forge {
@@ -156,7 +156,7 @@ fn make_loader_v1_game_arg(obj: &GameSettingObj, game: &GameArgObj) -> Vec<Strin
 
 /// 创建V2加载器启动参数
 /// - `obj`: 游戏启动参数
-fn make_loader_v2_game_arg(obj: &GameSettingObj) -> Vec<String> {
+fn make_loader_v2_game_arg(obj: &InstanceSettingObj) -> Vec<String> {
     match obj.loader {
         LoaderType::Forge | LoaderType::NeoForge => {
             let loader = if obj.loader == LoaderType::Forge {
@@ -212,7 +212,7 @@ fn make_v2_jvm_arg(game: &GameArgObj) -> Vec<String> {
 /// 创建加载器Jvm参数
 /// - `v2`: 是否为V2版本
 /// - `obj`: 游戏实例
-pub async fn make_loader_jvm_arg(v2: bool, obj: &GameSettingObj) -> Vec<String> {
+pub async fn make_loader_jvm_arg(v2: bool, obj: &InstanceSettingObj) -> Vec<String> {
     match obj.loader {
         LoaderType::Normal => Vec::new(),
         LoaderType::Forge | LoaderType::NeoForge => {
@@ -282,7 +282,7 @@ pub async fn make_loader_jvm_arg(v2: bool, obj: &GameSettingObj) -> Vec<String> 
     }
 }
 
-impl GameSettingObj {
+impl InstanceSettingObj {
     /// 创建游戏启动参数
     /// - `world`: 自动加入的存档
     pub fn make_game_arg(&self, auto: &AutoJoinType) -> Vec<String> {
@@ -732,7 +732,7 @@ fn do_lib_item(item: &FileItemObj, game_libs: &mut Vec<FileItemObj>) -> CoreResu
     Ok(())
 }
 
-impl GameSettingObj {
+impl InstanceSettingObj {
     /// 创建常规启动内容
     async fn make_normal_arg(
         &self,

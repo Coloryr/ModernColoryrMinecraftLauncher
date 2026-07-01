@@ -12,7 +12,7 @@ use mcml_names::{
 use zip::ZipArchive;
 
 use crate::{
-    launcher::{custom_loader_obj::CustomLoaderType, game_setting_obj::GameSettingObj},
+    launcher::{custom_loader_obj::CustomLoaderType, game_setting_obj::InstanceSettingObj},
     launcher_path::{libraries_path, version_path},
     loader::{
         forge_install_obj::ForgeInstallObj,
@@ -25,7 +25,7 @@ pub struct CutsomLoaderRes {
     pub libs: Vec<FileItemObj>,
 }
 
-impl GameSettingObj {
+impl InstanceSettingObj {
     /// 分析jar
     pub async fn decode_loader_jar(&self) -> CoreResult<CutsomLoaderRes> {
         self.decode_loader_jar_with_path(self.get_loader_file())

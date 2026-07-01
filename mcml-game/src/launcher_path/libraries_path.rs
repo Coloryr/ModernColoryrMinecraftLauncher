@@ -23,7 +23,7 @@ use mcml_net::{
 };
 
 use crate::{
-    game_arg::GameLaunchObj, launcher::game_setting_obj::GameSettingObj, loader::LoaderType,
+    game_arg::GameLaunchObj, launcher::game_setting_obj::InstanceSettingObj, loader::LoaderType,
 };
 
 /// 基础路径
@@ -197,7 +197,7 @@ pub fn get_optifine_file(mc: &str, version: &str) -> PathBuf {
         .join(format!("OptiFine-{mc}-{version}.jar"))
 }
 
-impl GameSettingObj {
+impl InstanceSettingObj {
     /// 获取OptiFine路径
     pub fn get_optifine_file(&self) -> PathBuf {
         get_optifine_file(&self.version, self.loader_version.as_ref().unwrap())

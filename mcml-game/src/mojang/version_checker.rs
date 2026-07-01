@@ -1,5 +1,5 @@
 use crate::{
-    launcher::game_setting_obj::GameSettingObj,
+    launcher::game_setting_obj::InstanceSettingObj,
     launcher_path::version_path,
     mojang::{game_arg_obj::GameArgObj, version_parse::parse_game_version},
 };
@@ -16,7 +16,7 @@ pub fn is_game_version_greater(v1: &str, v2: &str) -> bool {
     }
 }
 
-impl GameSettingObj {
+impl InstanceSettingObj {
     /// 是否为V2版本
     pub fn is_game_version_v2(&self) -> bool {
         let version = version_path::get_version(&self.version);
@@ -49,7 +49,7 @@ impl GameArgObj {
     }
 }
 
-impl GameSettingObj {
+impl InstanceSettingObj {
     /// 判断是否是 1.17 以上版本
     pub fn is_game_version_117(&self) -> bool {
         is_game_version_117(&self.version)

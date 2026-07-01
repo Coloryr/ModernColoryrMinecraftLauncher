@@ -9,7 +9,7 @@ use mcml_names::{i18_items::error_type::CoreResult, names};
 use tokio::task;
 
 use crate::{
-    game_arg::GameLaunchObj, launcher::game_setting_obj::GameSettingObj, launcher_path::assets_path,
+    game_arg::GameLaunchObj, launcher::game_setting_obj::InstanceSettingObj, launcher_path::assets_path,
 };
 
 /// 检查文件是否需要添加到下载列表
@@ -39,7 +39,7 @@ fn check_file_sha1<P: AsRef<Path>>(file: P, sha1: &str) -> bool {
     false
 }
 
-impl GameSettingObj {
+impl InstanceSettingObj {
     /// 检查游戏文件
     /// 返回缺失的文件列表
     /// - `obj`: 启动配置
