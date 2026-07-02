@@ -28,7 +28,7 @@ use crate::{
     game_saves::SaveObj,
     launcher::{
         LogEncoding, SourceType,
-        game_setting_obj::{InstanceSettingObj, ServerObj},
+        instance_setting_obj::{InstanceSettingObj, ServerObj},
     },
     launcher_path::libraries_path,
     loader::LoaderType,

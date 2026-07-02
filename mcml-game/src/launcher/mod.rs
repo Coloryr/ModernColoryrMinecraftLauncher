@@ -1,8 +1,8 @@
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
-pub mod game_setting_obj;
+pub mod instance_setting_obj;
 pub mod game_time_obj;
-pub mod mod_info_obj;
+pub mod file_online_info_obj;
 pub mod custom_game_arg_obj;
 pub mod custom_loader_obj;
 

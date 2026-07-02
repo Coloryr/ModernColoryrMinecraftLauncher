@@ -26,7 +26,7 @@ use std::{
     sync::{LazyLock, OnceLock, RwLock},
 };
 
-use mcml_base::events::EventNormalHandler;
+use mcml_base::events::EventHandler;
 use mcml_log;
 use mcml_names::{i18, i18_items::info_type::InfoType, i18_items::panic_type::PanicType};
 
@@ -39,18 +39,21 @@ pub static NEW_START: RwLock<bool> = RwLock::new(false);
 
 static STATE: RwLock<bool> = RwLock::new(false);
 
-static CORE_STOP_HANDLERS: LazyLock<EventNormalHandler> =
-    LazyLock::new(|| EventNormalHandler::new());
+static CORE_STOP_EVENT: LazyLock<EventHandler> = LazyLock::new(|| EventHandler::new());
 
-pub fn add_core_stop_handler<F>(handler: F)
+pub fn add_core_stop<F>(handler: F) -> u64
 where
     F: Fn() + Send + Sync + 'static,
 {
-    CORE_STOP_HANDLERS.add_handler(Box::new(handler));
+    CORE_STOP_EVENT.add_handler(Box::new(handler))
+}
+
+pub fn remove_core_stop(id: u64) {
+    CORE_STOP_EVENT.remove_handle(id);
 }
 
 pub fn invoke_core_stop() {
-    CORE_STOP_HANDLERS.emit();
+    CORE_STOP_EVENT.emit();
 }
 
 pub fn get_state() -> bool {
@@ -87,9 +90,9 @@ pub fn init(arg: CoreInitObj) {
     mcml_net::init();
     mcml_config::init(dir);
 
-    CORE_STOP_HANDLERS.add_handler(mcml_config::config_save::stop);
-    CORE_STOP_HANDLERS.add_handler(mcml_downloader::stop);
-    CORE_STOP_HANDLERS.add_handler(mcml_log::stop);
+    CORE_STOP_EVENT.add_handler(mcml_config::config_save::stop);
+    CORE_STOP_EVENT.add_handler(mcml_downloader::stop);
+    CORE_STOP_EVENT.add_handler(mcml_log::stop);
 
     *STATE.write().unwrap() = true;
 }

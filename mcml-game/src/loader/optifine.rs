@@ -3,7 +3,7 @@ use mcml_names::i18_items::error_type::{CoreResult, ErrorType};
 use mcml_net::optifine_api;
 
 use crate::{
-    launcher::game_setting_obj::InstanceSettingObj,
+    launcher::instance_setting_obj::InstanceSettingObj,
     launcher_path::{libraries_path, version_path},
     loader::optifine_obj::OptifineObj,
 };

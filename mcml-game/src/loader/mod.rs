@@ -63,6 +63,8 @@ pub enum LoaderType {
     NeoForge,
     /// 高清修复
     OptiFine,
+    /// LiteLoader
+    LiteLoader,
     /// 自定义
     Custom,
 }
@@ -82,6 +84,7 @@ impl LoaderType {
             LoaderType::Quilt => "quilt",
             LoaderType::NeoForge => "neoforge",
             LoaderType::OptiFine => "optifine",
+            LoaderType::LiteLoader => "liteloader",
             _ => "custom",
         }
     }

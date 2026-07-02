@@ -3,7 +3,7 @@ use mcml_names::i18_items::error_type::{CoreResult, ErrorData, ErrorType};
 use mcml_net::{maven_utils::version_name_to_path, quilt_api, url_helper};
 
 use crate::{
-    launcher::game_setting_obj::InstanceSettingObj,
+    launcher::instance_setting_obj::InstanceSettingObj,
     launcher_path::{libraries_path, version_path},
     loader::{quilt_loader_obj::QuiltLoaderObj, quilt_meta_obj::QuiltMetaObj},
 };

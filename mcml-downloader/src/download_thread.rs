@@ -418,5 +418,56 @@ fn check_hash<R: Read + Seek>(file: &PathBuf, hash: &FileHash, stream: &mut R) -
                 Err(err) => Err(err),
             }
         }
+        FileHash::Sha1Sha512(sha1, sha512) => {
+            let sha1 = match hash_helper::gen_hash_from_reader(HashType::Sha1, stream) {
+                Ok(hash) => {
+                    if hash.eq_ignore_ascii_case(sha1) {
+                        Ok(())
+                    } else {
+                        Err(ErrorType::DownloadFileHashError(
+                            DownloadFileHashErrorData {
+                                file: file.clone(),
+                                now: hash.clone(),
+                                hash: sha1.clone(),
+                            },
+                        ))
+                    }
+                }
+                Err(err) => Err(err),
+            };
+
+            if sha1.is_err() {
+                return sha1;
+            }
+
+            stream.seek(SeekFrom::Start(0)).map_err(|err| {
+                ErrorType::StreamError(ErrorData {
+                    error: err.to_string(),
+                })
+            })?;
+
+            let sha512 = match hash_helper::gen_hash_from_reader(HashType::Sha512, stream) {
+                Ok(hash) => {
+                    if hash.eq_ignore_ascii_case(sha512) {
+                        Ok(())
+                    } else {
+                        Err(ErrorType::DownloadFileHashError(
+                            DownloadFileHashErrorData {
+                                file: file.clone(),
+                                now: hash.clone(),
+                                hash: sha512.clone(),
+                            },
+                        ))
+                    }
+                }
+                Err(err) => Err(err),
+            };
+
+            if sha512.is_err() {
+                return sha512;
+            }
+
+            Ok(())
+        }
     }
 }

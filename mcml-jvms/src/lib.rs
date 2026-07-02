@@ -5,7 +5,7 @@ use std::{
     sync::{Arc, LazyLock, Mutex, OnceLock, RwLock},
 };
 
-use mcml_base::{ArchEnum, events::EventNormalHandler};
+use mcml_base::{ArchEnum, events::EventHandler};
 use mcml_config::config_obj::JvmConfigObj;
 use mcml_names::names;
 
@@ -33,18 +33,21 @@ static JAVA_DIR: OnceLock<PathBuf> = OnceLock::new();
 static JVMS: LazyLock<RwLock<HashMap<String, Arc<JavaInfoObj>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 
-static JVM_CHANGE_HANDLERS: LazyLock<EventNormalHandler> =
-    LazyLock::new(|| EventNormalHandler::new());
+static JVM_CHANGE_EVENT: LazyLock<EventHandler> = LazyLock::new(|| EventHandler::new());
 
-pub fn add_jvm_change_handler<F>(handler: F)
+pub fn add_jvm_change<F>(handler: F) -> u64
 where
     F: Fn() + Send + Sync + 'static,
 {
-    JVM_CHANGE_HANDLERS.add_handler(handler);
+    JVM_CHANGE_EVENT.add_handler(handler)
 }
 
-pub fn invoke_jvm_change() {
-    JVM_CHANGE_HANDLERS.emit();
+pub fn remove_jvm_change(id: u64) {
+    JVM_CHANGE_EVENT.remove_handle(id);
+}
+
+pub(crate) fn invoke_jvm_change() {
+    JVM_CHANGE_EVENT.emit();
 }
 
 /// 初始化

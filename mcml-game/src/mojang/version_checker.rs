@@ -1,5 +1,5 @@
 use crate::{
-    launcher::game_setting_obj::InstanceSettingObj,
+    launcher::instance_setting_obj::InstanceSettingObj,
     launcher_path::version_path,
     mojang::{game_arg_obj::GameArgObj, version_parse::parse_game_version},
 };

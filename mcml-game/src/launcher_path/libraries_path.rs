@@ -23,7 +23,7 @@ use mcml_net::{
 };
 
 use crate::{
-    game_arg::GameLaunchObj, launcher::game_setting_obj::InstanceSettingObj, loader::LoaderType,
+    game_arg::GameLaunchObj, launcher::instance_setting_obj::InstanceSettingObj, loader::LoaderType,
 };
 
 /// 基础路径
