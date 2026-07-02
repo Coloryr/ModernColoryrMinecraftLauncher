@@ -18,7 +18,7 @@ use mcml_net::{mojang_api, urls};
 use crate::{
     game_launch::{AutoJoinType, GameLaunchArg},
     game_log::GameLog,
-    launcher::game_setting_obj::InstanceSettingObj,
+    launcher::instance_setting_obj::InstanceSettingObj,
     launcher_path::{self, assets_path, libraries_path, version_path},
     loader::LoaderType,
     mojang::{
@@ -151,6 +151,7 @@ fn make_loader_v1_game_arg(obj: &InstanceSettingObj, game: &GameArgObj) -> Vec<S
             args
         }
         LoaderType::Custom => obj.get_custom_loader_game_args(),
+        LoaderType::LiteLoader => todo!(),
     }
 }
 
@@ -183,6 +184,7 @@ fn make_loader_v2_game_arg(obj: &InstanceSettingObj) -> Vec<String> {
             "optifine.OptiFineTweaker".to_string(),
         ],
         LoaderType::Custom => obj.get_custom_loader_game_args(),
+        LoaderType::LiteLoader => todo!(),
     }
 }
 
@@ -279,6 +281,7 @@ pub async fn make_loader_jvm_arg(v2: bool, obj: &InstanceSettingObj) -> Vec<Stri
             list
         }
         LoaderType::Custom => obj.get_custom_loader_game_args(),
+        LoaderType::LiteLoader => todo!(),
     }
 }
 
@@ -703,6 +706,7 @@ impl InstanceSettingObj {
             LoaderType::Quilt => self.get_quilt().unwrap().main_class.clone(),
             LoaderType::OptiFine => "com.coloryr.optifinewrapper.OptifineWrapper".to_string(),
             LoaderType::Custom => self.get_custom_loader_mainclass(),
+            LoaderType::LiteLoader => todo!(),
         })
     }
 
@@ -803,6 +807,7 @@ impl InstanceSettingObj {
                     loader_libs = Some(res.libs);
                 }
                 LoaderType::Normal => {}
+                LoaderType::LiteLoader => todo!(),
             }
 
             if let Some(loader) = loader_libs {

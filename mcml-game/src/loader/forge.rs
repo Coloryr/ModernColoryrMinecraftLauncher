@@ -15,7 +15,7 @@ use mcml_net::{
 use zip::ZipArchive;
 
 use crate::{
-    launcher::game_setting_obj::InstanceSettingObj,
+    launcher::instance_setting_obj::InstanceSettingObj,
     launcher_path::{libraries_path, version_path},
     loader::{
         LoaderType,

@@ -18,11 +18,15 @@ use tokio::task;
 use uuid::Uuid;
 
 use crate::{
-    launcher::{custom_loader_obj::CustomLoaderType, game_setting_obj::InstanceSettingObj},
+    launcher::{custom_loader_obj::CustomLoaderType, instance_setting_obj::InstanceSettingObj},
     loader::{
-        LoaderKey, LoaderType, fabric_loader_obj::FabricLoaderObj,
-        forge_install_obj::ForgeInstallObj, forge_launch_obj::ForgeLaunchObj,
-        optifine_obj::OptifineObj, quilt_loader_obj::QuiltLoaderObj,
+        LoaderKey, LoaderType,
+        fabric_loader_obj::FabricLoaderObj,
+        forge_install_obj::ForgeInstallObj,
+        forge_launch_obj::ForgeLaunchObj,
+        liteloader_meta_obj::{LiteloaderMetaObj, LiteloaderVersionObj},
+        optifine_obj::OptifineObj,
+        quilt_loader_obj::QuiltLoaderObj,
     },
     mojang::{
         game_arg_obj::GameArgObj,
@@ -59,6 +63,8 @@ static FABRIC_LOADERS: LazyLock<RwLock<HashMap<LoaderKey, Arc<FabricLoaderObj>>>
 static QUILT_LOADERS: LazyLock<RwLock<HashMap<LoaderKey, Arc<QuiltLoaderObj>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 static CUSTOM_LOADERS: LazyLock<RwLock<HashMap<Uuid, Arc<CustomLoaderType>>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
+static LITE_LOADER: LazyLock<RwLock<HashMap<String, Arc<LiteloaderVersionObj>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 
 /// 初始化版本路径
@@ -97,6 +103,7 @@ pub(crate) fn init<P: AsRef<Path>>(dir: P) -> CoreResult<()> {
     }
 
     load_optifine();
+    load_liteloader();
 
     Ok(())
 }
@@ -147,6 +154,49 @@ fn save_optifine() {
         value.iter().map(|(k, v)| (k, v.as_ref())).collect();
 
     config_save::save(uuids::OPTIFINE_UUID, &ref_map, file);
+}
+
+/// 加载liteloader版本信息
+fn load_liteloader() {
+    let local = LITELOADER_FILE.get().unwrap();
+    if !local.exists() {
+        return;
+    }
+
+    let file = path_helper::open_read(local);
+    if let Err(err) = file {
+        mcml_log::error_type(err);
+
+        return;
+    }
+    let file = file.unwrap();
+    let json = serde_json::from_reader::<_, LiteloaderMetaObj>(file);
+
+    match json {
+        Err(err) => {
+            mcml_log::error_type(ErrorType::JsonError(ErrorData {
+                error: err.to_string(),
+            }));
+        }
+        Ok(data) => {
+            let mut list = LITE_LOADER.write().unwrap();
+            list.clear();
+
+            list.extend(data.versions.into_iter().map(|(k, v)| (k, Arc::new(v))));
+        }
+    };
+}
+
+/// 保存liteloader版本信息
+fn save_liteloader() {
+    let file = LITELOADER_FILE.get().unwrap();
+    let list = LITE_LOADER.read().unwrap();
+    let value = &*list;
+
+    let ref_map: HashMap<&String, &LiteloaderVersionObj> =
+        value.iter().map(|(k, v)| (k, v.as_ref())).collect();
+
+    config_save::save(uuids::LITELOADER_UUID, &ref_map, file);
 }
 
 /// 从在线获取版本信息
@@ -365,6 +415,14 @@ pub fn add_optifine(obj: OptifineObj) -> Arc<OptifineObj> {
     save_optifine();
 
     info
+}
+
+/// 保存liteloader信息
+pub fn add_liteloader(obj: LiteloaderMetaObj) {
+    let mut list = LITE_LOADER.write().unwrap();
+    list.extend(obj.versions.into_iter().map(|(k, v)| (k, Arc::new(v))));
+
+    save_liteloader();
 }
 
 /// 获取版本信息
@@ -750,6 +808,13 @@ pub fn get_quilt(mc: &str, version: &str) -> Option<Arc<QuiltLoaderObj>> {
 /// - `version`: 版本号
 pub fn get_optifine(version: &str) -> Option<Arc<OptifineObj>> {
     let list = OPTIFINE_LOADER.read().unwrap();
+    Some(list.get(version)?.clone())
+}
+
+/// 获取liteloader信息
+/// - `version`: 游戏版本号
+pub fn get_liteloader(version: &str) -> Option<Arc<LiteloaderVersionObj>> {
+    let list = LITE_LOADER.read().unwrap();
     Some(list.get(version)?.clone())
 }
 

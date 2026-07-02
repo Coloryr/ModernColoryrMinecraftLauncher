@@ -9,7 +9,7 @@ use mcml_names::{i18_items::error_type::CoreResult, names};
 use tokio::task;
 
 use crate::{
-    game_arg::GameLaunchObj, launcher::game_setting_obj::InstanceSettingObj, launcher_path::assets_path,
+    game_arg::GameLaunchObj, launcher::instance_setting_obj::InstanceSettingObj, launcher_path::assets_path,
 };
 
 /// 检查文件是否需要添加到下载列表

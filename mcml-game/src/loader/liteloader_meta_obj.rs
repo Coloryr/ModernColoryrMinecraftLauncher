@@ -81,13 +81,13 @@ impl Default for SnapshotsObj {
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
-pub struct VersionObj {
+pub struct LiteloaderVersionObj {
     pub repo: ReopObj,
     pub snapshots: SnapshotsObj,
     pub artefacts: SnapshotsObj,
 }
 
-impl Default for VersionObj {
+impl Default for LiteloaderVersionObj {
     fn default() -> Self {
         Self {
             repo: Default::default(),
@@ -100,7 +100,7 @@ impl Default for VersionObj {
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct LiteloaderMetaObj {
-    pub versions: HashMap<String, VersionObj>,
+    pub versions: HashMap<String, LiteloaderVersionObj>,
 }
 
 impl Default for LiteloaderMetaObj {

@@ -7,21 +7,29 @@ use mcml_base::path_helper;
 use mcml_names::i18_items::error_type::{CoreResult, ErrorData, ErrorType};
 use tokio::io::{AsyncRead, AsyncWriteExt};
 
-pub enum InputFileType {
+/// 输入文件
+pub enum InputFile {
+    /// 实际存在的文件
     Path(PathBuf),
+    /// 网络文件
     Url(String),
+    /// 数据
     Data(Vec<u8>),
+    /// 同步流
     Stream(Box<dyn Read>),
+    /// 异步流
     StreamAsync(Box<dyn AsyncRead + Unpin>),
 }
 
-impl InputFileType {
+impl InputFile {
+    /// 保存到文件
+    /// - `path`: 需要保存的路径
     pub async fn save_file<P: AsRef<Path>>(self, path: P) -> CoreResult<()> {
         match self {
-            InputFileType::Path(path_buf) => {
+            InputFile::Path(path_buf) => {
                 path_helper::copy_file_async(path_buf, path.as_ref().to_path_buf()).await?;
             }
-            InputFileType::Url(url) => {
+            InputFile::Url(url) => {
                 let mut stream = mcml_net::get_work_client().get(&url).await?;
                 let mut file = path_helper::open_write_async(path.as_ref()).await?;
 
@@ -44,13 +52,13 @@ impl InputFileType {
                     }
                 }
             }
-            InputFileType::Data(items) => {
+            InputFile::Data(items) => {
                 path_helper::write_bytes_async(path.as_ref(), &items).await?;
             }
-            InputFileType::Stream(read) => {
+            InputFile::Stream(read) => {
                 path_helper::write_stream(path.as_ref(), read)?;
             }
-            InputFileType::StreamAsync(async_read) => {
+            InputFile::StreamAsync(async_read) => {
                 path_helper::write_stream_async(path.as_ref(), async_read).await?;
             }
         }

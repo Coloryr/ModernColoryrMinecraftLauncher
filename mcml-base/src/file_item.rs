@@ -15,8 +15,9 @@ pub enum FileHash {
     Md5(String),
     Sha1(String),
     Sha256(String),
-    Sha1Sha256(String, String),
     Sha512(String),
+    Sha1Sha256(String, String),
+    Sha1Sha512(String, String),
 }
 
 impl Default for FileHash {
@@ -49,6 +50,7 @@ impl FileHash {
             FileHash::Sha256(hash) => hash == check,
             FileHash::Sha1Sha256(hash1, hash2) => hash1 == check || hash2 == check,
             FileHash::Sha512(hash) => hash == check,
+            FileHash::Sha1Sha512(hash1, hash2) => hash1 == check || hash2 == check,
         }
     }
 }
@@ -136,6 +138,23 @@ impl FileItemObj {
                             hash_helper::gen_hash_from_reader(HashType::Sha512, &mut stream)
                         {
                             hash.eq_ignore_ascii_case(sha512)
+                        } else {
+                            false
+                        }
+                    }
+                    FileHash::Sha1Sha512(sha1, sha512) => {
+                        if let Ok(hash) =
+                            hash_helper::gen_hash_from_reader(HashType::Sha1, &mut stream)
+                            && hash.eq_ignore_ascii_case(sha1)
+                        {
+                            stream.seek(SeekFrom::Start(0)).unwrap();
+                            if let Ok(hash) =
+                                hash_helper::gen_hash_from_reader(HashType::Sha512, &mut stream)
+                            {
+                                hash.eq_ignore_ascii_case(sha512)
+                            } else {
+                                false
+                            }
                         } else {
                             false
                         }

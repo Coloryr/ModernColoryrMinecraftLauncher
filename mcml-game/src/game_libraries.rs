@@ -12,7 +12,7 @@ use mcml_net::{maven_utils, url_helper};
 use tokio::task;
 
 use crate::{
-    launcher::game_setting_obj::InstanceSettingObj,
+    launcher::instance_setting_obj::InstanceSettingObj,
     launcher_path::libraries_path,
     loader::forge,
     mojang::{

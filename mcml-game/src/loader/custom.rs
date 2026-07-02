@@ -12,7 +12,7 @@ use mcml_names::{
 use zip::ZipArchive;
 
 use crate::{
-    launcher::{custom_loader_obj::CustomLoaderType, game_setting_obj::InstanceSettingObj},
+    launcher::{custom_loader_obj::CustomLoaderType, instance_setting_obj::InstanceSettingObj},
     launcher_path::{libraries_path, version_path},
     loader::{
         forge_install_obj::ForgeInstallObj,

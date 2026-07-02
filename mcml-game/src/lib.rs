@@ -16,11 +16,12 @@ use mcml_names::{
 use uuid::Uuid;
 
 use crate::{
+    dyn_file::InputFile,
     game_launch::InstanceHandle,
     game_log::{GameLog, GameLogItemObj, InstanceRuntimeLog},
     launcher::{
-        LogEncoding, custom_game_arg_obj::CustomGameArgObj, game_setting_obj::InstanceSettingObj,
-        game_time_obj::GameTimeObj, mod_info_obj::FileOnlineInfoObj,
+        LogEncoding, custom_game_arg_obj::CustomGameArgObj, instance_setting_obj::InstanceSettingObj,
+        game_time_obj::GameTimeObj, file_online_info_obj::FileOnlineInfoObj,
     },
     launcher_path::instance_path,
 };
@@ -29,6 +30,8 @@ pub mod dyn_file;
 pub mod game_arg;
 pub mod game_check;
 pub mod game_download;
+pub mod game_export;
+pub mod game_mod;
 pub mod game_launch;
 pub mod game_libraries;
 pub mod game_log;
@@ -89,36 +92,48 @@ static CHANGE_EVENT: LazyLock<EventArgHandler<InstanceChange>> =
     LazyLock::new(|| EventArgHandler::new());
 static LOG_EVENT: LazyLock<EventArgHandler<InstanceLog>> = LazyLock::new(|| EventArgHandler::new());
 
-pub fn add_exit_handler<F>(handler: F)
+pub fn add_exit<F>(handler: F) -> u64
 where
     F: Fn(&InstanceExit) + Send + Sync + 'static,
 {
-    EXIT_EVENT.add_handler(handler);
+    EXIT_EVENT.add_handler(handler)
 }
 
-pub fn add_change_handler<F>(handler: F)
+pub fn add_change<F>(handler: F) -> u64
 where
     F: Fn(&InstanceChange) + Send + Sync + 'static,
 {
-    CHANGE_EVENT.add_handler(handler);
+    CHANGE_EVENT.add_handler(handler)
 }
 
-pub fn add_run_log_handler<F>(handler: F)
+pub fn add_run_log<F>(handler: F) -> u64
 where
-    F: Fn(&InstanceChange) + Send + Sync + 'static,
+    F: Fn(&InstanceLog) + Send + Sync + 'static,
 {
-    CHANGE_EVENT.add_handler(handler);
+    LOG_EVENT.add_handler(handler)
 }
 
-pub fn invoke_exit(uuid: Uuid, code: i32) {
+pub fn remove_exit(id: u64) {
+    EXIT_EVENT.remove_handel(id);
+}
+
+pub fn remove_change(id: u64) {
+    CHANGE_EVENT.remove_handel(id);
+}
+
+pub fn remove_run_log(id: u64) {
+    LOG_EVENT.remove_handel(id);
+}
+
+pub(crate) fn invoke_exit(uuid: Uuid, code: i32) {
     EXIT_EVENT.emit(InstanceExit { uuid, code });
 }
 
-pub fn invoke_change(change: InstanceChange) {
+pub(crate) fn invoke_change(change: InstanceChange) {
     CHANGE_EVENT.emit(change);
 }
 
-pub fn invoke_run_log(uuid: Uuid, log: LogType) {
+pub(crate) fn invoke_run_log(uuid: Uuid, log: LogType) {
     LOG_EVENT.emit(InstanceLog { uuid, log });
 }
 
@@ -175,54 +190,6 @@ pub fn load() -> CoreResult<()> {
     }
 
     Ok(())
-}
-
-/// 添加运行日志
-pub(crate) fn add_game_log(uuid: &Uuid, data: &str) {
-    let mut logs = RUNTIME_LOGS.write().unwrap();
-    if let Some(log) = logs.get_mut(uuid) {
-        log.add_game_log(&data);
-    } else {
-        let mut log = InstanceRuntimeLog::new();
-        let item = log.add_game_log(&data);
-
-        logs.insert(uuid.clone(), log);
-
-        invoke_run_log(uuid.clone(), LogType::AddLog(item));
-    }
-}
-
-/// 添加运行日志
-pub(crate) fn add_game_log_item(uuid: &Uuid, data: GameLog) {
-    let mut logs = RUNTIME_LOGS.write().unwrap();
-    if let Some(log) = logs.get_mut(uuid) {
-        log.add_log_item(data);
-    } else {
-        let mut log = InstanceRuntimeLog::new();
-        let item = log.add_log_item(data);
-
-        logs.insert(uuid.clone(), log);
-        invoke_run_log(uuid.clone(), LogType::AddLog(item));
-    }
-}
-
-/// 清理日志
-pub(crate) fn clear_game_log(uuid: &Uuid) {
-    let mut logs = RUNTIME_LOGS.write().unwrap();
-    if let Some(log) = logs.get_mut(uuid) {
-        log.clear();
-    } else {
-        let log = InstanceRuntimeLog::new();
-        logs.insert(uuid.clone(), log);
-    }
-
-    invoke_run_log(uuid.clone(), LogType::ClearLog);
-}
-
-/// 添加启动的游戏实例
-pub(crate) fn add_run_game(handel: InstanceHandle) {
-    let mut games = HANDELS.write().unwrap();
-    games.insert(handel.uuid, handel);
 }
 
 /// 获取所有实例
@@ -410,6 +377,54 @@ fn remove_from_group(uuid: &Uuid) {
     invoke_change(InstanceChange::RemoveInstance(uuid.clone()));
 }
 
+/// 添加运行日志
+pub(crate) fn add_game_log(uuid: &Uuid, data: &str) {
+    let mut logs = RUNTIME_LOGS.write().unwrap();
+    if let Some(log) = logs.get_mut(uuid) {
+        log.add_game_log(&data);
+    } else {
+        let mut log = InstanceRuntimeLog::new();
+        let item = log.add_game_log(&data);
+
+        logs.insert(uuid.clone(), log);
+
+        invoke_run_log(uuid.clone(), LogType::AddLog(item));
+    }
+}
+
+/// 添加运行日志
+pub(crate) fn add_game_log_item(uuid: &Uuid, data: GameLog) {
+    let mut logs = RUNTIME_LOGS.write().unwrap();
+    if let Some(log) = logs.get_mut(uuid) {
+        log.add_log_item(data);
+    } else {
+        let mut log = InstanceRuntimeLog::new();
+        let item = log.add_log_item(data);
+
+        logs.insert(uuid.clone(), log);
+        invoke_run_log(uuid.clone(), LogType::AddLog(item));
+    }
+}
+
+/// 清理日志
+pub(crate) fn clear_game_log(uuid: &Uuid) {
+    let mut logs = RUNTIME_LOGS.write().unwrap();
+    if let Some(log) = logs.get_mut(uuid) {
+        log.clear();
+    } else {
+        let log = InstanceRuntimeLog::new();
+        logs.insert(uuid.clone(), log);
+    }
+
+    invoke_run_log(uuid.clone(), LogType::ClearLog);
+}
+
+/// 添加启动的游戏实例
+pub(crate) fn add_run_game(handel: InstanceHandle) {
+    let mut games = HANDELS.write().unwrap();
+    games.insert(handel.uuid, handel);
+}
+
 impl InstanceSettingObj {
     /// 创建实例
     pub async fn create_instance(
@@ -576,5 +591,9 @@ impl InstanceSettingObj {
         Ok(())
     }
 
-    pub fn set_icon(&mut self, icon: InputFileType) {}
+    /// 设置图标
+    pub async fn set_icon(&mut self, icon: InputFile) -> CoreResult<()> {
+        let file = self.get_icon_file();
+        icon.save_file(file).await
+    }
 }
