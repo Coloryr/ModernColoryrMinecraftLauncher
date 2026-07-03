@@ -395,7 +395,7 @@ impl InstanceSettingObj {
 
             let stream = path_helper::open_write(file)?;
             serde_json::to_writer(stream, value).map_err(|err| {
-                ErrorType::JsonError(ErrorData {
+                ErrorType::SerializerError(ErrorData {
                     error: err.to_string(),
                 })
             })?

@@ -1493,6 +1493,7 @@ dependencies = [
  "soft-canonicalize",
  "tokio",
  "tokio-util",
+ "toml",
  "url",
  "uuid",
  "zip",

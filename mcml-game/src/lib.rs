@@ -20,21 +20,22 @@ use crate::{
     game_launch::InstanceHandle,
     game_log::{GameLog, GameLogItemObj, InstanceRuntimeLog},
     launcher::{
-        LogEncoding, custom_game_arg_obj::CustomGameArgObj, instance_setting_obj::InstanceSettingObj,
-        game_time_obj::GameTimeObj, file_online_info_obj::FileOnlineInfoObj,
+        LogEncoding, custom_game_arg_obj::CustomGameArgObj,
+        file_online_info_obj::FileOnlineInfoObj, game_time_obj::GameTimeObj,
+        instance_setting_obj::InstanceSettingObj,
     },
     launcher_path::instance_path,
 };
-
+pub mod class_scan;
 pub mod dyn_file;
 pub mod game_arg;
 pub mod game_check;
 pub mod game_download;
 pub mod game_export;
-pub mod game_mod;
 pub mod game_launch;
 pub mod game_libraries;
 pub mod game_log;
+pub mod game_mods;
 pub mod game_saves;
 pub mod game_server;
 pub mod launcher;

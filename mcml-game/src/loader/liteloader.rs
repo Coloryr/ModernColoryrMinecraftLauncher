@@ -9,7 +9,7 @@ use crate::{
 pub async fn get_liteloader_meta() -> CoreResult<LiteloaderMetaObj> {
     let data = liteloader_api::get_meta().await?;
     let obj = serde_json::from_slice::<LiteloaderMetaObj>(&data).map_err(|err| {
-        ErrorType::JsonError(ErrorData {
+        ErrorType::SerializerError(ErrorData {
             error: err.to_string(),
         })
     })?;

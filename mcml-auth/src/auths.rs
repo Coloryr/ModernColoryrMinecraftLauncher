@@ -58,7 +58,7 @@ pub fn get(uuid: String, auth_type: AuthType) -> Option<LoginObj> {
 pub fn import(file: &PathBuf) -> CoreResult<()> {
     let temp = path_helper::open_read(file)?;
     let json = serde_json::from_reader::<_, Vec<LoginObj>>(temp).map_err(|err| {
-        ErrorType::JsonError(ErrorData {
+        ErrorType::SerializerError(ErrorData {
             error: err.to_string(),
         })
     })?;

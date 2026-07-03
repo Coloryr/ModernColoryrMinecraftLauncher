@@ -40,7 +40,7 @@ impl I18Lang for ZhCn {
                 format!("发送网络请求 {} 读取失败：{}", data.url, data.error)
             }
 
-            ErrorType::JsonError(data) => format!("Json解析失败：{}", data.error),
+            ErrorType::SerializerError(data) => format!("Json解析失败：{}", data.error),
             ErrorType::FileNotExists(data) => {
                 format!("文件不存在：{}", data.file.display().to_string())
             }

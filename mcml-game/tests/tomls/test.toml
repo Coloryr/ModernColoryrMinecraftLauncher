@@ -1,0 +1,36 @@
+modLoader = "javafml"
+loaderVersion = "[2,)"
+license = "GPL-3.0"
+issueTrackerURL = "https://github.com/Coloryr/AllMusic/issues"
+
+[[mods]]
+modId = "allmusic"
+version = "4.0.3"
+displayName = "AllMusic Server"
+displayURL = "https://github.com/Coloryr/AllMusic/"
+logoFile = "icon.png"
+authors = "Color_yr"
+description = '''AllMusic Server Mod'''
+
+[[mods]]
+modId = "allmusic_server"
+version = "4.0.3"
+displayName = "AllMusic Server"
+displayURL = "https://github.com/Coloryr/AllMusic/"
+logoFile = "icon.png"
+authors = "Color_yr"
+description = '''AllMusic Server Mod'''
+
+[[dependencies.allmusic_server]]
+modId = "neoforge"
+type = "required"
+versionRange = "[26.1.0.19-beta,)"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.allmusic_server]]
+modId = "minecraft"
+type = "required"
+versionRange = "[26.1,)"
+ordering = "NONE"
+side = "BOTH"

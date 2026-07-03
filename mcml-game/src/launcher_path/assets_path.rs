@@ -82,7 +82,7 @@ pub fn get_index(obj: &GameAssetIndexObj) -> CoreResult<AssetsObj> {
     let stream = path_helper::open_read(&file)?;
     let obj = serde_json::from_reader::<_, AssetsObj>(stream);
     match obj {
-        Err(err) => Err(ErrorType::JsonError(ErrorData {
+        Err(err) => Err(ErrorType::SerializerError(ErrorData {
             error: err.to_string(),
         })),
         Ok(ok) => Ok(ok),

@@ -80,13 +80,13 @@ impl InstanceSettingObj {
         }
 
         let obj1: ForgeLaunchObj = serde_json::from_str(&version_json).map_err(|err| {
-            ErrorType::JsonError(ErrorData {
+            ErrorType::SerializerError(ErrorData {
                 error: err.to_string(),
             })
         })?;
 
         let obj2: ForgeInstallObj = serde_json::from_str(&install_json).map_err(|err| {
-            ErrorType::JsonError(ErrorData {
+            ErrorType::SerializerError(ErrorData {
                 error: err.to_string(),
             })
         })?;
