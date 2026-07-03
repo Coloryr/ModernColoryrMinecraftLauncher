@@ -80,8 +80,8 @@ pub enum ErrorType {
     /// Http请求出错
     HttpReadError(HttpReadErrorData),
 
-    /// Json处理错误
-    JsonError(ErrorData),
+    /// 序列化处理错误
+    SerializerError(ErrorData),
 
     /// 登录返回数据错误
     AuthDataError(String),

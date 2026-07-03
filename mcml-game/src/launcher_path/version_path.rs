@@ -131,7 +131,7 @@ fn load_optifine() {
 
     match json {
         Err(err) => {
-            mcml_log::error_type(ErrorType::JsonError(ErrorData {
+            mcml_log::error_type(ErrorType::SerializerError(ErrorData {
                 error: err.to_string(),
             }));
         }
@@ -174,7 +174,7 @@ fn load_liteloader() {
 
     match json {
         Err(err) => {
-            mcml_log::error_type(ErrorType::JsonError(ErrorData {
+            mcml_log::error_type(ErrorType::SerializerError(ErrorData {
                 error: err.to_string(),
             }));
         }
@@ -277,7 +277,7 @@ pub async fn add_game(obj: &VersionsObj) -> CoreResult<Arc<GameArgObj>> {
 
     let data = mojang_api::get_assets(&url).await?;
     let json = serde_json::from_slice::<GameArgObj>(&data).map_err(|err| {
-        ErrorType::JsonError(ErrorData {
+        ErrorType::SerializerError(ErrorData {
             error: err.to_string(),
         })
     })?;
@@ -439,7 +439,7 @@ pub fn get_version(version: &str) -> CoreResult<Arc<GameArgObj>> {
                 .join(format!("{}{}", version, names::JSON_EXT));
             let file = path_helper::open_read(&local)?;
             let json = serde_json::from_reader::<_, GameArgObj>(file).map_err(|err| {
-                ErrorType::JsonError(ErrorData {
+                ErrorType::SerializerError(ErrorData {
                     error: err.to_string(),
                 })
             })?;
@@ -562,7 +562,7 @@ pub fn get_neoforge_install_obj(mc: &str, version: &str) -> Option<Arc<ForgeInst
                     Some(temp1)
                 }
                 Err(err) => {
-                    mcml_log::error_type(ErrorType::JsonError(ErrorData {
+                    mcml_log::error_type(ErrorType::SerializerError(ErrorData {
                         error: err.to_string(),
                     }));
 
@@ -608,7 +608,7 @@ pub fn get_neoforge(mc: &str, version: &str) -> Option<Arc<ForgeLaunchObj>> {
                     Some(temp1)
                 }
                 Err(err) => {
-                    mcml_log::error_type(ErrorType::JsonError(ErrorData {
+                    mcml_log::error_type(ErrorType::SerializerError(ErrorData {
                         error: err.to_string(),
                     }));
 
@@ -654,7 +654,7 @@ pub fn get_forge_install_obj(mc: &str, version: &str) -> Option<Arc<ForgeInstall
                     Some(temp1)
                 }
                 Err(err) => {
-                    mcml_log::error_type(ErrorType::JsonError(ErrorData {
+                    mcml_log::error_type(ErrorType::SerializerError(ErrorData {
                         error: err.to_string(),
                     }));
 
@@ -701,7 +701,7 @@ pub fn get_forge(mc: &str, version: &str) -> Option<Arc<ForgeLaunchObj>> {
                     Some(temp1)
                 }
                 Err(err) => {
-                    mcml_log::error_type(ErrorType::JsonError(ErrorData {
+                    mcml_log::error_type(ErrorType::SerializerError(ErrorData {
                         error: err.to_string(),
                     }));
 
@@ -746,7 +746,7 @@ pub fn get_fabric(mc: &str, version: &str) -> Option<Arc<FabricLoaderObj>> {
                     Some(temp1)
                 }
                 Err(err) => {
-                    mcml_log::error_type(ErrorType::JsonError(ErrorData {
+                    mcml_log::error_type(ErrorType::SerializerError(ErrorData {
                         error: err.to_string(),
                     }));
 
@@ -792,7 +792,7 @@ pub fn get_quilt(mc: &str, version: &str) -> Option<Arc<QuiltLoaderObj>> {
                     Some(temp1)
                 }
                 Err(err) => {
-                    mcml_log::error_type(ErrorType::JsonError(ErrorData {
+                    mcml_log::error_type(ErrorType::SerializerError(ErrorData {
                         error: err.to_string(),
                     }));
 

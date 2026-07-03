@@ -60,7 +60,7 @@ impl From<NetError> for ErrorType {
                     None => Default::default(),
                 },
             }),
-            NetError::Json(error) => ErrorType::JsonError(ErrorData {
+            NetError::Json(error) => ErrorType::SerializerError(ErrorData {
                 error: error.to_string(),
             }),
         }

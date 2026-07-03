@@ -157,7 +157,7 @@ pub async fn get_optifine_version() -> CoreResult<Vec<GetOptifineObj>> {
         }
     } else {
         let mut obj = serde_json::from_str::<Vec<OptifineListObj>>(&data).map_err(|err| {
-            ErrorType::JsonError(ErrorData {
+            ErrorType::SerializerError(ErrorData {
                 error: err.to_string(),
             })
         })?;

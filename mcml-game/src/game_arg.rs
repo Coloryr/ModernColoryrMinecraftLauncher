@@ -875,7 +875,7 @@ impl InstanceSettingObj {
             if assets.is_err() {
                 let data = mojang_api::get_assets(&asset_index.url).await?;
                 let assets_obj = serde_json::from_slice::<AssetsObj>(&data).map_err(|err| {
-                    ErrorType::JsonError(ErrorData {
+                    ErrorType::SerializerError(ErrorData {
                         error: err.to_string(),
                     })
                 })?;
@@ -945,7 +945,7 @@ impl InstanceSettingObj {
                 if assets.is_err() {
                     let data = mcml_net::mojang_api::get_assets(&asset_index.url).await?;
                     let assets_obj = serde_json::from_slice::<AssetsObj>(&data).map_err(|err| {
-                        ErrorType::JsonError(ErrorData {
+                        ErrorType::SerializerError(ErrorData {
                             error: err.to_string(),
                         })
                     })?;

@@ -491,7 +491,7 @@ async fn get_forge_libs(mc: &str, version: &str, neo: bool) -> CoreResult<ForgeG
     if version_ok && install_ok {
         // 1.12.2以上 新版Forge
         let info = serde_json::from_str::<ForgeLaunchObj>(&version_json).map_err(|err| {
-            ErrorType::JsonError(ErrorData {
+            ErrorType::SerializerError(ErrorData {
                 error: err.to_string(),
             })
         })?;
@@ -500,7 +500,7 @@ async fn get_forge_libs(mc: &str, version: &str, neo: bool) -> CoreResult<ForgeG
 
         let install_info =
             serde_json::from_str::<ForgeInstallObj>(&install_json).map_err(|err| {
-                ErrorType::JsonError(ErrorData {
+                ErrorType::SerializerError(ErrorData {
                     error: err.to_string(),
                 })
             })?;
@@ -519,7 +519,7 @@ async fn get_forge_libs(mc: &str, version: &str, neo: bool) -> CoreResult<ForgeG
     } else if install_ok {
         // 旧版Forge
         let obj = serde_json::from_str::<ForgeInstallOldObj>(&install_json).map_err(|err| {
-            ErrorType::JsonError(ErrorData {
+            ErrorType::SerializerError(ErrorData {
                 error: err.to_string(),
             })
         })?;
@@ -551,7 +551,7 @@ async fn get_forge_libs(mc: &str, version: &str, neo: bool) -> CoreResult<ForgeG
         };
 
         let json_bytes = serde_json::to_vec(&info).map_err(|err| {
-            ErrorType::JsonError(ErrorData {
+            ErrorType::SerializerError(ErrorData {
                 error: err.to_string(),
             })
         })?;

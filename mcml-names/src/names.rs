@@ -64,6 +64,8 @@ pub const MOD_LIST_FILE: &str = "modlist.html";
 pub const LATEST_LOG_FILE: &str = "latest.log";
 pub const DEBUG_LOG_FILE: &str = "debug.log";
 pub const SERVER_MANIFEST_FILE: &str = "server-manifest.json";
+pub const FABRIC_MOD_FILE: &str = "fabric.mod.json";
+pub const QUILT_MOD_FILE: &str = "quilt.mod.json";
 
 pub const MINECRAFT_KEY: &str = "minecraft";
 pub const LANG_KEY1: &str = "minecraft/lang/";

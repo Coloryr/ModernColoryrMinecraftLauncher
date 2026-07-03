@@ -15,7 +15,7 @@ pub async fn get_quilt_libs(mc: &str, version: Option<&str>) -> CoreResult<Vec<F
     let meta = quilt_api::get_meta().await?;
 
     let obj = serde_json::from_slice::<QuiltMetaObj>(&meta).map_err(|err| {
-        ErrorType::JsonError(ErrorData {
+        ErrorType::SerializerError(ErrorData {
             error: err.to_string(),
         })
     })?;
@@ -32,7 +32,7 @@ pub async fn get_quilt_libs(mc: &str, version: Option<&str>) -> CoreResult<Vec<F
     if let Some(fabric) = fabric {
         let data = quilt_api::get_loader(mc, &fabric.version).await?;
         let obj = serde_json::from_slice::<QuiltLoaderObj>(&data).map_err(|err| {
-            ErrorType::JsonError(ErrorData {
+            ErrorType::SerializerError(ErrorData {
                 error: err.to_string(),
             })
         })?;
