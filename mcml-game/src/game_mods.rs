@@ -1,7 +1,6 @@
 use std::{
-    collections::HashSet,
-    fs::File,
-    io::Read,
+    collections::HashMap,
+    io::{Cursor, Read, Seek},
     path::{Path, PathBuf},
     sync::Mutex,
 };
@@ -17,7 +16,7 @@ use mcml_names::{
 };
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use toml::Table;
-use zip::{ZipArchive, read::ZipFile};
+use zip::ZipArchive;
 
 use crate::{launcher::instance_setting_obj::InstanceSettingObj, loader::LoaderType};
 
@@ -163,19 +162,184 @@ fn get_string_from_json(map: &serde_json::Map<String, serde_json::Value>, key: &
         .to_string()
 }
 
-fn read_forge_json(mut zip: ZipFile<'_, File>, mod_info: &mut ModObj) -> CoreResult<()> {
+/// 字符串引号状态
+#[derive(PartialEq)]
+enum Quote {
+    None,
+    Double,
+    Single,
+}
+
+/// 容错处理 mcmod.info 中常见的非法 JSON：
+/// - 单引号字符串：`'value'` → `"value"`
+/// - 数组内未加引号的标识符：`[mod_minecraftForge]` → `["mod_minecraftForge"]`
+/// - 字符串内未转义的控制字符：换行符 → `\n`，回车符 → `\r`，制表符 → `\t`
+fn sanitize_mcmod_json(json: &str) -> String {
+    let mut result = String::with_capacity(json.len() + 64);
+    let chars: Vec<char> = json.chars().collect();
+    let mut i = 0;
+    let mut quote = Quote::None;
+    let mut escape = false;
+
+    while i < chars.len() {
+        let ch = chars[i];
+
+        // 处理转义模式
+        if escape {
+            escape = false;
+            match quote {
+                Quote::Single => match ch {
+                    '\'' => result.push('\''),       // \' → '
+                    '"' => result.push_str("\\\""),  // \" → \"
+                    '\\' => result.push_str("\\\\"), // \\ → \\
+                    'n' => result.push_str("\\n"),
+                    'r' => result.push_str("\\r"),
+                    't' => result.push_str("\\t"),
+                    '/' => result.push_str("\\/"),
+                    other => {
+                        result.push_str("\\\\");
+                        result.push(other);
+                    }
+                },
+                Quote::Double | Quote::None => {
+                    result.push(ch);
+                }
+            }
+            i += 1;
+            continue;
+        }
+
+        // 反斜杠进入转义模式
+        if ch == '\\' {
+            match quote {
+                Quote::Double => {
+                    escape = true;
+                    result.push(ch); // 双引号内的转义已合法，直接保留
+                }
+                Quote::Single => {
+                    escape = true; // 单引号内需要转换，不先推入 \
+                }
+                Quote::None => {
+                    result.push(ch);
+                }
+            }
+            i += 1;
+            continue;
+        }
+
+        // 双引号
+        if ch == '"' {
+            match quote {
+                Quote::Double => {
+                    quote = Quote::None;
+                    result.push(ch);
+                }
+                Quote::Single => {
+                    // 单引号字符串内的双引号 → 转义
+                    result.push_str("\\\"");
+                }
+                Quote::None => {
+                    quote = Quote::Double;
+                    result.push(ch);
+                }
+            }
+            i += 1;
+            continue;
+        }
+
+        // 单引号 → 统一转换为双引号
+        if ch == '\'' {
+            match quote {
+                Quote::Single => {
+                    quote = Quote::None;
+                    result.push('"');
+                }
+                Quote::Double => {
+                    result.push(ch); // 双引号内的单引号是普通字符
+                }
+                Quote::None => {
+                    quote = Quote::Single;
+                    result.push('"');
+                }
+            }
+            i += 1;
+            continue;
+        }
+
+        // 字符串内未转义的控制字符
+        if quote != Quote::None {
+            match ch {
+                '\n' => result.push_str("\\n"),
+                '\r' => result.push_str("\\r"),
+                '\t' => result.push_str("\\t"),
+                other => result.push(other),
+            }
+            i += 1;
+            continue;
+        }
+
+        // 仅在字符串外部处理数组内裸标识符
+        if ch == '[' || ch == ',' {
+            result.push(ch);
+            i += 1;
+
+            // 跳过空白
+            while i < chars.len() && chars[i].is_whitespace() {
+                result.push(chars[i]);
+                i += 1;
+            }
+
+            // 检测裸标识符（以字母或下划线开头）
+            if i < chars.len() && (chars[i].is_alphabetic() || chars[i] == '_') {
+                let start = i;
+                while i < chars.len()
+                    && (chars[i].is_alphanumeric() || chars[i] == '_' || chars[i] == '.')
+                {
+                    i += 1;
+                }
+                let word: String = chars[start..i].iter().collect();
+
+                // 不引用 JSON 字面量
+                if matches!(word.as_str(), "true" | "false" | "null") || word.parse::<f64>().is_ok()
+                {
+                    result.push_str(&word);
+                } else {
+                    result.push('"');
+                    result.push_str(&word);
+                    result.push('"');
+                }
+            }
+
+            continue;
+        }
+
+        result.push(ch);
+        i += 1;
+    }
+
+    result
+}
+
+fn read_forge_json(mut reader: impl Read, mod_info: &mut ModObj) -> CoreResult<()> {
     let mut json = String::new();
-    zip.read_to_string(&mut json).map_err(|err| {
+    reader.read_to_string(&mut json).map_err(|err| {
         ErrorType::ArchiveReadError(ErrorData {
             error: err.to_string(),
         })
     })?;
 
-    let obj = serde_json::from_str::<serde_json::Value>(&json).map_err(|err| {
-        ErrorType::SerializerError(ErrorData {
-            error: err.to_string(),
-        })
-    })?;
+    let obj = match serde_json::from_str::<serde_json::Value>(&json) {
+        Ok(obj) => obj,
+        Err(_) => {
+            // 尝试容错处理：修复数组内未加引号的标识符
+            let sanitized = sanitize_mcmod_json(&json);
+            serde_json::from_str::<serde_json::Value>(&sanitized).map_err(|err| {
+                ErrorType::SerializerError(ErrorData {
+                    error: err.to_string(),
+                })
+            })?
+        }
+    };
 
     let values = match obj {
         serde_json::Value::Array(values) => Some(values),
@@ -212,12 +376,12 @@ fn read_forge_json(mut zip: ZipFile<'_, File>, mod_info: &mut ModObj) -> CoreRes
 }
 
 fn read_forge_toml(
-    mut zip: ZipFile<'_, File>,
+    mut reader: impl Read,
     loader: LoaderType,
     mod_info: &mut ModObj,
 ) -> CoreResult<()> {
     let mut toml = String::new();
-    zip.read_to_string(&mut toml).map_err(|err| {
+    reader.read_to_string(&mut toml).map_err(|err| {
         ErrorType::ArchiveReadError(ErrorData {
             error: err.to_string(),
         })
@@ -315,9 +479,9 @@ fn read_forge_toml(
     Ok(())
 }
 
-fn read_fabric_json(mut zip: ZipFile<'_, File>, mod_info: &mut ModObj) -> CoreResult<()> {
+fn read_fabric_json(mut reader: impl Read, mod_info: &mut ModObj) -> CoreResult<()> {
     let mut json = String::new();
-    zip.read_to_string(&mut json).map_err(|err| {
+    reader.read_to_string(&mut json).map_err(|err| {
         ErrorType::ArchiveReadError(ErrorData {
             error: err.to_string(),
         })
@@ -391,9 +555,9 @@ fn read_fabric_json(mut zip: ZipFile<'_, File>, mod_info: &mut ModObj) -> CoreRe
     Ok(())
 }
 
-fn read_quilt_json(mut zip: ZipFile<'_, File>, mod_info: &mut ModObj) -> CoreResult<()> {
+fn read_quilt_json(mut reader: impl Read, mod_info: &mut ModObj) -> CoreResult<()> {
     let mut json = String::new();
-    zip.read_to_string(&mut json).map_err(|err| {
+    reader.read_to_string(&mut json).map_err(|err| {
         ErrorType::ArchiveReadError(ErrorData {
             error: err.to_string(),
         })
@@ -450,15 +614,203 @@ fn read_quilt_json(mut zip: ZipFile<'_, File>, mod_info: &mut ModObj) -> CoreRes
     Ok(())
 }
 
-fn read_core_mod(zip: &ZipArchive<File>) -> CoreResult<ModItemObj> {
-    
+fn parse_manifest(content: &str) -> HashMap<String, String> {
+    let mut map = HashMap::new();
+    let mut current_key = String::new();
+    let mut current_value = String::new();
 
-    todo!()
+    for line in content.lines() {
+        if line.is_empty() {
+            continue;
+        }
+
+        if line.starts_with(' ') {
+            // 续行
+            current_value.push_str(line.trim());
+        } else if let Some((key, value)) = line.split_once(':') {
+            if !current_key.is_empty() {
+                map.insert(current_key, current_value.trim().to_string());
+            }
+            current_key = key.trim().to_string();
+            current_value = value.trim().to_string();
+        }
+    }
+
+    if !current_key.is_empty() {
+        map.insert(current_key, current_value.trim().to_string());
+    }
+    map
 }
 
-fn read_jar_in_jar() {}
+fn read_core_mod(
+    archive: &mut ZipArchive<impl Read + Seek>,
+    mod_info: &mut ModObj,
+) -> CoreResult<()> {
+    // 读取 META-INF/MANIFEST.MF
+    let mut manifest_file = match archive.by_name("META-INF/MANIFEST.MF") {
+        Ok(file) => file,
+        Err(_) => return Ok(()),
+    };
 
-fn read_mod_info<P: AsRef<Path>>(path: P) -> CoreResult<ModObj> {
+    let mut info = ModItemObj::default();
+
+    let mut content = String::new();
+    manifest_file.read_to_string(&mut content).map_err(|err| {
+        ErrorType::ArchiveReadError(ErrorData {
+            error: err.to_string(),
+        })
+    })?;
+
+    let manifest = parse_manifest(&content);
+
+    // 检查 FMLCorePlugin（Forge core mod 主类）
+    if let Some(core_plugin) = manifest.get("FMLCorePlugin") {
+        info.mod_id = core_plugin.clone();
+        info.name = core_plugin
+            .rsplit('.')
+            .next()
+            .unwrap_or(core_plugin)
+            .to_string();
+        info.loaders = LoaderType::Forge;
+    }
+
+    // 检查 TweakClass（LaunchWrapper 注入类）
+    if let Some(tweak_class) = manifest.get("TweakClass") {
+        if info.mod_id.is_empty() {
+            info.mod_id = tweak_class.clone();
+            info.name = tweak_class
+                .rsplit('.')
+                .next()
+                .unwrap_or(tweak_class)
+                .to_string();
+        }
+        info.loaders = LoaderType::Forge;
+    }
+
+    mod_info.info.push(info);
+    mod_info.core = true;
+    Ok(())
+}
+
+/// 读取jarinjar
+/// - `archive`: 压缩包
+/// - `mod_info`: 模组信息
+fn read_jar_in_jar(
+    archive: &mut ZipArchive<impl Read + Seek>,
+    mod_info: &mut ModObj,
+) -> CoreResult<()> {
+    // 收集所有 META-INF/jarjar/ 目录下的 .jar 文件
+    let jar_entries: Vec<usize> = (0..archive.len())
+        .filter_map(|i| {
+            archive.by_index(i).ok().and_then(|entry| {
+                let name = entry.name();
+                if name.ends_with(names::JAR_EXT)
+                    && (name.starts_with(names::MOD_JAR_JAR_DIR)
+                        || name.starts_with(names::MOD_JARS_DIR))
+                {
+                    Some(i)
+                } else {
+                    None
+                }
+            })
+        })
+        .collect();
+
+    for idx in jar_entries {
+        let mut entry = archive.by_index(idx).map_err(|err| {
+            ErrorType::ArchiveReadError(ErrorData {
+                error: err.to_string(),
+            })
+        })?;
+
+        let mut bytes = Vec::new();
+        entry.read_to_end(&mut bytes).map_err(|err| {
+            ErrorType::ArchiveReadError(ErrorData {
+                error: err.to_string(),
+            })
+        })?;
+
+        let cursor = Cursor::new(bytes);
+        let mut inner_zip = ZipArchive::new(cursor).map_err(|err| {
+            ErrorType::ArchiveOpenError(FileSystemErrorData {
+                path: PathBuf::new(),
+                error: err.to_string(),
+            })
+        })?;
+
+        match parse_mod_archive(&mut inner_zip) {
+            Ok(inmod) => {
+                mod_info.jar_in_jar.push(inmod);
+            }
+            Err(err) => {
+                mcml_log::error_type(err);
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// 从任意可读的 ZIP 归档中解析模组信息（核心解析逻辑）
+/// - `archive`: 压缩包
+fn parse_mod_archive(archive: &mut ZipArchive<impl Read + Seek>) -> CoreResult<ModObj> {
+    let mut mod_info = ModObj::default();
+
+    // mcmod.info
+    if let Ok(item) = archive.by_name(names::MC_MOD_INFO_FILE) {
+        read_forge_json(item, &mut mod_info)?;
+    }
+
+    // mods.toml
+    macro_rules! try_read_file {
+        ($archive:expr, $name:expr, $func:expr, $loader:expr) => {
+            if let Ok(item) = $archive.by_name($name) {
+                $func(item, $loader, &mut mod_info)?;
+            }
+        };
+    }
+
+    try_read_file!(
+        archive,
+        names::MC_MOD_TOML_FILE,
+        read_forge_toml,
+        LoaderType::Forge
+    );
+    try_read_file!(
+        archive,
+        names::NEO_TOML_FILE,
+        read_forge_toml,
+        LoaderType::NeoForge
+    );
+    try_read_file!(
+        archive,
+        names::NEO_TOML1_FILE,
+        read_forge_toml,
+        LoaderType::NeoForge
+    );
+
+    // fabric.mod.json
+    if let Ok(item) = archive.by_name(names::FABRIC_MOD_FILE) {
+        read_fabric_json(item, &mut mod_info)?;
+    }
+
+    // quilt.mod.json
+    if let Ok(item) = archive.by_name(names::QUILT_MOD_FILE) {
+        read_quilt_json(item, &mut mod_info)?;
+    }
+
+    // 扫描coremod
+    read_core_mod(archive, &mut mod_info)?;
+
+    // 扫描jar-in-jar
+    read_jar_in_jar(archive, &mut mod_info)?;
+
+    Ok(mod_info)
+}
+
+/// 读取模组信息
+/// - `path`: 路径
+pub fn read_mod_info<P: AsRef<Path>>(path: P) -> CoreResult<ModObj> {
     let file = path_helper::open_read(&path)?;
     let mut zip = ZipArchive::new(file).map_err(|err| {
         ErrorType::ArchiveOpenError(FileSystemErrorData {
@@ -467,68 +819,28 @@ fn read_mod_info<P: AsRef<Path>>(path: P) -> CoreResult<ModObj> {
         })
     })?;
 
-    let mut mod_info = ModObj::default();
+    let mut mod_info = parse_mod_archive(&mut zip)?;
     mod_info.file = path.as_ref().to_path_buf();
 
-    // modid.info
-    if let Ok(item) = zip.by_name(names::MC_MOD_INFO_FILE) {
-        let _ = read_forge_json(item, &mut mod_info);
-
-        // 从注解扫描 side
-        if let Ok(scan_result) = crate::class_scan::scan_jar(path.as_ref()) {
-            for scan_mod in &scan_result.mods {
-                if let Some(info) = mod_info
-                    .info
-                    .iter_mut()
-                    .find(|info| info.mod_id == scan_mod.modid)
-                {
-                    info.side = scan_mod.side;
-                }
+    // 从注解扫描 side（仅文件类模组可用）
+    if let Ok(scan_result) = crate::class_scan::scan_jar(path.as_ref()) {
+        for scan_mod in &scan_result.mods {
+            if let Some(info) = mod_info
+                .info
+                .iter_mut()
+                .find(|info| info.mod_id == scan_mod.modid)
+            {
+                info.side = scan_mod.side;
             }
         }
-    }
-
-    // mods.toml
-    macro_rules! try_read_file {
-        ($zip:expr, $name:expr, $func:expr, $loader:expr) => {
-            if let Ok(item) = $zip.by_name($name) {
-                let _ = $func(item, $loader, &mut mod_info);
-            }
-        };
-    }
-
-    try_read_file!(
-        zip,
-        names::MC_MOD_TOML_FILE,
-        read_forge_toml,
-        LoaderType::Forge
-    );
-    try_read_file!(
-        zip,
-        names::NEO_TOML_FILE,
-        read_forge_toml,
-        LoaderType::NeoForge
-    );
-    try_read_file!(
-        zip,
-        names::NEO_TOML1_FILE,
-        read_forge_toml,
-        LoaderType::NeoForge
-    );
-
-    // fabric.mod.json
-    if let Ok(item) = zip.by_name(names::FABRIC_MOD_FILE) {
-        read_fabric_json(item, &mut mod_info)?;
-    }
-
-    // quilt.mod.json
-    if let Ok(item) = zip.by_name(names::QUILT_MOD_FILE) {
-        read_quilt_json(item, &mut mod_info)?;
     }
 
     Ok(mod_info)
 }
 
+/// 读模组
+/// - `path`: 路径
+/// - `sha256`: 是否计算sha256
 fn read_mod<P: AsRef<Path>>(path: P, sha256: bool) -> CoreResult<ModObj> {
     let sha1 = hash_helper::gen_hash_from_file(HashType::Sha1, path.as_ref())?;
 
@@ -545,6 +857,9 @@ fn read_mod<P: AsRef<Path>>(path: P, sha256: bool) -> CoreResult<ModObj> {
     Ok(mod_info)
 }
 
+/// 扫描文件列表
+/// - `files`: 文件列表
+/// - `process_fn`: 处理的函数
 fn scan_mod_files<F>(files: Vec<PathBuf>, process_fn: F) -> Vec<ModObj>
 where
     F: Fn(&PathBuf, bool) -> CoreResult<ModObj> + Send + Sync,

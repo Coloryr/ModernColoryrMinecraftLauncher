@@ -1,5 +1,7 @@
+use std::path::Path;
+
 use mcml_base::path_helper;
-use mcml_game::class_scan;
+use mcml_game::{class_scan, game_mods};
 use toml::Table;
 
 #[tokio::test]
@@ -42,4 +44,60 @@ fn toml() {
 
     let datas = file.parse::<Table>().unwrap();
     println!("{}", datas);
-}   
+}
+
+#[test]
+fn fail_json_mod() {
+    let files = path_helper::get_files("./tests/fail_mods/");
+    for item in files.iter() {
+        let mods = game_mods::read_mod_info(item);
+        match mods {
+            Ok(mods) => {
+                assert!(!mods.info.is_empty());
+                println!("modid = {}", mods.info.iter().next().unwrap().mod_id);
+            }
+            Err(err) => {
+                println!("error file: {}", item.to_string_lossy());
+                println!("error: {}", err);
+            }
+        }
+    }
+}
+
+#[test]
+fn core_mod() {
+    let files = path_helper::get_files("./tests/core_mods/");
+    for item in files.iter() {
+        let mods = game_mods::read_mod_info(item);
+        match mods {
+            Ok(mods) => {
+                assert!(!mods.info.is_empty());
+                println!("modid = {}", mods.info.iter().next().unwrap().mod_id);
+            }
+            Err(err) => {
+                println!("error file: {}", item.to_string_lossy());
+                println!("error: {}", err);
+            }
+        }
+    }
+}
+
+#[test]
+fn jar_in_jar_mod() {
+    let mods = game_mods::read_mod_info("./tests/mods/[fabric-1.21]AllMusic_Server-4.0.3.jar");
+    match mods {
+        Ok(mods) => {
+            assert!(!mods.jar_in_jar.is_empty());
+            for item in mods.jar_in_jar.iter() {
+                let info = item.info.iter().next().unwrap();
+                println!("jar in jar: {}", info.mod_id);
+                for item in item.jar_in_jar.iter() {
+                    println!("    jar in jar: {}", item.info.iter().next().unwrap().mod_id);
+                }
+            }
+        }
+        Err(err) => {
+            println!("error: {}", err);
+        }
+    }
+}

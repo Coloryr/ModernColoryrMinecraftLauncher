@@ -36,6 +36,7 @@ pub mod game_launch;
 pub mod game_libraries;
 pub mod game_log;
 pub mod game_mods;
+pub mod game_options;
 pub mod game_saves;
 pub mod game_server;
 pub mod launcher;

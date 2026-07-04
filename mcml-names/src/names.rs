@@ -130,6 +130,7 @@ pub const MC_MOD_TOML_FILE: &str = "META-INF/mods.toml";
 pub const NEO_TOML_FILE: &str = "META-INF/neoforge.mods.toml";
 pub const NEO_TOML1_FILE: &str = "neoforge.mods.toml";
 pub const MOD_JAR_JAR_DIR: &str = "META-INF/jarjar/";
+pub const MOD_JARS_DIR: &str = "META-INF/jars/";
 
 pub const MCML: &str = "Mcml";
 pub const MINECRAFT: &str = "Minecraft";
