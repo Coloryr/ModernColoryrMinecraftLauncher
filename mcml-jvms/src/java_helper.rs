@@ -14,8 +14,8 @@ use crate::JavaInfoObj;
 pub fn find(dir: &PathBuf) -> Option<PathBuf> {
     let sys = get_system_info();
     match sys.os {
-        Os::Windows => path_helper::get_file(dir, names::JAVAW_FILE),
-        Os::Linux | Os::MacOS => path_helper::get_file(dir, names::JAVA_FILE),
+        Os::Windows => path_helper::search_file(dir, names::JAVAW_FILE),
+        Os::Linux | Os::MacOS => path_helper::search_file(dir, names::JAVA_FILE),
         _ => None,
     }
 }
@@ -144,14 +144,14 @@ pub(crate) fn find_java_inner(java_paths: &mut HashSet<PathBuf>) {
         let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
         let subkey = hklm
             .open_subkey(key_path)
-            .map_err(|_| ErrorType::InfoNotFound)?;
+            .map_err(|_| ErrorType::InfoNotFound(key_path.to_string()))?;
         let mut paths = Vec::new();
 
         for name in subkey.enum_keys() {
-            let key_name = name.map_err(|_| ErrorType::InfoNotFound)?;
+            let key_name = name.map_err(|_| ErrorType::InfoNotFound(key_path.to_string()))?;
             let key = subkey
                 .open_subkey(&key_name)
-                .map_err(|_| ErrorType::InfoNotFound)?;
+                .map_err(|_| ErrorType::InfoNotFound(key_name))?;
             if let Ok(java_home) = key.get_value::<String, _>("JavaHome") {
                 paths.push(PathBuf::from(java_home));
             }
@@ -164,14 +164,14 @@ pub(crate) fn find_java_inner(java_paths: &mut HashSet<PathBuf>) {
         let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
         let subkey = hklm
             .open_subkey(key_path)
-            .map_err(|_| ErrorType::InfoNotFound)?;
+            .map_err(|_| ErrorType::InfoNotFound(key_path.to_string()))?;
         let mut paths = Vec::new();
 
         for name in subkey.enum_keys() {
-            let key_name = name.map_err(|_| ErrorType::InfoNotFound)? + r"\hotspot\MSI";
+            let key_name = name.map_err(|_| ErrorType::InfoNotFound(key_path.to_string()))? + r"\hotspot\MSI";
             let key = subkey
                 .open_subkey(&key_name)
-                .map_err(|_| ErrorType::InfoNotFound)?;
+                .map_err(|_| ErrorType::InfoNotFound(key_name))?;
             if let Ok(java_home) = key.get_value::<String, _>("Path") {
                 paths.push(PathBuf::from(java_home));
             }
@@ -184,14 +184,14 @@ pub(crate) fn find_java_inner(java_paths: &mut HashSet<PathBuf>) {
         let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
         let subkey = hklm
             .open_subkey(key_path)
-            .map_err(|_| ErrorType::InfoNotFound)?;
+            .map_err(|_| ErrorType::InfoNotFound(key_path.to_string()))?;
         let mut paths = Vec::new();
 
         for name in subkey.enum_keys() {
-            let key_name = name.map_err(|_| ErrorType::InfoNotFound)?;
+            let key_name = name.map_err(|_| ErrorType::InfoNotFound(key_path.to_string()))?;
             let key = subkey
                 .open_subkey(&key_name)
-                .map_err(|_| ErrorType::InfoNotFound)?;
+                .map_err(|_| ErrorType::InfoNotFound(key_name))?;
             if let Ok(java_home) = key.get_value::<String, _>("InstallationPath") {
                 paths.push(PathBuf::from(java_home));
             }

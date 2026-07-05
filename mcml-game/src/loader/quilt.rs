@@ -54,7 +54,7 @@ pub async fn get_quilt_libs(mc: &str, version: Option<&str>) -> CoreResult<Vec<F
 
         Ok(list)
     } else {
-        Err(ErrorType::InfoNotFound)
+        Err(ErrorType::InfoNotFound(mc.to_string()))
     }
 }
 

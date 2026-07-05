@@ -801,7 +801,9 @@ impl InstanceSettingObj {
                 LoaderType::Custom => {
                     let loader_file = self.get_loader_file();
                     if !loader_file.exists() {
-                        return Err(ErrorType::InfoNotFound);
+                        return Err(ErrorType::InfoNotFound(
+                            loader_file.to_string_lossy().to_string(),
+                        ));
                     }
                     let res = self.decode_loader_jar_with_path(&loader_file).await?;
                     loader_libs = Some(res.libs);
@@ -880,7 +882,7 @@ impl InstanceSettingObj {
                     })
                 })?;
                 if assets_obj.objects.is_empty() {
-                    return Err(ErrorType::InfoNotFound);
+                    return Err(ErrorType::InfoNotFound(asset_index.id.clone()));
                 }
                 assets_path::add_index(&game, &mut Cursor::new(data));
             }
@@ -950,7 +952,7 @@ impl InstanceSettingObj {
                         })
                     })?;
                     if assets_obj.objects.is_empty() {
-                        return Err(ErrorType::InfoNotFound);
+                        return Err(ErrorType::InfoNotFound(asset_index.id.clone()));
                     }
                     assets_path::add_index(&item.base, &mut Cursor::new(data));
                 }

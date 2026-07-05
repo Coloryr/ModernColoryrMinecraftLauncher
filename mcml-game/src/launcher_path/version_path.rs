@@ -455,7 +455,7 @@ pub fn get_version(version: &str) -> CoreResult<Arc<GameArgObj>> {
 
 /// 检查游戏版本更新
 /// - `version`: 游戏版本
-pub async fn check_update(version: &str) -> CoreResult<Arc<GameArgObj>> {
+pub async fn check_update(mc: &str) -> CoreResult<Arc<GameArgObj>> {
     // 直接从在线更新数据
     get_version_from_online().await?;
 
@@ -463,19 +463,19 @@ pub async fn check_update(version: &str) -> CoreResult<Arc<GameArgObj>> {
     let item = versions
         .versions
         .iter()
-        .filter(|&item| item.id.eq_ignore_ascii_case(version))
+        .filter(|&item| item.id.eq_ignore_ascii_case(mc))
         .next();
 
     match item {
         // 在线也没有这个版本号
-        None => Err(ErrorType::InfoNotFound),
+        None => Err(ErrorType::InfoNotFound(mc.to_string())),
         Some(item) => {
-            let local = BASE_DIR.get().unwrap().join(format!("{}.json", version));
+            let local = BASE_DIR.get().unwrap().join(format!("{}.json", mc));
             let sha1 = hash_helper::gen_hash_from_file_async(HashType::Sha1, &local).await?;
             if sha1 != item.sha1 {
                 Ok(add_game(item).await?)
             } else {
-                Ok(get_version(version)?)
+                Ok(get_version(mc)?)
             }
         }
     }

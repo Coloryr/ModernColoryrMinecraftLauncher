@@ -4,10 +4,11 @@
 use std::env;
 #[cfg(not(windows))]
 use std::process::{Command, Stdio};
+use std::time::SystemTime;
 #[cfg(not(windows))]
 use std::time::UNIX_EPOCH;
 
-use std::fs;
+use std::fs::{self, DirEntry};
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 
@@ -289,14 +290,52 @@ pub fn get_files<P: AsRef<Path>>(path: P) -> Vec<PathBuf> {
 
     if let Ok(entries) = fs::read_dir(path) {
         for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_file() {
-                files.push(path);
+            if entry.path().is_file() {
+                files.push(entry.path());
             }
         }
     }
 
     files
+}
+
+/// 获取文件夹下面最后写入的文件
+/// - `path`: 获取的目录
+pub fn get_last_written_file<P: AsRef<Path>>(path: P) -> CoreResult<Option<PathBuf>> {
+    let entries = fs::read_dir(&path).map_err(|err| {
+        ErrorType::FileSystemError(FileSystemErrorData {
+            path: path.as_ref().to_path_buf(),
+            error: err.to_string(),
+        })
+    })?;
+
+    let mut files: Vec<(PathBuf, SystemTime)> = Vec::new();
+
+    for entry in entries {
+        let entry = entry.map_err(|err| {
+            ErrorType::FileSystemError(FileSystemErrorData {
+                path: path.as_ref().to_path_buf(),
+                error: err.to_string(),
+            })
+        })?;
+        let path = entry.path();
+
+        if path.is_file() {
+            let metadata = fs::metadata(&path).map_err(|err| {
+                ErrorType::FileSystemError(FileSystemErrorData {
+                    path: path.clone(),
+                    error: err.to_string(),
+                })
+            })?;
+            if let Ok(modified) = metadata.modified() {
+                files.push((path, modified));
+            }
+        }
+    }
+
+    files.sort_by(|a, b| b.1.cmp(&a.1));
+
+    Ok(files.first().map(|(path, _)| path.clone()))
 }
 
 /// 获取目录占用大小
@@ -480,7 +519,7 @@ pub async fn copy_dir_async<P: AsRef<Path>>(from: P, to: P) -> CoreResult<()> {
 /// 查找文件
 /// - `path`: 查找的目录
 /// - `name`: 查找的文件名
-pub fn get_file<P: AsRef<Path>>(path: P, name: &str) -> Option<PathBuf> {
+pub fn search_file<P: AsRef<Path>>(path: P, name: &str) -> Option<PathBuf> {
     let files = get_all_files(path);
     files.into_iter().find(|f| f.file_name().unwrap() == name)
 }

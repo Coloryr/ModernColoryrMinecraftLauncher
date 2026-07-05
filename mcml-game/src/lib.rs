@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, VecDeque},
     path::{Path, PathBuf},
     sync::{Arc, LazyLock, RwLock},
     thread,
@@ -26,6 +26,7 @@ use crate::{
     },
     launcher_path::instance_path,
 };
+
 pub mod class_scan;
 pub mod dyn_file;
 pub mod game_arg;
@@ -37,6 +38,7 @@ pub mod game_libraries;
 pub mod game_log;
 pub mod game_mods;
 pub mod game_options;
+pub mod game_resourcepacks;
 pub mod game_saves;
 pub mod game_server;
 pub mod launcher;
@@ -597,5 +599,12 @@ impl InstanceSettingObj {
     pub async fn set_icon(&mut self, icon: InputFile) -> CoreResult<()> {
         let file = self.get_icon_file();
         icon.save_file(file).await
+    }
+
+    /// 获取运行中的日志
+    pub fn get_runtime_log(&self) -> Option<Arc<VecDeque<GameLogItemObj>>> {
+        let logs = RUNTIME_LOGS.read().unwrap();
+        logs.get(&self.uuid)
+            .map(|log| log.logs.read().unwrap().clone())
     }
 }

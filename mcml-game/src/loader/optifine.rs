@@ -34,10 +34,10 @@ pub async fn get_optifine_libs(mc: &str, version: &str) -> CoreResult<Vec<FileIt
                     hash: FileHash::None,
                     later: LaterRun::None,
                 }]),
-                None => Err(ErrorType::InfoNotFound),
+                None => Err(ErrorType::InfoNotFound(mc.to_string())),
             }
         }
-        None => Err(ErrorType::InfoNotFound),
+        None => Err(ErrorType::InfoNotFound(mc.to_string())),
     }
 }
 

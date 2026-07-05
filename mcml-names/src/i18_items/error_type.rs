@@ -145,7 +145,7 @@ pub enum ErrorType {
     Base64Error(ErrorData),
 
     /// 所需文件未能找到
-    InfoNotFound,
+    InfoNotFound(String),
 
     /// 下载文件覆盖错误
     DownloadFileOverFail(DownloadFileOverFailData),

@@ -41,7 +41,7 @@ pub async fn get_fabric_libs(mc: &str, version: Option<&str>) -> CoreResult<Vec<
 
         Ok(obj.make_libs())
     } else {
-        Err(ErrorType::InfoNotFound)
+        Err(ErrorType::InfoNotFound(mc.to_string()))
     }
 }
 

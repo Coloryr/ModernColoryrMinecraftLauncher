@@ -448,7 +448,7 @@ async fn get_forge_libs(mc: &str, version: &str, neo: bool) -> CoreResult<ForgeG
     if !installer.check_hash() {
         let res = mcml_downloader::run_download_task(vec![installer.clone()]).await;
         if !res {
-            return Err(ErrorType::InfoNotFound);
+            return Err(ErrorType::InfoNotFound(mc.to_string()));
         }
     }
 
@@ -562,7 +562,7 @@ async fn get_forge_libs(mc: &str, version: &str, neo: bool) -> CoreResult<ForgeG
             installs: Vec::new(),
         })
     } else {
-        Err(ErrorType::InfoNotFound)
+        Err(ErrorType::InfoNotFound(mc.to_string()))
     }
 }
 

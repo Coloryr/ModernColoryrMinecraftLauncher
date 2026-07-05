@@ -1475,6 +1475,7 @@ dependencies = [
  "chrono",
  "encoding_rs",
  "encoding_rs_io",
+ "flate2",
  "mcml-auth",
  "mcml-base",
  "mcml-config",
