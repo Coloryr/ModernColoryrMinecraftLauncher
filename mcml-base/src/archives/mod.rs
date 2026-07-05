@@ -3,7 +3,7 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 
-use mcml_names::{i18_items::error_type::ErrorType, names};
+use mcml_names::{i18_items::error_type::CoreResult, names};
 
 use crate::archives::{r7z_runner::R7zProcess, tar_runner::TarProcess, zip_runner::ZipProcess};
 
@@ -34,9 +34,7 @@ impl TarMode {
 
         if file_name.ends_with(names::TAR_GZ_EXT) || file_name.ends_with(names::TGZ_EXT) {
             Some(TarMode::Gz)
-        } else if file_name.ends_with(names::TAR_XZ_EXT)
-            || file_name.ends_with(names::TXZ_EXT)
-        {
+        } else if file_name.ends_with(names::TAR_XZ_EXT) || file_name.ends_with(names::TXZ_EXT) {
             Some(TarMode::Xz)
         } else {
             None
@@ -82,8 +80,8 @@ pub(crate) trait ArchiveRun: Send + Sync {
         pack_dir: &Path,
         root_path: Option<&Path>,
         filter: &Option<Vec<String>>,
-    ) -> Result<(), ErrorType>;
-    fn decompress(&self, archive_file: &Path, output_dir: &Path) -> Result<(), ErrorType>;
+    ) -> CoreResult<()>;
+    fn decompress(&self, archive_file: &Path, output_dir: &Path) -> CoreResult<()>;
 }
 
 pub trait ArchiveGui: Send + Sync {
@@ -117,7 +115,7 @@ pub fn compress<P: AsRef<Path>>(
     root_path: Option<P>,
     filter: &Option<Vec<String>>,
     gui: Option<Box<dyn ArchiveGui + Send + Sync>>,
-) -> Result<(), ErrorType> {
+) -> CoreResult<()> {
     let precess: Box<dyn ArchiveRun + Send + Sync> = match archive_type {
         ArchiveType::Zip => Box::new(ZipProcess::new(ArchiveProcess::new(gui))),
         ArchiveType::R7Z => Box::new(R7zProcess::new(ArchiveProcess::new(gui))),
@@ -148,7 +146,7 @@ pub fn decompress<P: AsRef<Path>>(
     archive_file: P,
     output_dir: P,
     gui: Option<Box<dyn ArchiveGui + Send + Sync>>,
-) -> Result<(), ErrorType> {
+) -> CoreResult<()> {
     let precess: Box<dyn ArchiveRun + Send + Sync> = match archive_type {
         ArchiveType::Zip => Box::new(ZipProcess::new(ArchiveProcess::new(gui))),
         ArchiveType::R7Z => Box::new(R7zProcess::new(ArchiveProcess::new(gui))),

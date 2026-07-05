@@ -153,7 +153,7 @@ pub async fn get_optifine_version() -> CoreResult<Vec<GetOptifineObj>> {
         }
 
         if list.is_empty() {
-            return Err(ErrorType::InfoNotFound);
+            return Err(ErrorType::InfoNotFound(String::from("optifine url")));
         }
     } else {
         let mut obj = serde_json::from_str::<Vec<OptifineListObj>>(&data).map_err(|err| {
