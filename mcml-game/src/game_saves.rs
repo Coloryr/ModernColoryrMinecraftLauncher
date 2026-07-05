@@ -2,7 +2,6 @@ use std::{
     io::{Read, Seek},
     path::{Path, PathBuf},
     sync::Arc,
-    time::SystemTime,
 };
 
 use chrono::{Datelike, Local, Timelike};
@@ -11,7 +10,7 @@ use mcml_base::{
     path_helper,
 };
 use mcml_names::{i18_items::error_type::CoreResult, names};
-use mcml_nbt::{NbtType, nbt_file::NbtFile};
+use mcml_nbt::{NbtType, nbt_file::NbtFile, nbt_types::NbtCompound};
 
 use crate::launcher::instance_setting_obj::InstanceSettingObj;
 
@@ -59,59 +58,89 @@ impl Default for SaveObj {
     }
 }
 
+// ---- NBT 辅助提取函数 ----
+
+/// 从 NbtCompound 中提取 `&NbtCompound`
+fn get_compound<'a>(c: &'a NbtCompound, key: &str) -> Option<&'a NbtCompound> {
+    match c.data.get(key) {
+        Some(NbtType::Compound(v)) => Some(v),
+        _ => None,
+    }
+}
+
+/// 从 NbtCompound 中提取 i64
+fn get_long(c: &NbtCompound, key: &str) -> Option<i64> {
+    match c.data.get(key) {
+        Some(NbtType::Long(v)) => Some(v.data),
+        _ => None,
+    }
+}
+
+/// 从 NbtCompound 中提取 i32
+fn get_int(c: &NbtCompound, key: &str) -> Option<i32> {
+    match c.data.get(key) {
+        Some(NbtType::Int(v)) => Some(v.data),
+        _ => None,
+    }
+}
+
+/// 从 NbtCompound 中提取 u8
+fn get_byte(c: &NbtCompound, key: &str) -> Option<u8> {
+    match c.data.get(key) {
+        Some(NbtType::Byte(v)) => Some(v.data),
+        _ => None,
+    }
+}
+
+/// 从 NbtCompound 中提取 &str
+fn get_string<'a>(c: &'a NbtCompound, key: &str) -> Option<&'a str> {
+    match c.data.get(key) {
+        Some(NbtType::String(v)) => Some(&v.data),
+        _ => None,
+    }
+}
+
 fn read_save<R: Read + Seek>(stream: &mut R) -> CoreResult<SaveObj> {
     let nbt = NbtFile::read(stream)?;
-
     let mut obj = SaveObj::default();
 
-    if let Some(nbt) = nbt.nbt.as_compound() {
-        if let Some(NbtType::Compound(data)) = nbt.data.get("Data") {
-            if let Some(NbtType::Long(data1)) = data.data.get("LastPlayed") {
-                obj.last_played = data1.data;
-            }
-
-            if let Some(NbtType::Long(data1)) = data.data.get("RandomSeed") {
-                obj.random_seed = data1.data;
-            }
-
-            if let Some(NbtType::Compound(data1)) = data.data.get("WorldGenSettings") {
-                if let Some(NbtType::Long(data2)) = data1.data.get("seed") {
-                    obj.random_seed = data2.data;
-                }
-
-                if let Some(NbtType::Compound(data2)) = data1.data.get("dimensions") {
-                    if let Some(NbtType::Compound(data3)) = data2.data.get("minecraft:overworld") {
-                        if let Some(NbtType::Compound(data4)) = data3.data.get("generator") {
-                            if let Some(NbtType::String(data5)) = data4.data.get("settings") {
-                                obj.generator_name = data5.data.clone();
-                            }
-                        }
-                    }
-                }
-            }
-
-            if let Some(NbtType::String(data1)) = data.data.get("generatorName") {
-                obj.generator_name = format!("minecraft:{}", data1.data);
-            }
-
-            if let Some(NbtType::Int(data1)) = data.data.get("GameType") {
-                obj.game_type = data1.data;
-            }
-
-            if let Some(NbtType::Byte(data1)) = data.data.get("hardcore") {
-                obj.hard_core = data1.data;
-            }
-
-            if let Some(NbtType::Byte(data1)) = data.data.get("Difficulty") {
-                obj.difficulty = data1.data;
-            }
-
-            if let Some(NbtType::String(data1)) = data.data.get("LevelName") {
-                obj.level_name = data1.data.clone();
-            }
-        }
-    } else {
+    let Some(nbt) = nbt.nbt.as_compound() else {
         obj.broken = true;
+        return Ok(obj);
+    };
+
+    let Some(data) = get_compound(nbt, "Data") else {
+        obj.broken = true;
+        return Ok(obj);
+    };
+
+    // 基础字段提取
+    obj.last_played = get_long(data, "LastPlayed").unwrap_or(0);
+    obj.random_seed = get_long(data, "RandomSeed").unwrap_or(0);
+    obj.game_type = get_int(data, "GameType").unwrap_or(0);
+    obj.hard_core = get_byte(data, "hardcore").unwrap_or(0);
+    obj.difficulty = get_byte(data, "Difficulty").unwrap_or(0);
+    obj.level_name = get_string(data, "LevelName")
+        .map(String::from)
+        .unwrap_or_default();
+
+    // WorldGenSettings（新版格式，含种子和生成器名）
+    if let Some(world_gen) = get_compound(data, "WorldGenSettings") {
+        if let Some(seed) = get_long(world_gen, "seed") {
+            obj.random_seed = seed;
+        }
+        let gen_name = get_compound(world_gen, "dimensions")
+            .and_then(|d: &NbtCompound| get_compound(d, "minecraft:overworld"))
+            .and_then(|o: &NbtCompound| get_compound(o, "generator"))
+            .and_then(|g: &NbtCompound| get_string(g, "settings"));
+        if let Some(name) = gen_name {
+            obj.generator_name = name.to_string();
+        }
+    }
+
+    // generatorName（旧版格式，优先级高于 WorldGenSettings）
+    if let Some(name) = get_string(data, "generatorName") {
+        obj.generator_name = format!("minecraft:{}", name);
     }
 
     Ok(obj)
@@ -151,7 +180,21 @@ impl InstanceSettingObj {
     }
 
     /// 还原备份
-    pub fn unzip_backup(&self, file: &str, gui: Option<Box<dyn ArchiveGui + Send + Sync>>) {}
+    pub fn unzip_backup(
+        &self,
+        file: &str,
+        gui: Option<Box<dyn ArchiveGui + Send + Sync>>,
+    ) -> CoreResult<()> {
+        let backup_file = self.get_backup_path().join(file);
+        let saves_dir = self.get_saves_path();
+
+        archives::decompress(ArchiveType::Zip, &backup_file, &saves_dir, gui)
+    }
+
+    /// 获取备份文件列表
+    pub fn get_backup_files(&self) -> Vec<PathBuf> {
+        path_helper::get_files(self.get_backup_path())
+    }
 }
 
 impl SaveObj {
