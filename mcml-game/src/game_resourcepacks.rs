@@ -15,11 +15,109 @@ use mcml_names::{
     names,
 };
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
-use serde_json::Value;
-use tokio_util::io::simplex::new;
+use serde::Deserialize;
+use serde_json::Number;
 use zip::ZipArchive;
 
 use crate::launcher::instance_setting_obj::InstanceSettingObj;
+
+/// Deserialize a JSON value that can be either a number or an array of numbers.
+/// For a number: returns it directly.
+/// For an array: returns the minimum value (0 for empty array).
+fn deserialize_number_or_min<'de, D>(deserializer: D) -> Result<i64, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de::{self, SeqAccess, Visitor};
+    use std::fmt;
+
+    struct V;
+    impl<'de> Visitor<'de> for V {
+        type Value = i64;
+        fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            f.write_str("a number or array of numbers")
+        }
+        fn visit_i64<E: de::Error>(self, v: i64) -> Result<i64, E> {
+            Ok(v)
+        }
+        fn visit_u64<E: de::Error>(self, v: u64) -> Result<i64, E> {
+            Ok(v as i64)
+        }
+        fn visit_f64<E: de::Error>(self, v: f64) -> Result<i64, E> {
+            Ok(v as i64)
+        }
+        fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<i64, A::Error> {
+            let mut min = i64::MAX;
+            let mut found = false;
+            while let Some(v) = seq.next_element::<Number>()? {
+                if let Some(n) = v.as_i64() {
+                    min = cmp::min(min, n);
+                    found = true;
+                }
+            }
+            Ok(if found { min } else { 0 })
+        }
+    }
+    deserializer.deserialize_any(V)
+}
+
+/// Deserialize a JSON value that can be either a number or an array of numbers.
+/// For a number: returns it directly.
+/// For an array: returns the maximum value (0 for empty array).
+fn deserialize_number_or_max<'de, D>(deserializer: D) -> Result<i64, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de::{self, SeqAccess, Visitor};
+    use std::fmt;
+
+    struct V;
+    impl<'de> Visitor<'de> for V {
+        type Value = i64;
+        fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            f.write_str("a number or array of numbers")
+        }
+        fn visit_i64<E: de::Error>(self, v: i64) -> Result<i64, E> {
+            Ok(v)
+        }
+        fn visit_u64<E: de::Error>(self, v: u64) -> Result<i64, E> {
+            Ok(v as i64)
+        }
+        fn visit_f64<E: de::Error>(self, v: f64) -> Result<i64, E> {
+            Ok(v as i64)
+        }
+        fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<i64, A::Error> {
+            let mut max = i64::MIN;
+            let mut found = false;
+            while let Some(v) = seq.next_element::<Number>()? {
+                if let Some(n) = v.as_i64() {
+                    max = cmp::max(max, n);
+                    found = true;
+                }
+            }
+            Ok(if found { max } else { 0 })
+        }
+    }
+    deserializer.deserialize_any(V)
+}
+
+/// Deserialization struct for pack.mcmeta
+#[derive(Deserialize)]
+struct PackMeta {
+    pack: PackInfo,
+}
+
+#[derive(Deserialize)]
+struct PackInfo {
+    #[serde(default, deserialize_with = "deserialize_number_or_min")]
+    pack_format: i64,
+    #[serde(default, deserialize_with = "deserialize_number_or_min")]
+    min_format: i64,
+    #[serde(default, deserialize_with = "deserialize_number_or_max")]
+    max_format: i64,
+    #[serde(default)]
+    description: String,
+}
 
 /// 资源包信息
 pub struct ResourcepackObj {
@@ -65,79 +163,33 @@ fn process_resourcepack<P: AsRef<Path>>(path: P) -> CoreResult<ResourcepackObj> 
         })
     })?;
 
-    let meta = zip.by_name(names::PACK_META_FILE).map_err(|err| {
-        ErrorType::ArchiveReadError(ErrorData {
-            error: err.to_string(),
-        })
-    })?;
+    // 解析 pack.mcmeta
+    let mut pack = {
+        let meta = zip.by_name(names::PACK_META_FILE).map_err(|err| {
+            ErrorType::ArchiveReadError(ErrorData {
+                error: err.to_string(),
+            })
+        })?;
 
-    let json = serde_json::from_reader::<_, Value>(meta).map_err(|err| {
-        ErrorType::StreamError(ErrorData {
-            error: err.to_string(),
-        })
-    })?;
-
-    let mut pack = ResourcepackObj::default();
-
-    // 读取json
-    match json {
-        Value::Object(map) => {
-            if let Some(Value::Object(objs)) = map.get("pack") {
-                let format = objs.get("pack_format");
-                let min_format = objs.get("min_format");
-                let max_format = objs.get("max_format");
-                let description = objs.get("description");
-
-                if let Some(Value::Number(value)) = format {
-                    pack.pack_format = value.as_i64().unwrap_or(0);
-                }
-                if let Some(Value::Number(value)) = min_format {
-                    pack.min_format = value.as_i64().unwrap_or(0);
-                }
-                if let Some(Value::Number(value)) = max_format {
-                    pack.max_format = value.as_i64().unwrap_or(0);
-                }
-                if let Some(Value::String(value)) = description {
-                    pack.description = value.clone();
-                }
-
-                if let Some(Value::Array(list)) = min_format {
-                    let mut min = 0i64;
-                    if let Some(item) = list.iter().next() {
-                        if item.is_number() {
-                            min = item.as_i64().unwrap_or(0);
-                        }
-                    }
-                    for item in list {
-                        min = cmp::min(min, item.as_i64().unwrap_or(0));
-                    }
-
-                    pack.min_format = min;
-                }
-                if let Some(Value::Array(list)) = max_format {
-                    let mut max = 0i64;
-                    if let Some(item) = list.iter().next() {
-                        if item.is_number() {
-                            max = item.as_i64().unwrap_or(0);
-                        }
-                    }
-                    for item in list {
-                        max = cmp::max(max, item.as_i64().unwrap_or(0));
-                    }
-
-                    pack.max_format = max;
-                }
-            }
+        match serde_json::from_reader::<_, PackMeta>(meta) {
+            Ok(m) => ResourcepackObj {
+                description: m.pack.description,
+                pack_format: m.pack.pack_format,
+                min_format: m.pack.min_format,
+                max_format: m.pack.max_format,
+                ..Default::default()
+            },
+            Err(_) => ResourcepackObj {
+                fail: true,
+                ..Default::default()
+            },
         }
-        _ => {
-            pack.fail = true;
-        }
-    }
+    };
 
     // 读取图标
-    let icon = zip.by_name(names::PACK_ICON_FILE);
-    if let Ok(mut icon) = icon {
-        let mut vec = Vec::new();
+    if let Ok(mut icon) = zip.by_name(names::PACK_ICON_FILE) {
+        let size = icon.size() as usize;
+        let mut vec = Vec::with_capacity(size);
         icon.read_to_end(&mut vec).map_err(|err| {
             ErrorType::ArchiveReadError(ErrorData {
                 error: err.to_string(),
