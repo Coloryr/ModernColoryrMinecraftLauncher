@@ -12,3 +12,4 @@
 **/*.rs.bk
 /mcml-game/tests/core_mods
 /mcml-game/tests/fail_mods
+/mcml-game/tests/schematics

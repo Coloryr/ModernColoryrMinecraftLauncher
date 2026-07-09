@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     io::{Read, Seek},
     path::{Path, PathBuf},
     sync::Arc,
@@ -6,13 +7,34 @@ use std::{
 
 use chrono::{Datelike, Local, Timelike};
 use mcml_base::{
-    archives::{self, ArchiveGui, ArchiveType},
+    archives::{self, ArchiveGui, ArchiveType, BaseArchive},
     path_helper,
 };
-use mcml_names::{i18_items::error_type::CoreResult, names};
-use mcml_nbt::{NbtType, nbt_file::NbtFile, nbt_types::NbtCompound};
+use mcml_config::config_save;
+use mcml_names::{
+    i18_items::error_type::{CoreResult, ErrorData, ErrorType, FileSystemErrorData},
+    names, uuids,
+};
+use mcml_nbt::{nbt_file::NbtFile, nbt_types::NbtCompound};
+use serde::{Deserialize, Serialize};
 
 use crate::launcher::instance_setting_obj::InstanceSettingObj;
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+#[serde(default)]
+pub struct SaveBackupObj {
+    pub dir: String,
+    pub back: Vec<String>,
+}
+
+impl Default for SaveBackupObj {
+    fn default() -> Self {
+        Self {
+            dir: Default::default(),
+            back: Default::default(),
+        }
+    }
+}
 
 /// 游戏存档
 pub struct SaveObj {
@@ -58,48 +80,6 @@ impl Default for SaveObj {
     }
 }
 
-// ---- NBT 辅助提取函数 ----
-
-/// 从 NbtCompound 中提取 `&NbtCompound`
-fn get_compound<'a>(c: &'a NbtCompound, key: &str) -> Option<&'a NbtCompound> {
-    match c.data.get(key) {
-        Some(NbtType::Compound(v)) => Some(v),
-        _ => None,
-    }
-}
-
-/// 从 NbtCompound 中提取 i64
-fn get_long(c: &NbtCompound, key: &str) -> Option<i64> {
-    match c.data.get(key) {
-        Some(NbtType::Long(v)) => Some(v.data),
-        _ => None,
-    }
-}
-
-/// 从 NbtCompound 中提取 i32
-fn get_int(c: &NbtCompound, key: &str) -> Option<i32> {
-    match c.data.get(key) {
-        Some(NbtType::Int(v)) => Some(v.data),
-        _ => None,
-    }
-}
-
-/// 从 NbtCompound 中提取 u8
-fn get_byte(c: &NbtCompound, key: &str) -> Option<u8> {
-    match c.data.get(key) {
-        Some(NbtType::Byte(v)) => Some(v.data),
-        _ => None,
-    }
-}
-
-/// 从 NbtCompound 中提取 &str
-fn get_string<'a>(c: &'a NbtCompound, key: &str) -> Option<&'a str> {
-    match c.data.get(key) {
-        Some(NbtType::String(v)) => Some(&v.data),
-        _ => None,
-    }
-}
-
 fn read_save<R: Read + Seek>(stream: &mut R) -> CoreResult<SaveObj> {
     let nbt = NbtFile::read(stream)?;
     let mut obj = SaveObj::default();
@@ -109,37 +89,39 @@ fn read_save<R: Read + Seek>(stream: &mut R) -> CoreResult<SaveObj> {
         return Ok(obj);
     };
 
-    let Some(data) = get_compound(nbt, "Data") else {
+    let Some(data) = nbt.get_compound("Data") else {
         obj.broken = true;
         return Ok(obj);
     };
 
     // 基础字段提取
-    obj.last_played = get_long(data, "LastPlayed").unwrap_or(0);
-    obj.random_seed = get_long(data, "RandomSeed").unwrap_or(0);
-    obj.game_type = get_int(data, "GameType").unwrap_or(0);
-    obj.hard_core = get_byte(data, "hardcore").unwrap_or(0);
-    obj.difficulty = get_byte(data, "Difficulty").unwrap_or(0);
-    obj.level_name = get_string(data, "LevelName")
+    obj.last_played = data.get_long("LastPlayed").unwrap_or(0);
+    obj.random_seed = data.get_long("RandomSeed").unwrap_or(0);
+    obj.game_type = data.get_int("GameType").unwrap_or(0);
+    obj.hard_core = data.get_byte("hardcore").unwrap_or(0);
+    obj.difficulty = data.get_byte("Difficulty").unwrap_or(0);
+    obj.level_name = data
+        .get_string("LevelName")
         .map(String::from)
         .unwrap_or_default();
 
     // WorldGenSettings（新版格式，含种子和生成器名）
-    if let Some(world_gen) = get_compound(data, "WorldGenSettings") {
-        if let Some(seed) = get_long(world_gen, "seed") {
+    if let Some(world_gen) = data.get_compound("WorldGenSettings") {
+        if let Some(seed) = world_gen.get_long("seed") {
             obj.random_seed = seed;
         }
-        let gen_name = get_compound(world_gen, "dimensions")
-            .and_then(|d: &NbtCompound| get_compound(d, "minecraft:overworld"))
-            .and_then(|o: &NbtCompound| get_compound(o, "generator"))
-            .and_then(|g: &NbtCompound| get_string(g, "settings"));
+        let gen_name = world_gen
+            .get_compound("dimensions")
+            .and_then(|d: &NbtCompound| d.get_compound("minecraft:overworld"))
+            .and_then(|o: &NbtCompound| o.get_compound("generator"))
+            .and_then(|g: &NbtCompound| g.get_string("settings"));
         if let Some(name) = gen_name {
             obj.generator_name = name.to_string();
         }
     }
 
     // generatorName（旧版格式，优先级高于 WorldGenSettings）
-    if let Some(name) = get_string(data, "generatorName") {
+    if let Some(name) = data.get_string("generatorName") {
         obj.generator_name = format!("minecraft:{}", name);
     }
 
@@ -156,8 +138,7 @@ impl InstanceSettingObj {
         for item in dirs.iter() {
             let file = item.join(names::LEVEL_FILE);
             if file.exists() && file.is_file() {
-                let stream = path_helper::open_read(&file);
-                if let Ok(mut stream) = stream {
+                if let Ok(mut stream) = path_helper::open_read(&file) {
                     let data = read_save(&mut stream);
                     match data {
                         Ok(mut obj) => {
@@ -166,6 +147,7 @@ impl InstanceSettingObj {
                                 obj.icon = Some(file);
                             }
 
+                            obj.path = item.clone();
                             list.push(obj);
                         }
                         Err(err) => {
@@ -180,22 +162,79 @@ impl InstanceSettingObj {
     }
 
     /// 还原备份
-    pub fn unzip_backup(
+    pub fn restore_backup(
         &self,
+        info: &SaveBackupObj,
         file: &str,
         gui: Option<Box<dyn ArchiveGui + Send + Sync>>,
     ) -> CoreResult<()> {
-        let backup_file = self.get_backup_path().join(file);
-        let saves_dir = self.get_saves_path();
+        let dir = self.get_backup_path();
+        let path = dir.join(info.dir.clone());
+        if path.exists() && path.is_dir() {
+            path_helper::move_to_trash(&path)?;
+        }
 
-        archives::decompress(ArchiveType::Zip, &backup_file, &saves_dir, gui)
+        let backup_file = dir.join(file);
+
+        archives::decompress(ArchiveType::Zip, &backup_file, &path, gui)
     }
 
     /// 获取备份文件列表
-    pub fn get_backup_files(&self) -> Vec<PathBuf> {
-        path_helper::get_files(self.get_backup_path())
+    pub fn get_backups(&self) -> CoreResult<HashMap<String, SaveBackupObj>> {
+        let file = self.get_backup_file();
+        if file.exists() && file.is_file() {
+            let stream = path_helper::open_read(&file)?;
+            let json = serde_json::from_reader::<_, HashMap<String, SaveBackupObj>>(&stream)
+                .map_err(|err| {
+                    ErrorType::SerializerError(ErrorData {
+                        error: err.to_string(),
+                    })
+                })?;
+
+            Ok(json)
+        } else {
+            Ok(HashMap::new())
+        }
+    }
+
+    /// 保存备份信息
+    pub fn save_backups(&self, info: &HashMap<String, SaveBackupObj>) {
+        let file = self.get_backup_file();
+        config_save::save(uuids::mix_uuid(uuids::BACKUP_UUID, self.uuid), info, &file);
+    }
+
+    /// 导入存档
+    pub fn import_save<P: AsRef<Path>>(&self, file: P) -> CoreResult<()> {
+        let saves_dir = self.get_saves_path();
+        if !saves_dir.exists() {
+            path_helper::create_dir_all(&saves_dir)?;
+        }
+
+        let archive = BaseArchive::open(file.as_ref())?;
+
+        // 如果包内所有条目都套在同一个顶层文件夹里，直接解压到 saves 目录；
+        // 否则以压缩包文件名新建一个文件夹再解压进去。
+        let output_dir = if archive.single_top_dir().is_some() {
+            // 有唯一顶层文件夹：直接解压，顶层文件夹就是存档目录
+            saves_dir
+        } else {
+            // 没有套壳：用压缩包文件名（去掉后缀）建一个新目录
+            let file_path = file.as_ref();
+            let stem = file_path
+                .file_stem()
+                .map(|s| s.to_string_lossy().to_string())
+                .unwrap_or_else(|| "save".to_string());
+            // 二次去后缀（处理 .tar.gz 这类双后缀）
+            let stem = stem.trim_end_matches(".tar").to_string();
+            saves_dir.join(&stem)
+        };
+
+        path_helper::create_dir_all(&output_dir)?;
+        archive.extract_all(&output_dir, None)
     }
 }
+
+impl SaveBackupObj {}
 
 impl SaveObj {
     /// 获取数据包文件夹
@@ -231,7 +270,7 @@ impl SaveObj {
         path_helper::create_dir_all(&path)?;
 
         let time = Local::now();
-        let file = path.join(format!(
+        let name = format!(
             "{}_{}_{}_{}_{}_{}_{}.zip",
             self.level_name,
             time.year(),
@@ -240,8 +279,33 @@ impl SaveObj {
             time.hour(),
             time.minute(),
             time.second()
-        ));
+        );
+        let file = path.join(&name);
 
-        archives::compress(ArchiveType::Zip, &file, &self.path, None, &None, gui)
+        archives::compress(ArchiveType::Zip, &file, &self.path, None, &None, gui)?;
+
+        let mut info = self.instance.get_backups()?;
+        if let Some(obj) = info.get_mut(&self.level_name) {
+            obj.back.push(name);
+        } else {
+            let path = self.instance.get_saves_path();
+            let dir = self
+                .path
+                .strip_prefix(path)
+                .map_err(|err| {
+                    ErrorType::FileSystemError(FileSystemErrorData {
+                        path: self.path.clone(),
+                        error: err.to_string(),
+                    })
+                })?
+                .to_string_lossy()
+                .to_string();
+            let back: Vec<String> = vec![name];
+            info.insert(self.level_name.clone(), SaveBackupObj { dir, back });
+        }
+
+        self.instance.save_backups(&info);
+
+        Ok(())
     }
 }
