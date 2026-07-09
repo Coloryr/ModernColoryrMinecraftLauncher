@@ -1,0 +1,374 @@
+use std::{
+    collections::HashMap,
+    io::{Read, Seek},
+    path::PathBuf,
+};
+
+use mcml_base::path_helper;
+use mcml_names::{
+    i18_items::error_type::{CoreResult, ErrorType},
+    names,
+};
+use mcml_nbt::{NbtType, nbt_file::NbtFile, nbt_types::NbtCompound};
+
+use crate::launcher::instance_setting_obj::InstanceSettingObj;
+
+/// 结构文件类型
+#[derive(Debug)]
+pub enum SchematicType {
+    /// 原版
+    Minecraft,
+    /// 投影模组
+    Litematic,
+    /// 创世神模组
+    WorldEdit,
+    /// 机械动力蓝图
+    Create,
+}
+
+impl Default for SchematicType {
+    fn default() -> Self {
+        SchematicType::Minecraft
+    }
+}
+
+/// 结构文件
+#[derive(Debug)]
+pub struct SchematicObj {
+    /// 名字
+    pub name: String,
+    /// 路径
+    pub path: PathBuf,
+    /// 高
+    pub height: i32,
+    /// 长
+    pub length: i32,
+    /// 宽
+    pub width: i32,
+    /// 作者
+    pub author: String,
+    /// 描述
+    pub description: String,
+    /// 文件类型
+    pub schematic_type: SchematicType,
+    /// 方块总数
+    pub block_count: u64,
+    /// 方块种类
+    pub block_types: u32,
+    /// 方块数量
+    pub blocks: HashMap<String, u64>,
+    /// 是否读取错误
+    pub fail: bool,
+}
+
+impl Default for SchematicObj {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            path: PathBuf::new(),
+            height: 0,
+            length: 0,
+            width: 0,
+            author: String::new(),
+            description: String::new(),
+            schematic_type: SchematicType::Minecraft,
+            block_count: 0,
+            block_types: 0,
+            blocks: HashMap::new(),
+            fail: false,
+        }
+    }
+}
+
+impl SchematicType {
+    fn from_ext(ext: &str) -> Self {
+        if ext.eq_ignore_ascii_case(names::LITEMATIC_EXT) {
+            SchematicType::Litematic
+        } else if ext.eq_ignore_ascii_case(names::SCHEMATIC_EXT) {
+            SchematicType::Minecraft
+        } else if ext.eq_ignore_ascii_case(names::SCHEM_EXT) {
+            SchematicType::WorldEdit
+        } else if ext.eq_ignore_ascii_case(names::NBT_EXT) {
+            SchematicType::Create
+        } else {
+            SchematicType::Minecraft
+        }
+    }
+}
+
+/// 从 NbtCompound 读取 Short 类型的尺寸信息 (Height/Length/Width)
+fn read_dimensions_short(nbt: &NbtCompound, obj: &mut SchematicObj) {
+    if let Some(h) = nbt.get_short("Height") {
+        obj.height = h as i32;
+    }
+    if let Some(l) = nbt.get_short("Length") {
+        obj.length = l as i32;
+    }
+    if let Some(w) = nbt.get_short("Width") {
+        obj.width = w as i32;
+    }
+}
+
+/// 根据 palette 大小计算打包所需的位数（整数运算）
+fn bits_per_entry(palette_size: usize) -> usize {
+    if palette_size <= 1 {
+        1
+    } else {
+        (usize::BITS - (palette_size - 1).leading_zeros()) as usize
+    }
+}
+
+fn read_litematic(nbt: NbtFile) -> CoreResult<SchematicObj> {
+    if let Some(nbt) = nbt.nbt.as_compound()
+        && let Some(meta) = nbt.get_compound("Metadata")
+    {
+        let mut obj = SchematicObj {
+            schematic_type: SchematicType::Litematic,
+            name: meta.get_string("Name").unwrap_or_default(),
+            author: meta.get_string("Author").unwrap_or_default(),
+            description: meta.get_string("Description").unwrap_or_default(),
+            ..Default::default()
+        };
+
+        if let Some(data) = meta.get_compound("EnclosingSize") {
+            if let Some(y) = data.get_int("y") {
+                obj.height = y;
+            }
+            if let Some(x) = data.get_int("x") {
+                obj.length = x;
+            }
+            if let Some(z) = data.get_int("z") {
+                obj.width = z;
+            }
+        }
+
+        if let Some(total) = meta.get_int("TotalBlocks") {
+            obj.block_count = total as u64;
+        }
+
+        if let Some(regions) = nbt.get_compound("Regions") {
+            for (_, value) in regions.data.iter() {
+                if let Some(region) = value.as_compound()
+                    && let Some(palette) = region.get_list("BlockStatePalette")
+                    && let Some(array) = region.get_long_array("BlockStates")
+                {
+                    let palette_size = palette.len();
+                    if palette_size == 0 || array.data.is_empty() {
+                        continue;
+                    }
+
+                    let bits = bits_per_entry(palette_size);
+                    let block_states = array.data.as_slice();
+                    let entries_per_long = 64 / bits;
+                    let mask = if bits >= 64 {
+                        u64::MAX
+                    } else {
+                        (1u64 << bits) - 1
+                    };
+
+                    let mut counts = vec![0u64; palette_size];
+                    let total = obj.block_count as usize;
+                    let mut processed = 0usize;
+
+                    'outer: for &value in block_states {
+                        let v = value as u64;
+                        for i in 0..entries_per_long {
+                            if processed >= total {
+                                break 'outer;
+                            }
+                            let block_id = ((v >> (i * bits)) & mask) as usize;
+                            if block_id < palette_size {
+                                counts[block_id] += 1;
+                            }
+                            processed += 1;
+                        }
+                    }
+
+                    for (index, count) in counts.into_iter().enumerate() {
+                        if count == 0 {
+                            continue;
+                        }
+                        if let Some(NbtType::Compound(data)) = palette.get_item(index)
+                            && let Some(key) = data.get_string("Name")
+                        {
+                            *obj.blocks.entry(key).or_default() += count;
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(obj)
+    } else {
+        Err(ErrorType::DataNotFound)
+    }
+}
+
+fn read_schematic(nbt: NbtFile) -> CoreResult<SchematicObj> {
+    if let Some(nbt) = nbt.nbt.as_compound() {
+        let mut obj = SchematicObj {
+            schematic_type: SchematicType::Minecraft,
+            ..Default::default()
+        };
+        read_dimensions_short(nbt, &mut obj);
+        Ok(obj)
+    } else {
+        Err(ErrorType::DataNotFound)
+    }
+}
+
+/// 去除方块名中的属性部分，如 "minecraft:stone[axis=y]" → "minecraft:stone"
+fn base_name(input: &str) -> &str {
+    input.find('[').map_or(input, |pos| &input[..pos])
+}
+
+fn read_schem(nbt: NbtFile) -> CoreResult<SchematicObj> {
+    if let Some(nbt) = nbt.nbt.as_compound() {
+        let mut obj = SchematicObj {
+            schematic_type: SchematicType::WorldEdit,
+            ..Default::default()
+        };
+        read_dimensions_short(nbt, &mut obj);
+
+        if let Some(block) = nbt.get_byte_array("BlockData")
+            && let Some(palette) = nbt.get_compound("Palette")
+        {
+            let mut palettes = HashMap::<usize, String>::new();
+            for (key, value) in palette.data.iter() {
+                let index = value.as_int().map_or(0, |v| v.data);
+                palettes.insert(index as usize, base_name(key).to_string());
+            }
+
+            let mut blocks = vec![0u64; palettes.len()];
+            for &item in block.data.iter() {
+                blocks[item as usize] += 1;
+            }
+
+            let mut total = 0u64;
+            for (index, count) in blocks.into_iter().enumerate() {
+                if count == 0 {
+                    continue;
+                }
+                let key = palettes.remove(&index).unwrap_or_default();
+                if key.is_empty() {
+                    continue;
+                }
+                let entry = obj.blocks.entry(key).or_default();
+                *entry += count;
+                total += count;
+            }
+
+            obj.block_count = total;
+            obj.block_types = obj.blocks.len() as u32;
+        }
+
+        Ok(obj)
+    } else {
+        Err(ErrorType::DataNotFound)
+    }
+}
+
+fn read_nbt(nbt: NbtFile) -> CoreResult<SchematicObj> {
+    if let Some(data) = nbt.nbt.as_compound() {
+        let mut obj = SchematicObj {
+            schematic_type: SchematicType::Create,
+            ..Default::default()
+        };
+
+        if let Some(list) = data.get_list("size")
+            && list.len() == 3
+        {
+            obj.width = list
+                .get_item(0)
+                .and_then(|v| v.as_int())
+                .map_or(0, |v| v.data);
+            obj.height = list
+                .get_item(1)
+                .and_then(|v| v.as_int())
+                .map_or(0, |v| v.data);
+            obj.length = list
+                .get_item(2)
+                .and_then(|v| v.as_int())
+                .map_or(0, |v| v.data);
+        }
+
+        if let Some(palette) = data.get_list("palette")
+            && let Some(block) = data.get_list("blocks")
+        {
+            let mut blocks = vec![0u64; palette.len()];
+            for item in block.iter() {
+                if let Some(compound) = item.as_compound()
+                    && let Some(state) = compound.data.get("state")
+                    && let Some(state) = state.as_int()
+                {
+                    blocks[state.data as usize] += 1;
+                }
+            }
+
+            let mut total = 0u64;
+            for (index, count) in blocks.into_iter().enumerate() {
+                if count == 0 {
+                    continue;
+                }
+                if let Some(item) = palette.get_item(index)
+                    && let Some(compound) = item.as_compound()
+                    && let Some(key) = compound.get_string("Name")
+                {
+                    *obj.blocks.entry(key).or_default() += count;
+                    total += count;
+                }
+            }
+
+            obj.block_count = total;
+            obj.block_types = obj.blocks.len() as u32;
+        }
+
+        Ok(obj)
+    } else {
+        Err(ErrorType::DataNotFound)
+    }
+}
+
+/// 读取结构文件
+pub fn read_schematic_file<R: Read + Seek>(
+    stream: &mut R,
+    schematic_type: SchematicType,
+) -> CoreResult<SchematicObj> {
+    let nbt = NbtFile::read(stream)?;
+    match schematic_type {
+        SchematicType::Minecraft => read_schematic(nbt),
+        SchematicType::Litematic => read_litematic(nbt),
+        SchematicType::WorldEdit => read_schem(nbt),
+        SchematicType::Create => read_nbt(nbt),
+    }
+}
+
+impl InstanceSettingObj {
+    /// 获取结构文件列表
+    pub fn get_schematics(&self) -> Vec<SchematicObj> {
+        let dir = self.get_schematics_path();
+        let files = path_helper::get_all_files(&dir);
+
+        let mut list = Vec::with_capacity(files.len());
+
+        for item in files.iter() {
+            if let Some(ext) = item.extension() {
+                let schematic_type = SchematicType::from_ext(&ext.to_string_lossy());
+                let mut obj = if let Ok(mut stream) = path_helper::open_read(item)
+                    && let Ok(obj) = read_schematic_file(&mut stream, schematic_type)
+                {
+                    obj
+                } else {
+                    SchematicObj {
+                        fail: true,
+                        ..Default::default()
+                    }
+                };
+                obj.path = item.clone();
+                list.push(obj);
+            }
+        }
+
+        list
+    }
+}

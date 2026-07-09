@@ -1,11 +1,13 @@
+use std::fmt;
 use std::io::{Read, Seek, SeekFrom, Write};
 
 use flate2::{
     read::{GzDecoder, ZlibDecoder},
     write::{GzEncoder, ZlibEncoder},
 };
-use mcml_names::i18_items::error_type::{CoreResult, ErrorType};
+use mcml_names::i18_items::error_type::{CoreResult, ErrorData, ErrorType};
 
+use crate::nbt_types::NbtCompound;
 use crate::{NBT_BYTE_ORDER, NBT_END_ORDER, NbtType, io_error, nbt_types};
 
 #[derive(Clone, Debug, PartialEq)]
@@ -14,6 +16,17 @@ pub enum CompressType {
     GZip,
     Zlib,
     Lz4,
+}
+
+impl fmt::Display for CompressType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            CompressType::None => write!(f, "none"),
+            CompressType::GZip => write!(f, "gzip"),
+            CompressType::Zlib => write!(f, "zlib"),
+            CompressType::Lz4 => write!(f, "lz4"),
+        }
+    }
 }
 
 pub struct NbtFile {
@@ -76,17 +89,37 @@ impl NbtFile {
             return Err(ErrorType::NbtReadError);
         }
 
-        let mut nbt = nbt.unwrap();
-        if matches!(nbt, NbtType::Compound(_)) {
+        let mut nbt_inner = nbt.unwrap();
+        let mut root_name = String::new();
+        if matches!(nbt_inner, NbtType::Compound(_)) {
             let mut temp = [0u8; 2];
             stream.read_exact(&mut temp).map_err(|err| io_error(err))?;
+            let len = u16::from_be_bytes(temp);
+            if len > 0 {
+                let mut temp = vec![0; len as usize];
+                stream.read_exact(&mut temp).map_err(|err| io_error(err))?;
+                root_name = String::from_utf8(temp).map_err(|err| {
+                    ErrorType::StreamError(ErrorData {
+                        error: err.to_string(),
+                    })
+                })?;
+            }
         }
-        nbt.read(&mut stream)?;
+        nbt_inner.read(&mut stream)?;
 
-        Ok(NbtFile {
-            nbt: nbt,
-            compress: compress_type,
-        })
+        if root_name.is_empty() {
+            Ok(NbtFile {
+                nbt: nbt_inner,
+                compress: compress_type,
+            })
+        } else {
+            let mut com = NbtCompound::new();
+            com.data.insert(root_name, nbt_inner);
+            Ok(NbtFile {
+                nbt: com.to_nbt(),
+                compress: compress_type,
+            })
+        }
     }
 
     /// 从流中保存NBT文件
@@ -111,5 +144,11 @@ impl NbtFile {
         stream.flush().map_err(|err| io_error(err))?;
 
         Ok(())
+    }
+}
+
+impl fmt::Display for NbtFile {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{} (compress: {})", self.nbt, self.compress)
     }
 }

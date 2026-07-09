@@ -7,11 +7,15 @@ use mcml_names::{i18_items::error_type::CoreResult, names};
 
 use crate::archives::{r7z_runner::R7zProcess, tar_runner::TarProcess, zip_runner::ZipProcess};
 
+pub mod base_archive;
 pub mod r7z_runner;
 pub mod tar_runner;
 pub mod zip_runner;
 
+pub use base_archive::{ArchiveEntryInfo, BaseArchive};
+
 /// 压缩包类型
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ArchiveType {
     Zip,
     R7Z,

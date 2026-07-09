@@ -9,6 +9,12 @@ use crate::{NbtStream, NbtType, io_error, is_nbt_num};
 
 pub struct NbtEnd {}
 
+impl Default for NbtEnd {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl NbtEnd {
     pub fn new() -> Self {
         Self {}
@@ -35,6 +41,14 @@ impl NbtStream for NbtEnd {
 
 pub struct NbtByte {
     pub data: u8,
+}
+
+impl Default for NbtByte {
+    fn default() -> Self {
+        Self {
+            data: Default::default(),
+        }
+    }
 }
 
 impl NbtByte {
@@ -76,6 +90,14 @@ pub struct NbtShort {
     pub data: i16,
 }
 
+impl Default for NbtShort {
+    fn default() -> Self {
+        Self {
+            data: Default::default(),
+        }
+    }
+}
+
 impl NbtShort {
     pub fn new(data: i16) -> Self {
         Self { data }
@@ -113,6 +135,14 @@ impl NbtStream for NbtShort {
 
 pub struct NbtInt {
     pub data: i32,
+}
+
+impl Default for NbtInt {
+    fn default() -> Self {
+        Self {
+            data: Default::default(),
+        }
+    }
 }
 
 impl NbtInt {
@@ -154,6 +184,14 @@ pub struct NbtLong {
     pub data: i64,
 }
 
+impl Default for NbtLong {
+    fn default() -> Self {
+        Self {
+            data: Default::default(),
+        }
+    }
+}
+
 impl NbtLong {
     pub fn new(data: i64) -> Self {
         Self { data }
@@ -191,6 +229,14 @@ impl NbtStream for NbtLong {
 
 pub struct NbtFloat {
     pub data: f32,
+}
+
+impl Default for NbtFloat {
+    fn default() -> Self {
+        Self {
+            data: Default::default(),
+        }
+    }
 }
 
 impl NbtFloat {
@@ -232,6 +278,14 @@ pub struct NbtDouble {
     pub data: f64,
 }
 
+impl Default for NbtDouble {
+    fn default() -> Self {
+        Self {
+            data: Default::default(),
+        }
+    }
+}
+
 impl NbtDouble {
     pub fn new(data: f64) -> Self {
         Self { data }
@@ -269,6 +323,14 @@ impl NbtStream for NbtDouble {
 
 pub struct NbtByteArray {
     pub data: Vec<u8>,
+}
+
+impl Default for NbtByteArray {
+    fn default() -> Self {
+        Self {
+            data: Default::default(),
+        }
+    }
 }
 
 impl NbtByteArray {
@@ -314,6 +376,14 @@ impl NbtStream for NbtByteArray {
 
 pub struct NbtString {
     pub data: String,
+}
+
+impl Default for NbtString {
+    fn default() -> Self {
+        Self {
+            data: Default::default(),
+        }
+    }
 }
 
 impl NbtString {
@@ -370,6 +440,15 @@ pub struct NbtList {
     nbt_num: u8,
 }
 
+impl Default for NbtList {
+    fn default() -> Self {
+        Self {
+            data: Default::default(),
+            nbt_num: Default::default(),
+        }
+    }
+}
+
 impl NbtList {
     pub fn new(nbt_num: u8) -> Self {
         Self {
@@ -402,6 +481,14 @@ impl NbtList {
 
     pub fn get_item(&self, index: usize) -> Option<&NbtType> {
         self.data.get(index)
+    }
+
+    pub fn len(&self) -> usize {
+        self.data.len()
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = &NbtType> {
+        self.data.iter()
     }
 
     pub fn eq(&self, nbt: &NbtType) -> bool {
@@ -483,6 +570,14 @@ pub struct NbtCompound {
     pub data: HashMap<String, NbtType>,
 }
 
+impl Default for NbtCompound {
+    fn default() -> Self {
+        Self {
+            data: Default::default(),
+        }
+    }
+}
+
 impl NbtCompound {
     pub fn new() -> Self {
         Self {
@@ -512,6 +607,82 @@ impl NbtCompound {
                 return true;
             }
             _ => false,
+        }
+    }
+
+    pub fn get(&self, key: &str) -> Option<&NbtType> {
+        self.data.get(key)
+    }
+
+    /// 从 NbtCompound 中提取 `&NbtByteArray`
+    pub fn get_byte_array(&self, key: &str) -> Option<&NbtByteArray> {
+        match self.get(key) {
+            Some(NbtType::ByteArray(v)) => Some(v),
+            _ => None,
+        }
+    }
+
+    /// 从 NbtCompound 中提取 `&NbtLongArray`
+    pub fn get_long_array(&self, key: &str) -> Option<&NbtLongArray> {
+        match self.get(key) {
+            Some(NbtType::LongArray(v)) => Some(v),
+            _ => None,
+        }
+    }
+
+    /// 从 NbtCompound 中提取 `&NbtCompound`
+    pub fn get_compound(&self, key: &str) -> Option<&NbtCompound> {
+        match self.get(key) {
+            Some(NbtType::Compound(v)) => Some(v),
+            _ => None,
+        }
+    }
+
+    /// 从 NbtCompound 中提取 i64
+    pub fn get_long(&self, key: &str) -> Option<i64> {
+        match self.get(key) {
+            Some(NbtType::Long(v)) => Some(v.data),
+            _ => None,
+        }
+    }
+
+    /// 从 NbtCompound 中提取 i16
+    pub fn get_short(&self, key: &str) -> Option<i16> {
+        match self.get(key) {
+            Some(NbtType::Short(v)) => Some(v.data),
+            _ => None,
+        }
+    }
+
+    /// 从 NbtCompound 中提取 i32
+    pub fn get_int(&self, key: &str) -> Option<i32> {
+        match self.get(key) {
+            Some(NbtType::Int(v)) => Some(v.data),
+            _ => None,
+        }
+    }
+
+    /// 从 NbtCompound 中提取 u8
+    pub fn get_byte(&self, key: &str) -> Option<u8> {
+        match self.get(key) {
+            Some(NbtType::Byte(v)) => Some(v.data),
+            _ => None,
+        }
+    }
+
+    /// 从 NbtCompound 中提取 &str
+    pub fn get_string(&self, key: &str) -> Option<String> {
+        match self.get(key) {
+            Some(NbtType::String(v)) => Some(v.data.clone()),
+            _ => None,
+        }
+    }
+
+    /// 从 NbtCompound 中提取 list
+    pub fn get_list(&self, key: &str) -> Option<&NbtList> {
+        match self.get(key) {
+            Some(NbtType::List(v)) => Some(v),
+            _ => None,
         }
     }
 
@@ -583,6 +754,14 @@ pub struct NbtIntArray {
     pub data: Vec<i32>,
 }
 
+impl Default for NbtIntArray {
+    fn default() -> Self {
+        Self {
+            data: Default::default(),
+        }
+    }
+}
+
 impl NbtIntArray {
     pub fn new(data: Vec<i32>) -> Self {
         Self { data }
@@ -634,6 +813,14 @@ impl NbtStream for NbtIntArray {
 
 pub struct NbtLongArray {
     pub data: Vec<i64>,
+}
+
+impl Default for NbtLongArray {
+    fn default() -> Self {
+        Self {
+            data: Default::default(),
+        }
+    }
 }
 
 impl NbtLongArray {

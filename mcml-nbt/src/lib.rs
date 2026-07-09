@@ -1,3 +1,4 @@
+use std::fmt;
 use std::io::{Read, Write};
 
 use mcml_names::i18_items::error_type::{CoreResult, ErrorData, ErrorType};
@@ -75,55 +76,55 @@ impl NbtType {
     }
 
     pub fn end() -> NbtType {
-        NbtType::End(nbt_types::end())
+        NbtType::End(Default::default())
     }
 
     pub fn byte() -> NbtType {
-        NbtType::Byte(nbt_types::byte(Default::default()))
+        NbtType::Byte(Default::default())
     }
 
     pub fn short() -> NbtType {
-        NbtType::Short(nbt_types::short(Default::default()))
+        NbtType::Short(Default::default())
     }
 
     pub fn int() -> NbtType {
-        NbtType::Int(nbt_types::int(Default::default()))
+        NbtType::Int(Default::default())
     }
 
     pub fn long() -> NbtType {
-        NbtType::Long(nbt_types::long(Default::default()))
+        NbtType::Long(Default::default())
     }
 
     pub fn float() -> NbtType {
-        NbtType::Float(nbt_types::float(Default::default()))
+        NbtType::Float(Default::default())
     }
 
     pub fn double() -> NbtType {
-        NbtType::Double(nbt_types::double(Default::default()))
+        NbtType::Double(Default::default())
     }
 
     pub fn byte_array() -> NbtType {
-        NbtType::ByteArray(nbt_types::byte_array(Default::default()))
+        NbtType::ByteArray(Default::default())
     }
 
     pub fn string() -> NbtType {
-        NbtType::String(nbt_types::string(Default::default()))
+        NbtType::String(Default::default())
     }
 
     pub fn list() -> NbtType {
-        NbtType::List(nbt_types::list(Default::default()))
+        NbtType::List(Default::default())
     }
 
     pub fn compound() -> NbtType {
-        NbtType::Compound(nbt_types::compound())
+        NbtType::Compound(Default::default())
     }
 
     pub fn int_array() -> NbtType {
-        NbtType::IntArray(nbt_types::int_array(Default::default()))
+        NbtType::IntArray(Default::default())
     }
 
     pub fn long_array() -> NbtType {
-        NbtType::LongArray(nbt_types::long_array(Default::default()))
+        NbtType::LongArray(Default::default())
     }
 
     /// 从NBT标签读对应的数字序号
@@ -316,6 +317,73 @@ impl NbtType {
         }?;
 
         Ok(())
+    }
+}
+
+impl fmt::Display for NbtType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            NbtType::End(_) => write!(f, "END"),
+            NbtType::Byte(nbt) => write!(f, "{}b", nbt.data),
+            NbtType::Short(nbt) => write!(f, "{}s", nbt.data),
+            NbtType::Int(nbt) => write!(f, "{}", nbt.data),
+            NbtType::Long(nbt) => write!(f, "{}L", nbt.data),
+            NbtType::Float(nbt) => write!(f, "{}f", nbt.data),
+            NbtType::Double(nbt) => write!(f, "{}d", nbt.data),
+            NbtType::ByteArray(nbt) => {
+                write!(f, "[B;")?;
+                for (i, b) in nbt.data.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{}B", b)?;
+                }
+                write!(f, "]")
+            }
+            NbtType::String(nbt) => write!(f, "\"{}\"", nbt.data.escape_default()),
+            NbtType::List(nbt) => {
+                write!(f, "[")?;
+                for (i, item) in nbt.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{}", item)?;
+                }
+                write!(f, "]")
+            }
+            NbtType::Compound(nbt) => {
+                write!(f, "{{")?;
+                let mut first = true;
+                for (key, value) in &nbt.data {
+                    if !first {
+                        write!(f, ", ")?;
+                    }
+                    first = false;
+                    write!(f, "{}: {}", key, value)?;
+                }
+                write!(f, "}}")
+            }
+            NbtType::IntArray(nbt) => {
+                write!(f, "[I;")?;
+                for (i, v) in nbt.data.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{}", v)?;
+                }
+                write!(f, "]")
+            }
+            NbtType::LongArray(nbt) => {
+                write!(f, "[L;")?;
+                for (i, v) in nbt.data.iter().enumerate() {
+                    if i > 0 {
+                        write!(f, ", ")?;
+                    }
+                    write!(f, "{}L", v)?;
+                }
+                write!(f, "]")
+            }
+        }
     }
 }
 

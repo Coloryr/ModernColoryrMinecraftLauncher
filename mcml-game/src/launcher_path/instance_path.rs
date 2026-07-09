@@ -157,7 +157,7 @@ impl InstanceSettingObj {
     }
 
     /// 获取截图路径
-    pub fn get_screensots_path(&self) -> PathBuf {
+    pub fn get_screenshots_path(&self) -> PathBuf {
         BASE_DIR
             .get()
             .unwrap()
@@ -262,6 +262,15 @@ impl InstanceSettingObj {
             .unwrap()
             .join(&self.dir)
             .join(names::ICON_FILE)
+    }
+
+    /// 获取存档备份信息文件
+    pub fn get_backup_file(&self) -> PathBuf {
+        BASE_DIR
+            .get()
+            .unwrap()
+            .join(&self.dir)
+            .join(names::SAVE_BACKUP_FILE)
     }
 
     /// 获取在线文件信息文件
