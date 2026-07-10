@@ -80,6 +80,13 @@ impl Default for SchematicObj {
     }
 }
 
+impl SchematicObj {
+    /// 删除
+    pub fn delete(&self) -> CoreResult<()> {
+        path_helper::move_to_trash(&self.path)
+    }
+}
+
 impl SchematicType {
     fn from_ext(ext: &str) -> Self {
         if ext.eq_ignore_ascii_case(names::LITEMATIC_EXT) {
@@ -370,5 +377,59 @@ impl InstanceSettingObj {
         }
 
         list
+    }
+
+    /// 导入结构文件
+    pub fn import_schematic(&self, files: Vec<PathBuf>) -> CoreResult<()> {
+        let path = self.get_schematics_path();
+        path_helper::create_dir_all(&path)?;
+
+        // 收集目标目录中已有的文件名，用于冲突检测
+        let existing = path_helper::get_all_files(&path);
+        let mut names: Vec<String> = existing
+            .iter()
+            .filter_map(|p| p.file_name())
+            .map(|n| n.to_string_lossy().to_string())
+            .collect();
+
+        for item in files.iter() {
+            if !item.is_file() {
+                continue;
+            }
+
+            let file_name = match item.file_name() {
+                Some(n) => n.to_string_lossy().to_string(),
+                None => continue,
+            };
+
+            // 如果文件名冲突，在后面加 (1)、(2) ...
+            let final_name = if names.contains(&file_name) {
+                let stem = item
+                    .file_stem()
+                    .map(|s| s.to_string_lossy().to_string())
+                    .unwrap_or_default();
+                let ext = item
+                    .extension()
+                    .map(|e| format!(".{}", e.to_string_lossy()))
+                    .unwrap_or_default();
+
+                let mut counter = 1u32;
+                loop {
+                    let candidate = format!("{stem}({counter}){ext}");
+                    if !names.contains(&candidate) {
+                        break candidate;
+                    }
+                    counter += 1;
+                }
+            } else {
+                file_name
+            };
+
+            names.push(final_name.clone());
+            let dest = path.join(&final_name);
+            path_helper::copy_file(item, &dest)?;
+        }
+
+        Ok(())
     }
 }

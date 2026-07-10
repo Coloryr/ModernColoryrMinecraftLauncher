@@ -58,8 +58,22 @@ pub struct SaveObj {
     pub icon: Option<PathBuf>,
     /// 是否损坏
     pub broken: bool,
-    /// 实例
-    pub instance: Arc<InstanceSettingObj>,
+    /// 存档信息
+    pub nbt: Option<NbtFile>,
+}
+
+/// 数据包信息
+pub struct SaveDataPackObj {
+    /// 名字
+    pub name: String,
+    /// 路径
+    pub path: PathBuf,
+    /// 描述
+    pub description: String,
+    /// 格式版本号
+    pub pack_format: i32,
+    /// 是否启用
+    pub enable: Option<bool>,
 }
 
 impl Default for SaveObj {
@@ -75,22 +89,24 @@ impl Default for SaveObj {
             icon: Default::default(),
             broken: Default::default(),
             last_played: Default::default(),
-            instance: Default::default(),
+            nbt: Default::default()
         }
     }
 }
 
 fn read_save<R: Read + Seek>(stream: &mut R) -> CoreResult<SaveObj> {
-    let nbt = NbtFile::read(stream)?;
+    let nbt_file = NbtFile::read(stream)?;
     let mut obj = SaveObj::default();
 
-    let Some(nbt) = nbt.nbt.as_compound() else {
+    let Some(nbt) = nbt_file.nbt.as_compound() else {
         obj.broken = true;
+        obj.nbt = Some(nbt_file);
         return Ok(obj);
     };
 
     let Some(data) = nbt.get_compound("Data") else {
         obj.broken = true;
+        obj.nbt = Some(nbt_file);
         return Ok(obj);
     };
 
@@ -125,6 +141,7 @@ fn read_save<R: Read + Seek>(stream: &mut R) -> CoreResult<SaveObj> {
         obj.generator_name = format!("minecraft:{}", name);
     }
 
+    obj.nbt = Some(nbt_file);
     Ok(obj)
 }
 
@@ -234,8 +251,6 @@ impl InstanceSettingObj {
     }
 }
 
-impl SaveBackupObj {}
-
 impl SaveObj {
     /// 获取数据包文件夹
     pub fn get_datapack_path(&self) -> PathBuf {
@@ -265,8 +280,12 @@ impl SaveObj {
     }
 
     /// 备份存档
-    pub fn backup(&self, gui: Option<Box<dyn ArchiveGui + Send + Sync>>) -> CoreResult<()> {
-        let path = self.instance.get_backup_path();
+    pub fn backup(
+        &self,
+        instance: &Arc<InstanceSettingObj>,
+        gui: Option<Box<dyn ArchiveGui + Send + Sync>>,
+    ) -> CoreResult<()> {
+        let path = instance.get_backup_path();
         path_helper::create_dir_all(&path)?;
 
         let time = Local::now();
@@ -284,11 +303,11 @@ impl SaveObj {
 
         archives::compress(ArchiveType::Zip, &file, &self.path, None, &None, gui)?;
 
-        let mut info = self.instance.get_backups()?;
+        let mut info = instance.get_backups()?;
         if let Some(obj) = info.get_mut(&self.level_name) {
             obj.back.push(name);
         } else {
-            let path = self.instance.get_saves_path();
+            let path = instance.get_saves_path();
             let dir = self
                 .path
                 .strip_prefix(path)
@@ -304,8 +323,22 @@ impl SaveObj {
             info.insert(self.level_name.clone(), SaveBackupObj { dir, back });
         }
 
-        self.instance.save_backups(&info);
+        instance.save_backups(&info);
 
         Ok(())
+    }
+
+    /// 获取数据包列表
+    pub fn get_datapacks(&self) -> CoreResult<Vec<SaveDataPackObj>> {
+        let path = self.get_datapack_path();
+        if !path.exists() || !path.is_dir() {
+            return Ok(Vec::new());
+        }
+
+        let mut list = Vec::new();
+
+        if let Some(nbt) = self.nbt.map(|item| item.nbt.as_compound());
+
+        Ok(list)
     }
 }

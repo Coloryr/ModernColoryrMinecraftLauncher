@@ -105,13 +105,15 @@ impl InstanceRuntimeLog {
         };
 
         if let Ok(stream) = path_helper::open_read(&file) {
-            let reader: Box<BufReader<dyn Read>> = if let Some(ext) = file.as_ref().extension() {
-                if ext.eq_ignore_ascii_case(names::LOG_GZ_EXT) {
-                    let gz = GzDecoder::new(stream);
-                    Box::new(BufReader::new(gz))
-                } else {
-                    Box::new(BufReader::new(stream))
-                }
+            let is_gz = file
+                .as_ref()
+                .file_name()
+                .map(|n| n.to_string_lossy().ends_with(names::LOG_GZ_EXT))
+                .unwrap_or(false);
+
+            let reader: Box<BufReader<dyn Read>> = if is_gz {
+                let gz = GzDecoder::new(stream);
+                Box::new(BufReader::new(gz))
             } else {
                 Box::new(BufReader::new(stream))
             };
@@ -210,15 +212,25 @@ fn get_level(level: &str) -> LogLevel {
 impl InstanceSettingObj {
     /// 获取游戏日志文件列表
     pub fn get_log_files(&self) -> Vec<PathBuf> {
+        fn is_log_file(path: &Path) -> bool {
+            if let Some(ext) = path.extension() {
+                if ext.eq_ignore_ascii_case(names::LOG_EXT)
+                    || ext.eq_ignore_ascii_case(names::TXT_EXT)
+                {
+                    return true;
+                }
+            }
+            // LOG_GZ_EXT 是 .log.gz 复合后缀，需要用文件名直接判断
+            path.file_name()
+                .map(|n| n.to_string_lossy().ends_with(names::LOG_GZ_EXT))
+                .unwrap_or(false)
+        }
+
         let mut list = Vec::new();
         let dir = self.get_logs_path();
         if dir.exists() && dir.is_dir() {
             for item in path_helper::get_all_files(dir).iter() {
-                if let Some(data) = item.extension()
-                    && (data.eq_ignore_ascii_case(names::LOG_EXT)
-                        || data.eq_ignore_ascii_case(names::TXT_EXT)
-                        || data.eq_ignore_ascii_case(names::LOG_GZ_EXT))
-                {
+                if is_log_file(item) {
                     list.push(item.clone());
                 }
             }
@@ -227,11 +239,7 @@ impl InstanceSettingObj {
         let dir = self.get_crash_path();
         if dir.exists() && dir.is_dir() {
             for item in path_helper::get_all_files(dir).iter() {
-                if let Some(data) = item.extension()
-                    && (data.eq_ignore_ascii_case(names::LOG_EXT)
-                        || data.eq_ignore_ascii_case(names::TXT_EXT)
-                        || data.eq_ignore_ascii_case(names::LOG_GZ_EXT))
-                {
+                if is_log_file(item) {
                     list.push(item.clone());
                 }
             }
