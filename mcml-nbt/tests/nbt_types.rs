@@ -179,7 +179,7 @@ fn nbt_list() {
     assert!(nbt.add_item(nbt_types::byte(1).to_nbt()));
     assert!(nbt.add_item(nbt_types::byte(2).to_nbt()));
 
-    let nbt = NbtFile::new(nbt.to_nbt_type(), CompressType::None);
+    let nbt = NbtFile::new(nbt.to_nbt(), CompressType::None);
 
     nbt.write(&mut stream).unwrap();
 

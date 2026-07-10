@@ -704,7 +704,7 @@ fn read_jar_in_jar(
         .filter_map(|i| {
             archive.by_index(i).ok().and_then(|entry| {
                 let name = entry.name();
-                if name.ends_with(names::JAR_EXT)
+                if name.ends_with(&format!(".{}", names::JAR_EXT))
                     && (name.starts_with(names::MOD_JAR_JAR_DIR)
                         || name.starts_with(names::MOD_JARS_DIR))
                 {

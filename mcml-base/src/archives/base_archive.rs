@@ -40,7 +40,7 @@ impl ArchiveType {
     pub fn try_from_path(path: &Path) -> Option<Self> {
         let file_name = path.file_name()?.to_string_lossy().to_lowercase();
 
-        if file_name.ends_with(names::ZIP_EXT) {
+        if file_name.ends_with(&format!(".{}", names::ZIP_EXT)) {
             Some(ArchiveType::Zip)
         } else if file_name.ends_with(names::R7Z_EXT) {
             Some(ArchiveType::R7Z)

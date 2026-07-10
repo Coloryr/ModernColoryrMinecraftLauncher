@@ -516,7 +516,7 @@ impl NbtList {
         }
     }
 
-    pub fn to_nbt_type(self) -> NbtType {
+    pub fn to_nbt(self) -> NbtType {
         NbtType::List(self)
     }
 }

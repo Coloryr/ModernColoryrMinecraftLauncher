@@ -536,7 +536,7 @@ impl InstanceSettingObj {
                 if let Some(ext) = file.extension()
                     && ext.eq_ignore_ascii_case(names::JAR_EXT)
                 {
-                    let file = file.join(names::DISABLE_EXT);
+                    let file = file.join(format!(".{}", names::DISABLE_EXT));
                     if file.exists() {
                         return false;
                     }
