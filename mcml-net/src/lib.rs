@@ -1,16 +1,3 @@
-pub mod adoptium_api;
-pub mod authlib_api;
-pub mod coloryr_api;
-pub mod fabric_api;
-pub mod liteloader_api;
-pub mod maven_utils;
-pub mod mojang_api;
-pub mod nide8_api;
-pub mod optifine_api;
-pub mod quilt_api;
-pub mod url_helper;
-pub mod urls;
-
 use mcml_config::config_obj::{ProxyState, ProxyType};
 use mcml_names::i18_items::error_type::{
     ErrorData, ErrorType, HttpReadErrorData, HttpReqErrorData,
@@ -21,6 +8,20 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
+
+pub mod adoptium_api;
+pub mod authlib_api;
+pub mod coloryr_api;
+pub mod fabric_api;
+pub mod input_file;
+pub mod liteloader_api;
+pub mod maven_utils;
+pub mod mojang_api;
+pub mod nide8_api;
+pub mod optifine_api;
+pub mod quilt_api;
+pub mod url_helper;
+pub mod urls;
 
 /// 默认超时时间（秒）
 const DEFAULT_TIMEOUT: u64 = 10;

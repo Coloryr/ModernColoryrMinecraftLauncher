@@ -1,14 +1,12 @@
-use chrono::Local;
 /// 旧版账户验证
+use chrono::Local;
 use mcml_names::i18_items::error_type::{CoreResult, ErrorType};
 use reqwest::StatusCode;
 
 use crate::{
     LoginObj,
-    legacy::{
-        authenticate_obj::{AgentObj, AuthenticateObj, AuthenticateResObj},
-        refresh_obj::RefreshObj,
-        selected_profile_obj::SelectedProfileObj,
+    legacy::authenticate_obj::{
+        AgentObj, AuthenticateObj, AuthenticateResObj, RefreshObj, SelectedProfileObj,
     },
 };
 
@@ -16,8 +14,6 @@ pub mod authenticate_obj;
 pub mod authlib_injector;
 pub mod little_skin;
 pub mod nide8;
-pub mod refresh_obj;
-pub mod selected_profile_obj;
 
 pub trait GuiSelectHandel {
     /// 选择登陆的账户

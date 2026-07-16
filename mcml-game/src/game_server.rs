@@ -1,3 +1,5 @@
+/// 游戏实例服务器相关
+
 use std::sync::Arc;
 
 use mcml_base::path_helper;
@@ -28,13 +30,6 @@ impl Default for ServerInfoObj {
             accept_textures: Default::default(),
             instance: Default::default(),
         }
-    }
-}
-
-impl ServerInfoObj {
-    /// 删除
-    pub fn delete(&self, instance: &Arc<InstanceSettingObj>) {
-        instance.remove_server(&self.name, &self.ip);
     }
 }
 

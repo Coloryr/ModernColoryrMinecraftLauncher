@@ -1,7 +1,11 @@
+/// 游戏实例结构文件相关
+/// 包括模组的结构文件读取
+
 use std::{
     collections::HashMap,
     io::{Read, Seek},
     path::PathBuf,
+    sync::Mutex,
 };
 
 use mcml_base::path_helper;
@@ -10,6 +14,7 @@ use mcml_names::{
     names,
 };
 use mcml_nbt::{NbtType, nbt_file::NbtFile, nbt_types::NbtCompound};
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
 use crate::launcher::instance_setting_obj::InstanceSettingObj;
 
@@ -207,7 +212,7 @@ fn read_litematic(nbt: NbtFile) -> CoreResult<SchematicObj> {
 
         Ok(obj)
     } else {
-        Err(ErrorType::DataNotFound)
+        Err(ErrorType::InfoNotFound("nbt".to_string()))
     }
 }
 
@@ -220,7 +225,7 @@ fn read_schematic(nbt: NbtFile) -> CoreResult<SchematicObj> {
         read_dimensions_short(nbt, &mut obj);
         Ok(obj)
     } else {
-        Err(ErrorType::DataNotFound)
+        Err(ErrorType::InfoNotFound("nbt".to_string()))
     }
 }
 
@@ -271,7 +276,7 @@ fn read_schem(nbt: NbtFile) -> CoreResult<SchematicObj> {
 
         Ok(obj)
     } else {
-        Err(ErrorType::DataNotFound)
+        Err(ErrorType::InfoNotFound("nbt".to_string()))
     }
 }
 
@@ -332,7 +337,7 @@ fn read_nbt(nbt: NbtFile) -> CoreResult<SchematicObj> {
 
         Ok(obj)
     } else {
-        Err(ErrorType::DataNotFound)
+        Err(ErrorType::InfoNotFound("nbt".to_string()))
     }
 }
 
@@ -352,31 +357,35 @@ pub fn read_schematic_file<R: Read + Seek>(
 
 impl InstanceSettingObj {
     /// 获取结构文件列表
-    pub fn get_schematics(&self) -> Vec<SchematicObj> {
+    pub async fn get_schematics(&self) -> Vec<SchematicObj> {
         let dir = self.get_schematics_path();
         let files = path_helper::get_all_files(&dir);
 
-        let mut list = Vec::with_capacity(files.len());
+        tokio::task::spawn_blocking(move || {
+            let list = Mutex::new(Vec::new());
 
-        for item in files.iter() {
-            if let Some(ext) = item.extension() {
-                let schematic_type = SchematicType::from_ext(&ext.to_string_lossy());
-                let mut obj = if let Ok(mut stream) = path_helper::open_read(item)
-                    && let Ok(obj) = read_schematic_file(&mut stream, schematic_type)
-                {
-                    obj
-                } else {
-                    SchematicObj {
-                        fail: true,
-                        ..Default::default()
-                    }
-                };
-                obj.path = item.clone();
-                list.push(obj);
-            }
-        }
+            files.par_iter().for_each(|item| {
+                if let Some(ext) = item.extension() {
+                    let schematic_type = SchematicType::from_ext(&ext.to_string_lossy());
+                    let mut obj = if let Ok(mut stream) = path_helper::open_read(item)
+                        && let Ok(obj) = read_schematic_file(&mut stream, schematic_type)
+                    {
+                        obj
+                    } else {
+                        SchematicObj {
+                            fail: true,
+                            ..Default::default()
+                        }
+                    };
+                    obj.path = item.clone();
+                    list.lock().unwrap().push(obj);
+                }
+            });
 
-        list
+            list.into_inner().unwrap()
+        })
+        .await
+        .unwrap_or_default()
     }
 
     /// 导入结构文件

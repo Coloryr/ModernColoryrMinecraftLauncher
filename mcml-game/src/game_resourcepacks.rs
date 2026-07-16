@@ -1,3 +1,4 @@
+/// 游戏实例资源包相关
 use std::{
     cmp,
     io::Read,
@@ -6,9 +7,7 @@ use std::{
 };
 
 use mcml_base::{
-    file_item::FileHash,
-    hash_helper::{self, HashType},
-    path_helper,
+    file_item::FileHash, hash_helper::{self, HashType}, path_helper, serialize_tools,
 };
 use mcml_names::{
     i18_items::error_type::{CoreResult, ErrorData, ErrorType, FileSystemErrorData},
@@ -132,7 +131,7 @@ pub struct ResourcepackObj {
     /// 文件校验
     pub hash: FileHash,
     /// 路径
-    pub local: PathBuf,
+    pub path: PathBuf,
     /// 图标
     pub icon: Option<Vec<u8>>,
     /// 是否读取失败
@@ -147,7 +146,7 @@ impl Default for ResourcepackObj {
             min_format: Default::default(),
             max_format: Default::default(),
             hash: Default::default(),
-            local: Default::default(),
+            path: Default::default(),
             icon: Default::default(),
             fail: Default::default(),
         }
@@ -171,7 +170,7 @@ fn process_resourcepack<P: AsRef<Path>>(path: P) -> CoreResult<ResourcepackObj> 
             })
         })?;
 
-        match serde_json::from_reader::<_, PackMeta>(meta) {
+        match serialize_tools::json_stream::<PackMeta, _>(meta) {
             Ok(m) => ResourcepackObj {
                 description: m.pack.description,
                 pack_format: m.pack.pack_format,
@@ -199,6 +198,13 @@ fn process_resourcepack<P: AsRef<Path>>(path: P) -> CoreResult<ResourcepackObj> 
     }
 
     Ok(pack)
+}
+
+impl ResourcepackObj {
+    /// 删除
+    pub fn remove(&self) -> CoreResult<()> {
+        path_helper::move_to_trash(&self.path)
+    }
 }
 
 impl InstanceSettingObj {
@@ -230,7 +236,7 @@ impl InstanceSettingObj {
                         match process_resourcepack(item) {
                             Ok(mut obj) => {
                                 obj.hash = hash;
-                                obj.local = item.clone();
+                                obj.path = item.clone();
 
                                 list.lock().unwrap().push(obj);
                                 return;
@@ -247,7 +253,7 @@ impl InstanceSettingObj {
                         min_format: Default::default(),
                         max_format: Default::default(),
                         hash,
-                        local: item.clone(),
+                        path: item.clone(),
                         icon: Default::default(),
                         fail: true,
                     });

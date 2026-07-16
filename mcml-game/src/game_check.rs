@@ -1,3 +1,5 @@
+/// 检查游戏实例文件
+
 use std::{collections::HashMap, path::{Path, PathBuf}};
 
 use mcml_base::{

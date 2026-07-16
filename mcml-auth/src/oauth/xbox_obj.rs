@@ -1,3 +1,4 @@
+/// Xbox网络模型
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]

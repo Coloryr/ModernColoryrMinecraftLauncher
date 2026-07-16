@@ -34,6 +34,15 @@ pub struct NbtFile {
     pub compress: CompressType,
 }
 
+impl Default for NbtFile {
+    fn default() -> Self {
+        Self {
+            nbt: NbtType::end(),
+            compress: CompressType::None,
+        }
+    }
+}
+
 impl NbtFile {
     pub fn new(nbt: NbtType, compress: CompressType) -> Self {
         Self { nbt, compress }

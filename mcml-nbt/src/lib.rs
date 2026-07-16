@@ -154,7 +154,23 @@ impl NbtType {
         }
     }
 
+    pub fn as_end_mut(&mut self) -> Option<&mut NbtEnd> {
+        if let NbtType::End(nbt) = self {
+            Some(nbt)
+        } else {
+            None
+        }
+    }
+
     pub fn as_byte(&self) -> Option<&NbtByte> {
+        if let NbtType::Byte(nbt) = self {
+            Some(nbt)
+        } else {
+            None
+        }
+    }
+
+    pub fn as_byte_mut(&mut self) -> Option<&mut NbtByte> {
         if let NbtType::Byte(nbt) = self {
             Some(nbt)
         } else {
@@ -170,7 +186,23 @@ impl NbtType {
         }
     }
 
+    pub fn as_short_mut(&mut self) -> Option<&mut NbtShort> {
+        if let NbtType::Short(nbt) = self {
+            Some(nbt)
+        } else {
+            None
+        }
+    }
+
     pub fn as_int(&self) -> Option<&NbtInt> {
+        if let NbtType::Int(nbt) = self {
+            Some(nbt)
+        } else {
+            None
+        }
+    }
+
+    pub fn as_int_mut(&mut self) -> Option<&mut NbtInt> {
         if let NbtType::Int(nbt) = self {
             Some(nbt)
         } else {
@@ -186,7 +218,23 @@ impl NbtType {
         }
     }
 
+    pub fn as_long_mut(&mut self) -> Option<&mut NbtLong> {
+        if let NbtType::Long(nbt) = self {
+            Some(nbt)
+        } else {
+            None
+        }
+    }
+
     pub fn as_float(&self) -> Option<&NbtFloat> {
+        if let NbtType::Float(nbt) = self {
+            Some(nbt)
+        } else {
+            None
+        }
+    }
+
+    pub fn as_float_mut(&mut self) -> Option<&mut NbtFloat> {
         if let NbtType::Float(nbt) = self {
             Some(nbt)
         } else {
@@ -202,7 +250,23 @@ impl NbtType {
         }
     }
 
+    pub fn as_double_mut(&mut self) -> Option<&mut NbtDouble> {
+        if let NbtType::Double(nbt) = self {
+            Some(nbt)
+        } else {
+            None
+        }
+    }
+
     pub fn as_byte_array(&self) -> Option<&NbtByteArray> {
+        if let NbtType::ByteArray(nbt) = self {
+            Some(nbt)
+        } else {
+            None
+        }
+    }
+
+    pub fn as_byte_array_mut(&mut self) -> Option<&mut NbtByteArray> {
         if let NbtType::ByteArray(nbt) = self {
             Some(nbt)
         } else {
@@ -218,6 +282,14 @@ impl NbtType {
         }
     }
 
+    pub fn as_string_mut(&mut self) -> Option<&mut NbtString> {
+        if let NbtType::String(nbt) = self {
+            Some(nbt)
+        } else {
+            None
+        }
+    }
+
     pub fn as_list(&self) -> Option<&NbtList> {
         if let NbtType::List(nbt) = self {
             Some(nbt)
@@ -226,7 +298,23 @@ impl NbtType {
         }
     }
 
+    pub fn as_list_mut(&mut self) -> Option<&mut NbtList> {
+        if let NbtType::List(nbt) = self {
+            Some(nbt)
+        } else {
+            None
+        }
+    }
+
     pub fn as_compound(&self) -> Option<&NbtCompound> {
+        if let NbtType::Compound(nbt) = self {
+            Some(nbt)
+        } else {
+            None
+        }
+    }
+
+    pub fn as_compound_mut(&mut self) -> Option<&mut NbtCompound> {
         if let NbtType::Compound(nbt) = self {
             Some(nbt)
         } else {
@@ -250,7 +338,23 @@ impl NbtType {
         }
     }
 
+    pub fn as_int_array_mut(&mut self) -> Option<&mut NbtIntArray> {
+        if let NbtType::IntArray(nbt) = self {
+            Some(nbt)
+        } else {
+            None
+        }
+    }
+
     pub fn as_long_array(&self) -> Option<&NbtLongArray> {
+        if let NbtType::LongArray(nbt) = self {
+            Some(nbt)
+        } else {
+            None
+        }
+    }
+
+    pub fn as_long_array_mut(&mut self) -> Option<&mut NbtLongArray> {
         if let NbtType::LongArray(nbt) = self {
             Some(nbt)
         } else {

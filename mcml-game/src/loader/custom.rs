@@ -76,7 +76,7 @@ impl InstanceSettingObj {
 
         // Both files must be present
         if !version_ok || !install_ok {
-            return Err(ErrorType::DataNotFound);
+            return Err(ErrorType::InfoNotFound(names::FILE_INSTALL_PROFILE.to_string()));
         }
 
         let obj1: ForgeLaunchObj = serde_json::from_str(&version_json).map_err(|err| {

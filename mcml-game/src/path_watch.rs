@@ -48,14 +48,10 @@ pub(crate) fn init_watch() -> CoreResult<()> {
 
                         match event.kind {
                             EventKind::Create(create_kind) => {
-                                if create_kind == CreateKind::Folder {
-
-                                }
+                                if create_kind == CreateKind::Folder {}
                             }
                             EventKind::Remove(remove_kind) => {
-                                if remove_kind == RemoveKind::Folder {
-                                    
-                                }
+                                if remove_kind == RemoveKind::Folder {}
                             }
                             _ => {}
                         }

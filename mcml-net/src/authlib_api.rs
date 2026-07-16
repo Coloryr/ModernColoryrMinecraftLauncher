@@ -95,7 +95,7 @@ pub async fn get_obj() -> CoreResult<AuthlibInjectorObj> {
         .find(|item| item.build_number == meta.latest_build_number);
 
     match item {
-        None => Err(ErrorType::DataNotFound),
+        None => Err(ErrorType::InfoNotFound("meta".to_string())),
         Some(data) => Ok(WORK_CLIENT
             .get()
             .unwrap()

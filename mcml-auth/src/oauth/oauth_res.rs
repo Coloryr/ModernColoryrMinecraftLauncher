@@ -1,3 +1,4 @@
+/// OAuth网络模型
 use serde::{Deserialize, Serialize};
 
 /// OAuth获取登陆码结果

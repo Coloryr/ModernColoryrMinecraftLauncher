@@ -1,3 +1,5 @@
+/// 游戏实例屏幕截图相关
+
 use std::path::PathBuf;
 
 use mcml_base::path_helper;

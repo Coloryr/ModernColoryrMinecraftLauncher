@@ -30,7 +30,7 @@ impl InputFile {
                 path_helper::copy_file_async(path_buf, path.as_ref().to_path_buf()).await?;
             }
             InputFile::Url(url) => {
-                let mut stream = mcml_net::get_work_client().get(&url).await?;
+                let mut stream = crate::get_work_client().get(&url).await?;
                 let mut file = path_helper::open_write_async(path.as_ref()).await?;
 
                 loop {

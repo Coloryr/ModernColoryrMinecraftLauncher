@@ -1,7 +1,6 @@
+/// 登陆模型
 use mcml_names::names;
 use serde::{Deserialize, Serialize};
-
-use crate::legacy::selected_profile_obj::SelectedProfileObj;
 
 /// 启动器登陆信息
 #[derive(Serialize, Deserialize, Debug)]
@@ -94,6 +93,50 @@ impl Default for AuthenticateResObj {
             selected_profile: Default::default(),
             available_profiles: Default::default(),
             error_message: Default::default(),
+        }
+    }
+}
+
+/// 刷新账户
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(default)]
+pub struct RefreshObj {
+    /// 登陆密钥
+    #[serde(rename = "accessToken")]
+    pub access_token: String,
+    /// 客户端标识
+    #[serde(rename = "clientToken")]
+    pub client_token: String,
+    /// 选中的账户
+    #[serde(rename = "selectedProfile")]
+    pub selected_profile: Option<SelectedProfileObj>,
+}
+
+impl Default for RefreshObj {
+    fn default() -> Self {
+        Self {
+            access_token: Default::default(),
+            client_token: Default::default(),
+            selected_profile: Default::default(),
+        }
+    }
+}
+
+/// 账户列表
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(default)]
+pub struct SelectedProfileObj {
+    /// 账户名
+    pub name: String,
+    /// 账户标识
+    pub id: String,
+}
+
+impl Default for SelectedProfileObj {
+    fn default() -> Self {
+        Self {
+            name: Default::default(),
+            id: Default::default(),
         }
     }
 }

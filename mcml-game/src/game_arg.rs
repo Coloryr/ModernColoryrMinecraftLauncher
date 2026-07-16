@@ -1,3 +1,4 @@
+/// 游戏实例启动参数相关生成
 use std::{
     collections::{HashMap, HashSet},
     io::Cursor,
@@ -8,7 +9,7 @@ use mcml_auth::{AuthType, LoginObj};
 use mcml_base::{
     Os, builder,
     file_item::{FileHash, FileItemObj, LaterRun},
-    hash_helper, path_helper,
+    hash_helper, path_helper, serialize_tools,
 };
 use mcml_config::config_obj::GCType;
 use mcml_names::i18_items::error_type::{CoreResult, ErrorData, ErrorType};
@@ -56,8 +57,8 @@ pub struct GameLaunchObj {
     pub use_asm: bool,
 }
 
-impl GameLaunchObj {
-    pub fn new() -> Self {
+impl Default for GameLaunchObj {
+    fn default() -> Self {
         Self {
             game_libs: Default::default(),
             loader_libs: Default::default(),
@@ -876,11 +877,7 @@ impl InstanceSettingObj {
             let assets = assets_path::get_index(asset_index);
             if assets.is_err() {
                 let data = mojang_api::get_assets(&asset_index.url).await?;
-                let assets_obj = serde_json::from_slice::<AssetsObj>(&data).map_err(|err| {
-                    ErrorType::SerializerError(ErrorData {
-                        error: err.to_string(),
-                    })
-                })?;
+                let assets_obj: AssetsObj = serialize_tools::json_bytes(&data)?;
                 if assets_obj.objects.is_empty() {
                     return Err(ErrorType::InfoNotFound(asset_index.id.clone()));
                 }
@@ -946,11 +943,7 @@ impl InstanceSettingObj {
                 let assets = assets_path::get_index(asset_index);
                 if assets.is_err() {
                     let data = mcml_net::mojang_api::get_assets(&asset_index.url).await?;
-                    let assets_obj = serde_json::from_slice::<AssetsObj>(&data).map_err(|err| {
-                        ErrorType::SerializerError(ErrorData {
-                            error: err.to_string(),
-                        })
-                    })?;
+                    let assets_obj: AssetsObj = serialize_tools::json_bytes(&data)?;
                     if assets_obj.objects.is_empty() {
                         return Err(ErrorType::InfoNotFound(asset_index.id.clone()));
                     }
@@ -1064,7 +1057,7 @@ impl InstanceSettingObj {
 
     /// 创建游戏完整启动内容
     pub async fn make_game_launch_obj(&self, arg: &GameLaunchArg) -> CoreResult<GameLaunchObj> {
-        let mut obj = GameLaunchObj::new();
+        let mut obj = GameLaunchObj::default();
 
         // 设置本地库路径
         obj.native_dir = libraries_path::get_native_dir(Some(&self.version));

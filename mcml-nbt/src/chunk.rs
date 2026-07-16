@@ -79,7 +79,7 @@ pub struct ChunkData {
 
 /// 读区块头
 fn read_chunk_head<R: Read>(stream: &mut R) -> CoreResult<Vec<ChunkInfo>> {
-    let mut temp = [0u8; 8192];
+    let mut temp = vec![0u8; 8192];
 
     stream.read_exact(&mut temp).map_err(|err| io_error(err))?;
 
@@ -182,7 +182,7 @@ fn write_chunk_data<W: Write + Seek>(chunk: &mut ChunkData, stream: &mut W) -> C
         return Ok(());
     }
 
-    let buf = [0u8; 8192];
+    let buf = vec![0u8; 8192];
     let mut now = 8192;
     stream.write_all(&buf).map_err(|err| io_error(err))?;
 

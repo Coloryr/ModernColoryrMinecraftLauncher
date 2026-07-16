@@ -49,7 +49,6 @@ impl I18Lang for ZhCn {
             ErrorType::AuthLoginNoProfile => String::from("账户登录错误，没有找到账户"),
             ErrorType::AuthRefreshFail(data) => format!("账户刷新失败：{}", data),
             ErrorType::AuthRefreshNoProfile => String::from("账户刷新错误，没有找到账户"),
-            ErrorType::GetVersionMetaFail => String::from("获取版本列表数据错误"),
             _ => String::new(),
         }
     }
@@ -68,6 +67,8 @@ impl I18Lang for ZhCn {
         match thread {
             ThreadType::LogThread => String::from("日志线程"),
             ThreadType::ConfigSaveThread => String::from("配置保存线程"),
+            ThreadType::LanClientV4 => String::from("局域网游戏V4监听线程"),
+            ThreadType::LanClientV6 => String::from("局域网游戏V6监听线程"),
         }
     }
 }
