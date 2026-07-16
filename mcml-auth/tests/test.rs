@@ -15,13 +15,3 @@ fn test_time() {
 async fn oauth_test() {
     let code = oauth::get_code().await.unwrap();
 }
-
-#[tokio::test]
-async fn littleskin_test() {
-    let code = oauth::get_code().await.unwrap();
-}
-
-#[tokio::test]
-async fn nide8_test() {
-    let code = oauth::get_code().await.unwrap();
-}

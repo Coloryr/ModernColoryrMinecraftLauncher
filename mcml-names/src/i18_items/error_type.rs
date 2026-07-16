@@ -128,8 +128,6 @@ pub enum ErrorType {
     /// 任务出错
     TaskError(ErrorData),
 
-    GetVersionMetaFail,
-
     /// 流处理异常
     StreamError(ErrorData),
 
@@ -137,9 +135,6 @@ pub enum ErrorType {
     NbtTypeError,
     /// NBT读取失败
     NbtReadError,
-
-    /// 项目不存在
-    DataNotFound,
 
     /// BASE64错误
     Base64Error(ErrorData),
@@ -160,10 +155,19 @@ pub enum ErrorType {
     ProcessError(ErrorData),
 
     /// 版本号错误
-    VersionInfoError,
+    InstanceVersionError,
     /// 找不到合适的Java
     JavaNotFound,
 
     /// 输入参数错误
     ArgEmpty(ArgEmptyData),
+
+    /// 错误的操作
+    InvalidOperation,
+
+    /// Socket处理出错
+    SocketError(ErrorData),
+
+    /// 线程启动错误
+    ThreadError(ErrorData),
 }

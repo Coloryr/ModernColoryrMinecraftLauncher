@@ -1,3 +1,5 @@
+/// 游戏实例启动相关
+
 use std::{
     collections::HashMap,
     io::{BufRead, BufReader},
@@ -567,21 +569,21 @@ impl InstanceSettingObj {
         gui: &Option<impl ILaunchGui>,
     ) -> CoreResult<LaunchCmd> {
         if self.version.is_empty() {
-            return Err(ErrorType::VersionInfoError);
+            return Err(ErrorType::InstanceVersionError);
         }
 
         if self.loader != LoaderType::Normal || self.loader != LoaderType::Custom {
             if let Some(data) = &self.loader_version
                 && data.is_empty()
             {
-                return Err(ErrorType::VersionInfoError);
+                return Err(ErrorType::InstanceVersionError);
             } else {
-                return Err(ErrorType::VersionInfoError);
+                return Err(ErrorType::InstanceVersionError);
             }
         }
 
         if self.loader == LoaderType::Custom && !self.get_loader_file().exists() {
-            return Err(ErrorType::VersionInfoError);
+            return Err(ErrorType::InstanceVersionError);
         }
 
         if let Some(gui) = gui {
@@ -644,21 +646,21 @@ impl InstanceSettingObj {
 
         // 检查版本号是否合理
         if self.version.is_empty() {
-            return Err(ErrorType::VersionInfoError);
+            return Err(ErrorType::InstanceVersionError);
         }
 
         if self.loader != LoaderType::Normal || self.loader != LoaderType::Custom {
             if let Some(data) = &self.loader_version
                 && data.is_empty()
             {
-                return Err(ErrorType::VersionInfoError);
+                return Err(ErrorType::InstanceVersionError);
             } else {
-                return Err(ErrorType::VersionInfoError);
+                return Err(ErrorType::InstanceVersionError);
             }
         }
 
         if self.loader == LoaderType::Custom && !self.get_loader_file().exists() {
-            return Err(ErrorType::VersionInfoError);
+            return Err(ErrorType::InstanceVersionError);
         }
 
         // 登陆账户

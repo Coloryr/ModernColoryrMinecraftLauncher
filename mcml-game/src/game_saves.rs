@@ -1,22 +1,30 @@
+/// 游戏实例存档相关
+/// 包括存档里面的数据包
 use std::{
     collections::HashMap,
     io::{Read, Seek},
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{Arc, Mutex},
 };
 
 use chrono::{Datelike, Local, Timelike};
 use mcml_base::{
     archives::{self, ArchiveGui, ArchiveType, BaseArchive},
-    path_helper,
+    path_helper, serialize_tools,
 };
 use mcml_config::config_save;
 use mcml_names::{
     i18_items::error_type::{CoreResult, ErrorData, ErrorType, FileSystemErrorData},
     names, uuids,
 };
-use mcml_nbt::{nbt_file::NbtFile, nbt_types::NbtCompound};
+use mcml_nbt::{
+    nbt_file::NbtFile,
+    nbt_types::{NbtCompound, NbtList, NbtString},
+};
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use zip::ZipArchive;
 
 use crate::launcher::instance_setting_obj::InstanceSettingObj;
 
@@ -59,7 +67,7 @@ pub struct SaveObj {
     /// 是否损坏
     pub broken: bool,
     /// 存档信息
-    pub nbt: Option<NbtFile>,
+    pub nbt: NbtFile,
 }
 
 /// 数据包信息
@@ -71,7 +79,7 @@ pub struct SaveDataPackObj {
     /// 描述
     pub description: String,
     /// 格式版本号
-    pub pack_format: i32,
+    pub pack_format: i64,
     /// 是否启用
     pub enable: Option<bool>,
 }
@@ -89,7 +97,7 @@ impl Default for SaveObj {
             icon: Default::default(),
             broken: Default::default(),
             last_played: Default::default(),
-            nbt: Default::default()
+            nbt: Default::default(),
         }
     }
 }
@@ -100,13 +108,13 @@ fn read_save<R: Read + Seek>(stream: &mut R) -> CoreResult<SaveObj> {
 
     let Some(nbt) = nbt_file.nbt.as_compound() else {
         obj.broken = true;
-        obj.nbt = Some(nbt_file);
+        obj.nbt = nbt_file;
         return Ok(obj);
     };
 
     let Some(data) = nbt.get_compound("Data") else {
         obj.broken = true;
-        obj.nbt = Some(nbt_file);
+        obj.nbt = nbt_file;
         return Ok(obj);
     };
 
@@ -141,41 +149,46 @@ fn read_save<R: Read + Seek>(stream: &mut R) -> CoreResult<SaveObj> {
         obj.generator_name = format!("minecraft:{}", name);
     }
 
-    obj.nbt = Some(nbt_file);
+    obj.nbt = nbt_file;
     Ok(obj)
 }
 
 impl InstanceSettingObj {
     /// 获取实例存档列表
-    pub fn get_saves(&self) -> Vec<SaveObj> {
-        let mut list = Vec::new();
+    pub async fn get_saves(&self) -> Vec<SaveObj> {
         let dir = self.get_saves_path();
         let dirs = path_helper::get_dirs(dir);
 
-        for item in dirs.iter() {
-            let file = item.join(names::LEVEL_FILE);
-            if file.exists() && file.is_file() {
-                if let Ok(mut stream) = path_helper::open_read(&file) {
-                    let data = read_save(&mut stream);
-                    match data {
-                        Ok(mut obj) => {
-                            let file = item.join(names::ICON_FILE);
-                            if file.exists() {
-                                obj.icon = Some(file);
-                            }
+        tokio::task::spawn_blocking(move || {
+            let list = Mutex::new(Vec::new());
 
-                            obj.path = item.clone();
-                            list.push(obj);
-                        }
-                        Err(err) => {
-                            mcml_log::error_type(err);
+            dirs.par_iter().for_each(|item| {
+                let file = item.join(names::LEVEL_FILE);
+                if file.exists() && file.is_file() {
+                    if let Ok(mut stream) = path_helper::open_read(&file) {
+                        let data = read_save(&mut stream);
+                        match data {
+                            Ok(mut obj) => {
+                                let file = item.join(names::ICON_FILE);
+                                if file.exists() {
+                                    obj.icon = Some(file);
+                                }
+
+                                obj.path = item.clone();
+                                list.lock().unwrap().push(obj);
+                            }
+                            Err(err) => {
+                                mcml_log::error_type(err);
+                            }
                         }
                     }
                 }
-            }
-        }
+            });
 
-        list
+            list.into_inner().unwrap()
+        })
+        .await
+        .unwrap_or_default()
     }
 
     /// 还原备份
@@ -201,14 +214,7 @@ impl InstanceSettingObj {
         let file = self.get_backup_file();
         if file.exists() && file.is_file() {
             let stream = path_helper::open_read(&file)?;
-            let json = serde_json::from_reader::<_, HashMap<String, SaveBackupObj>>(&stream)
-                .map_err(|err| {
-                    ErrorType::SerializerError(ErrorData {
-                        error: err.to_string(),
-                    })
-                })?;
-
-            Ok(json)
+            serialize_tools::json_stream(&stream)
         } else {
             Ok(HashMap::new())
         }
@@ -255,6 +261,11 @@ impl SaveObj {
     /// 获取数据包文件夹
     pub fn get_datapack_path(&self) -> PathBuf {
         self.path.join(names::GAME_DATAPACK_DIR)
+    }
+
+    /// 获取存档信息文件
+    pub fn get_level_file(&self) -> PathBuf {
+        self.path.join(names::LEVEL_FILE)
     }
 
     /// 删除存档
@@ -328,6 +339,16 @@ impl SaveObj {
         Ok(())
     }
 
+    /// 存储
+    fn save_nbt(&self) -> CoreResult<()> {
+        let file = self.get_level_file();
+        let mut stream = path_helper::open_read(file)?;
+
+        self.nbt.write(&mut stream)?;
+
+        Ok(())
+    }
+
     /// 获取数据包列表
     pub fn get_datapacks(&self) -> CoreResult<Vec<SaveDataPackObj>> {
         let path = self.get_datapack_path();
@@ -335,10 +356,304 @@ impl SaveObj {
             return Ok(Vec::new());
         }
 
-        let mut list = Vec::new();
+        let list = Mutex::new(Vec::new());
 
-        if let Some(nbt) = self.nbt.map(|item| item.nbt.as_compound());
+        if let Some(nbt) = self
+            .nbt
+            .nbt
+            .as_compound()
+            .and_then(|map| map.get_compound("Data"))
+            .and_then(|map1| map1.get_compound("DataPacks"))
+        {
+            let ens = nbt.get_list("Enabled");
+            let dis = nbt.get_list("Disabled");
 
-        Ok(list)
+            let files = path_helper::get_files(&path);
+
+            files.par_iter().for_each(|item| {
+                if let Some(ext) = item.extension()
+                    && ext.eq_ignore_ascii_case(names::ZIP_EXT)
+                {
+                    let stream = path_helper::open_read(item);
+                    if let Err(err) = stream {
+                        mcml_log::error_type(err);
+                        return;
+                    }
+
+                    let stream = stream.unwrap();
+                    let zip = ZipArchive::new(stream);
+                    if let Err(err) = zip {
+                        mcml_log::error_type(ErrorType::ArchiveOpenError(FileSystemErrorData {
+                            path: path.clone(),
+                            error: err.to_string(),
+                        }));
+                        return;
+                    }
+
+                    let mut zip = zip.unwrap();
+                    let meta = zip.by_name(names::PACK_META_FILE);
+                    if let Err(err) = meta {
+                        mcml_log::error_type(ErrorType::ArchiveReadError(ErrorData {
+                            error: err.to_string(),
+                        }));
+                        return;
+                    }
+                    let json: Result<Value, ErrorType> =
+                        serialize_tools::json_stream(meta.unwrap());
+                    if let Err(err) = json {
+                        mcml_log::error_type(ErrorType::SerializerError(ErrorData {
+                            error: err.to_string(),
+                        }));
+                        return;
+                    }
+                    let json = json.unwrap();
+                    if let Some(data) = read_pack(path.clone(), ens, dis, json) {
+                        list.lock().unwrap().push(data);
+                    }
+                }
+            });
+
+            let files = path_helper::get_dirs(&path);
+
+            files.par_iter().for_each(|item| {
+                let meta = item.join(names::PACK_META_FILE);
+                if !meta.exists() || !meta.is_file() {
+                    return;
+                }
+                let stream = path_helper::open_read(meta);
+                if let Err(err) = stream {
+                    mcml_log::error_type(err);
+                    return;
+                }
+                let json = serde_json::from_reader::<_, Value>(stream.unwrap());
+                if let Err(err) = json {
+                    mcml_log::error_type(ErrorType::SerializerError(ErrorData {
+                        error: err.to_string(),
+                    }));
+                    return;
+                }
+                let json = json.unwrap();
+                if let Some(data) = read_pack(path.clone(), ens, dis, json) {
+                    list.lock().unwrap().push(data);
+                }
+            });
+        }
+
+        Ok(list.into_inner().unwrap())
+    }
+
+    /// 修改数据包启用状态
+    pub fn change_data_pack(&mut self, list: &Vec<SaveDataPackObj>) -> CoreResult<()> {
+        let Some(data) = self
+            .nbt
+            .nbt
+            .as_compound_mut()
+            .and_then(|map| map.get_compound_mut("Data"))
+        else {
+            return Err(ErrorType::InfoNotFound("Data".to_string()));
+        };
+        let Some(data_packs) = data.get_compound_mut("DataPacks") else {
+            return Err(ErrorType::InfoNotFound("DataPacks".to_string()));
+        };
+
+        // Collect info with immutable access first
+        let mut remove_from_enabled: Vec<usize> = Vec::new();
+        let mut remove_from_disabled: Vec<usize> = Vec::new();
+        let mut add_to_enabled: Vec<String> = Vec::new();
+        let mut add_to_disabled: Vec<String> = Vec::new();
+
+        {
+            let Some(ens) = data_packs.get_list("Enabled") else {
+                return Err(ErrorType::InfoNotFound("Enabled".to_string()));
+            };
+            let Some(dis) = data_packs.get_list("Disabled") else {
+                return Err(ErrorType::InfoNotFound("Disabled".to_string()));
+            };
+
+            for item in list.iter() {
+                let nbt_enable = (0..ens.len()).find(|&index| {
+                    ens.get_item(index)
+                        .and_then(|data| data.as_string())
+                        .map(|s| s.data.eq_ignore_ascii_case(&item.name))
+                        .unwrap_or(false)
+                });
+
+                let nbt_disable = (0..dis.len()).find(|&index| {
+                    dis.get_item(index)
+                        .and_then(|data| data.as_string())
+                        .map(|s| s.data.eq_ignore_ascii_case(&item.name))
+                        .unwrap_or(false)
+                });
+
+                if nbt_enable.is_some() && nbt_disable.is_some() {
+                    remove_from_disabled.push(nbt_disable.unwrap());
+                } else if nbt_enable.is_some() && nbt_disable.is_none() {
+                    remove_from_enabled.push(nbt_enable.unwrap());
+                    add_to_disabled.push(item.name.clone());
+                } else if nbt_disable.is_some() {
+                    remove_from_disabled.push(nbt_disable.unwrap());
+                } else {
+                    add_to_enabled.push(item.name.clone());
+                }
+            }
+        } // immutable refs dropped here
+
+        // Apply mutations — one list at a time to avoid double mutable borrow
+        {
+            let Some(ens) = data_packs.get_list_mut("Enabled") else {
+                return Err(ErrorType::InfoNotFound("Enabled".to_string()));
+            };
+            remove_from_enabled.sort_by(|a, b| b.cmp(a));
+            for idx in remove_from_enabled {
+                ens.remove(idx);
+            }
+            for name in add_to_enabled {
+                ens.add_item(NbtString::new(name).to_nbt());
+            }
+        }
+        {
+            let Some(dis) = data_packs.get_list_mut("Disabled") else {
+                return Err(ErrorType::InfoNotFound("Disabled".to_string()));
+            };
+            remove_from_disabled.sort_by(|a, b| b.cmp(a));
+            for idx in remove_from_disabled {
+                dis.remove(idx);
+            }
+            for name in add_to_disabled {
+                dis.add_item(NbtString::new(name).to_nbt());
+            }
+        }
+
+        self.save_nbt()?;
+
+        Ok(())
+    }
+
+    /// 删除数据包
+    pub fn delete_datapack(&mut self, list: &Vec<SaveDataPackObj>) -> CoreResult<()> {
+        let Some(data) = self
+            .nbt
+            .nbt
+            .as_compound_mut()
+            .and_then(|map| map.get_compound_mut("Data"))
+        else {
+            return Err(ErrorType::InfoNotFound("Data".to_string()));
+        };
+        let Some(data_packs) = data.get_compound_mut("DataPacks") else {
+            return Err(ErrorType::InfoNotFound("DataPacks".to_string()));
+        };
+
+        // Collect indices to remove with immutable access first
+        let mut remove_from_enabled: Vec<usize> = Vec::new();
+        let mut remove_from_disabled: Vec<usize> = Vec::new();
+
+        {
+            let Some(ens) = data_packs.get_list("Enabled") else {
+                return Err(ErrorType::InfoNotFound("Enabled".to_string()));
+            };
+            let Some(dis) = data_packs.get_list("Disabled") else {
+                return Err(ErrorType::InfoNotFound("Disabled".to_string()));
+            };
+
+            for item in list.iter() {
+                if let Some(idx) = (0..ens.len()).find(|&index| {
+                    ens.get_item(index)
+                        .and_then(|data| data.as_string())
+                        .map(|s| s.data.eq_ignore_ascii_case(&item.name))
+                        .unwrap_or(false)
+                }) {
+                    remove_from_enabled.push(idx);
+                }
+
+                if let Some(idx) = (0..dis.len()).find(|&index| {
+                    dis.get_item(index)
+                        .and_then(|data| data.as_string())
+                        .map(|s| s.data.eq_ignore_ascii_case(&item.name))
+                        .unwrap_or(false)
+                }) {
+                    remove_from_disabled.push(idx);
+                }
+            }
+        } // immutable refs dropped here
+
+        // Apply removals — one list at a time, descending order
+        if !remove_from_enabled.is_empty() {
+            let Some(ens) = data_packs.get_list_mut("Enabled") else {
+                return Err(ErrorType::InfoNotFound("Enabled".to_string()));
+            };
+            remove_from_enabled.sort_by(|a, b| b.cmp(a));
+            for idx in remove_from_enabled {
+                ens.remove(idx);
+            }
+        }
+
+        if !remove_from_disabled.is_empty() {
+            let Some(dis) = data_packs.get_list_mut("Disabled") else {
+                return Err(ErrorType::InfoNotFound("Disabled".to_string()));
+            };
+            remove_from_disabled.sort_by(|a, b| b.cmp(a));
+            for idx in remove_from_disabled {
+                dis.remove(idx);
+            }
+        }
+
+        self.save_nbt()?;
+
+        Ok(())
+    }
+}
+
+fn read_pack(
+    path: PathBuf,
+    ens: Option<&NbtList>,
+    dis: Option<&NbtList>,
+    data: Value,
+) -> Option<SaveDataPackObj> {
+    if let Some(pack) = data.as_object().and_then(|map| map.get("pack")) {
+        let mut obj = SaveDataPackObj {
+            name: format!(
+                "file/{}",
+                path.file_name().unwrap_or_default().to_string_lossy()
+            ),
+            path,
+            description: pack
+                .as_object()
+                .and_then(|map| map.get("description"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string(),
+            pack_format: pack
+                .as_object()
+                .and_then(|map| map.get("pack_format"))
+                .and_then(|v| v.as_i64())
+                .unwrap_or(-1),
+            enable: None,
+        };
+
+        if let Some(ens) = ens {
+            for item in ens.iter() {
+                if let Some(name) = item.as_string()
+                    && name.data.eq_ignore_ascii_case(&obj.name)
+                {
+                    obj.enable = Some(true);
+                    break;
+                }
+            }
+        }
+
+        if let Some(dis) = dis {
+            for item in dis.iter() {
+                if let Some(name) = item.as_string()
+                    && name.data.eq_ignore_ascii_case(&obj.name)
+                {
+                    obj.enable = Some(false);
+                    break;
+                }
+            }
+        }
+
+        Some(obj)
+    } else {
+        None
     }
 }

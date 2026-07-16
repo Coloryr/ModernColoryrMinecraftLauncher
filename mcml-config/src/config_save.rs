@@ -1,7 +1,6 @@
 use std::{
-    fs::File,
-    io::Write,
-    path::PathBuf,
+    mem,
+    path::{Path, PathBuf},
     sync::{
         Arc, Mutex, OnceLock,
         atomic::{AtomicBool, Ordering},
@@ -9,11 +8,12 @@ use std::{
     thread::Builder,
 };
 
+use mcml_base::{path_helper, serialize_tools};
 use mcml_log;
 use mcml_names::{
     i18,
     i18_items::{
-        error_type::{FileSystemErrorData, ErrorType},
+        error_type::{CoreResult, ErrorType, FileSystemErrorData},
         thread_type::ThreadType,
     },
 };
@@ -21,6 +21,7 @@ use semrs::Semaphore;
 use serde::Serialize;
 use uuid::Uuid;
 
+/// 保存任务
 pub struct ConfigSaveObj {
     /// 保存的内容
     json: String,
@@ -31,26 +32,16 @@ pub struct ConfigSaveObj {
 }
 
 impl ConfigSaveObj {
-    pub fn new<T: Serialize>(
-        obj: &T,
-        file: PathBuf,
-        uuid: Uuid,
-    ) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn new<T: Serialize>(obj: &T, file: PathBuf, uuid: Uuid) -> CoreResult<Self> {
         Ok(ConfigSaveObj {
-            json: serde_json::to_string_pretty(obj)?,
+            json: serialize_tools::to_json(obj)?,
             file,
             uuid,
         })
     }
 
-    pub fn save(&self) -> Result<(), Box<dyn std::error::Error>> {
-        let mut file = File::create(&self.file)?;
-        file.write_all(self.json.as_bytes())?;
-        Ok(())
-    }
-
-    pub fn json_str(&self) -> &str {
-        &self.json
+    pub fn save(&self) -> CoreResult<()> {
+        path_helper::write_text(&self.file, &self.json)
     }
 }
 
@@ -62,45 +53,29 @@ static IS_RUN: AtomicBool = AtomicBool::new(true);
 static SEM: OnceLock<Arc<Semaphore>> = OnceLock::new();
 
 /// 保存一个内容
-pub fn save<T>(uuid: Uuid, value: &T, file: &PathBuf)
+pub fn save<T, P: AsRef<Path>>(uuid: Uuid, obj: &T, file: P)
 where
-    T: ?Sized + Serialize,
+    T: Serialize,
 {
     let mut queue = QUEUE.lock().unwrap();
     // 移除所有同名的旧任务
     queue.retain(|obj| obj.uuid != uuid);
-    queue.push(ConfigSaveObj {
-        uuid,
-        file: file.to_path_buf(),
-        json: serde_json::to_string(value).unwrap(),
-    });
+    queue.push(ConfigSaveObj::new(obj, file.as_ref().to_path_buf(), uuid).unwrap());
 
     SEM.get().unwrap().up();
 }
 
+/// 执行一次保存
 fn save_now() {
     let items = {
         let mut queue = QUEUE.lock().unwrap();
-        std::mem::take(&mut *queue)
+        mem::take(&mut *queue)
     };
     for save_obj in items {
-        if let Err(e) = save_obj.save() {
-            mcml_log::error_type(ErrorType::ConfigSaveError(FileSystemErrorData {
-                error: e.to_string(),
-                path: save_obj.file.clone(),
-            }));
+        if let Err(err) = save_obj.save() {
+            mcml_log::error_type(err);
         }
     }
-}
-
-fn run() {
-    while IS_RUN.load(Ordering::Acquire) {
-        SEM.get().unwrap().down();
-
-        save_now();
-    }
-
-    save_now();
 }
 
 // 后台保存线程
@@ -109,7 +84,15 @@ pub fn start() {
 
     Builder::new()
         .name(i18::get_thread(ThreadType::ConfigSaveThread))
-        .spawn(|| run())
+        .spawn(|| {
+            while IS_RUN.load(Ordering::Acquire) {
+                SEM.get().unwrap().down();
+
+                save_now();
+            }
+
+            save_now();
+        })
         .unwrap();
 }
 

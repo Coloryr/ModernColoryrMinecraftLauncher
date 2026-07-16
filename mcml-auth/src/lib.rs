@@ -1,3 +1,4 @@
+/// 游戏账户
 use chrono::{DateTime, FixedOffset, Local};
 use mcml_names::i18_items::error_type::CoreResult;
 use serde::{Deserialize, Serialize};
@@ -127,7 +128,9 @@ impl LoginObj {
             AuthType::OAuth => self.refresh_oauth(cancel).await,
             AuthType::Nide8 => self.refresh_nide8(cancel).await,
             AuthType::AuthlibInjector => self.refresh_authlib(cancel).await,
-            AuthType::LittleSkin | AuthType::SelfLittleSkin => self.refresh_littleskin(cancel).await,
+            AuthType::LittleSkin | AuthType::SelfLittleSkin => {
+                self.refresh_littleskin(cancel).await
+            }
             _ => Ok(()),
         }
     }

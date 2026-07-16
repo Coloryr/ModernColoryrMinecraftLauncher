@@ -1,5 +1,7 @@
 #[derive(Clone, Debug)]
 pub enum ThreadType {
     LogThread,
-    ConfigSaveThread
+    ConfigSaveThread,
+    LanClientV4,
+    LanClientV6
 }

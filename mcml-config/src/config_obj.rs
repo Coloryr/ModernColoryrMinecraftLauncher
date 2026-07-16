@@ -1,3 +1,4 @@
+/// 核心配置文件
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
@@ -44,7 +45,7 @@ impl Default for SourceLocal {
 pub enum ProxyState {
     Auto,
     None,
-    User
+    User,
 }
 
 impl Default for ProxyState {
@@ -59,7 +60,7 @@ impl Default for ProxyState {
 pub enum ProxyType {
     Http,
     Sock4,
-    Sock5
+    Sock5,
 }
 
 impl Default for ProxyType {
@@ -108,7 +109,6 @@ pub struct HttpObj {
     // /// 游戏使用代理
     // #[serde(rename = "ProxyGame")]
     // pub game_proxy: ProxyState,
-
     /// 检查下载文件完整性
     #[serde(rename = "CheckFile")]
     pub check_file: bool,

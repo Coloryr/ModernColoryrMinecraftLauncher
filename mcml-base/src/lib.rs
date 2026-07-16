@@ -7,6 +7,7 @@ pub mod hash_helper;
 pub mod inner_path;
 pub mod path_helper;
 pub mod process_utils;
+pub mod serialize_tools;
 
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::{

@@ -1,3 +1,4 @@
+/// 微软登陆
 use std::{sync::OnceLock, time::Duration};
 
 use chrono::Local;
@@ -9,7 +10,7 @@ use tokio_util::sync::CancellationToken;
 use crate::{
     LoginObj,
     oauth::{
-        oauth_obj::{OAuthGetCodeObj, OAuthGetCodeRes, OAuthObj},
+        oauth_res::{OAuthGetCodeObj, OAuthGetCodeRes, OAuthObj},
         xbox_obj::{
             XBoxLiveRes, XBoxLoginObj, XBoxLoginPropertiesObj, XBoxLoginResObj, XSTSLoginObj,
             XSTSLoginPropertiesObj,
@@ -17,7 +18,7 @@ use crate::{
     },
 };
 
-pub mod oauth_obj;
+pub mod oauth_res;
 pub mod xbox_obj;
 
 /// OAuth客户端密钥

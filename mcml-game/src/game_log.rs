@@ -1,3 +1,6 @@
+/// 游戏实例日志相关
+/// 包括运行日志和过往日志处理
+
 use std::{
     collections::VecDeque,
     fs,

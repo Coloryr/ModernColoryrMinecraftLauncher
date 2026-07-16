@@ -1,5 +1,3 @@
-use std::path::Path;
-
 use mcml_base::path_helper;
 use mcml_game::{class_scan, game_mods};
 use toml::Table;

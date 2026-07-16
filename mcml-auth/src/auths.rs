@@ -1,16 +1,13 @@
+/// 账户存储
 use std::{
     collections::HashMap,
-    path::PathBuf,
+    path::Path,
     sync::{LazyLock, RwLock},
 };
 
-use mcml_base::{inner_path, path_helper};
+use mcml_base::{inner_path, serialize_tools};
 use mcml_config::config_save;
-use mcml_names::{
-    i18_items::error_type::{CoreResult, ErrorData, ErrorType},
-    names,
-    uuids::AUTH_UUID,
-};
+use mcml_names::{i18_items::error_type::CoreResult, names, uuids::AUTH_UUID};
 
 use crate::{AuthType, LoginObj, UserKeyObj};
 
@@ -19,8 +16,9 @@ static AUTHS: LazyLock<RwLock<HashMap<UserKeyObj, LoginObj>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 
 /// 加载登陆的账户列表
-fn load(local: &PathBuf) {
-    if let Err(err) = import(local) {
+/// - `local`
+fn load<P: AsRef<Path>>(path: P) {
+    if let Err(err) = import(path) {
         mcml_log::error_type(err);
 
         save();
@@ -55,13 +53,8 @@ pub fn get(uuid: String, auth_type: AuthType) -> Option<LoginObj> {
 
 /// 导入账户列表
 /// - `file`: 文件位置
-pub fn import(file: &PathBuf) -> CoreResult<()> {
-    let temp = path_helper::open_read(file)?;
-    let json = serde_json::from_reader::<_, Vec<LoginObj>>(temp).map_err(|err| {
-        ErrorType::SerializerError(ErrorData {
-            error: err.to_string(),
-        })
-    })?;
+pub fn import<P: AsRef<Path>>(file: P) -> CoreResult<()> {
+    let json: Vec<LoginObj> = serialize_tools::json_file(file)?;
 
     let mut auths = AUTHS.write().unwrap();
 

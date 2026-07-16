@@ -219,19 +219,16 @@ async fn get_version_from_online() -> CoreResult<()> {
     }
 
     // 获取失败再从官方源获取一次
-    let res = mojang_api::get_versions(Some(SourceLocal::Offical)).await;
-    if res.is_ok() {
-        let data: Vec<u8> = res.unwrap();
-        let json = serde_json::from_slice::<VersionObj>(&data);
-        if json.is_ok() {
-            *VERSION.write().unwrap() = Some(Arc::new(json.unwrap()));
-            save_versions(&data);
+    let data = mojang_api::get_versions(Some(SourceLocal::Offical)).await?;
+    let json = serde_json::from_slice::<VersionObj>(&data).map_err(|err| {
+        ErrorType::SerializerError(ErrorData {
+            error: err.to_string(),
+        })
+    })?;
+    *VERSION.write().unwrap() = Some(Arc::new(json));
+    save_versions(&data);
 
-            return Ok(());
-        }
-    }
-
-    Err(ErrorType::GetVersionMetaFail)
+    Ok(())
 }
 
 /// 从文件读取版本信息

@@ -479,6 +479,10 @@ impl NbtList {
         }
     }
 
+    pub fn remove(&mut self, index: usize) -> NbtType {
+        self.data.remove(index)
+    }
+
     pub fn get_item(&self, index: usize) -> Option<&NbtType> {
         self.data.get(index)
     }
@@ -614,9 +618,21 @@ impl NbtCompound {
         self.data.get(key)
     }
 
+    pub fn get_mut(&mut self, key: &str) -> Option<&mut NbtType> {
+        self.data.get_mut(key)
+    }
+
     /// 从 NbtCompound 中提取 `&NbtByteArray`
     pub fn get_byte_array(&self, key: &str) -> Option<&NbtByteArray> {
         match self.get(key) {
+            Some(NbtType::ByteArray(v)) => Some(v),
+            _ => None,
+        }
+    }
+
+    /// 从 NbtCompound 中提取 `&mut NbtByteArray`
+    pub fn get_byte_array_mut(&mut self, key: &str) -> Option<&mut NbtByteArray> {
+        match self.get_mut(key) {
             Some(NbtType::ByteArray(v)) => Some(v),
             _ => None,
         }
@@ -630,9 +646,25 @@ impl NbtCompound {
         }
     }
 
+    /// 从 NbtCompound 中提取 `&mut NbtLongArray`
+    pub fn get_long_array_mut(&mut self, key: &str) -> Option<&mut NbtLongArray> {
+        match self.get_mut(key) {
+            Some(NbtType::LongArray(v)) => Some(v),
+            _ => None,
+        }
+    }
+
     /// 从 NbtCompound 中提取 `&NbtCompound`
     pub fn get_compound(&self, key: &str) -> Option<&NbtCompound> {
         match self.get(key) {
+            Some(NbtType::Compound(v)) => Some(v),
+            _ => None,
+        }
+    }
+
+    /// 从 NbtCompound 中提取 `&mut NbtCompound`
+    pub fn get_compound_mut(&mut self, key: &str) -> Option<&mut NbtCompound> {
+        match self.get_mut(key) {
             Some(NbtType::Compound(v)) => Some(v),
             _ => None,
         }
@@ -681,6 +713,14 @@ impl NbtCompound {
     /// 从 NbtCompound 中提取 list
     pub fn get_list(&self, key: &str) -> Option<&NbtList> {
         match self.get(key) {
+            Some(NbtType::List(v)) => Some(v),
+            _ => None,
+        }
+    }
+
+    /// 从 NbtCompound 中提取 `&mut NbtList`
+    pub fn get_list_mut(&mut self, key: &str) -> Option<&mut NbtList> {
+        match self.get_mut(key) {
             Some(NbtType::List(v)) => Some(v),
             _ => None,
         }

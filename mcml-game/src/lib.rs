@@ -13,10 +13,10 @@ use mcml_names::{
     names,
 };
 
+use mcml_net::input_file::InputFile;
 use uuid::Uuid;
 
 use crate::{
-    dyn_file::InputFile,
     game_launch::InstanceHandle,
     game_log::{GameLog, GameLogItemObj, InstanceRuntimeLog},
     launcher::{
@@ -28,7 +28,6 @@ use crate::{
 };
 
 pub mod class_scan;
-pub mod dyn_file;
 pub mod game_arg;
 pub mod game_check;
 pub mod game_download;
@@ -36,6 +35,7 @@ pub mod game_export;
 pub mod game_launch;
 pub mod game_libraries;
 pub mod game_log;
+pub mod game_lan;
 pub mod game_mods;
 pub mod game_options;
 pub mod game_resourcepacks;
@@ -43,6 +43,7 @@ pub mod game_saves;
 pub mod game_schematics;
 pub mod game_screenshots;
 pub mod game_server;
+pub mod game_shaderpacks;
 pub mod launcher;
 pub mod launcher_path;
 pub mod loader;

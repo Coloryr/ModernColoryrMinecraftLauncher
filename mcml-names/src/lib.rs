@@ -7,7 +7,7 @@ use std::{
     env,
     fs::File,
     io::{Read, Write},
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{LazyLock, OnceLock, RwLock},
 };
 
@@ -19,7 +19,7 @@ use crate::{
 /// 启动器主版本号
 pub const VERSION_NUM: i32 = 1;
 /// 启动器日期
-pub const DATE: &str = "20260503";
+pub const DATE: &str = "20260714";
 /// 启动器版本号
 pub const VERSION: LazyLock<String> = LazyLock::new(|| format!("1.{}.{DATE}", VERSION_NUM));
 
@@ -57,7 +57,7 @@ pub fn get_current_locale() -> String {
 }
 
 /// 获取语言
-fn get_lang(lang: Lang) -> &'static str {
+pub fn get_lang(lang: Lang) -> &'static str {
     match lang {
         Lang::zh_cn => LANG_ZH_CN,
         Lang::en_us => LANG_EN_US,
@@ -102,6 +102,11 @@ fn save() {
     file.write_all(str.as_bytes()).unwrap();
 }
 
+/// 获取语言类型
+pub fn get_lang_type() -> Lang {
+    LANG.get().unwrap().read().unwrap().clone()
+}
+
 /// 设置语言类型
 pub fn set_lang(lang: Lang) {
     *LANG.get().unwrap().write().unwrap() = lang;
@@ -111,8 +116,8 @@ pub fn set_lang(lang: Lang) {
 }
 
 /// 初始化语言
-pub fn init(local: &PathBuf) {
-    let file = local.with_file_name(names::LANG_FILE);
+pub fn init<P: AsRef<Path>>(path: P) {
+    let file = path.as_ref().with_file_name(names::LANG_FILE);
     let file = FILE.get_or_init(|| file);
 
     if file.exists() {

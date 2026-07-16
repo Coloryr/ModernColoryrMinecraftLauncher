@@ -1,3 +1,4 @@
+/// 游戏实例模组相关
 use std::{
     collections::HashMap,
     io::{Cursor, Read, Seek},
@@ -8,7 +9,7 @@ use std::{
 use mcml_base::{
     file_item::FileHash,
     hash_helper::{self, HashType},
-    path_helper,
+    path_helper, serialize_tools,
 };
 use mcml_names::{
     i18_items::error_type::{CoreResult, ErrorData, ErrorType, FileSystemErrorData},
@@ -108,58 +109,6 @@ impl Default for ModObj {
             file: Default::default(),
         }
     }
-}
-
-fn extract_strings_from_json(
-    map: &serde_json::Map<String, serde_json::Value>,
-    key: &str,
-) -> Vec<String> {
-    map.get(key)
-        .and_then(|v| v.as_array())
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|v| v.as_str().map(String::from))
-                .collect()
-        })
-        .unwrap_or_default()
-}
-
-fn extract_dependants_from_json(
-    map: &serde_json::Map<String, serde_json::Value>,
-    key: &str,
-    required: bool,
-) -> Vec<DependantType> {
-    map.get(key)
-        .and_then(|v| v.as_array())
-        .map(|arr| {
-            arr.iter()
-                .filter_map(|v| {
-                    v.as_str().map(|item| {
-                        if required {
-                            DependantType::Required(item.to_string())
-                        } else {
-                            DependantType::Recommend(item.to_string())
-                        }
-                    })
-                })
-                .collect()
-        })
-        .unwrap_or_default()
-}
-
-fn get_opt_string_from_json(
-    map: &serde_json::Map<String, serde_json::Value>,
-    key: &str,
-) -> Option<String> {
-    map.get(key)
-        .and_then(|v| Some(v.as_str().unwrap_or("").to_string()))
-}
-
-fn get_string_from_json(map: &serde_json::Map<String, serde_json::Value>, key: &str) -> String {
-    map.get(key)
-        .and_then(|v| v.as_str())
-        .unwrap_or("")
-        .to_string()
 }
 
 /// 字符串引号状态
@@ -352,20 +301,30 @@ fn read_forge_json(mut reader: impl Read, mod_info: &mut ModObj) -> CoreResult<(
             let mut info = ModItemObj::default();
 
             if let serde_json::Value::Object(map) = v {
-                info.mod_id = get_string_from_json(map, "modid");
-                info.name = get_opt_string_from_json(map, "name").unwrap_or(info.mod_id.clone());
-                info.description = get_opt_string_from_json(map, "description");
-                info.version = get_opt_string_from_json(map, "version");
-                info.url = get_opt_string_from_json(map, "url");
+                info.mod_id = serialize_tools::get_string_from_json(map, "modid");
+                info.name = serialize_tools::get_opt_string_from_json(map, "name")
+                    .unwrap_or(info.mod_id.clone());
+                info.description = serialize_tools::get_opt_string_from_json(map, "description");
+                info.version = serialize_tools::get_opt_string_from_json(map, "version");
+                info.url = serialize_tools::get_opt_string_from_json(map, "url");
                 info.loaders = LoaderType::Forge;
 
-                info.author = extract_strings_from_json(map, "authorList");
-                info.dependants
-                    .extend(extract_dependants_from_json(map, "dependants", false));
-                info.dependants
-                    .extend(extract_dependants_from_json(map, "dependencies", false));
-                info.dependants
-                    .extend(extract_dependants_from_json(map, "requiredMods", true));
+                info.author = serialize_tools::extract_strings_from_json(map, "authorList");
+                info.dependants.extend(
+                    serialize_tools::extract_strings_from_json(map, "dependants")
+                        .iter()
+                        .map(|item| DependantType::Recommend(item.clone())),
+                );
+                info.dependants.extend(
+                    serialize_tools::extract_strings_from_json(map, "dependencies")
+                        .iter()
+                        .map(|item| DependantType::Recommend(item.clone())),
+                );
+                info.dependants.extend(
+                    serialize_tools::extract_strings_from_json(map, "requiredMods")
+                        .iter()
+                        .map(|item| DependantType::Required(item.clone())),
+                );
             }
 
             info
@@ -497,12 +456,12 @@ fn read_fabric_json(mut reader: impl Read, mod_info: &mut ModObj) -> CoreResult<
 
     match obj {
         serde_json::Value::Object(map) => {
-            info.mod_id = get_string_from_json(&map, "id");
-            info.name = get_string_from_json(&map, "name");
-            info.description = get_opt_string_from_json(&map, "description");
-            info.version = get_opt_string_from_json(&map, "version");
+            info.mod_id = serialize_tools::get_string_from_json(&map, "id");
+            info.name = serialize_tools::get_string_from_json(&map, "name");
+            info.description = serialize_tools::get_opt_string_from_json(&map, "description");
+            info.version = serialize_tools::get_opt_string_from_json(&map, "version");
             if let Some(serde_json::Value::Object(map1)) = map.get("contact") {
-                info.url = get_opt_string_from_json(map1, "homepage");
+                info.url = serialize_tools::get_opt_string_from_json(map1, "homepage");
             }
 
             if let Some(serde_json::Value::String(str)) = map.get("environment") {
@@ -574,15 +533,15 @@ fn read_quilt_json(mut reader: impl Read, mod_info: &mut ModObj) -> CoreResult<(
     match obj {
         serde_json::Value::Object(map) => {
             if let Some(serde_json::Value::Object(map)) = map.get("quilt_loader") {
-                info.mod_id = get_string_from_json(&map, "id");
-                info.version = get_opt_string_from_json(&map, "version");
+                info.mod_id = serialize_tools::get_string_from_json(&map, "id");
+                info.version = serialize_tools::get_opt_string_from_json(&map, "version");
                 if let Some(serde_json::Value::Object(map)) = map.get("metadata") {
                     if let Some(serde_json::Value::Object(map1)) = map.get("contact") {
-                        info.url = get_opt_string_from_json(map1, "homepage");
+                        info.url = serialize_tools::get_opt_string_from_json(map1, "homepage");
                     }
 
-                    info.name = get_string_from_json(map, "name");
-                    info.description = get_opt_string_from_json(map, "description");
+                    info.name = serialize_tools::get_string_from_json(map, "name");
+                    info.description = serialize_tools::get_opt_string_from_json(map, "description");
 
                     if let Some(serde_json::Value::Object(map1)) = map.get("contributors") {
                         for (item, _) in map1.iter() {
@@ -862,7 +821,7 @@ fn read_mod<P: AsRef<Path>>(path: P, sha256: bool) -> CoreResult<ModObj> {
 /// - `process_fn`: 处理的函数
 fn scan_mod_files<F>(files: Vec<PathBuf>, process_fn: F) -> Vec<ModObj>
 where
-    F: Fn(&PathBuf, bool) -> CoreResult<ModObj> + Send + Sync,
+    F: Fn(&PathBuf) -> CoreResult<ModObj> + Send + Sync,
 {
     let list = Mutex::new(Vec::new());
 
@@ -874,7 +833,7 @@ where
 
             if is_jar || is_disabled {
                 let disable = is_disabled;
-                let result = process_fn(item, false);
+                let result = process_fn(item);
 
                 let entry = match result {
                     Ok(mut item) => {
@@ -899,6 +858,67 @@ where
     list.into_inner().unwrap()
 }
 
+pub fn add_disable_suffix(path: &Path) -> CoreResult<()> {
+    let file_name = path
+        .file_name()
+        .ok_or_else(|| ErrorType::InvalidOperation)?;
+
+    let mut new_name = file_name.to_os_string();
+    new_name.push(format!(".{}", names::DISABLE_EXT));
+    let new_path = path.with_file_name(new_name);
+
+    path_helper::move_file(path, &new_path)
+}
+
+pub fn remove_disable_suffix(path: &Path) -> CoreResult<()> {
+    let file_name = path
+        .file_name()
+        .ok_or_else(|| ErrorType::InvalidOperation)?;
+
+    let name_str = file_name
+        .to_str()
+        .ok_or_else(|| ErrorType::InvalidOperation)?;
+
+    let ext = format!(".{}", names::DISABLE_EXT);
+    if let Some(stripped) = name_str.strip_suffix(&ext) {
+        let new_path = path.with_file_name(stripped);
+        path_helper::move_file(path, &new_path)
+    } else {
+        let ext = format!(".{}", names::DISABLED_EXT);
+        if let Some(stripped) = name_str.strip_suffix(&ext) {
+            let new_path = path.with_file_name(stripped);
+            path_helper::move_file(path, &new_path)
+        } else {
+            Ok(())
+        }
+    }
+}
+
+impl ModObj {
+    /// 删除
+    pub fn delete(&self) -> CoreResult<()> {
+        path_helper::move_to_trash(&self.file)
+    }
+
+    /// 禁用模组
+    pub fn disable(&self) -> CoreResult<()> {
+        if self.disable || !self.file.exists() {
+            return Err(ErrorType::InvalidOperation);
+        }
+
+        add_disable_suffix(&self.file)
+    }
+
+    /// 启用模组
+    pub fn enable(&self) -> CoreResult<()> {
+        if !self.disable || !self.file.exists() {
+            return Err(ErrorType::InvalidOperation);
+        }
+
+        remove_disable_suffix(&self.file)
+    }
+}
+
 impl InstanceSettingObj {
     /// 扫描模组
     pub async fn read_mod_fast(&self) -> Vec<ModObj> {
@@ -906,7 +926,7 @@ impl InstanceSettingObj {
         let files = path_helper::get_files(dir);
 
         tokio::task::spawn_blocking(move || {
-            scan_mod_files(files, |item, _| {
+            scan_mod_files(files, |item| {
                 let hash = hash_helper::gen_hash_from_file(HashType::Sha1, item)?;
                 Ok(ModObj {
                     hash: FileHash::Sha1(hash),
@@ -925,7 +945,7 @@ impl InstanceSettingObj {
         let dir = self.get_mods_path();
         let files = path_helper::get_files(dir);
 
-        tokio::task::spawn_blocking(move || scan_mod_files(files, |item, _| read_mod(item, sha256)))
+        tokio::task::spawn_blocking(move || scan_mod_files(files, |item| read_mod(item, sha256)))
             .await
             .unwrap_or_default()
     }

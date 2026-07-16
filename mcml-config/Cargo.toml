@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 mcml-log = { path = "../mcml-log" }
+mcml-base = { path = "../mcml-base" }
 mcml-names = { path = "../mcml-names" }
 semrs.workspace = true
 serde.workspace = true
