@@ -9,7 +9,8 @@ use std::{
 use mcml_base::{
     file_item::FileHash,
     hash_helper::{self, HashType},
-    path_helper, serialize_tools,
+    path_helper,
+    serialize_tools::{self, MiniJsonObj},
 };
 use mcml_names::{
     i18_items::error_type::{CoreResult, ErrorData, ErrorType, FileSystemErrorData},
@@ -277,51 +278,48 @@ fn read_forge_json(mut reader: impl Read, mod_info: &mut ModObj) -> CoreResult<(
         })
     })?;
 
-    let obj = match serde_json::from_str::<serde_json::Value>(&json) {
+    let obj = match MiniJsonObj::from_str(&json) {
         Ok(obj) => obj,
         Err(_) => {
             // 尝试容错处理：修复数组内未加引号的标识符
             let sanitized = sanitize_mcmod_json(&json);
-            serde_json::from_str::<serde_json::Value>(&sanitized).map_err(|err| {
-                ErrorType::SerializerError(ErrorData {
-                    error: err.to_string(),
-                })
-            })?
+            MiniJsonObj::from_str(&sanitized)?
         }
     };
 
-    let values = match obj {
-        serde_json::Value::Array(values) => Some(values),
-        serde_json::Value::Object(map) => map.get("modList").and_then(|v| v.as_array()).cloned(),
-        _ => None,
+    let values = if obj.is_list() {
+        obj.as_list()
+    } else if obj.is_obj() {
+        obj.get_list("modList")
+    } else {
+        None
     };
 
     if let Some(values) = values {
         mod_info.info.extend(values.iter().map(|v| {
             let mut info = ModItemObj::default();
 
-            if let serde_json::Value::Object(map) = v {
-                info.mod_id = serialize_tools::get_string_from_json(map, "modid");
-                info.name = serialize_tools::get_opt_string_from_json(map, "name")
-                    .unwrap_or(info.mod_id.clone());
-                info.description = serialize_tools::get_opt_string_from_json(map, "description");
-                info.version = serialize_tools::get_opt_string_from_json(map, "version");
-                info.url = serialize_tools::get_opt_string_from_json(map, "url");
+            if let Some(map) = v.as_object() {
+                info.mod_id = map.get_string("modid");
+                info.name = map.get_opt_string("name").unwrap_or(info.mod_id.clone());
+                info.description = map.get_opt_string("description");
+                info.version = map.get_opt_string("version");
+                info.url = map.get_opt_string("url");
                 info.loaders = LoaderType::Forge;
 
-                info.author = serialize_tools::extract_strings_from_json(map, "authorList");
+                info.author = map.extract_strings("authorList");
                 info.dependants.extend(
-                    serialize_tools::extract_strings_from_json(map, "dependants")
+                    map.extract_strings("dependants")
                         .iter()
                         .map(|item| DependantType::Recommend(item.clone())),
                 );
                 info.dependants.extend(
-                    serialize_tools::extract_strings_from_json(map, "dependencies")
+                    map.extract_strings("dependencies")
                         .iter()
                         .map(|item| DependantType::Recommend(item.clone())),
                 );
                 info.dependants.extend(
-                    serialize_tools::extract_strings_from_json(map, "requiredMods")
+                    map.extract_strings("requiredMods")
                         .iter()
                         .map(|item| DependantType::Required(item.clone())),
                 );
@@ -438,75 +436,59 @@ fn read_forge_toml(
     Ok(())
 }
 
-fn read_fabric_json(mut reader: impl Read, mod_info: &mut ModObj) -> CoreResult<()> {
-    let mut json = String::new();
-    reader.read_to_string(&mut json).map_err(|err| {
-        ErrorType::ArchiveReadError(ErrorData {
-            error: err.to_string(),
-        })
-    })?;
-
-    let obj = serde_json::from_str::<serde_json::Value>(&json).map_err(|err| {
-        ErrorType::SerializerError(ErrorData {
-            error: err.to_string(),
-        })
-    })?;
+fn read_fabric_json(reader: impl Read, mod_info: &mut ModObj) -> CoreResult<()> {
+    let obj = MiniJsonObj::from_stream(reader)?;
 
     let mut info = ModItemObj::default();
 
-    match obj {
-        serde_json::Value::Object(map) => {
-            info.mod_id = serialize_tools::get_string_from_json(&map, "id");
-            info.name = serialize_tools::get_string_from_json(&map, "name");
-            info.description = serialize_tools::get_opt_string_from_json(&map, "description");
-            info.version = serialize_tools::get_opt_string_from_json(&map, "version");
-            if let Some(serde_json::Value::Object(map1)) = map.get("contact") {
-                info.url = serialize_tools::get_opt_string_from_json(map1, "homepage");
-            }
+    if let Some(map) = obj.as_object() {
+        info.mod_id = map.get_string("id");
+        info.name = map.get_string("name");
+        info.description = map.get_opt_string("description");
+        info.version = map.get_opt_string("version");
+        if let Some(map1) = map.get_object("contact") {
+            info.url = map1.get_opt_string("homepage");
+        }
 
-            if let Some(serde_json::Value::String(str)) = map.get("environment") {
-                info.side = if str.eq_ignore_ascii_case("client") {
-                    LoadSideType::Client
-                } else if str.eq_ignore_ascii_case("server") {
-                    LoadSideType::Server
-                } else if str.eq_ignore_ascii_case("*") {
-                    LoadSideType::Both
-                } else {
-                    LoadSideType::Unknown
-                };
-            }
+        if let Some(str) = map.get_opt_string("environment") {
+            info.side = if str.eq_ignore_ascii_case("client") {
+                LoadSideType::Client
+            } else if str.eq_ignore_ascii_case("server") {
+                LoadSideType::Server
+            } else if str.eq_ignore_ascii_case("*") {
+                LoadSideType::Both
+            } else {
+                LoadSideType::Unknown
+            };
+        }
 
-            if let Some(serde_json::Value::Array(list)) = map.get("authors") {
-                for item in list.iter() {
-                    match item {
-                        serde_json::Value::String(str) => {
-                            info.author.push(str.to_string());
-                        }
-                        serde_json::Value::Object(map) => {
-                            if let Some(serde_json::Value::String(str)) = map.get("name") {
-                                info.author.push(str.to_string());
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-            }
-
-            if let Some(serde_json::Value::Object(str)) = map.get("depends") {
-                for (key, _) in str.iter() {
-                    info.dependants
-                        .push(DependantType::Required(key.to_string()));
-                }
-            }
-
-            if let Some(serde_json::Value::Object(str)) = map.get("suggests") {
-                for (key, _) in str.iter() {
-                    info.dependants
-                        .push(DependantType::Recommend(key.to_string()));
+        if let Some(list) = map.get_list("authors") {
+            for item in list.iter() {
+                if item.is_str() {
+                    info.author.push(item.as_str().unwrap());
+                } else if item.is_obj()
+                    && let Some(value) = item
+                        .as_object()
+                        .and_then(|item| item.get_opt_string("name"))
+                {
+                    info.author.push(value);
                 }
             }
         }
-        _ => {}
+
+        if let Some(str) = map.get_object("depends") {
+            for (key, _) in str.iter() {
+                info.dependants
+                    .push(DependantType::Required(key.to_string()));
+            }
+        }
+
+        if let Some(str) = map.get_object("suggests") {
+            for (key, _) in str.iter() {
+                info.dependants
+                    .push(DependantType::Recommend(key.to_string()));
+            }
+        }
     }
 
     mod_info.info.push(info);
@@ -514,58 +496,40 @@ fn read_fabric_json(mut reader: impl Read, mod_info: &mut ModObj) -> CoreResult<
     Ok(())
 }
 
-fn read_quilt_json(mut reader: impl Read, mod_info: &mut ModObj) -> CoreResult<()> {
-    let mut json = String::new();
-    reader.read_to_string(&mut json).map_err(|err| {
-        ErrorType::ArchiveReadError(ErrorData {
-            error: err.to_string(),
-        })
-    })?;
-
-    let obj = serde_json::from_str::<serde_json::Value>(&json).map_err(|err| {
-        ErrorType::SerializerError(ErrorData {
-            error: err.to_string(),
-        })
-    })?;
+fn read_quilt_json(reader: impl Read, mod_info: &mut ModObj) -> CoreResult<()> {
+    let obj = MiniJsonObj::from_stream(reader)?;
 
     let mut info = ModItemObj::default();
 
-    match obj {
-        serde_json::Value::Object(map) => {
-            if let Some(serde_json::Value::Object(map)) = map.get("quilt_loader") {
-                info.mod_id = serialize_tools::get_string_from_json(&map, "id");
-                info.version = serialize_tools::get_opt_string_from_json(&map, "version");
-                if let Some(serde_json::Value::Object(map)) = map.get("metadata") {
-                    if let Some(serde_json::Value::Object(map1)) = map.get("contact") {
-                        info.url = serialize_tools::get_opt_string_from_json(map1, "homepage");
-                    }
+    if let Some(map) = obj
+        .as_object()
+        .and_then(|item| item.get_object("quilt_loader"))
+    {
+        info.mod_id = map.get_string("id");
+        info.version = map.get_opt_string("version");
+        if let Some(map) = map.get_object("metadata") {
+            if let Some(map1) = map.get_object("contact") {
+                info.url = map1.get_opt_string("homepage");
+            }
 
-                    info.name = serialize_tools::get_string_from_json(map, "name");
-                    info.description = serialize_tools::get_opt_string_from_json(map, "description");
+            info.name = map.get_string("name");
+            info.description = map.get_opt_string("description");
 
-                    if let Some(serde_json::Value::Object(map1)) = map.get("contributors") {
-                        for (item, _) in map1.iter() {
-                            info.author.push(item.to_string());
-                        }
-                    }
-                }
-
-                if let Some(serde_json::Value::Array(list)) = map.get("depends") {
-                    for item in list.iter() {
-                        match item {
-                            serde_json::Value::Object(map) => {
-                                if let Some(serde_json::Value::String(str)) = map.get("id") {
-                                    info.dependants
-                                        .push(DependantType::Required(str.to_string()));
-                                }
-                            }
-                            _ => {}
-                        }
-                    }
+            if let Some(map1) = map.get_object("contributors") {
+                for (item, _) in map1.iter() {
+                    info.author.push(item.to_string());
                 }
             }
         }
-        _ => {}
+
+        if let Some(list) = map.get_object("depends") {
+            for (_, value) in list.iter() {
+                if let Some(str) = value.as_object().map(|item| item.get_string("id")) {
+                    info.dependants
+                        .push(DependantType::Required(str.to_string()));
+                }
+            }
+        }
     }
 
     mod_info.info.push(info);
