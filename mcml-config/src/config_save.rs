@@ -34,7 +34,7 @@ pub struct ConfigSaveObj {
 impl ConfigSaveObj {
     pub fn new<T: Serialize>(obj: &T, file: PathBuf, uuid: Uuid) -> CoreResult<Self> {
         Ok(ConfigSaveObj {
-            json: serialize_tools::to_json(obj)?,
+            json: serialize_tools::json_to_string(obj)?,
             file,
             uuid,
         })

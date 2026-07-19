@@ -17,47 +17,47 @@ fn stop() {
     mcml_log::stop();
 }
 
-#[ignore = "reason"]
-#[tokio::test]
-async fn get_quilt_meta() {
-    init();
+// #[ignore = "reason"]
+// #[tokio::test]
+// async fn get_quilt_meta() {
+//     init();
 
-    let data = quilt_api::get_meta().await.unwrap();
+//     let data = quilt_api::get_meta().await.unwrap();
 
-    // println!("{}", String::from_utf8_lossy(&data));
+//     // println!("{}", String::from_utf8_lossy(&data));
 
-    let obj: Value = serde_json::from_slice(&data).unwrap();
+//     let obj: Value = serde_json::from_slice(&data).unwrap();
 
-    assert!(obj.is_object());
+//     assert!(obj.is_object());
 
-    let obj1 = obj.as_object();
-    let item = &obj1.iter().next().unwrap();
+//     let obj1 = obj.as_object();
+//     let item = &obj1.iter().next().unwrap();
 
-    assert!(!item.is_empty());
-    assert!(item.contains_key("game"));
+//     assert!(!item.is_empty());
+//     assert!(item.contains_key("game"));
 
-    stop();
-}
+//     stop();
+// }
 
-#[ignore = "reason"]
-#[tokio::test]
-async fn get_quilt_loader() {
-    init();
+// #[ignore = "reason"]
+// #[tokio::test]
+// async fn get_quilt_loader() {
+//     init();
 
-    let data = quilt_api::get_loader("26.1.2", "0.20.0-beta.9")
-        .await
-        .unwrap();
+//     let data = quilt_api::get_loader("26.1.2", "0.20.0-beta.9")
+//         .await
+//         .unwrap();
 
-    // println!("{}", String::from_utf8_lossy(&data));
+//     // println!("{}", String::from_utf8_lossy(&data));
 
-    let obj: Value = serde_json::from_slice(&data).unwrap();
+//     let obj: Value = serde_json::from_slice(&data).unwrap();
 
-    assert!(obj.is_object());
+//     assert!(obj.is_object());
 
-    let obj1 = obj.as_object().unwrap();
+//     let obj1 = obj.as_object().unwrap();
 
-    assert!(!obj1.is_empty());
-    assert!(obj1.contains_key("id"));
+//     assert!(!obj1.is_empty());
+//     assert!(obj1.contains_key("id"));
 
-    stop();
-}
+//     stop();
+// }

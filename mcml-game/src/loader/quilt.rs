@@ -1,4 +1,4 @@
-use mcml_base::file_item::{FileHash, FileItemObj, LaterRun};
+use mcml_base::{file_item::{FileHash, FileItemObj, LaterRun}, serialize_tools};
 use mcml_names::i18_items::error_type::{CoreResult, ErrorData, ErrorType};
 use mcml_net::{maven_utils::version_name_to_path, quilt_api, url_helper};
 
@@ -14,12 +14,7 @@ use crate::{
 pub async fn get_quilt_libs(mc: &str, version: Option<&str>) -> CoreResult<Vec<FileItemObj>> {
     let meta = quilt_api::get_meta().await?;
 
-    let obj = serde_json::from_slice::<QuiltMetaObj>(&meta).map_err(|err| {
-        ErrorType::SerializerError(ErrorData {
-            error: err.to_string(),
-        })
-    })?;
-
+    let obj = serialize_tools::json_from_bytes::<QuiltMetaObj>(&meta)?;
     let fabric = match version {
         Some(version) => obj
             .loader
@@ -31,12 +26,7 @@ pub async fn get_quilt_libs(mc: &str, version: Option<&str>) -> CoreResult<Vec<F
 
     if let Some(fabric) = fabric {
         let data = quilt_api::get_loader(mc, &fabric.version).await?;
-        let obj = serde_json::from_slice::<QuiltLoaderObj>(&data).map_err(|err| {
-            ErrorType::SerializerError(ErrorData {
-                error: err.to_string(),
-            })
-        })?;
-
+        let obj = serialize_tools::json_from_bytes::<QuiltLoaderObj>(&data)?;
         let obj = version_path::add_quilt(obj, &data, mc, &fabric.version);
 
         let mut list = Vec::new();

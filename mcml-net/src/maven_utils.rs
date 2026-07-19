@@ -33,41 +33,36 @@ pub fn version_name_to_path(name: &str) -> String {
     }
 }
 
-pub struct UrlSha1Obj {
-    pub sha1: String,
+pub struct UrlHashObj {
+    pub hash: FileHash,
     pub url: String,
 }
 
 /// 测试这个jar文件是否能从网上下载
 /// - `dir`: jar文件路径
-pub async fn test_sha1(dir: &str) -> Option<UrlSha1Obj> {
+pub async fn test_hash(dir: &str) -> Option<UrlHashObj> {
     let url = match url_helper::get_source() {
         SourceLocal::Offical => urls::MAVEN,
         SourceLocal::Bmclapi => urls::MAVEN_ALIYUN,
     };
 
     let url1 = String::from(url) + dir;
-    let url2 = url1.clone() + names::SHA1_EXT;
 
-    let res = WORK_CLIENT.get().unwrap().get_text(&url2).await;
-
-    if let Ok(data) = res {
-        Some(UrlSha1Obj {
-            sha1: data,
-            url: url1,
-        })
-    } else {
+    let hash = try_get_hash(&url1).await;
+    if matches!(hash, FileHash::None) {
         None
+    } else {
+        Some(UrlHashObj { hash, url: url1 })
     }
 }
 
 /// 尝试获取校验值
 pub async fn try_get_hash(url: &str) -> FileHash {
-    let sha1_url = url.to_string() + names::SHA1_EXT;
-    let sha256_url = url.to_string() + names::SHA256_EXT;
-    let sha512_url = url.to_string() + names::SHA512_EXT;
+    let sha1_url = url.to_string() + names::SHA1_DOT_EXT;
+    let sha256_url = url.to_string() + names::SHA256_DOT_EXT;
+    let sha512_url = url.to_string() + names::SHA512_DOT_EXT;
 
-    let client = crate::get_login_client();
+    let client = crate::get_work_client();
 
     if let Ok(data) = client.get_text(&sha256_url).await {
         FileHash::Sha256(data)

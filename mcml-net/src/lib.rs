@@ -1,6 +1,7 @@
+use mcml_base::serialize_tools;
 use mcml_config::config_obj::{ProxyState, ProxyType};
 use mcml_names::i18_items::error_type::{
-    ErrorData, ErrorType, HttpReadErrorData, HttpReqErrorData,
+    CoreResult, ErrorType, HttpReadErrorData, HttpReqErrorData,
 };
 use reqwest::header::{HeaderMap, HeaderValue, USER_AGENT};
 use reqwest::{Proxy, Request, Response};
@@ -29,43 +30,14 @@ const DEFAULT_TIMEOUT: u64 = 10;
 /// 默认 User-Agent
 const DEFAULT_USER_AGENT: &str = "mcml/1.0.0";
 
-/// HTTP 请求的通用结果类型
-pub type NetResult<T> = Result<T, ErrorType>;
-
-/// 网络请求错误
-#[derive(Debug)]
-pub enum NetError {
-    Reqwest(reqwest::Error),
-    Json(serde_json::Error),
-}
-
-impl From<reqwest::Error> for NetError {
-    fn from(e: reqwest::Error) -> Self {
-        NetError::Reqwest(e)
-    }
-}
-
-impl From<serde_json::Error> for NetError {
-    fn from(e: serde_json::Error) -> Self {
-        NetError::Json(e)
-    }
-}
-
-impl From<NetError> for ErrorType {
-    fn from(value: NetError) -> Self {
-        match value {
-            NetError::Reqwest(error) => ErrorType::HttpReqError(HttpReqErrorData {
-                error: error.to_string(),
-                url: match error.url() {
-                    Some(url) => url.to_string(),
-                    None => Default::default(),
-                },
-            }),
-            NetError::Json(error) => ErrorType::SerializerError(ErrorData {
-                error: error.to_string(),
-            }),
-        }
-    }
+fn map_err(error: reqwest::Error) -> ErrorType {
+    ErrorType::HttpReqError(HttpReqErrorData {
+        error: error.to_string(),
+        url: match error.url() {
+            Some(url) => url.to_string(),
+            None => Default::default(),
+        },
+    })
 }
 
 /// HTTP 客户端
@@ -138,66 +110,56 @@ impl Client {
     }
 
     /// 发送Http请求
-    pub async fn send(&self, build: Request) -> NetResult<Response> {
-        Ok(self.inner.execute(build).await.map_err(NetError::Reqwest)?)
+    pub async fn send(&self, build: Request) -> CoreResult<Response> {
+        self.inner.execute(build).await.map_err(map_err)
     }
 
     /// 发送 GET 请求，返回原始文本响应
-    pub async fn get(&self, url: &str) -> NetResult<Response> {
-        let resp = self
-            .inner
-            .get(url)
-            .send()
-            .await
-            .map_err(NetError::Reqwest)?;
-        Ok(resp)
+    pub async fn get(&self, url: &str) -> CoreResult<Response> {
+        self.inner.get(url).send().await.map_err(map_err)
     }
 
     /// 发送 GET 请求，返回原始文本响应
-    pub async fn get_text(&self, url: &str) -> NetResult<String> {
-        let resp = self
-            .inner
+    pub async fn get_text(&self, url: &str) -> CoreResult<String> {
+        self.inner
             .get(url)
             .send()
             .await
-            .map_err(NetError::Reqwest)?;
-        Ok(resp.text().await.map_err(NetError::Reqwest)?)
+            .map_err(map_err)?
+            .text()
+            .await
+            .map_err(map_err)
     }
 
     /// 发送 GET 请求，返回原始字节响应
-    pub async fn get_bytes(&self, url: &str) -> NetResult<Vec<u8>> {
-        let resp = self
-            .inner
+    pub async fn get_bytes(&self, url: &str) -> CoreResult<Vec<u8>> {
+        self.inner
             .get(url)
             .send()
             .await
-            .map_err(NetError::Reqwest)?;
-        Ok(resp.bytes().await.map_err(NetError::Reqwest)?.to_vec())
+            .map_err(map_err)?
+            .bytes()
+            .await
+            .map_err(map_err)
+            .map(|data| data.to_vec())
     }
 
     /// 发送 GET 请求，返回反序列化后的 JSON 响应
-    pub async fn get_json<T: DeserializeOwned>(&self, url: &str) -> NetResult<T> {
-        let resp = self
-            .inner
-            .get(url)
-            .send()
-            .await
-            .map_err(NetError::Reqwest)?;
+    pub async fn get_json<T: DeserializeOwned>(&self, url: &str) -> CoreResult<T> {
+        let resp = self.inner.get(url).send().await.map_err(map_err)?;
         handle_response(resp).await
     }
 
     /// 发送带有 Range 头的 GET 请求，用于断点续传
     /// - `url`: 请求地址
     /// - `pos`: 已下载的字节数，从该位置继续下载
-    pub async fn get_ranges(&self, url: &str, pos: u64) -> NetResult<Response> {
-        let resp = self
-            .inner
+    pub async fn get_ranges(&self, url: &str, pos: u64) -> CoreResult<Response> {
+        self.inner
             .get(url)
             .header("Range", format!("bytes={}-", pos))
             .send()
             .await
-            .map_err(NetError::Reqwest)?;
-        Ok(resp)
+            .map_err(map_err)
     }
 
     /// 发送 POST 请求，请求体为 JSON
@@ -209,26 +171,30 @@ impl Client {
         &self,
         url: &str,
         body: &B,
-    ) -> NetResult<reqwest::Response> {
-        Ok(self
-            .inner
+    ) -> CoreResult<reqwest::Response> {
+        self.inner
             .post(url)
             .json(body)
             .send()
             .await
-            .map_err(NetError::Reqwest)?)
+            .map_err(map_err)
     }
 
     /// 发送 POST 请求，请求体为 JSON，返回原始文本响应
-    pub async fn post_json_get_text<B: Serialize>(&self, url: &str, body: &B) -> NetResult<String> {
-        let resp = self
-            .inner
+    pub async fn post_json_get_text<B: Serialize>(
+        &self,
+        url: &str,
+        body: &B,
+    ) -> CoreResult<String> {
+        self.inner
             .post(url)
             .json(body)
             .send()
             .await
-            .map_err(NetError::Reqwest)?;
-        Ok(resp.text().await.map_err(NetError::Reqwest)?)
+            .map_err(map_err)?
+            .text()
+            .await
+            .map_err(map_err)
     }
 
     /// 发送 POST 请求，请求体为 JSON，返回原始字节响应
@@ -236,15 +202,17 @@ impl Client {
         &self,
         url: &str,
         body: &B,
-    ) -> NetResult<Vec<u8>> {
-        let resp = self
-            .inner
+    ) -> CoreResult<Vec<u8>> {
+        self.inner
             .post(url)
             .json(body)
             .send()
             .await
-            .map_err(NetError::Reqwest)?;
-        Ok(resp.bytes().await.map_err(NetError::Reqwest)?.to_vec())
+            .map_err(map_err)?
+            .bytes()
+            .await
+            .map_err(map_err)
+            .map(|data| data.to_vec())
     }
 
     /// 发送 POST 请求，请求体为 JSON，返回JSON
@@ -252,14 +220,14 @@ impl Client {
         &self,
         url: &str,
         json: &B,
-    ) -> NetResult<T> {
+    ) -> CoreResult<T> {
         let resp = self
             .inner
             .post(url)
             .json(json)
             .send()
             .await
-            .map_err(NetError::Reqwest)?;
+            .map_err(map_err)?;
         handle_response(resp).await
     }
 
@@ -268,14 +236,14 @@ impl Client {
         &self,
         url: &str,
         params: &[(&str, &str)],
-    ) -> NetResult<T> {
+    ) -> CoreResult<T> {
         let resp = self
             .inner
             .post(url)
             .form(params)
             .send()
             .await
-            .map_err(NetError::Reqwest)?;
+            .map_err(map_err)?;
         handle_response(resp).await
     }
 }
@@ -332,7 +300,7 @@ pub fn get_login_client() -> Arc<Client> {
 }
 
 /// 处理响应，检查状态码并解析 JSON
-pub async fn handle_response<T: DeserializeOwned>(resp: reqwest::Response) -> NetResult<T> {
+pub async fn handle_response<T: DeserializeOwned>(resp: reqwest::Response) -> CoreResult<T> {
     let status = resp.status();
     if !status.is_success() {
         let url = resp.url().to_string();
@@ -343,7 +311,7 @@ pub async fn handle_response<T: DeserializeOwned>(resp: reqwest::Response) -> Ne
             status: status.as_u16(),
         }));
     }
-    let bytes = resp.bytes().await.map_err(NetError::Reqwest)?;
-    let value: T = serde_json::from_slice(&bytes).map_err(NetError::Json)?;
+    let bytes = resp.bytes().await.map_err(map_err)?;
+    let value: T = serialize_tools::json_from_bytes(&bytes)?;
     Ok(value)
 }

@@ -10,14 +10,13 @@ use mcml_base::{
     file_item::FileHash,
     hash_helper::{self, HashType},
     path_helper,
-    serialize_tools::{self, MiniJsonObj},
+    serialize_tools::{MiniJsonObj, MiniTomlMap},
 };
 use mcml_names::{
     i18_items::error_type::{CoreResult, ErrorData, ErrorType, FileSystemErrorData},
     names,
 };
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
-use toml::Table;
 use zip::ZipArchive;
 
 use crate::{launcher::instance_setting_obj::InstanceSettingObj, loader::LoaderType};
@@ -337,35 +336,24 @@ fn read_forge_toml(
     loader: LoaderType,
     mod_info: &mut ModObj,
 ) -> CoreResult<()> {
-    let mut toml = String::new();
-    reader.read_to_string(&mut toml).map_err(|err| {
-        ErrorType::ArchiveReadError(ErrorData {
-            error: err.to_string(),
-        })
-    })?;
-
-    let obj = toml.parse::<Table>().map_err(|err| {
-        ErrorType::SerializerError(ErrorData {
-            error: err.to_string(),
-        })
-    })?;
+    let obj = MiniTomlMap::from_stream(&mut reader)?;
 
     // 读取 mods
-    if let Some(toml::Value::Array(values)) = obj.get("mods") {
+    if let Some(values) = obj.get_list("mods") {
         for item in values.iter() {
             let mut info = ModItemObj::default();
-            let get_str = |key: &str| item.get(key).and_then(|v| v.as_str());
 
-            info.mod_id = get_str("modId").unwrap_or("").to_string();
-            info.name = get_str("displayName").unwrap_or(&info.mod_id).to_string();
-            info.description = get_str("description").map(String::from);
-            info.version = get_str("version").map(String::from);
-            info.url = get_str("displayURL").map(String::from);
+            info.mod_id = item.get_opt_string("modId").unwrap_or_default();
+            info.name = item
+                .get_opt_string("displayName")
+                .unwrap_or(info.mod_id.clone());
+            info.description = item.get_opt_string("description");
+            info.version = item.get_opt_string("version");
+            info.url = item.get_opt_string("displayURL");
             info.loaders = loader;
 
             let authors = |key: &str| -> Vec<String> {
-                item.get(key)
-                    .and_then(|v| v.as_str())
+                item.get_opt_string(key)
                     .map(|s| s.split(',').map(String::from).collect())
                     .unwrap_or_default()
             };
@@ -378,9 +366,9 @@ fn read_forge_toml(
     }
 
     // 处理依赖关系
-    if let Some(toml::Value::Table(dep_table)) = obj.get("dependencies") {
-        for (key, value) in dep_table.iter() {
-            let toml::Value::Table(map) = value else {
+    if let Some(table) = obj.get_object("dependencies") {
+        for (key, value) in table.iter() {
+            let Some(map) = value.as_object() else {
                 continue;
             };
 
@@ -393,21 +381,9 @@ fn read_forge_toml(
                 continue;
             };
 
-            let get_str = |field: &str| map.get(field).and_then(|v| v.as_str());
-            let get_bool = |field: &str| {
-                map.get(field)
-                    .and_then(|v| v.as_bool())
-                    .or_else(|| {
-                        map.get(field)
-                            .and_then(|v| v.as_str())
-                            .map(|s| s.eq_ignore_ascii_case("true"))
-                    })
-                    .unwrap_or(false)
-            };
-
-            if let Some(modid) = get_str("modid") {
+            if let Some(modid) = map.get_opt_string("modid") {
                 if modid.eq_ignore_ascii_case("minecraft") {
-                    if let Some(side) = get_str("side") {
+                    if let Some(side) = map.get_opt_string("side") {
                         mod_item.side = match side.to_ascii_lowercase().as_str() {
                             "both" => LoadSideType::Both,
                             "client" => LoadSideType::Client,
@@ -416,8 +392,9 @@ fn read_forge_toml(
                         };
                     }
                 } else {
-                    let is_mandatory = get_bool("mandatory");
-                    let is_required = get_str("type")
+                    let is_mandatory = map.get_bool("mandatory");
+                    let is_required = map
+                        .get_opt_string("type")
                         .map(|s| s.eq_ignore_ascii_case("required"))
                         .unwrap_or(false);
 
@@ -465,7 +442,7 @@ fn read_fabric_json(reader: impl Read, mod_info: &mut ModObj) -> CoreResult<()> 
         if let Some(list) = map.get_list("authors") {
             for item in list.iter() {
                 if item.is_str() {
-                    info.author.push(item.as_str().unwrap());
+                    info.author.push(item.as_string().unwrap());
                 } else if item.is_obj()
                     && let Some(value) = item
                         .as_object()
@@ -627,7 +604,7 @@ fn read_jar_in_jar(
         .filter_map(|i| {
             archive.by_index(i).ok().and_then(|entry| {
                 let name = entry.name();
-                if name.ends_with(&format!(".{}", names::JAR_EXT))
+                if name.ends_with(names::JAR_DOT_EXT)
                     && (name.starts_with(names::MOD_JAR_JAR_DIR)
                         || name.starts_with(names::MOD_JARS_DIR))
                 {
@@ -828,7 +805,7 @@ pub fn add_disable_suffix(path: &Path) -> CoreResult<()> {
         .ok_or_else(|| ErrorType::InvalidOperation)?;
 
     let mut new_name = file_name.to_os_string();
-    new_name.push(format!(".{}", names::DISABLE_EXT));
+    new_name.push(names::DISABLE_DOT_EXT);
     let new_path = path.with_file_name(new_name);
 
     path_helper::move_file(path, &new_path)
@@ -843,13 +820,11 @@ pub fn remove_disable_suffix(path: &Path) -> CoreResult<()> {
         .to_str()
         .ok_or_else(|| ErrorType::InvalidOperation)?;
 
-    let ext = format!(".{}", names::DISABLE_EXT);
-    if let Some(stripped) = name_str.strip_suffix(&ext) {
+    if let Some(stripped) = name_str.strip_suffix(names::DISABLE_DOT_EXT) {
         let new_path = path.with_file_name(stripped);
         path_helper::move_file(path, &new_path)
     } else {
-        let ext = format!(".{}", names::DISABLED_EXT);
-        if let Some(stripped) = name_str.strip_suffix(&ext) {
+        if let Some(stripped) = name_str.strip_suffix(names::DISABLED_DOT_EXT) {
             let new_path = path.with_file_name(stripped);
             path_helper::move_file(path, &new_path)
         } else {

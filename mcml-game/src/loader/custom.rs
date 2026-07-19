@@ -1,9 +1,7 @@
 use std::{io::Read, path::Path};
 
 use mcml_base::{
-    file_item::{FileHash, FileItemObj},
-    hash_helper::{self, HashType},
-    path_helper,
+    file_item::{FileHash, FileItemObj}, hash_helper::{self, HashType}, path_helper, serialize_tools,
 };
 use mcml_names::{
     i18_items::error_type::{CoreResult, ErrorData, ErrorType, FileSystemErrorData},
@@ -79,17 +77,8 @@ impl InstanceSettingObj {
             return Err(ErrorType::InfoNotFound(names::FILE_INSTALL_PROFILE.to_string()));
         }
 
-        let obj1: ForgeLaunchObj = serde_json::from_str(&version_json).map_err(|err| {
-            ErrorType::SerializerError(ErrorData {
-                error: err.to_string(),
-            })
-        })?;
-
-        let obj2: ForgeInstallObj = serde_json::from_str(&install_json).map_err(|err| {
-            ErrorType::SerializerError(ErrorData {
-                error: err.to_string(),
-            })
-        })?;
+        let obj1 = serialize_tools::json_from_str::<ForgeLaunchObj>(&version_json)?;
+        let obj2 = serialize_tools::json_from_str::<ForgeInstallObj>(&install_json)?;
 
         let mut list = Vec::new();
         let libraries_path = libraries_path::get_lib_dir();

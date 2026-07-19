@@ -877,7 +877,7 @@ impl InstanceSettingObj {
             let assets = assets_path::get_index(asset_index);
             if assets.is_err() {
                 let data = mojang_api::get_assets(&asset_index.url).await?;
-                let assets_obj: AssetsObj = serialize_tools::json_bytes(&data)?;
+                let assets_obj: AssetsObj = serialize_tools::json_from_bytes(&data)?;
                 if assets_obj.objects.is_empty() {
                     return Err(ErrorType::InfoNotFound(asset_index.id.clone()));
                 }
@@ -943,7 +943,7 @@ impl InstanceSettingObj {
                 let assets = assets_path::get_index(asset_index);
                 if assets.is_err() {
                     let data = mcml_net::mojang_api::get_assets(&asset_index.url).await?;
-                    let assets_obj: AssetsObj = serialize_tools::json_bytes(&data)?;
+                    let assets_obj: AssetsObj = serialize_tools::json_from_bytes(&data)?;
                     if assets_obj.objects.is_empty() {
                         return Err(ErrorType::InfoNotFound(asset_index.id.clone()));
                     }

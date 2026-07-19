@@ -1,13 +1,14 @@
 /// 游戏实例资源包相关
 use std::{
-    cmp,
     io::Read,
     path::{Path, PathBuf},
     sync::Mutex,
 };
 
 use mcml_base::{
-    file_item::FileHash, hash_helper::{self, HashType}, path_helper, serialize_tools,
+    file_item::FileHash,
+    hash_helper::{self, HashType},
+    path_helper, serialize_tools,
 };
 use mcml_names::{
     i18_items::error_type::{CoreResult, ErrorData, ErrorType, FileSystemErrorData},
@@ -15,90 +16,9 @@ use mcml_names::{
 };
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use serde::Deserialize;
-use serde_json::Number;
 use zip::ZipArchive;
 
 use crate::launcher::instance_setting_obj::InstanceSettingObj;
-
-/// Deserialize a JSON value that can be either a number or an array of numbers.
-/// For a number: returns it directly.
-/// For an array: returns the minimum value (0 for empty array).
-fn deserialize_number_or_min<'de, D>(deserializer: D) -> Result<i64, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    use serde::de::{self, SeqAccess, Visitor};
-    use std::fmt;
-
-    struct V;
-    impl<'de> Visitor<'de> for V {
-        type Value = i64;
-        fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
-            f.write_str("a number or array of numbers")
-        }
-        fn visit_i64<E: de::Error>(self, v: i64) -> Result<i64, E> {
-            Ok(v)
-        }
-        fn visit_u64<E: de::Error>(self, v: u64) -> Result<i64, E> {
-            Ok(v as i64)
-        }
-        fn visit_f64<E: de::Error>(self, v: f64) -> Result<i64, E> {
-            Ok(v as i64)
-        }
-        fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<i64, A::Error> {
-            let mut min = i64::MAX;
-            let mut found = false;
-            while let Some(v) = seq.next_element::<Number>()? {
-                if let Some(n) = v.as_i64() {
-                    min = cmp::min(min, n);
-                    found = true;
-                }
-            }
-            Ok(if found { min } else { 0 })
-        }
-    }
-    deserializer.deserialize_any(V)
-}
-
-/// Deserialize a JSON value that can be either a number or an array of numbers.
-/// For a number: returns it directly.
-/// For an array: returns the maximum value (0 for empty array).
-fn deserialize_number_or_max<'de, D>(deserializer: D) -> Result<i64, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    use serde::de::{self, SeqAccess, Visitor};
-    use std::fmt;
-
-    struct V;
-    impl<'de> Visitor<'de> for V {
-        type Value = i64;
-        fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
-            f.write_str("a number or array of numbers")
-        }
-        fn visit_i64<E: de::Error>(self, v: i64) -> Result<i64, E> {
-            Ok(v)
-        }
-        fn visit_u64<E: de::Error>(self, v: u64) -> Result<i64, E> {
-            Ok(v as i64)
-        }
-        fn visit_f64<E: de::Error>(self, v: f64) -> Result<i64, E> {
-            Ok(v as i64)
-        }
-        fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<i64, A::Error> {
-            let mut max = i64::MIN;
-            let mut found = false;
-            while let Some(v) = seq.next_element::<Number>()? {
-                if let Some(n) = v.as_i64() {
-                    max = cmp::max(max, n);
-                    found = true;
-                }
-            }
-            Ok(if found { max } else { 0 })
-        }
-    }
-    deserializer.deserialize_any(V)
-}
 
 /// Deserialization struct for pack.mcmeta
 #[derive(Deserialize)]
@@ -108,11 +28,20 @@ struct PackMeta {
 
 #[derive(Deserialize)]
 struct PackInfo {
-    #[serde(default, deserialize_with = "deserialize_number_or_min")]
+    #[serde(
+        default,
+        deserialize_with = "serialize_tools::deserialize_number_or_max"
+    )]
     pack_format: i64,
-    #[serde(default, deserialize_with = "deserialize_number_or_min")]
+    #[serde(
+        default,
+        deserialize_with = "serialize_tools::deserialize_number_or_min"
+    )]
     min_format: i64,
-    #[serde(default, deserialize_with = "deserialize_number_or_max")]
+    #[serde(
+        default,
+        deserialize_with = "serialize_tools::deserialize_number_or_max"
+    )]
     max_format: i64,
     #[serde(default)]
     description: String,
@@ -170,7 +99,7 @@ fn process_resourcepack<P: AsRef<Path>>(path: P) -> CoreResult<ResourcepackObj> 
             })
         })?;
 
-        match serialize_tools::json_stream::<PackMeta, _>(meta) {
+        match serialize_tools::json_from_stream::<PackMeta>(meta) {
             Ok(m) => ResourcepackObj {
                 description: m.pack.description,
                 pack_format: m.pack.pack_format,
