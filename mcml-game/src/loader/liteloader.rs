@@ -1,5 +1,5 @@
-use mcml_base::file_item::FileItemObj;
-use mcml_names::i18_items::error_type::{CoreResult, ErrorData, ErrorType};
+use mcml_base::{file_item::FileItemObj, serialize_tools};
+use mcml_names::i18_items::error_type::{CoreResult};
 use mcml_net::liteloader_api;
 
 use crate::{
@@ -8,12 +8,7 @@ use crate::{
 
 pub async fn get_liteloader_meta() -> CoreResult<LiteloaderMetaObj> {
     let data = liteloader_api::get_meta().await?;
-    let obj = serde_json::from_slice::<LiteloaderMetaObj>(&data).map_err(|err| {
-        ErrorType::SerializerError(ErrorData {
-            error: err.to_string(),
-        })
-    })?;
-
+    let obj = serialize_tools::json_from_bytes::<LiteloaderMetaObj>(&data)?;
     Ok(obj)
 }
 

@@ -54,7 +54,7 @@ pub fn get(uuid: String, auth_type: AuthType) -> Option<LoginObj> {
 /// 导入账户列表
 /// - `file`: 文件位置
 pub fn import<P: AsRef<Path>>(file: P) -> CoreResult<()> {
-    let json: Vec<LoginObj> = serialize_tools::json_file(file)?;
+    let json = serialize_tools::json_from_file::<Vec<LoginObj>>(file)?;
 
     let mut auths = AUTHS.write().unwrap();
 

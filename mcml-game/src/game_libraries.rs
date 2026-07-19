@@ -1,5 +1,4 @@
 /// 游戏实例运行库相关
-
 use std::{
     collections::{HashMap, HashSet},
     path::Path,
@@ -10,6 +9,7 @@ use mcml_base::{
     Os,
     file_item::{FileHash, FileItemObj, LaterRun},
 };
+use mcml_names::names;
 use mcml_net::{maven_utils, url_helper};
 use tokio::task;
 
@@ -111,18 +111,24 @@ impl GameArgObj {
 
                 let name = format!("{}:{}-{}-natives-{}-arm64", item, path[1], path[2], system);
                 let dir = format!(
-                    "{}{}/{}/{}-{}-natives-{}-arm64.jar",
-                    base_dir, path[1], path[2], path[1], path[2], system
+                    "{}{}/{}/{}-{}-natives-{}-arm64{}",
+                    base_dir,
+                    path[1],
+                    path[2],
+                    path[1],
+                    path[2],
+                    system,
+                    names::JAR_DOT_EXT
                 );
 
-                let sha1 = maven_utils::test_sha1(&dir).await;
+                let hash = maven_utils::test_hash(&dir).await;
 
-                if let Some(data) = sha1 {
+                if let Some(data) = hash {
                     list.push(FileItemObj {
                         name,
                         file: libraries_path::get_lib_dir().join(dir),
                         url: data.url,
-                        hash: FileHash::Sha1(data.sha1),
+                        hash: data.hash,
                         later: Default::default(),
                     });
                 }
@@ -132,18 +138,24 @@ impl GameArgObj {
                     item, path[1], path[2], system
                 );
                 let dir = format!(
-                    "{}{}/{}/{}-{}-natives-{}-aarch_64.jar",
-                    base_dir, path[1], path[2], path[1], path[2], system
+                    "{}{}/{}/{}-{}-natives-{}-aarch_64{}",
+                    base_dir,
+                    path[1],
+                    path[2],
+                    path[1],
+                    path[2],
+                    system,
+                    names::JAR_DOT_EXT
                 );
 
-                let sha1 = maven_utils::test_sha1(&dir).await;
+                let hash = maven_utils::test_hash(&dir).await;
 
-                if let Some(data) = sha1 {
+                if let Some(data) = hash {
                     list.push(FileItemObj {
                         name,
                         file: libraries_path::get_lib_dir().join(dir),
                         url: data.url,
-                        hash: FileHash::Sha1(data.sha1),
+                        hash: data.hash,
                         later: Default::default(),
                     });
                 }

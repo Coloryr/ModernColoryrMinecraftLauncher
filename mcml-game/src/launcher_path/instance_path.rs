@@ -5,7 +5,10 @@ use std::{
     sync::OnceLock,
 };
 
-use mcml_base::path_helper::{self};
+use mcml_base::{
+    path_helper::{self},
+    serialize_tools,
+};
 use mcml_config::config_save;
 use mcml_names::{
     i18_items::error_type::{CoreResult, ErrorData, ErrorType, FileSystemErrorData},
@@ -13,8 +16,8 @@ use mcml_names::{
 };
 
 use crate::launcher::{
-    custom_game_arg_obj::CustomGameArgObj, instance_setting_obj::InstanceSettingObj,
-    game_time_obj::GameTimeObj, file_online_info_obj::FileOnlineInfoObj,
+    custom_game_arg_obj::CustomGameArgObj, file_online_info_obj::FileOnlineInfoObj,
+    game_time_obj::GameTimeObj, instance_setting_obj::InstanceSettingObj,
 };
 
 static BASE_DIR: OnceLock<PathBuf> = OnceLock::new();
@@ -72,12 +75,7 @@ pub(crate) fn load_instance<P: AsRef<Path>>(dir: P) -> Option<InstanceSettingObj
         return None;
     }
 
-    let stream = path_helper::open_read(&config);
-    if stream.is_err() {
-        return None;
-    }
-    let stream = stream.unwrap();
-    if let Ok(mut obj) = serde_json::from_reader::<_, InstanceSettingObj>(stream) {
+    if let Ok(mut obj) = serialize_tools::json_from_file::<InstanceSettingObj>(&config) {
         let path = file.file_name().unwrap_or_default();
         let path = path.to_string_lossy();
         if !path.eq(&obj.dir) {
@@ -350,11 +348,8 @@ impl InstanceSettingObj {
     /// 读取在线文件信息
     pub fn read_online_info(&self) -> HashMap<String, FileOnlineInfoObj> {
         let file = self.get_online_info_file();
-        if file.exists()
-            && file.is_file()
-            && let Ok(stream) = path_helper::open_read(&file)
-        {
-            let json = serde_json::from_reader::<_, HashMap<String, FileOnlineInfoObj>>(stream);
+        if file.exists() && file.is_file() {
+            let json = serialize_tools::json_from_file::<HashMap<String, FileOnlineInfoObj>>(&file);
             if let Ok(data) = json {
                 return data;
             }
@@ -381,10 +376,8 @@ impl InstanceSettingObj {
             && let Ok(dir) = fs::read_dir(&file)
         {
             for item in dir {
-                if let Ok(item) = item
-                    && let Ok(stream) = path_helper::open_read(&item.path())
-                {
-                    let json = serde_json::from_reader::<_, CustomGameArgObj>(stream);
+                if let Ok(item) = item {
+                    let json = serialize_tools::json_from_file::<CustomGameArgObj>(&item.path());
                     if let Ok(data) = json {
                         list.insert(item.file_name().to_string_lossy().to_string(), data);
                     }
@@ -400,14 +393,7 @@ impl InstanceSettingObj {
         let dir = self.get_json_path();
         path_helper::create_dir_all(&dir)?;
         for (key, value) in info.iter() {
-            let file = dir.join(key);
-
-            let stream = path_helper::open_write(file)?;
-            serde_json::to_writer(stream, value).map_err(|err| {
-                ErrorType::SerializerError(ErrorData {
-                    error: err.to_string(),
-                })
-            })?
+            serialize_tools::json_to_file(value, dir.join(key))?;
         }
 
         Ok(())
@@ -416,11 +402,8 @@ impl InstanceSettingObj {
     /// 读取启动统计数据
     pub fn read_launch_count_data(&self) -> GameTimeObj {
         let file = self.get_launch_file();
-        if file.exists()
-            && file.is_file()
-            && let Ok(stream) = path_helper::open_read(&file)
-        {
-            let obj = serde_json::from_reader::<_, GameTimeObj>(stream);
+        if file.exists() && file.is_file() {
+            let obj = serialize_tools::json_from_file::<GameTimeObj>(&file);
             if let Ok(obj) = obj {
                 return obj;
             }

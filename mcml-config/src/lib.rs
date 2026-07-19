@@ -62,7 +62,7 @@ pub fn load<P: AsRef<Path>>(file: P) -> bool {
         return true;
     }
 
-    let json: Result<ConfigObj, ErrorType> = serialize_tools::json_file(&file);
+    let json = serialize_tools::json_from_file::<ConfigObj>(&file);
 
     if let Err(err) = json {
         mcml_log::error_type(ErrorType::ConfigReadError(FileSystemErrorData {

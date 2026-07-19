@@ -1,4 +1,7 @@
-use mcml_base::file_item::{FileHash, FileItemObj, LaterRun};
+use mcml_base::{
+    file_item::{FileHash, FileItemObj, LaterRun},
+    serialize_tools,
+};
 use mcml_names::i18_items::error_type::{CoreResult, ErrorData, ErrorType};
 use mcml_net::{fabric_api, maven_utils::version_name_to_path, url_helper};
 
@@ -14,11 +17,7 @@ use crate::{
 pub async fn get_fabric_libs(mc: &str, version: Option<&str>) -> CoreResult<Vec<FileItemObj>> {
     let meta = fabric_api::get_meta().await?;
 
-    let obj = serde_json::from_slice::<FabricMetaObj>(&meta).map_err(|err| {
-        ErrorType::SerializerError(ErrorData {
-            error: err.to_string(),
-        })
-    })?;
+    let obj = serialize_tools::json_from_bytes::<FabricMetaObj>(&meta)?;
 
     let fabric = match version {
         Some(version) => obj
@@ -31,14 +30,8 @@ pub async fn get_fabric_libs(mc: &str, version: Option<&str>) -> CoreResult<Vec<
 
     if let Some(fabric) = fabric {
         let data = fabric_api::get_loader(mc, &fabric.version).await?;
-        let obj = serde_json::from_slice::<FabricLoaderObj>(&data).map_err(|err| {
-            ErrorType::SerializerError(ErrorData {
-                error: err.to_string(),
-            })
-        })?;
-
+        let obj = serialize_tools::json_from_bytes::<FabricLoaderObj>(&data)?;
         let obj = version_path::add_fabric(obj, &data, mc, &fabric.version);
-
         Ok(obj.make_libs())
     } else {
         Err(ErrorType::InfoNotFound(mc.to_string()))

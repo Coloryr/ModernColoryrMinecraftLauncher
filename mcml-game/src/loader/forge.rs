@@ -2,7 +2,7 @@ use std::{collections::HashMap, io::Read};
 
 use mcml_base::{
     file_item::{FileHash, FileItemObj},
-    path_helper,
+    path_helper, serialize_tools,
 };
 use mcml_names::{
     i18_items::error_type::{CoreResult, ErrorData, ErrorType, FileSystemErrorData},
@@ -490,20 +490,11 @@ async fn get_forge_libs(mc: &str, version: &str, neo: bool) -> CoreResult<ForgeG
 
     if version_ok && install_ok {
         // 1.12.2以上 新版Forge
-        let info = serde_json::from_str::<ForgeLaunchObj>(&version_json).map_err(|err| {
-            ErrorType::SerializerError(ErrorData {
-                error: err.to_string(),
-            })
-        })?;
+        let info = serialize_tools::json_from_str::<ForgeLaunchObj>(&version_json)?;
         let info = version_path::add_forge(info, &version_json.into_bytes(), mc, version, neo);
         let loaders = info.build_forge_libs(mc, version, neo, v2, false).await;
 
-        let install_info =
-            serde_json::from_str::<ForgeInstallObj>(&install_json).map_err(|err| {
-                ErrorType::SerializerError(ErrorData {
-                    error: err.to_string(),
-                })
-            })?;
+        let install_info = serialize_tools::json_from_str::<ForgeInstallObj>(&install_json)?;
         let install_info = version_path::add_forge_install(
             install_info,
             &install_json.into_bytes(),
@@ -518,11 +509,7 @@ async fn get_forge_libs(mc: &str, version: &str, neo: bool) -> CoreResult<ForgeG
         Ok(ForgeGetFilesObj { loaders, installs })
     } else if install_ok {
         // 旧版Forge
-        let obj = serde_json::from_str::<ForgeInstallOldObj>(&install_json).map_err(|err| {
-            ErrorType::SerializerError(ErrorData {
-                error: err.to_string(),
-            })
-        })?;
+        let obj = serialize_tools::json_from_str::<ForgeInstallOldObj>(&install_json)?;
 
         let mut libraries: Vec<ForgeLibrariesObj> = Vec::new();
         for item in &obj.version_info.libraries {
@@ -550,11 +537,7 @@ async fn get_forge_libs(mc: &str, version: &str, neo: bool) -> CoreResult<ForgeG
             ..Default::default()
         };
 
-        let json_bytes = serde_json::to_vec(&info).map_err(|err| {
-            ErrorType::SerializerError(ErrorData {
-                error: err.to_string(),
-            })
-        })?;
+        let json_bytes = serialize_tools::json_to_bytes(&info)?;
         let info = version_path::add_forge(info, &json_bytes, mc, version, neo);
 
         Ok(ForgeGetFilesObj {

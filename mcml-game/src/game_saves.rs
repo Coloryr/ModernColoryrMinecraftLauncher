@@ -10,7 +10,8 @@ use std::{
 use chrono::{Datelike, Local, Timelike};
 use mcml_base::{
     archives::{self, ArchiveGui, ArchiveType, BaseArchive},
-    path_helper, serialize_tools,
+    path_helper,
+    serialize_tools::{self, MiniJsonObj},
 };
 use mcml_config::config_save;
 use mcml_names::{
@@ -23,7 +24,6 @@ use mcml_nbt::{
 };
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 use zip::ZipArchive;
 
 use crate::launcher::instance_setting_obj::InstanceSettingObj;
@@ -214,7 +214,7 @@ impl InstanceSettingObj {
         let file = self.get_backup_file();
         if file.exists() && file.is_file() {
             let stream = path_helper::open_read(&file)?;
-            serialize_tools::json_stream(&stream)
+            serialize_tools::json_from_stream(&stream)
         } else {
             Ok(HashMap::new())
         }
@@ -398,8 +398,7 @@ impl SaveObj {
                         }));
                         return;
                     }
-                    let json: Result<Value, ErrorType> =
-                        serialize_tools::json_stream(meta.unwrap());
+                    let json = MiniJsonObj::from_stream(meta.unwrap());
                     if let Err(err) = json {
                         mcml_log::error_type(ErrorType::SerializerError(ErrorData {
                             error: err.to_string(),
@@ -425,7 +424,7 @@ impl SaveObj {
                     mcml_log::error_type(err);
                     return;
                 }
-                let json = serde_json::from_reader::<_, Value>(stream.unwrap());
+                let json = MiniJsonObj::from_stream(stream.unwrap());
                 if let Err(err) = json {
                     mcml_log::error_type(ErrorType::SerializerError(ErrorData {
                         error: err.to_string(),
@@ -607,26 +606,17 @@ fn read_pack(
     path: PathBuf,
     ens: Option<&NbtList>,
     dis: Option<&NbtList>,
-    data: Value,
+    data: MiniJsonObj,
 ) -> Option<SaveDataPackObj> {
-    if let Some(pack) = data.as_object().and_then(|map| map.get("pack")) {
+    if let Some(pack) = data.as_object().and_then(|item| item.get_object("pack")) {
         let mut obj = SaveDataPackObj {
             name: format!(
                 "file/{}",
                 path.file_name().unwrap_or_default().to_string_lossy()
             ),
             path,
-            description: pack
-                .as_object()
-                .and_then(|map| map.get("description"))
-                .and_then(|v| v.as_str())
-                .unwrap_or("")
-                .to_string(),
-            pack_format: pack
-                .as_object()
-                .and_then(|map| map.get("pack_format"))
-                .and_then(|v| v.as_i64())
-                .unwrap_or(-1),
+            description: pack.get_string("description"),
+            pack_format: pack.get_opt_i64("pack_format").unwrap_or(-1),
             enable: None,
         };
 

@@ -1,6 +1,5 @@
 /// 游戏实例日志相关
 /// 包括运行日志和过往日志处理
-
 use std::{
     collections::VecDeque,
     fs,
@@ -111,7 +110,7 @@ impl InstanceRuntimeLog {
             let is_gz = file
                 .as_ref()
                 .file_name()
-                .map(|n| n.to_string_lossy().ends_with(names::LOG_GZ_EXT))
+                .map(|n| n.to_string_lossy().ends_with(names::LOG_GZ_DOT_EXT))
                 .unwrap_or(false);
 
             let reader: Box<BufReader<dyn Read>> = if is_gz {
@@ -223,9 +222,8 @@ impl InstanceSettingObj {
                     return true;
                 }
             }
-            // LOG_GZ_EXT 是 .log.gz 复合后缀，需要用文件名直接判断
             path.file_name()
-                .map(|n| n.to_string_lossy().ends_with(names::LOG_GZ_EXT))
+                .map(|n| n.to_string_lossy().ends_with(names::LOG_GZ_DOT_EXT))
                 .unwrap_or(false)
         }
 

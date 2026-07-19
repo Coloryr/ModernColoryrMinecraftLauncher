@@ -1,6 +1,7 @@
 use std::{collections::HashSet, path::Path, sync::OnceLock};
 
 use itertools::Itertools;
+use mcml_base::serialize_tools;
 use mcml_config::config_obj::SourceLocal;
 use mcml_names::{
     i18_items::error_type::{CoreResult, ErrorData, ErrorType},
@@ -156,11 +157,7 @@ pub async fn get_optifine_version() -> CoreResult<Vec<GetOptifineObj>> {
             return Err(ErrorType::InfoNotFound(String::from("optifine url")));
         }
     } else {
-        let mut obj = serde_json::from_str::<Vec<OptifineListObj>>(&data).map_err(|err| {
-            ErrorType::SerializerError(ErrorData {
-                error: err.to_string(),
-            })
-        })?;
+        let mut obj = serialize_tools::json_from_str::<Vec<OptifineListObj>>(&data)?;
 
         for item in obj.drain(..) {
             let url = url_helper::get_optifine_jar(&item);

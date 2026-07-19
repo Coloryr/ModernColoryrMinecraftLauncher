@@ -7,7 +7,7 @@ use std::{
 };
 
 use mcml_auth::LoginObj;
-use mcml_base::path_helper;
+use mcml_base::{path_helper, serialize_tools};
 use mcml_names::{
     i18_items::error_type::{CoreResult, ErrorData, ErrorType},
     names,
@@ -79,14 +79,8 @@ pub fn add_index(obj: &GameArgObj, data: &mut Cursor<Vec<u8>>) {
 /// - `obj`：版本数据资源
 pub fn get_index(obj: &GameAssetIndexObj) -> CoreResult<AssetsObj> {
     let file = INDEX_DIR.get().unwrap().join(format!("{}.json", obj.id));
-    let stream = path_helper::open_read(&file)?;
-    let obj = serde_json::from_reader::<_, AssetsObj>(stream);
-    match obj {
-        Err(err) => Err(ErrorType::SerializerError(ErrorData {
-            error: err.to_string(),
-        })),
-        Ok(ok) => Ok(ok),
-    }
+    let obj = serialize_tools::json_from_file::<AssetsObj>(&file)?;
+    Ok(obj)
 }
 
 /// 保存皮肤图片
