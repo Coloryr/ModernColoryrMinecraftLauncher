@@ -1,0 +1,6 @@
+{
+    "rust-analyzer.linkedProjects": [
+        "mcml-core/Cargo.toml",
+        "mcml-gui/src-tauri/Cargo.toml"
+    ]
+}

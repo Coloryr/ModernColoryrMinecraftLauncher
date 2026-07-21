@@ -79,13 +79,14 @@ impl LoaderType {
     /// 获取加载器版本名前缀
     pub fn prefix(&self) -> &'static str {
         match self {
+            LoaderType::Normal => "normal",
             LoaderType::Forge => "forge",
             LoaderType::Fabric => "fabric",
             LoaderType::Quilt => "quilt",
             LoaderType::NeoForge => "neoforge",
             LoaderType::OptiFine => "optifine",
             LoaderType::LiteLoader => "liteloader",
-            _ => "custom",
+            LoaderType::Custom => "custom",
         }
     }
 }

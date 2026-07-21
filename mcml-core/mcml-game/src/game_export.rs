@@ -7,8 +7,10 @@ use mcml_base::{
 };
 use mcml_names::{i18_items::error_type::CoreResult, names};
 
-use crate::launcher::{
-    file_online_info_obj::FileOnlineInfoObj, instance_setting_obj::InstanceSettingObj,
+use crate::{
+    curseforge::curseforge_pack_obj::{CurseForgePackObj, FilesObj, MinecraftObj, ModLoadersObj},
+    launcher::{file_online_info_obj::FileOnlineInfoObj, instance_setting_obj::InstanceSettingObj},
+    loader::LoaderType,
 };
 
 /// 导出压缩包类型
@@ -67,7 +69,7 @@ impl InstanceSettingObj {
     pub async fn export(&self, data: ExportArg) -> CoreResult<()> {
         match data.pack {
             ExportPackType::ColorMC => colormc(self, data),
-            ExportPackType::CurseForge => todo!(),
+            ExportPackType::CurseForge => curseforge(self, data),
             ExportPackType::Modrinth => todo!(),
             ExportPackType::Zip => todo!(),
         }
@@ -105,6 +107,47 @@ fn colormc(game: &InstanceSettingObj, data: ExportArg) -> CoreResult<()> {
         &serialize_tools::json_to_bytes(&list1)?,
         data.gui,
     )?;
+
+    Ok(())
+}
+
+fn curseforge(game: &InstanceSettingObj, data: ExportArg) -> CoreResult<()> {
+    let mut obj = CurseForgePackObj {
+        name: data.name,
+        author: data.author,
+        version: data.version,
+        manifest_type: "minecraftModpack".to_string(),
+        manifest_version: 1,
+        overrides: names::OVERRIDE_DIR.to_string(),
+        minecraft: MinecraftObj {
+            version: game.version.clone(),
+            mod_loaders: Vec::new(),
+        },
+        ..Default::default()
+    };
+
+    if game.loader != LoaderType::Normal {
+        obj.minecraft.mod_loaders.push(ModLoadersObj {
+            id: format!(
+                "{}-{}",
+                game.loader.prefix(),
+                game.loader_version.clone().unwrap_or_default()
+            ),
+            primary: true,
+        });
+    }
+
+    for item in data.mods {
+        if let Some(info) = item.info {
+            obj.files.push(FilesObj {
+                file_id: info.fileid.parse::<i64>().unwrap_or_default(),
+                project_id: info.modid.parse::<i64>().unwrap_or_default(),
+                required: true,
+            });
+        }
+    }
+
+    
 
     Ok(())
 }

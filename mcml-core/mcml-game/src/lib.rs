@@ -29,6 +29,7 @@ use crate::{
 
 pub mod class_scan;
 pub mod game_arg;
+pub mod curseforge;
 pub mod game_check;
 pub mod game_download;
 pub mod game_export;
