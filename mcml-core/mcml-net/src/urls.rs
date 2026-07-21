@@ -52,3 +52,6 @@ pub const MINECRAFT_SESSION_SERVER: &str =
 pub const MINECRAFT_SERVICES_XBOX: &str =
     "https://api.minecraftservices.com/authentication/login_with_xbox";
 pub const MINECRAFT_NEWS: &str = "https://www.minecraft.net/content/minecraftnet/language-masters/zh-hans/jcr:content/root/container/image_grid_a_copy_64.articles.page-";
+
+pub const CURSEFORGE_DOWNLOAD: &str = "https://edge.forgecdn.net/";
+pub const CURSEFORGE: &str = "https://api.curseforge.com/v1/";

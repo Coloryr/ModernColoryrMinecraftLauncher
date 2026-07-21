@@ -1,0 +1,1 @@
+pub mod curseforge_pack_obj;
