@@ -26,9 +26,11 @@ use std::{
     sync::{LazyLock, OnceLock, RwLock},
 };
 
+use mcml_auth::oauth;
 use mcml_base::events::EventHandler;
 use mcml_log;
 use mcml_names::{i18, i18_items::info_type::InfoType, i18_items::panic_type::PanicType};
+use mcml_net::curseforge_api;
 
 /// 基础运行路径
 pub static BASE_DIR: OnceLock<PathBuf> = OnceLock::new();
@@ -76,9 +78,12 @@ pub fn init(arg: CoreInitObj) {
         }
     }
 
-    CORE_ARG.set(arg).unwrap();
+    let arg = CORE_ARG.get_or_init(|| arg);
 
-    let dir = BASE_DIR.get_or_init(|| CORE_ARG.get().unwrap().local.to_path_buf());
+    let dir = BASE_DIR.get_or_init(|| arg.local.to_path_buf());
+
+    oauth::set_key(&arg.oauth_key);
+    curseforge_api::set_key(&arg.curseforge_key);
 
     mcml_names::init(dir);
 

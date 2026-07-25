@@ -1334,6 +1334,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "crossbeam-queue",
+ "mcml-auth",
  "mcml-base",
  "mcml-config",
  "mcml-downloader",
