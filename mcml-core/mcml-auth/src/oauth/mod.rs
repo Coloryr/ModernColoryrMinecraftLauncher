@@ -42,7 +42,7 @@ pub fn set_key(key: &str) {
 /// 是否设置了密钥
 fn have_key() -> CoreResult<String> {
     match KEY.get() {
-        None => Err(ErrorType::OAuthKeyIsNull),
+        None => Err(ErrorType::KeyIsNull),
         Some(key) => Ok(key.clone()),
     }
 }

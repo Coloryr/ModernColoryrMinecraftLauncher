@@ -96,8 +96,6 @@ pub enum ErrorType {
     /// 登录密钥过期
     AuthTokenTimeout,
 
-    /// OAuth服务器密钥未设置
-    OAuthKeyIsNull,
     /// OAuth标识请求超时
     OAuthTokenTimeout,
     /// OAuth获取登录码错误
@@ -128,19 +126,15 @@ pub enum ErrorType {
     /// 任务出错
     TaskError(ErrorData),
 
-    /// 流处理异常
-    StreamError(ErrorData),
-
     /// NBT类型错误
     NbtTypeError,
     /// NBT读取失败
     NbtReadError,
 
-    /// BASE64错误
-    Base64Error(ErrorData),
-
     /// 所需文件未能找到
     InfoNotFound(String),
+    /// 找不到合适的Java
+    JavaNotFound,
 
     /// 下载文件覆盖错误
     DownloadFileOverFail(DownloadFileOverFailData),
@@ -151,14 +145,6 @@ pub enum ErrorType {
     /// 文件下载失败
     DownloadFileFail,
 
-    /// 进程启动错误
-    ProcessError(ErrorData),
-
-    /// 版本号错误
-    InstanceVersionError,
-    /// 找不到合适的Java
-    JavaNotFound,
-
     /// 输入参数错误
     ArgEmpty(ArgEmptyData),
 
@@ -167,7 +153,17 @@ pub enum ErrorType {
 
     /// Socket处理出错
     SocketError(ErrorData),
-
     /// 线程启动错误
     ThreadError(ErrorData),
+    /// 进程启动错误
+    ProcessError(ErrorData),
+    /// 版本号错误
+    InstanceVersionError,
+    /// BASE64错误
+    Base64Error(ErrorData),
+    /// 流处理异常
+    StreamError(ErrorData),
+
+    /// 密钥未设置
+    KeyIsNull,
 }
