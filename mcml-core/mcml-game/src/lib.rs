@@ -6,7 +6,6 @@ use std::{
     time::Duration,
 };
 
-use async_trait::async_trait;
 use mcml_base::{Os, events::EventArgHandler, path_helper};
 use mcml_names::{
     i18_items::error_type::{ArgEmptyData, CoreResult, ErrorType, FileSystemErrorData},
@@ -19,6 +18,7 @@ use uuid::Uuid;
 use crate::{
     game_launch::InstanceHandle,
     game_log::{GameLog, GameLogItemObj, InstanceRuntimeLog},
+    gui_hook::{IAddInstanceGui, ICopyGui},
     launcher::{
         LogEncoding, custom_game_arg_obj::CustomGameArgObj,
         file_online_info_obj::FileOnlineInfoObj, game_time_obj::GameTimeObj,
@@ -28,15 +28,16 @@ use crate::{
 };
 
 pub mod class_scan;
-pub mod game_arg;
 pub mod curseforge;
+pub mod data_res;
+pub mod game_arg;
 pub mod game_check;
 pub mod game_download;
 pub mod game_export;
+pub mod game_lan;
 pub mod game_launch;
 pub mod game_libraries;
 pub mod game_log;
-pub mod game_lan;
 pub mod game_mods;
 pub mod game_options;
 pub mod game_resourcepacks;
@@ -45,6 +46,7 @@ pub mod game_schematics;
 pub mod game_screenshots;
 pub mod game_server;
 pub mod game_shaderpacks;
+pub mod gui_hook;
 pub mod launcher;
 pub mod launcher_path;
 pub mod loader;
@@ -143,22 +145,6 @@ pub(crate) fn invoke_change(change: InstanceChange) {
 
 pub(crate) fn invoke_run_log(uuid: Uuid, log: LogType) {
     LOG_EVENT.emit(InstanceLog { uuid, log });
-}
-
-/// 实例创建界面回调
-#[async_trait]
-pub trait IInstanceGui {
-    /// 是否同意替换名字
-    async fn name_replace(&self, name: &str) -> bool;
-    /// 是否同意覆盖
-    async fn overwrite(&self, obj: Arc<InstanceSettingObj>) -> bool;
-}
-
-pub trait ICopyGui {
-    /// 更新数量
-    fn update(&self, index: usize, count: usize);
-    /// 当前文件
-    fn file(&self, file: PathBuf);
 }
 
 /// 初始化
@@ -437,7 +423,7 @@ impl InstanceSettingObj {
     /// 创建实例
     pub async fn create_instance(
         mut self,
-        gui: &Option<impl IInstanceGui>,
+        gui: &Option<impl IAddInstanceGui>,
     ) -> CoreResult<Arc<InstanceSettingObj>> {
         path_watch::stop_watch();
 
@@ -511,7 +497,7 @@ impl InstanceSettingObj {
     pub async fn copy_to_other(
         &self,
         name: &str,
-        gui: &Option<impl IInstanceGui>,
+        gui: &Option<impl IAddInstanceGui>,
     ) -> CoreResult<Arc<InstanceSettingObj>> {
         let mut instance = self.clone();
         instance.name = name.to_string();

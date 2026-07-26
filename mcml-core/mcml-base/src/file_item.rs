@@ -31,6 +31,8 @@ pub enum LaterRun {
     None,
     /// 解压
     UnpackNative(PathBuf),
+    /// 存档
+    UnpackSave(PathBuf),
 }
 
 impl Default for LaterRun {

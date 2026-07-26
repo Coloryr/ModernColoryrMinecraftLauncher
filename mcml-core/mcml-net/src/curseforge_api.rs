@@ -13,8 +13,8 @@ pub const GAME_ID: u32 = 432;
 pub const CLASS_MODPACK: u32 = 4471;
 pub const CLASS_MOD: u32 = 6;
 pub const CLASS_SAVES: u32 = 17;
-pub const CLASS_RESOURCEPACK: u32 = 12;
-pub const CLASS_SHADERPACK: u32 = 6552;
+pub const CLASS_RESOURCEPACKS: u32 = 12;
+pub const CLASS_SHADERPACKS: u32 = 6552;
 pub const CLASS_OPENLOADER_DATAPACK: u32 = 6945;
 pub const CATEGORYID_DATAPACKS: u32 = 5193;
 
@@ -144,7 +144,7 @@ pub async fn get_save_list<T: DeserializeOwned>(arg: CurseFogreArg) -> CoreResul
 /// 获取资源包列表
 pub async fn get_resourcepack_list<T: DeserializeOwned>(arg: CurseFogreArg) -> CoreResult<T> {
     get_list(
-        CLASS_RESOURCEPACK,
+        CLASS_RESOURCEPACKS,
         &arg.version.unwrap_or_default(),
         arg.page.unwrap_or(0),
         arg.sort.unwrap_or(2),
@@ -160,7 +160,7 @@ pub async fn get_resourcepack_list<T: DeserializeOwned>(arg: CurseFogreArg) -> C
 /// 获取数据包列表
 pub async fn get_datapacks_list<T: DeserializeOwned>(arg: CurseFogreArg) -> CoreResult<T> {
     get_list(
-        CLASS_RESOURCEPACK,
+        CLASS_RESOURCEPACKS,
         &arg.version.unwrap_or_default(),
         arg.page.unwrap_or(0),
         arg.sort.unwrap_or(2),
@@ -176,7 +176,7 @@ pub async fn get_datapacks_list<T: DeserializeOwned>(arg: CurseFogreArg) -> Core
 /// 获取光影包列表
 pub async fn get_shaders_list<T: DeserializeOwned>(arg: CurseFogreArg) -> CoreResult<T> {
     get_list(
-        CLASS_SHADERPACK,
+        CLASS_SHADERPACKS,
         &arg.version.unwrap_or_default(),
         arg.page.unwrap_or(0),
         arg.sort.unwrap_or(2),

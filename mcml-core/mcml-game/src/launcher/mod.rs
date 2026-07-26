@@ -1,10 +1,10 @@
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
-pub mod instance_setting_obj;
-pub mod game_time_obj;
-pub mod file_online_info_obj;
 pub mod custom_game_arg_obj;
 pub mod custom_loader_obj;
+pub mod file_online_info_obj;
+pub mod game_time_obj;
+pub mod instance_setting_obj;
 
 /// 资源来源
 #[derive(Serialize_repr, Deserialize_repr, Debug, Clone, Copy, PartialEq, Eq)]
@@ -35,4 +35,40 @@ impl Default for LogEncoding {
     fn default() -> Self {
         LogEncoding::UTF8
     }
+}
+
+/// 文件类型
+pub enum FileType {
+    Modpack,
+    Mod,
+    Save,
+    Shaderpack,
+    Resourcepack,
+    DataPacks,
+    Schematic,
+    Java,
+    Game,
+    Config,
+    AuthConfig,
+    Pic,
+    Optifine,
+    Skin,
+    Music,
+    Text,
+    GameIcon,
+    Head,
+    JavaZip,
+    Loader,
+    InputConfig,
+    User,
+    Cmd,
+    Icon,
+    StartIcon,
+    File,
+    OpenLoaderDataPack,
+    Lang,
+}
+
+impl FileType {
+
 }
