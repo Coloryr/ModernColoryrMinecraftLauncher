@@ -73,9 +73,9 @@ impl Default for ModLoadersObj {
 #[serde(default)]
 pub struct FilesObj {
     #[serde(rename = "projectID")]
-    pub project_id: i64,
+    pub project_id: u64,
     #[serde(rename = "fileID")]
-    pub file_id: i64,
+    pub file_id: u64,
     pub required: bool,
 }
 

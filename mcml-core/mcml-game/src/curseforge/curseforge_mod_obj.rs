@@ -35,7 +35,7 @@ pub struct CurseForgeDataObj {
     pub download_count: u64,
     #[serde(rename = "downloadUrl")]
     pub download_url: Option<String>,
-    pub dependencies: Vec<DependenciesObj>,
+    pub dependencies: Option<Vec<DependenciesObj>>,
 }
 
 impl Default for CurseForgeDataObj {

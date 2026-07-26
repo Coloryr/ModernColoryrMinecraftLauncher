@@ -21,7 +21,7 @@ pub struct CurseForgeCategoriesDataObj {
     pub id: u64,
     pub name: String,
     #[serde(rename = "classId")]
-    pub class_id: u64,
+    pub class_id: u32,
 }
 
 impl Default for CurseForgeCategoriesDataObj {

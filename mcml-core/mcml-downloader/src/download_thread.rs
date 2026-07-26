@@ -11,9 +11,7 @@ use std::{
 };
 
 use mcml_base::{
-    file_item::{FileHash, LaterRun},
-    hash_helper::{self, HashType},
-    path_helper,
+    archives::{self, ArchiveType}, file_item::{FileHash, LaterRun}, hash_helper::{self, HashType}, path_helper,
 };
 use mcml_names::i18_items::error_type::{
     CoreResult, DownloadFileHashErrorData, DownloadFileOverFailData, DownloadFileSizeErrorData,
@@ -227,12 +225,23 @@ fn download(index: u32, mut obj: DownloadObj) {
 
     path_helper::move_file(&temp_file, &obj.item.base.file).unwrap();
 
-    match &obj.item.base.later {
-        LaterRun::None => {}
-        LaterRun::UnpackNative(path_buf) => {
-            let file = path_helper::open_read(&obj.item.base.file).unwrap();
-            later_tasks::unpack_native(path_buf, file).unwrap();
+    let res: Result<(), ErrorType> = match &obj.item.base.later {
+        LaterRun::None => {
+            Ok(())
         }
+        LaterRun::UnpackNative(path_buf) => {
+            match path_helper::open_read(&obj.item.base.file) {
+                Ok(file) => later_tasks::unpack_native(path_buf, file),
+                Err(err) => Err(err),
+            }
+        }
+        LaterRun::UnpackSave(path_buf) => {
+            archives::decompress(ArchiveType::Zip, &obj.item.base.file, path_buf, None)
+        },
+    };
+
+    if let Err(err) = res {
+        mcml_log::error_type(err);
     }
 
     obj.item.set_state(DownloadItemState::Done);

@@ -35,7 +35,7 @@ impl Default for CurseForgeListObj {
 pub struct CurseForgeListDataObj {
     pub id: u64,
     #[serde(rename = "classId")]
-    pub class_id: u64,
+    pub class_id: u32,
     pub name: String,
     pub links: LinksObj,
     pub summary: String,
@@ -123,7 +123,7 @@ pub struct CategoriesObj {
     #[serde(rename = "iconUrl")]
     pub icon_url: String,
     #[serde(rename = "classId")]
-    pub class_id: u64,
+    pub class_id: u32,
 }
 
 impl Default for CategoriesObj {
