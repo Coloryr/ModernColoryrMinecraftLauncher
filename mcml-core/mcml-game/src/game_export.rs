@@ -8,7 +8,7 @@ use mcml_base::{
 use mcml_names::{i18_items::error_type::CoreResult, names};
 
 use crate::{
-    curseforge::{curseforge_obj::CurseForgeListDataObj, curseforge_pack_obj::{CurseForgePackObj, FilesObj, MinecraftObj, ModLoadersObj}}, launcher::{file_online_info_obj::FileOnlineInfoObj, instance_setting_obj::InstanceSettingObj}, loader::LoaderType,
+    curseforge::{curseforge_list_obj::CurseForgeListDataObj, curseforge_pack_obj::{CurseForgePackObj, FilesObj, MinecraftObj, ModLoadersObj}}, launcher::{file_online_info_obj::FileOnlineInfoObj, instance_setting_obj::InstanceSettingObj}, loader::LoaderType,
 };
 
 /// 导出压缩包类型
@@ -153,8 +153,8 @@ fn curseforge(game: &InstanceSettingObj, data: ExportArg) -> CoreResult<()> {
     for item in data.mods {
         if let Some(info) = item.info {
             obj.files.push(FilesObj {
-                file_id: info.fileid.parse::<i64>().unwrap_or_default(),
-                project_id: info.modid.parse::<i64>().unwrap_or_default(),
+                file_id: info.fileid.parse::<u64>().unwrap_or_default(),
+                project_id: info.modid.parse::<u64>().unwrap_or_default(),
                 required: true,
             });
         }

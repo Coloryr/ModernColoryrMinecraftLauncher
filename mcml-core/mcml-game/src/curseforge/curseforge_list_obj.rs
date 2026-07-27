@@ -2,11 +2,11 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
-pub struct CurseForgeObj {
+pub struct CurseForgeListObj {
     pub data: CurseForgeListDataObj,
 }
 
-impl Default for CurseForgeObj {
+impl Default for CurseForgeListObj {
     fn default() -> Self {
         Self {
             data: Default::default(),
@@ -16,12 +16,12 @@ impl Default for CurseForgeObj {
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
-pub struct CurseForgeListObj {
+pub struct CurseForgeListPageObj {
     pub data: Vec<CurseForgeListDataObj>,
     pub pagination: CurseForgeListPaginationObj,
 }
 
-impl Default for CurseForgeListObj {
+impl Default for CurseForgeListPageObj {
     fn default() -> Self {
         Self {
             data: Default::default(),
