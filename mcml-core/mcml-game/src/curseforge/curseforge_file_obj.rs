@@ -1,13 +1,31 @@
 use serde::{Deserialize, Serialize};
 
+use crate::curseforge::curseforge_list_obj::CurseForgeListPaginationObj;
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(default)]
+pub struct CurseFogreMutFileObj {
+    pub data: Vec<CurseForgeFileDataObj>,
+    pub pagination: CurseForgeListPaginationObj,
+}
+
+impl Default for CurseFogreMutFileObj {
+    fn default() -> Self {
+        Self {
+            data: Default::default(),
+            pagination: Default::default(),
+        }
+    }
+}
+
 /// 模组信息
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
-pub struct CurseForgeModObj {
-    pub data: CurseForgeDataObj,
+pub struct CurseForgeFileObj {
+    pub data: CurseForgeFileDataObj,
 }
 
-impl Default for CurseForgeModObj {
+impl Default for CurseForgeFileObj {
     fn default() -> Self {
         Self {
             data: Default::default(),
@@ -17,7 +35,7 @@ impl Default for CurseForgeModObj {
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
-pub struct CurseForgeDataObj {
+pub struct CurseForgeFileDataObj {
     pub id: u64,
     #[serde(rename = "modId")]
     pub mod_id: u64,
@@ -38,7 +56,7 @@ pub struct CurseForgeDataObj {
     pub dependencies: Option<Vec<DependenciesObj>>,
 }
 
-impl Default for CurseForgeDataObj {
+impl Default for CurseForgeFileDataObj {
     fn default() -> Self {
         Self {
             id: Default::default(),
@@ -71,7 +89,7 @@ impl Default for HashesObj {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(default)]
 pub struct DependenciesObj {
     #[serde(rename = "modId")]

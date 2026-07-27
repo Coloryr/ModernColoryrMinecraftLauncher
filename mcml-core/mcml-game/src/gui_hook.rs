@@ -25,19 +25,19 @@ pub trait IAddInstanceGui {
 /// 进度条界面回调
 pub trait IProgressGui {
     /// 进度
-    fn set_now_process(value: i32, all: i32);
+    fn set_now_process(value: usize, all: Option<usize>);
 }
 
 /// 整合包安装界面回调
 pub trait IAddModPackGui {
     /// 设置整合包安装状态
-    fn set_state(state: AdddModPackState);
+    fn set_state(&self, state: AdddModPackState);
     /// 设置当前进度
-    fn set_now(value: i32, all: i32);
+    fn set_now(&self, value: usize, all: Option<usize>);
     /// 显示文件
-    fn set_sub_text(text: Option<String>);
+    fn set_sub_text(&self, text: Option<String>);
     /// 子进度
-    fn set_sub_now(value: i32, all: i32);
+    fn set_sub_now(&self, value: usize, all: Option<usize>);
 }
 
 /// 复制文件界面回调

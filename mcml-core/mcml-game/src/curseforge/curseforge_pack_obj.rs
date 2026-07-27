@@ -9,15 +9,10 @@ pub struct CurseForgePackObj {
     pub manifest_type: String,
     #[serde(rename = "manifestVersion")]
     pub manifest_version: i32,
-    #[serde(rename = "name")]
     pub name: String,
-    #[serde(rename = "version")]
     pub version: String,
-    #[serde(rename = "author")]
     pub author: String,
-    #[serde(rename = "files")]
     pub files: Vec<FilesObj>,
-    #[serde(rename = "overrides")]
     pub overrides: String,
 }
 

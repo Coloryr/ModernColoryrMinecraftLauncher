@@ -23,23 +23,39 @@ static API_KEY: OnceLock<String> = OnceLock::new();
 /// 搜索参数
 pub struct CurseFogreArg {
     /// 项目编号
-    id: Option<String>,
+    pub id: Option<String>,
     /// 游戏版本
-    version: Option<String>,
+    pub version: Option<String>,
     /// 页数
-    page: Option<u32>,
+    pub page: Option<u32>,
     /// 过滤
-    sort: Option<u32>,
+    pub sort: Option<u32>,
     /// 过滤名
-    filter: Option<String>,
+    pub filter: Option<String>,
     /// 页大小
-    page_size: Option<u32>,
+    pub page_size: Option<u32>,
     /// 排序方式
-    sort_order: Option<u32>,
+    pub sort_order: Option<u32>,
     /// 分类
-    category: Option<String>,
+    pub category: Option<String>,
     /// 模组加载器类型
-    loader: Option<u32>,
+    pub loader: Option<u32>,
+}
+
+impl Default for CurseFogreArg {
+    fn default() -> Self {
+        Self {
+            id: Default::default(),
+            version: Default::default(),
+            page: Default::default(),
+            sort: Default::default(),
+            filter: Default::default(),
+            page_size: Default::default(),
+            sort_order: Default::default(),
+            category: Default::default(),
+            loader: Default::default(),
+        }
+    }
 }
 
 /// 设置API KEY
