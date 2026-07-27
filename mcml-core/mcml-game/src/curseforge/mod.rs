@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     path::Path,
     sync::{
         Arc, Mutex, OnceLock,
@@ -103,22 +103,25 @@ impl CurseForgeFileDataObj {
         }
     }
 
+    /// 提取 SHA1 哈希值
+    #[inline]
+    fn sha1_hash(&self) -> String {
+        self.hashes
+            .iter()
+            .find(|h| h.algo == 1)
+            .map(|h| h.value.clone())
+            .unwrap_or_default()
+    }
+
     /// 创建下载项目
     pub fn make_file_item_obj<P: AsRef<Path>>(&mut self, path: P) -> FileItemObj {
         self.fix_download_url();
-
-        let mut hash = self.hashes.iter().filter(|item| item.algo == 1);
-
-        let hash = hash
-            .next()
-            .map(|data| FileHash::Sha1(data.value.clone()))
-            .unwrap_or_default();
 
         FileItemObj {
             url: self.download_url.clone().unwrap(),
             name: self.display_name.clone(),
             file: path.as_ref().join(&self.file_name),
-            hash,
+            hash: FileHash::Sha1(self.sha1_hash()),
             later: LaterRun::None,
         }
     }
@@ -127,18 +130,11 @@ impl CurseForgeFileDataObj {
     pub fn make_file_online_info_obj(&mut self, path: &str) -> FileOnlineInfoObj {
         self.fix_download_url();
 
-        let mut hash = self.hashes.iter().filter(|item| item.algo == 1);
-
-        let hash = hash
-            .next()
-            .map(|data| data.value.clone())
-            .unwrap_or_default();
-
         FileOnlineInfoObj {
             path: path.to_string(),
             name: self.display_name.clone(),
             file: self.file_name.clone(),
-            sha1: hash,
+            sha1: self.sha1_hash(),
             url: self.download_url.clone().unwrap_or_default(),
             modid: self.mod_id.to_string(),
             fileid: self.id.to_string(),
@@ -151,7 +147,7 @@ impl CurseForgeFileDataObj {
         version: &str,
         loader: LoaderType,
     ) -> Vec<CurseForgeModDependenciesRes> {
-        let ids = Mutex::new(Vec::new());
+        let ids = Mutex::new(HashSet::new());
         let handle = tokio::runtime::Handle::current();
         let dependencies = self.dependencies.clone();
         let version = version.to_string();
@@ -168,88 +164,84 @@ fn get_mod_dependencies_inner(
     dependencies: &Option<Vec<DependenciesObj>>,
     version: &str,
     loader: &LoaderType,
-    ids: &Mutex<Vec<u64>>,
+    ids: &Mutex<HashSet<u64>>,
     handle: &tokio::runtime::Handle,
 ) -> Vec<CurseForgeModDependenciesRes> {
-    match dependencies {
-        Some(dep) => {
-            if dep.is_empty() {
-                Vec::new()
-            } else {
-                let list: Mutex<Vec<CurseForgeModDependenciesRes>> = Mutex::new(Vec::new());
-                dep.par_iter().for_each(|item| {
-                    if ids.lock().unwrap().contains(&item.mod_id) {
-                        return;
-                    }
+    let dep = match dependencies {
+        Some(dep) if !dep.is_empty() => dep,
+        _ => return Vec::new(),
+    };
 
-                    let id = item.mod_id.to_string();
-                    let opt = item.relation_type != 2;
+    let list: Mutex<Vec<CurseForgeModDependenciesRes>> = Mutex::new(Vec::new());
 
-                    let (res1, res2) = handle.block_on(async {
-                        let res1 =
-                            curseforge_api::get_files_page::<CurseFogreMutFileObj>(CurseFogreArg {
-                                id: Some(id.clone()),
-                                version: Some(version.to_string()),
-                                loader: Some(loader.get_id()),
-                                ..Default::default()
-                            })
-                            .await;
-
-                        if res1.is_err() {
-                            return (None, None);
-                        }
-
-                        let data = res1.unwrap();
-                        if data.data.is_empty() {
-                            return (None, None);
-                        }
-
-                        let res2 = curseforge_api::get_mod_info::<CurseForgeListObj>(&id).await;
-                        (Some(data), res2.ok())
-                    });
-
-                    let Some(data) = res1 else {
-                        return;
-                    };
-
-                    let Some(data1) = res2 else {
-                        return;
-                    };
-
-                    // 在移动 data.data 之前，先递归获取第一个文件的依赖
-                    let sub_deps = get_mod_dependencies_inner(
-                        &data.data[0].dependencies,
-                        version,
-                        loader,
-                        ids,
-                        handle,
-                    );
-
-                    // 先添加当前模组到列表，再标记ID（与C#逻辑一致）
-                    list.lock().unwrap().push(CurseForgeModDependenciesRes {
-                        name: data1.data.name.clone(),
-                        mod_id: data1.data.id,
-                        opt: !opt,
-                        list: data.data,
-                    });
-                    ids.lock().unwrap().push(item.mod_id);
-
-                    // 获取依赖的依赖
-                    for item5 in sub_deps {
-                        if ids.lock().unwrap().contains(&item5.mod_id) {
-                            continue;
-                        }
-                        let mod_id = item5.mod_id;
-                        list.lock().unwrap().push(item5);
-                        ids.lock().unwrap().push(mod_id);
-                    }
-                });
-
-                list.into_inner().unwrap()
+    dep.par_iter().for_each(|item| {
+        // Atomic check-and-insert: HashSet::insert returns false if already present
+        {
+            let mut ids_guard = ids.lock().unwrap();
+            if !ids_guard.insert(item.mod_id) {
+                return;
             }
         }
-        None => Vec::new(),
-    }
+
+        let id = item.mod_id.to_string();
+        let opt = item.relation_type != 2;
+
+        let (res1, res2) = handle.block_on(async {
+            let res1 =
+                curseforge_api::get_files_page::<CurseFogreMutFileObj>(CurseFogreArg {
+                    id: Some(id.clone()),
+                    version: Some(version.to_string()),
+                    loader: Some(loader.get_id()),
+                    ..Default::default()
+                })
+                .await;
+
+            if res1.is_err() {
+                return (None, None);
+            }
+
+            let data = res1.unwrap();
+            if data.data.is_empty() {
+                return (None, None);
+            }
+
+            let res2 = curseforge_api::get_mod_info::<CurseForgeListObj>(&id).await;
+            (Some(data), res2.ok())
+        });
+
+        let Some(data) = res1 else { return };
+        let Some(data1) = res2 else { return };
+
+        // 在移动 data.data 之前，先递归获取第一个文件的依赖
+        let sub_deps = get_mod_dependencies_inner(
+            &data.data[0].dependencies,
+            version,
+            loader,
+            ids,
+            handle,
+        );
+
+        // 先添加当前模组到列表（与C#逻辑一致）
+        list.lock().unwrap().push(CurseForgeModDependenciesRes {
+            name: data1.data.name.clone(),
+            mod_id: data1.data.id,
+            opt: !opt,
+            list: data.data,
+        });
+
+        // 添加未被标记的子依赖（避免同时持有 ids 和 list 锁）
+        for item5 in sub_deps {
+            let mut ids_guard = ids.lock().unwrap();
+            if ids_guard.contains(&item5.mod_id) {
+                continue;
+            }
+            ids_guard.insert(item5.mod_id);
+            drop(ids_guard);
+            list.lock().unwrap().push(item5);
+        }
+    });
+
+    list.into_inner().unwrap()
 }
 
 impl FileType {
@@ -297,26 +289,28 @@ impl FileType {
 
                 list.data.retain(|item| item.name.starts_with("Minecraft "));
 
-                // 排序: ID > 17 的降序在前, ID < 18 的升序在后
-                list.data.sort_by(|a, b| {
-                    let a_id: i32 = a.id.parse().unwrap_or(0);
-                    let b_id: i32 = b.id.parse().unwrap_or(0);
-                    match (a_id > 17, b_id > 17) {
-                        (true, true) => b_id.cmp(&a_id),
-                        (false, false) => a_id.cmp(&b_id),
-                        (true, false) => std::cmp::Ordering::Less,
-                        (false, true) => std::cmp::Ordering::Greater,
-                    }
+                // Sort: ID > 17 desc first, ID < 18 asc after.
+                // Use cached key to parse each id only once.
+                list.data.sort_by_cached_key(|item| {
+                    let id: i32 = item.id.parse().unwrap_or(0);
+                    // Primary: new versions (id > 17) before old
+                    // Secondary: new versions descending, old versions ascending
+                    (id <= 17, if id > 17 { -id } else { id })
                 });
 
                 let version_list = curseforge_api::get_version::<CurseForgeVersionObj>().await?;
 
+                // Build lookup map for O(1) version-type matching
+                let version_map: HashMap<u32, &_> = version_list
+                    .data
+                    .iter()
+                    .map(|v| (v.verion_type, v))
+                    .collect();
+
                 let mut result = vec![String::new()];
                 for vtype in &list.data {
                     let vtype_id: u32 = vtype.id.parse().unwrap_or(0);
-                    if let Some(version_data) =
-                        version_list.data.iter().find(|v| v.verion_type == vtype_id)
-                    {
+                    if let Some(version_data) = version_map.get(&vtype_id) {
                         result.extend(version_data.versions.clone());
                     }
                 }
@@ -338,10 +332,22 @@ macro_rules! build_results_impl {
         let size: usize = $size;
 
         async move {
-            // Phase 1: pre-fetch paths (async I/O; .jar returns instantly, non-jar are rare)
+            // Phase 1: pre-fetch paths concurrently (async I/O; .jar returns instantly).
+            // Spawn all then await in insertion order to preserve item ↔ path alignment.
+            let handles: Vec<_> = items
+                .iter()
+                .map(|item| {
+                    let game = game.clone();
+                    let file_name = item.file_name.clone();
+                    let mod_id = item.mod_id;
+                    tokio::spawn(async move {
+                        game.get_item_path(&file_name, mod_id).await.ok()
+                    })
+                })
+                .collect();
             let mut paths: Vec<Option<ItemPathRes>> = Vec::with_capacity(size);
-            for item in items.iter() {
-                paths.push(game.get_item_path(item).await.ok());
+            for handle in handles {
+                paths.push(handle.await.unwrap_or(None));
             }
 
             // Phase 2: build file items in parallel (CPU-bound, spawn_blocking + rayon)
@@ -359,13 +365,7 @@ macro_rules! build_results_impl {
                         // make_file_online_info_obj)
                         item.fix_download_url();
                         let url = item.download_url.clone().unwrap_or_default();
-
-                        let sha1 = item
-                            .hashes
-                            .iter()
-                            .find(|h| h.algo == 1)
-                            .map(|h| h.value.clone())
-                            .unwrap_or_default();
+                        let sha1 = item.sha1_hash();
 
                         let modid_str = item.mod_id.to_string();
 
@@ -438,7 +438,7 @@ pub async fn get_modpack_info(
 
     // ── Fallback path: fetch each file individually, any failure → empty ──
     const CONCURRENCY: usize = 20;
-    let failed = std::sync::Arc::new(AtomicBool::new(false));
+    let failed = Arc::new(AtomicBool::new(false));
     let mut fetched: Vec<CurseForgeFileDataObj> = Vec::with_capacity(size);
 
     {
@@ -477,8 +477,8 @@ pub async fn get_modpack_info(
 
 fn spawn_fetch_task(
     tasks: &mut tokio::task::JoinSet<Option<CurseForgeFileDataObj>>,
-    file_ref: &crate::curseforge::curseforge_pack_obj::FilesObj,
-    failed: &std::sync::Arc<AtomicBool>,
+    file_ref: &curseforge_pack_obj::FilesObj,
+    failed: &Arc<AtomicBool>,
 ) {
     let pid = file_ref.project_id.to_string();
     let fid = file_ref.file_id.to_string();
@@ -495,39 +495,55 @@ fn spawn_fetch_task(
 }
 
 impl InstanceSettingObj {
-    async fn get_item_path(&self, item: &CurseForgeFileDataObj) -> CoreResult<ItemPathRes> {
+    /// Resolve the item path and file type. Takes individual fields to enable
+    /// cheap concurrent dispatch without cloning the full `CurseForgeFileDataObj`.
+    async fn get_item_path(&self, file_name: &str, mod_id: u64) -> CoreResult<ItemPathRes> {
         let mut item1 = ItemPathRes {
             file_path: self.get_mods_path(),
             path: names::GAME_MODS_DIR.to_string(),
             file_type: FileType::Mod,
         };
 
-        if !item.file_name.ends_with(names::JAR_DOT_EXT) {
+        if !file_name.ends_with(names::JAR_DOT_EXT) {
             let info1 =
-                curseforge_api::get_mod_info::<CurseForgeListObj>(&item.mod_id.to_string()).await?;
-            for item2 in info1.data.categories.iter() {
-                if item2.class_id == curseforge_api::CLASS_RESOURCEPACKS {
-                    item1.change_to_resourcepacks(self);
-                    break;
-                } else if item2.class_id == curseforge_api::CLASS_SHADERPACKS {
-                    item1.change_to_shaderpacks(self);
-                    break;
-                } else if item2.class_id == curseforge_api::CLASS_SAVES {
-                    item1.change_to_saves(self);
-                    break;
-                } else if item2.class_id == curseforge_api::CLASS_OPENLOADER_DATAPACK {
-                    item1.change_to_openloader_datapack(self);
+                curseforge_api::get_mod_info::<CurseForgeListObj>(&mod_id.to_string()).await?;
+
+            // Categories list: first match wins
+            for item2 in &info1.data.categories {
+                if apply_class_id(item2.class_id, &mut item1, self) {
                     break;
                 }
             }
 
-            if info1.data.class_id == curseforge_api::CLASS_SAVES {
-                item1.change_to_saves(self);
-            } else if info1.data.class_id == curseforge_api::CLASS_OPENLOADER_DATAPACK {
-                item1.change_to_openloader_datapack(self);
-            }
+            // Fallback: data.class_id may override category result
+            apply_class_id(info1.data.class_id, &mut item1, self);
         }
 
         Ok(item1)
+    }
+}
+
+/// Apply a CurseForge class_id to the path resolver. Returns `true` when
+/// the id matched one of the known file-type classes.
+#[inline]
+fn apply_class_id(class_id: u32, item: &mut ItemPathRes, instance: &InstanceSettingObj) -> bool {
+    match class_id {
+        curseforge_api::CLASS_RESOURCEPACKS => {
+            item.change_to_resourcepacks(instance);
+            true
+        }
+        curseforge_api::CLASS_SHADERPACKS => {
+            item.change_to_shaderpacks(instance);
+            true
+        }
+        curseforge_api::CLASS_SAVES => {
+            item.change_to_saves(instance);
+            true
+        }
+        curseforge_api::CLASS_OPENLOADER_DATAPACK => {
+            item.change_to_openloader_datapack(instance);
+            true
+        }
+        _ => false,
     }
 }
