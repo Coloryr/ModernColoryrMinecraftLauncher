@@ -1,5 +1,8 @@
 use std::{
-    fs, io::{Read, Seek, SeekFrom, Write}, path::{Path, PathBuf}, sync::Arc,
+    fs,
+    io::{Read, Seek, SeekFrom, Write},
+    path::{Path, PathBuf},
+    sync::Arc,
 };
 
 use flate2::read::GzDecoder;
@@ -16,7 +19,7 @@ use xz2::read::XzDecoder;
 use zip::ZipArchive;
 
 use crate::{
-    archives::{compress, decompress, ArchiveGui, ArchiveType},
+    archives::{ArchiveGui, ArchiveType, compress, decompress},
     path_helper,
 };
 
@@ -42,9 +45,13 @@ impl ArchiveType {
             Some(ArchiveType::Zip)
         } else if file_name.ends_with(names::R7Z_DOT_EXT) {
             Some(ArchiveType::R7Z)
-        } else if file_name.ends_with(names::TAR_GZ_DOT_EXT) || file_name.ends_with(names::TGZ_DOT_EXT) {
+        } else if file_name.ends_with(names::TAR_GZ_DOT_EXT)
+            || file_name.ends_with(names::TGZ_DOT_EXT)
+        {
             Some(ArchiveType::TarGz)
-        } else if file_name.ends_with(names::TAR_XZ_DOT_EXT) || file_name.ends_with(names::TXZ_DOT_EXT) {
+        } else if file_name.ends_with(names::TAR_XZ_DOT_EXT)
+            || file_name.ends_with(names::TXZ_DOT_EXT)
+        {
             Some(ArchiveType::TarXz)
         } else if file_name.ends_with(names::TAR_EXT) {
             Some(ArchiveType::Tar)
@@ -154,6 +161,49 @@ impl BaseArchive {
         }
     }
 
+    /// Read a single file entry from the archive into memory.
+    ///
+    /// * `name` — The entry name/path inside the archive (e.g.
+    ///   `"subdir/readme.txt"`).
+    ///
+    /// Returns the raw bytes of the entry's content.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the entry is not found, is a directory, or reading
+    /// fails.
+    pub fn read(&self, name: &str) -> CoreResult<Vec<u8>> {
+        match self.archive_type {
+            ArchiveType::Zip => self.read_zip(name),
+            ArchiveType::R7Z => self.read_7z(name),
+            ArchiveType::Tar | ArchiveType::TarGz | ArchiveType::TarXz => self.read_tar(name),
+        }
+    }
+
+    /// Open a single file entry from the archive as a streaming [`Read`]
+    /// implementor.
+    ///
+    /// Unlike [`read`](Self::read), which returns the full entry bytes as a
+    /// `Vec<u8>`, this returns a `Box<dyn Read>` that can be passed directly to
+    /// any function accepting the [`Read`] trait.
+    ///
+    /// * `name` — The entry name/path inside the archive (e.g.
+    ///   `"subdir/readme.txt"`).
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the entry is not found, is a directory, or a read
+    /// error occurs.
+    pub fn read_stream(&self, name: &str) -> CoreResult<Box<dyn Read>> {
+        match self.archive_type {
+            ArchiveType::Zip => self.read_zip_stream(name),
+            ArchiveType::R7Z => self.read_7z_stream(name),
+            ArchiveType::Tar | ArchiveType::TarGz | ArchiveType::TarXz => {
+                self.read_tar_stream(name)
+            }
+        }
+    }
+
     /// Extract a single file from the archive to the given output path.
     ///
     /// * `name` — The entry name/path inside the archive (e.g.
@@ -233,7 +283,7 @@ impl BaseArchive {
     /// Zip fast path: append files from disk directly without touching
     /// existing entries.
     fn add_files_zip<P: AsRef<Path>>(&mut self, files: &[(P, P)]) -> CoreResult<()> {
-        use zip::{write::SimpleFileOptions, CompressionMethod, ZipWriter};
+        use zip::{CompressionMethod, ZipWriter, write::SimpleFileOptions};
 
         let file = fs::OpenOptions::new()
             .read(true)
@@ -307,13 +357,15 @@ impl BaseArchive {
                 })
             })?;
 
-        let len = file.metadata().map_err(|err| {
-            ErrorType::FileSystemError(FileSystemErrorData {
-                path: self.path.clone(),
-                error: err.to_string(),
-            })
-        })?
-        .len();
+        let len = file
+            .metadata()
+            .map_err(|err| {
+                ErrorType::FileSystemError(FileSystemErrorData {
+                    path: self.path.clone(),
+                    error: err.to_string(),
+                })
+            })?
+            .len();
         if len >= 1024 {
             file.seek(SeekFrom::Start(len - 1024)).map_err(|err| {
                 ErrorType::FileSystemError(FileSystemErrorData {
@@ -454,7 +506,7 @@ impl BaseArchive {
     /// Zip fast path: append in-memory data directly without touching existing
     /// entries.
     fn add_data_zip(&mut self, name: &str, data: &[u8]) -> CoreResult<()> {
-        use zip::{write::SimpleFileOptions, CompressionMethod, ZipWriter};
+        use zip::{CompressionMethod, ZipWriter, write::SimpleFileOptions};
 
         let file = fs::OpenOptions::new()
             .read(true)
@@ -520,13 +572,15 @@ impl BaseArchive {
 
         // Seek past the tar EOF marker (two 512-byte zero blocks) so the
         // builder overwrites them with the new entry + a fresh EOF marker.
-        let len = file.metadata().map_err(|err| {
-            ErrorType::FileSystemError(FileSystemErrorData {
-                path: self.path.clone(),
-                error: err.to_string(),
-            })
-        })?
-        .len();
+        let len = file
+            .metadata()
+            .map_err(|err| {
+                ErrorType::FileSystemError(FileSystemErrorData {
+                    path: self.path.clone(),
+                    error: err.to_string(),
+                })
+            })?
+            .len();
         if len >= 1024 {
             file.seek(SeekFrom::Start(len - 1024)).map_err(|err| {
                 ErrorType::FileSystemError(FileSystemErrorData {
@@ -719,9 +773,11 @@ impl BaseArchive {
             entries.push(ArchiveEntryInfo {
                 name: entry
                     .path()
-                    .map_err(|err| ErrorType::ArchiveReadError(ErrorData {
-                        error: err.to_string(),
-                    }))?
+                    .map_err(|err| {
+                        ErrorType::ArchiveReadError(ErrorData {
+                            error: err.to_string(),
+                        })
+                    })?
                     .to_string_lossy()
                     .to_string(),
                 is_dir: header.entry_type() == tar::EntryType::Directory,
@@ -752,6 +808,140 @@ impl BaseArchive {
             }
             _ => unreachable!(),
         }
+    }
+
+    // --- Per-format single-file readers ---
+
+    fn read_zip(&self, name: &str) -> CoreResult<Vec<u8>> {
+        let file = path_helper::open_read(&self.path)?;
+        let mut archive = ZipArchive::new(file).map_err(|err| {
+            ErrorType::ArchiveOpenError(FileSystemErrorData {
+                path: self.path.clone(),
+                error: err.to_string(),
+            })
+        })?;
+
+        let mut entry = archive.by_name(name).map_err(|err| {
+            ErrorType::ArchiveReadError(ErrorData {
+                error: format!("Entry '{}' not found: {}", name, err),
+            })
+        })?;
+
+        if entry.is_dir() {
+            return Err(ErrorType::ArchiveReadError(ErrorData {
+                error: format!("Entry '{}' is a directory", name),
+            }));
+        }
+
+        let mut buf = Vec::with_capacity(entry.size() as usize);
+        entry.read_to_end(&mut buf).map_err(|err| {
+            ErrorType::ArchiveReadError(ErrorData {
+                error: format!("Cannot read entry '{}': {}", name, err),
+            })
+        })?;
+        Ok(buf)
+    }
+
+    fn read_7z(&self, name: &str) -> CoreResult<Vec<u8>> {
+        let file = path_helper::open_read(&self.path)?;
+        let mut archive = ArchiveReader::new(file, Password::empty()).map_err(|err| {
+            ErrorType::ArchiveOpenError(FileSystemErrorData {
+                path: self.path.clone(),
+                error: err.to_string(),
+            })
+        })?;
+
+        let mut result: Option<Vec<u8>> = None;
+        let mut found = false;
+        archive
+            .for_each_entries(|entry, reader| {
+                if entry.name() == name {
+                    found = true;
+                    if entry.is_directory() {
+                        result = None;
+                        return Err(sevenz_rust2::Error::Other("entry is a directory".into()));
+                    }
+                    let mut buf = Vec::new();
+                    std::io::Read::read_to_end(reader, &mut buf)?;
+                    result = Some(buf);
+                    Ok(false) // stop iterating
+                } else {
+                    Ok(true)
+                }
+            })
+            .map_err(|err| {
+                ErrorType::ArchiveReadError(ErrorData {
+                    error: format!("Cannot read entry '{}': {}", name, err),
+                })
+            })?;
+
+        if !found {
+            return Err(ErrorType::ArchiveReadError(ErrorData {
+                error: format!("Entry '{}' not found in archive", name),
+            }));
+        }
+
+        result.ok_or_else(|| {
+            ErrorType::ArchiveReadError(ErrorData {
+                error: format!("Entry '{}' is a directory", name),
+            })
+        })
+    }
+
+    fn read_tar(&self, name: &str) -> CoreResult<Vec<u8>> {
+        let file = path_helper::open_read(&self.path)?;
+        let mut archive = Self::open_tar_reader(file, self.archive_type)?;
+
+        for entry in archive.entries().map_err(|err| {
+            ErrorType::ArchiveReadError(ErrorData {
+                error: err.to_string(),
+            })
+        })? {
+            let mut entry = entry.map_err(|err| {
+                ErrorType::ArchiveReadError(ErrorData {
+                    error: err.to_string(),
+                })
+            })?;
+            let entry_path = entry.path().map_err(|err| {
+                ErrorType::ArchiveReadError(ErrorData {
+                    error: err.to_string(),
+                })
+            })?;
+            if entry_path.to_string_lossy() == name {
+                let header = entry.header();
+                if header.entry_type() == tar::EntryType::Directory {
+                    return Err(ErrorType::ArchiveReadError(ErrorData {
+                        error: format!("Entry '{}' is a directory", name),
+                    }));
+                }
+                let mut buf = Vec::with_capacity(header.size().unwrap_or(0) as usize);
+                entry.read_to_end(&mut buf).map_err(|err| {
+                    ErrorType::ArchiveReadError(ErrorData {
+                        error: format!("Cannot read entry '{}': {}", name, err),
+                    })
+                })?;
+                return Ok(buf);
+            }
+        }
+
+        Err(ErrorType::ArchiveReadError(ErrorData {
+            error: format!("Entry '{}' not found in archive", name),
+        }))
+    }
+
+    fn read_zip_stream(&self, name: &str) -> CoreResult<Box<dyn Read>> {
+        let data = self.read_zip(name)?;
+        Ok(Box::new(std::io::Cursor::new(data)))
+    }
+
+    fn read_7z_stream(&self, name: &str) -> CoreResult<Box<dyn Read>> {
+        let data = self.read_7z(name)?;
+        Ok(Box::new(std::io::Cursor::new(data)))
+    }
+
+    fn read_tar_stream(&self, name: &str) -> CoreResult<Box<dyn Read>> {
+        let data = self.read_tar(name)?;
+        Ok(Box::new(std::io::Cursor::new(data)))
     }
 
     // --- Per-format single-file extractors ---

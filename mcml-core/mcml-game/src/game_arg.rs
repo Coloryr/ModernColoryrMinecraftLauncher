@@ -215,7 +215,7 @@ fn make_v2_jvm_arg(game: &GameArgObj) -> Vec<String> {
 /// 创建加载器Jvm参数
 /// - `v2`: 是否为V2版本
 /// - `obj`: 游戏实例
-pub async fn make_loader_jvm_arg(v2: bool, obj: &InstanceSettingObj) -> Vec<String> {
+async fn make_loader_jvm_arg(v2: bool, obj: &InstanceSettingObj) -> Vec<String> {
     match obj.loader {
         LoaderType::Normal => Vec::new(),
         LoaderType::Forge | LoaderType::NeoForge => {
@@ -723,21 +723,7 @@ impl InstanceSettingObj {
             .replace(names::ARG_JAVA_LOCAL, &jvm.to_string_lossy())
             .replace(names::ARG_JAVA_ARG, &builder::build_vec_string(arg))
     }
-}
 
-/// 辅助函数：处理运行库项
-fn do_lib_item(item: &FileItemObj, game_libs: &mut Vec<FileItemObj>) -> CoreResult<()> {
-    if !item.file.as_os_str().is_empty() {
-        game_libs.push(item.clone());
-    }
-    if let LaterRun::UnpackNative(native) = &item.later {
-        let reader = path_helper::open_read(&item.file)?;
-        mcml_downloader::later_tasks::unpack_native(native, reader)?;
-    }
-    Ok(())
-}
-
-impl InstanceSettingObj {
     /// 创建常规启动内容
     async fn make_normal_arg(
         &self,
@@ -1080,4 +1066,16 @@ impl InstanceSettingObj {
 
         Ok(obj)
     }
+}
+
+/// 辅助函数：处理运行库项
+fn do_lib_item(item: &FileItemObj, game_libs: &mut Vec<FileItemObj>) -> CoreResult<()> {
+    if !item.file.as_os_str().is_empty() {
+        game_libs.push(item.clone());
+    }
+    if let LaterRun::UnpackNative(native) = &item.later {
+        let reader = path_helper::open_read(&item.file)?;
+        mcml_downloader::later_tasks::unpack_native(native, reader)?;
+    }
+    Ok(())
 }

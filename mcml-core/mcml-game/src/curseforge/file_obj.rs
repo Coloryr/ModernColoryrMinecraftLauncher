@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::curseforge::curseforge_list_obj::CurseForgeListPaginationObj;
+use crate::curseforge::list_obj::CurseForgeListPaginationObj;
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]

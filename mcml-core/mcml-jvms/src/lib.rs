@@ -2,7 +2,7 @@ use std::{
     collections::{HashMap, HashSet},
     fs,
     path::{Path, PathBuf},
-    sync::{Arc, LazyLock, Mutex, OnceLock, RwLock},
+    sync::{Arc, LazyLock, OnceLock, RwLock},
 };
 
 use mcml_base::{ArchEnum, events::EventHandler};

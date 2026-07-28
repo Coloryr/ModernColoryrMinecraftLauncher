@@ -50,8 +50,11 @@ pub mod gui_hook;
 pub mod launcher;
 pub mod launcher_path;
 pub mod loader;
+pub mod modpack;
 pub mod mojang;
 pub mod path_watch;
+
+type GameInstance = Arc<RwLock<InstanceSettingObj>>;
 
 /// 实例结束运行事件
 pub struct InstanceExit {
@@ -76,7 +79,7 @@ pub struct InstanceLog {
 }
 
 pub struct InstanceData {
-    pub instance: InstanceSettingObj,
+    pub instance: GameInstance,
     pub online: HashMap<String, FileOnlineInfoObj>,
     pub custom: HashMap<String, CustomGameArgObj>,
 }
@@ -93,7 +96,7 @@ static GROUPS: LazyLock<RwLock<HashMap<String, Vec<Uuid>>>> = LazyLock::new(|| {
     RwLock::new(group)
 });
 
-static INSTANCES: LazyLock<RwLock<HashMap<Uuid, Arc<InstanceSettingObj>>>> =
+static INSTANCES: LazyLock<RwLock<HashMap<Uuid, GameInstance>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 
 static EXIT_EVENT: LazyLock<EventArgHandler<InstanceExit>> =
@@ -155,17 +158,31 @@ pub fn init<P: AsRef<Path>>(dir: P) -> CoreResult<()> {
 
     thread::spawn(|| {
         loop {
-            let mut write = HANDELS.write().unwrap();
+            let to_remove: Vec<(Uuid, i32)> = {
+                let handels = HANDELS.read().unwrap();
+                handels
+                    .iter()
+                    .filter_map(|(k, v)| {
+                        v.tick();
+                        if v.is_exit() {
+                            Some((*k, v.code()))
+                        } else {
+                            None
+                        }
+                    })
+                    .collect()
+            };
 
-            let removed: Vec<_> = write
-                .extract_if(|_key, value| {
-                    value.tick();
-                    value.is_exit()
-                })
-                .collect();
-
-            for (uuid, handel) in removed {
-                invoke_exit(uuid, handel.code());
+            if !to_remove.is_empty() {
+                {
+                    let mut handels = HANDELS.write().unwrap();
+                    for (uuid, _) in &to_remove {
+                        handels.remove(uuid);
+                    }
+                }
+                for (uuid, code) in &to_remove {
+                    invoke_exit(*uuid, *code);
+                }
             }
 
             thread::sleep(Duration::from_secs(1));
@@ -187,7 +204,7 @@ pub fn load() -> CoreResult<()> {
 }
 
 /// 获取所有实例
-pub fn get_instances() -> Vec<Arc<InstanceSettingObj>> {
+pub fn get_instances() -> Vec<GameInstance> {
     let mut list = Vec::new();
 
     for (_, value) in INSTANCES.read().unwrap().iter() {
@@ -198,7 +215,7 @@ pub fn get_instances() -> Vec<Arc<InstanceSettingObj>> {
 }
 
 /// 从uuid获取实例
-pub fn get_instance(uuid: &Uuid) -> Option<Arc<InstanceSettingObj>> {
+pub fn get_instance(uuid: &Uuid) -> Option<GameInstance> {
     let list = INSTANCES.read().unwrap();
 
     Some(list.get(uuid)?.clone())
@@ -217,7 +234,7 @@ pub fn get_group_keys() -> Vec<String> {
 
 /// 从分组名字获取对应的实例
 /// - `key`: 分组名字
-pub fn get_group(key: &str) -> Vec<Arc<InstanceSettingObj>> {
+pub fn get_group(key: &str) -> Vec<GameInstance> {
     let mut list = Vec::new();
 
     let group = GROUPS.read().unwrap();
@@ -263,53 +280,64 @@ pub fn remove_group(name: &str) -> bool {
 /// - `list`: 需要移动的列表
 /// - `new`: 新分组名字
 pub fn move_group(list: Vec<Uuid>, new: Option<String>) {
-    let mut groups = GROUPS.write().unwrap();
-    let mut instances = INSTANCES.write().unwrap();
+    let mut changes: Vec<(Uuid, Option<String>)> = Vec::new();
 
-    for item in list.iter() {
-        let game = match instances.get_mut(item) {
-            Some(game) => Arc::make_mut(game),
-            None => continue,
-        };
+    {
+        let mut groups = GROUPS.write().unwrap();
+        let instances = INSTANCES.read().unwrap();
 
-        if let Some(name) = &game.group {
-            let group = groups.get_mut(name);
-            if let Some(group) = group {
+        for item in list.iter() {
+            let game_arc = match instances.get(item) {
+                Some(game) => game.clone(),
+                None => continue,
+            };
+
+            let mut game = game_arc.write().unwrap();
+
+            if let Some(name) = &game.group {
+                let group = groups.get_mut(name);
+                if let Some(group) = group {
+                    group.retain(|g| g != &game.uuid);
+                }
+            } else {
+                let group = groups.get_mut(names::DEFAULT_GROUP).unwrap();
                 group.retain(|g| g != &game.uuid);
             }
-        } else {
-            let group = groups.get_mut(names::DEFAULT_GROUP).unwrap();
-            group.retain(|g| g != &game.uuid);
-        }
 
-        match new {
-            Some(ref name) => {
-                if !groups.contains_key(name) {
-                    groups.insert(name.to_string(), Vec::new());
+            match new {
+                Some(ref name) => {
+                    if !groups.contains_key(name) {
+                        groups.insert(name.to_string(), Vec::new());
+                    }
+                    let group = groups.get_mut(name).unwrap();
+                    group.push(game.uuid);
                 }
-                let group = groups.get_mut(name).unwrap();
-                group.push(game.uuid);
+                None => {
+                    let group = groups.get_mut(names::DEFAULT_GROUP).unwrap();
+                    group.push(game.uuid);
+                }
             }
-            None => {
-                let group = groups.get_mut(names::DEFAULT_GROUP).unwrap();
-                group.push(game.uuid);
-            }
+
+            game.group = new.clone();
+            changes.push((game.uuid, game.group.clone()));
         }
+    }
 
-        game.group = new.clone();
-        game.save();
-
-        invoke_change(InstanceChange::MoveGroup(game.uuid, game.group.clone()))
+    for (uuid, group) in changes {
+        if let Some(instance) = get_instance(&uuid) {
+            instance.write().unwrap().save();
+        }
+        invoke_change(InstanceChange::MoveGroup(uuid, group));
     }
 }
 
 /// 从实例名字获取实例
 /// - `name`: 实例名字
-pub fn get_instance_by_name(name: &str) -> Option<Arc<InstanceSettingObj>> {
+pub fn get_instance_by_name(name: &str) -> Option<GameInstance> {
     let list = INSTANCES.read().unwrap();
     let temp = list
         .iter()
-        .filter(|(_, value)| value.name.eq_ignore_ascii_case(name))
+        .filter(|(_, value)| value.read().unwrap().name.eq_ignore_ascii_case(name))
         .next()?;
 
     Some(temp.1.clone())
@@ -321,54 +349,77 @@ pub fn have_instance_name(name: &str) -> bool {
     let list = INSTANCES.read().unwrap();
     let temp = list
         .iter()
-        .filter(|(_, value)| value.name.eq_ignore_ascii_case(name))
+        .filter(|(_, value)| value.read().unwrap().name.eq_ignore_ascii_case(name))
         .next();
     !temp.is_none()
 }
 
 /// 将实例添加到分组中
-fn add_to_group(mut obj: InstanceSettingObj) -> Arc<InstanceSettingObj> {
+fn add_to_group(mut obj: InstanceSettingObj) -> GameInstance {
     while obj.uuid.is_nil() || matches!(get_instance(&obj.uuid), Some(_)) {
         obj.uuid = Uuid::new_v4();
     }
 
     obj.save();
-    let game = Arc::new(obj);
-    INSTANCES.write().unwrap().insert(game.uuid, game.clone());
-    if let Some(group) = &game.group {
-        let mut groups = GROUPS.write().unwrap();
-        if let Some(group) = groups.get_mut(group) {
-            group.push(game.uuid);
-        } else {
-            let mut list = Vec::new();
-            list.push(game.uuid);
-            groups.insert(group.clone(), list);
+    let key = obj.uuid.clone();
+    let group = obj.group.clone();
+    let game: Arc<RwLock<InstanceSettingObj>> = Arc::new(RwLock::new(obj));
+
+    let mut groups = GROUPS.write().unwrap();
+    if let Some(ref g) = group {
+        if !groups.contains_key(g) {
+            groups.insert(g.clone(), Vec::new());
         }
     } else {
-        let mut groups = GROUPS.write().unwrap();
-        if let Some(group) = groups.get_mut(names::DEFAULT_GROUP) {
-            group.push(game.uuid);
+        if !groups.contains_key(names::DEFAULT_GROUP) {
+            groups.insert(names::DEFAULT_GROUP.to_string(), Vec::new());
         }
     }
 
-    invoke_change(InstanceChange::AddInstance(game.uuid));
+    let mut instances = INSTANCES.write().unwrap();
+    instances.insert(key, game.clone());
 
-    game.clone()
-}
-
-/// 将实例从分组中删除
-fn remove_from_group(uuid: &Uuid) {
-    let mut group = GROUPS.write().unwrap();
-    for (_, value) in group.iter_mut() {
-        value.retain(|item| item.eq(uuid));
+    // ---- 更新分组列表 ----
+    if let Some(ref g) = group {
+        if let Some(list) = groups.get_mut(g) {
+            list.push(key);
+        }
+    } else {
+        if let Some(list) = groups.get_mut(names::DEFAULT_GROUP) {
+            list.push(key);
+        }
     }
 
-    group.retain(|_, value| value.is_empty());
+    drop(groups);
+    drop(instances);
 
-    let mut games = INSTANCES.write().unwrap();
-    games.remove(uuid);
+    invoke_change(InstanceChange::AddInstance(key));
+    game
+}
 
-    invoke_change(InstanceChange::RemoveInstance(uuid.clone()));
+/// 删除实例
+pub fn delete_instance(uuid: &Uuid) -> CoreResult<()> {
+    let instance_opt = {
+        let mut groups = GROUPS.write().unwrap();
+        let mut instances = INSTANCES.write().unwrap();
+
+        // 从所有分组中移除 uuid
+        for (_, list) in groups.iter_mut() {
+            list.retain(|&u| u != *uuid);
+        }
+        groups.retain(|_, list| !list.is_empty());
+        instances.remove(uuid)
+    };
+
+    if let Some(instance) = instance_opt {
+        invoke_change(InstanceChange::RemoveInstance(*uuid));
+        instance.read().unwrap().delete_files()?;
+        Ok(())
+    } else {
+        Err(ErrorType::ArgEmpty(ArgEmptyData {
+            arg: "uuid".to_string(),
+        }))
+    }
 }
 
 /// 添加运行日志
@@ -423,8 +474,8 @@ impl InstanceSettingObj {
     /// 创建实例
     pub async fn create_instance(
         mut self,
-        gui: &Option<impl IAddInstanceGui>,
-    ) -> CoreResult<Arc<InstanceSettingObj>> {
+        gui: &Option<Arc<dyn IAddInstanceGui>>,
+    ) -> CoreResult<GameInstance> {
         path_watch::stop_watch();
 
         let old = get_instance_by_name(&self.name);
@@ -439,8 +490,8 @@ impl InstanceSettingObj {
             let mut a = 1;
             let mut name = format!("{}{a}", self.name);
             while have_instance_name(&name) {
-                name = format!("{}{a}", self.name);
                 a += 1;
+                name = format!("{}{a}", self.name);
             }
 
             self.name = name;
@@ -453,7 +504,12 @@ impl InstanceSettingObj {
         }
 
         if let Some(instance) = old {
-            instance.remove()?;
+            let uuid = {
+                let r = instance.read().unwrap();
+                r.uuid
+            };
+
+            delete_instance(&uuid)?;
         }
 
         self.dir = path_helper::replace_path_name(&self.name);
@@ -485,10 +541,8 @@ impl InstanceSettingObj {
         Ok(add_to_group(self))
     }
 
-    /// 删除实例
-    pub fn remove(&self) -> CoreResult<()> {
-        remove_from_group(&self.uuid);
-
+    /// 删除实例文件
+    pub fn delete_files(&self) -> CoreResult<()> {
         path_helper::move_to_trash(self.get_base_path())
     }
 
@@ -497,8 +551,8 @@ impl InstanceSettingObj {
     pub async fn copy_to_other(
         &self,
         name: &str,
-        gui: &Option<impl IAddInstanceGui>,
-    ) -> CoreResult<Arc<InstanceSettingObj>> {
+        gui: &Option<Arc<dyn IAddInstanceGui>>,
+    ) -> CoreResult<GameInstance> {
         let mut instance = self.clone();
         instance.name = name.to_string();
         let instance = instance.create_instance(gui).await?;
@@ -506,10 +560,11 @@ impl InstanceSettingObj {
         let online = self.read_online_info();
         let custom = self.read_custom_json();
 
-        instance.save_custom_json(&custom)?;
-        instance.save_online_info(&online);
+        let read = instance.read().unwrap();
+        read.save_custom_json(&custom)?;
+        read.save_online_info(&online);
 
-        Ok(instance)
+        Ok(instance.clone())
     }
 
     /// 更新在线文件信息
@@ -524,8 +579,9 @@ impl InstanceSettingObj {
                 if let Some(ext) = file.extension()
                     && ext.eq_ignore_ascii_case(names::JAR_EXT)
                 {
-                    let file = file.join(names::DISABLED_DOT_EXT);
-                    if file.exists() {
+                    let disabled_file =
+                        PathBuf::from(format!("{}{}", file.display(), names::DISABLED_DOT_EXT));
+                    if disabled_file.exists() {
                         return false;
                     }
                 }
@@ -571,6 +627,7 @@ impl InstanceSettingObj {
                     if let Some(gui) = gui {
                         gui.update(index, list.len());
                     }
+                    continue;
                 }
             }
 
