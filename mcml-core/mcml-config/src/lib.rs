@@ -3,7 +3,6 @@ pub mod config_obj;
 pub mod config_save;
 
 use std::{
-    fs::File,
     path::{Path, PathBuf},
     sync::{OnceLock, RwLock, RwLockReadGuard, RwLockWriteGuard},
 };

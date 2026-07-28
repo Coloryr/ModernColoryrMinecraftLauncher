@@ -8,7 +8,7 @@ use std::time::SystemTime;
 #[cfg(not(windows))]
 use std::time::UNIX_EPOCH;
 
-use std::fs::{self, DirEntry};
+use std::fs::{self};
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 

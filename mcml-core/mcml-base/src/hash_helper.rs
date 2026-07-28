@@ -24,7 +24,8 @@ fn bytes_to_hex(bytes: &[u8]) -> String {
     bytes.iter().map(|b| format!("{:02x}", b)).collect()
 }
 
-fn create_hasher(hash_type: HashType) -> Box<dyn DynDigest> {
+/// 创建哈希
+fn create_hasher(hash_type: HashType) -> Box<dyn DynDigest + Send> {
     match hash_type {
         HashType::Md5 => Box::new(Md5::new()),
         HashType::Sha1 => Box::new(Sha1::new()),

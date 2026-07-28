@@ -220,7 +220,7 @@ impl InstanceHandle {
         }
     }
 
-    pub fn tick(&mut self) {
+    pub fn tick(&self) {
         // 等待进程退出线程
         let process_clone = self.process.clone();
         let exit_clone = self.is_exit.clone();

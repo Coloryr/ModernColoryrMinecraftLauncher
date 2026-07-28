@@ -70,6 +70,11 @@ pub fn init<P: AsRef<Path>>(dir: P) -> CoreResult<()> {
     Ok(())
 }
 
+/// 获取下载文件夹
+pub fn get_download_path() -> PathBuf {
+    DOWNLOAD_PATH.get().unwrap().clone()
+}
+
 /// 生成一个临时文件
 pub fn gen_temp_file() -> PathBuf {
     loop {

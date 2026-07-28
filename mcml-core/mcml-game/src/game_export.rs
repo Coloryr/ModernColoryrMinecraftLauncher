@@ -8,7 +8,12 @@ use mcml_base::{
 use mcml_names::{i18_items::error_type::CoreResult, names};
 
 use crate::{
-    curseforge::{curseforge_list_obj::CurseForgeListDataObj, curseforge_pack_obj::{CurseForgePackObj, FilesObj, MinecraftObj, ModLoadersObj}}, launcher::{file_online_info_obj::FileOnlineInfoObj, instance_setting_obj::InstanceSettingObj}, loader::LoaderType,
+    curseforge::{
+        list_obj::CurseForgeListDataObj,
+        pack_obj::{CurseForgePackObj, FilesObj, MinecraftObj, ModLoadersObj},
+    },
+    launcher::{file_online_info_obj::FileOnlineInfoObj, instance_setting_obj::InstanceSettingObj},
+    loader::LoaderType,
 };
 
 /// 导出压缩包类型
@@ -77,8 +82,7 @@ impl InstanceSettingObj {
 fn get_author_string(author: &Vec<CurseForgeListDataObj>) -> String {
     if author.is_empty() {
         String::new()
-    }
-    else {
+    } else {
         let mut data = String::new();
 
         for item in author.iter() {
@@ -159,8 +163,6 @@ fn curseforge(game: &InstanceSettingObj, data: ExportArg) -> CoreResult<()> {
             });
         }
     }
-
-    
 
     Ok(())
 }
