@@ -1,3 +1,4 @@
+/// 通用事件
 use std::{
     collections::HashMap,
     sync::{
@@ -6,12 +7,14 @@ use std::{
     },
 };
 
+/// 带参数通用事件
 pub struct EventArgHandler<E> {
     handlers: RwLock<HashMap<u64, Box<dyn Fn(&E) + Send + Sync>>>,
     index: AtomicU64,
 }
 
 impl<E> EventArgHandler<E> {
+    /// 创建事件处理器
     pub fn new() -> Self {
         Self {
             handlers: RwLock::new(HashMap::new()),
@@ -19,6 +22,9 @@ impl<E> EventArgHandler<E> {
         }
     }
 
+    /// 添加事件处理器
+    ///
+    /// - `handler`: 回调函数
     pub fn add_handler<F>(&self, handler: F) -> u64
     where
         F: Fn(&E) + Send + Sync + 'static,
@@ -29,10 +35,16 @@ impl<E> EventArgHandler<E> {
         id
     }
 
+    /// 移除事件处理器
+    ///
+    /// - `id`: 处理器编号
     pub fn remove_handel(&self, id: u64) {
         self.handlers.write().unwrap().remove(&id);
     }
 
+    /// 触发事件
+    ///
+    /// - `event`: 事件参数
     pub fn emit(&self, event: E) {
         for (_, handler) in self.handlers.read().unwrap().iter() {
             handler(&event);
@@ -44,12 +56,14 @@ impl<E> EventArgHandler<E> {
     }
 }
 
+/// 不带参数通用事件
 pub struct EventHandler {
     handlers: RwLock<HashMap<u64, Box<dyn Fn() + Send + Sync>>>,
     index: AtomicU64,
 }
 
 impl EventHandler {
+    /// 创建事件处理器
     pub fn new() -> Self {
         Self {
             handlers: RwLock::new(HashMap::new()),
@@ -57,6 +71,9 @@ impl EventHandler {
         }
     }
 
+    /// 添加事件处理器
+    ///
+    /// - `handler`: 回调函数
     pub fn add_handler<F>(&self, handler: F) -> u64
     where
         F: Fn() + Send + Sync + 'static,
@@ -67,10 +84,14 @@ impl EventHandler {
         id
     }
 
+    /// 移除事件处理器
+    ///
+    /// - `id`: 处理器编号
     pub fn remove_handle(&self, id: u64) {
         self.handlers.write().unwrap().remove(&id);
     }
 
+    /// 触发事件
     pub fn emit(&self) {
         for (_, handler) in self.handlers.read().unwrap().iter() {
             handler();

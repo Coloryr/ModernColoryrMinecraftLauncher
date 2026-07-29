@@ -59,7 +59,13 @@ pub fn start<P: AsRef<Path>>(local: P) {
 
     thread::Builder::new()
         .name(i18::get_thread(ThreadType::LogThread))
-        .spawn(|| run())
+        .spawn(|| {
+            while IS_RUN.load(Ordering::Acquire) {
+                SEM.get().unwrap().down();
+                save();
+            }
+            save();
+        })
         .unwrap();
 }
 
@@ -90,16 +96,9 @@ fn save() {
     }
 }
 
-fn run() {
-    while IS_RUN.load(Ordering::Acquire) {
-        SEM.get().unwrap().down();
-
-        save();
-    }
-
-    save();
-}
-
+/// 信息日志
+/// 
+/// - `text`: 日志内容
 pub fn info(text: String) {
     QUEUE
         .write()
@@ -108,6 +107,9 @@ pub fn info(text: String) {
     SEM.get().unwrap().up();
 }
 
+/// 信息日志
+/// 
+/// - `info`: 日志类型
 pub fn info_type(info: InfoType) {
     QUEUE
         .write()
@@ -116,6 +118,9 @@ pub fn info_type(info: InfoType) {
     SEM.get().unwrap().up();
 }
 
+/// 警告日志
+/// 
+/// - `text`: 日志内容
 pub fn warn(text: String) {
     QUEUE
         .write()
@@ -124,6 +129,9 @@ pub fn warn(text: String) {
     SEM.get().unwrap().up();
 }
 
+/// 错误日志
+/// 
+/// - `text`: 日志内容
 pub fn error(text: String) {
     QUEUE
         .write()
@@ -132,6 +140,9 @@ pub fn error(text: String) {
     SEM.get().unwrap().up();
 }
 
+/// 错误日志
+/// 
+/// - `info`: 日志类型
 pub fn error_type(error: ErrorType) {
     QUEUE
         .write()
@@ -140,6 +151,9 @@ pub fn error_type(error: ErrorType) {
     SEM.get().unwrap().up();
 }
 
+/// 崩溃日志
+/// 
+/// - `text`: 日志内容
 pub fn failt(text: String) {
     QUEUE
         .write()

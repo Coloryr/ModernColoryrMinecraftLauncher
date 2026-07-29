@@ -1,10 +1,10 @@
 use std::{env, path::Path, sync::Arc};
 
-use mcml_downloader::{DownloadGui, DownloadTaskState, download_item::DownloadItem};
+use mcml_downloader::{IDownloadGui, DownloadTaskState, download_item::DownloadItem};
 
 struct GuiRun {}
 
-impl DownloadGui for GuiRun {
+impl IDownloadGui for GuiRun {
     fn update(&self, thread: u32, file: &Arc<DownloadItem>) {
         // let pro = file.progress() as u64;
         // if pro > 0 && pro % 10 == 0 {

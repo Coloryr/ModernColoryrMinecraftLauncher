@@ -9,7 +9,7 @@ use std::{
 
 use chrono::{Datelike, Local, Timelike};
 use mcml_base::{
-    archives::{self, ArchiveGui, ArchiveType, BaseArchive},
+    archives::{IArchiveGui, ArchiveType, BaseArchive},
     path_helper,
     serialize_tools::{self, MiniJsonObj},
 };
@@ -31,7 +31,9 @@ use crate::launcher::instance_setting_obj::InstanceSettingObj;
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(default)]
 pub struct SaveBackupObj {
+    /// 存档目录
     pub dir: String,
+    /// 备份文件列表
     pub back: Vec<String>,
 }
 
@@ -102,6 +104,9 @@ impl Default for SaveObj {
     }
 }
 
+/// 读取存档文件
+///
+/// - `stream`: 存档文件流
 fn read_save<R: Read + Seek>(stream: &mut R) -> CoreResult<SaveObj> {
     let nbt_file = NbtFile::read(stream)?;
     let mut obj = SaveObj::default();
@@ -196,7 +201,7 @@ impl InstanceSettingObj {
         &self,
         info: &SaveBackupObj,
         file: &str,
-        gui: Option<Arc<dyn ArchiveGui>>,
+        gui: Option<Arc<dyn IArchiveGui>>,
     ) -> CoreResult<()> {
         let dir = self.get_backup_path();
         let path = dir.join(info.dir.clone());
@@ -206,7 +211,7 @@ impl InstanceSettingObj {
 
         let backup_file = dir.join(file);
 
-        archives::decompress(ArchiveType::Zip, &backup_file, &path, gui)
+        BaseArchive::decompress(ArchiveType::Zip, &backup_file, &path, gui)
     }
 
     /// 获取备份文件列表
@@ -278,23 +283,24 @@ impl SaveObj {
         &self,
         path: P,
         archive_type: ArchiveType,
-        gui: Option<Arc<dyn ArchiveGui>>,
+        gui: Option<Arc<dyn IArchiveGui>>,
     ) -> CoreResult<()> {
-        archives::compress(
+        BaseArchive::compress(
             archive_type,
             path.as_ref(),
             self.path.as_ref(),
             None::<&Path>,
             &None,
             gui,
-        )
+        )?;
+        Ok(())
     }
 
     /// 备份存档
     pub fn backup(
         &self,
         instance: &Arc<InstanceSettingObj>,
-        gui: Option<Arc<dyn ArchiveGui>>,
+        gui: Option<Arc<dyn IArchiveGui>>,
     ) -> CoreResult<()> {
         let path = instance.get_backup_path();
         path_helper::create_dir_all(&path)?;
@@ -312,7 +318,7 @@ impl SaveObj {
         );
         let file = path.join(&name);
 
-        archives::compress(ArchiveType::Zip, &file, &self.path, None, &None, gui)?;
+        BaseArchive::compress(ArchiveType::Zip, &file, &self.path, None, &None, gui)?;
 
         let mut info = instance.get_backups()?;
         if let Some(obj) = info.get_mut(&self.level_name) {
@@ -339,7 +345,7 @@ impl SaveObj {
         Ok(())
     }
 
-    /// 存储
+    /// 保存 NBT 数据到文件
     fn save_nbt(&self) -> CoreResult<()> {
         let file = self.get_level_file();
         let mut stream = path_helper::open_read(file)?;
@@ -602,6 +608,12 @@ impl SaveObj {
     }
 }
 
+/// 读取数据包信息
+///
+/// - `path`: 数据包路径
+/// - `ens`: 已启用的数据包列表
+/// - `dis`: 已禁用的数据包列表
+/// - `data`: 数据包元数据
 fn read_pack(
     path: PathBuf,
     ens: Option<&NbtList>,

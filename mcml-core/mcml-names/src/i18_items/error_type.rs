@@ -66,8 +66,10 @@ pub struct ArgEmptyData {
     pub arg: String,
 }
 
+/// mcml执行结果
 pub type CoreResult<T> = result::Result<T, ErrorType>;
 
+/// mcml错误类型
 #[derive(Clone, Debug)]
 pub enum ErrorType {
     /// 配置文件保存时出错

@@ -14,6 +14,7 @@ pub struct AgentObj {
 
 impl AgentObj {
     /// 创建启动器信息
+    /// 
     /// - `use_minecraft`: 是否为原版头
     pub fn new(use_minecraft: bool) -> Self {
         AgentObj {

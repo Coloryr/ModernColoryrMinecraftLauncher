@@ -4,8 +4,6 @@ use std::{
 
 use mcml_names::{i18_items::error_type::CoreResult, names};
 
-use crate::archives::{r7z_runner::R7zProcess, tar_runner::TarProcess, zip_runner::ZipProcess};
-
 pub mod base_archive;
 pub mod r7z_runner;
 pub mod tar_runner;
@@ -46,13 +44,17 @@ impl TarMode {
 }
 
 pub(crate) struct ArchiveProcess {
-    gui: Option<Arc<dyn ArchiveGui>>,
+    /// 进度回调
+    gui: Option<Arc<dyn IArchiveGui>>,
+    /// 总文件数
     size: AtomicUsize,
+    /// 当前处理数
     now: AtomicUsize,
 }
 
 impl ArchiveProcess {
-    pub fn new(gui: Option<Arc<dyn ArchiveGui>>) -> Self {
+    /// 创建进度追踪器
+    pub fn new(gui: Option<Arc<dyn IArchiveGui>>) -> Self {
         Self {
             gui,
             size: AtomicUsize::new(0),
@@ -60,6 +62,7 @@ impl ArchiveProcess {
         }
     }
 
+    /// 设置总文件数
     pub fn set_count(&self, count: usize) {
         self.size.store(count, Ordering::SeqCst);
         if let Some(gui) = &self.gui {
@@ -67,6 +70,7 @@ impl ArchiveProcess {
         }
     }
 
+    /// 更新当前处理进度
     pub fn add_now(&self, path: &PathBuf) {
         let now = self.now.fetch_add(1, Ordering::SeqCst) + 1;
         if let Some(gui) = &self.gui {
@@ -76,7 +80,9 @@ impl ArchiveProcess {
     }
 }
 
+/// 压缩包执行器
 pub(crate) trait ArchiveRun: Send + Sync {
+    /// 压缩
     fn compress(
         &self,
         archive_file: &Path,
@@ -84,18 +90,29 @@ pub(crate) trait ArchiveRun: Send + Sync {
         root_path: Option<&Path>,
         filter: &Option<Vec<String>>,
     ) -> CoreResult<()>;
+    /// 解压
     fn decompress(&self, archive_file: &Path, output_dir: &Path) -> CoreResult<()>;
 }
 
-pub trait ArchiveGui: Send + Sync {
+/// 压缩包处理显示回调
+pub trait IArchiveGui: Send + Sync {
+    /// 开始处理压缩包
+    /// 
+    /// - `total`: 总计需要处理的数量
     fn start(&self, total: usize);
+    /// 更新压缩包处理信息
+    /// 
+    /// - `filename`: 当前文件名
+    /// - `current`: 当前处理数量
     fn update(&self, filename: Option<String>, current: usize);
 }
 
+/// 归一化路径分隔符为 `/`
 fn normalize_path(path: &Path) -> String {
     path.to_string_lossy().to_string().replace('\\', "/") // Windows \ 转换为 /
 }
 
+/// 检查路径是否匹配任一排除规则
 fn should_exclude(path: &Path, patterns: &[String]) -> bool {
     let normalized_path = normalize_path(path);
     patterns.iter().any(|pattern| {
@@ -104,63 +121,25 @@ fn should_exclude(path: &Path, patterns: &[String]) -> bool {
     })
 }
 
-/// 压缩文件
-/// - `archive_type`: 压缩包类型
-/// - `archive_file`: 压缩包位置
-/// - `pack_dir`: 需要压缩的位置
-/// - `root_path`: 相对路径
-/// - `filter`: 文件过滤
-/// - `gui`: 显示回调
+/// 压缩文件（委托给 [`BaseArchive::compress`]，忽略返回的句柄）。
 pub fn compress<P: AsRef<Path>>(
     archive_type: ArchiveType,
     archive_file: P,
     pack_dir: P,
     root_path: Option<P>,
     filter: &Option<Vec<String>>,
-    gui: Option<Arc<dyn ArchiveGui>>,
+    gui: Option<Arc<dyn IArchiveGui>>,
 ) -> CoreResult<()> {
-    let precess: Box<dyn ArchiveRun + Send + Sync> = match archive_type {
-        ArchiveType::Zip => Box::new(ZipProcess::new(ArchiveProcess::new(gui))),
-        ArchiveType::R7Z => Box::new(R7zProcess::new(ArchiveProcess::new(gui))),
-        ArchiveType::Tar => Box::new(TarProcess::new(ArchiveProcess::new(gui), None)),
-        ArchiveType::TarGz => {
-            Box::new(TarProcess::new(ArchiveProcess::new(gui), Some(TarMode::Gz)))
-        }
-        ArchiveType::TarXz => {
-            Box::new(TarProcess::new(ArchiveProcess::new(gui), Some(TarMode::Xz)))
-        }
-    };
-
-    precess.compress(
-        archive_file.as_ref(),
-        pack_dir.as_ref(),
-        root_path.as_ref().map(|p| p.as_ref()),
-        filter,
-    )
+    BaseArchive::compress(archive_type, archive_file, pack_dir, root_path, filter, gui)?;
+    Ok(())
 }
 
-/// 压缩文件
-/// - `archive_type`: 压缩包类型
-/// - `archive_file`: 压缩包位置
-/// - `output_dir`: 解压路径
-/// - `gui`: 显示回调
+/// 解压文件（委托给 [`BaseArchive::decompress`]）。
 pub fn decompress<P: AsRef<Path>>(
     archive_type: ArchiveType,
     archive_file: P,
     output_dir: P,
-    gui: Option<Arc<dyn ArchiveGui>>,
+    gui: Option<Arc<dyn IArchiveGui>>,
 ) -> CoreResult<()> {
-    let precess: Box<dyn ArchiveRun + Send + Sync> = match archive_type {
-        ArchiveType::Zip => Box::new(ZipProcess::new(ArchiveProcess::new(gui))),
-        ArchiveType::R7Z => Box::new(R7zProcess::new(ArchiveProcess::new(gui))),
-        ArchiveType::Tar => Box::new(TarProcess::new(ArchiveProcess::new(gui), None)),
-        ArchiveType::TarGz => {
-            Box::new(TarProcess::new(ArchiveProcess::new(gui), Some(TarMode::Gz)))
-        }
-        ArchiveType::TarXz => {
-            Box::new(TarProcess::new(ArchiveProcess::new(gui), Some(TarMode::Xz)))
-        }
-    };
-
-    precess.decompress(archive_file.as_ref(), output_dir.as_ref())
+    BaseArchive::decompress(archive_type, archive_file, output_dir, gui)
 }

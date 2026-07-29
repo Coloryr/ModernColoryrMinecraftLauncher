@@ -9,14 +9,19 @@ use crate::download_item::DownloadItem;
 
 /// 下载任务
 pub(crate) struct DownloadTask {
+    /// 任务编号
     pub id: u64,
-    /// 取消
+    /// 取消令牌
     cancel: CancellationToken,
     /// 下载项目列表
     items: SegQueue<DownloadItem>,
+    /// 任务数量
     pub total_size: usize,
+    /// 完成数量
     pub completed_count: AtomicUsize,
+    /// 失败数量
     pub failed_count: AtomicUsize,
+    /// 任务等待器
     sem: Semaphore,
 }
 
@@ -43,6 +48,7 @@ impl DownloadTask {
         }
     }
 
+    /// 检测是否完成
     fn check_done(&self) {
         crate::update_task(self.id, self.progress());
         if self.items.is_empty() {
@@ -51,11 +57,13 @@ impl DownloadTask {
         }
     }
 
+    /// 完成了一个项目
     pub fn done(&self) {
         self.completed_count.fetch_add(1, Ordering::SeqCst);
         self.check_done();
     }
 
+    /// 失败了一个项目
     pub fn fail(&self) {
         self.failed_count.fetch_add(1, Ordering::SeqCst);
         self.check_done();

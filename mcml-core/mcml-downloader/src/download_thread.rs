@@ -11,7 +11,10 @@ use std::{
 };
 
 use mcml_base::{
-    archives::{self, ArchiveType}, file_item::{FileHash, LaterRun}, hash_helper::{self, HashType}, path_helper,
+    archives::{ArchiveType, BaseArchive},
+    file_item::{FileHash, LaterRun},
+    hash_helper::{self, HashType},
+    path_helper,
 };
 use mcml_names::i18_items::error_type::{
     CoreResult, DownloadFileHashErrorData, DownloadFileOverFailData, DownloadFileSizeErrorData,
@@ -24,26 +27,34 @@ use semka::Sem;
 use crate::{DownloadObj, download_item::DownloadItemState, later_tasks};
 
 /// 用于在下载线程中执行异步任务的运行时
-static RT: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
+static RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
 
 /// 在当前线程中阻塞执行异步任务
 fn block_on<F: Future>(f: F) -> F::Output {
-    RT.get_or_init(|| {
-        tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-            .unwrap()
-    })
-    .block_on(f)
+    RUNTIME
+        .get_or_init(|| {
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap()
+        })
+        .block_on(f)
 }
 
-pub struct DownloadThread {
+/// 下载线程
+pub(crate) struct DownloadThread {
+    /// 线程句柄
     handle: Option<JoinHandle<()>>,
+    /// 启动锁
     sem: Arc<Sem>,
+    /// 是否停止
     is_stop: Arc<AtomicBool>,
 }
 
 impl DownloadThread {
+    /// 创建线程
+    ///
+    /// - `index`: 线程号
     pub fn new(index: u32) -> Self {
         let sem = Arc::new(Sem::new(0).unwrap());
         let is_stop = Arc::new(AtomicBool::new(false));
@@ -93,6 +104,24 @@ impl DownloadThread {
     }
 }
 
+/// 是否因为超出尝试次数停止
+///
+/// - `err`: 错误原因
+/// - `times`: 错误次数
+fn is_need_err(err: ErrorType, times: &mut i32) -> bool {
+    *times += 1;
+    mcml_log::error_type(err);
+    if *times > 5 {
+        return true;
+    }
+
+    return false;
+}
+
+/// 下载一个文件
+///
+/// - `index`: 下载线程
+/// - `obj`: 下载项目
 fn download(index: u32, mut obj: DownloadObj) {
     if obj.item.base.file.exists() {
         if obj.item.overwrite {
@@ -123,16 +152,6 @@ fn download(index: u32, mut obj: DownloadObj) {
     let mut use_break = false;
     let mut server_ranges = true;
     let mut is_keep = false;
-
-    fn is_need_err(err: ErrorType, times: &mut i32) -> bool {
-        *times += 1;
-        mcml_log::error_type(err);
-        if *times > 5 {
-            return true;
-        }
-
-        return false;
-    }
 
     let mut temp_file;
 
@@ -226,18 +245,14 @@ fn download(index: u32, mut obj: DownloadObj) {
     path_helper::move_file(&temp_file, &obj.item.base.file).unwrap();
 
     let res: Result<(), ErrorType> = match &obj.item.base.later {
-        LaterRun::None => {
-            Ok(())
-        }
-        LaterRun::UnpackNative(path_buf) => {
-            match path_helper::open_read(&obj.item.base.file) {
-                Ok(file) => later_tasks::unpack_native(path_buf, file),
-                Err(err) => Err(err),
-            }
-        }
-        LaterRun::UnpackSave(path_buf) => {
-            archives::decompress(ArchiveType::Zip, &obj.item.base.file, path_buf, None)
+        LaterRun::None => Ok(()),
+        LaterRun::UnpackNative(path_buf) => match path_helper::open_read(&obj.item.base.file) {
+            Ok(file) => later_tasks::unpack_native(path_buf, file),
+            Err(err) => Err(err),
         },
+        LaterRun::UnpackSave(path_buf) => {
+            BaseArchive::decompress(ArchiveType::Zip, &obj.item.base.file, path_buf, None)
+        }
     };
 
     if let Err(err) = res {
@@ -249,6 +264,12 @@ fn download(index: u32, mut obj: DownloadObj) {
     obj.task.done();
 }
 
+/// 写文件
+/// 
+/// - `index`: 线程号
+/// - `obj`: 下载任务
+/// - `resp`: Http请求结果
+/// - `file`: 写入的文件
 async fn write_file(
     index: u32,
     obj: &mut DownloadObj,
@@ -305,6 +326,10 @@ async fn write_file(
 }
 
 /// 检查文件
+/// 
+/// - `file`: 文件位置
+/// - `hash`: 需要校验的值
+/// - `stream`: 文件流
 fn check_hash<R: Read + Seek>(file: &PathBuf, hash: &FileHash, stream: &mut R) -> CoreResult<()> {
     match hash {
         FileHash::None => Ok(()),

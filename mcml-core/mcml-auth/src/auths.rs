@@ -16,6 +16,7 @@ static AUTHS: LazyLock<RwLock<HashMap<UserKeyObj, LoginObj>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 
 /// 加载登陆的账户列表
+///
 /// - `local`
 fn load<P: AsRef<Path>>(path: P) {
     if let Err(err) = import(path) {
@@ -44,6 +45,7 @@ pub fn init() {
 }
 
 /// 获取账户
+///
 /// - `uuid`: 账户标识
 /// - `auth_type`: 账户类型
 pub fn get(uuid: String, auth_type: AuthType) -> Option<LoginObj> {
@@ -52,6 +54,7 @@ pub fn get(uuid: String, auth_type: AuthType) -> Option<LoginObj> {
 }
 
 /// 导入账户列表
+///
 /// - `file`: 文件位置
 pub fn import<P: AsRef<Path>>(file: P) -> CoreResult<()> {
     let json = serialize_tools::json_from_file::<Vec<LoginObj>>(file)?;

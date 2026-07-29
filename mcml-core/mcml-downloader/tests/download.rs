@@ -1,11 +1,11 @@
 use std::{env, sync::Arc};
 
 use mcml_base::file_item::{FileHash, FileItemObj, LaterRun};
-use mcml_downloader::{DownloadGui, DownloadTaskState, download_item::DownloadItem};
+use mcml_downloader::{IDownloadGui, DownloadTaskState, download_item::DownloadItem};
 
 struct GuiRun {}
 
-impl DownloadGui for GuiRun {
+impl IDownloadGui for GuiRun {
     fn update(&self, thread: u32, file: &Arc<DownloadItem>) {
         // let pro = file.progress() as u64;
         // if pro > 0 && pro % 10 == 0 {
@@ -66,7 +66,7 @@ async fn test_download() {
         later: LaterRun::None,
     };
 
-    let res = mcml_downloader::run_download_task(vec![obj]).await;
+    let res = mcml_downloader::start_download_task(vec![obj]).await;
     assert!(res);
 
     mcml_downloader::stop();

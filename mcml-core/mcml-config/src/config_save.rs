@@ -32,6 +32,11 @@ pub struct ConfigSaveObj {
 }
 
 impl ConfigSaveObj {
+    /// 创建保存任务
+    ///
+    /// - `obj`: 需要保存的内容
+    /// - `file`: 保存的文件
+    /// - `uuid`: 任务标识
     pub fn new<T: Serialize>(obj: &T, file: PathBuf, uuid: Uuid) -> CoreResult<Self> {
         Ok(ConfigSaveObj {
             json: serialize_tools::json_to_string(obj)?,
@@ -40,6 +45,7 @@ impl ConfigSaveObj {
         })
     }
 
+    /// 执行保存
     pub fn save(&self) -> CoreResult<()> {
         path_helper::write_text(&self.file, &self.json)
     }
@@ -53,10 +59,11 @@ static IS_RUN: AtomicBool = AtomicBool::new(true);
 static SEM: OnceLock<Arc<Semaphore>> = OnceLock::new();
 
 /// 保存一个内容
-pub fn save<T, P: AsRef<Path>>(uuid: Uuid, obj: &T, file: P)
-where
-    T: Serialize,
-{
+///
+/// - `uuid`: 任务标识
+/// - `obj`: 需要保存的内容
+/// - `file`: 需要写入的文件
+pub fn save<T: Serialize>(uuid: Uuid, obj: &T, file: impl AsRef<Path>) {
     let mut queue = QUEUE.lock().unwrap();
     // 移除所有同名的旧任务
     queue.retain(|obj| obj.uuid != uuid);
@@ -78,7 +85,7 @@ fn save_now() {
     }
 }
 
-// 后台保存线程
+/// 启动保存线程
 pub fn start() {
     SEM.get_or_init(|| Arc::new(Semaphore::new(0)));
 
@@ -96,6 +103,7 @@ pub fn start() {
         .unwrap();
 }
 
+/// 停止保存线程
 pub fn stop() {
     IS_RUN.store(false, Ordering::Release);
 }

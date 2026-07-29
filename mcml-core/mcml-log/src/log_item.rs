@@ -3,7 +3,7 @@ use std::time::SystemTime;
 use chrono::{DateTime, Datelike, Local, Timelike};
 
 /// 日志等级
-pub enum LogLevel {
+pub(crate) enum LogLevel {
     /// 信息
     Info,
     /// 警告
@@ -11,10 +11,10 @@ pub enum LogLevel {
     /// 错误
     Error,
     /// 严重错误
-    Fault
+    Fault,
 }
 
-pub struct LogItem {
+pub(crate) struct LogItem {
     /// 日志内容
     pub log: String,
     /// 日志等级

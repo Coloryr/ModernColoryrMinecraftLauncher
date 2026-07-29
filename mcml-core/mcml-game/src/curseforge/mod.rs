@@ -558,7 +558,7 @@ pub async fn upgrade_modpack(
         ..Default::default()
     };
 
-    let res = mcml_downloader::run_download_task(vec![obj]).await;
+    let res = mcml_downloader::start_download_task(vec![obj]).await;
     if !res {
         return false;
     }

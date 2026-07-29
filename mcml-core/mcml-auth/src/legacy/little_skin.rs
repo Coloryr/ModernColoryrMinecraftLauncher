@@ -9,6 +9,7 @@ use crate::{
 };
 
 /// 皮肤站登录
+/// 
 /// - `client_token`: 客户端标识
 /// - `user`: 用户名
 /// - `password`: 密码
@@ -76,6 +77,7 @@ pub async fn authenticate(
 
 impl LoginObj {
     /// 刷新登录
+    /// 
     /// - `auth`: 保存的账户
     pub async fn refresh_littleskin(&mut self, cancel: &CancellationToken) -> CoreResult<()> {
         let mut server = if self.auth_type == AuthType::LittleSkin {

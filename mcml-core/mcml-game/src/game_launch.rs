@@ -36,8 +36,11 @@ use crate::{
     loader::LoaderType,
 };
 
+/// 进程运行时机
 pub enum ProcessRunType {
+    /// 启动前运行
     PreLaunch,
+    /// 启动后运行
     PostLaunch,
 }
 
@@ -379,7 +382,7 @@ impl InstanceSettingObj {
                     gui.update_state(self, LaunchState::Download);
                 }
                 let start = Instant::now();
-                let res = mcml_downloader::run_download_task(check).await;
+                let res = mcml_downloader::start_download_task(check).await;
                 let time = start.elapsed();
                 crate::add_game_log_item(&self.uuid, GameLog::DownloadFileTime(time));
                 if !res {

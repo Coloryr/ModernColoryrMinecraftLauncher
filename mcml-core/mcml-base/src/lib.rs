@@ -72,7 +72,7 @@ impl fmt::Display for ArchEnum {
 }
 
 /// 系统信息结构体
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct SystemInfo {
     /// 操作系统类型
     pub os: Os,
@@ -93,10 +93,12 @@ pub struct SystemInfo {
 /// 系统信息
 static SYSTEM_INFO: LazyLock<SystemInfo> = LazyLock::new(|| SystemInfo::new());
 
-pub fn get_system_info() -> &'static SystemInfo {
-    &SYSTEM_INFO
+/// 获取系统信息
+pub fn get_system_info() -> SystemInfo {
+    SYSTEM_INFO.clone()
 }
 
+/// 读linux系统信息
 fn get_linux_distribution() -> String {
     // 读取 /etc/os-release
     let content = std::fs::read_to_string("/etc/os-release").ok();
@@ -163,6 +165,7 @@ impl fmt::Display for SystemInfo {
     }
 }
 
+/// 基础运行路径
 static BASE_DIR: OnceLock<PathBuf> = OnceLock::new();
 
 /// 初始化路径

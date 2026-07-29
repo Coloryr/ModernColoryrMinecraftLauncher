@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use mcml_base::{
@@ -53,8 +53,8 @@ pub struct BaseModPackWorker {
     pub game_version: String,
     /// 游戏实例
     pub game: Option<GameInstance>,
-    /// 下载列表
-    pub downloads: Vec<FileItemObj>,
+    /// 下载列表（Mutex 允许 `&self` 方法修改）
+    pub downloads: Mutex<Vec<FileItemObj>>,
     /// 取消
     pub cancel: CancellationToken,
 }
@@ -74,7 +74,7 @@ impl BaseModPackWorker {
             loader_version: String::new(),
             game_version: String::new(),
             game: None,
-            downloads: Vec::new(),
+            downloads: Mutex::new(Vec::new()),
             cancel,
         }
     }

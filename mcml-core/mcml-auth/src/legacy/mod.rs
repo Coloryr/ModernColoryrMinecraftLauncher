@@ -17,6 +17,7 @@ pub mod nide8;
 
 pub trait GuiSelectHandel {
     /// 选择登陆的账户
+    /// 
     /// - `auths`: 账户列表
     fn select_auth(&self, auths: Vec<String>) -> i32;
 }
@@ -30,6 +31,7 @@ pub struct LegacyLoginRes {
 }
 
 /// 登录
+/// 
 /// - `server`: 服务器地址
 /// - `client_token`: 客户端标识
 /// - `user`: 用户名
@@ -117,6 +119,7 @@ pub async fn authenticate(
 }
 
 /// 刷新登录
+/// 
 /// - `server`: 服务器地址
 /// - `login`: 保存的账户
 /// - `select`: 是否为选择模式
@@ -173,6 +176,7 @@ pub async fn refresh(server: &String, login: &mut LoginObj, select: bool) -> Cor
 }
 
 /// 检测密钥可用性
+/// 
 /// - `server`: 检测地址
 /// - `login`: 保存的账户
 pub async fn validate(server: &String, login: &LoginObj) -> CoreResult<bool> {
