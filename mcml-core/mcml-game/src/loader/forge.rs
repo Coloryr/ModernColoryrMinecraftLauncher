@@ -430,8 +430,11 @@ pub async fn build_forge_libs(
     list1
 }
 
+/// Forge 文件获取结果
 pub struct ForgeGetFilesObj {
+    /// 加载器文件列表
     pub loaders: Vec<FileItemObj>,
+    /// 安装器文件列表
     pub installs: Vec<FileItemObj>,
 }
 
@@ -446,7 +449,7 @@ async fn get_forge_libs(mc: &str, version: &str, neo: bool) -> CoreResult<ForgeG
     };
 
     if !installer.check_hash() {
-        let res = mcml_downloader::run_download_task(vec![installer.clone()]).await;
+        let res = mcml_downloader::start_download_task(vec![installer.clone()]).await;
         if !res {
             return Err(ErrorType::InfoNotFound(mc.to_string()));
         }

@@ -57,6 +57,7 @@ pub struct LoginObj {
 
 impl LoginObj {
     /// 创建账户
+    ///
     /// - `user_name`: 名字
     /// - `uuid`: 标识
     /// - `access_token`: 密钥
@@ -83,6 +84,7 @@ impl LoginObj {
     }
 
     /// 创建空白账户
+    ///
     /// - `user_name`: 名字
     /// - `uuid`: 标识
     pub fn new_empty(user_name: String, uuid: String) -> Self {
@@ -99,6 +101,7 @@ impl LoginObj {
     }
 
     /// 创建空白账户
+    ///
     /// - `access_token`: 密钥
     /// - `client_token`: 客户端标识
     pub fn new_token(access_token: String, client_token: String) -> Self {
@@ -151,6 +154,7 @@ impl Default for LoginObj {
     }
 }
 
+/// 账户键
 #[derive(Eq, Hash, PartialEq, Debug)]
 pub struct UserKeyObj {
     /// 账户标识

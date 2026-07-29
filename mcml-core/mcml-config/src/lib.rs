@@ -52,6 +52,7 @@ pub fn save() {
 }
 
 /// 加载配置文件
+/// 
 /// - `file`: 配置文件
 pub fn load<P: AsRef<Path>>(file: P) -> bool {
     let config = CONFIG.get_or_init(|| RwLock::new(Default::default()));

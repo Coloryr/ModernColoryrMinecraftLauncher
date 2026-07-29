@@ -1,13 +1,17 @@
 /// Xbox网络模型
 use serde::{Deserialize, Serialize};
 
+/// Xbox 登录属性
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct XBoxLoginPropertiesObj {
+    /// 认证方式
     #[serde(rename = "AuthMethod")]
     pub auth_method: String,
+    /// 站点名称
     #[serde(rename = "SiteName")]
     pub site_name: String,
+    /// RPS 票据
     #[serde(rename = "RpsTicket")]
     pub rps_ticket: String,
 }
@@ -22,13 +26,17 @@ impl Default for XBoxLoginPropertiesObj {
     }
 }
 
+/// Xbox 登录请求
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct XBoxLoginObj {
+    /// 登录属性
     #[serde(rename = "Properties")]
     pub properties: XBoxLoginPropertiesObj,
+    /// 依赖方
     #[serde(rename = "RelyingParty")]
     pub relying_party: String,
+    /// 令牌类型
     #[serde(rename = "TokenType")]
     pub token_type: String,
 }
@@ -43,11 +51,14 @@ impl Default for XBoxLoginObj {
     }
 }
 
+/// XSTS 登录属性
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct XSTSLoginPropertiesObj {
+    /// 沙盒标识
     #[serde(rename = "SandboxId")]
     pub sandbox_id: String,
+    /// 用户令牌列表
     #[serde(rename = "UserTokens")]
     pub user_tokens: Vec<String>,
 }
@@ -61,13 +72,17 @@ impl Default for XSTSLoginPropertiesObj {
     }
 }
 
+/// XSTS 登录请求
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct XSTSLoginObj {
+    /// 登录属性
     #[serde(rename = "Properties")]
     pub properties: XSTSLoginPropertiesObj,
+    /// 依赖方
     #[serde(rename = "RelyingParty")]
     pub relying_party: String,
+    /// 令牌类型
     #[serde(rename = "TokenType")]
     pub token_type: String,
 }
@@ -82,9 +97,11 @@ impl Default for XSTSLoginObj {
     }
 }
 
+/// Xbox 登录显示声明 XUI
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct XBoxLoginDisplayClaimsXuiObj {
+    /// 用户哈希
     pub uhs: String,
 }
 
@@ -96,9 +113,11 @@ impl Default for XBoxLoginDisplayClaimsXuiObj {
     }
 }
 
+/// Xbox 登录显示声明
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct XBoxLoginDisplayClaimsObj {
+    /// XUI 声明列表
     pub xui: Vec<XBoxLoginDisplayClaimsXuiObj>,
 }
 
@@ -110,11 +129,14 @@ impl Default for XBoxLoginDisplayClaimsObj {
     }
 }
 
+/// Xbox 登录响应
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct XBoxLoginResObj {
+    /// 认证令牌
     #[serde(rename = "Token")]
     pub token: String,
+    /// 显示声明
     #[serde(rename = "DisplayClaims")]
     pub display_claims: XBoxLoginDisplayClaimsObj,
 }
@@ -128,8 +150,10 @@ impl Default for XBoxLoginResObj {
     }
 }
 
+/// Xbox Live 登录结果
 pub struct XBoxLiveRes {
+    /// XBL 令牌
     pub xbl_token: String,
+    /// XBL 用户哈希
     pub xbl_uhs: String,
 }
-

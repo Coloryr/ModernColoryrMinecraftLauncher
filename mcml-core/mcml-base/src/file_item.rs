@@ -26,6 +26,7 @@ impl Default for FileHash {
     }
 }
 
+/// 下载后运行
 #[derive(Debug, Clone)]
 pub enum LaterRun {
     None,

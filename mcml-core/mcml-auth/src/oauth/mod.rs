@@ -34,6 +34,7 @@ pub enum AuthState {
 }
 
 /// 设置OAuth客户端密钥
+///
 /// - `key`: 客户端密钥
 pub fn set_key(key: &str) {
     KEY.get_or_init(|| key.to_string());
@@ -72,6 +73,7 @@ pub async fn get_code() -> CoreResult<OAuthGetCodeRes> {
 }
 
 /// 获取token
+///
 /// - `res`: 上一阶段的登录码
 /// - `token`: 是否取消获取
 pub async fn run_get_code(
@@ -119,6 +121,7 @@ pub async fn run_get_code(
 }
 
 /// 刷新密匙
+///
 /// - `token`: 登录密钥
 pub async fn refresh_oauth_token(token: &str) -> CoreResult<OAuthGetCodeObj> {
     let key = have_key()?;
@@ -140,6 +143,7 @@ pub async fn refresh_oauth_token(token: &str) -> CoreResult<OAuthGetCodeObj> {
 }
 
 /// Xbox登录
+///
 /// - `token`: Xbox的密钥
 pub async fn get_xbox(token: &str) -> CoreResult<XBoxLiveRes> {
     let obj = XBoxLoginObj {
@@ -170,6 +174,7 @@ pub async fn get_xbox(token: &str) -> CoreResult<XBoxLiveRes> {
 }
 
 /// XSTS登陆
+///
 /// - `token`: XSTS的密钥
 pub async fn get_xsts(token: &str) -> CoreResult<XBoxLiveRes> {
     let obj = XSTSLoginObj {

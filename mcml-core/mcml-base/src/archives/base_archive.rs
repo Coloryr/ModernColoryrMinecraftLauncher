@@ -2,7 +2,7 @@ use std::{
     fs,
     io::{Read, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
-    sync::Arc,
+    sync::{Arc, Mutex},
 };
 
 use flate2::read::GzDecoder;
@@ -19,25 +19,28 @@ use xz2::read::XzDecoder;
 use zip::ZipArchive;
 
 use crate::{
-    archives::{ArchiveGui, ArchiveType, compress, decompress},
+    archives::{
+        IArchiveGui, ArchiveProcess, ArchiveRun, ArchiveType, TarMode, r7z_runner::R7zProcess,
+        tar_runner::TarProcess, zip_runner::ZipProcess,
+    },
     path_helper,
 };
 
-/// Information about an entry in an archive.
+/// 压缩包条目信息
 #[derive(Debug, Clone)]
 pub struct ArchiveEntryInfo {
-    /// Entry name / path within the archive.
+    /// 条目名称 / 压缩包内路径
     pub name: String,
-    /// Whether this entry is a directory.
+    /// 是否为目录
     pub is_dir: bool,
-    /// Uncompressed size in bytes. `0` for directories.
+    /// 未压缩大小（字节），目录为 `0`
     pub size: u64,
 }
 
 impl ArchiveType {
-    /// Auto-detect archive type from a file path extension.
+    /// 根据文件路径后缀自动检测压缩包类型。
     ///
-    /// Returns `None` if the extension is not a supported archive format.
+    /// 后缀不受支持时返回 `None`。
     pub fn try_from_path(path: &Path) -> Option<Self> {
         let file_name = path.file_name()?.to_string_lossy().to_lowercase();
 
@@ -61,87 +64,262 @@ impl ArchiveType {
     }
 }
 
-/// A unified archive handler that auto-detects the archive type and provides
-/// read/write access to archive contents.
+/// 统一的压缩包处理器，自动检测压缩包格式并提供读写功能。
 ///
-/// # Examples
+/// # 示例
 ///
 /// ```ignore
 /// use mcml_base::archives::BaseArchive;
 ///
-/// // Open an archive (type auto-detected from extension)
+/// // 打开压缩包（根据后缀自动检测类型）
 /// let archive = BaseArchive::open("path/to/file.zip").unwrap();
 ///
-/// // Iterate over entries
+/// // 遍历条目
 /// for entry in archive.entries() {
 ///     println!("{} ({} bytes)", entry.name, entry.size);
 /// }
 ///
-/// // Extract a single file
+/// // 提取单个文件
 /// archive.extract_file("readme.txt", "output/readme.txt", None).unwrap();
 ///
-/// // Extract everything
+/// // 提取全部文件
 /// archive.extract_all("output_dir/", None).unwrap();
 /// ```
 pub struct BaseArchive {
+    /// 压缩包磁盘路径
     path: PathBuf,
+    /// 压缩包类型
     archive_type: ArchiveType,
+    /// 条目列表缓存
     entries: Vec<ArchiveEntryInfo>,
+    /// 始终保持打开的文件句柄。Zip 格式下此句柄独立于缓存的
+    /// [`ZipArchive`]；其他格式下每次读取操作通过克隆此句柄获得
+    /// 独立的文件描述符，避免反复打开文件。
+    file: fs::File,
+    /// 缓存的 [`ZipArchive`]，中央目录仅解析一次。
+    /// 非 Zip 格式为 `None`。
+    zip: Mutex<Option<ZipArchive<fs::File>>>,
 }
 
 impl BaseArchive {
-    /// Open an archive file. The archive type is auto-detected from the file
-    /// extension.
+    /// 打开压缩包文件，根据文件扩展名自动检测类型。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if the file cannot be opened, the format is
-    /// unsupported, or the archive is malformed.
+    /// 文件无法打开、格式不支持或压缩包损坏时返回错误。
     pub fn open<P: AsRef<Path>>(path: P) -> CoreResult<Self> {
         let path = path.as_ref().to_path_buf();
         let archive_type = ArchiveType::try_from_path(&path).ok_or_else(|| {
             ErrorType::ArchiveOpenError(FileSystemErrorData {
                 path: path.clone(),
-                error: format!("Unsupported archive format: {}", path.display()),
+                error: format!("不支持的压缩包格式: {}", path.display()),
             })
         })?;
 
-        let entries = Self::read_entries(&path, archive_type)?;
+        let file = path_helper::open_read(&path)?;
+
+        let (entries, zip) = match archive_type {
+            ArchiveType::Zip => {
+                // 克隆句柄，让 ZipArchive 拥有独立的文件描述符
+                let zip_file = file.try_clone().map_err(|err| {
+                    ErrorType::FileSystemError(FileSystemErrorData {
+                        path: path.clone(),
+                        error: err.to_string(),
+                    })
+                })?;
+                let mut zip_archive = ZipArchive::new(zip_file).map_err(|err| {
+                    ErrorType::ArchiveOpenError(FileSystemErrorData {
+                        path: path.clone(),
+                        error: err.to_string(),
+                    })
+                })?;
+                let entries = Self::read_entries_zip_archive(&mut zip_archive)?;
+                (entries, Mutex::new(Some(zip_archive)))
+            }
+            _ => {
+                // 从克隆句柄读取条目，保留原句柄供后续使用
+                let clone = file.try_clone().map_err(|err| {
+                    ErrorType::FileSystemError(FileSystemErrorData {
+                        path: path.clone(),
+                        error: err.to_string(),
+                    })
+                })?;
+                let entries = Self::read_entries(clone, archive_type)?;
+                (entries, Mutex::new(None))
+            }
+        };
 
         Ok(Self {
             path,
             archive_type,
             entries,
+            file,
+            zip,
         })
     }
 
-    /// Returns the detected archive type.
+    /// 从目录创建新的压缩包并返回已打开的状态。
+    ///
+    /// 创建成功后可通过 [`add_files`](Self::add_files) /
+    /// [`add_data`](Self::add_data) 继续添加内容。
+    ///
+    /// * `output_file` — 压缩包输出路径。
+    /// * `source_dir` — 需要打包的源目录。
+    /// * `root_path` — 相对根路径，设置后文件在包内的路径相对于此。
+    /// * `filter` — 可选的排除子串列表，匹配的文件将被跳过。
+    pub fn compress<P: AsRef<Path>>(
+        archive_type: ArchiveType,
+        output_file: P,
+        source_dir: P,
+        root_path: Option<P>,
+        filter: &Option<Vec<String>>,
+        gui: Option<Arc<dyn IArchiveGui>>,
+    ) -> CoreResult<Self> {
+        Self::compress_inner(
+            archive_type,
+            output_file.as_ref(),
+            source_dir.as_ref(),
+            root_path.as_ref().map(|p| p.as_ref()),
+            filter,
+            gui,
+        )?;
+        Self::open(output_file)
+    }
+
+    /// 创建一个空的压缩包（无条目）并返回已打开的状态。
+    ///
+    /// 创建后通过 [`add_files`](Self::add_files) /
+    /// [`add_data`](Self::add_data) 填充内容。
+    ///
+    /// * `archive_type` — 压缩包格式。
+    /// * `output_file` — 压缩包输出路径。
+    pub fn create_empty<P: AsRef<Path>>(
+        archive_type: ArchiveType,
+        output_file: P,
+    ) -> CoreResult<Self> {
+        let output_file = output_file.as_ref();
+        match archive_type {
+            ArchiveType::Zip => Self::create_empty_zip(output_file)?,
+            ArchiveType::Tar => Self::create_empty_tar(output_file)?,
+            // 7z / TarGz / TarXz：压缩空目录后再打开
+            _ => {
+                let temp_dir = std::env::temp_dir().join(format!("mcml_empty_{}", Uuid::new_v4()));
+                path_helper::create_dir_all(&temp_dir)?;
+                let res =
+                    Self::compress_inner(archive_type, output_file, &temp_dir, None, &None, None);
+                let _ = fs::remove_dir_all(&temp_dir);
+                res?;
+            }
+        }
+        Self::open(output_file)
+    }
+
+    /// 解压压缩包到指定目录，无需构造 [`BaseArchive`] 实例。
+    pub fn decompress<P: AsRef<Path>>(
+        archive_type: ArchiveType,
+        archive_file: P,
+        output_dir: P,
+        gui: Option<Arc<dyn IArchiveGui>>,
+    ) -> CoreResult<()> {
+        Self::make_runner(archive_type, gui)?.decompress(archive_file.as_ref(), output_dir.as_ref())
+    }
+
+    /// 内部辅助：仅执行压缩写入磁盘，不打开结果文件。
+    fn compress_inner(
+        archive_type: ArchiveType,
+        output_file: &Path,
+        source_dir: &Path,
+        root_path: Option<&Path>,
+        filter: &Option<Vec<String>>,
+        gui: Option<Arc<dyn IArchiveGui>>,
+    ) -> CoreResult<()> {
+        Self::make_runner(archive_type, gui)?.compress(output_file, source_dir, root_path, filter)
+    }
+
+    /// 根据压缩包类型创建对应的执行器。
+    fn make_runner(
+        archive_type: ArchiveType,
+        gui: Option<Arc<dyn IArchiveGui>>,
+    ) -> CoreResult<Box<dyn ArchiveRun + Send + Sync>> {
+        let process = ArchiveProcess::new(gui);
+        Ok(match archive_type {
+            ArchiveType::Zip => Box::new(ZipProcess::new(process)),
+            ArchiveType::R7Z => Box::new(R7zProcess::new(process)),
+            ArchiveType::Tar => Box::new(TarProcess::new(process, None)),
+            ArchiveType::TarGz => Box::new(TarProcess::new(process, Some(TarMode::Gz))),
+            ArchiveType::TarXz => Box::new(TarProcess::new(process, Some(TarMode::Xz))),
+        })
+    }
+
+    /// 在磁盘上创建一个空的 zip 文件（仅含中央目录，零条目）。
+    fn create_empty_zip(path: &Path) -> CoreResult<()> {
+        use zip::ZipWriter;
+
+        let file = fs::File::create(path).map_err(|err| {
+            ErrorType::FileSystemError(FileSystemErrorData {
+                path: path.to_path_buf(),
+                error: err.to_string(),
+            })
+        })?;
+
+        let zip = ZipWriter::new(file);
+        zip.finish().map_err(|err| {
+            ErrorType::ArchiveWriteError(ErrorData {
+                error: format!("创建空 zip 失败: {}", err),
+            })
+        })?;
+
+        Ok(())
+    }
+
+    /// 在磁盘上创建一个空的 tar 文件（头 + 两个零块 EOF 标记）。
+    fn create_empty_tar(path: &Path) -> CoreResult<()> {
+        use tar::Builder;
+
+        let file = fs::File::create(path).map_err(|err| {
+            ErrorType::FileSystemError(FileSystemErrorData {
+                path: path.to_path_buf(),
+                error: err.to_string(),
+            })
+        })?;
+
+        let mut builder = Builder::new(file);
+        builder.finish().map_err(|err| {
+            ErrorType::ArchiveWriteError(ErrorData {
+                error: format!("创建空 tar 失败: {}", err),
+            })
+        })?;
+
+        Ok(())
+    }
+
+    /// 返回检测到的压缩包类型。
     pub fn archive_type(&self) -> ArchiveType {
         self.archive_type
     }
 
-    /// Returns the path to the archive file on disk.
+    /// 返回压缩包在磁盘上的路径。
     pub fn path(&self) -> &Path {
         &self.path
     }
 
-    /// Returns all entries in the archive.
+    /// 返回压缩包内所有条目。
     ///
-    /// Use this to iterate over the archive contents without extracting.
+    /// 用于在不解压的情况下遍历压缩包内容。
     pub fn entries(&self) -> &[ArchiveEntryInfo] {
         &self.entries
     }
 
-    /// Checks whether an entry with the given name exists in the archive.
+    /// 检查压缩包中是否存在指定名称的条目。
     pub fn contains(&self, name: &str) -> bool {
         self.entries.iter().any(|e| e.name == name)
     }
 
-    /// If all entries share a single top-level directory, returns its name.
+    /// 如果所有条目共享同一个顶层目录，返回该目录名。
     ///
-    /// For example, when every entry starts with `"MyWorld/"`, this returns
-    /// `Some("MyWorld")`. Returns `None` when entries live at the archive
-    /// root or have multiple top-level directories.
+    /// 例如所有条目都以 `"MyWorld/"` 开头时返回
+    /// `Some("MyWorld")`。条目位于压缩包根目录或有多个
+    /// 顶层目录时返回 `None`。
     pub fn single_top_dir(&self) -> Option<&str> {
         let mut firsts: Vec<&str> = self
             .entries
@@ -161,17 +339,15 @@ impl BaseArchive {
         }
     }
 
-    /// Read a single file entry from the archive into memory.
+    /// 读取压缩包内单个条目的内容到内存。
     ///
-    /// * `name` — The entry name/path inside the archive (e.g.
-    ///   `"subdir/readme.txt"`).
+    /// * `name` — 条目在压缩包内的名称/路径（如 `"subdir/readme.txt"`）。
     ///
-    /// Returns the raw bytes of the entry's content.
+    /// 返回条目内容的原始字节。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if the entry is not found, is a directory, or reading
-    /// fails.
+    /// 条目不存在、是目录或读取失败时返回错误。
     pub fn read(&self, name: &str) -> CoreResult<Vec<u8>> {
         match self.archive_type {
             ArchiveType::Zip => self.read_zip(name),
@@ -180,20 +356,16 @@ impl BaseArchive {
         }
     }
 
-    /// Open a single file entry from the archive as a streaming [`Read`]
-    /// implementor.
+    /// 以流式 [`Read`] 接口打开压缩包内的单个文件条目。
     ///
-    /// Unlike [`read`](Self::read), which returns the full entry bytes as a
-    /// `Vec<u8>`, this returns a `Box<dyn Read>` that can be passed directly to
-    /// any function accepting the [`Read`] trait.
+    /// 与返回完整 `Vec<u8>` 的 [`read`](Self::read) 不同，此方法返回
+    /// `Box<dyn Read>`，可直接传递给任何接受 [`Read`] trait 的函数。
     ///
-    /// * `name` — The entry name/path inside the archive (e.g.
-    ///   `"subdir/readme.txt"`).
+    /// * `name` — 条目在压缩包内的名称/路径（如 `"subdir/readme.txt"`）。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if the entry is not found, is a directory, or a read
-    /// error occurs.
+    /// 条目不存在、是目录或读取失败时返回错误。
     pub fn read_stream(&self, name: &str) -> CoreResult<Box<dyn Read>> {
         match self.archive_type {
             ArchiveType::Zip => self.read_zip_stream(name),
@@ -204,22 +376,20 @@ impl BaseArchive {
         }
     }
 
-    /// Extract a single file from the archive to the given output path.
+    /// 将压缩包中单个文件提取到指定输出路径。
     ///
-    /// * `name` — The entry name/path inside the archive (e.g.
-    ///   `"subdir/readme.txt"`).
-    /// * `output_path` — The destination file path on disk. Parent directories
-    ///   are created automatically.
-    /// * `gui` — Optional progress callback.
+    /// * `name` — 条目在压缩包内的名称/路径（如 `"subdir/readme.txt"`）。
+    /// * `output_path` — 目标磁盘路径，父目录会自动创建。
+    /// * `gui` — 可选的进度回调。
     ///
-    /// # Errors
+    /// # 错误
     ///
-    /// Returns an error if the entry is not found or extraction fails.
+    /// 条目不存在或提取失败时返回错误。
     pub fn extract_file<P: AsRef<Path>>(
         &self,
         name: &str,
         output_path: P,
-        gui: Option<&dyn ArchiveGui>,
+        gui: Option<&dyn IArchiveGui>,
     ) -> CoreResult<()> {
         let output_path = output_path.as_ref();
 
@@ -236,16 +406,16 @@ impl BaseArchive {
         }
     }
 
-    /// Extract all files from the archive to the given output directory.
+    /// 将压缩包中所有文件提取到指定输出目录。
     ///
-    /// * `output_dir` — The destination directory.
-    /// * `gui` — Optional progress callback.
+    /// * `output_dir` — 目标目录。
+    /// * `gui` — 可选的进度回调。
     pub fn extract_all<P: AsRef<Path>>(
         &self,
         output_dir: P,
-        gui: Option<Arc<dyn ArchiveGui>>,
+        gui: Option<Arc<dyn IArchiveGui>>,
     ) -> CoreResult<()> {
-        decompress(
+        Self::decompress(
             self.archive_type,
             self.path.as_path(),
             output_dir.as_ref(),
@@ -253,22 +423,46 @@ impl BaseArchive {
         )
     }
 
-    /// Add files to the archive and save in-place.
+    /// 按条件提取选中条目到由闭包计算的输出路径。
     ///
-    /// For Zip and Tar archives files are appended directly without
-    /// extracting or re-compressing existing entries. For 7z and compressed
-    /// tar formats the archive is extracted, patched, and re-compressed.
-    /// Existing entries with the same internal path are overwritten.
+    /// 闭包接收每个文件 [`ArchiveEntryInfo`]，返回 `Some(输出路径)` 则提取，
+    /// 返回 `None` 则跳过。目录条目始终自动跳过。
     ///
-    /// * `files` — Pairs of `(source_disk_path, internal_archive_path)`.
-    /// * `gui` — Optional progress callback (used during re-compression when
-    ///   applicable).
+    /// 此方法比反复调用 [`extract_file`](Self::extract_file) 更高效，
+    /// 因为缓存的压缩包读取器（zip）或文件句柄（其他格式）在所有提取过程中复用。
     ///
-    /// After a successful call the internal entry list is refreshed.
+    /// * `map` — 将每个条目映射为可选输出路径的闭包。
+    /// * `gui` — 可选的进度回调（按每个已提取文件触发）。
+    pub fn extract_where<F: FnMut(&ArchiveEntryInfo) -> Option<PathBuf>>(
+        &self,
+        mut map: F,
+        gui: Option<&dyn IArchiveGui>,
+    ) -> CoreResult<()> {
+        for entry in &self.entries {
+            if entry.is_dir {
+                continue;
+            }
+            if let Some(output) = map(entry) {
+                self.extract_file(&entry.name, &output, gui)?;
+            }
+        }
+        Ok(())
+    }
+
+    /// 向压缩包添加文件并原地保存。
+    ///
+    /// Zip 和 Tar 格式下文件直接追加，无需解压或重压缩已有条目。
+    /// 7z 和压缩 tar 格式则先解压到临时目录，合并文件后重压缩。
+    /// 已有同路径条目会被覆盖。
+    ///
+    /// * `files` — `(磁盘源路径, 压缩包内路径)` 对。
+    /// * `gui` — 可选的进度回调（仅在重压缩时使用）。
+    ///
+    /// 调用成功后内部条目列表会自动刷新。
     pub fn add_files<P: AsRef<Path>>(
         &mut self,
         files: &[(P, P)],
-        gui: Option<Arc<dyn ArchiveGui>>,
+        gui: Option<Arc<dyn IArchiveGui>>,
     ) -> CoreResult<()> {
         if files.is_empty() {
             return Ok(());
@@ -280,8 +474,7 @@ impl BaseArchive {
         }
     }
 
-    /// Zip fast path: append files from disk directly without touching
-    /// existing entries.
+    /// Zip 快速路径：直接从磁盘追加文件，不触碰已有条目。
     fn add_files_zip<P: AsRef<Path>>(&mut self, files: &[(P, P)]) -> CoreResult<()> {
         use zip::{CompressionMethod, ZipWriter, write::SimpleFileOptions};
 
@@ -320,29 +513,28 @@ impl BaseArchive {
             zip.start_file(internal_path.as_ref(), options)
                 .map_err(|err| {
                     ErrorType::ArchiveWriteError(ErrorData {
-                        error: format!("Cannot start entry '{}': {}", internal_path, err),
+                        error: format!("无法创建条目 '{}': {}", internal_path, err),
                     })
                 })?;
 
             std::io::copy(&mut reader, &mut zip).map_err(|err| {
                 ErrorType::ArchiveWriteError(ErrorData {
-                    error: format!("Cannot write data for '{}': {}", internal_path, err),
+                    error: format!("无法写入条目 '{}': {}", internal_path, err),
                 })
             })?;
         }
 
         zip.finish().map_err(|err| {
             ErrorType::ArchiveWriteError(ErrorData {
-                error: format!("Cannot finalize archive: {}", err),
+                error: format!("无法完成压缩包: {}", err),
             })
         })?;
 
-        self.entries = Self::read_entries(&self.path, self.archive_type)?;
+        self.refresh_after_modify()?;
         Ok(())
     }
 
-    /// Tar fast path: append files from disk by seeking past the EOF marker
-    /// and writing new tar entries directly.
+    /// Tar 快速路径：通过跳过 EOF 标记后直接写入新 tar 条目来追加文件。
     fn add_files_tar<P: AsRef<Path>>(&mut self, files: &[(P, P)]) -> CoreResult<()> {
         use tar::Builder;
 
@@ -389,41 +581,40 @@ impl BaseArchive {
                 .append_file(internal_path.as_ref(), &mut reader)
                 .map_err(|err| {
                     ErrorType::ArchiveWriteError(ErrorData {
-                        error: format!("Cannot append '{}' to tar: {}", internal_path, err),
+                        error: format!("无法追加到 tar '{}': {}", internal_path, err),
                     })
                 })?;
         }
 
         builder.finish().map_err(|err| {
             ErrorType::ArchiveWriteError(ErrorData {
-                error: format!("Cannot finalize tar: {}", err),
+                error: format!("无法完成 tar: {}", err),
             })
         })?;
 
-        self.entries = Self::read_entries(&self.path, self.archive_type)?;
+        self.refresh_after_modify()?;
         Ok(())
     }
 
-    /// Fallback for 7z / tar.gz / tar.xz: extract to temp dir, write data,
-    /// re-compress.
+    /// 7z / tar.gz / tar.xz 的后备路径：解压到临时目录，写入文件后重压缩。
     fn add_files_extract_recompress<P: AsRef<Path>>(
         &mut self,
         files: &[(P, P)],
-        gui: Option<Arc<dyn ArchiveGui>>,
+        gui: Option<Arc<dyn IArchiveGui>>,
     ) -> CoreResult<()> {
-        // Create a temp directory for the extraction + new files
+        // 创建临时目录用于解压和新文件
         let temp_dir = std::env::temp_dir().join(format!("mcml_archive_{}", Uuid::new_v4()));
         path_helper::create_dir_all(&temp_dir)?;
 
-        // Extract existing archive to temp dir (skip if the archive is empty)
+        // 将已有压缩包解压到临时目录（空压缩包跳过）
         if !self.entries.is_empty() {
-            if let Err(err) = decompress(self.archive_type, &self.path, &temp_dir, None) {
+            if let Err(err) = Self::decompress(self.archive_type, &self.path, &temp_dir, None) {
                 let _ = fs::remove_dir_all(&temp_dir);
                 return Err(err);
             }
         }
 
-        // Copy new files into the temp directory
+        // 将新文件复制到临时目录
         for (src, dest) in files {
             let dest_path = temp_dir.join(dest.as_ref());
             if let Some(parent) = dest_path.parent() {
@@ -435,11 +626,11 @@ impl BaseArchive {
             }
         }
 
-        // Compress to a temporary archive file first, then atomically replace
+        // 先压缩到临时文件，再原子替换
         let temp_archive =
             std::env::temp_dir().join(format!("mcml_archive_{}.tmp", Uuid::new_v4()));
 
-        let compress_result = compress(
+        let compress_result = Self::compress_inner(
             self.archive_type,
             temp_archive.as_path(),
             temp_dir.as_path(),
@@ -448,7 +639,7 @@ impl BaseArchive {
             gui,
         );
 
-        // Clean up temp dir regardless of outcome
+        // 无论成功与否都清理临时目录
         let _ = fs::remove_dir_all(&temp_dir);
 
         if let Err(err) = compress_result {
@@ -456,7 +647,7 @@ impl BaseArchive {
             return Err(err);
         }
 
-        // Replace the original archive with the new one
+        // 用新压缩包替换原有压缩包
         fs::remove_file(&self.path).map_err(|err| {
             ErrorType::FileSystemError(FileSystemErrorData {
                 path: self.path.clone(),
@@ -470,31 +661,28 @@ impl BaseArchive {
             })
         })?;
 
-        // Refresh the internal entry list
-        self.entries = Self::read_entries(&self.path, self.archive_type)?;
+        // 刷新内部条目列表
+        self.reopen_after_replace()?;
 
         Ok(())
     }
 
-    /// Add an in-memory file to the archive and save in-place.
+    /// 将内存中的文件添加到压缩包并原地保存。
     ///
-    /// For Zip archives this appends directly without extracting or
-    /// re-compressing existing entries. For 7z and tar-based formats the
-    /// archive is extracted, patched, and re-compressed.
+    /// Zip 格式下直接追加，无需解压或重压缩已有条目。
+    /// 7z 和 tar 系列格式则先解压到临时目录，写入数据后重压缩。
+    /// 已有同路径条目会被覆盖。
     ///
-    /// An existing entry with the same internal path is overwritten.
+    /// * `name` — 条目在压缩包内的路径（如 `"subdir/readme.txt"`）。
+    /// * `data` — 文件内容的原始字节。
+    /// * `gui` — 可选的进度回调（仅在重压缩时使用）。
     ///
-    /// * `name` — The entry path inside the archive (e.g. `"subdir/readme.txt"`).
-    /// * `data` — The file content as raw bytes.
-    /// * `gui` — Optional progress callback (used during re-compression when
-    ///   applicable).
-    ///
-    /// After a successful call the internal entry list is refreshed.
+    /// 调用成功后内部条目列表会自动刷新。
     pub fn add_data(
         &mut self,
         name: &str,
         data: &[u8],
-        gui: Option<Arc<dyn ArchiveGui>>,
+        gui: Option<Arc<dyn IArchiveGui>>,
     ) -> CoreResult<()> {
         match self.archive_type {
             ArchiveType::Zip => self.add_data_zip(name, data),
@@ -503,8 +691,7 @@ impl BaseArchive {
         }
     }
 
-    /// Zip fast path: append in-memory data directly without touching existing
-    /// entries.
+    /// Zip 快速路径：直接追加内存数据，不触碰已有条目。
     fn add_data_zip(&mut self, name: &str, data: &[u8]) -> CoreResult<()> {
         use zip::{CompressionMethod, ZipWriter, write::SimpleFileOptions};
 
@@ -532,30 +719,29 @@ impl BaseArchive {
 
         zip.start_file(name, options).map_err(|err| {
             ErrorType::ArchiveWriteError(ErrorData {
-                error: format!("Cannot start entry '{}': {}", name, err),
+                error: format!("无法创建条目 '{}': {}", name, err),
             })
         })?;
 
         zip.write_all(data).map_err(|err| {
             ErrorType::ArchiveWriteError(ErrorData {
-                error: format!("Cannot write data for '{}': {}", name, err),
+                error: format!("无法写入条目 '{}': {}", name, err),
             })
         })?;
 
         zip.finish().map_err(|err| {
             ErrorType::ArchiveWriteError(ErrorData {
-                error: format!("Cannot finalize archive: {}", err),
+                error: format!("无法完成压缩包: {}", err),
             })
         })?;
 
-        // Refresh the internal entry list
-        self.entries = Self::read_entries(&self.path, self.archive_type)?;
+        // 刷新内部条目列表
+        self.refresh_after_modify()?;
 
         Ok(())
     }
 
-    /// Tar fast path: append in-memory data by seeking past the EOF marker and
-    /// writing a new tar entry directly.
+    /// Tar 快速路径：通过跳过 EOF 标记后直接写入新 tar 条目来追加内存数据。
     fn add_data_tar(&mut self, name: &str, data: &[u8]) -> CoreResult<()> {
         use tar::{Builder, Header};
 
@@ -570,8 +756,8 @@ impl BaseArchive {
                 })
             })?;
 
-        // Seek past the tar EOF marker (two 512-byte zero blocks) so the
-        // builder overwrites them with the new entry + a fresh EOF marker.
+        // 跳过 tar 的 EOF 标记（两个 512 字节的零块），由 Builder
+        // 用新条目 + 新 EOF 覆盖
         let len = file
             .metadata()
             .map_err(|err| {
@@ -600,42 +786,42 @@ impl BaseArchive {
             .append_data(&mut header, name, data)
             .map_err(|err| {
                 ErrorType::ArchiveWriteError(ErrorData {
-                    error: format!("Cannot append '{}' to tar: {}", name, err),
+                    error: format!("无法追加到 tar '{}': {}", name, err),
                 })
             })?;
 
         builder.finish().map_err(|err| {
             ErrorType::ArchiveWriteError(ErrorData {
-                error: format!("Cannot finalize tar: {}", err),
+                error: format!("无法完成 tar: {}", err),
             })
         })?;
 
-        // Refresh the internal entry list
-        self.entries = Self::read_entries(&self.path, self.archive_type)?;
+        // 刷新内部条目列表
+        self.refresh_after_modify()?;
 
         Ok(())
     }
 
-    /// Fallback for 7z / tar.gz / tar.xz: extract to temp dir, write data, re-compress.
+    /// 7z / tar.gz / tar.xz 的后备路径：解压到临时目录，写入数据后重压缩。
     fn add_data_extract_recompress(
         &mut self,
         name: &str,
         data: &[u8],
-        gui: Option<Arc<dyn ArchiveGui>>,
+        gui: Option<Arc<dyn IArchiveGui>>,
     ) -> CoreResult<()> {
-        // Create a temp directory for the extraction + new file
+        // 创建临时目录用于解压和新文件
         let temp_dir = std::env::temp_dir().join(format!("mcml_archive_{}", Uuid::new_v4()));
         path_helper::create_dir_all(&temp_dir)?;
 
-        // Extract existing archive to temp dir (skip if the archive is empty)
+        // 将已有压缩包解压到临时目录（空压缩包跳过）
         if !self.entries.is_empty() {
-            if let Err(err) = decompress(self.archive_type, &self.path, &temp_dir, None) {
+            if let Err(err) = Self::decompress(self.archive_type, &self.path, &temp_dir, None) {
                 let _ = fs::remove_dir_all(&temp_dir);
                 return Err(err);
             }
         }
 
-        // Write the in-memory data to the target path inside the temp directory
+        // 将内存数据写入临时目录中的目标路径
         let dest_path = temp_dir.join(name);
         if let Some(parent) = dest_path.parent() {
             path_helper::create_dir_all(parent)?;
@@ -648,11 +834,11 @@ impl BaseArchive {
             })
         })?;
 
-        // Compress to a temporary archive file first, then atomically replace
+        // 先压缩到临时文件，再原子替换
         let temp_archive =
             std::env::temp_dir().join(format!("mcml_archive_{}.tmp", Uuid::new_v4()));
 
-        let compress_result = compress(
+        let compress_result = Self::compress_inner(
             self.archive_type,
             temp_archive.as_path(),
             temp_dir.as_path(),
@@ -661,7 +847,7 @@ impl BaseArchive {
             gui,
         );
 
-        // Clean up temp dir regardless of outcome
+        // 无论成功与否都清理临时目录
         let _ = fs::remove_dir_all(&temp_dir);
 
         if let Err(err) = compress_result {
@@ -669,7 +855,7 @@ impl BaseArchive {
             return Err(err);
         }
 
-        // Replace the original archive with the new one
+        // 用新压缩包替换原有压缩包
         fs::remove_file(&self.path).map_err(|err| {
             ErrorType::FileSystemError(FileSystemErrorData {
                 path: self.path.clone(),
@@ -683,36 +869,78 @@ impl BaseArchive {
             })
         })?;
 
-        // Refresh the internal entry list
-        self.entries = Self::read_entries(&self.path, self.archive_type)?;
+        // 刷新内部条目列表
+        self.reopen_after_replace()?;
 
         Ok(())
     }
 
-    // ------------------------------------------------------------------
-    // Private helpers
-    // ------------------------------------------------------------------
+    /// 克隆存储的文件句柄，供需要获取所有权的读取操作使用。
+    fn clone_file(&self) -> CoreResult<fs::File> {
+        self.file.try_clone().map_err(|err| {
+            ErrorType::FileSystemError(FileSystemErrorData {
+                path: self.path.clone(),
+                error: err.to_string(),
+            })
+        })
+    }
 
-    /// Read all entries from an archive of the given type.
-    fn read_entries(path: &Path, archive_type: ArchiveType) -> CoreResult<Vec<ArchiveEntryInfo>> {
+    /// 在磁盘上的压缩包被**原地修改**（追加/覆盖）后刷新条目元数据。
+    /// Zip 格式下同时重建缓存的 [`ZipArchive`]。
+    fn refresh_after_modify(&mut self) -> CoreResult<()> {
+        if self.archive_type == ArchiveType::Zip {
+            *self.zip.lock().unwrap() = None;
+            let clone = self.clone_file()?;
+            let mut new_zip = ZipArchive::new(clone).map_err(|err| {
+                ErrorType::ArchiveOpenError(FileSystemErrorData {
+                    path: self.path.clone(),
+                    error: err.to_string(),
+                })
+            })?;
+            self.entries = Self::read_entries_zip_archive(&mut new_zip)?;
+            *self.zip.lock().unwrap() = Some(new_zip);
+        } else {
+            let clone = self.clone_file()?;
+            self.entries = Self::read_entries(clone, self.archive_type)?;
+        }
+        Ok(())
+    }
+
+    /// 在磁盘上的压缩包被**替换**（旧文件删除/重命名，新文件在
+    /// `self.path`）后重新打开文件句柄并刷新条目。
+    fn reopen_after_replace(&mut self) -> CoreResult<()> {
+        self.file = path_helper::open_read(&self.path)?;
+        self.refresh_after_modify()
+    }
+
+    /// 读取指定类型压缩包的所有条目，消费文件句柄。
+    fn read_entries(
+        file: fs::File,
+        archive_type: ArchiveType,
+    ) -> CoreResult<Vec<ArchiveEntryInfo>> {
         match archive_type {
-            ArchiveType::Zip => Self::read_entries_zip(path),
-            ArchiveType::R7Z => Self::read_entries_7z(path),
+            ArchiveType::Zip => {
+                // 仅应在 `open()` 路径下到达此分支，Zip 已在外部处理。
+                // 此处作为兜底保护。
+                let mut zip = ZipArchive::new(file).map_err(|err| {
+                    ErrorType::ArchiveOpenError(FileSystemErrorData {
+                        path: PathBuf::new(),
+                        error: err.to_string(),
+                    })
+                })?;
+                Self::read_entries_zip_archive(&mut zip)
+            }
+            ArchiveType::R7Z => Self::read_entries_7z(file),
             ArchiveType::Tar | ArchiveType::TarGz | ArchiveType::TarXz => {
-                Self::read_entries_tar(path, archive_type)
+                Self::read_entries_tar(file, archive_type)
             }
         }
     }
 
-    fn read_entries_zip(path: &Path) -> CoreResult<Vec<ArchiveEntryInfo>> {
-        let file = path_helper::open_read(path)?;
-        let mut archive = ZipArchive::new(file).map_err(|err| {
-            ErrorType::ArchiveOpenError(FileSystemErrorData {
-                path: path.to_path_buf(),
-                error: err.to_string(),
-            })
-        })?;
-
+    /// 从已打开的 [`ZipArchive`] 读取条目元数据。
+    fn read_entries_zip_archive(
+        archive: &mut ZipArchive<fs::File>,
+    ) -> CoreResult<Vec<ArchiveEntryInfo>> {
         let mut entries = Vec::with_capacity(archive.len());
         for i in 0..archive.len() {
             let entry = archive.by_index(i).map_err(|err| {
@@ -729,11 +957,11 @@ impl BaseArchive {
         Ok(entries)
     }
 
-    fn read_entries_7z(path: &Path) -> CoreResult<Vec<ArchiveEntryInfo>> {
-        let file = path_helper::open_read(path)?;
+    /// 读取 7z 压缩包的所有条目。
+    fn read_entries_7z(file: fs::File) -> CoreResult<Vec<ArchiveEntryInfo>> {
         let archive = ArchiveReader::new(file, Password::empty()).map_err(|err| {
             ErrorType::ArchiveOpenError(FileSystemErrorData {
-                path: path.to_path_buf(),
+                path: PathBuf::new(),
                 error: err.to_string(),
             })
         })?;
@@ -751,11 +979,11 @@ impl BaseArchive {
         Ok(entries)
     }
 
+    /// 读取 tar（plain / Gz / Xz）压缩包的所有条目。
     fn read_entries_tar(
-        path: &Path,
+        file: fs::File,
         archive_type: ArchiveType,
     ) -> CoreResult<Vec<ArchiveEntryInfo>> {
-        let file = path_helper::open_read(path)?;
         let mut archive = Self::open_tar_reader(file, archive_type)?;
 
         let mut entries = Vec::new();
@@ -791,7 +1019,7 @@ impl BaseArchive {
         Ok(entries)
     }
 
-    /// Open a tar reader based on the archive type (plain / Gz / Xz).
+    /// 根据压缩包类型（plain / Gz / Xz）创建 tar 读取器。
     fn open_tar_reader(
         file: fs::File,
         archive_type: ArchiveType,
@@ -810,40 +1038,40 @@ impl BaseArchive {
         }
     }
 
-    // --- Per-format single-file readers ---
-
+    /// Zip：从缓存的 ZipArchive 中查找并读取条目。
     fn read_zip(&self, name: &str) -> CoreResult<Vec<u8>> {
-        let file = path_helper::open_read(&self.path)?;
-        let mut archive = ZipArchive::new(file).map_err(|err| {
+        let mut zip = self.zip.lock().unwrap();
+        let zip = zip.as_mut().ok_or_else(|| {
             ErrorType::ArchiveOpenError(FileSystemErrorData {
                 path: self.path.clone(),
-                error: err.to_string(),
+                error: "zip 缓存不可用".to_string(),
             })
         })?;
 
-        let mut entry = archive.by_name(name).map_err(|err| {
+        let mut entry = zip.by_name(name).map_err(|err| {
             ErrorType::ArchiveReadError(ErrorData {
-                error: format!("Entry '{}' not found: {}", name, err),
+                error: format!("条目 '{}' 未找到: {}", name, err),
             })
         })?;
 
         if entry.is_dir() {
             return Err(ErrorType::ArchiveReadError(ErrorData {
-                error: format!("Entry '{}' is a directory", name),
+                error: format!("条目 '{}' 是目录", name),
             }));
         }
 
         let mut buf = Vec::with_capacity(entry.size() as usize);
         entry.read_to_end(&mut buf).map_err(|err| {
             ErrorType::ArchiveReadError(ErrorData {
-                error: format!("Cannot read entry '{}': {}", name, err),
+                error: format!("无法读取条目 '{}': {}", name, err),
             })
         })?;
         Ok(buf)
     }
 
+    /// 7z：克隆文件句柄，创建 ArchiveReader 后遍历查找条目。
     fn read_7z(&self, name: &str) -> CoreResult<Vec<u8>> {
-        let file = path_helper::open_read(&self.path)?;
+        let file = self.clone_file()?;
         let mut archive = ArchiveReader::new(file, Password::empty()).map_err(|err| {
             ErrorType::ArchiveOpenError(FileSystemErrorData {
                 path: self.path.clone(),
@@ -859,37 +1087,38 @@ impl BaseArchive {
                     found = true;
                     if entry.is_directory() {
                         result = None;
-                        return Err(sevenz_rust2::Error::Other("entry is a directory".into()));
+                        return Err(sevenz_rust2::Error::Other("条目是目录".into()));
                     }
                     let mut buf = Vec::new();
                     std::io::Read::read_to_end(reader, &mut buf)?;
                     result = Some(buf);
-                    Ok(false) // stop iterating
+                    Ok(false) // 停止遍历
                 } else {
                     Ok(true)
                 }
             })
             .map_err(|err| {
                 ErrorType::ArchiveReadError(ErrorData {
-                    error: format!("Cannot read entry '{}': {}", name, err),
+                    error: format!("无法读取条目 '{}': {}", name, err),
                 })
             })?;
 
         if !found {
             return Err(ErrorType::ArchiveReadError(ErrorData {
-                error: format!("Entry '{}' not found in archive", name),
+                error: format!("条目 '{}' 在压缩包中未找到", name),
             }));
         }
 
         result.ok_or_else(|| {
             ErrorType::ArchiveReadError(ErrorData {
-                error: format!("Entry '{}' is a directory", name),
+                error: format!("条目 '{}' 是目录", name),
             })
         })
     }
 
+    /// Tar：克隆文件句柄，打开 tar 读取器后扫描查找条目。
     fn read_tar(&self, name: &str) -> CoreResult<Vec<u8>> {
-        let file = path_helper::open_read(&self.path)?;
+        let file = self.clone_file()?;
         let mut archive = Self::open_tar_reader(file, self.archive_type)?;
 
         for entry in archive.entries().map_err(|err| {
@@ -911,13 +1140,13 @@ impl BaseArchive {
                 let header = entry.header();
                 if header.entry_type() == tar::EntryType::Directory {
                     return Err(ErrorType::ArchiveReadError(ErrorData {
-                        error: format!("Entry '{}' is a directory", name),
+                        error: format!("条目 '{}' 是目录", name),
                     }));
                 }
                 let mut buf = Vec::with_capacity(header.size().unwrap_or(0) as usize);
                 entry.read_to_end(&mut buf).map_err(|err| {
                     ErrorType::ArchiveReadError(ErrorData {
-                        error: format!("Cannot read entry '{}': {}", name, err),
+                        error: format!("无法读取条目 '{}': {}", name, err),
                     })
                 })?;
                 return Ok(buf);
@@ -925,48 +1154,50 @@ impl BaseArchive {
         }
 
         Err(ErrorType::ArchiveReadError(ErrorData {
-            error: format!("Entry '{}' not found in archive", name),
+            error: format!("条目 '{}' 在压缩包中未找到", name),
         }))
     }
 
+    /// Zip 流式读取：先读取到内存，再包装为 Cursor。
     fn read_zip_stream(&self, name: &str) -> CoreResult<Box<dyn Read>> {
         let data = self.read_zip(name)?;
         Ok(Box::new(std::io::Cursor::new(data)))
     }
 
+    /// 7z 流式读取：先读取到内存，再包装为 Cursor。
     fn read_7z_stream(&self, name: &str) -> CoreResult<Box<dyn Read>> {
         let data = self.read_7z(name)?;
         Ok(Box::new(std::io::Cursor::new(data)))
     }
 
+    /// Tar 流式读取：先读取到内存，再包装为 Cursor。
     fn read_tar_stream(&self, name: &str) -> CoreResult<Box<dyn Read>> {
         let data = self.read_tar(name)?;
         Ok(Box::new(std::io::Cursor::new(data)))
     }
 
-    // --- Per-format single-file extractors ---
-
+    /// Zip：从缓存读取条目，流式写入目标文件。
     fn extract_file_zip(
         &self,
         name: &str,
         output_path: &Path,
-        gui: Option<&dyn ArchiveGui>,
+        gui: Option<&dyn IArchiveGui>,
     ) -> CoreResult<()> {
         if let Some(gui) = gui {
             gui.start(1);
         }
 
-        let file = path_helper::open_read(&self.path)?;
-        let mut archive = ZipArchive::new(file).map_err(|err| {
+        let mut zip = self.zip.lock().unwrap();
+        let zip = zip.as_mut().ok_or_else(|| {
             ErrorType::ArchiveOpenError(FileSystemErrorData {
                 path: self.path.clone(),
-                error: err.to_string(),
+                error: "zip 缓存不可用".to_string(),
             })
         })?;
 
-        let mut entry = archive.by_name(name).map_err(|err| {
+        let mut entry = zip.by_name(name).map_err(|err| {
             ErrorType::ArchiveReadError(ErrorData {
-                error: format!("Entry '{}' not found: {}", name, err),
+                error: format!("条目 '{}' 未找到: {}", name, err),
             })
         })?;
 
@@ -986,17 +1217,18 @@ impl BaseArchive {
         Ok(())
     }
 
+    /// 7z：克隆文件句柄，通过 default_entry_extract_fn 提取条目。
     fn extract_file_7z(
         &self,
         name: &str,
         output_path: &Path,
-        gui: Option<&dyn ArchiveGui>,
+        gui: Option<&dyn IArchiveGui>,
     ) -> CoreResult<()> {
         if let Some(gui) = gui {
             gui.start(1);
         }
 
-        let file = path_helper::open_read(&self.path)?;
+        let file = self.clone_file()?;
         let mut archive = ArchiveReader::new(file, Password::empty()).map_err(|err| {
             ErrorType::ArchiveOpenError(FileSystemErrorData {
                 path: self.path.clone(),
@@ -1026,7 +1258,7 @@ impl BaseArchive {
 
         if !found {
             return Err(ErrorType::ArchiveReadError(ErrorData {
-                error: format!("Entry '{}' not found in archive", name),
+                error: format!("条目 '{}' 在压缩包中未找到", name),
             }));
         }
 
@@ -1037,17 +1269,18 @@ impl BaseArchive {
         Ok(())
     }
 
+    /// Tar：克隆文件句柄，扫描条目后流式写入目标文件。
     fn extract_file_tar(
         &self,
         name: &str,
         output_path: &Path,
-        gui: Option<&dyn ArchiveGui>,
+        gui: Option<&dyn IArchiveGui>,
     ) -> CoreResult<()> {
         if let Some(gui) = gui {
             gui.start(1);
         }
 
-        let file = path_helper::open_read(&self.path)?;
+        let file = self.clone_file()?;
         let mut archive = Self::open_tar_reader(file, self.archive_type)?;
 
         let mut found = false;
@@ -1082,7 +1315,7 @@ impl BaseArchive {
 
         if !found {
             return Err(ErrorType::ArchiveReadError(ErrorData {
-                error: format!("Entry '{}' not found in archive", name),
+                error: format!("条目 '{}' 在压缩包中未找到", name),
             }));
         }
 

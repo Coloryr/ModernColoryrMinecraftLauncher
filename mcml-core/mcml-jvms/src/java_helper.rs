@@ -1,18 +1,19 @@
 use std::{
     collections::HashSet,
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::{Command, Stdio},
 };
 
-use mcml_base::{ArchEnum, Os, get_system_info, path_helper};
+use mcml_base::{ArchEnum, Os, path_helper};
 use mcml_names::names;
 
 use crate::JavaInfoObj;
 
-/// 查找Java文件
+/// 在指定目录中查找 Java 可执行文件
+///
 /// - `dir`: 查找路径
 pub fn find(dir: &PathBuf) -> Option<PathBuf> {
-    let sys = get_system_info();
+    let sys = mcml_base::get_system_info();
     match sys.os {
         Os::Windows => path_helper::search_file(dir, names::JAVAW_FILE),
         Os::Linux | Os::MacOS => path_helper::search_file(dir, names::JAVA_FILE),
@@ -20,12 +21,13 @@ pub fn find(dir: &PathBuf) -> Option<PathBuf> {
     }
 }
 
-/// 获取主版本号
+/// 从版本字符串提取主版本号
+///
+/// 传统格式: 1.8.0_201 -> 8
+/// 新格式: 11.0.2 -> 11, 17.0.1 -> 17
+///
+/// - `version`: 输入版本号
 fn get_major_version(version: &str) -> i32 {
-    // Java 版本格式处理
-    // 传统格式: 1.8.0_201 -> 8
-    // 新格式: 11.0.2 -> 11, 17.0.1 -> 17
-
     if version.starts_with("1.") {
         // 传统版本: 1.8.0 -> 8
         version
@@ -44,8 +46,10 @@ fn get_major_version(version: &str) -> i32 {
 }
 
 /// 获取 Java 信息
-pub(crate) fn test_java(file: &PathBuf) -> Option<JavaInfoObj> {
-    let path = file.clone();
+///
+/// - `file`: 需要检测的java
+pub(crate) fn test_java<P: AsRef<Path>>(file: P) -> Option<JavaInfoObj> {
+    let path = file.as_ref().to_path_buf();
 
     if !path.exists() || !path.is_file() {
         return None;
@@ -133,6 +137,9 @@ where
         .collect())
 }
 
+/// 搜索Java
+/// 
+/// - `java_paths`: 搜索的结果
 #[cfg(target_os = "windows")]
 pub(crate) fn find_java_inner(java_paths: &mut HashSet<PathBuf>) {
     use mcml_names::i18_items::error_type::CoreResult;
@@ -168,7 +175,8 @@ pub(crate) fn find_java_inner(java_paths: &mut HashSet<PathBuf>) {
         let mut paths = Vec::new();
 
         for name in subkey.enum_keys() {
-            let key_name = name.map_err(|_| ErrorType::InfoNotFound(key_path.to_string()))? + r"\hotspot\MSI";
+            let key_name =
+                name.map_err(|_| ErrorType::InfoNotFound(key_path.to_string()))? + r"\hotspot\MSI";
             let key = subkey
                 .open_subkey(&key_name)
                 .map_err(|_| ErrorType::InfoNotFound(key_name))?;
@@ -260,6 +268,9 @@ pub(crate) fn find_java_inner(java_paths: &mut HashSet<PathBuf>) {
     }
 }
 
+/// 搜索Java
+/// 
+/// - `java_paths`: 搜索的结果
 #[cfg(target_os = "linux")]
 pub(crate) fn find_java_inner(java_paths: &mut HashSet<PathBuf>) {
     fn resolve_symlink(path: &str) -> Result<PathBuf, std::io::Error> {
@@ -347,6 +358,9 @@ pub(crate) fn find_java_inner(java_paths: &mut HashSet<PathBuf>) {
     scan_common_java_dirs(java_paths);
 }
 
+/// 搜索Java
+/// 
+/// - `java_paths`: 搜索的结果
 #[cfg(target_os = "macos")]
 pub(crate) fn find_java(java_paths: &mut HashSet<PathBuf>) {
     // 使用 /usr/libexec/java_home

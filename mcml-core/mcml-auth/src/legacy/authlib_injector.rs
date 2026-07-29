@@ -8,6 +8,7 @@ use crate::{
 };
 
 /// 外置登录
+/// 
 /// - `client_token`: 客户端标识
 /// - `user`: 用户名
 /// - `password`: 密码
@@ -52,6 +53,7 @@ pub async fn authenticate(
 
 impl LoginObj {
     /// 刷新登录
+    /// 
     /// - `auth`: 保存的账户
     pub async fn refresh_authlib(&mut self, cancel: &CancellationToken) -> CoreResult<()> {
         let server = self.text1.clone().unwrap();

@@ -1,4 +1,6 @@
-/// 将字符串列表换成字符串
+/// 将字符串列表换成字符串，一个数据一个换行
+/// 
+/// - `vec`: 输入数据
 pub fn build_vec_string(vec: &Vec<String>) -> String {
     let mut str = String::new();
 

@@ -15,7 +15,7 @@ pub mod java_helper;
 pub struct JavaInfoObj {
     /// 名字
     pub name: String,
-    /// 名字
+    /// 路径
     pub path: PathBuf,
     /// 版本号
     pub version: String,
@@ -23,11 +23,11 @@ pub struct JavaInfoObj {
     pub major_version: i32,
     /// Java类型
     pub java_type: String,
-    /// 进制
+    /// 架构
     pub arch: ArchEnum,
 }
 
-static DIR: OnceLock<PathBuf> = OnceLock::new();
+/// Java存放位置
 static JAVA_DIR: OnceLock<PathBuf> = OnceLock::new();
 
 static JVMS: LazyLock<RwLock<HashMap<String, Arc<JavaInfoObj>>>> =
@@ -35,6 +35,7 @@ static JVMS: LazyLock<RwLock<HashMap<String, Arc<JavaInfoObj>>>> =
 
 static JVM_CHANGE_EVENT: LazyLock<EventHandler> = LazyLock::new(|| EventHandler::new());
 
+/// 添加 Java 列表变更回调
 pub fn add_jvm_change<F>(handler: F) -> u64
 where
     F: Fn() + Send + Sync + 'static,
@@ -42,6 +43,7 @@ where
     JVM_CHANGE_EVENT.add_handler(handler)
 }
 
+/// 移除 Java 列表变更回调
 pub fn remove_jvm_change(id: u64) {
     JVM_CHANGE_EVENT.remove_handle(id);
 }
@@ -51,10 +53,10 @@ pub(crate) fn invoke_jvm_change() {
 }
 
 /// 初始化
+/// 
 /// - `dir`:  运行的路径
 pub fn init<P: AsRef<Path>>(dir: P) {
-    let dir = DIR.get_or_init(|| dir.as_ref().to_path_buf());
-    let dir = JAVA_DIR.get_or_init(|| dir.join(names::JAVA_DIR));
+    let dir = JAVA_DIR.get_or_init(|| dir.as_ref().join(names::JAVA_DIR));
     if !dir.is_dir() || !dir.exists() {
         fs::create_dir(dir).unwrap();
     }
@@ -66,7 +68,8 @@ pub fn init<P: AsRef<Path>>(dir: P) {
 }
 
 /// 获取Java信息
-/// - `name`: 名字
+///
+/// - `key`: Java 名字
 pub fn get_java_info(key: &str) -> Option<Arc<JavaInfoObj>> {
     let list = JVMS.read().ok()?;
     let item = list.get(key)?;
@@ -74,6 +77,7 @@ pub fn get_java_info(key: &str) -> Option<Arc<JavaInfoObj>> {
 }
 
 /// 删除Java
+/// 
 /// - `name`: 名字
 pub fn remove(name: &str) {
     let mut list = JVMS.write().unwrap();
@@ -94,7 +98,7 @@ pub fn remove(name: &str) {
     }
 }
 
-/// 删除所有Java
+/// 删除所有Java并保存配置
 pub fn remove_all() {
     let mut list = JVMS.write().unwrap();
 
@@ -105,10 +109,11 @@ pub fn remove_all() {
 }
 
 /// 添加Java
+/// 
 /// - `name`: 名字
 /// - `file`: 路径
 pub fn add_item(name: String, file: String) -> Option<String> {
-    let dir = DIR.get().unwrap();
+    let dir = mcml_base::get_base_dir();
     let local = if file.starts_with(dir.to_str().unwrap()) {
         String::from(&file[dir.to_str().unwrap().len()..])
     } else {
@@ -145,10 +150,11 @@ pub fn add_item(name: String, file: String) -> Option<String> {
     }
 }
 
-/// 添加到列表
+/// 测试并添加到配置文件
+/// 
 /// - `list`: 列表
 fn add_list(list: &Vec<JvmConfigObj>) {
-    let dir = DIR.get().unwrap().clone();
+    let dir = mcml_base::get_base_dir();
     let list_cloned = list.clone();
 
     let mut list1 = JVMS.write().unwrap();
@@ -196,6 +202,7 @@ fn add_list(list: &Vec<JvmConfigObj>) {
 }
 
 /// 查找对应主版本的Java
+/// 
 /// - `version`: 主版本
 /// - `over`: 是否允许获取高版本
 pub fn get_java(version: i32, over: bool) -> Option<Arc<JavaInfoObj>> {
@@ -232,7 +239,7 @@ pub fn get_all_java() -> Vec<Arc<JavaInfoObj>> {
     vec
 }
 
-/// 从注册表或者标准路径中查找java列表
+/// 从系统注册表或标准路径中查找 Java 列表
 fn find_java() -> Option<Vec<JavaInfoObj>> {
     let mut java_paths = HashSet::new();
 

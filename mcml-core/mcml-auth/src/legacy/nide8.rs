@@ -9,6 +9,7 @@ use crate::{
 };
 
 /// 统一通行证登录
+/// 
 /// - `client_token`: 客户端标识
 /// - `user`: 用户名
 /// - `password`: 密码
@@ -32,6 +33,7 @@ pub async fn authenticate(
 
 impl LoginObj {
     /// 刷新登录
+    /// 
     /// - `auth`: 保存的账户
     pub async fn refresh_nide8(&mut self, cancel: &CancellationToken) -> CoreResult<()> {
         let server = String::from(urls::NIDE8_URL) + &self.text1.clone().unwrap();

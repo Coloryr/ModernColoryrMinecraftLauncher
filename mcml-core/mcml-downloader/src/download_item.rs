@@ -5,16 +5,56 @@ use mcml_base::file_item::FileItemObj;
 /// 下载项状态
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DownloadItemState {
-    Wait,     // 等待中
-    Download, // 下载中
-    GetInfo,  // 获取信息
-    Pause,    // 暂停
-    Init,     // 初始化中
-    Action,   // 执行后续操作
-    Done,     // 完成
-    Error,    // 错误
+    /// 等待中
+    Wait,
+    /// 下载中
+    Download,
+    /// 获取信息
+    GetInfo,
+    /// 暂停
+    Pause,
+    /// 初始化中
+    Init,
+    /// 执行后续操作
+    Action,
+    /// 完成
+    Done,
+    /// 错误
+    Error,
 }
 
+impl DownloadItemState {
+    /// 状态转换
+    pub fn state_to_int(&self) -> u32 {
+        match self {
+            DownloadItemState::Wait => 0,
+            DownloadItemState::Download => 1,
+            DownloadItemState::GetInfo => 2,
+            DownloadItemState::Pause => 3,
+            DownloadItemState::Init => 4,
+            DownloadItemState::Action => 5,
+            DownloadItemState::Done => 6,
+            DownloadItemState::Error => 7,
+        }
+    }
+
+    /// 状态转换
+    pub fn int_to_state(value: u32) -> DownloadItemState {
+        match value {
+            0 => DownloadItemState::Wait,
+            1 => DownloadItemState::Download,
+            2 => DownloadItemState::GetInfo,
+            3 => DownloadItemState::Pause,
+            4 => DownloadItemState::Init,
+            5 => DownloadItemState::Action,
+            6 => DownloadItemState::Done,
+            7 => DownloadItemState::Error,
+            _ => DownloadItemState::Error,
+        }
+    }
+}
+
+/// 下载项目
 pub struct DownloadItem {
     /// 文件信息
     pub base: FileItemObj,
@@ -60,63 +100,43 @@ impl DownloadItem {
         }
     }
 
+    /// 添加下载进度
     pub fn add_progress(&self, size: u64) {
         self.now_size.fetch_add(size, Ordering::Relaxed);
     }
 
+    /// 设置下载大小
     pub fn set_now_size(&self, size: u64) {
         self.now_size.store(size, Ordering::Relaxed);
     }
 
+    /// 设置文件大小
     pub fn set_all_size(&self, size: u64) {
         self.all_size.store(size, Ordering::Relaxed);
     }
 
+    /// 获取文件大小
     pub fn get_all_size(&self) -> u64 {
         self.all_size.load(Ordering::Acquire)
     }
 
+    /// 添加下载错误次数
     pub fn add_error(&self) {
         self.error.fetch_add(1, Ordering::Relaxed);
     }
 
+    /// 设置下载状态
     pub fn set_state(&self, state: DownloadItemState) {
-        self.state
-            .store(Self::state_to_int(state), Ordering::Relaxed);
+        self.state.store(state.state_to_int(), Ordering::Relaxed);
     }
 
+    /// 获取下载状态
     pub fn get_state(&self) -> DownloadItemState {
-        Self::int_to_state(self.state.load(Ordering::Acquire))
+        DownloadItemState::int_to_state(self.state.load(Ordering::Acquire))
     }
 
+    /// 获取当前下载大小
     pub fn get_now_size(&self) -> u64 {
         self.now_size.load(Ordering::Acquire)
-    }
-
-    fn state_to_int(state: DownloadItemState) -> u32 {
-        match state {
-            DownloadItemState::Wait => 0,
-            DownloadItemState::Download => 1,
-            DownloadItemState::GetInfo => 2,
-            DownloadItemState::Pause => 3,
-            DownloadItemState::Init => 4,
-            DownloadItemState::Action => 5,
-            DownloadItemState::Done => 6,
-            DownloadItemState::Error => 7,
-        }
-    }
-
-    fn int_to_state(value: u32) -> DownloadItemState {
-        match value {
-            0 => DownloadItemState::Wait,
-            1 => DownloadItemState::Download,
-            2 => DownloadItemState::GetInfo,
-            3 => DownloadItemState::Pause,
-            4 => DownloadItemState::Init,
-            5 => DownloadItemState::Action,
-            6 => DownloadItemState::Done,
-            7 => DownloadItemState::Error,
-            _ => DownloadItemState::Error,
-        }
     }
 }

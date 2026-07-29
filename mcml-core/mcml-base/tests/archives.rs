@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fs, path::{Path, PathBuf}};
 
-use mcml_base::archives::{ArchiveType, TarMode, compress, decompress};
+use mcml_base::archives::{ArchiveType, BaseArchive, TarMode};
 
 /// 对比两个文件夹是否一致
 pub fn compare_folders(
@@ -160,7 +160,7 @@ fn zip() {
         String::from("skip.text"),
         String::from("dir1/skip.text"),
     ]);
-    let res = compress(ArchiveType::Zip, &zip, &source, Some(&source), &filter, None);
+    let res = BaseArchive::compress(ArchiveType::Zip, &zip, &source, Some(&source), &filter, None);
     assert!(res.is_ok());
 }
 
@@ -170,7 +170,7 @@ fn unzip() {
     let file = Path::new("test_run");
     let zip = file.join("test.zip");
     let dir = file.join("test_zip/");
-    let res = decompress(ArchiveType::Zip, &zip, &dir, None);
+    let res = BaseArchive::decompress(ArchiveType::Zip, &zip, &dir, None);
     assert!(res.is_ok());
 }
 
@@ -196,7 +196,7 @@ fn r7z() {
         String::from("skip.text"),
         String::from("dir1/skip.text"),
     ]);
-    let res = compress(ArchiveType::R7Z, &zip, &source, Some(&source), &filter, None);
+    let res = BaseArchive::compress(ArchiveType::R7Z, &zip, &source, Some(&source), &filter, None);
     assert!(res.is_ok());
 }
 
@@ -206,7 +206,7 @@ fn unr7z() {
     let file = Path::new("test_run");
     let zip = file.join("test.7z");
     let dir = file.join("test_7z/");
-    let res = decompress(ArchiveType::R7Z, &zip, &dir, None);
+    let res = BaseArchive::decompress(ArchiveType::R7Z, &zip, &dir, None);
     assert!(res.is_ok());
 }
 
@@ -232,7 +232,7 @@ fn targz() {
         String::from("skip.text"),
         String::from("dir1/skip.text"),
     ]);
-    let res = compress(ArchiveType::TarGz, &zip, &source, Some(&source), &filter, None);
+    let res = BaseArchive::compress(ArchiveType::TarGz, &zip, &source, Some(&source), &filter, None);
     assert!(res.is_ok());
 }
 
@@ -242,7 +242,7 @@ fn untargz() {
     let file = Path::new("test_run");
     let zip = file.join("test.tar.gz");
     let dir = file.join("test_targz/");
-    let res = decompress(ArchiveType::TarGz, &zip, &dir, None);
+    let res = BaseArchive::decompress(ArchiveType::TarGz, &zip, &dir, None);
     assert!(res.is_ok());
 }
 
@@ -268,7 +268,7 @@ fn tarxz() {
         String::from("skip.text"),
         String::from("dir1/skip.text"),
     ]);
-    let res = compress(ArchiveType::TarXz, &zip, &source, Some(&source), &filter, None);
+    let res = BaseArchive::compress(ArchiveType::TarXz, &zip, &source, Some(&source), &filter, None);
     assert!(res.is_ok());
 }
 
@@ -278,7 +278,7 @@ fn untarxz() {
     let file = Path::new("test_run");
     let zip = file.join("test.tar.xz");
     let dir = file.join("test_tarxz/");
-    let res = decompress(ArchiveType::TarXz, &zip, &dir, None);
+    let res = BaseArchive::decompress(ArchiveType::TarXz, &zip, &dir, None);
     assert!(res.is_ok());
 }
 

@@ -1,7 +1,7 @@
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use mcml_base::{
-    archives::{self, ArchiveGui, ArchiveType, BaseArchive},
+    archives::{IArchiveGui, ArchiveType, BaseArchive},
     file_item::FileHash,
     serialize_tools,
 };
@@ -65,10 +65,13 @@ pub struct ExportArg {
     /// 说明
     pub summary: String,
     /// 压缩进度条
-    pub gui: Option<Arc<dyn ArchiveGui>>,
+    pub gui: Option<Arc<dyn IArchiveGui>>,
 }
 
 impl InstanceSettingObj {
+    /// 导出整合包
+    ///
+    /// - `data`: 导出参数
     pub async fn export(&self, data: ExportArg) -> CoreResult<()> {
         match data.pack {
             ExportPackType::ColorMC => colormc(self, data),
@@ -79,6 +82,7 @@ impl InstanceSettingObj {
     }
 }
 
+/// 将作者列表拼接为字符串
 fn get_author_string(author: &Vec<CurseForgeListDataObj>) -> String {
     if author.is_empty() {
         String::new()
@@ -93,6 +97,7 @@ fn get_author_string(author: &Vec<CurseForgeListDataObj>) -> String {
     }
 }
 
+/// 导出为 ColorMC 整合包格式
 fn colormc(game: &InstanceSettingObj, data: ExportArg) -> CoreResult<()> {
     let mut list = data.unselect;
     list.push(game.get_online_info_file());
@@ -109,7 +114,7 @@ fn colormc(game: &InstanceSettingObj, data: ExportArg) -> CoreResult<()> {
         }
     }
 
-    archives::compress(
+    let mut archive = BaseArchive::compress(
         data.archive,
         &data.file,
         &game.get_base_path(),
@@ -117,8 +122,6 @@ fn colormc(game: &InstanceSettingObj, data: ExportArg) -> CoreResult<()> {
         &Some(list),
         data.gui.clone(),
     )?;
-
-    let mut archive = BaseArchive::open(&data.file)?;
     archive.add_data(
         names::MOD_INFO_FILE,
         &serialize_tools::json_to_bytes(&list1)?,
@@ -128,6 +131,7 @@ fn colormc(game: &InstanceSettingObj, data: ExportArg) -> CoreResult<()> {
     Ok(())
 }
 
+/// 导出为 CurseForge 整合包格式
 fn curseforge(game: &InstanceSettingObj, data: ExportArg) -> CoreResult<()> {
     let mut obj = CurseForgePackObj {
         name: data.name,
