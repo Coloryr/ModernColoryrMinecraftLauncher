@@ -1,3 +1,8 @@
+//! 通用事件系统
+//!
+//! 提供基于回调的发布-订阅事件机制，支持带参数和无参数两种模式。
+//! 使用 `RwLock<HashMap<u64, Box<dyn Fn>>>` 存储回调，原子自增 ID 管理。
+
 /// 通用事件
 use std::{
     collections::HashMap,

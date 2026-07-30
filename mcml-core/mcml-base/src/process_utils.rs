@@ -1,3 +1,19 @@
+//! 进程管理模块
+//!
+//! 提供跨平台的子进程启动功能，支持：
+//!
+//! - **普通启动** — 标准子进程，stdout/stderr 通过管道捕获
+//! - **管理员权限启动** — Windows (PowerShell + 命名管道) / macOS (osascript) / Linux (pkexec)
+//! - **进程重启** — 以管理员权限重新启动 ColorMC 自身
+//!
+//! # 提权机制
+//!
+//! | 平台 | 机制 |
+//! |------|------|
+//! | Windows | PowerShell RunAs + 命名管道转发 stdout/stderr |
+//! | macOS | `osascript do shell script with administrator privileges` |
+//! | Linux | `pkexec` 直接转发 stdin/stdout/stderr |
+
 use std::{
     collections::HashMap,
     io::{self, Read},
@@ -7,7 +23,9 @@ use std::{
 
 use mcml_names::i18_items::error_type::{CoreResult, ErrorData, ErrorType};
 
-/// 进程输出流，统一普通子进程的输出管道和提权进程的命名管道
+/// 进程输出流统一封装
+///
+/// 统一普通子进程的输出管道和提权进程的命名管道，对外提供统一的 `Read` 接口。
 pub enum OutputStream {
     /// 普通子进程的 stdout
     Stdout(std::process::ChildStdout),

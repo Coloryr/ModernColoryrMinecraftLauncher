@@ -1,3 +1,14 @@
+//! 序列化工具模块
+//!
+//! 提供 JSON 和 TOML 格式的解析、序列化工具函数，
+//! 以及简化的值访问封装（`MiniJsonObj`、`MiniTomlMap`）和
+//! 自定义反序列化器（`deserialize_number_or_min`/`deserialize_number_or_max`）。
+//!
+//! # 简化访问封装
+//!
+//! - [`MiniJsonObj`] / [`MiniJsonMap`] — JSON 值的类型安全访问
+//! - [`MiniTomlObj`] / [`MiniTomlMap`] — TOML 值的类型安全访问
+
 /// 序列化操作
 use std::{
     cmp, collections::{HashMap, hash_map}, io::Read, path::Path,

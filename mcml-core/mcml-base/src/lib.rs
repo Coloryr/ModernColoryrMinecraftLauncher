@@ -1,3 +1,33 @@
+//! 启动器基础库模块
+//!
+//! 本模块是启动器最底层的公共库，提供了所有其他模块共享的基础设施：
+//!
+//! # 核心功能
+//!
+//! - **系统信息检测** — 操作系统类型、CPU 架构、Linux 发行版识别
+//! - **文件系统操作** — 文件读写、复制移动、权限提升、回收站操作
+//! - **序列化工具** — JSON/TOML 的解析和序列化，自定义反序列化器
+//! - **哈希计算** — MD5/SHA1/SHA256/SHA512 及 Base64 编解码
+//! - **压缩包处理** — Zip/7z/Tar/TarGz/TarXz 的压缩和解压
+//! - **事件系统** — 全局事件发布订阅（带参数/无参数）
+//! - **进程管理** — 子进程启动（普通/管理员权限）、输出流捕获
+//! - **字符串校验** — 数字格式、英文数字格式的正则校验
+//!
+//! # 子模块
+//!
+//! | 模块 | 用途 |
+//! |------|------|
+//! | [`path_helper`] | 文件和目录操作 |
+//! | [`serialize_tools`] | JSON/TOML 序列化 |
+//! | [`hash_helper`] | 哈希和 Base64 |
+//! | [`archives`] | 压缩包处理 |
+//! | [`events`] | 事件发布订阅 |
+//! | [`process_utils`] | 进程管理 |
+//! | [`inner_path`] | 内部数据存储路径 |
+//! | [`file_item`] | 文件下载项定义 |
+//! | [`checker`] | 字符串格式校验 |
+//! | [`builder`] | 字符串构建工具 |
+
 pub mod archives;
 pub mod builder;
 pub mod checker;
@@ -19,12 +49,19 @@ use std::{
 /// 操作系统类型枚举
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Os {
+    /// 未知操作系统
     None,
+    /// Microsoft Windows
     Windows,
+    /// Linux（通用发行版）
     Linux,
+    /// Apple macOS
     MacOS,
+    /// Alpine Linux（使用 musl libc）
     AlpineLinux,
+    /// IBM AIX
     AIX,
+    /// Oracle Solaris
     Solaris,
 }
 
@@ -42,14 +79,21 @@ impl fmt::Display for Os {
     }
 }
 
-/// 系统架构枚举
+/// CPU 架构枚举
+///
+/// 使用 `#[repr(u8)]` 支持高效序列化。
 #[derive(Serialize_repr, Deserialize_repr, Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum ArchEnum {
+    /// x86 32 位
     X86,
+    /// x86_64 64 位
     X86_64,
+    /// ARM 32 位
     Arm,
+    /// ARM 64 位 (AArch64)
     AArch64,
+    /// 未知架构
     Unknown,
 }
 
@@ -72,17 +116,19 @@ impl fmt::Display for ArchEnum {
 }
 
 /// 系统信息结构体
+///
+/// 在首次访问时通过 [`get_system_info()`] 惰性初始化并缓存。
 #[derive(Debug, Clone)]
 pub struct SystemInfo {
     /// 操作系统类型
     pub os: Os,
-    /// 系统架构
+    /// CPU 架构
     pub system_arch: ArchEnum,
-    /// 系统名称（完整描述）
+    /// 系统名称（完整描述，如 `"windows"`、`"linux"`）
     pub system_name: String,
-    /// Linux系统名
+    /// Linux 发行版标识（如 `"ubuntu"`、`"arch"`），非 Linux 为空字符串
     pub distribution: String,
-    /// 格式化的系统字符串
+    /// 格式化的系统描述字符串（如 `"Os:Windows Arch:x86_64"`）
     pub system: String,
     /// 是否为 ARM 处理器
     pub is_arm: bool,
@@ -90,15 +136,17 @@ pub struct SystemInfo {
     pub is_64_bit: bool,
 }
 
-/// 系统信息
+/// 全局系统信息缓存（惰性初始化）
 static SYSTEM_INFO: LazyLock<SystemInfo> = LazyLock::new(|| SystemInfo::new());
 
-/// 获取系统信息
+/// 获取系统信息（首次调用时自动检测并缓存）
 pub fn get_system_info() -> SystemInfo {
     SYSTEM_INFO.clone()
 }
 
-/// 读linux系统信息
+/// 读取 Linux 发行版标识
+///
+/// 解析 `/etc/os-release` 中的 `ID=` 字段。
 fn get_linux_distribution() -> String {
     // 读取 /etc/os-release
     let content = std::fs::read_to_string("/etc/os-release").ok();
@@ -165,15 +213,21 @@ impl fmt::Display for SystemInfo {
     }
 }
 
-/// 基础运行路径
+/// 程序运行根目录（全局单例）
 static BASE_DIR: OnceLock<PathBuf> = OnceLock::new();
 
-/// 初始化路径
+/// 初始化程序运行根目录
+///
+/// 应在程序启动时调用一次，设置后可通过 [`get_base_dir()`] 获取。
+///
+/// # 参数
+///
+/// - `dir`: 程序运行目录
 pub fn init<P: AsRef<Path>>(dir: P) {
     BASE_DIR.get_or_init(|| dir.as_ref().to_path_buf());
 }
 
-/// 获取基础路径
+/// 获取程序运行根目录
 pub fn get_base_dir() -> PathBuf {
     BASE_DIR.get().unwrap().clone()
 }

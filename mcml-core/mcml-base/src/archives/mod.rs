@@ -1,3 +1,18 @@
+//! 压缩包处理模块
+//!
+//! 提供多种压缩格式的压缩和解压功能：
+//!
+//! | 格式 | 实现 |
+//! |------|------|
+//! | Zip | [`zip_runner`] — 基于 `zip` crate |
+//! | Tar / TarGz / TarXz | [`tar_runner`] — 基于 `tar` + `flate2`/`xz2` crate |
+//! | 7z | [`r7z_runner`] — 基于 `sevenz-rust` crate |
+//!
+//! # 进度回调
+//!
+//! 通过 [`IArchiveGui`] trait 支持压缩/解压进度的 UI 回调通知。
+//! 使用 [`ArchiveProcess`] 内部追踪进度状态。
+
 use std::{
     path::{Path, PathBuf}, sync::{Arc, atomic::{AtomicUsize, Ordering}},
 };
