@@ -1,33 +1,44 @@
+//! 日志条目数据结构
+//!
+//! 定义日志系统中的日志级别枚举和单条日志条目结构。
+
 use std::time::SystemTime;
 
 use chrono::{DateTime, Datelike, Local, Timelike};
 
-/// 日志等级
+/// 日志级别
+///
+/// 从低到高依次为：Info → Warn → Error → Fault
 pub(crate) enum LogLevel {
-    /// 信息
+    /// 一般信息
     Info,
     /// 警告
     Warn,
     /// 错误
     Error,
-    /// 严重错误
+    /// 严重错误/崩溃
     Fault,
 }
 
+/// 单条日志条目
+///
+/// 包含日志内容、级别和记录时间。
 pub(crate) struct LogItem {
-    /// 日志内容
+    /// 日志文本内容
     pub log: String,
-    /// 日志等级
+    /// 日志级别
     level: LogLevel,
-    /// 日志时间
+    /// 日志记录时间（系统时间）
     time: SystemTime,
 }
 
-/// 一条日志
 impl LogItem {
-    /// 生成一条日志
-    /// text 日志内容
-    /// level 日志等级
+    /// 创建一条日志条目
+    ///
+    /// # 参数
+    ///
+    /// - `text`: 日志内容
+    /// - `level`: 日志级别
     pub fn new(text: String, level: LogLevel) -> Self {
         LogItem {
             log: text,
@@ -36,7 +47,9 @@ impl LogItem {
         }
     }
 
-    /// 获取时间字符串
+    /// 获取格式化的时间字符串
+    ///
+    /// 格式：`YYYY-MM-DD HH:MM:SS`
     pub fn get_time(&self) -> String {
         let time: DateTime<Local> = self.time.into();
 
@@ -52,7 +65,7 @@ impl LogItem {
         .to_string()
     }
 
-    /// 获取日志等级字符串
+    /// 获取日志级别的字符串表示
     pub fn get_level(&self) -> &str {
         match self.level {
             LogLevel::Info => "Info",

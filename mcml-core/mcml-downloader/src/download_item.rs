@@ -1,30 +1,41 @@
+//! 下载项目模块
+//!
+//! 定义单个下载文件的状态跟踪结构体 [`DownloadItem`]，
+//! 使用原子变量实现线程安全的状态和进度更新。
+
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 
 use mcml_base::file_item::FileItemObj;
 
-/// 下载项状态
+/// 下载项的状态机
+///
+/// ```text
+/// Wait → Init → GetInfo → Download → Done
+///                    ↓          ↓
+///                 Action     Error
+/// ```
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DownloadItemState {
-    /// 等待中
+    /// 等待分配到下载线程
     Wait,
-    /// 下载中
+    /// 正在下载文件数据
     Download,
-    /// 获取信息
+    /// 正在获取文件元信息（大小等）
     GetInfo,
     /// 暂停
     Pause,
     /// 初始化中
     Init,
-    /// 执行后续操作
+    /// 执行下载后处理（解压等）
     Action,
-    /// 完成
+    /// 下载完成
     Done,
-    /// 错误
+    /// 下载出错
     Error,
 }
 
 impl DownloadItemState {
-    /// 状态转换
+    /// 将状态转换为整数（用于原子存储）
     pub fn state_to_int(&self) -> u32 {
         match self {
             DownloadItemState::Wait => 0,
@@ -38,7 +49,7 @@ impl DownloadItemState {
         }
     }
 
-    /// 状态转换
+    /// 从整数恢复状态
     pub fn int_to_state(value: u32) -> DownloadItemState {
         match value {
             0 => DownloadItemState::Wait,
@@ -54,25 +65,30 @@ impl DownloadItemState {
     }
 }
 
-/// 下载项目
+/// 单个下载文件的状态跟踪
+///
+/// 所有字段使用原子变量，支持多线程安全的读写。
 pub struct DownloadItem {
-    /// 文件信息
+    /// 文件基本信息（URL、路径、哈希等）
     pub base: FileItemObj,
-    /// 下载时是否覆盖
+    /// 下载时是否覆盖已存在的文件
     pub overwrite: bool,
-    /// 总体大小
+    /// 文件总大小（字节）
     all_size: AtomicU64,
-    /// 已下载大小
+    /// 已下载大小（字节）
     now_size: AtomicU64,
-    /// 下载状态
+    /// 当前下载状态
     state: AtomicU32,
-    /// 错误次数
+    /// 累计错误次数
     error: AtomicU32,
 }
 
 impl DownloadItem {
     /// 创建下载项目
-    /// - `file`: 文件信息
+    ///
+    /// # 参数
+    ///
+    /// - `file`: 文件基本信息
     pub fn new(file: FileItemObj) -> Self {
         DownloadItem {
             base: file,
@@ -84,13 +100,13 @@ impl DownloadItem {
         }
     }
 
-    /// 设置是否覆盖
+    /// 设置是否覆盖已存在文件（构建器模式）
     pub fn set_overwrite(mut self, overwrite: bool) -> Self {
         self.overwrite = overwrite;
         self
     }
 
-    /// 获取当前文件进度
+    /// 获取当前下载进度百分比（0.0–100.0）
     pub fn progress(&self) -> f64 {
         let size = self.all_size.load(Ordering::Acquire);
         if size > 0 {
@@ -100,42 +116,42 @@ impl DownloadItem {
         }
     }
 
-    /// 添加下载进度
+    /// 累加已下载字节数
     pub fn add_progress(&self, size: u64) {
         self.now_size.fetch_add(size, Ordering::Relaxed);
     }
 
-    /// 设置下载大小
+    /// 设置已下载字节数（用于断点续传恢复）
     pub fn set_now_size(&self, size: u64) {
         self.now_size.store(size, Ordering::Relaxed);
     }
 
-    /// 设置文件大小
+    /// 设置文件总大小
     pub fn set_all_size(&self, size: u64) {
         self.all_size.store(size, Ordering::Relaxed);
     }
 
-    /// 获取文件大小
+    /// 获取文件总大小
     pub fn get_all_size(&self) -> u64 {
         self.all_size.load(Ordering::Acquire)
     }
 
-    /// 添加下载错误次数
+    /// 累加错误计数
     pub fn add_error(&self) {
         self.error.fetch_add(1, Ordering::Relaxed);
     }
 
-    /// 设置下载状态
+    /// 设置当前下载状态
     pub fn set_state(&self, state: DownloadItemState) {
         self.state.store(state.state_to_int(), Ordering::Relaxed);
     }
 
-    /// 获取下载状态
+    /// 获取当前下载状态
     pub fn get_state(&self) -> DownloadItemState {
         DownloadItemState::int_to_state(self.state.load(Ordering::Acquire))
     }
 
-    /// 获取当前下载大小
+    /// 获取已下载字节数
     pub fn get_now_size(&self) -> u64 {
         self.now_size.load(Ordering::Acquire)
     }

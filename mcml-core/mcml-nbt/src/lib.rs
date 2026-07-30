@@ -8,25 +8,45 @@ use crate::nbt_types::{
     NbtLong, NbtLongArray, NbtShort, NbtString,
 };
 
+/// 区块（Chunk）数据的读写模块
 pub mod chunk;
+/// NBT 文件的整体读写模块
 pub mod nbt_file;
+/// NBT 各类型标签的数据结构定义模块
 pub mod nbt_types;
 
+/// NBT 标签结束标记（TAG_End）的类型序号
 pub const NBT_END_ORDER: u8 = 0;
+/// NBT 字节类型（TAG_Byte）的类型序号
 pub const NBT_BYTE_ORDER: u8 = 1;
+/// NBT 短整型（TAG_Short）的类型序号
 pub const NBT_SHORT_ORDER: u8 = 2;
+/// NBT 整型（TAG_Int）的类型序号
 pub const NBT_INT_ORDER: u8 = 3;
+/// NBT 长整型（TAG_Long）的类型序号
 pub const NBT_LONG_ORDER: u8 = 4;
+/// NBT 浮点型（TAG_Float）的类型序号
 pub const NBT_FLOAT_ORDER: u8 = 5;
+/// NBT 双精度浮点型（TAG_Double）的类型序号
 pub const NBT_DOUBLE_ORDER: u8 = 6;
+/// NBT 字节数组类型（TAG_Byte_Array）的类型序号
 pub const NBT_BYTE_ARRAY_ORDER: u8 = 7;
+/// NBT 字符串类型（TAG_String）的类型序号
 pub const NBT_STRING_ORDER: u8 = 8;
+/// NBT 列表类型（TAG_List）的类型序号
 pub const NBT_LIST_ORDER: u8 = 9;
+/// NBT 复合类型（TAG_Compound）的类型序号
 pub const NBT_COMPOUND_ORDER: u8 = 10;
+/// NBT 整型数组类型（TAG_Int_Array）的类型序号
 pub const NBT_INT_ARRAY_ORDER: u8 = 11;
+/// NBT 长整型数组类型（TAG_Long_Array）的类型序号
 pub const NBT_LONG_ARRAY_ORDER: u8 = 12;
 
-/// NBT读写流接口
+/// NBT 读写流接口
+///
+/// 定义了 NBT 标签与二进制流之间序列化和反序列化的统一接口。
+/// 所有 NBT 标签类型均需实现此 trait，以便通过统一的 `read`/`write`
+/// 方法进行二进制读写操作。
 pub(crate) trait NbtStream {
     /// NBT标签读
     fn read<R: Read>(&mut self, stream: &mut R) -> CoreResult<()>;
@@ -34,25 +54,72 @@ pub(crate) trait NbtStream {
     fn write<W: Write>(&self, stream: &mut W) -> CoreResult<()>;
 }
 
-/// NBT类型
+/// NBT 类型枚举
+///
+/// 封装了 Minecraft NBT（Named Binary Tag）规范中定义的全部 13 种标签类型。
+/// 每种变体对应 Minecraft 数据存储中的一种基本数据类型，用于序列化和
+/// 反序列化游戏数据（如区块、玩家存档、物品等）。
+///
+/// # 标签类型对照
+///
+/// | 变体       | 类型 ID | Minecraft 名称       | 说明             |
+/// |-----------|--------|---------------------|-----------------|
+/// | `End`     | 0      | TAG_End             | 复合标签结束标记    |
+/// | `Byte`    | 1      | TAG_Byte            | 有符号 8 位整数    |
+/// | `Short`   | 2      | TAG_Short           | 有符号 16 位整数   |
+/// | `Int`     | 3      | TAG_Int             | 有符号 32 位整数   |
+/// | `Long`    | 4      | TAG_Long            | 有符号 64 位整数   |
+/// | `Float`   | 5      | TAG_Float           | 32 位 IEEE 浮点数 |
+/// | `Double`  | 6      | TAG_Double          | 64 位 IEEE 浮点数 |
+/// | `ByteArray` | 7    | TAG_Byte_Array      | 字节数组          |
+/// | `String`  | 8      | TAG_String          | UTF-8 字符串     |
+/// | `List`    | 9      | TAG_List            | 同类型标签列表     |
+/// | `Compound`| 10     | TAG_Compound        | 键值对复合结构     |
+/// | `IntArray`| 11     | TAG_Int_Array       | 32 位整数数组     |
+/// | `LongArray`| 12    | TAG_Long_Array      | 64 位整数数组     |
 pub enum NbtType {
+    /// NBT 结束标记，用于标识复合标签（Compound）的结尾
     End(NbtEnd),
+    /// NBT 字节类型（TAG_Byte）
     Byte(NbtByte),
+    /// NBT 短整型（TAG_Short）
     Short(NbtShort),
+    /// NBT 整型（TAG_Int）
     Int(NbtInt),
+    /// NBT 长整型（TAG_Long）
     Long(NbtLong),
+    /// NBT 浮点型（TAG_Float）
     Float(NbtFloat),
+    /// NBT 双精度浮点型（TAG_Double）
     Double(NbtDouble),
+    /// NBT 字节数组（TAG_Byte_Array）
     ByteArray(NbtByteArray),
+    /// NBT 字符串（TAG_String）
     String(NbtString),
+    /// NBT 列表（TAG_List），包含一组相同类型的标签
     List(NbtList),
+    /// NBT 复合标签（TAG_Compound），包含键值对映射
     Compound(NbtCompound),
+    /// NBT 整型数组（TAG_Int_Array）
     IntArray(NbtIntArray),
+    /// NBT 长整型数组（TAG_Long_Array）
     LongArray(NbtLongArray),
 }
 
 impl NbtType {
-    /// 从数字序号创建NBT标签
+    /// 根据类型序号创建对应的默认 NBT 标签实例
+    ///
+    /// 传入 NBT 类型 ID（0–12），返回一个初始化为默认值的 `NbtType` 变体。
+    /// 序号 0 对应 `TAG_End`，1 对应 `TAG_Byte`，以此类推。
+    /// 如果序号超出 12，则返回 `None`。
+    ///
+    /// # 参数
+    ///
+    /// - `nbt_type`: NBT 标签类型序号（0–12）
+    ///
+    /// # 返回值
+    ///
+    /// 成功时返回 `Some(NbtType)`，序号无效时返回 `None`
     pub fn get_nbt(nbt_type: u8) -> Option<NbtType> {
         if nbt_type > 12 {
             None
@@ -470,6 +537,13 @@ impl NbtType {
     }
 }
 
+/// 为 NBT 类型实现格式化输出（Display trait）
+///
+/// 按照 Minecraft SNBT（Stringified NBT）格式输出，用于调试和日志记录。
+/// - 数值类型会附带类型后缀（如 `1b`、`2s`、`3L`、`4.0f`、`5.0d`）
+/// - 字符串会被双引号包裹并转义
+/// - 数组以 `[B;...]`、`[I;...]`、`[L;...]` 格式输出
+/// - 复合标签以 `{key: value, ...}` 格式输出
 impl fmt::Display for NbtType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -537,12 +611,34 @@ impl fmt::Display for NbtType {
     }
 }
 
-/// 是否为NBT标签数字
+/// 判断给定的序号是否为合法的 NBT 标签类型 ID
+///
+/// NBT 标签类型 ID 的范围是 0（`TAG_End`）到 12（`TAG_Long_Array`），
+/// 此函数用于校验一个 `u8` 值是否落在这个有效范围内。
+///
+/// # 参数
+///
+/// - `nbt_type`: 待校验的 NBT 标签类型序号
+///
+/// # 返回值
+///
+/// 如果 `nbt_type` 在 0–12 之间则返回 `true`，否则返回 `false`
 pub fn is_nbt_num(nbt_type: u8) -> bool {
     nbt_type >= NBT_END_ORDER && nbt_type <= NBT_LONG_ARRAY_ORDER
 }
 
-/// 错误转换
+/// 将标准库 IO 错误转换为项目统一的 `ErrorType`
+///
+/// 封装 `std::io::Error`，将其错误信息提取为字符串后包装为
+/// `ErrorType::StreamError`，便于在 NBT 读写过程中统一错误处理。
+///
+/// # 参数
+///
+/// - `e`: 来自标准库的 IO 错误
+///
+/// # 返回值
+///
+/// 包含原始错误描述的 `ErrorType::StreamError` 变体
 pub(crate) fn io_error(e: std::io::Error) -> ErrorType {
     ErrorType::StreamError(ErrorData {
         error: e.to_string(),

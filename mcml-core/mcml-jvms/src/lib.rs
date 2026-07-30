@@ -1,3 +1,19 @@
+//! Java 运行时管理模块
+//!
+//! 本模块负责管理启动器中配置的 Java 运行时环境（JRE/JDK）。
+//!
+//! # 核心功能
+//!
+//! - **自动扫描** — 从系统注册表（Windows）、标准路径（Linux/macOS）搜索已安装的 Java
+//! - **手动添加** — 用户可手动指定 Java 可执行文件路径
+//! - **版本匹配** — 根据 Minecraft 版本自动选择兼容的 Java 版本
+//! - **架构匹配** — 自动过滤与系统架构一致的 Java（x86_64 / aarch64）
+//! - **变更通知** — 通过事件回调通知 UI 层 Java 列表已变更
+//!
+//! # 数据结构
+//!
+//! [`JavaInfoObj`] 包含 Java 的名称、路径、版本、主版本号、类型和架构信息。
+
 use std::{
     collections::{HashMap, HashSet},
     fs,
@@ -11,31 +27,37 @@ use mcml_names::names;
 
 pub mod java_helper;
 
-/// Java信息
+/// Java 运行时信息
 pub struct JavaInfoObj {
-    /// 名字
+    /// Java 显示名称（如 "OpenJDK-17.0.1-x86_64"）
     pub name: String,
-    /// 路径
+    /// Java 可执行文件的完整路径
     pub path: PathBuf,
-    /// 版本号
+    /// Java 完整版本号字符串（如 "17.0.1"）
     pub version: String,
-    /// 主版本号
+    /// Java 主版本号（如 8、11、17、21）
     pub major_version: i32,
-    /// Java类型
+    /// Java 发行版类型（如 "OpenJDK"、"Oracle"）
     pub java_type: String,
-    /// 架构
+    /// CPU 架构
     pub arch: ArchEnum,
 }
 
-/// Java存放位置
+/// Java 运行时存放目录（`{运行目录}/java/`）
 static JAVA_DIR: OnceLock<PathBuf> = OnceLock::new();
 
+/// 全局 Java 运行时列表（按名称索引）
 static JVMS: LazyLock<RwLock<HashMap<String, Arc<JavaInfoObj>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 
+/// Java 列表变更事件（通知 UI 刷新）
 static JVM_CHANGE_EVENT: LazyLock<EventHandler> = LazyLock::new(|| EventHandler::new());
 
-/// 添加 Java 列表变更回调
+/// 注册 Java 列表变更回调
+///
+/// # 返回值
+///
+/// 返回回调 ID，可用于 [`remove_jvm_change`] 取消注册
 pub fn add_jvm_change<F>(handler: F) -> u64
 where
     F: Fn() + Send + Sync + 'static,
@@ -44,17 +66,26 @@ where
 }
 
 /// 移除 Java 列表变更回调
+///
+/// # 参数
+///
+/// - `id`: 回调注册时返回的 ID
 pub fn remove_jvm_change(id: u64) {
     JVM_CHANGE_EVENT.remove_handle(id);
 }
 
+/// 触发 Java 列表变更事件（内部使用）
 pub(crate) fn invoke_jvm_change() {
     JVM_CHANGE_EVENT.emit();
 }
 
-/// 初始化
-/// 
-/// - `dir`:  运行的路径
+/// 初始化 Java 运行时管理
+///
+/// 创建 Java 存放目录，加载配置中保存的 Java 列表。
+///
+/// # 参数
+///
+/// - `dir`: 程序运行根目录
 pub fn init<P: AsRef<Path>>(dir: P) {
     let dir = JAVA_DIR.get_or_init(|| dir.as_ref().join(names::JAVA_DIR));
     if !dir.is_dir() || !dir.exists() {
@@ -67,18 +98,28 @@ pub fn init<P: AsRef<Path>>(dir: P) {
     add_list(config);
 }
 
-/// 获取Java信息
+/// 根据名称获取 Java 信息
 ///
-/// - `key`: Java 名字
+/// # 参数
+///
+/// - `key`: Java 名称
+///
+/// # 返回值
+///
+/// 找到则返回 `Arc<JavaInfoObj>` 的克隆，未找到返回 `None`
 pub fn get_java_info(key: &str) -> Option<Arc<JavaInfoObj>> {
     let list = JVMS.read().ok()?;
     let item = list.get(key)?;
     Some(item.clone())
 }
 
-/// 删除Java
-/// 
-/// - `name`: 名字
+/// 删除指定名称的 Java
+///
+/// 同时从内存列表和配置文件中的 Java 列表中移除。
+///
+/// # 参数
+///
+/// - `name`: Java 名称
 pub fn remove(name: &str) {
     let mut list = JVMS.write().unwrap();
     if list.remove(name).is_some() {
@@ -98,7 +139,7 @@ pub fn remove(name: &str) {
     }
 }
 
-/// 删除所有Java并保存配置
+/// 删除所有 Java 并保存配置
 pub fn remove_all() {
     let mut list = JVMS.write().unwrap();
 
@@ -108,10 +149,18 @@ pub fn remove_all() {
     mcml_config::save();
 }
 
-/// 添加Java
-/// 
-/// - `name`: 名字
-/// - `file`: 路径
+/// 添加一个 Java 运行时
+///
+/// 测试 Java 可执行文件是否有效，有效则加入列表并保存配置。
+///
+/// # 参数
+///
+/// - `name`: Java 显示名称
+/// - `file`: Java 可执行文件路径
+///
+/// # 返回值
+///
+/// 添加成功返回 `Some(name)`，无效的 Java 返回 `None`
 pub fn add_item(name: String, file: String) -> Option<String> {
     let dir = mcml_base::get_base_dir();
     let local = if file.starts_with(dir.to_str().unwrap()) {
@@ -120,6 +169,7 @@ pub fn add_item(name: String, file: String) -> Option<String> {
         file
     };
 
+    // 先移除同名旧条目
     remove(&name);
 
     let path = if local.starts_with(names::JAVA_DIR) {
@@ -150,9 +200,11 @@ pub fn add_item(name: String, file: String) -> Option<String> {
     }
 }
 
-/// 测试并添加到配置文件
-/// 
-/// - `list`: 列表
+/// 从配置列表批量测试并添加 Java
+///
+/// # 参数
+///
+/// - `list`: 配置文件中保存的 Java 列表
 fn add_list(list: &Vec<JvmConfigObj>) {
     let dir = mcml_base::get_base_dir();
     let list_cloned = list.clone();
@@ -160,6 +212,7 @@ fn add_list(list: &Vec<JvmConfigObj>) {
     let mut list1 = JVMS.write().unwrap();
     list1.clear();
 
+    // 在异步任务中逐个测试 Java
     tokio::task::spawn(async move {
         let mut empty: bool = false;
         for item in list_cloned.iter() {
@@ -175,6 +228,7 @@ fn add_list(list: &Vec<JvmConfigObj>) {
             list1.remove(&item.name);
 
             if info.is_none() {
+                // Java 无效，保留占位条目
                 list1.insert(
                     item.name.clone(),
                     Arc::new(JavaInfoObj {
@@ -201,10 +255,16 @@ fn add_list(list: &Vec<JvmConfigObj>) {
     });
 }
 
-/// 查找对应主版本的Java
-/// 
-/// - `version`: 主版本
-/// - `over`: 是否允许获取高版本
+/// 根据版本需求查找匹配的 Java
+///
+/// # 参数
+///
+/// - `version`: 所需的主版本号（如 17、21）
+/// - `over`: `true` 允许返回更高版本的 Java，`false` 要求精确匹配
+///
+/// # 返回值
+///
+/// 找到则返回匹配的 Java 信息，未找到返回 `None`
 pub fn get_java(version: i32, over: bool) -> Option<Arc<JavaInfoObj>> {
     let list = JVMS.read().ok()?;
     let system_arch = mcml_base::get_system_info().system_arch;
@@ -222,12 +282,13 @@ pub fn get_java(version: i32, over: bool) -> Option<Arc<JavaInfoObj>> {
         .map(|item| item.1)
         .collect();
 
+    // 按版本号降序排列（优先选择最新版本）
     filtered.sort_by(|a, b| b.major_version.cmp(&a.major_version));
 
     filtered.first().map(|&info| info.clone())
 }
 
-/// 获取所有Java
+/// 获取所有已配置的 Java 运行时列表
 pub fn get_all_java() -> Vec<Arc<JavaInfoObj>> {
     let read = JVMS.read().unwrap();
     let mut vec = Vec::new();
@@ -239,7 +300,9 @@ pub fn get_all_java() -> Vec<Arc<JavaInfoObj>> {
     vec
 }
 
-/// 从系统注册表或标准路径中查找 Java 列表
+/// 从系统注册表或标准路径中搜索已安装的 Java
+///
+/// 返回去重后的 Java 列表，按路径排序。
 fn find_java() -> Option<Vec<JavaInfoObj>> {
     let mut java_paths = HashSet::new();
 
@@ -268,7 +331,9 @@ fn find_java() -> Option<Vec<JavaInfoObj>> {
     }
 }
 
-/// 扫描Java并添加到列表中
+/// 扫描系统中已安装的 Java 并添加到列表
+///
+/// 此函数执行系统级的 Java 搜索（注册表、常见路径等）。
 pub fn scan_java() {
     if let Some(list) = find_java() {
         let mut list1 = JVMS.write().unwrap();

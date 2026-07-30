@@ -1,3 +1,20 @@
+//! 下载线程模块
+//!
+//! 实现下载工作线程和文件下载的核心逻辑。
+//!
+//! # 下载流程
+//!
+//! 1. **检查已存在文件** — 文件已存在且哈希匹配 → 跳过
+//! 2. **发起 HTTP 请求** — 支持 Range 断点续传（需服务器返回 `Accept-Ranges: bytes`）
+//! 3. **流式写入临时文件** — 边下载边写入，实时更新进度
+//! 4. **下载后校验** — 检查文件大小和哈希值
+//! 5. **后处理** — 解压 native 库 / 存档文件
+//! 6. **移至目标路径** — 校验通过后原子移动临时文件到最终位置
+//!
+//! # 重试策略
+//!
+//! 单文件最多重试 5 次，超过后放弃。
+
 use std::{
     fs::File,
     future::Future,
@@ -26,7 +43,10 @@ use semka::Sem;
 
 use crate::{DownloadObj, download_item::DownloadItemState, later_tasks};
 
-/// 用于在下载线程中执行异步任务的运行时
+/// 用于在下载线程中执行异步任务的 Tokio 运行时
+///
+/// 每个下载线程独立使用一个 `current_thread` 运行时，
+/// 通过 `block_on` 将异步 HTTP 请求转为同步调用。
 static RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
 
 /// 在当前线程中阻塞执行异步任务
@@ -41,20 +61,25 @@ fn block_on<F: Future>(f: F) -> F::Output {
         .block_on(f)
 }
 
-/// 下载线程
+/// 下载工作线程
+///
+/// 封装一个 OS 线程，通过信号量机制在有新任务时被唤醒，
+/// 从全局任务队列中取出文件执行下载。
 pub(crate) struct DownloadThread {
-    /// 线程句柄
+    /// OS 线程句柄
     handle: Option<JoinHandle<()>>,
-    /// 启动锁
+    /// 唤醒信号量
     sem: Arc<Sem>,
-    /// 是否停止
+    /// 停止标志
     is_stop: Arc<AtomicBool>,
 }
 
 impl DownloadThread {
-    /// 创建线程
+    /// 创建并启动下载线程
     ///
-    /// - `index`: 线程号
+    /// # 参数
+    ///
+    /// - `index`: 线程序号（用于 UI 更新标识）
     pub fn new(index: u32) -> Self {
         let sem = Arc::new(Sem::new(0).unwrap());
         let is_stop = Arc::new(AtomicBool::new(false));
@@ -68,6 +93,7 @@ impl DownloadThread {
                     break;
                 }
 
+                // 等待信号量唤醒
                 sem_clone.wait();
 
                 if is_stop_clone.load(Ordering::SeqCst) {
@@ -88,12 +114,12 @@ impl DownloadThread {
         }
     }
 
-    // 开始下载
+    /// 唤醒线程开始下载
     pub fn run(&self) {
         self.sem.signal();
     }
 
-    // 停止线程
+    /// 停止线程并等待退出
     pub fn stop(&mut self) {
         self.is_stop.store(true, Ordering::SeqCst);
         self.sem.signal();
@@ -104,10 +130,16 @@ impl DownloadThread {
     }
 }
 
-/// 是否因为超出尝试次数停止
+/// 检查错误次数是否超过阈值（5 次）
 ///
-/// - `err`: 错误原因
-/// - `times`: 错误次数
+/// # 参数
+///
+/// - `err`: 错误信息
+/// - `times`: 当前错误次数（可变引用，会自增）
+///
+/// # 返回值
+///
+/// `true` — 应停止重试，`false` — 可继续重试
 fn is_need_err(err: ErrorType, times: &mut i32) -> bool {
     *times += 1;
     mcml_log::error_type(err);
@@ -118,11 +150,16 @@ fn is_need_err(err: ErrorType, times: &mut i32) -> bool {
     return false;
 }
 
-/// 下载一个文件
+/// 下载单个文件
 ///
-/// - `index`: 下载线程
-/// - `obj`: 下载项目
+/// # 参数
+///
+/// - `index`: 下载线程序号
+/// - `obj`: 下载项目（包含任务和文件信息）
 fn download(index: u32, mut obj: DownloadObj) {
+    // ============================================================
+    // 第一步：检查文件是否已存在
+    // ============================================================
     if obj.item.base.file.exists() {
         if obj.item.overwrite {
             if let Err(err) = path_helper::delete(&obj.item.base.file) {
@@ -141,6 +178,7 @@ fn download(index: u32, mut obj: DownloadObj) {
                 if let Err(err) = check {
                     mcml_log::error_type(err);
                 } else {
+                    // 文件已存在且哈希匹配，直接跳过
                     obj.task.done();
                     return;
                 }
@@ -148,6 +186,9 @@ fn download(index: u32, mut obj: DownloadObj) {
         }
     }
 
+    // ============================================================
+    // 第二步：循环下载（支持重试）
+    // ============================================================
     let mut times = 0;
     let mut use_break = false;
     let mut server_ranges = true;
@@ -175,6 +216,7 @@ fn download(index: u32, mut obj: DownloadObj) {
 
         let mut file = file.unwrap();
 
+        // 发起 HTTP 请求（支持断点续传）
         let mut resp = if use_break && server_ranges {
             let result = block_on(
                 mcml_net::get_work_client().get_ranges(&obj.item.base.url, obj.item.get_now_size()),
@@ -220,6 +262,7 @@ fn download(index: u32, mut obj: DownloadObj) {
             resp
         };
 
+        // 检测服务器是否支持断点续传
         if let Some(range) = resp.headers().get("Accept-Ranges")
             && range.to_str().unwrap().starts_with("bytes")
         {
@@ -229,6 +272,9 @@ fn download(index: u32, mut obj: DownloadObj) {
         obj.item.set_state(DownloadItemState::GetInfo);
         crate::update(index, &obj.item);
 
+        // ============================================================
+        // 第三步：流式写入文件
+        // ============================================================
         let result = block_on(write_file(index, &mut obj, &mut resp, &mut file));
         if let Err(err) = result {
             obj.item.add_error();
@@ -242,8 +288,14 @@ fn download(index: u32, mut obj: DownloadObj) {
         break;
     }
 
+    // ============================================================
+    // 第四步：移动到最终路径
+    // ============================================================
     path_helper::move_file(&temp_file, &obj.item.base.file).unwrap();
 
+    // ============================================================
+    // 第五步：后处理（解压 native 库 / 存档）
+    // ============================================================
     let res: Result<(), ErrorType> = match &obj.item.base.later {
         LaterRun::None => Ok(()),
         LaterRun::UnpackNative(path_buf) => match path_helper::open_read(&obj.item.base.file) {
@@ -264,12 +316,14 @@ fn download(index: u32, mut obj: DownloadObj) {
     obj.task.done();
 }
 
-/// 写文件
-/// 
-/// - `index`: 线程号
-/// - `obj`: 下载任务
-/// - `resp`: Http请求结果
-/// - `file`: 写入的文件
+/// 流式写入下载数据到文件
+///
+/// # 参数
+///
+/// - `index`: 线程序号
+/// - `obj`: 下载项目
+/// - `resp`: HTTP 响应流
+/// - `file`: 目标文件句柄
 async fn write_file(
     index: u32,
     obj: &mut DownloadObj,
@@ -300,6 +354,7 @@ async fn write_file(
         }
     }
 
+    // 下载完成后校验
     let config = mcml_config::read_config();
     if config.http.check_file {
         let now = file.stream_position().unwrap();
@@ -325,11 +380,15 @@ async fn write_file(
     Ok(())
 }
 
-/// 检查文件
-/// 
-/// - `file`: 文件位置
-/// - `hash`: 需要校验的值
-/// - `stream`: 文件流
+/// 校验文件哈希
+///
+/// 支持 MD5、SHA1、SHA256、SHA512 及组合校验（SHA1+SHA256、SHA1+SHA512）。
+///
+/// # 参数
+///
+/// - `file`: 文件路径
+/// - `hash`: 期望的哈希值
+/// - `stream`: 文件读取流
 fn check_hash<R: Read + Seek>(file: &PathBuf, hash: &FileHash, stream: &mut R) -> CoreResult<()> {
     match hash {
         FileHash::None => Ok(()),

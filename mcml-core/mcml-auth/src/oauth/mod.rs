@@ -1,4 +1,39 @@
-/// 微软登陆
+//! Microsoft OAuth 2.0 认证模块
+//!
+//! 本模块实现了 Microsoft 正版 Minecraft 的完整 OAuth 2.0 认证流程。
+//! 由于 Minecraft Java 版已迁移至微软账户体系，登录需要经过以下认证链：
+//!
+//! # 认证流程
+//!
+//! ```text
+//! Microsoft OAuth 设备码授权
+//!     │
+//!     ▼
+//! 获取 Microsoft Token ───► refresh_token 可用于续期
+//!     │
+//!     ▼
+//! Xbox Live 认证（获取 XBL Token）
+//!     │
+//!     ▼
+//! XSTS 认证（获取 XSTS Token）
+//!     │
+//!     ▼
+//! Minecraft 服务认证（获取 Minecraft Token）
+//!     │
+//!     ▼
+//! 获取 Minecraft 玩家 Profile（用户名 + UUID）
+//! ```
+//!
+//! # 子模块
+//!
+//! - [`oauth_res`] — OAuth 请求/响应的数据结构
+//! - [`xbox_obj`] — Xbox Live/XSTS 认证的数据结构
+//!
+//! # 认证状态
+//!
+//! [`AuthState`] 枚举表示了认证流程中的各个阶段：
+//! `OAuth` → `XBox` → `XSTS` → `Token` → `Profile`
+
 use std::{sync::OnceLock, time::Duration};
 
 use chrono::Local;
@@ -18,29 +53,48 @@ use crate::{
     },
 };
 
+/// OAuth 请求/响应数据结构
 pub mod oauth_res;
+/// Xbox Live/XSTS 认证数据结构
 pub mod xbox_obj;
 
-/// OAuth客户端密钥
+/// OAuth 客户端密钥（Azure 应用程序 ID）
+///
+/// 全局单例，通过 `set_key()` 在启动时设置。
 pub static KEY: OnceLock<String> = OnceLock::new();
 
-/// 目前登录状态
+/// 微软认证流程中的当前阶段
+///
+/// 用于在 UI 中展示认证进度。
 pub enum AuthState {
+    /// 正在进行 Microsoft OAuth 设备码授权
     OAuth,
+    /// 正在进行 Xbox Live 认证
     XBox,
+    /// 正在进行 XSTS（Xbox Secure Token Service）认证
     XSTS,
+    /// 正在获取 Minecraft 服务令牌
     Token,
+    /// 正在获取 Minecraft 玩家档案
     Profile,
 }
 
-/// 设置OAuth客户端密钥
+/// 设置 OAuth 客户端密钥
 ///
-/// - `key`: 客户端密钥
+/// 应在程序启动时调用，设置 Azure 应用程序的客户端 ID。
+///
+/// # 参数
+///
+/// - `key`: Azure 应用程序注册 ID
 pub fn set_key(key: &str) {
     KEY.get_or_init(|| key.to_string());
 }
 
-/// 是否设置了密钥
+/// 获取已设置的 OAuth 客户端密钥
+///
+/// # 返回值
+///
+/// 成功时返回密钥字符串，未设置时返回 `ErrorType::KeyIsNull`
 fn have_key() -> CoreResult<String> {
     match KEY.get() {
         None => Err(ErrorType::KeyIsNull),
@@ -48,7 +102,18 @@ fn have_key() -> CoreResult<String> {
     }
 }
 
-/// 获取登录码
+/// 发起 OAuth 设备码授权——第一步：获取登录码
+///
+/// 向 Microsoft 设备授权端点请求设备码和验证 URL。
+/// 用户需要在浏览器中打开返回的 URL 并输入设备码来完成授权。
+///
+/// # 返回值
+///
+/// 返回 `OAuthGetCodeRes`，包含：
+/// - `code`: 用户需要输入的设备码
+/// - `url`: 用户需要访问的验证网址
+/// - `device_code`: 后续轮询用的设备码
+/// - `expires_in`: 设备码的有效期（秒）
 pub async fn get_code() -> CoreResult<OAuthGetCodeRes> {
     let key = have_key()?;
 
@@ -72,10 +137,24 @@ pub async fn get_code() -> CoreResult<OAuthGetCodeRes> {
     }
 }
 
-/// 获取token
+/// 轮询等待用户完成设备码授权——第二步：获取 Microsoft Token
 ///
-/// - `res`: 上一阶段的登录码
-/// - `token`: 是否取消获取
+/// 此函数会循环轮询 Microsoft 令牌端点，直到用户完成授权、超时或被取消。
+///
+/// # 参数
+///
+/// - `res`: 第一步返回的设备码信息
+/// - `cancel`: 取消令牌，用于用户主动终止等待
+///
+/// # 轮询策略
+///
+/// - 初始间隔 2 秒
+/// - 收到 `slow_down` 错误时递增 5 秒
+/// - 超过 `expires_in` 后返回超时错误
+///
+/// # 返回值
+///
+/// 成功时返回包含 `access_token` 和 `refresh_token` 的 `OAuthGetCodeObj`
 pub async fn run_get_code(
     res: &OAuthGetCodeRes,
     cancel: &CancellationToken,
@@ -108,8 +187,10 @@ pub async fn run_get_code(
 
         if let Some(error) = data.error {
             if error == "authorization_pending" {
+                // 用户尚未完成授权，继续等待
                 continue;
             } else if error == "slow_down" {
+                // 服务器要求降低轮询频率
                 delay += 5;
             } else if error == "expired_token" {
                 return Err(ErrorType::OAuthGetTokenError(ErrorData { error }));
@@ -120,9 +201,18 @@ pub async fn run_get_code(
     }
 }
 
-/// 刷新密匙
+/// 使用 refresh_token 刷新 Microsoft 令牌
 ///
-/// - `token`: 登录密钥
+/// 当 access_token 过期后，用上次保存的 refresh_token 获取新令牌，
+/// 无需用户重新授权。
+///
+/// # 参数
+///
+/// - `token`: 之前保存的 refresh_token
+///
+/// # 返回值
+///
+/// 成功时返回新的 `OAuthGetCodeObj`（包含新的 access_token 和 refresh_token）
 pub async fn refresh_oauth_token(token: &str) -> CoreResult<OAuthGetCodeObj> {
     let key = have_key()?;
 
@@ -142,9 +232,15 @@ pub async fn refresh_oauth_token(token: &str) -> CoreResult<OAuthGetCodeObj> {
     }
 }
 
-/// Xbox登录
+/// Xbox Live 认证——第三步：用 Microsoft Token 换取 XBL Token
 ///
-/// - `token`: Xbox的密钥
+/// # 参数
+///
+/// - `token`: Microsoft OAuth access_token
+///
+/// # 返回值
+///
+/// 返回 `XBoxLiveRes`，包含 XBL token 和用户哈希（UHS）
 pub async fn get_xbox(token: &str) -> CoreResult<XBoxLiveRes> {
     let obj = XBoxLoginObj {
         properties: XBoxLoginPropertiesObj {
@@ -173,9 +269,18 @@ pub async fn get_xbox(token: &str) -> CoreResult<XBoxLiveRes> {
     }
 }
 
-/// XSTS登陆
+/// XSTS 认证——第四步：用 XBL Token 换取 XSTS Token
 ///
-/// - `token`: XSTS的密钥
+/// XSTS（Xbox Secure Token Service）是访问 Minecraft 服务所需的
+/// 安全令牌服务。
+///
+/// # 参数
+///
+/// - `token`: XBL token
+///
+/// # 返回值
+///
+/// 返回 `XBoxLiveRes`，包含 XSTS token 和用户哈希
 pub async fn get_xsts(token: &str) -> CoreResult<XBoxLiveRes> {
     let obj = XSTSLoginObj {
         properties: XSTSLoginPropertiesObj {
@@ -204,13 +309,23 @@ pub async fn get_xsts(token: &str) -> CoreResult<XBoxLiveRes> {
 }
 
 impl LoginObj {
-    /// 微软登陆刷新
+    /// 微软正版账户的刷新流程
+    ///
+    /// 执行完整的认证链刷新：
+    /// 1. 先尝试用现有 Minecraft Token 获取 Profile（快速验证）
+    /// 2. 失败则执行完整刷新链：refresh_token → Xbox → XSTS → Minecraft Token → Profile
+    ///
+    /// # 参数
+    ///
+    /// - `cancel`: 取消令牌，用于中断异步操作
     pub async fn refresh_oauth(&mut self, cancel: &CancellationToken) -> CoreResult<()> {
+        // 快速路径：尝试用现有 token 获取 profile
         let profile = mojang_api::get_minecraft_profile(&self.access_token).await;
         if profile.is_ok() {
             return Ok(());
         }
 
+        // 完整刷新链
         let oauth = refresh_oauth_token(&self.text1.clone().unwrap()).await?;
         if cancel.is_cancelled() {
             return Err(ErrorType::TaskCancel);
@@ -229,6 +344,7 @@ impl LoginObj {
         }
         let profile = mojang_api::get_minecraft_profile(&token).await?;
 
+        // 更新本地账户信息
         self.user_name = profile.name;
         self.uuid = profile.id;
         self.text1 = Some(oauth.refresh_token);

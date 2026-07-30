@@ -1,4 +1,13 @@
-/// LittleSkin登录
+//! LittleSkin 皮肤站登录模块
+//!
+//! LittleSkin 是一个国内的 Minecraft 皮肤站服务，提供基于 Yggdrasil 协议的
+//! 账户认证和外置皮肤功能。
+//!
+//! # 支持的站点类型
+//!
+//! - **官方 LittleSkin** — 使用 `urls::LITTLE_SKIN_URL` 作为认证服务器
+//! - **自建皮肤站** — 用户提供自定义服务器地址，兼容 LittleSkin 的 API 布局
+
 use mcml_names::i18_items::error_type::{CoreResult, ErrorType};
 use mcml_net::urls;
 use tokio_util::sync::CancellationToken;
@@ -8,13 +17,23 @@ use crate::{
     legacy::{self, GuiSelectHandel},
 };
 
-/// 皮肤站登录
-/// 
-/// - `client_token`: 客户端标识
+/// LittleSkin 皮肤站登录认证
+///
+/// 支持官方 LittleSkin 站和自建皮肤站两种模式。
+/// 自动处理服务器地址规范化和 API 路径拼接。
+///
+/// # 参数
+///
+/// - `client_token`: 客户端标识令牌
 /// - `user`: 用户名
 /// - `password`: 密码
-/// - `server`: 服务器地址
-/// - `gui`: 选择账户回调
+/// - `server`: 自建皮肤站地址（`None` 表示使用官方 LittleSkin）
+/// - `gui`: 可选的角色选择回调
+///
+/// # 返回值
+///
+/// 返回已认证并刷新令牌的 `LoginObj`，其 `auth_type` 为
+/// `LittleSkin` 或 `SelfLittleSkin`
 pub async fn authenticate(
     client_token: String,
     user: String,
@@ -28,6 +47,7 @@ pub async fn authenticate(
         Some(server) => {
             auth_type = AuthType::SelfLittleSkin;
             let mut server = server.clone();
+            // 规范化服务器地址：移除常见的子路径
             if server.ends_with("/api/yggdrasil") {
                 server = server.replace("/api/yggdrasil", "/");
             }
@@ -48,6 +68,7 @@ pub async fn authenticate(
 
     let mut auth = obj.auth;
 
+    // 处理多角色选择
     if let Some(list) = obj.logins {
         match gui {
             Some(gui) => {
@@ -76,9 +97,11 @@ pub async fn authenticate(
 }
 
 impl LoginObj {
-    /// 刷新登录
-    /// 
-    /// - `auth`: 保存的账户
+    /// 刷新 LittleSkin 皮肤站登录令牌
+    ///
+    /// # 参数
+    ///
+    /// - `cancel`: 取消令牌
     pub async fn refresh_littleskin(&mut self, cancel: &CancellationToken) -> CoreResult<()> {
         let mut server = if self.auth_type == AuthType::LittleSkin {
             String::from(urls::LITTLE_SKIN_URL)
@@ -98,7 +121,11 @@ impl LoginObj {
         }
     }
 
-    /// 获取启动时所需的密钥
+    /// 获取 LittleSkin 皮肤站启动参数所需的 Yggdrasil 元数据
+    ///
+    /// # 返回值
+    ///
+    /// 认证服务器返回的元数据 JSON 文本
     pub async fn get_littleskin_key(&self) -> CoreResult<String> {
         let mut server = if self.auth_type == AuthType::LittleSkin {
             String::from(urls::LITTLE_SKIN_URL)
