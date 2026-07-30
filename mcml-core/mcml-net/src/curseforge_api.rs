@@ -1,3 +1,21 @@
+//! CurseForge API
+//!
+//! 提供与 CurseForge REST API 交互的功能，支持搜索和下载：
+//!
+//! # 支持的内容类型
+//!
+//! | 常量 | 值 | 用途 |
+//! |------|---|------|
+//! | `CLASS_MOD` | 6 | 模组 |
+//! | `CLASS_MODPACK` | 4471 | 整合包 |
+//! | `CLASS_SAVES` | 17 | 存档 |
+//! | `CLASS_RESOURCEPACKS` | 12 | 资源包 |
+//! | `CLASS_SHADERPACKS` | 6552 | 光影包 |
+//!
+//! # API Key
+//!
+//! CurseForge API 需要 API Key，通过 [`set_key()`] 在初始化时设置。
+
 use std::sync::OnceLock;
 
 use mcml_names::i18_items::error_type::{CoreResult, ErrorData, ErrorType};
@@ -9,18 +27,27 @@ use serde::{Serialize, de::DeserializeOwned};
 
 use crate::urls;
 
+/// CurseForge 游戏 ID（Minecraft = 432）
 pub const GAME_ID: u32 = 432;
+/// 分类 ID：整合包
 pub const CLASS_MODPACK: u32 = 4471;
+/// 分类 ID：模组
 pub const CLASS_MOD: u32 = 6;
+/// 分类 ID：存档
 pub const CLASS_SAVES: u32 = 17;
+/// 分类 ID：资源包
 pub const CLASS_RESOURCEPACKS: u32 = 12;
+/// 分类 ID：光影包
 pub const CLASS_SHADERPACKS: u32 = 6552;
+/// 分类 ID：数据包（OpenLoader）
 pub const CLASS_OPENLOADER_DATAPACK: u32 = 6945;
+/// 类别 ID：数据包
 pub const CATEGORYID_DATAPACKS: u32 = 5193;
 
+/// 全局 CurseForge API Key
 static API_KEY: OnceLock<String> = OnceLock::new();
 
-/// 搜索参数
+/// CurseForge 搜索/列表请求参数
 pub struct CurseFogreArg {
     /// 项目编号
     pub id: Option<String>,
@@ -73,6 +100,7 @@ pub fn get_key() -> CoreResult<String> {
 }
 
 /// 发送请求
+/// 
 /// - `req`: 请求内容
 async fn send<T: DeserializeOwned>(mut req: reqwest::Request) -> CoreResult<T> {
     req.headers_mut()
@@ -206,6 +234,7 @@ pub async fn get_shaders_list<T: DeserializeOwned>(arg: CurseFogreArg) -> CoreRe
 }
 
 /// 获取模组信息
+/// 
 /// - `pid`: 项目编号
 /// - `fid`: 文件编号
 pub async fn get_mod<T: DeserializeOwned>(pid: &str, fid: &str) -> CoreResult<T> {

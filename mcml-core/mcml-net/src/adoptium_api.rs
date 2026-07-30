@@ -1,3 +1,8 @@
+//! Adoptium (Eclipse Temurin) API
+//!
+//! 提供从 Adoptium 官方 API 获取可用 Java 版本列表和下载链接的功能。
+//! Adoptium 是 Eclipse 基金会维护的 OpenJDK 发行版（前身为 AdoptOpenJDK）。
+
 use std::sync::OnceLock;
 
 use mcml_base::Os;

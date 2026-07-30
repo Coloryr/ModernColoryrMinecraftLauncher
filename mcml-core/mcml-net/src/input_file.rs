@@ -1,3 +1,8 @@
+//! 输入文件抽象
+//!
+//! 提供统一的文件输入来源抽象，支持本地文件、网络 URL、
+//! 内存数据和同步/异步流等多种输入形式，统一通过 `save_file()` 写入目标路径。
+
 use std::{
     io::Read,
     path::{Path, PathBuf},
@@ -7,23 +12,37 @@ use mcml_base::path_helper;
 use mcml_names::i18_items::error_type::{CoreResult, ErrorData, ErrorType};
 use tokio::io::{AsyncRead, AsyncWriteExt};
 
-/// 输入文件
+/// 输入文件来源
+///
+/// 封装了多种可能的文件输入形式，调用方可使用统一的 `save_file()`
+/// 方法将内容写入目标路径，无需关心具体来源类型。
 pub enum InputFile {
-    /// 实际存在的文件
+    /// 本地文件系统中的文件（异步复制）
     Path(PathBuf),
-    /// 网络文件
+    /// 通过 HTTP GET 下载的网络文件
     Url(String),
-    /// 数据
+    /// 内存中的字节数据
     Data(Vec<u8>),
-    /// 同步流
+    /// 同步读取流
     Stream(Box<dyn Read>),
-    /// 异步流
+    /// 异步读取流
     StreamAsync(Box<dyn AsyncRead + Unpin>),
 }
 
 impl InputFile {
-    /// 保存到文件
-    /// - `path`: 需要保存的路径
+    /// 将输入文件内容保存到指定路径
+    ///
+    /// # 参数
+    ///
+    /// - `path`: 目标文件路径
+    ///
+    /// # 行为
+    ///
+    /// - `Path` → 异步文件复制
+    /// - `Url` → HTTP 流式下载
+    /// - `Data` → 直接写入字节
+    /// - `Stream` → 同步流写入
+    /// - `StreamAsync` → 异步流写入
     pub async fn save_file<P: AsRef<Path>>(self, path: P) -> CoreResult<()> {
         match self {
             InputFile::Path(path_buf) => {

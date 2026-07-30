@@ -19,7 +19,7 @@ fn nbt_gzip() {
     nbt.data
         .insert(String::from("byte"), nbt_types::byte(20).to_nbt());
     nbt.data
-        .insert(String::from("int"), nbt_types::int(30).to_nbt_type());
+        .insert(String::from("int"), nbt_types::int(30).to_nbt());
     nbt.data
         .insert(String::from("long"), nbt_types::long(1).to_nbt());
 
@@ -44,7 +44,7 @@ fn nbt_zlib() {
     nbt.data
         .insert(String::from("byte"), nbt_types::byte(20).to_nbt());
     nbt.data
-        .insert(String::from("int"), nbt_types::int(30).to_nbt_type());
+        .insert(String::from("int"), nbt_types::int(30).to_nbt());
     nbt.data
         .insert(String::from("long"), nbt_types::long(1).to_nbt());
 
@@ -69,7 +69,7 @@ fn nbt_lz4() {
     nbt.data
         .insert(String::from("byte"), nbt_types::byte(20).to_nbt());
     nbt.data
-        .insert(String::from("int"), nbt_types::int(30).to_nbt_type());
+        .insert(String::from("int"), nbt_types::int(30).to_nbt());
     nbt.data
         .insert(String::from("long"), nbt_types::long(1).to_nbt());
 

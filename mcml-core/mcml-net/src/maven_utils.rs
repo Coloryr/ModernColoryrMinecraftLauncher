@@ -1,12 +1,32 @@
+//! Maven 坐标工具
+//!
+//! 提供 Maven 坐标（Gradle 风格）与文件路径之间的转换，
+//! 以及从 Maven 仓库获取文件哈希校验值的功能。
+
 use mcml_base::file_item::FileHash;
 use mcml_config::config_obj::SourceLocal;
 use mcml_names::names;
 
 use crate::{url_helper, urls};
 
-/// 将一个 Maven 坐标库名转换为文件路径
-/// 例如 "com.example:artifact:1.0" -> "com/example/artifact/1.0/artifact-1.0.jar"
-/// 例如 "com.example:artifact:1.0:ext" -> "com/example/artifact/1.0/artifact-1.0-ext.jar"
+/// 将 Maven 坐标名转换为相对文件路径
+///
+/// # 转换规则
+///
+/// - `"group:artifact:version"` → `"group/artifact/version/artifact-version.jar"`
+/// - `"group:artifact:version:ext"` → `"group/artifact/version/artifact-version-ext.jar"`
+///
+/// # 示例
+///
+/// ```
+/// // 标准坐标
+/// version_name_to_path("com.example:artifact:1.0");
+/// // -> "com/example/artifact/1.0/artifact-1.0.jar"
+///
+/// // 带扩展名
+/// version_name_to_path("com.example:artifact:1.0:sources");
+/// // -> "com/example/artifact/1.0/artifact-1.0-sources.jar"
+/// ```
 pub fn version_name_to_path(name: &str) -> String {
     let parts: Vec<&str> = name.split(':').collect();
     if parts.len() < 3 {
@@ -39,6 +59,7 @@ pub struct UrlHashObj {
 }
 
 /// 测试这个jar文件是否能从网上下载
+/// 
 /// - `dir`: jar文件路径
 pub async fn test_hash(dir: &str) -> Option<UrlHashObj> {
     let url = match url_helper::get_source() {

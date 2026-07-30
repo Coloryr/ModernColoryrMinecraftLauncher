@@ -1,3 +1,8 @@
+//! Authlib-Injector API
+//!
+//! 提供从 Authlib-Injector 项目获取最新版本信息和下载链接的功能。
+//! Authlib-Injector 是一个用于 Minecraft 外置登录的 JAR 注入工具。
+
 use std::sync::LazyLock;
 
 use mcml_names::i18_items::error_type::{CoreResult, ErrorType};

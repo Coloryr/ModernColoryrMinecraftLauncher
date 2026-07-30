@@ -1,3 +1,27 @@
+//! 旧版 Yggdrasil 认证协议模块
+//!
+//! 本模块实现了 Minecraft 旧版认证协议（Yggdrasil API），
+//! 这是 Mojang 在迁移到 Microsoft OAuth 之前使用的认证系统。
+//! 目前该协议仍被以下第三方认证服务广泛使用：
+//!
+//! - **外置登录（Authlib-Injector）** — 自定义认证服务器
+//! - **统一通行证（Nide8）** — 国内流行的第三方认证
+//! - **LittleSkin** — 皮肤站认证服务
+//!
+//! # API 端点
+//!
+//! 所有认证服务器均遵循统一的 Yggdrasil API 规范：
+//! - `POST /authserver/authenticate` — 登录认证
+//! - `POST /authserver/refresh` — 刷新令牌
+//! - `POST /authserver/validate` — 验证令牌有效性
+//!
+//! # 子模块
+//!
+//! - [`authenticate_obj`] — 认证请求/响应的数据结构
+//! - [`authlib_injector`] — Authlib-Injector 外置登录实现
+//! - [`nide8`] — 统一通行证登录实现
+//! - [`little_skin`] — LittleSkin 皮肤站登录实现
+
 /// 旧版账户验证
 use chrono::Local;
 use mcml_names::i18_items::error_type::{CoreResult, ErrorType};
@@ -10,33 +34,64 @@ use crate::{
     },
 };
 
+/// 认证请求/响应数据结构
 pub mod authenticate_obj;
+/// Authlib-Injector 外置登录
 pub mod authlib_injector;
+/// LittleSkin 皮肤站登录
 pub mod little_skin;
+/// 统一通行证（Nide8）登录
 pub mod nide8;
 
+/// GUI 账户选择回调接口
+///
+/// 当认证服务器返回多个可选角色时，通过此 trait 弹窗让用户选择
+/// 要登录的账户。
 pub trait GuiSelectHandel {
-    /// 选择登陆的账户
-    /// 
-    /// - `auths`: 账户列表
+    /// 让用户从多个账户中选择一个
+    ///
+    /// # 参数
+    ///
+    /// - `auths`: 可选账户的用户名列表
+    ///
+    /// # 返回值
+    ///
+    /// 返回被选中账户在列表中的索引（从 0 开始）
     fn select_auth(&self, auths: Vec<String>) -> i32;
 }
 
-/// 旧版方式登录结果
+/// 旧版认证方式的登录结果
+///
+/// 包含已认证的账户信息，以及可能存在的多角色选择列表。
 pub struct LegacyLoginRes {
-    /// 选中的账户
+    /// 选中的账户（或仅有令牌的临时账户，等待角色选择）
     pub auth: LoginObj,
-    /// 可选的账户列表
+    /// 可选的账户列表（当服务器返回多个角色时为 `Some`）
     pub logins: Option<Vec<LoginObj>>,
 }
 
-/// 登录
-/// 
-/// - `server`: 服务器地址
-/// - `client_token`: 客户端标识
-/// - `user`: 用户名
+/// 向 Yggdrasil 认证服务器发起登录请求
+///
+/// 这是旧版认证协议的通用登录实现，被外置登录、皮肤站和统一通行证共用。
+///
+/// # 参数
+///
+/// - `server`: 认证服务器地址（完整 URL）
+/// - `client_token`: 客户端标识令牌
+/// - `user`: 用户名（通常是邮箱）
 /// - `password`: 密码
-/// - `use_minecraft`: 使用minecraft头
+/// - `use_minecraft`: 是否使用 Minecraft 官方启动器的 Agent 标识
+///
+/// # 返回值
+///
+/// 成功时返回 `LegacyLoginRes`，其中可能包含多个可选角色
+///
+/// # 处理逻辑
+///
+/// 1. 单个角色 → 直接返回包含完整信息的 `LoginObj`
+/// 2. 多个角色 → 返回令牌和角色列表，由调用方引导用户选择
+/// 3. 无角色 → 返回错误
+/// 4. 用户名匹配的角色优先自动选中
 pub async fn authenticate(
     server: &String,
     client_token: String,
@@ -68,6 +123,7 @@ pub async fn authenticate(
     } else if obj.selected_profile.is_none() && obj.available_profiles.is_none() {
         Err(ErrorType::AuthLoginNoProfile)
     } else if let Some(data) = obj.selected_profile {
+        // 服务器明确选中了某个角色
         Ok(LegacyLoginRes {
             auth: LoginObj::new(data.name, data.id, obj.access_token, obj.client_token),
             logins: None,
@@ -76,6 +132,7 @@ pub async fn authenticate(
         if list.len() == 0 {
             Err(ErrorType::AuthLoginNoProfile)
         } else if list.len() == 1 {
+            // 仅有一个角色，直接选中
             let temp = list.first().unwrap();
 
             Ok(LegacyLoginRes {
@@ -88,6 +145,7 @@ pub async fn authenticate(
                 logins: None,
             })
         } else {
+            // 多个角色，优先按用户名匹配
             if let Some(item) = list
                 .iter()
                 .find(|item| item.name.eq_ignore_ascii_case(&user))
@@ -102,6 +160,7 @@ pub async fn authenticate(
                     logins: None,
                 })
             } else {
+                // 无一匹配，返回可选列表让用户自行选择
                 let mut logins: Vec<LoginObj> = Vec::new();
                 for item in list.iter() {
                     logins.push(LoginObj::new_empty(item.name.clone(), item.id.clone()));
@@ -118,11 +177,15 @@ pub async fn authenticate(
     }
 }
 
-/// 刷新登录
-/// 
-/// - `server`: 服务器地址
-/// - `login`: 保存的账户
-/// - `select`: 是否为选择模式
+/// 刷新 Yggdrasil 认证令牌
+///
+/// 当 access token 即将过期时，通过 refresh token 获取新的令牌。
+///
+/// # 参数
+///
+/// - `server`: 认证服务器地址
+/// - `login`: 待刷新的账户（可变引用，成功后字段会被更新）
+/// - `select`: 是否需要在刷新时选定角色（`true` 时附带 `selected_profile`）
 pub async fn refresh(server: &String, login: &mut LoginObj, select: bool) -> CoreResult<()> {
     let obj = if select {
         RefreshObj {
@@ -158,6 +221,7 @@ pub async fn refresh(server: &String, login: &mut LoginObj, select: bool) -> Cor
     } else if obj.selected_profile.is_none() && !select {
         Err(ErrorType::AuthRefreshNoProfile)
     } else if obj.selected_profile.is_some() {
+        // 服务器返回了新的角色信息，更新本地账户
         let select = obj.selected_profile.unwrap();
         login.user_name = select.name;
         login.uuid = select.id;
@@ -167,6 +231,7 @@ pub async fn refresh(server: &String, login: &mut LoginObj, select: bool) -> Cor
 
         Ok(())
     } else {
+        // 仅刷新令牌，不改变角色信息
         login.access_token = obj.access_token;
         login.client_token = obj.client_token;
         login.last_login = Local::now().fixed_offset();
@@ -175,10 +240,18 @@ pub async fn refresh(server: &String, login: &mut LoginObj, select: bool) -> Cor
     }
 }
 
-/// 检测密钥可用性
-/// 
-/// - `server`: 检测地址
-/// - `login`: 保存的账户
+/// 验证 Yggdrasil 令牌是否仍然有效
+///
+/// 向认证服务器发送验证请求，不刷新令牌，仅检查当前令牌是否可用。
+///
+/// # 参数
+///
+/// - `server`: 认证服务器地址
+/// - `login`: 待验证的账户
+///
+/// # 返回值
+///
+/// 令牌有效返回 `Ok(true)`，无效返回 `Ok(false)`，网络错误返回 `Err`
 pub async fn validate(server: &String, login: &LoginObj) -> CoreResult<bool> {
     let obj = RefreshObj {
         access_token: login.access_token.clone(),
@@ -198,5 +271,6 @@ pub async fn validate(server: &String, login: &LoginObj) -> CoreResult<bool> {
         .post_json_get_req(&server, &obj)
         .await?;
 
+    // HTTP 204 No Content 表示令牌有效
     Ok(obj.status() == StatusCode::NO_CONTENT)
 }

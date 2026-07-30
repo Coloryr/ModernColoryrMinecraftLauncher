@@ -1,3 +1,17 @@
+//! OptiFine API
+//!
+//! 提供 OptiFine（高清修复）版本列表获取和下载地址解析的功能。
+//!
+//! # 实现细节
+//!
+//! - **官方源** — 通过 HTML 页面解析获取版本列表和下载链接（`scraper` crate）
+//! - **BMCLAPI 镜像** — 直接调用 JSON API 获取版本信息
+//!
+//! # 数据结构
+//!
+//! - [`OptifineListObj`] — BMCLAPI 返回的版本条目
+//! - [`GetOptifineObj`] — 统一后的 OptiFine 版本信息
+
 use std::{collections::HashSet, path::Path, sync::OnceLock};
 
 use itertools::Itertools;
@@ -178,6 +192,7 @@ pub async fn get_optifine_version() -> CoreResult<Vec<GetOptifineObj>> {
 }
 
 /// 获取Optifine下载地址
+/// 
 /// - `obj`: 下载项目
 pub async fn get_optifine_download(
     source: &SourceLocal,

@@ -1,3 +1,17 @@
+//! Mojang API
+//!
+//! 提供与 Mojang 官方 API 交互的功能，包括：
+//!
+//! - 获取 Minecraft 版本列表
+//! - 获取玩家档案（Profile）和皮肤信息
+//! - Xbox Live → Minecraft Token 认证
+//! - Minecraft 官方新闻
+//!
+//! # 认证相关
+//!
+//! 本模块中的 [`get_minecraft_profile`] 和 [`get_minecraft_token`]
+//! 是 Microsoft OAuth 认证流程的最后两步。
+
 use mcml_config::config_obj::SourceLocal;
 use mcml_names::i18_items::error_type::{CoreResult, ErrorType};
 

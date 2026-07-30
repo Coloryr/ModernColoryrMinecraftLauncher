@@ -1,6 +1,9 @@
 use std::{
-    collections::{HashMap, HashSet}, path::Path, sync::{
-        Arc, Mutex, OnceLock, RwLock, atomic::{AtomicBool, AtomicUsize, Ordering},
+    collections::{HashMap, HashSet},
+    path::Path,
+    sync::{
+        Arc, Mutex, OnceLock,
+        atomic::{AtomicBool, AtomicUsize, Ordering},
     },
 };
 
@@ -10,6 +13,7 @@ use rayon::iter::{
 };
 
 use crate::{
+    GameInstance,
     curseforge::{
         categories_obj::CurseForgeCategoriesObj,
         file_obj::{CurseFogreMutFileObj, CurseForgeFileDataObj, DependenciesObj},
@@ -34,7 +38,6 @@ use mcml_net::{
 pub mod categories_obj;
 pub mod file_obj;
 pub mod list_obj;
-pub mod modpack;
 pub mod pack_obj;
 pub mod version_obj;
 
@@ -545,9 +548,9 @@ fn apply_class_id(class_id: u32, item: &mut ItemPathRes, instance: &InstanceSett
 
 /// 升级整合包
 pub async fn upgrade_modpack(
-    game: Arc<RwLock<InstanceSettingObj>>,
+    game: &GameInstance,
     data: &mut CurseForgeFileDataObj,
-    gui: &Option<impl IAddInstanceGui>,
+    gui: &Option<Arc<impl IAddInstanceGui>>,
 ) -> bool {
     data.fix_download_url();
 
