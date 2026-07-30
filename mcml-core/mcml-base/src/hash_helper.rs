@@ -1,3 +1,8 @@
+//! 哈希计算和 Base64 编解码模块
+//!
+//! 提供 MD5、SHA1、SHA256、SHA512 哈希计算以及 Base64 编解码功能。
+//! 支持多种输入源：字节数组、字符串、文件、读取流（同步/异步）。
+
 use std::{io::Read, path::Path};
 
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
@@ -11,7 +16,7 @@ use digest::{Digest, DynDigest};
 
 use crate::path_helper;
 
-/// 校验类型
+/// 哈希算法类型
 pub enum HashType {
     Md5,
     Sha1,

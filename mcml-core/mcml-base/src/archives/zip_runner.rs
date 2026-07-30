@@ -1,3 +1,5 @@
+//! Zip 压缩/解压实现（基于 `zip` crate）
+
 #[cfg(windows)]
 use mcml_names::i18_items::error_type::CoreResult;
 use mcml_names::i18_items::error_type::{

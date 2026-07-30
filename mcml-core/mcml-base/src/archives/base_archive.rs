@@ -1,3 +1,7 @@
+//! 压缩包处理核心逻辑
+//!
+//! 实现压缩/解压的统一入口，根据 [`ArchiveType`] 分派到对应的 runner。
+
 use std::{
     fs,
     io::{Read, Seek, SeekFrom, Write},

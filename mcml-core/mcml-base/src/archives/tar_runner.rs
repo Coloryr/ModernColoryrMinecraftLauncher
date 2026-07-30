@@ -1,3 +1,5 @@
+//! Tar/TarGz/TarXz 压缩/解压实现（基于 `tar` + `flate2`/`xz2` crate）
+
 use std::{io::Read, path::Path};
 
 use flate2::read::GzDecoder;

@@ -1,3 +1,5 @@
+//! 7z 压缩/解压实现（基于 `sevenz-rust` crate）
+
 use std::path::Path;
 
 use mcml_names::i18_items::error_type::{
