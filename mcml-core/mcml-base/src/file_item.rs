@@ -48,6 +48,7 @@ impl Default for LaterRun {
 
 impl FileHash {
     /// 检查是否符合校验值
+    /// 
     /// - `check`: 目标校验值
     pub fn eq(&self, check: &str) -> bool {
         match self {
@@ -58,6 +59,19 @@ impl FileHash {
             FileHash::Sha1Sha256(hash1, hash2) => hash1 == check || hash2 == check,
             FileHash::Sha512(hash) => hash == check,
             FileHash::Sha1Sha512(hash1, hash2) => hash1 == check || hash2 == check,
+        }
+    }
+
+    /// 获取SHA1
+    pub fn get_sha1(&self) -> Option<String> {
+        match self {
+            FileHash::None => None,
+            FileHash::Md5(_) => None,
+            FileHash::Sha1(sha1) => Some(sha1.clone()),
+            FileHash::Sha256(_) => None,
+            FileHash::Sha512(_) => None,
+            FileHash::Sha1Sha256(sha1, _) => Some(sha1.clone()),
+            FileHash::Sha1Sha512(sha1, _) => Some(sha1.clone()),
         }
     }
 }

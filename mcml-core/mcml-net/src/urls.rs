@@ -128,3 +128,10 @@ pub const MINECRAFT_NEWS: &str = "https://www.minecraft.net/content/minecraftnet
 pub const CURSEFORGE_DOWNLOAD: &str = "https://edge.forgecdn.net/";
 /// CurseForge REST API
 pub const CURSEFORGE: &str = "https://api.curseforge.com/v1/";
+
+// ============================================================================
+// Modrinth API
+// ============================================================================
+
+pub const MODRINTH: &str = "https://api.modrinth.com/v2/";
+pub const MODRINTH_DOWNLOAD: &str = "https://cdn.modrinth.com/";

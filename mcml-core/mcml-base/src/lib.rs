@@ -25,12 +25,9 @@
 //! | [`process_utils`] | 进程管理 |
 //! | [`inner_path`] | 内部数据存储路径 |
 //! | [`file_item`] | 文件下载项定义 |
-//! | [`checker`] | 字符串格式校验 |
-//! | [`builder`] | 字符串构建工具 |
 
 pub mod archives;
-pub mod builder;
-pub mod checker;
+pub mod tools;
 pub mod events;
 pub mod file_item;
 pub mod hash_helper;

@@ -5,12 +5,13 @@ use async_trait::async_trait;
 use crate::GameInstance;
 
 /// 项目安装状态
-pub enum AdddModPackState {
+pub enum AddModPackState {
     DownloadPack,
     ReadInfo,
     GetInfo,
     DownloadFile,
     Unzip,
+    Done,
 }
 
 /// 实例创建界面回调
@@ -31,7 +32,7 @@ pub trait IProgressGui: Send + Sync {
 /// 整合包安装界面回调
 pub trait IAddModPackGui: Send + Sync {
     /// 设置整合包安装状态
-    fn set_state(&self, state: AdddModPackState);
+    fn set_state(&self, state: AddModPackState);
     /// 设置当前进度
     fn set_now(&self, value: usize, all: Option<usize>);
     /// 显示文件

@@ -15,6 +15,7 @@ use crate::{
 };
 
 pub mod curseforge_worker;
+pub mod modrinth_worker;
 
 /// 整合包安装器
 #[async_trait]
@@ -56,7 +57,7 @@ pub struct BaseModPackWorker {
     /// 下载列表（Mutex 允许 `&self` 方法修改）
     pub downloads: Mutex<Vec<FileItemObj>>,
     /// 取消
-    pub cancel: CancellationToken,
+    pub cancel: Option<CancellationToken>,
 }
 
 impl BaseModPackWorker {
@@ -64,7 +65,7 @@ impl BaseModPackWorker {
         zip: BaseArchive,
         gui: Option<Arc<dyn IAddInstanceGui>>,
         pack_gui: Option<Arc<dyn IAddGui>>,
-        cancel: CancellationToken,
+        cancel: Option<CancellationToken>,
     ) -> Self {
         Self {
             zip,

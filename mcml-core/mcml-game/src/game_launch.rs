@@ -474,7 +474,7 @@ impl InstanceSettingObj {
         }
 
         if let Some(gui) = &gui {
-            gui.no_java(*list.first().unwrap());
+            gui.no_java(list[0]);
         }
 
         None

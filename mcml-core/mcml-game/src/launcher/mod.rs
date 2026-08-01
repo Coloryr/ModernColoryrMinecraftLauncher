@@ -5,6 +5,7 @@ pub mod custom_loader_obj;
 pub mod file_online_info_obj;
 pub mod game_time_obj;
 pub mod instance_setting_obj;
+pub mod project_save_obj;
 
 /// 资源来源
 #[derive(Serialize_repr, Deserialize_repr, Debug, Clone, Copy, PartialEq, Eq)]
@@ -70,5 +71,5 @@ pub enum FileType {
 }
 
 impl FileType {
-
+    
 }

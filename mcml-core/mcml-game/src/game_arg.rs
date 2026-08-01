@@ -7,9 +7,7 @@ use std::{
 
 use mcml_auth::{AuthType, LoginObj};
 use mcml_base::{
-    Os, builder,
-    file_item::{FileHash, FileItemObj, LaterRun},
-    hash_helper, path_helper, serialize_tools,
+    Os, file_item::{FileHash, FileItemObj, LaterRun}, hash_helper, path_helper, serialize_tools, tools,
 };
 use mcml_config::config_obj::GCType;
 use mcml_names::i18_items::error_type::{CoreResult, ErrorType};
@@ -721,7 +719,7 @@ impl InstanceSettingObj {
                 &self.get_game_path().to_string_lossy(),
             )
             .replace(names::ARG_JAVA_LOCAL, &jvm.to_string_lossy())
-            .replace(names::ARG_JAVA_ARG, &builder::build_vec_string(arg))
+            .replace(names::ARG_JAVA_ARG, &tools::build_vec_string(arg))
     }
 
     /// 创建常规启动内容

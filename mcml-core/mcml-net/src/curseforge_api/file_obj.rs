@@ -1,15 +1,15 @@
 use serde::{Deserialize, Serialize};
 
-use crate::curseforge::list_obj::CurseForgeListPaginationObj;
+use crate::curseforge_api::list_obj::CurseForgeListPaginationObj;
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
-pub struct CurseFogreMutFileObj {
+pub struct CurseFogreFilePageObj {
     pub data: Vec<CurseForgeFileDataObj>,
     pub pagination: CurseForgeListPaginationObj,
 }
 
-impl Default for CurseFogreMutFileObj {
+impl Default for CurseFogreFilePageObj {
     fn default() -> Self {
         Self {
             data: Default::default(),

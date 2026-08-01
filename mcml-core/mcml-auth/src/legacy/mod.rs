@@ -133,7 +133,7 @@ pub async fn authenticate(
             Err(ErrorType::AuthLoginNoProfile)
         } else if list.len() == 1 {
             // 仅有一个角色，直接选中
-            let temp = list.first().unwrap();
+            let temp = &list[0];
 
             Ok(LegacyLoginRes {
                 auth: LoginObj::new(

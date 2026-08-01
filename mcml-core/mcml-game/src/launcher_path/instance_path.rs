@@ -16,9 +16,12 @@ use mcml_names::{
 };
 
 use crate::launcher::{
-    custom_game_arg_obj::CustomGameArgObj, file_online_info_obj::FileOnlineInfoObj,
+    custom_game_arg_obj::CustomGameArgObj, file_online_info_obj::OnlineInfoObj,
     game_time_obj::GameTimeObj, instance_setting_obj::InstanceSettingObj,
 };
+
+pub type OnlineInfoList = HashMap<String, OnlineInfoObj>;
+pub type CustomGameArgList = HashMap<String, CustomGameArgObj>;
 
 static BASE_DIR: OnceLock<PathBuf> = OnceLock::new();
 
@@ -346,10 +349,10 @@ impl InstanceSettingObj {
     }
 
     /// 读取在线文件信息
-    pub fn read_online_info(&self) -> HashMap<String, FileOnlineInfoObj> {
+    pub fn read_online_info(&self) -> OnlineInfoList {
         let file = self.get_online_info_file();
         if file.exists() && file.is_file() {
-            let json = serialize_tools::json_from_file::<HashMap<String, FileOnlineInfoObj>>(&file);
+            let json = serialize_tools::json_from_file::<OnlineInfoList>(&file);
             if let Ok(data) = json {
                 return data;
             }
@@ -359,7 +362,7 @@ impl InstanceSettingObj {
     }
 
     /// 保存在线文件信息
-    pub fn save_online_info(&self, info: &HashMap<String, FileOnlineInfoObj>) {
+    pub fn save_online_info(&self, info: &OnlineInfoList) {
         config_save::save(
             uuids::mix_uuid(self.uuid, uuids::ONLINE_FILE_UUID),
             info,
@@ -368,7 +371,7 @@ impl InstanceSettingObj {
     }
 
     /// 读取自定义游戏启动配置
-    pub fn read_custom_json(&self) -> HashMap<String, CustomGameArgObj> {
+    pub fn read_custom_json(&self) -> CustomGameArgList {
         let file = self.get_json_path();
         let mut list = HashMap::new();
         if file.exists()
@@ -389,7 +392,7 @@ impl InstanceSettingObj {
     }
 
     /// 保存自定义启动配置
-    pub fn save_custom_json(&self, info: &HashMap<String, CustomGameArgObj>) -> CoreResult<()> {
+    pub fn save_custom_json(&self, info: &CustomGameArgList) -> CoreResult<()> {
         let dir = self.get_json_path();
         path_helper::create_dir_all(&dir)?;
         for (key, value) in info.iter() {

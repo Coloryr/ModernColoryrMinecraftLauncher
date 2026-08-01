@@ -110,7 +110,7 @@ impl Default for CustomLoaderObj {
 }
 
 /// 游戏实例配置
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct InstanceSettingObj {
     /// 实例标识
