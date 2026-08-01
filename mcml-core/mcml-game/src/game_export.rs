@@ -12,7 +12,7 @@ use crate::{
         list_obj::CurseForgeListDataObj,
         pack_obj::{CurseForgePackObj, FilesObj, MinecraftObj, ModLoadersObj},
     },
-    launcher::{file_online_info_obj::FileOnlineInfoObj, instance_setting_obj::InstanceSettingObj},
+    launcher::{file_online_info_obj::OnlineInfoObj, instance_setting_obj::InstanceSettingObj},
     loader::LoaderType,
 };
 
@@ -37,7 +37,7 @@ pub struct OnlineFileExport {
     /// 校验
     pub hash: FileHash,
     /// 文件在线信息
-    pub info: Option<FileOnlineInfoObj>,
+    pub info: Option<OnlineInfoObj>,
 }
 
 /// 导出需要的参数

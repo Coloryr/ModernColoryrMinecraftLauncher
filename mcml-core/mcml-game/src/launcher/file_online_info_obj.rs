@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 /// 文件在线信息
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(default)]
-pub struct FileOnlineInfoObj {
+pub struct OnlineInfoObj {
     /// 游戏路径文件夹
     #[serde(rename = "Path")]
     pub path: String,
@@ -27,7 +27,7 @@ pub struct FileOnlineInfoObj {
     pub fileid: String,
 }
 
-impl Default for FileOnlineInfoObj {
+impl Default for OnlineInfoObj {
     fn default() -> Self {
         Self {
             path: Default::default(),

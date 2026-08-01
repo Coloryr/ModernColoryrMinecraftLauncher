@@ -255,7 +255,7 @@ pub async fn get_xbox(token: &str) -> CoreResult<XBoxLiveRes> {
     let data = mcml_net::get_login_client()
         .post_json_get_json::<_, XBoxLoginResObj>(urls::XBOX_LIVE, &obj)
         .await?;
-    let item = data.display_claims.xui.first().unwrap();
+    let item = &data.display_claims.xui[0];
     let token = data.token;
     let uhs = item.uhs.clone();
 
@@ -294,7 +294,7 @@ pub async fn get_xsts(token: &str) -> CoreResult<XBoxLiveRes> {
     let data = mcml_net::get_login_client()
         .post_json_get_json::<_, XBoxLoginResObj>(urls::XSTS, &obj)
         .await?;
-    let item = data.display_claims.xui.first().unwrap();
+    let item = &data.display_claims.xui[0];
     let token = data.token;
     let uhs = item.uhs.clone();
 

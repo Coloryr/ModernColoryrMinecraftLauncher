@@ -1,10 +1,11 @@
-use std::{collections::HashMap, path::PathBuf};
+use std::path::PathBuf;
 
 use mcml_base::file_item::FileItemObj;
 use mcml_names::names;
 
-use crate::launcher::{
-    FileType, file_online_info_obj::FileOnlineInfoObj, instance_setting_obj::InstanceSettingObj,
+use crate::{
+    launcher::{FileType, instance_setting_obj::InstanceSettingObj},
+    launcher_path::instance_path::OnlineInfoList,
 };
 
 /// 获取下载项目信息
@@ -17,7 +18,7 @@ pub struct ItemPathRes {
 /// 创建一些下载项目
 pub struct DownloadItemRes {
     pub list: Vec<FileItemObj>,
-    pub online: HashMap<String, FileOnlineInfoObj>,
+    pub online: OnlineInfoList,
 }
 
 impl ItemPathRes {

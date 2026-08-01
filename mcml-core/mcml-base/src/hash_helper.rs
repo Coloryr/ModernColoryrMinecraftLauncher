@@ -46,7 +46,7 @@ fn create_hasher(hash_type: HashType) -> Box<dyn DynDigest + Send> {
 pub fn gen_hash(hash_type: HashType, data: &[u8]) -> String {
     let mut hasher = create_hasher(hash_type);
     hasher.update(data);
-    bytes_to_hex(&hasher.finalize())
+    bytes_to_hex(&hasher.finalize()).to_ascii_lowercase()
 }
 
 /// 从字符串生成校验值
@@ -56,7 +56,7 @@ pub fn gen_hash(hash_type: HashType, data: &[u8]) -> String {
 pub fn gen_hash_from_string(hash_type: HashType, data: &str) -> String {
     let mut hasher = create_hasher(hash_type);
     hasher.update(data.as_bytes());
-    bytes_to_hex(&hasher.finalize())
+    bytes_to_hex(&hasher.finalize()).to_ascii_lowercase()
 }
 
 /// 从数据流生成校验值
@@ -79,7 +79,7 @@ pub fn gen_hash_from_reader<R: Read>(hash_type: HashType, reader: &mut R) -> Cor
         }
         hasher.update(&buffer[..len]);
     }
-    Ok(bytes_to_hex(&hasher.finalize()))
+    Ok(bytes_to_hex(&hasher.finalize()).to_ascii_lowercase())
 }
 
 /// 异步从数据流生成校验值
@@ -105,7 +105,7 @@ pub async fn gen_hash_from_reader_async<R: AsyncRead + Unpin>(
         }
         hasher.update(&buffer[..len]);
     }
-    Ok(bytes_to_hex(&hasher.finalize()))
+    Ok(bytes_to_hex(&hasher.finalize()).to_ascii_lowercase())
 }
 
 /// 从文件生成校验值

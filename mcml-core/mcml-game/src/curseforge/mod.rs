@@ -3,43 +3,35 @@ use std::{
     path::Path,
     sync::{
         Arc, Mutex, OnceLock,
-        atomic::{AtomicBool, AtomicUsize, Ordering},
+        atomic::{AtomicBool, Ordering},
     },
 };
 
-use rayon::iter::{
-    IndexedParallelIterator, IntoParallelIterator, IntoParallelRefIterator,
-    IntoParallelRefMutIterator, ParallelIterator,
-};
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
 use crate::{
     GameInstance,
-    curseforge::{
-        categories_obj::CurseForgeCategoriesObj,
-        file_obj::{CurseFogreMutFileObj, CurseForgeFileDataObj, DependenciesObj},
-        list_obj::CurseForgeListObj,
-        pack_obj::CurseForgePackObj,
-        version_obj::{CurseForgeVersionObj, CurseForgeVersionTypeObj},
-    },
+    curseforge::pack_obj::CurseForgePackObj,
     data_res::{DownloadItemRes, ItemPathRes},
-    gui_hook::{IAddInstanceGui, IAddModPackGui, IProgressGui},
+    gui_hook::{AddModPackState, IAddGui, IAddModPackGui, IProgressGui},
     launcher::{
-        FileType, file_online_info_obj::FileOnlineInfoObj, instance_setting_obj::InstanceSettingObj,
+        FileType, file_online_info_obj::OnlineInfoObj, instance_setting_obj::InstanceSettingObj,
     },
     loader::LoaderType,
+    modpack::{BaseModPackWorker, ModPackWorker, curseforge_worker::CurseForgeWorker},
 };
-use mcml_base::file_item::{FileHash, FileItemObj, LaterRun};
+use mcml_base::{
+    archives::BaseArchive,
+    file_item::{FileHash, FileItemObj, LaterRun},
+};
 use mcml_names::{i18_items::error_type::CoreResult, names};
-use mcml_net::{
-    curseforge_api::{self, CurseFogreArg},
-    urls,
+use mcml_net::curseforge_api::{
+    self, CurseFogreArg,
+    categories_obj::CurseForgeCategoriesObj,
+    file_obj::{CurseForgeFileDataObj, CurseForgeFileObj, DependenciesObj},
 };
 
-pub mod categories_obj;
-pub mod file_obj;
-pub mod list_obj;
 pub mod pack_obj;
-pub mod version_obj;
 
 static CATEGORIES: OnceLock<CurseForgeCategoriesObj> = OnceLock::new();
 static VERSIONS: OnceLock<Vec<String>> = OnceLock::new();
@@ -83,6 +75,34 @@ impl LoaderType {
     }
 }
 
+/// 创建下载项目
+pub fn make_file_item_obj<P: AsRef<Path>>(obj: &mut CurseForgeFileDataObj, path: P) -> FileItemObj {
+    obj.fix_download_url();
+
+    FileItemObj {
+        url: obj.download_url.clone().unwrap(),
+        name: obj.display_name.clone(),
+        file: path.as_ref().join(&obj.file_name),
+        hash: FileHash::Sha1(obj.sha1_hash()),
+        later: LaterRun::None,
+    }
+}
+
+/// 创建在线文件信息
+pub fn make_file_online_info_obj(obj: &mut CurseForgeFileDataObj, path: &str) -> OnlineInfoObj {
+    obj.fix_download_url();
+
+    OnlineInfoObj {
+        path: path.to_string(),
+        name: obj.display_name.clone(),
+        file: obj.file_name.clone(),
+        sha1: obj.sha1_hash(),
+        url: obj.download_url.clone().unwrap_or_default(),
+        modid: obj.mod_id.to_string(),
+        fileid: obj.id.to_string(),
+    }
+}
+
 /// 模组依赖列表
 pub struct CurseForgeModDependenciesRes {
     /// 名字
@@ -95,75 +115,26 @@ pub struct CurseForgeModDependenciesRes {
     pub list: Vec<CurseForgeFileDataObj>,
 }
 
-impl CurseForgeFileDataObj {
-    /// 修正下载地址
-    pub fn fix_download_url(&mut self) {
-        if self.download_url.is_none() {
-            self.download_url = Some(format!(
-                "{}files/{}/{}/{}",
-                urls::CURSEFORGE_DOWNLOAD,
-                self.id / 1000,
-                self.id % 1000,
-                self.file_name
-            ))
-        }
-    }
+/// 获取模组依赖
+///
+/// - `obj`: CurseForge文件信息
+/// - `version`: 游戏版本
+/// - `loader`: 加载器类型
+pub async fn get_mod_dependencies(
+    obj: &CurseForgeFileDataObj,
+    version: &str,
+    loader: LoaderType,
+) -> Vec<CurseForgeModDependenciesRes> {
+    let ids = Mutex::new(HashSet::new());
+    let handle = tokio::runtime::Handle::current();
+    let dependencies = obj.dependencies.clone();
+    let version = version.to_string();
 
-    /// 提取 SHA1 哈希值
-    #[inline]
-    fn sha1_hash(&self) -> String {
-        self.hashes
-            .iter()
-            .find(|h| h.algo == 1)
-            .map(|h| h.value.clone())
-            .unwrap_or_default()
-    }
-
-    /// 创建下载项目
-    pub fn make_file_item_obj<P: AsRef<Path>>(&mut self, path: P) -> FileItemObj {
-        self.fix_download_url();
-
-        FileItemObj {
-            url: self.download_url.clone().unwrap(),
-            name: self.display_name.clone(),
-            file: path.as_ref().join(&self.file_name),
-            hash: FileHash::Sha1(self.sha1_hash()),
-            later: LaterRun::None,
-        }
-    }
-
-    /// 创建在线文件信息
-    pub fn make_file_online_info_obj(&mut self, path: &str) -> FileOnlineInfoObj {
-        self.fix_download_url();
-
-        FileOnlineInfoObj {
-            path: path.to_string(),
-            name: self.display_name.clone(),
-            file: self.file_name.clone(),
-            sha1: self.sha1_hash(),
-            url: self.download_url.clone().unwrap_or_default(),
-            modid: self.mod_id.to_string(),
-            fileid: self.id.to_string(),
-        }
-    }
-
-    /// 获取模组依赖
-    pub async fn get_mod_dependencies(
-        &self,
-        version: &str,
-        loader: LoaderType,
-    ) -> Vec<CurseForgeModDependenciesRes> {
-        let ids = Mutex::new(HashSet::new());
-        let handle = tokio::runtime::Handle::current();
-        let dependencies = self.dependencies.clone();
-        let version = version.to_string();
-
-        tokio::task::spawn_blocking(move || {
-            get_mod_dependencies_inner(&dependencies, &version, &loader, &ids, &handle)
-        })
-        .await
-        .unwrap()
-    }
+    tokio::task::spawn_blocking(move || {
+        get_mod_dependencies_inner(&dependencies, &version, &loader, &ids, &handle)
+    })
+    .await
+    .unwrap()
 }
 
 fn get_mod_dependencies_inner(
@@ -193,7 +164,7 @@ fn get_mod_dependencies_inner(
         let opt = item.relation_type != 2;
 
         let (res1, res2) = handle.block_on(async {
-            let res1 = curseforge_api::get_files_page::<CurseFogreMutFileObj>(CurseFogreArg {
+            let res1 = curseforge_api::get_files_page(CurseFogreArg {
                 id: Some(id.clone()),
                 version: Some(version.to_string()),
                 loader: Some(loader.get_id()),
@@ -210,7 +181,7 @@ fn get_mod_dependencies_inner(
                 return (None, None);
             }
 
-            let res2 = curseforge_api::get_mod_info::<CurseForgeListObj>(&id).await;
+            let res2 = curseforge_api::get_mod_info(&id).await;
             (Some(data), res2.ok())
         });
 
@@ -221,7 +192,6 @@ fn get_mod_dependencies_inner(
         let sub_deps =
             get_mod_dependencies_inner(&data.data[0].dependencies, version, loader, ids, handle);
 
-        // 先添加当前模组到列表（与C#逻辑一致）
         list.lock().unwrap().push(CurseForgeModDependenciesRes {
             name: data1.data.name.clone(),
             mod_id: data1.data.id,
@@ -260,7 +230,7 @@ impl FileType {
         let temp = match CATEGORIES.get() {
             Some(data) => data,
             None => {
-                let list = curseforge_api::get_categories::<CurseForgeCategoriesObj>().await?;
+                let list = curseforge_api::get_categories().await?;
                 CATEGORIES.get_or_init(|| list)
             }
         };
@@ -284,8 +254,7 @@ impl FileType {
         match VERSIONS.get() {
             Some(version) => Ok(version.clone()),
             None => {
-                let mut list =
-                    curseforge_api::get_version_type::<CurseForgeVersionTypeObj>().await?;
+                let mut list = curseforge_api::get_version_type().await?;
 
                 list.data.retain(|item| item.name.starts_with("Minecraft "));
 
@@ -298,7 +267,7 @@ impl FileType {
                     (id <= 17, if id > 17 { -id } else { id })
                 });
 
-                let version_list = curseforge_api::get_version::<CurseForgeVersionObj>().await?;
+                let version_list = curseforge_api::get_version().await?;
 
                 // Build lookup map for O(1) version-type matching
                 let version_map: HashMap<u32, &_> = version_list
@@ -322,116 +291,85 @@ impl FileType {
     }
 }
 
-/// Shared processing pipeline: fetch paths → rayon CPU → assemble.
-/// Defined as a macro to work with the opaque `impl Trait` gui type.
-macro_rules! build_results_impl {
-    ($game:expr, $items:expr, $gui:expr, $size:expr) => {{
-        let game: &Arc<InstanceSettingObj> = $game;
-        let mut items: Vec<CurseForgeFileDataObj> = $items;
-        let gui = $gui;
-        let size: usize = $size;
+/// 构建下载结果（串行处理）。
+/// 只有 `get_modpack_info` 中的 `spawn_fetch_task` 才需要并行处理。
+async fn build_results(
+    game: &InstanceSettingObj,
+    items: Vec<CurseForgeFileDataObj>,
+    gui: &Option<Arc<dyn IAddGui>>,
+    size: usize,
+) -> DownloadItemRes {
+    let mut list = Vec::with_capacity(size);
+    let mut online = HashMap::with_capacity(size);
+    let mut now = 0usize;
 
-        async move {
-            // Phase 1: pre-fetch paths concurrently (async I/O; .jar returns instantly).
-            // Spawn all then await in insertion order to preserve item ↔ path alignment.
-            let handles: Vec<_> = items
-                .iter()
-                .map(|item| {
-                    let game = game.clone();
-                    let file_name = item.file_name.clone();
-                    let mod_id = item.mod_id;
-                    tokio::spawn(async move { game.get_item_path(&file_name, mod_id).await.ok() })
-                })
-                .collect();
-            let mut paths: Vec<Option<ItemPathRes>> = Vec::with_capacity(size);
-            for handle in handles {
-                paths.push(handle.await.unwrap_or(None));
-            }
+    for mut item in items {
+        let Some(path) = game.get_item_path(&item.file_name, item.mod_id).await.ok() else {
+            continue;
+        };
 
-            // Phase 2: build file items in parallel (CPU-bound, spawn_blocking + rayon)
-            let game = game.clone();
-            let results = tokio::task::spawn_blocking(move || {
-                let now = AtomicUsize::new(0);
-                items
-                    .par_iter_mut()
-                    .zip(paths.into_par_iter())
-                    .filter_map(|(item, path)| {
-                        let path = path?;
+        // Fix download URL and compute SHA1 once (avoid duplicate
+        // work from calling both make_file_item_obj and
+        // make_file_online_info_obj)
+        item.fix_download_url();
+        let url = item.download_url.clone().unwrap_or_default();
+        let sha1 = item.sha1_hash();
 
-                        // Fix download URL and compute SHA1 once (avoid duplicate
-                        // work from calling both make_file_item_obj and
-                        // make_file_online_info_obj)
-                        item.fix_download_url();
-                        let url = item.download_url.clone().unwrap_or_default();
-                        let sha1 = item.sha1_hash();
+        let modid_str = item.mod_id.to_string();
 
-                        let modid_str = item.mod_id.to_string();
+        let mut file_item = FileItemObj {
+            url: url.clone(),
+            name: item.display_name.clone(),
+            file: path.file_path.join(&item.file_name),
+            hash: FileHash::Sha1(sha1.clone()),
+            later: LaterRun::None,
+        };
 
-                        let mut file_item = FileItemObj {
-                            url: url.clone(),
-                            name: item.display_name.clone(),
-                            file: path.file_path.join(&item.file_name),
-                            hash: FileHash::Sha1(sha1.clone()),
-                            later: LaterRun::None,
-                        };
-
-                        let online_item = if matches!(path.file_type, FileType::Save) {
-                            file_item.later = LaterRun::UnpackSave(game.get_saves_path());
-                            None
-                        } else {
-                            Some(FileOnlineInfoObj {
-                                path: path.path.clone(),
-                                name: item.display_name.clone(),
-                                file: item.file_name.clone(),
-                                sha1,
-                                url,
-                                modid: modid_str.clone(),
-                                fileid: item.id.to_string(),
-                            })
-                        };
-
-                        let now_val = now.fetch_add(1, Ordering::Relaxed);
-                        if let Some(gui) = gui {
-                            gui.set_sub_now(now_val, Some(size));
-                        }
-
-                        Some((file_item, online_item, modid_str))
-                    })
-                    .collect::<Vec<_>>()
+        let online_item = if matches!(path.file_type, FileType::Save) {
+            file_item.later = LaterRun::UnpackSave(game.get_saves_path());
+            None
+        } else {
+            Some(OnlineInfoObj {
+                path: path.path.clone(),
+                name: item.display_name.clone(),
+                file: item.file_name.clone(),
+                sha1,
+                url,
+                modid: modid_str.clone(),
+                fileid: item.id.to_string(),
             })
-            .await
-            .unwrap_or_default();
+        };
 
-            // Assemble: last-write-wins deduplication
-            let mut list = Vec::with_capacity(size);
-            let mut online = HashMap::with_capacity(size);
-
-            for (file_item, online_item, modid) in results {
-                list.push(file_item);
-                online.remove(&modid);
-                if let Some(oi) = online_item {
-                    online.insert(modid, oi);
-                }
-            }
-
-            DownloadItemRes { list, online }
+        let now_val = now;
+        now += 1;
+        if let Some(gui) = gui {
+            gui.set_sub_now(now_val, Some(size));
         }
-    }};
+
+        // Assemble: last-write-wins deduplication
+        list.push(file_item);
+        online.remove(&modid_str);
+        if let Some(oi) = online_item {
+            online.insert(modid_str, oi);
+        }
+    }
+
+    DownloadItemRes { list, online }
 }
 
 /// 获取整合包模组信息
-pub async fn get_modpack_info(
-    game: &Arc<InstanceSettingObj>,
-    obj: &mut CurseForgePackObj,
-    gui: &'static Option<impl IAddModPackGui + IProgressGui + Send + Sync + 'static>,
+pub async fn get_modpack_info<P: AsRef<Path>>(
+    path: P,
+    obj: &CurseForgePackObj,
+    gui: &Option<Arc<dyn IAddGui>>,
 ) -> CoreResult<DownloadItemRes> {
     let size = obj.files.len();
 
     let file_ids: Vec<_> = obj.files.iter().map(|f| f.file_id).collect();
 
     // ── Batch path: get_files succeeds → process all at once ──
-    if let Ok(items) = curseforge_api::get_files::<Vec<CurseForgeFileDataObj>>(file_ids).await {
-        return Ok(build_results_impl!(game, items, gui, size).await);
+    if let Ok(items) = curseforge_api::get_files(file_ids).await {
+        return Ok(build_results(path, items, gui, size).await);
     }
 
     // ── Fallback path: fetch each file individually, any failure → empty ──
@@ -451,7 +389,7 @@ pub async fn get_modpack_info(
         // Drain + refill
         while let Some(result) = tasks.join_next().await {
             if let Ok(Some(data)) = result {
-                fetched.push(data);
+                fetched.push(data.data);
             }
             // Once any item fails, stop spawning but keep draining remaining tasks
             if failed.load(Ordering::Relaxed) {
@@ -470,11 +408,11 @@ pub async fn get_modpack_info(
         });
     }
 
-    Ok(build_results_impl!(game, fetched, gui, size).await)
+    Ok(build_results(path, fetched, gui, size).await)
 }
 
 fn spawn_fetch_task(
-    tasks: &mut tokio::task::JoinSet<Option<CurseForgeFileDataObj>>,
+    tasks: &mut tokio::task::JoinSet<Option<CurseForgeFileObj>>,
     file_ref: &pack_obj::FilesObj,
     failed: &Arc<AtomicBool>,
 ) {
@@ -482,7 +420,7 @@ fn spawn_fetch_task(
     let fid = file_ref.file_id.to_string();
     let failed = failed.clone();
     tasks.spawn(async move {
-        match curseforge_api::get_mod::<CurseForgeFileDataObj>(&pid, &fid).await {
+        match curseforge_api::get_mod(&pid, &fid).await {
             Ok(data) => Some(data),
             Err(_) => {
                 failed.store(true, Ordering::Relaxed);
@@ -503,8 +441,7 @@ impl InstanceSettingObj {
         };
 
         if !file_name.ends_with(names::JAR_DOT_EXT) {
-            let info1 =
-                curseforge_api::get_mod_info::<CurseForgeListObj>(&mod_id.to_string()).await?;
+            let info1 = curseforge_api::get_mod_info(&mod_id.to_string()).await?;
 
             // Categories list: first match wins
             for item2 in &info1.data.categories {
@@ -550,20 +487,78 @@ fn apply_class_id(class_id: u32, item: &mut ItemPathRes, instance: &InstanceSett
 pub async fn upgrade_modpack(
     game: &GameInstance,
     data: &mut CurseForgeFileDataObj,
-    gui: &Option<Arc<impl IAddInstanceGui>>,
+    gui: Option<Arc<dyn IAddGui>>,
 ) -> bool {
     data.fix_download_url();
 
-    let obj = FileItemObj {
-        url: data.download_url.clone().unwrap(),
-        name: data.file_name.clone(),
-        file: mcml_downloader::get_download_path().join(&data.file_name),
-        ..Default::default()
-    };
+    let obj = make_file_item_obj(data, mcml_downloader::get_download_path());
+    let file = obj.file.clone();
+
+    if let Some(ref gui) = gui {
+        gui.set_state(AddModPackState::DownloadPack);
+        gui.set_now(1, Some(6));
+    }
 
     let res = mcml_downloader::start_download_task(vec![obj]).await;
     if !res {
         return false;
+    }
+
+    if let Some(ref gui) = gui {
+        gui.set_state(AddModPackState::ReadInfo);
+        gui.set_now(2, Some(6));
+    }
+
+    let zip = BaseArchive::open(file);
+    if let Err(err) = zip {
+        mcml_log::error_type(err);
+        return false;
+    }
+    let mut worker = CurseForgeWorker::new(BaseModPackWorker::new(
+        zip.unwrap(),
+        None,
+        gui.as_ref().cloned(),
+        None,
+    ));
+
+    if !worker.read_info() || !worker.read_version().await {
+        return false;
+    }
+
+    worker.update_game(game);
+
+    if let Some(ref gui) = gui {
+        gui.set_state(AddModPackState::Unzip);
+        gui.set_now(3, Some(6));
+    }
+
+    if !worker.unzip(None).await {
+        return false;
+    }
+
+    if let Some(ref gui) = gui {
+        gui.set_sub_text(None);
+        gui.set_sub_now(0, None);
+        gui.set_state(AddModPackState::GetInfo);
+        gui.set_now(4, Some(6));
+    }
+
+    if !worker.check_upgrade().await {
+        return false;
+    }
+
+    if let Some(ref gui) = gui {
+        gui.set_sub_text(None);
+        gui.set_sub_now(0, None);
+        gui.set_state(AddModPackState::DownloadFile);
+        gui.set_now(5, Some(6));
+    }
+
+    worker.download().await;
+
+    if let Some(ref gui) = gui {
+        gui.set_state(AddModPackState::Done);
+        gui.set_now(6, Some(6));
     }
 
     true

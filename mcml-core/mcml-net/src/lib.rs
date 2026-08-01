@@ -38,8 +38,10 @@ use reqwest::header::{HeaderMap, HeaderValue, USER_AGENT};
 use reqwest::{Proxy, Request, Response};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
+use std::fmt;
 use std::sync::{Arc, OnceLock};
-use std::time::Duration;
+use std::time::{Duration, Instant};
+use tokio::sync::Mutex;
 
 pub mod adoptium_api;
 pub mod authlib_api;
@@ -51,6 +53,7 @@ pub mod liteloader_api;
 pub mod maven_utils;
 pub mod mojang_api;
 pub mod nide8_api;
+pub mod modrinth_api;
 pub mod optifine_api;
 pub mod quilt_api;
 pub mod url_helper;
@@ -73,12 +76,82 @@ fn map_err(error: reqwest::Error) -> ErrorType {
     })
 }
 
+/// 请求速率限制器
+///
+/// 基于滑动时间窗口实现，限制每分钟的最大请求数。
+/// 当达到上限后，后续请求将等待下一个时间窗口。
+struct RateLimiter {
+    /// 每分钟允许的最大请求数
+    max_requests: u32,
+    /// 当前时间窗口的起始时刻
+    window_start: Instant,
+    /// 当前窗口内已发出的请求数
+    request_count: u32,
+}
+
+impl RateLimiter {
+    /// 创建新的速率限制器
+    ///
+    /// # 参数
+    ///
+    /// - `max_requests`: 每分钟允许的最大请求数
+    fn new(max_requests: u32) -> Self {
+        Self {
+            max_requests,
+            window_start: Instant::now(),
+            request_count: 0,
+        }
+    }
+
+    /// 更新最大请求数限制
+    fn update_limit(&mut self, max_requests: u32) {
+        self.max_requests = max_requests;
+    }
+
+    /// 尝试获取一个请求槽位。
+    ///
+    /// 如果当前窗口内请求数已达上限，则等待至下一个时间窗口。
+    /// 如果已经过去了一分钟，则自动重置窗口计数器。
+    async fn acquire(&mut self) {
+        let now = Instant::now();
+        let elapsed = now.duration_since(self.window_start);
+
+        // 如果已经过去了一分钟，重置窗口
+        if elapsed >= Duration::from_secs(60) {
+            self.window_start = now;
+            self.request_count = 0;
+        }
+
+        if self.request_count >= self.max_requests {
+            // 等待当前窗口结束
+            let wait_time = Duration::from_secs(60) - elapsed;
+            tokio::time::sleep(wait_time).await;
+            self.window_start = Instant::now();
+            self.request_count = 0;
+        }
+
+        self.request_count += 1;
+    }
+
+}
+
 /// HTTP 客户端封装
 ///
-/// 对 `reqwest::Client` 的二次包装，增加了超时配置、默认请求头和代理支持。
-#[derive(Debug)]
+/// 对 `reqwest::Client` 的二次包装，增加了超时配置、默认请求头、代理支持
+/// 以及可选的请求速率限制。
 pub struct Client {
     inner: reqwest::Client,
+    /// 可选的速率限制器，锁内为 `None` 表示不限制
+    rate_limiter: Arc<Mutex<Option<RateLimiter>>>,
+}
+
+impl fmt::Debug for Client {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Client")
+            .field("inner", &self.inner)
+            .field("rate_limiter", &"Arc<Mutex<Option<RateLimiter>>>")
+            .finish()
+    }
 }
 
 impl Client {
@@ -110,7 +183,101 @@ impl Client {
 
         Client {
             inner: builder.build().unwrap(),
+            rate_limiter: Arc::new(Mutex::new(None)),
         }
+    }
+
+    /// 发送带速率限制的 GET 请求，返回反序列化的 JSON
+    ///
+    /// 每次调用时根据传入的 `max_per_minute` 动态维护速率限制，
+    /// 确保每分钟请求数不超过限制。如果之前没有限制或限制值不同，
+    /// 则自动创建或更新限制器。
+    ///
+    /// # 参数
+    ///
+    /// - `url`: 请求地址
+    /// - `max_per_minute`: 每分钟最大请求数
+    pub async fn get_json_limited<T: DeserializeOwned>(
+        &self,
+        url: &str,
+        max_per_minute: u32,
+    ) -> CoreResult<T> {
+        // 动态维护速率限制器
+        {
+            let mut guard = self.rate_limiter.lock().await;
+            match *guard {
+                Some(ref mut limiter) => limiter.update_limit(max_per_minute),
+                None => *guard = Some(RateLimiter::new(max_per_minute)),
+            }
+            if let Some(ref mut limiter) = *guard {
+                limiter.acquire().await;
+            }
+        }
+        let resp = self.inner.get(url).send().await.map_err(map_err)?;
+        handle_response(resp).await
+    }
+
+    /// 发送带速率限制的 GET 请求，返回响应体文本
+    ///
+    /// # 参数
+    ///
+    /// - `url`: 请求地址
+    /// - `max_per_minute`: 每分钟最大请求数
+    pub async fn get_text_limited(
+        &self,
+        url: &str,
+        max_per_minute: u32,
+    ) -> CoreResult<String> {
+        {
+            let mut guard = self.rate_limiter.lock().await;
+            match *guard {
+                Some(ref mut limiter) => limiter.update_limit(max_per_minute),
+                None => *guard = Some(RateLimiter::new(max_per_minute)),
+            }
+            if let Some(ref mut limiter) = *guard {
+                limiter.acquire().await;
+            }
+        }
+        self.inner
+            .get(url)
+            .send()
+            .await
+            .map_err(map_err)?
+            .text()
+            .await
+            .map_err(map_err)
+    }
+
+    /// 发送带速率限制的 GET 请求，返回响应体字节
+    ///
+    /// # 参数
+    ///
+    /// - `url`: 请求地址
+    /// - `max_per_minute`: 每分钟最大请求数
+    pub async fn get_bytes_limited(
+        &self,
+        url: &str,
+        max_per_minute: u32,
+    ) -> CoreResult<Vec<u8>> {
+        {
+            let mut guard = self.rate_limiter.lock().await;
+            match *guard {
+                Some(ref mut limiter) => limiter.update_limit(max_per_minute),
+                None => *guard = Some(RateLimiter::new(max_per_minute)),
+            }
+            if let Some(ref mut limiter) = *guard {
+                limiter.acquire().await;
+            }
+        }
+        self.inner
+            .get(url)
+            .send()
+            .await
+            .map_err(map_err)?
+            .bytes()
+            .await
+            .map_err(map_err)
+            .map(|data| data.to_vec())
     }
 
     /// 创建一个使用自定义代理的客户端
@@ -156,6 +323,7 @@ impl Client {
 
         Client {
             inner: builder.build().unwrap(),
+            rate_limiter: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -280,6 +448,39 @@ impl Client {
         handle_response(resp).await
     }
 
+    /// 发送带速率限制的 POST 请求，JSON 请求体，返回反序列化的 JSON
+    ///
+    /// # 参数
+    ///
+    /// - `url`: 请求地址
+    /// - `json`: JSON 请求体
+    /// - `max_per_minute`: 每分钟最大请求数
+    pub async fn post_json_get_json_limited<B: Serialize, T: DeserializeOwned>(
+        &self,
+        url: &str,
+        json: &B,
+        max_per_minute: u32,
+    ) -> CoreResult<T> {
+        {
+            let mut guard = self.rate_limiter.lock().await;
+            match *guard {
+                Some(ref mut limiter) => limiter.update_limit(max_per_minute),
+                None => *guard = Some(RateLimiter::new(max_per_minute)),
+            }
+            if let Some(ref mut limiter) = *guard {
+                limiter.acquire().await;
+            }
+        }
+        let resp = self
+            .inner
+            .post(url)
+            .json(json)
+            .send()
+            .await
+            .map_err(map_err)?;
+        handle_response(resp).await
+    }
+
     /// 发送 POST 请求，表单请求体，返回反序列化的 JSON
     pub async fn post_form_get_json<T: DeserializeOwned>(
         &self,
@@ -371,6 +572,5 @@ pub async fn handle_response<T: DeserializeOwned>(resp: reqwest::Response) -> Co
         }));
     }
     let bytes = resp.bytes().await.map_err(map_err)?;
-    let value: T = serialize_tools::json_from_bytes(&bytes)?;
-    Ok(value)
+    serialize_tools::json_from_bytes(&bytes)
 }

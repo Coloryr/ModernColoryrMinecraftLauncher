@@ -58,7 +58,7 @@ pub async fn authenticate(
             }
             None => {
                 // 无 GUI 回调时自动选择第一个角色
-                let item = list.first().unwrap();
+                let item = &list[0];
                 auth.uuid = item.uuid.clone();
                 auth.user_name = item.user_name.clone();
             }

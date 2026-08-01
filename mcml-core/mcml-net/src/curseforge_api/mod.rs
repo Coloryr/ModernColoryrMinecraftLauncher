@@ -25,7 +25,20 @@ use reqwest::{
 };
 use serde::{Serialize, de::DeserializeOwned};
 
-use crate::urls;
+use crate::{
+    curseforge_api::{
+        categories_obj::CurseForgeCategoriesObj,
+        file_obj::{CurseFogreFilePageObj, CurseForgeFileDataObj, CurseForgeFileObj},
+        list_obj::{CurseForgeListObj, CurseForgeListPageObj},
+        version_obj::{CurseForgeVersionObj, CurseForgeVersionTypeObj},
+    },
+    urls,
+};
+
+pub mod categories_obj;
+pub mod file_obj;
+pub mod list_obj;
+pub mod version_obj;
 
 /// CurseForge 游戏 ID（Minecraft = 432）
 pub const GAME_ID: u32 = 432;
@@ -47,6 +60,50 @@ pub const CATEGORYID_DATAPACKS: u32 = 5193;
 /// 全局 CurseForge API Key
 static API_KEY: OnceLock<String> = OnceLock::new();
 
+/// 搜索排序方式
+pub enum CurseForgeSortType {
+    /// 流行度
+    Popularity,
+    /// 特性
+    Featured,
+    /// 上次更新
+    LastUpdated,
+    /// 名字
+    Name,
+    /// 下载次数
+    TotalDownloads,
+}
+
+impl CurseForgeSortType {
+    /// 获取排序方式对应编号
+    pub fn get_index(&self) -> u32 {
+        match self {
+            CurseForgeSortType::Featured => 1,
+            CurseForgeSortType::Popularity => 2,
+            CurseForgeSortType::LastUpdated => 3,
+            CurseForgeSortType::Name => 4,
+            CurseForgeSortType::TotalDownloads => 6,
+        }
+    }
+
+    /// 根据排序方式获取排序方向编号
+    pub fn get_order_index(&self) -> u32 {
+        match self {
+            CurseForgeSortType::Featured
+            | CurseForgeSortType::Popularity
+            | CurseForgeSortType::LastUpdated
+            | CurseForgeSortType::TotalDownloads => 1,
+            CurseForgeSortType::Name => 0,
+        }
+    }
+}
+
+impl Default for CurseForgeSortType {
+    fn default() -> Self {
+        CurseForgeSortType::Popularity
+    }
+}
+
 /// CurseForge 搜索/列表请求参数
 pub struct CurseFogreArg {
     /// 项目编号
@@ -56,13 +113,11 @@ pub struct CurseFogreArg {
     /// 页数
     pub page: Option<u32>,
     /// 过滤
-    pub sort: Option<u32>,
+    pub sort: CurseForgeSortType,
     /// 过滤名
     pub filter: Option<String>,
     /// 页大小
     pub page_size: Option<u32>,
-    /// 排序方式
-    pub sort_order: Option<u32>,
     /// 分类
     pub category: Option<String>,
     /// 模组加载器类型
@@ -78,7 +133,6 @@ impl Default for CurseFogreArg {
             sort: Default::default(),
             filter: Default::default(),
             page_size: Default::default(),
-            sort_order: Default::default(),
             category: Default::default(),
             loader: Default::default(),
         }
@@ -100,7 +154,7 @@ pub fn get_key() -> CoreResult<String> {
 }
 
 /// 发送请求
-/// 
+///
 /// - `req`: 请求内容
 async fn send<T: DeserializeOwned>(mut req: reqwest::Request) -> CoreResult<T> {
     req.headers_mut()
@@ -110,7 +164,7 @@ async fn send<T: DeserializeOwned>(mut req: reqwest::Request) -> CoreResult<T> {
     crate::handle_response(res).await
 }
 
-async fn get_list<T: DeserializeOwned>(
+async fn get_list(
     classid: u32,
     version: &str,
     page: u32,
@@ -120,7 +174,7 @@ async fn get_list<T: DeserializeOwned>(
     sort_order: u32,
     category: &str,
     mod_loader_type: u32,
-) -> CoreResult<T> {
+) -> CoreResult<CurseForgeListPageObj> {
     let mut url = format!(
         "{}mods/search?gameId={}&classId={classid}&gameVersion={version}&index={}&sortField={sort}&searchFilter={filter}&pageSize={page_size}&sortOrder={sort_order}&categoryId={category}",
         urls::CURSEFORGE,
@@ -138,15 +192,15 @@ async fn get_list<T: DeserializeOwned>(
 }
 
 /// 获取整合包列表
-pub async fn get_modpack_list<T: DeserializeOwned>(arg: CurseFogreArg) -> CoreResult<T> {
+pub async fn get_modpack_list(arg: CurseFogreArg) -> CoreResult<CurseForgeListPageObj> {
     get_list(
         CLASS_MODPACK,
         &arg.version.unwrap_or_default(),
         arg.page.unwrap_or(0),
-        arg.sort.unwrap_or(2),
+        arg.sort.get_index(),
         &arg.filter.unwrap_or_default(),
         arg.page_size.unwrap_or(20),
-        arg.sort_order.unwrap_or(1),
+        arg.sort.get_order_index(),
         &arg.category.unwrap_or_default(),
         0,
     )
@@ -154,15 +208,15 @@ pub async fn get_modpack_list<T: DeserializeOwned>(arg: CurseFogreArg) -> CoreRe
 }
 
 /// 获取模组列表
-pub async fn get_mod_list<T: DeserializeOwned>(arg: CurseFogreArg) -> CoreResult<T> {
+pub async fn get_mod_list(arg: CurseFogreArg) -> CoreResult<CurseForgeListPageObj> {
     get_list(
         CLASS_MOD,
         &arg.version.unwrap_or_default(),
         arg.page.unwrap_or(0),
-        arg.sort.unwrap_or(2),
+        arg.sort.get_index(),
         &arg.filter.unwrap_or_default(),
         arg.page_size.unwrap_or(20),
-        arg.sort_order.unwrap_or(1),
+        arg.sort.get_order_index(),
         &arg.category.unwrap_or_default(),
         arg.loader.unwrap_or(0),
     )
@@ -170,15 +224,15 @@ pub async fn get_mod_list<T: DeserializeOwned>(arg: CurseFogreArg) -> CoreResult
 }
 
 /// 获取存档列表
-pub async fn get_save_list<T: DeserializeOwned>(arg: CurseFogreArg) -> CoreResult<T> {
+pub async fn get_save_list(arg: CurseFogreArg) -> CoreResult<CurseForgeListPageObj> {
     get_list(
         CLASS_SAVES,
         &arg.version.unwrap_or_default(),
         arg.page.unwrap_or(0),
-        arg.sort.unwrap_or(2),
+        arg.sort.get_index(),
         &arg.filter.unwrap_or_default(),
         arg.page_size.unwrap_or(20),
-        arg.sort_order.unwrap_or(1),
+        arg.sort.get_order_index(),
         &arg.category.unwrap_or_default(),
         0,
     )
@@ -186,15 +240,15 @@ pub async fn get_save_list<T: DeserializeOwned>(arg: CurseFogreArg) -> CoreResul
 }
 
 /// 获取资源包列表
-pub async fn get_resourcepack_list<T: DeserializeOwned>(arg: CurseFogreArg) -> CoreResult<T> {
+pub async fn get_resourcepack_list(arg: CurseFogreArg) -> CoreResult<CurseForgeListPageObj> {
     get_list(
         CLASS_RESOURCEPACKS,
         &arg.version.unwrap_or_default(),
         arg.page.unwrap_or(0),
-        arg.sort.unwrap_or(2),
+        arg.sort.get_index(),
         &arg.filter.unwrap_or_default(),
         arg.page_size.unwrap_or(20),
-        arg.sort_order.unwrap_or(1),
+        arg.sort.get_order_index(),
         &arg.category.unwrap_or_default(),
         0,
     )
@@ -202,15 +256,15 @@ pub async fn get_resourcepack_list<T: DeserializeOwned>(arg: CurseFogreArg) -> C
 }
 
 /// 获取数据包列表
-pub async fn get_datapacks_list<T: DeserializeOwned>(arg: CurseFogreArg) -> CoreResult<T> {
+pub async fn get_datapacks_list(arg: CurseFogreArg) -> CoreResult<CurseForgeListPageObj> {
     get_list(
         CLASS_RESOURCEPACKS,
         &arg.version.unwrap_or_default(),
         arg.page.unwrap_or(0),
-        arg.sort.unwrap_or(2),
+        arg.sort.get_index(),
         &arg.filter.unwrap_or_default(),
         arg.page_size.unwrap_or(20),
-        arg.sort_order.unwrap_or(1),
+        arg.sort.get_order_index(),
         &CATEGORYID_DATAPACKS.to_string(),
         0,
     )
@@ -218,15 +272,15 @@ pub async fn get_datapacks_list<T: DeserializeOwned>(arg: CurseFogreArg) -> Core
 }
 
 /// 获取光影包列表
-pub async fn get_shaders_list<T: DeserializeOwned>(arg: CurseFogreArg) -> CoreResult<T> {
+pub async fn get_shaders_list(arg: CurseFogreArg) -> CoreResult<CurseForgeListPageObj> {
     get_list(
         CLASS_SHADERPACKS,
         &arg.version.unwrap_or_default(),
         arg.page.unwrap_or(0),
-        arg.sort.unwrap_or(2),
+        arg.sort.get_index(),
         &arg.filter.unwrap_or_default(),
         arg.page_size.unwrap_or(20),
-        arg.sort_order.unwrap_or(1),
+        arg.sort.get_order_index(),
         "",
         0,
     )
@@ -234,10 +288,10 @@ pub async fn get_shaders_list<T: DeserializeOwned>(arg: CurseFogreArg) -> CoreRe
 }
 
 /// 获取模组信息
-/// 
+///
 /// - `pid`: 项目编号
 /// - `fid`: 文件编号
-pub async fn get_mod<T: DeserializeOwned>(pid: &str, fid: &str) -> CoreResult<T> {
+pub async fn get_mod(pid: &str, fid: &str) -> CoreResult<CurseForgeFileObj> {
     let url = format!("{}mods/{pid}/files/{fid}", urls::CURSEFORGE);
 
     let req = reqwest::Request::new(Method::GET, Url::parse(&url).unwrap());
@@ -269,7 +323,7 @@ pub fn json<T: Serialize>(req: &mut reqwest::Request, json: &T) -> CoreResult<()
 }
 
 /// 获取文件列表
-pub async fn get_files<T: DeserializeOwned>(ids: Vec<u64>) -> CoreResult<T> {
+pub async fn get_files(ids: Vec<u64>) -> CoreResult<Vec<CurseForgeFileDataObj>> {
     let obj = CurseForgeGetFilesObj { file_ids: ids };
 
     let url = format!("{}mods/files", urls::CURSEFORGE);
@@ -282,7 +336,7 @@ pub async fn get_files<T: DeserializeOwned>(ids: Vec<u64>) -> CoreResult<T> {
 }
 
 /// 获取分类信息
-pub async fn get_categories<T: DeserializeOwned>() -> CoreResult<T> {
+pub async fn get_categories() -> CoreResult<CurseForgeCategoriesObj> {
     let url = format!("{}categories?gameId={}", urls::CURSEFORGE, GAME_ID);
 
     let req = reqwest::Request::new(Method::GET, Url::parse(&url).unwrap());
@@ -291,7 +345,7 @@ pub async fn get_categories<T: DeserializeOwned>() -> CoreResult<T> {
 }
 
 /// 获取版本信息
-pub async fn get_version<T: DeserializeOwned>() -> CoreResult<T> {
+pub async fn get_version() -> CoreResult<CurseForgeVersionObj> {
     let url = format!("{}games/{}/versions", urls::CURSEFORGE, GAME_ID);
 
     let req = reqwest::Request::new(Method::GET, Url::parse(&url).unwrap());
@@ -300,7 +354,7 @@ pub async fn get_version<T: DeserializeOwned>() -> CoreResult<T> {
 }
 
 /// 获取版本信息
-pub async fn get_version_type<T: DeserializeOwned>() -> CoreResult<T> {
+pub async fn get_version_type() -> CoreResult<CurseForgeVersionTypeObj> {
     let url = format!("{}games/{}/version-types", urls::CURSEFORGE, GAME_ID);
 
     let req = reqwest::Request::new(Method::GET, Url::parse(&url).unwrap());
@@ -309,7 +363,7 @@ pub async fn get_version_type<T: DeserializeOwned>() -> CoreResult<T> {
 }
 
 /// 获取版本信息
-pub async fn get_mod_info<T: DeserializeOwned>(id: &str) -> CoreResult<T> {
+pub async fn get_mod_info(id: &str) -> CoreResult<CurseForgeListObj> {
     let url = format!("{}mods/{id}", urls::CURSEFORGE);
 
     let req = reqwest::Request::new(Method::GET, Url::parse(&url).unwrap());
@@ -327,7 +381,7 @@ struct CurseForgeModsInfoObj {
 }
 
 /// 获取版本信息
-pub async fn get_mods_info<T: DeserializeOwned>(ids: Vec<u64>) -> CoreResult<T> {
+pub async fn get_mods_info(ids: Vec<u64>) -> CoreResult<CurseForgeListPageObj> {
     let obj = CurseForgeModsInfoObj {
         mod_ids: ids,
         filter: true,
@@ -343,7 +397,7 @@ pub async fn get_mods_info<T: DeserializeOwned>(ids: Vec<u64>) -> CoreResult<T> 
 }
 
 /// 获取文件列表
-pub async fn get_files_page<T: DeserializeOwned>(arg: CurseFogreArg) -> CoreResult<T> {
+pub async fn get_files_page(arg: CurseFogreArg) -> CoreResult<CurseFogreFilePageObj> {
     let mut url = format!(
         "{}mods/{}/files?index={}pageSize=50&gameVersion={}",
         urls::CURSEFORGE,
@@ -359,4 +413,29 @@ pub async fn get_files_page<T: DeserializeOwned>(arg: CurseFogreArg) -> CoreResu
     let req = reqwest::Request::new(Method::POST, Url::parse(&url).unwrap());
 
     send(req).await
+}
+
+impl CurseForgeFileDataObj {
+    /// 修正下载地址
+    pub fn fix_download_url(&mut self) {
+        if self.download_url.is_none() {
+            self.download_url = Some(format!(
+                "{}files/{}/{}/{}",
+                urls::CURSEFORGE_DOWNLOAD,
+                self.id / 1000,
+                self.id % 1000,
+                self.file_name
+            ))
+        }
+    }
+
+    /// 提取 SHA1 哈希值
+    #[inline]
+    pub fn sha1_hash(&self) -> String {
+        self.hashes
+            .iter()
+            .find(|h| h.algo == 1)
+            .map(|h| h.value.clone())
+            .unwrap_or_default()
+    }
 }

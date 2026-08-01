@@ -19,14 +19,11 @@ use crate::{
     game_launch::InstanceHandle,
     game_log::{GameLog, GameLogItemObj, InstanceRuntimeLog},
     gui_hook::{IAddInstanceGui, ICopyGui},
-    launcher::{
-        LogEncoding, custom_game_arg_obj::CustomGameArgObj,
-        file_online_info_obj::FileOnlineInfoObj, game_time_obj::GameTimeObj,
-        instance_setting_obj::InstanceSettingObj,
-    },
-    launcher_path::instance_path,
+    launcher::{LogEncoding, game_time_obj::GameTimeObj, instance_setting_obj::InstanceSettingObj},
+    launcher_path::instance_path::{self, CustomGameArgList, OnlineInfoList},
 };
 
+pub mod add_game;
 pub mod class_scan;
 pub mod curseforge;
 pub mod data_res;
@@ -51,10 +48,11 @@ pub mod launcher;
 pub mod launcher_path;
 pub mod loader;
 pub mod modpack;
+pub mod modrinth;
 pub mod mojang;
 pub mod path_watch;
 
-type GameInstance = Arc<RwLock<InstanceSettingObj>>;
+pub type GameInstance = Arc<RwLock<InstanceSettingObj>>;
 
 /// 实例结束运行事件
 pub struct InstanceExit {
@@ -80,8 +78,8 @@ pub struct InstanceLog {
 
 pub struct InstanceData {
     pub instance: GameInstance,
-    pub online: HashMap<String, FileOnlineInfoObj>,
-    pub custom: HashMap<String, CustomGameArgObj>,
+    pub online: OnlineInfoList,
+    pub custom: CustomGameArgList,
 }
 
 static RUNTIME_LOGS: LazyLock<RwLock<HashMap<Uuid, InstanceRuntimeLog>>> =
