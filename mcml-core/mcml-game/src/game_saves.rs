@@ -461,7 +461,7 @@ impl SaveObj {
             return Err(ErrorType::InfoNotFound("DataPacks".to_string()));
         };
 
-        // Collect info with immutable access first
+        // 先用不可变访问收集信息
         let mut remove_from_enabled: Vec<usize> = Vec::new();
         let mut remove_from_disabled: Vec<usize> = Vec::new();
         let mut add_to_enabled: Vec<String> = Vec::new();
@@ -503,7 +503,7 @@ impl SaveObj {
             }
         } // immutable refs dropped here
 
-        // Apply mutations — one list at a time to avoid double mutable borrow
+        // 应用修改 — 每次只处理一个列表，避免双重可变借用
         {
             let Some(ens) = data_packs.get_list_mut("Enabled") else {
                 return Err(ErrorType::InfoNotFound("Enabled".to_string()));
@@ -548,7 +548,7 @@ impl SaveObj {
             return Err(ErrorType::InfoNotFound("DataPacks".to_string()));
         };
 
-        // Collect indices to remove with immutable access first
+        // 先用不可变访问收集要移除的索引
         let mut remove_from_enabled: Vec<usize> = Vec::new();
         let mut remove_from_disabled: Vec<usize> = Vec::new();
 
@@ -581,7 +581,7 @@ impl SaveObj {
             }
         } // immutable refs dropped here
 
-        // Apply removals — one list at a time, descending order
+        // 应用删除 — 每次只处理一个列表，按索引降序排列
         if !remove_from_enabled.is_empty() {
             let Some(ens) = data_packs.get_list_mut("Enabled") else {
                 return Err(ErrorType::InfoNotFound("Enabled".to_string()));

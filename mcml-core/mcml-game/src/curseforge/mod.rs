@@ -152,7 +152,7 @@ fn get_mod_dependencies_inner(
     let list: Mutex<Vec<CurseForgeModDependenciesRes>> = Mutex::new(Vec::new());
 
     dep.par_iter().for_each(|item| {
-        // Atomic check-and-insert: HashSet::insert returns false if already present
+        // 原子检查并插入：HashSet::insert 在元素已存在时返回 false
         {
             let mut ids_guard = ids.lock().unwrap();
             if !ids_guard.insert(item.mod_id) {
@@ -258,18 +258,18 @@ impl FileType {
 
                 list.data.retain(|item| item.name.starts_with("Minecraft "));
 
-                // Sort: ID > 17 desc first, ID < 18 asc after.
-                // Use cached key to parse each id only once.
+                // 排序：ID > 17 的新版本在前，ID < 18 的旧版本在后
+                // 使用缓存键，每个 id 只解析一次
                 list.data.sort_by_cached_key(|item| {
                     let id: i32 = item.id.parse().unwrap_or(0);
-                    // Primary: new versions (id > 17) before old
-                    // Secondary: new versions descending, old versions ascending
+                    // 主要排序：新版本（id > 17）排在旧版本之前
+                    // 次要排序：新版本按 id 降序，旧版本按 id 升序
                     (id <= 17, if id > 17 { -id } else { id })
                 });
 
                 let version_list = curseforge_api::get_version().await?;
 
-                // Build lookup map for O(1) version-type matching
+                // 构建查找表，实现 O(1) 的版本类型匹配
                 let version_map: HashMap<u32, &_> = version_list
                     .data
                     .iter()
@@ -308,9 +308,9 @@ async fn build_results(
             continue;
         };
 
-        // Fix download URL and compute SHA1 once (avoid duplicate
-        // work from calling both make_file_item_obj and
-        // make_file_online_info_obj)
+        // 修正下载地址并只计算一次 SHA1（避免
+        // 在 make_file_item_obj 和 make_file_online_info_obj
+        // 中被重复计算）
         item.fix_download_url();
         let url = item.download_url.clone().unwrap_or_default();
         let sha1 = item.sha1_hash();
@@ -346,7 +346,7 @@ async fn build_results(
             gui.set_sub_now(now_val, Some(size));
         }
 
-        // Assemble: last-write-wins deduplication
+        // 组装：后写覆盖的去重方式
         list.push(file_item);
         online.remove(&modid_str);
         if let Some(oi) = online_item {
@@ -358,8 +358,8 @@ async fn build_results(
 }
 
 /// 获取整合包模组信息
-pub async fn get_modpack_info<P: AsRef<Path>>(
-    path: P,
+pub async fn get_modpack_info(
+    game: &InstanceSettingObj,
     obj: &CurseForgePackObj,
     gui: &Option<Arc<dyn IAddGui>>,
 ) -> CoreResult<DownloadItemRes> {
@@ -367,12 +367,12 @@ pub async fn get_modpack_info<P: AsRef<Path>>(
 
     let file_ids: Vec<_> = obj.files.iter().map(|f| f.file_id).collect();
 
-    // ── Batch path: get_files succeeds → process all at once ──
+    // ── 批量路径：get_files 成功 → 一次性处理全部 ──
     if let Ok(items) = curseforge_api::get_files(file_ids).await {
-        return Ok(build_results(path, items, gui, size).await);
+        return Ok(build_results(game, items, gui, size).await);
     }
 
-    // ── Fallback path: fetch each file individually, any failure → empty ──
+    // ── 后备路径：逐个获取文件，任一失败 → 返回空 ──
     const CONCURRENCY: usize = 20;
     let failed = Arc::new(AtomicBool::new(false));
     let mut fetched: Vec<CurseForgeFileDataObj> = Vec::with_capacity(size);
@@ -381,17 +381,17 @@ pub async fn get_modpack_info<P: AsRef<Path>>(
         let mut tasks = tokio::task::JoinSet::new();
         let mut iter = obj.files.iter();
 
-        // Fill initial batch
+        // 填充初始批次
         for file_ref in (&mut iter).take(CONCURRENCY) {
             spawn_fetch_task(&mut tasks, file_ref, &failed);
         }
 
-        // Drain + refill
+        // 取空并补充
         while let Some(result) = tasks.join_next().await {
             if let Ok(Some(data)) = result {
                 fetched.push(data.data);
             }
-            // Once any item fails, stop spawning but keep draining remaining tasks
+            // 任一任务失败后停止派发新任务，但继续等待剩余任务完成
             if failed.load(Ordering::Relaxed) {
                 continue;
             }
@@ -408,7 +408,7 @@ pub async fn get_modpack_info<P: AsRef<Path>>(
         });
     }
 
-    Ok(build_results(path, fetched, gui, size).await)
+    Ok(build_results(game, fetched, gui, size).await)
 }
 
 fn spawn_fetch_task(
@@ -431,8 +431,8 @@ fn spawn_fetch_task(
 }
 
 impl InstanceSettingObj {
-    /// Resolve the item path and file type. Takes individual fields to enable
-    /// cheap concurrent dispatch without cloning the full `CurseForgeFileDataObj`.
+    /// 解析条目路径和文件类型。接收独立字段，以便在不对完整
+    /// `CurseForgeFileDataObj` 进行克隆的情况下进行低成本的并发分发。
     async fn get_item_path(&self, file_name: &str, mod_id: u64) -> CoreResult<ItemPathRes> {
         let mut item1 = ItemPathRes {
             file_path: self.get_mods_path(),
@@ -443,14 +443,14 @@ impl InstanceSettingObj {
         if !file_name.ends_with(names::JAR_DOT_EXT) {
             let info1 = curseforge_api::get_mod_info(&mod_id.to_string()).await?;
 
-            // Categories list: first match wins
+            // 分类列表：第一个匹配的生效
             for item2 in &info1.data.categories {
                 if apply_class_id(item2.class_id, &mut item1, self) {
                     break;
                 }
             }
 
-            // Fallback: data.class_id may override category result
+            // 后备：data.class_id 可能覆盖分类结果
             apply_class_id(info1.data.class_id, &mut item1, self);
         }
 
@@ -458,8 +458,8 @@ impl InstanceSettingObj {
     }
 }
 
-/// Apply a CurseForge class_id to the path resolver. Returns `true` when
-/// the id matched one of the known file-type classes.
+/// 将 CurseForge 的 class_id 应用到路径解析器。当该 id 匹配到
+/// 已知的文件类型分类时返回 `true`。
 #[inline]
 fn apply_class_id(class_id: u32, item: &mut ItemPathRes, instance: &InstanceSettingObj) -> bool {
     match class_id {

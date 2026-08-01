@@ -50,9 +50,9 @@ pub const BMCLAPI: &str = "https://bmclapi2.bangbang93.com/";
 pub const MOJANG_META: &str = "https://launchermeta.mojang.com/";
 /// Mojang 启动器资源
 pub const MOJANG_LAUNCHER: &str = "https://launcher.mojang.com/";
-/// Mojang Piston Data
+/// Mojang Piston 数据
 pub const MOJANG_PISTON_DATA: &str = "https://piston-data.mojang.com/";
-/// Mojang Piston Meta
+/// Mojang Piston 元数据
 pub const MOJANG_PISTON_META: &str = "https://piston-meta.mojang.com/";
 
 /// 所有 Mojang 官方域名的列表（用于镜像源替换）

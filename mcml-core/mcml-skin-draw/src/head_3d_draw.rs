@@ -11,22 +11,22 @@ use skia_safe::{
 };
 
 static CUBE_VERTICES: [Point3; 16] = [
-    // Front face
+    // 前面
     Point3::new(-1.0, -1.0, 1.0),
     Point3::new(1.0, -1.0, 1.0),
     Point3::new(1.0, 1.0, 1.0),
     Point3::new(-1.0, 1.0, 1.0),
-    // Back face
+    // 背面
     Point3::new(-1.0, -1.0, -1.0),
     Point3::new(1.0, -1.0, -1.0),
     Point3::new(1.0, 1.0, -1.0),
     Point3::new(-1.0, 1.0, -1.0),
-    // Front face (Top layer, 1.125x scale)
+    // 前面（顶层，1.125 倍缩放）
     Point3::new(-1.125, -1.125, 1.125),
     Point3::new(1.125, -1.125, 1.125),
     Point3::new(1.125, 1.125, 1.125),
     Point3::new(-1.125, 1.125, 1.125),
-    // Back face (Top layer)
+    // 背面（顶层）
     Point3::new(-1.125, -1.125, -1.125),
     Point3::new(1.125, -1.125, -1.125),
     Point3::new(1.125, 1.125, -1.125),
@@ -34,84 +34,84 @@ static CUBE_VERTICES: [Point3; 16] = [
 ];
 
 static CUBE_INDICES: [usize; 48] = [
-    8, 12, 15, 11, // Back face (Top)
-    8, 12, 13, 9, // Bottom face (Top)
-    8, 9, 10, 11, // Right face (Top)
-    0, 4, 7, 3, // Back face
-    0, 4, 5, 1, // Bottom face
-    0, 1, 2, 3, // Right face
-    3, 7, 6, 2, // Top face
-    4, 5, 6, 7, // Left face
-    1, 5, 6, 2, // Front face
-    11, 15, 14, 10, // Top face (Top)
-    12, 13, 14, 15, // Left face (Top)
-    9, 13, 14, 10, // Front face (Top)
+    8, 12, 15, 11, // 背面（顶层）
+    8, 12, 13, 9, // 底面（顶层）
+    8, 9, 10, 11, // 右面（顶层）
+    0, 4, 7, 3, // 背面
+    0, 4, 5, 1, // 底面
+    0, 1, 2, 3, // 右面
+    3, 7, 6, 2, // 顶面
+    4, 5, 6, 7, // 左面
+    1, 5, 6, 2, // 前面
+    11, 15, 14, 10, // 顶面（顶层）
+    12, 13, 14, 15, // 左面（顶层）
+    9, 13, 14, 10, // 前面（顶层）
 ];
 
 static FACE_POS: [IRect; 12] = [
-    IRect::new(56, 8, 64, 16), // Back face (Top)
-    IRect::new(48, 0, 56, 8),  // Bottom face (Top)
-    IRect::new(48, 8, 56, 16), // Right face (Top)
-    IRect::new(24, 8, 32, 16), // Back face
-    IRect::new(16, 0, 24, 8),  // Bottom face
-    IRect::new(16, 8, 24, 16), // Right face
-    IRect::new(8, 0, 16, 8),   // Top face
-    IRect::new(0, 8, 8, 16),   // Left face
-    IRect::new(8, 8, 16, 16),  // Front face
-    IRect::new(40, 0, 48, 8),  // Top face (Top)
-    IRect::new(32, 8, 40, 16), // Left face (Top)
-    IRect::new(40, 8, 48, 16), // Front face (Top)
+    IRect::new(56, 8, 64, 16), // 背面（顶层）
+    IRect::new(48, 0, 56, 8),  // 底面（顶层）
+    IRect::new(48, 8, 56, 16), // 右面（顶层）
+    IRect::new(24, 8, 32, 16), // 背面
+    IRect::new(16, 0, 24, 8),  // 底面
+    IRect::new(16, 8, 24, 16), // 右面
+    IRect::new(8, 0, 16, 8),   // 顶面
+    IRect::new(0, 8, 8, 16),   // 左面
+    IRect::new(8, 8, 16, 16),  // 前面
+    IRect::new(40, 0, 48, 8),  // 顶面（顶层）
+    IRect::new(32, 8, 40, 16), // 左面（顶层）
+    IRect::new(40, 8, 48, 16), // 前面（顶层）
 ];
 
 static SOURCE_VERTICES: [Point; 48] = [
     Point::new(0.0, 1.0),
     Point::new(1.0, 1.0),
     Point::new(1.0, 0.0),
-    Point::new(0.0, 0.0), // Back
+    Point::new(0.0, 0.0), // 背面
     Point::new(1.0, 0.0),
     Point::new(0.0, 0.0),
     Point::new(0.0, 1.0),
-    Point::new(1.0, 1.0), // Bottom
+    Point::new(1.0, 1.0), // 底面
     Point::new(1.0, 1.0),
     Point::new(0.0, 1.0),
     Point::new(0.0, 0.0),
-    Point::new(1.0, 0.0), // Right
-    Point::new(0.0, 1.0),
-    Point::new(1.0, 1.0),
-    Point::new(1.0, 0.0),
-    Point::new(0.0, 0.0), // Back
-    Point::new(1.0, 0.0),
-    Point::new(0.0, 0.0),
-    Point::new(0.0, 1.0),
-    Point::new(1.0, 1.0), // Bottom
-    Point::new(1.0, 1.0),
-    Point::new(0.0, 1.0),
-    Point::new(0.0, 0.0),
-    Point::new(1.0, 0.0), // Right
-    Point::new(1.0, 0.0),
-    Point::new(0.0, 0.0),
-    Point::new(0.0, 1.0),
-    Point::new(1.0, 1.0), // Top
+    Point::new(1.0, 0.0), // 右面
     Point::new(0.0, 1.0),
     Point::new(1.0, 1.0),
     Point::new(1.0, 0.0),
-    Point::new(0.0, 0.0), // Left
-    Point::new(1.0, 1.0),
-    Point::new(0.0, 1.0),
-    Point::new(0.0, 0.0),
-    Point::new(1.0, 0.0), // Front
+    Point::new(0.0, 0.0), // 背面
     Point::new(1.0, 0.0),
     Point::new(0.0, 0.0),
     Point::new(0.0, 1.0),
-    Point::new(1.0, 1.0), // Top
-    Point::new(0.0, 1.0),
-    Point::new(1.0, 1.0),
-    Point::new(1.0, 0.0),
-    Point::new(0.0, 0.0), // Left
+    Point::new(1.0, 1.0), // 底面
     Point::new(1.0, 1.0),
     Point::new(0.0, 1.0),
     Point::new(0.0, 0.0),
-    Point::new(1.0, 0.0), // Front
+    Point::new(1.0, 0.0), // 右面
+    Point::new(1.0, 0.0),
+    Point::new(0.0, 0.0),
+    Point::new(0.0, 1.0),
+    Point::new(1.0, 1.0), // 顶面
+    Point::new(0.0, 1.0),
+    Point::new(1.0, 1.0),
+    Point::new(1.0, 0.0),
+    Point::new(0.0, 0.0), // 左面
+    Point::new(1.0, 1.0),
+    Point::new(0.0, 1.0),
+    Point::new(0.0, 0.0),
+    Point::new(1.0, 0.0), // 前面
+    Point::new(1.0, 0.0),
+    Point::new(0.0, 0.0),
+    Point::new(0.0, 1.0),
+    Point::new(1.0, 1.0), // 顶面
+    Point::new(0.0, 1.0),
+    Point::new(1.0, 1.0),
+    Point::new(1.0, 0.0),
+    Point::new(0.0, 0.0), // 左面
+    Point::new(1.0, 1.0),
+    Point::new(0.0, 1.0),
+    Point::new(0.0, 0.0),
+    Point::new(1.0, 0.0), // 前面
 ];
 
 fn create_tran() -> Mat4 {

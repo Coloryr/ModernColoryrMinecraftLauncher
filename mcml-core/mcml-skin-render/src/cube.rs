@@ -9,17 +9,17 @@ pub const VERTICES: [f32; 72] = [
 ];
 
 const CUBE: [f32; 72] = [
-    VALUE, VALUE, -VALUE, /* Back. */
+    VALUE, VALUE, -VALUE, /* 背面。 */
     VALUE, -VALUE, -VALUE, -VALUE, -VALUE, -VALUE, -VALUE, VALUE, -VALUE, -VALUE, VALUE,
-    VALUE, /* Front. */
+    VALUE, /* 前面。 */
     -VALUE, -VALUE, VALUE, VALUE, -VALUE, VALUE, VALUE, VALUE, VALUE, -VALUE, VALUE,
-    -VALUE, /* Left. */
+    -VALUE, /* 左面。 */
     -VALUE, -VALUE, -VALUE, -VALUE, -VALUE, VALUE, -VALUE, VALUE, VALUE, VALUE, VALUE,
-    VALUE, /* Right. */
+    VALUE, /* 右面。 */
     VALUE, -VALUE, VALUE, VALUE, -VALUE, -VALUE, VALUE, VALUE, -VALUE, -VALUE, VALUE,
-    -VALUE, /* Top. */
+    -VALUE, /* 顶面。 */
     -VALUE, VALUE, VALUE, VALUE, VALUE, VALUE, VALUE, VALUE, -VALUE, VALUE, -VALUE,
-    -VALUE, /* Bottom. */
+    -VALUE, /* 底面。 */
     VALUE, -VALUE, VALUE, -VALUE, -VALUE, VALUE, -VALUE, -VALUE, -VALUE,
 ];
 
@@ -30,7 +30,7 @@ const CUBE_INDICES: [u16; 36] = [
 
 /// 获得一个方块X Y Z坐标
 ///
-/// # Arguments
+/// # 参数
 /// * `multiply_x` - X轴乘数
 /// * `multiply_y` - Y轴乘数
 /// * `multiply_z` - Z轴乘数
@@ -64,7 +64,7 @@ pub fn get_square(
 
 /// 获得一个标准方块顶点顺序
 ///
-/// # Arguments
+/// # 参数
 /// * `offset` - 顶点索引偏移量
 pub fn get_square_indices(offset: u16) -> Vec<u16> {
     let mut temp = vec![0; CUBE_INDICES.len()];

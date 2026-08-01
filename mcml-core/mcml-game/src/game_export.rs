@@ -7,9 +7,10 @@ use mcml_base::{
 };
 use mcml_names::{i18_items::error_type::CoreResult, names};
 
+use mcml_net::curseforge_api::list_obj::CurseForgeListDataObj;
+
 use crate::{
     curseforge::{
-        list_obj::CurseForgeListDataObj,
         pack_obj::{CurseForgePackObj, FilesObj, MinecraftObj, ModLoadersObj},
     },
     launcher::{file_online_info_obj::OnlineInfoObj, instance_setting_obj::InstanceSettingObj},

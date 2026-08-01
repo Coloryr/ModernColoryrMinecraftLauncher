@@ -20,7 +20,7 @@ use zip::ZipArchive;
 
 use crate::launcher::instance_setting_obj::InstanceSettingObj;
 
-/// Deserialization struct for pack.mcmeta
+/// pack.mcmeta 的反序列化结构体
 #[derive(Deserialize)]
 struct PackMeta {
     pack: PackInfo,

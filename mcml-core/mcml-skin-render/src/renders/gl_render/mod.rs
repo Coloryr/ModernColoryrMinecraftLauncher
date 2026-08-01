@@ -283,19 +283,19 @@ pub struct SkinRenderOpenGL {
     render_width: i32,
     render_height: i32,
 
-    // Shader programs
+    // 着色器程序
     pg: Program,
 
-    // Textures
+    // 纹理
     texture_skin: Texture,
     texture_cape: Texture,
 
-    // VAO for normal model
+    // 普通模型的 VAO
     normal_vao: ModelVao,
-    // VAO for top layer model
+    // 顶层模型的 VAO
     top_vao: ModelVao,
 
-    // Model data
+    // 模型数据
     steve_model_draw_order_count: i32,
 }
 

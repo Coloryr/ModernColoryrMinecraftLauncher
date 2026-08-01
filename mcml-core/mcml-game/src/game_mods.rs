@@ -656,12 +656,12 @@ fn read_jar_in_jar(
 fn parse_mod_archive(archive: &mut ZipArchive<impl Read + Seek>) -> CoreResult<ModObj> {
     let mut mod_info = ModObj::default();
 
-    // mcmod.info
+    // 读取 mcmod.info
     if let Ok(item) = archive.by_name(names::MC_MOD_INFO_FILE) {
         read_forge_json(item, &mut mod_info)?;
     }
 
-    // mods.toml
+    // 读取 mods.toml
     macro_rules! try_read_file {
         ($archive:expr, $name:expr, $func:expr, $loader:expr) => {
             if let Ok(item) = $archive.by_name($name) {
@@ -689,12 +689,12 @@ fn parse_mod_archive(archive: &mut ZipArchive<impl Read + Seek>) -> CoreResult<M
         LoaderType::NeoForge
     );
 
-    // fabric.mod.json
+    // 读取 fabric.mod.json
     if let Ok(item) = archive.by_name(names::FABRIC_MOD_FILE) {
         read_fabric_json(item, &mut mod_info)?;
     }
 
-    // quilt.mod.json
+    // 读取 quilt.mod.json
     if let Ok(item) = archive.by_name(names::QUILT_MOD_FILE) {
         read_quilt_json(item, &mut mod_info)?;
     }

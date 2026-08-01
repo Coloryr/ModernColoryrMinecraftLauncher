@@ -106,7 +106,7 @@ fn get_trash_info_path() -> PathBuf {
 
 /// 将文件夹挪到回收站
 pub fn move_to_trash<P: AsRef<Path>>(dir: P) -> CoreResult<()> {
-    // Check if the path exists
+    // 检查路径是否存在
     if !dir.as_ref().exists() {
         return Ok(());
     }
@@ -167,7 +167,7 @@ fn move_to_trash_linux(dir: &str) -> io::Result<bool> {
         counter += 1;
     }
 
-    // Generate trash info content
+    // 生成回收站信息文件内容
     let deletion_date = SystemTime::now();
     let datetime_str = format!(
         "{:?}",
@@ -180,7 +180,7 @@ fn move_to_trash_linux(dir: &str) -> io::Result<bool> {
 
     fs::write(&trash_info_file, trash_info_content)?;
 
-    // Move file or directory
+    // 移动文件或目录
     let path = Path::new(dir);
     if path.is_file() {
         fs::rename(path, &dest_path)?;
@@ -227,7 +227,7 @@ fn move_to_trash_windows<P: AsRef<Path>>(dir: P) -> CoreResult<()> {
     use windows_sys::Win32::UI::Shell::SHFILEOPSTRUCTW;
     use windows_sys::Win32::UI::Shell::SHFileOperationW;
 
-    // Convert string to Windows wide string (double null terminated)
+    // 将字符串转换为 Windows 宽字符串（双重 null 结尾）
     let wide_path: Vec<u16> = dir
         .as_ref()
         .as_os_str()
@@ -249,13 +249,13 @@ fn move_to_trash_windows<P: AsRef<Path>>(dir: P) -> CoreResult<()> {
 
     let result = unsafe { SHFileOperationW(&mut operation) };
 
-    // Result codes:
-    // 0 = Success
-    // 0x71 = No error but user aborted (we treat as success since nothing was moved)
-    // Other values indicate errors
+    // 返回码说明：
+    // 0 = 成功
+    // 0x71 = 无错误但用户取消（未移动任何内容，视为成功）
+    // 其他值表示出错
     match result {
         0 => Ok(()),
-        0x71 => Err(ErrorType::TaskCancel), // User cancelled
+        0x71 => Err(ErrorType::TaskCancel), // 用户已取消
         _ => Err(ErrorType::FileSystemError(FileSystemErrorData {
             path: dir.as_ref().to_path_buf(),
             error: format!("SHFileOperationW failed with error code: 0x{:X}", result),
