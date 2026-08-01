@@ -410,9 +410,9 @@ pub fn json_to_bytes<T: Serialize>(obj: &T) -> CoreResult<Vec<u8>> {
 }
 
 
-/// Deserialize a JSON value that can be either a number or an array of numbers.
-/// For a number: returns it directly.
-/// For an array: returns the minimum value (0 for empty array).
+/// 反序列化一个可以是数字或数字数组的 JSON 值。
+/// 若是数字：直接返回。
+/// 若是数组：返回其中的最小值（空数组返回 0）。
 pub fn deserialize_number_or_min<'de, D>(deserializer: D) -> Result<i64, D::Error>
 where
     D: serde::Deserializer<'de>,
@@ -450,9 +450,9 @@ where
     deserializer.deserialize_any(V)
 }
 
-/// Deserialize a JSON value that can be either a number or an array of numbers.
-/// For a number: returns it directly.
-/// For an array: returns the maximum value (0 for empty array).
+/// 反序列化一个可以是数字或数字数组的 JSON 值。
+/// 若是数字：直接返回。
+/// 若是数组：返回其中的最大值（空数组返回 0）。
 pub fn deserialize_number_or_max<'de, D>(deserializer: D) -> Result<i64, D::Error>
 where
     D: serde::Deserializer<'de>,

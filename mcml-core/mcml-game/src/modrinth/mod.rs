@@ -26,7 +26,7 @@ use tokio_util::sync::CancellationToken;
 use crate::{
     GameInstance, data_res::DownloadItemRes, gui_hook::{AddModPackState, IAddGui}, launcher::{
         FileType, file_online_info_obj::OnlineInfoObj, instance_setting_obj::InstanceSettingObj,
-    }, loader::LoaderType, modpack::{BaseModPackWorker, modrinth_worker::ModrinthPackWorker}, modrinth::pack_obj::{ModrinthPackFileObj, ModrinthPackObj},
+    }, loader::LoaderType, modpack::{BaseModPackWorker, ModPackWorker, modrinth_worker::ModrinthPackWorker}, modrinth::pack_obj::{ModrinthPackFileObj, ModrinthPackObj},
 };
 
 pub mod pack_obj;
@@ -272,7 +272,7 @@ fn get_mod_dependencies_inner(
     let list: Mutex<Vec<ModrinthModDependenciesRes>> = Mutex::new(Vec::new());
 
     dependencies.par_iter().for_each(|item| {
-        // Atomic check-and-insert: HashSet::insert returns false if already present
+        // 原子检查并插入：HashSet::insert 在元素已存在时返回 false
         {
             let mut ids_guard = ids.lock().unwrap();
             if !ids_guard.insert(item.project_id.clone()) {

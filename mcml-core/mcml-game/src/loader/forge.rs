@@ -463,7 +463,7 @@ async fn get_forge_libs(mc: &str, version: &str, neo: bool) -> CoreResult<ForgeG
         })
     })?;
 
-    // Read version.json
+    // 读取 version.json
     let mut version_json = String::new();
     let version_ok = match zip.by_name(names::VERSION_FILE) {
         Ok(mut file) => {
@@ -477,7 +477,7 @@ async fn get_forge_libs(mc: &str, version: &str, neo: bool) -> CoreResult<ForgeG
         Err(_) => false,
     };
 
-    // Read install_profile.json
+    // 读取 install_profile.json
     let mut install_json = String::new();
     let install_ok = match zip.by_name(names::FILE_INSTALL_PROFILE) {
         Ok(mut file) => {

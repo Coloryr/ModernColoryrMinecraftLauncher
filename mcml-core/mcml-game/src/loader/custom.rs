@@ -44,7 +44,7 @@ impl InstanceSettingObj {
             })
         })?;
 
-        // Read version.json (ForgeLaunchObj)
+        // 读取 version.json（ForgeLaunchObj）
         let mut version_json = String::new();
         let version_ok = match zip.by_name(names::VERSION_FILE) {
             Ok(mut file) => {
@@ -58,7 +58,7 @@ impl InstanceSettingObj {
             Err(_) => false,
         };
 
-        // Read install_profile.json (ForgeInstallObj)
+        // 读取 install_profile.json（ForgeInstallObj）
         let mut install_json = String::new();
         let install_ok = match zip.by_name(names::FILE_INSTALL_PROFILE) {
             Ok(mut file) => {
@@ -72,7 +72,7 @@ impl InstanceSettingObj {
             Err(_) => false,
         };
 
-        // Both files must be present
+        // 两个文件都必须存在
         if !version_ok || !install_ok {
             return Err(ErrorType::InfoNotFound(names::FILE_INSTALL_PROFILE.to_string()));
         }
@@ -83,13 +83,13 @@ impl InstanceSettingObj {
         let mut list = Vec::new();
         let libraries_path = libraries_path::get_lib_dir();
 
-        // Collect all libraries from both objects
+        // 收集两个对象中的所有运行库
         let all_libraries: Vec<&ForgeLibrariesObj> =
             obj1.libraries.iter().chain(obj2.libraries.iter()).collect();
 
         for item in all_libraries {
             if !item.downloads.artifact.url.is_empty() {
-                // Has download URL - check if local file already exists with correct hash
+                // 有下载地址 - 检查本地文件是否已存在且哈希正确
                 let local = libraries_path.join(&item.downloads.artifact.path);
                 let mut skip = false;
                 if let Ok(mut read) = path_helper::open_read(&local) {
@@ -109,11 +109,11 @@ impl InstanceSettingObj {
                     });
                 }
             } else {
-                // No URL - library is inside the zip archive
+                // 无下载地址 - 运行库在 zip 压缩包内部
                 let zip_path = format!("maven/{}", item.downloads.artifact.path);
                 if let Ok(zip_file) = zip.by_name(&zip_path) {
                     let local = libraries_path.join(&item.downloads.artifact.path);
-                    // Check if local file already exists with correct hash
+                    // 检查本地文件是否已存在且哈希正确
                     let mut need_extract = true;
                     if let Ok(mut read) = path_helper::open_read(&local) {
                         if let Ok(sha1) =
@@ -125,22 +125,22 @@ impl InstanceSettingObj {
                         }
                     }
                     if need_extract {
-                        // Extract from zip to local
+                        // 从 zip 解压到本地
                         path_helper::write_stream(&local, zip_file)?;
                     }
                 }
-                // If not found in zip, just skip this library
+                // 如果 zip 中没有该文件，则跳过此运行库
             }
         }
 
-        // Build the loader name
+        // 构建加载器名称
         let name = if !obj2.version.starts_with(&obj2.profile) {
             format!("{}-{}", obj2.profile, obj2.version)
         } else {
             obj2.version.clone()
         };
 
-        // Store custom loader info
+        // 保存自定义加载器信息
         version_path::add_custom_loader(CustomLoaderType::ForgeLaunch(obj1), self.uuid);
 
         Ok(CutsomLoaderRes { name, libs: list })

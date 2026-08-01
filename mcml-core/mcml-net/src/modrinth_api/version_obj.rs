@@ -71,7 +71,7 @@ impl Default for HasheObj {
 pub struct DependencieObj {
     pub version_id: Option<String>,
     pub project_id: String,
-    //required optional
+    // 依赖类型（required 必选 / optional 可选）
     pub dependency_type: String,
 }
 

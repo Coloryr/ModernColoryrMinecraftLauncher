@@ -33,11 +33,11 @@ impl GameArgObj {
         native: &Path,
         game: Option<GameInstance>,
     ) -> Vec<FileItemObj> {
-        // Clone data needed inside the spawn_blocking closure to satisfy 'static requirement
+        // 在 spawn_blocking 闭包内克隆所需数据，以满足 'static 生命周期要求
         let libraries = self.libraries.clone();
         let native = native.to_path_buf();
 
-        // Phase 1: Process all libraries in a blocking thread
+        // 阶段 1：在阻塞线程中处理所有运行库
         let (mut list, mut natives, natives_arm) = task::spawn_blocking(move || {
             let list = Mutex::new(Vec::<FileItemObj>::new());
             let keys = Mutex::new(HashSet::<String>::new());
@@ -86,7 +86,7 @@ impl GameArgObj {
         .await
         .unwrap();
 
-        // Phase 2: ARM native library fallback (runs in async context for network calls)
+        // 阶段 2：ARM 本地库回退（在异步上下文中进行网络请求）
         let sys = mcml_base::get_system_info();
         if sys.is_arm {
             for item in natives_arm.iter() {

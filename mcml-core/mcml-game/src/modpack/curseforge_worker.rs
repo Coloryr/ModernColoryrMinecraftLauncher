@@ -244,9 +244,9 @@ impl ModPackWorker for CurseForgeWorker {
             return false;
         };
 
-        // 在 .await 前克隆并释放读锁，避免把非 Send 的 RwLockReadGuard 带进异步任务
-        let path = game.read().unwrap().get_game_path();
-        let list = curseforge::get_modpack_info(path, info, &self.base.pack_gui).await;
+        // 克隆实例以释放读锁，避免把非 Send 的 RwLockReadGuard 带进异步任务
+        let game_info = game.read().unwrap().clone();
+        let list = curseforge::get_modpack_info(&game_info, info, &self.base.pack_gui).await;
 
         if list.is_err() {
             return false;
@@ -257,7 +257,7 @@ impl ModPackWorker for CurseForgeWorker {
         let downloads = list.list;
         let mods = list.online;
 
-        game.save_online_info(&mods);
+        game.read().unwrap().save_online_info(&mods);
 
         let Ok(mut guard) = self.base.downloads.lock() else {
             return false;
@@ -571,8 +571,8 @@ async fn check_upgrade_sha1(
         (game.get_game_path(), game.get_mods_path())
     };
 
-    // new_mods: mod_id → FileOnlineInfoObj
-    // new_download_map: mod_id → FileItemObj
+    // new_mods: mod_id → 在线文件信息对象
+    // new_download_map: mod_id → 下载项对象
     let mut new_online_map: OnlineInfoList = HashMap::new();
     let mut new_download_map: HashMap<String, FileItemObj> = HashMap::new();
 
