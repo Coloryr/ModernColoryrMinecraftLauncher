@@ -20,7 +20,7 @@ use crate::{
     game_log::{GameLog, GameLogItemObj, InstanceRuntimeLog},
     gui_hook::{IAddInstanceGui, ICopyGui},
     launcher::{LogEncoding, game_time_obj::GameTimeObj, instance_setting_obj::InstanceSettingObj},
-    launcher_path::instance_path::{self, CustomGameArgList, OnlineInfoList},
+    launcher_path::instance_path::{self},
 };
 
 pub mod add_game;
@@ -50,6 +50,7 @@ pub mod loader;
 pub mod modpack;
 pub mod modrinth;
 pub mod mojang;
+pub mod other_launcher;
 pub mod path_watch;
 
 pub type GameInstance = Arc<RwLock<InstanceSettingObj>>;
@@ -60,47 +61,54 @@ pub struct InstanceExit {
     pub code: i32,
 }
 
+/// 实例修改事件参数
 pub enum InstanceChange {
+    /// 添加实例
     AddInstance(Uuid),
+    /// 删除实例
     RemoveInstance(Uuid),
+    /// 移动分组
     MoveGroup(Uuid, Option<String>),
 }
 
-pub enum LogType {
+/// 实例日志事件参数
+pub enum InstanceLogType {
     AddLog(GameLogItemObj),
     ClearLog,
 }
 
+/// 实例日志
 pub struct InstanceLog {
     pub uuid: Uuid,
-    pub log: LogType,
+    pub log: InstanceLogType,
 }
 
-pub struct InstanceData {
-    pub instance: GameInstance,
-    pub online: OnlineInfoList,
-    pub custom: CustomGameArgList,
-}
-
+/// 保存的运行日志
 static RUNTIME_LOGS: LazyLock<RwLock<HashMap<Uuid, InstanceRuntimeLog>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 
+/// 保存的实例句柄
 static HANDELS: LazyLock<RwLock<HashMap<Uuid, InstanceHandle>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 
+/// 分组信息
 static GROUPS: LazyLock<RwLock<HashMap<String, Vec<Uuid>>>> = LazyLock::new(|| {
     let mut group = HashMap::new();
     group.insert(names::DEFAULT_GROUP.to_string(), Vec::new());
     RwLock::new(group)
 });
 
+/// 实例列表
 static INSTANCES: LazyLock<RwLock<HashMap<Uuid, GameInstance>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 
+/// 实例退出事件
 static EXIT_EVENT: LazyLock<EventArgHandler<InstanceExit>> =
     LazyLock::new(|| EventArgHandler::new());
+/// 实例修改事件
 static CHANGE_EVENT: LazyLock<EventArgHandler<InstanceChange>> =
     LazyLock::new(|| EventArgHandler::new());
+/// 实例运行日志事件
 static LOG_EVENT: LazyLock<EventArgHandler<InstanceLog>> = LazyLock::new(|| EventArgHandler::new());
 
 pub fn add_exit<F>(handler: F) -> u64
@@ -144,7 +152,7 @@ pub(crate) fn invoke_change(change: InstanceChange) {
     CHANGE_EVENT.emit(change);
 }
 
-pub(crate) fn invoke_run_log(uuid: Uuid, log: LogType) {
+pub(crate) fn invoke_run_log(uuid: Uuid, log: InstanceLogType) {
     LOG_EVENT.emit(InstanceLog { uuid, log });
 }
 
@@ -431,7 +439,7 @@ pub(crate) fn add_game_log(uuid: &Uuid, data: &str) {
 
         logs.insert(uuid.clone(), log);
 
-        invoke_run_log(uuid.clone(), LogType::AddLog(item));
+        invoke_run_log(uuid.clone(), InstanceLogType::AddLog(item));
     }
 }
 
@@ -445,7 +453,7 @@ pub(crate) fn add_game_log_item(uuid: &Uuid, data: GameLog) {
         let item = log.add_log_item(data);
 
         logs.insert(uuid.clone(), log);
-        invoke_run_log(uuid.clone(), LogType::AddLog(item));
+        invoke_run_log(uuid.clone(), InstanceLogType::AddLog(item));
     }
 }
 
@@ -459,7 +467,7 @@ pub(crate) fn clear_game_log(uuid: &Uuid) {
         logs.insert(uuid.clone(), log);
     }
 
-    invoke_run_log(uuid.clone(), LogType::ClearLog);
+    invoke_run_log(uuid.clone(), InstanceLogType::ClearLog);
 }
 
 /// 添加启动的游戏实例
@@ -544,6 +552,38 @@ impl InstanceSettingObj {
         path_helper::move_to_trash(self.get_base_path())
     }
 
+    /// 复制实例设置为新的对象。
+    ///
+    /// `InstanceSettingObj` 刻意不实现 `Clone`，避免被随意整对象复制；
+    /// 仅在确有需要构建一个独立新对象时（如复制实例）显式调用本方法。
+    fn copy_self(&self) -> Self {
+        Self {
+            uuid: self.uuid,
+            name: self.name.clone(),
+            group: self.group.clone(),
+            dir: self.dir.clone(),
+            version: self.version.clone(),
+            loader: self.loader,
+            loader_version: self.loader_version.clone(),
+            jvm_arg: self.jvm_arg.clone(),
+            jvm_name: self.jvm_name.clone(),
+            jvm_local: self.jvm_local.clone(),
+            window: self.window.clone(),
+            start_server: self.start_server.clone(),
+            proxy_host: self.proxy_host.clone(),
+            advance_jvm: self.advance_jvm.clone(),
+            is_modpack: self.is_modpack,
+            source_type: self.source_type,
+            game_type: self.game_type,
+            pid: self.pid.clone(),
+            fid: self.fid.clone(),
+            icon: self.icon.clone(),
+            server_url: self.server_url.clone(),
+            custom_loader: self.custom_loader.clone(),
+            encoding: self.encoding,
+        }
+    }
+
     /// 复制数据到新的实例
     /// - `name`: 新的实例名字
     pub async fn copy_to_other(
@@ -551,7 +591,7 @@ impl InstanceSettingObj {
         name: &str,
         gui: &Option<Arc<dyn IAddInstanceGui>>,
     ) -> CoreResult<GameInstance> {
-        let mut instance = self.clone();
+        let mut instance = self.copy_self();
         instance.name = name.to_string();
         let instance = instance.create_instance(gui).await?;
 
@@ -596,7 +636,7 @@ impl InstanceSettingObj {
         path: P,
         skip: Option<Vec<PathBuf>>,
         is_base: bool,
-        gui: &Option<impl ICopyGui>,
+        gui: &Option<Arc<dyn ICopyGui>>,
     ) -> CoreResult<()> {
         let dir = if is_base {
             self.get_base_path()

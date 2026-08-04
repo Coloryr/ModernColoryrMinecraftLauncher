@@ -13,7 +13,7 @@ use crate::{
     GameInstance,
     curseforge::pack_obj::CurseForgePackObj,
     data_res::{DownloadItemRes, ItemPathRes},
-    gui_hook::{AddModPackState, IAddGui, IAddModPackGui, IProgressGui},
+    gui_hook::{AddModPackState, IAddGui},
     launcher::{
         FileType, file_online_info_obj::OnlineInfoObj, instance_setting_obj::InstanceSettingObj,
     },
@@ -294,7 +294,7 @@ impl FileType {
 /// 构建下载结果（串行处理）。
 /// 只有 `get_modpack_info` 中的 `spawn_fetch_task` 才需要并行处理。
 async fn build_results(
-    game: &InstanceSettingObj,
+    game: &GameInstance,
     items: Vec<CurseForgeFileDataObj>,
     gui: &Option<Arc<dyn IAddGui>>,
     size: usize,
@@ -304,7 +304,7 @@ async fn build_results(
     let mut now = 0usize;
 
     for mut item in items {
-        let Some(path) = game.get_item_path(&item.file_name, item.mod_id).await.ok() else {
+        let Some(path) = get_item_path(game, &item.file_name, item.mod_id).await.ok() else {
             continue;
         };
 
@@ -326,7 +326,7 @@ async fn build_results(
         };
 
         let online_item = if matches!(path.file_type, FileType::Save) {
-            file_item.later = LaterRun::UnpackSave(game.get_saves_path());
+            file_item.later = LaterRun::UnpackSave(game.read().unwrap().get_saves_path());
             None
         } else {
             Some(OnlineInfoObj {
@@ -359,7 +359,7 @@ async fn build_results(
 
 /// 获取整合包模组信息
 pub async fn get_modpack_info(
-    game: &InstanceSettingObj,
+    game: &GameInstance,
     obj: &CurseForgePackObj,
     gui: &Option<Arc<dyn IAddGui>>,
 ) -> CoreResult<DownloadItemRes> {
@@ -430,32 +430,51 @@ fn spawn_fetch_task(
     });
 }
 
-impl InstanceSettingObj {
-    /// 解析条目路径和文件类型。接收独立字段，以便在不对完整
-    /// `CurseForgeFileDataObj` 进行克隆的情况下进行低成本的并发分发。
-    async fn get_item_path(&self, file_name: &str, mod_id: u64) -> CoreResult<ItemPathRes> {
-        let mut item1 = ItemPathRes {
-            file_path: self.get_mods_path(),
-            path: names::GAME_MODS_DIR.to_string(),
-            file_type: FileType::Mod,
-        };
+/// 解析条目路径和文件类型。
+///
+/// 先完成所有异步请求，再取读锁同步解析路径，避免把 `RwLockReadGuard`
+/// 带进 `.await`，因此无需克隆整个 [`InstanceSettingObj`]。
+async fn get_item_path(
+    game: &GameInstance,
+    file_name: &str,
+    mod_id: u64,
+) -> CoreResult<ItemPathRes> {
+    // 非 .jar 文件需要联网查询文件类型；期间不持有读锁
+    let class_ids: Option<(Vec<u32>, u32)> = if file_name.ends_with(names::JAR_DOT_EXT) {
+        None
+    } else {
+        let info1 = curseforge_api::get_mod_info(&mod_id.to_string()).await?;
+        Some((
+            info1
+                .data
+                .categories
+                .iter()
+                .map(|item2| item2.class_id)
+                .collect(),
+            info1.data.class_id,
+        ))
+    };
 
-        if !file_name.ends_with(names::JAR_DOT_EXT) {
-            let info1 = curseforge_api::get_mod_info(&mod_id.to_string()).await?;
-
-            // 分类列表：第一个匹配的生效
-            for item2 in &info1.data.categories {
-                if apply_class_id(item2.class_id, &mut item1, self) {
-                    break;
-                }
+    // 异步结束后再取读锁，同步构建路径
+    let game = game.read().unwrap();
+    let mut item1 = ItemPathRes {
+        file_path: game.get_mods_path(),
+        path: names::GAME_MODS_DIR.to_string(),
+        file_type: FileType::Mod,
+    };
+    if let Some((category_ids, fallback_id)) = class_ids {
+        // 分类列表：第一个匹配的生效
+        for class_id in category_ids {
+            if apply_class_id(class_id, &mut item1, &game) {
+                break;
             }
-
-            // 后备：data.class_id 可能覆盖分类结果
-            apply_class_id(info1.data.class_id, &mut item1, self);
         }
 
-        Ok(item1)
+        // 后备：data.class_id 可能覆盖分类结果
+        apply_class_id(fallback_id, &mut item1, &game);
     }
+
+    Ok(item1)
 }
 
 /// 将 CurseForge 的 class_id 应用到路径解析器。当该 id 匹配到
@@ -528,11 +547,11 @@ pub async fn upgrade_modpack(
     worker.update_game(game);
 
     if let Some(ref gui) = gui {
-        gui.set_state(AddModPackState::Unzip);
+        gui.set_state(AddModPackState::Extract);
         gui.set_now(3, Some(6));
     }
 
-    if !worker.unzip(None).await {
+    if !worker.extract(None).await {
         return false;
     }
 

@@ -65,7 +65,7 @@ pub struct PathPart {
 }
 
 /// 将输入路径拆分
-/// 
+///
 /// 例如输入home/user/text.txt，则输出home/user和text.txt
 pub fn get_path_part(input: &str) -> PathPart {
     let path = Path::new(input);
@@ -81,4 +81,70 @@ pub fn get_path_part(input: &str) -> PathPart {
         .unwrap_or_else(|| "".to_string());
 
     PathPart { parent, file }
+}
+
+/// 命令行参数解析
+///
+/// # 参数
+/// * `input` - 命令行字符串
+///
+/// # 返回值
+/// 参数字符串向量
+pub fn arg_parse(input: &str) -> Vec<String> {
+    let quote_char = '"';
+    let escape_char = '\\';
+    let mut inside_quote = false;
+    let mut inside_escape = false;
+
+    let mut current_arg = String::new();
+    let mut current_arg_char_count = 0;
+    let mut result = Vec::new();
+
+    for c in input.chars() {
+        if c == quote_char {
+            current_arg_char_count += 1;
+
+            if inside_escape {
+                current_arg.push(c);
+                inside_escape = false;
+            } else if inside_quote {
+                inside_quote = false;
+            } else {
+                inside_quote = true;
+            }
+        } else if c == escape_char {
+            current_arg_char_count += 1;
+
+            if inside_escape {
+                current_arg.push_str(&format!("{}{}", escape_char, escape_char));
+            }
+
+            inside_escape = !inside_escape;
+        } else if c.is_whitespace() {
+            if inside_quote {
+                current_arg_char_count += 1;
+                current_arg.push(c);
+            } else {
+                if current_arg_char_count > 0 {
+                    result.push(current_arg.clone());
+                }
+                current_arg_char_count = 0;
+                current_arg.clear();
+            }
+        } else {
+            current_arg_char_count += 1;
+            if inside_escape {
+                current_arg.push(escape_char);
+                current_arg_char_count = 0;
+                inside_escape = false;
+            }
+            current_arg.push(c);
+        }
+    }
+
+    if current_arg_char_count > 0 {
+        result.push(current_arg);
+    }
+
+    result
 }

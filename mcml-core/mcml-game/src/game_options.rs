@@ -1,8 +1,8 @@
 /// 游戏实例配置相关
-
 use std::{
     collections::HashMap,
     io::{BufRead, BufReader, Read, Write},
+    path::Path,
 };
 
 use mcml_base::path_helper;
@@ -10,7 +10,17 @@ use mcml_names::i18_items::error_type::{CoreResult, ErrorData, ErrorType};
 
 use crate::launcher::instance_setting_obj::InstanceSettingObj;
 
-pub fn read_options<R: Read>(buffer: R, sp: Option<char>) -> CoreResult<HashMap<String, String>> {
+pub type InstanceCfg = HashMap<String, String>;
+
+pub fn read_options_from_file<P: AsRef<Path>>(
+    file: P,
+    sp: Option<char>,
+) -> CoreResult<InstanceCfg> {
+    let file = path_helper::open_read(file)?;
+    read_options(file, sp)
+}
+
+pub fn read_options<R: Read>(buffer: R, sp: Option<char>) -> CoreResult<InstanceCfg> {
     let mut reader = BufReader::new(buffer);
     let mut data = HashMap::new();
     let mut line = String::new();

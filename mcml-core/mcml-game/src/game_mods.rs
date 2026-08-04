@@ -19,13 +19,18 @@ use mcml_names::{
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use zip::ZipArchive;
 
-use crate::{launcher::instance_setting_obj::InstanceSettingObj, loader::LoaderType};
+use crate::{class_scan, launcher::instance_setting_obj::InstanceSettingObj, loader::LoaderType};
 
+/// 加载测
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum LoadSideType {
+    /// 未知
     Unknown,
+    /// 客户端
     Client,
+    /// 服务端
     Server,
+    /// 两者
     Both,
 }
 
@@ -35,13 +40,17 @@ impl Default for LoadSideType {
     }
 }
 
+/// 依赖类型
 pub enum DependantType {
+    /// 强制要求
     Required(String),
+    /// 推荐
     Recommend(String),
 }
 
+/// 模组内容信息
 pub struct ModItemObj {
-    /// ID
+    /// modid
     pub mod_id: String,
     /// 名字
     pub name: String,
@@ -82,6 +91,7 @@ impl Default for ModItemObj {
 
 /// 模组信息
 pub struct ModObj {
+    /// 模组列表
     pub info: Vec<ModItemObj>,
     /// 是否被禁用
     pub disable: bool,
@@ -723,7 +733,7 @@ pub fn read_mod_info<P: AsRef<Path>>(path: P) -> CoreResult<ModObj> {
     mod_info.file = path.as_ref().to_path_buf();
 
     // 从注解扫描 side（仅文件类模组可用）
-    if let Ok(scan_result) = crate::class_scan::scan_jar(path.as_ref()) {
+    if let Ok(scan_result) = class_scan::scan_jar(path.as_ref()) {
         for scan_mod in &scan_result.mods {
             if let Some(info) = mod_info
                 .info

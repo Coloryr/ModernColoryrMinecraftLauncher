@@ -27,7 +27,7 @@ pub trait ModPackWorker {
     /// 创建游戏实例
     async fn create_instance(&self, group: Option<String>) -> CoreResult<GameInstance>;
     /// 解压文件
-    async fn unzip(&self, unselect: Option<&Vec<&ArchiveEntryInfo>>) -> bool;
+    async fn extract(&self, unselect: Option<Vec<String>>) -> bool;
     /// 获取模组信息
     async fn get_info(&self) -> bool;
     /// 下载所需文件
@@ -41,7 +41,7 @@ pub trait ModPackWorker {
 /// 整合包安装器
 pub struct BaseModPackWorker {
     /// 压缩包
-    pub zip: BaseArchive,
+    pub archive: BaseArchive,
     /// 界面
     pub gui: Option<Arc<dyn IAddInstanceGui>>,
     /// 更新界面
@@ -62,13 +62,13 @@ pub struct BaseModPackWorker {
 
 impl BaseModPackWorker {
     pub fn new(
-        zip: BaseArchive,
+        archive: BaseArchive,
         gui: Option<Arc<dyn IAddInstanceGui>>,
         pack_gui: Option<Arc<dyn IAddGui>>,
         cancel: Option<CancellationToken>,
     ) -> Self {
         Self {
-            zip,
+            archive,
             gui,
             pack_gui,
             loader: LoaderType::Normal,

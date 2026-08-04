@@ -24,7 +24,7 @@ use zip::ZipArchive;
 
 use crate::{
     archives::{
-        IArchiveGui, ArchiveProcess, ArchiveRun, ArchiveType, TarMode, r7z_runner::R7zProcess,
+        BaseArchiveGui, ArchiveProcess, ArchiveRun, ArchiveType, TarMode, r7z_runner::R7zProcess,
         tar_runner::TarProcess, zip_runner::ZipProcess,
     },
     path_helper,
@@ -177,7 +177,7 @@ impl BaseArchive {
         source_dir: P,
         root_path: Option<P>,
         filter: &Option<Vec<String>>,
-        gui: Option<Arc<dyn IArchiveGui>>,
+        gui: Option<Arc<dyn BaseArchiveGui>>,
     ) -> CoreResult<Self> {
         Self::compress_inner(
             archive_type,
@@ -223,7 +223,7 @@ impl BaseArchive {
         archive_type: ArchiveType,
         archive_file: P,
         output_dir: P,
-        gui: Option<Arc<dyn IArchiveGui>>,
+        gui: Option<Arc<dyn BaseArchiveGui>>,
     ) -> CoreResult<()> {
         Self::make_runner(archive_type, gui)?.decompress(archive_file.as_ref(), output_dir.as_ref())
     }
@@ -235,7 +235,7 @@ impl BaseArchive {
         source_dir: &Path,
         root_path: Option<&Path>,
         filter: &Option<Vec<String>>,
-        gui: Option<Arc<dyn IArchiveGui>>,
+        gui: Option<Arc<dyn BaseArchiveGui>>,
     ) -> CoreResult<()> {
         Self::make_runner(archive_type, gui)?.compress(output_file, source_dir, root_path, filter)
     }
@@ -243,7 +243,7 @@ impl BaseArchive {
     /// 根据压缩包类型创建对应的执行器。
     fn make_runner(
         archive_type: ArchiveType,
-        gui: Option<Arc<dyn IArchiveGui>>,
+        gui: Option<Arc<dyn BaseArchiveGui>>,
     ) -> CoreResult<Box<dyn ArchiveRun + Send + Sync>> {
         let process = ArchiveProcess::new(gui);
         Ok(match archive_type {
@@ -393,7 +393,7 @@ impl BaseArchive {
         &self,
         name: &str,
         output_path: P,
-        gui: Option<&dyn IArchiveGui>,
+        gui: Option<&dyn BaseArchiveGui>,
     ) -> CoreResult<()> {
         let output_path = output_path.as_ref();
 
@@ -417,7 +417,7 @@ impl BaseArchive {
     pub fn extract_all<P: AsRef<Path>>(
         &self,
         output_dir: P,
-        gui: Option<Arc<dyn IArchiveGui>>,
+        gui: Option<Arc<dyn BaseArchiveGui>>,
     ) -> CoreResult<()> {
         Self::decompress(
             self.archive_type,
@@ -440,7 +440,7 @@ impl BaseArchive {
     pub fn extract_where<F: FnMut(&ArchiveEntryInfo) -> Option<PathBuf>>(
         &self,
         mut map: F,
-        gui: Option<&dyn IArchiveGui>,
+        gui: Option<&dyn BaseArchiveGui>,
     ) -> CoreResult<()> {
         for entry in &self.entries {
             if entry.is_dir {
@@ -466,7 +466,7 @@ impl BaseArchive {
     pub fn add_files<P: AsRef<Path>>(
         &mut self,
         files: &[(P, P)],
-        gui: Option<Arc<dyn IArchiveGui>>,
+        gui: Option<Arc<dyn BaseArchiveGui>>,
     ) -> CoreResult<()> {
         if files.is_empty() {
             return Ok(());
@@ -604,7 +604,7 @@ impl BaseArchive {
     fn add_files_extract_recompress<P: AsRef<Path>>(
         &mut self,
         files: &[(P, P)],
-        gui: Option<Arc<dyn IArchiveGui>>,
+        gui: Option<Arc<dyn BaseArchiveGui>>,
     ) -> CoreResult<()> {
         // 创建临时目录用于解压和新文件
         let temp_dir = std::env::temp_dir().join(format!("mcml_archive_{}", Uuid::new_v4()));
@@ -686,7 +686,7 @@ impl BaseArchive {
         &mut self,
         name: &str,
         data: &[u8],
-        gui: Option<Arc<dyn IArchiveGui>>,
+        gui: Option<Arc<dyn BaseArchiveGui>>,
     ) -> CoreResult<()> {
         match self.archive_type {
             ArchiveType::Zip => self.add_data_zip(name, data),
@@ -811,7 +811,7 @@ impl BaseArchive {
         &mut self,
         name: &str,
         data: &[u8],
-        gui: Option<Arc<dyn IArchiveGui>>,
+        gui: Option<Arc<dyn BaseArchiveGui>>,
     ) -> CoreResult<()> {
         // 创建临时目录用于解压和新文件
         let temp_dir = std::env::temp_dir().join(format!("mcml_archive_{}", Uuid::new_v4()));
@@ -1185,7 +1185,7 @@ impl BaseArchive {
         &self,
         name: &str,
         output_path: &Path,
-        gui: Option<&dyn IArchiveGui>,
+        gui: Option<&dyn BaseArchiveGui>,
     ) -> CoreResult<()> {
         if let Some(gui) = gui {
             gui.start(1);
@@ -1226,7 +1226,7 @@ impl BaseArchive {
         &self,
         name: &str,
         output_path: &Path,
-        gui: Option<&dyn IArchiveGui>,
+        gui: Option<&dyn BaseArchiveGui>,
     ) -> CoreResult<()> {
         if let Some(gui) = gui {
             gui.start(1);
@@ -1278,7 +1278,7 @@ impl BaseArchive {
         &self,
         name: &str,
         output_path: &Path,
-        gui: Option<&dyn IArchiveGui>,
+        gui: Option<&dyn BaseArchiveGui>,
     ) -> CoreResult<()> {
         if let Some(gui) = gui {
             gui.start(1);

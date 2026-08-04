@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use async_trait::async_trait;
+use mcml_base::archives::BaseArchiveGui;
 
 use crate::GameInstance;
 
@@ -10,7 +11,7 @@ pub enum AddModPackState {
     ReadInfo,
     GetInfo,
     DownloadFile,
-    Unzip,
+    Extract,
     Done,
 }
 
@@ -49,4 +50,12 @@ pub trait ICopyGui {
     fn update(&self, index: usize, count: usize);
     /// 当前文件
     fn file(&self, file: PathBuf);
+}
+
+/// 压缩包解压界面
+pub trait IArchiveGui: BaseArchiveGui {
+    /// 解压完成
+    fn done(&self);
+    /// 文件名非法需要替换
+    fn file_rename(&self, name: Option<&str>);
 }

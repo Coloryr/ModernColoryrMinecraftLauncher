@@ -79,14 +79,14 @@ impl ModPackWorker for CurseForgeWorker {
     fn read_info(&mut self) -> bool {
         if let Some(item) = self
             .base
-            .zip
+            .archive
             .entries()
             .iter()
             .filter(|item| item.name.eq_ignore_ascii_case(names::MANIFEST_FILE))
             .next()
             && let Ok(data) = self
                 .base
-                .zip
+                .archive
                 .read(&item.name)
                 .and_then(|data| serialize_tools::json_from_bytes::<CurseForgePackObj>(&data))
         {
@@ -159,7 +159,7 @@ impl ModPackWorker for CurseForgeWorker {
     ///
     /// `overrides/` 下的文件去除前缀后写入游戏根目录；其余文件直接
     /// 写入游戏路径。
-    async fn unzip(&self, unselect: Option<&Vec<&ArchiveEntryInfo>>) -> bool {
+    async fn extract(&self, unselect: Option<Vec<String>>) -> bool {
         let Some(game) = &self.base.game else {
             return false;
         };
@@ -172,7 +172,7 @@ impl ModPackWorker for CurseForgeWorker {
         let game_path = game.get_game_path();
         let prefix = format!("{}/", info.overrides);
 
-        let entries: Vec<_> = self.base.zip.entries().iter().collect();
+        let entries: Vec<_> = self.base.archive.entries().iter().collect();
         let total = entries.len();
         let mut index = 0usize;
 
@@ -218,7 +218,7 @@ impl ModPackWorker for CurseForgeWorker {
 
             if self
                 .base
-                .zip
+                .archive
                 .extract_file(&entry.name, &output, None)
                 .is_err()
             {
@@ -244,9 +244,9 @@ impl ModPackWorker for CurseForgeWorker {
             return false;
         };
 
-        // 克隆实例以释放读锁，避免把非 Send 的 RwLockReadGuard 带进异步任务
-        let game_info = game.read().unwrap().clone();
-        let list = curseforge::get_modpack_info(&game_info, info, &self.base.pack_gui).await;
+        // 直接传入 GameInstance（Arc 引用），读锁在 get_modpack_info 内部
+        // 同步获取并立即释放，不会跨 .await 持有，也无需克隆整个实例
+        let list = curseforge::get_modpack_info(game, info, &self.base.pack_gui).await;
 
         if list.is_err() {
             return false;
@@ -309,7 +309,6 @@ impl ModPackWorker for CurseForgeWorker {
             return false;
         };
 
-        // 在 .await 前释放 RwLockReadGuard
         let old_info = {
             let game = game.read().unwrap();
             let base_path = game.get_base_path();

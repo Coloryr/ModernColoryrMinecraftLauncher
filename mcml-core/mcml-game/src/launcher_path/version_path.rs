@@ -35,6 +35,8 @@ use crate::{
     },
 };
 
+const NOW_VERSION: &str = "26.2";
+
 static BASE_DIR: OnceLock<PathBuf> = OnceLock::new();
 static FORGE_DIR: OnceLock<PathBuf> = OnceLock::new();
 static FABRIC_DIR: OnceLock<PathBuf> = OnceLock::new();
@@ -231,9 +233,33 @@ async fn read_version() -> CoreResult<()> {
     Ok(())
 }
 
+/// 获取最新版本
+pub fn get_latest_version() -> String {
+    let read = VERSION.read().unwrap();
+    let versions = read.as_ref();
+    match versions {
+        Some(data) => data.latest.release.clone(),
+        None => NOW_VERSION.to_string(),
+    }
+}
+
+/// 获取游戏版本列表
+pub fn have_version(version: &str) -> bool {
+    let read = VERSION.read().unwrap();
+    let versions = read.as_ref();
+    match versions {
+        Some(data) => data
+            .versions
+            .iter()
+            .find(|data| data.id == version)
+            .is_some(),
+        None => false,
+    }
+}
+
 /// 获取游戏版本列表
 /// 不存在就去读取文件
-pub async fn get_version_obj() -> CoreResult<Arc<VersionObj>> {
+pub async fn get_version_obj_online() -> CoreResult<Arc<VersionObj>> {
     if let Some(v) = VERSION.read().unwrap().as_ref() {
         return Ok(v.clone());
     }
@@ -428,7 +454,7 @@ pub async fn check_update(mc: &str) -> CoreResult<Arc<GameArgObj>> {
     // 直接从在线更新数据
     get_version_from_online().await?;
 
-    let versions = get_version_obj().await?;
+    let versions = get_version_obj_online().await?;
     let item = versions
         .versions
         .iter()
@@ -478,7 +504,13 @@ pub fn get_forge_json_name(mc: &str, version: &str, neo: bool, install: bool) ->
             if v222 {
                 format!("{}-{}{}", names::NEOFORGE_KEY, version, names::JSON_DOT_EXT)
             } else {
-                format!("{}-{}-{}{}", names::FORGE_KEY, mc, version, names::JSON_DOT_EXT)
+                format!(
+                    "{}-{}-{}{}",
+                    names::FORGE_KEY,
+                    mc,
+                    version,
+                    names::JSON_DOT_EXT
+                )
             }
         }
     } else {

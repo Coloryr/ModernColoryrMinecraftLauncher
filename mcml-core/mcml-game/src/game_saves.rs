@@ -9,7 +9,7 @@ use std::{
 
 use chrono::{Datelike, Local, Timelike};
 use mcml_base::{
-    archives::{IArchiveGui, ArchiveType, BaseArchive},
+    archives::{BaseArchiveGui, ArchiveType, BaseArchive},
     path_helper,
     serialize_tools::{self, MiniJsonObj},
 };
@@ -201,7 +201,7 @@ impl InstanceSettingObj {
         &self,
         info: &SaveBackupObj,
         file: &str,
-        gui: Option<Arc<dyn IArchiveGui>>,
+        gui: Option<Arc<dyn BaseArchiveGui>>,
     ) -> CoreResult<()> {
         let dir = self.get_backup_path();
         let path = dir.join(info.dir.clone());
@@ -283,7 +283,7 @@ impl SaveObj {
         &self,
         path: P,
         archive_type: ArchiveType,
-        gui: Option<Arc<dyn IArchiveGui>>,
+        gui: Option<Arc<dyn BaseArchiveGui>>,
     ) -> CoreResult<()> {
         BaseArchive::compress(
             archive_type,
@@ -300,7 +300,7 @@ impl SaveObj {
     pub fn backup(
         &self,
         instance: &Arc<InstanceSettingObj>,
-        gui: Option<Arc<dyn IArchiveGui>>,
+        gui: Option<Arc<dyn BaseArchiveGui>>,
     ) -> CoreResult<()> {
         let path = instance.get_backup_path();
         path_helper::create_dir_all(&path)?;
