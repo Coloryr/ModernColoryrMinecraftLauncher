@@ -10,13 +10,14 @@
 //!
 //! # 进度回调
 //!
-//! 通过 [`IArchiveGui`] trait 支持压缩/解压进度的 UI 回调通知。
+//! 通过 [`IBaseArchiveGui`] trait 支持压缩/解压进度的 UI 回调通知。
 //! 使用 [`ArchiveProcess`] 内部追踪进度状态。
 
 use std::{
     path::{Path, PathBuf}, sync::{Arc, atomic::{AtomicUsize, Ordering}},
 };
 
+use crate::path_helper;
 use mcml_names::{i18_items::error_type::CoreResult, names};
 
 pub mod base_archive;
@@ -60,7 +61,7 @@ impl TarMode {
 
 pub(crate) struct ArchiveProcess {
     /// 进度回调
-    gui: Option<Arc<dyn BaseArchiveGui>>,
+    gui: Option<Arc<dyn IBaseArchiveGui>>,
     /// 总文件数
     size: AtomicUsize,
     /// 当前处理数
@@ -69,7 +70,7 @@ pub(crate) struct ArchiveProcess {
 
 impl ArchiveProcess {
     /// 创建进度追踪器
-    pub fn new(gui: Option<Arc<dyn BaseArchiveGui>>) -> Self {
+    pub fn new(gui: Option<Arc<dyn IBaseArchiveGui>>) -> Self {
         Self {
             gui,
             size: AtomicUsize::new(0),
@@ -93,6 +94,35 @@ impl ArchiveProcess {
             gui.update(Some(filename), now);
         }
     }
+
+    /// 解压完成回调
+    pub fn done(&self) {
+        if let Some(gui) = &self.gui {
+            gui.done();
+        }
+    }
+
+    /// 检查条目名是否含非法字符，非法时替换为 `_`，并询问 GUI 是否用自定义名字覆盖。
+    ///
+    /// 返回替换后的条目名；名字合法时返回原名。
+    pub fn check_name(&self, name: &str) -> String {
+        if name
+            .split(['/', '\\'])
+            .filter(|seg| !seg.is_empty() && *seg != "." && *seg != "..")
+            .all(|seg| !path_helper::file_has_invalid_chars(seg))
+        {
+            return name.to_string();
+        }
+        // 非法字符替换为 `_`，GUI 可返回自定义名字覆盖
+        let safe_name = replace_invalid_name(name);
+        match &self.gui {
+            Some(gui) => gui
+                .file_rename(name)
+                .filter(|n| !n.is_empty())
+                .unwrap_or(safe_name),
+            None => safe_name,
+        }
+    }
 }
 
 /// 压缩包执行器
@@ -110,16 +140,20 @@ pub(crate) trait ArchiveRun: Send + Sync {
 }
 
 /// 压缩包处理显示回调
-pub trait BaseArchiveGui: Send + Sync {
+pub trait IBaseArchiveGui: Send + Sync {
     /// 开始处理压缩包
     /// 
     /// - `total`: 总计需要处理的数量
     fn start(&self, total: usize);
     /// 更新压缩包处理信息
-    /// 
+    ///
     /// - `filename`: 当前文件名
     /// - `current`: 当前处理数量
     fn update(&self, filename: Option<String>, current: usize);
+    /// 解压完成
+    fn done(&self);
+    /// 文件名含非法字符时询问，返回自定义替换名；`None` 表示接受默认替换（非法字符改为 `_`）
+    fn file_rename(&self, name: &str) -> Option<String>;
 }
 
 /// 归一化路径分隔符为 `/`
@@ -136,6 +170,14 @@ fn should_exclude(path: &Path, patterns: &[String]) -> bool {
     })
 }
 
+/// 替换条目名中的非法字符为 `_`（按路径段处理，保留目录结构）。
+pub(crate) fn replace_invalid_name(name: &str) -> String {
+    name.split(['/', '\\'])
+        .map(|seg| path_helper::replace_file_name(seg))
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
 /// 压缩文件（委托给 [`BaseArchive::compress`]，忽略返回的句柄）。
 pub fn compress<P: AsRef<Path>>(
     archive_type: ArchiveType,
@@ -143,7 +185,7 @@ pub fn compress<P: AsRef<Path>>(
     pack_dir: P,
     root_path: Option<P>,
     filter: &Option<Vec<String>>,
-    gui: Option<Arc<dyn BaseArchiveGui>>,
+    gui: Option<Arc<dyn IBaseArchiveGui>>,
 ) -> CoreResult<()> {
     BaseArchive::compress(archive_type, archive_file, pack_dir, root_path, filter, gui)?;
     Ok(())
@@ -154,7 +196,7 @@ pub fn decompress<P: AsRef<Path>>(
     archive_type: ArchiveType,
     archive_file: P,
     output_dir: P,
-    gui: Option<Arc<dyn BaseArchiveGui>>,
+    gui: Option<Arc<dyn IBaseArchiveGui>>,
 ) -> CoreResult<()> {
     BaseArchive::decompress(archive_type, archive_file, output_dir, gui)
 }

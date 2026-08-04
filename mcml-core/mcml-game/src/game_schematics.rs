@@ -1,6 +1,5 @@
 /// 游戏实例结构文件相关
 /// 包括模组的结构文件读取
-
 use std::{
     collections::HashMap,
     io::{Read, Seek},
@@ -10,7 +9,7 @@ use std::{
 
 use mcml_base::path_helper;
 use mcml_names::{
-    i18_items::error_type::{CoreResult, ErrorType},
+    i18_items::error_type::{CoreResult, DataNotFoundData, ErrorType},
     names,
 };
 use mcml_nbt::{NbtType, nbt_file::NbtFile, nbt_types::NbtCompound};
@@ -212,7 +211,7 @@ fn read_litematic(nbt: NbtFile) -> CoreResult<SchematicObj> {
 
         Ok(obj)
     } else {
-        Err(ErrorType::InfoNotFound("nbt".to_string()))
+        Err(ErrorType::DataNotFound(DataNotFoundData::Info))
     }
 }
 
@@ -225,7 +224,7 @@ fn read_schematic(nbt: NbtFile) -> CoreResult<SchematicObj> {
         read_dimensions_short(nbt, &mut obj);
         Ok(obj)
     } else {
-        Err(ErrorType::InfoNotFound("nbt".to_string()))
+        Err(ErrorType::DataNotFound(DataNotFoundData::Info))
     }
 }
 
@@ -276,7 +275,7 @@ fn read_schem(nbt: NbtFile) -> CoreResult<SchematicObj> {
 
         Ok(obj)
     } else {
-        Err(ErrorType::InfoNotFound("nbt".to_string()))
+        Err(ErrorType::DataNotFound(DataNotFoundData::Info))
     }
 }
 
@@ -337,7 +336,7 @@ fn read_nbt(nbt: NbtFile) -> CoreResult<SchematicObj> {
 
         Ok(obj)
     } else {
-        Err(ErrorType::InfoNotFound("nbt".to_string()))
+        Err(ErrorType::DataNotFound(DataNotFoundData::Info))
     }
 }
 

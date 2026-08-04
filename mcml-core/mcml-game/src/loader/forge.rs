@@ -5,8 +5,7 @@ use mcml_base::{
     path_helper, serialize_tools,
 };
 use mcml_names::{
-    i18_items::error_type::{CoreResult, ErrorData, ErrorType, FileSystemErrorData},
-    names,
+    i18_items::error_type::{CoreResult, DataNotFoundData, ErrorData, ErrorType, FileSystemErrorData}, names,
 };
 use mcml_net::{
     maven_utils::{self},
@@ -451,7 +450,7 @@ async fn get_forge_libs(mc: &str, version: &str, neo: bool) -> CoreResult<ForgeG
     if !installer.check_hash() {
         let res = mcml_downloader::start_download_task(vec![installer.clone()]).await;
         if !res {
-            return Err(ErrorType::InfoNotFound(mc.to_string()));
+            return Err(ErrorType::DataNotFound(DataNotFoundData::Info));
         }
     }
 
@@ -548,7 +547,7 @@ async fn get_forge_libs(mc: &str, version: &str, neo: bool) -> CoreResult<ForgeG
             installs: Vec::new(),
         })
     } else {
-        Err(ErrorType::InfoNotFound(mc.to_string()))
+        Err(ErrorType::DataNotFound(DataNotFoundData::Info))
     }
 }
 

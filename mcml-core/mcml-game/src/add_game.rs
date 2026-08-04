@@ -5,22 +5,31 @@ use std::{
     sync::Arc,
 };
 
-use mcml_base::{archives::BaseArchive, path_helper, serialize_tools};
+use mcml_base::{
+    archives::{BaseArchive, IBaseArchiveGui},
+    path_helper, serialize_tools,
+};
 use mcml_names::{
-    i18_items::error_type::{ArgEmptyData, CoreResult, ErrorType},
+    i18_items::error_type::{ArgEmptyData, CoreResult, ErrorType, PathNotExistsData},
     names,
 };
 use tokio_util::sync::CancellationToken;
+use uuid::Uuid;
 
 use crate::{
-    GameInstance, game_options, gui_hook::{AddModPackState, IAddGui, IAddInstanceGui, ICopyGui}, launcher::{SourceType, instance_setting_obj::InstanceSettingObj}, launcher_path::version_path, modpack::{
-        BaseModPackWorker, ModPackWorker, curseforge_worker::CurseForgeWorker, modrinth_worker::ModrinthPackWorker,
-    }, other_launcher::{self, mmc_obj::MMCObj, official_obj::OfficialObj},
+    GameInstance, game_options,
+    gui_hook::{AddModPackState, IAddGui, IAddInstanceGui, ICopyGui},
+    launcher::{SourceType, instance_setting_obj::InstanceSettingObj},
+    launcher_path::version_path,
+    modpack::{
+        BaseModPackWorker, ModPackWorker, curseforge_worker::CurseForgeWorker,
+        modrinth_worker::ModrinthPackWorker,
+    },
+    other_launcher::{self, mmc_obj::MMCObj, official_obj::OfficialObj},
 };
 
 /// 压缩包类型
 pub enum PackType {
-    ColorMC,
     CurseForge,
     Modrinth,
     MMC,
@@ -40,8 +49,8 @@ pub async fn add_game_folder<P: AsRef<Path>>(
     copy_gui: Option<Arc<dyn ICopyGui>>,
 ) -> CoreResult<GameInstance> {
     if !dir.as_ref().exists() || !dir.as_ref().is_dir() {
-        return Err(ErrorType::ArgEmpty(ArgEmptyData {
-            arg: "dir".to_string(),
+        return Err(ErrorType::DirNotExists(PathNotExistsData {
+            path: dir.as_ref().to_path_buf(),
         }));
     }
 
@@ -88,9 +97,7 @@ pub async fn add_game_folder<P: AsRef<Path>>(
     }
 
     if instance.name.is_empty() && name.is_none() {
-        return Err(ErrorType::ArgEmpty(ArgEmptyData {
-            arg: "name".to_string(),
-        }));
+        return Err(ErrorType::ArgEmpty(ArgEmptyData::Name));
     }
 
     let res = instance.create_instance(&gui).await?;
@@ -112,7 +119,7 @@ async fn modpack<P: AsRef<Path>>(
     gui: Option<Arc<dyn IAddInstanceGui>>,
     pack_gui: Option<Arc<dyn IAddGui>>,
     cancel: CancellationToken,
-) -> CoreResult<GameInstance> {
+) -> CoreResult<Uuid> {
     if let Some(pack_gui) = &pack_gui {
         pack_gui.set_state(AddModPackState::ReadInfo);
         pack_gui.set_now(1, Some(5));
@@ -135,15 +142,14 @@ async fn modpack<P: AsRef<Path>>(
         )))
     };
 
-    if !work.read_info() || !work.read_version().await {
-        return Err(ErrorType::InfoNotFound("info".to_string()));
-    }
+    work.read_info()?;
+    work.read_version().await?;
 
     if cancel.is_cancelled() {
         return Err(ErrorType::TaskCancel);
     }
 
-    let game = work.create_instance(group).await?;
+    let uuid = work.create_instance(group).await?;
 
     if let Some(pack_gui) = &pack_gui {
         pack_gui.set_state(AddModPackState::Extract);
@@ -151,9 +157,66 @@ async fn modpack<P: AsRef<Path>>(
         pack_gui.set_sub_now(0, Some(1));
     }
 
-    if !work.extract(unselect).await {
+    work.extract(unselect).await?;
 
+    if cancel.is_cancelled() {
+        crate::delete_instance(&uuid)?;
+        return Err(ErrorType::TaskCancel);
     }
+
+    if let Some(pack_gui) = &pack_gui {
+        pack_gui.set_state(AddModPackState::GetInfo);
+        pack_gui.set_sub_text(None);
+        pack_gui.set_sub_now(0, None);
+        pack_gui.set_now(3, Some(5));
+        pack_gui.set_sub_now(0, None);
+    }
+
+    work.get_info().await?;
+
+    if cancel.is_cancelled() {
+        crate::delete_instance(&uuid)?;
+        return Err(ErrorType::TaskCancel);
+    }
+
+    if let Some(pack_gui) = &pack_gui {
+        pack_gui.set_state(AddModPackState::DownloadFile);
+        pack_gui.set_sub_text(None);
+        pack_gui.set_now(4, Some(5));
+        pack_gui.set_sub_now(0, None);
+    }
+
+    work.download().await;
+
+    if let Some(pack_gui) = &pack_gui {
+        pack_gui.set_state(AddModPackState::Done);
+        pack_gui.set_now(5, Some(5));
+    }
+
+    Ok(uuid)
+}
+
+/// 直接解压
+async fn archive(zip: BaseArchive, unselect: Vec<String>, gui: Option<Arc<dyn IAddInstanceGui>>, pack_gui: Option<Arc<dyn IAddGui>>) -> CoreResult<Uuid> {
+    if let Some(pack_gui) = &pack_gui {
+        pack_gui.set_state(AddModPackState::ReadInfo);
+        pack_gui.set_now(1, Some(3));
+    }
+
+    let data = zip.read(names::GAME_FILE)?;
+    let obj = serialize_tools::json_from_bytes::<InstanceSettingObj>(&data)?;
+
+    let game = obj.create_instance(&gui).await?;
+    if let Some(pack_gui) = &pack_gui {
+        pack_gui.set_state(AddModPackState::Extract);
+        pack_gui.set_now(2, Some(3));
+    }
+
+    zip.extract_all(
+        game.read().unwrap().get_base_path(),
+        Some(unselect),
+        pack_gui.clone().map(|g| g as Arc<dyn IBaseArchiveGui>),
+    );
 
     todo!()
 }

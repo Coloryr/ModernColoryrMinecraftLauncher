@@ -5,4 +5,5 @@ pub enum ThreadType {
     LanClientV4,
     LanClientV6,
     LanServer,
+    GameCount,
 }

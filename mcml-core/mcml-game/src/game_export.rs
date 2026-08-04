@@ -1,7 +1,7 @@
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use mcml_base::{
-    archives::{BaseArchiveGui, ArchiveType, BaseArchive},
+    archives::{IBaseArchiveGui, ArchiveType, BaseArchive},
     file_item::FileHash,
     serialize_tools,
 };
@@ -66,7 +66,7 @@ pub struct ExportArg {
     /// 说明
     pub summary: String,
     /// 压缩进度条
-    pub gui: Option<Arc<dyn BaseArchiveGui>>,
+    pub gui: Option<Arc<dyn IBaseArchiveGui>>,
 }
 
 impl InstanceSettingObj {

@@ -24,8 +24,9 @@ use zip::ZipArchive;
 
 use crate::{
     archives::{
-        BaseArchiveGui, ArchiveProcess, ArchiveRun, ArchiveType, TarMode, r7z_runner::R7zProcess,
-        tar_runner::TarProcess, zip_runner::ZipProcess,
+        ArchiveProcess, ArchiveRun, ArchiveType, IBaseArchiveGui, TarMode,
+        r7z_runner::R7zProcess, replace_invalid_name, tar_runner::TarProcess,
+        zip_runner::ZipProcess,
     },
     path_helper,
 };
@@ -87,7 +88,7 @@ impl ArchiveType {
 /// archive.extract_file("readme.txt", "output/readme.txt", None).unwrap();
 ///
 /// // 提取全部文件
-/// archive.extract_all("output_dir/", None).unwrap();
+/// archive.extract_all("output_dir/", None, None).unwrap();
 /// ```
 pub struct BaseArchive {
     /// 压缩包磁盘路径
@@ -116,7 +117,7 @@ impl BaseArchive {
         let archive_type = ArchiveType::try_from_path(&path).ok_or_else(|| {
             ErrorType::ArchiveOpenError(FileSystemErrorData {
                 path: path.clone(),
-                error: format!("不支持的压缩包格式: {}", path.display()),
+                error: String::new(),
             })
         })?;
 
@@ -177,7 +178,7 @@ impl BaseArchive {
         source_dir: P,
         root_path: Option<P>,
         filter: &Option<Vec<String>>,
-        gui: Option<Arc<dyn BaseArchiveGui>>,
+        gui: Option<Arc<dyn IBaseArchiveGui>>,
     ) -> CoreResult<Self> {
         Self::compress_inner(
             archive_type,
@@ -223,7 +224,7 @@ impl BaseArchive {
         archive_type: ArchiveType,
         archive_file: P,
         output_dir: P,
-        gui: Option<Arc<dyn BaseArchiveGui>>,
+        gui: Option<Arc<dyn IBaseArchiveGui>>,
     ) -> CoreResult<()> {
         Self::make_runner(archive_type, gui)?.decompress(archive_file.as_ref(), output_dir.as_ref())
     }
@@ -235,7 +236,7 @@ impl BaseArchive {
         source_dir: &Path,
         root_path: Option<&Path>,
         filter: &Option<Vec<String>>,
-        gui: Option<Arc<dyn BaseArchiveGui>>,
+        gui: Option<Arc<dyn IBaseArchiveGui>>,
     ) -> CoreResult<()> {
         Self::make_runner(archive_type, gui)?.compress(output_file, source_dir, root_path, filter)
     }
@@ -243,7 +244,7 @@ impl BaseArchive {
     /// 根据压缩包类型创建对应的执行器。
     fn make_runner(
         archive_type: ArchiveType,
-        gui: Option<Arc<dyn BaseArchiveGui>>,
+        gui: Option<Arc<dyn IBaseArchiveGui>>,
     ) -> CoreResult<Box<dyn ArchiveRun + Send + Sync>> {
         let process = ArchiveProcess::new(gui);
         Ok(match archive_type {
@@ -269,7 +270,7 @@ impl BaseArchive {
         let zip = ZipWriter::new(file);
         zip.finish().map_err(|err| {
             ErrorType::ArchiveWriteError(ErrorData {
-                error: format!("创建空 zip 失败: {}", err),
+                error: err.to_string(),
             })
         })?;
 
@@ -290,7 +291,7 @@ impl BaseArchive {
         let mut builder = Builder::new(file);
         builder.finish().map_err(|err| {
             ErrorType::ArchiveWriteError(ErrorData {
-                error: format!("创建空 tar 失败: {}", err),
+                error: err.to_string(),
             })
         })?;
 
@@ -393,19 +394,42 @@ impl BaseArchive {
         &self,
         name: &str,
         output_path: P,
-        gui: Option<&dyn BaseArchiveGui>,
+        gui: Option<&dyn IBaseArchiveGui>,
     ) -> CoreResult<()> {
         let output_path = output_path.as_ref();
+
+        // 文件名非法时替换非法字符为 `_`，GUI 可返回自定义名字覆盖（仅替换目标路径的最后一个名称段）
+        let output_path = if name
+            .split(['/', '\\'])
+            .filter(|seg| !seg.is_empty() && *seg != "." && *seg != "..")
+            .any(|seg| path_helper::file_has_invalid_chars(seg))
+        {
+            let safe_name = replace_invalid_name(name);
+            let new_name = match gui {
+                Some(gui) => gui
+                    .file_rename(name)
+                    .filter(|n| !n.is_empty())
+                    .unwrap_or(safe_name),
+                None => safe_name,
+            };
+            let new_file = Path::new(&new_name)
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_else(|| name.to_string());
+            output_path.with_file_name(new_file)
+        } else {
+            output_path.to_path_buf()
+        };
 
         if let Some(parent) = output_path.parent() {
             path_helper::create_dir_all(parent)?;
         }
 
         match self.archive_type {
-            ArchiveType::Zip => self.extract_file_zip(name, output_path, gui),
-            ArchiveType::R7Z => self.extract_file_7z(name, output_path, gui),
+            ArchiveType::Zip => self.extract_file_zip(name, &output_path, gui),
+            ArchiveType::R7Z => self.extract_file_7z(name, &output_path, gui),
             ArchiveType::Tar | ArchiveType::TarGz | ArchiveType::TarXz => {
-                self.extract_file_tar(name, output_path, gui)
+                self.extract_file_tar(name, &output_path, gui)
             }
         }
     }
@@ -413,17 +437,35 @@ impl BaseArchive {
     /// 将压缩包中所有文件提取到指定输出目录。
     ///
     /// * `output_dir` — 目标目录。
+    /// * `unselect` — 可选的排除条目名列表，名字完全匹配的条目将被跳过。
     /// * `gui` — 可选的进度回调。
     pub fn extract_all<P: AsRef<Path>>(
         &self,
         output_dir: P,
-        gui: Option<Arc<dyn BaseArchiveGui>>,
+        unselect: Option<Vec<String>>,
+        gui: Option<Arc<dyn IBaseArchiveGui>>,
     ) -> CoreResult<()> {
-        Self::decompress(
-            self.archive_type,
-            self.path.as_path(),
-            output_dir.as_ref(),
-            gui,
+        let Some(patterns) = unselect else {
+            // 无排除项时走 runner 的批量解压路径
+            return Self::decompress(
+                self.archive_type,
+                self.path.as_path(),
+                output_dir.as_ref(),
+                gui,
+            );
+        };
+
+        // 有排除项时逐个提取，跳过名字完全匹配的条目
+        let output_dir = output_dir.as_ref();
+        self.extract_where(
+            |entry| {
+                if patterns.iter().any(|u| u == &entry.name) {
+                    None
+                } else {
+                    Some(output_dir.join(&entry.name))
+                }
+            },
+            gui.as_deref(),
         )
     }
 
@@ -440,7 +482,7 @@ impl BaseArchive {
     pub fn extract_where<F: FnMut(&ArchiveEntryInfo) -> Option<PathBuf>>(
         &self,
         mut map: F,
-        gui: Option<&dyn BaseArchiveGui>,
+        gui: Option<&dyn IBaseArchiveGui>,
     ) -> CoreResult<()> {
         for entry in &self.entries {
             if entry.is_dir {
@@ -449,6 +491,9 @@ impl BaseArchive {
             if let Some(output) = map(entry) {
                 self.extract_file(&entry.name, &output, gui)?;
             }
+        }
+        if let Some(gui) = gui {
+            gui.done();
         }
         Ok(())
     }
@@ -466,7 +511,7 @@ impl BaseArchive {
     pub fn add_files<P: AsRef<Path>>(
         &mut self,
         files: &[(P, P)],
-        gui: Option<Arc<dyn BaseArchiveGui>>,
+        gui: Option<Arc<dyn IBaseArchiveGui>>,
     ) -> CoreResult<()> {
         if files.is_empty() {
             return Ok(());
@@ -517,20 +562,20 @@ impl BaseArchive {
             zip.start_file(internal_path.as_ref(), options)
                 .map_err(|err| {
                     ErrorType::ArchiveWriteError(ErrorData {
-                        error: format!("无法创建条目 '{}': {}", internal_path, err),
+                        error: err.to_string(),
                     })
                 })?;
 
             std::io::copy(&mut reader, &mut zip).map_err(|err| {
                 ErrorType::ArchiveWriteError(ErrorData {
-                    error: format!("无法写入条目 '{}': {}", internal_path, err),
+                    error: err.to_string(),
                 })
             })?;
         }
 
         zip.finish().map_err(|err| {
             ErrorType::ArchiveWriteError(ErrorData {
-                error: format!("无法完成压缩包: {}", err),
+                error: err.to_string(),
             })
         })?;
 
@@ -585,14 +630,14 @@ impl BaseArchive {
                 .append_file(internal_path.as_ref(), &mut reader)
                 .map_err(|err| {
                     ErrorType::ArchiveWriteError(ErrorData {
-                        error: format!("无法追加到 tar '{}': {}", internal_path, err),
+                        error: err.to_string(),
                     })
                 })?;
         }
 
         builder.finish().map_err(|err| {
             ErrorType::ArchiveWriteError(ErrorData {
-                error: format!("无法完成 tar: {}", err),
+                error: err.to_string(),
             })
         })?;
 
@@ -604,7 +649,7 @@ impl BaseArchive {
     fn add_files_extract_recompress<P: AsRef<Path>>(
         &mut self,
         files: &[(P, P)],
-        gui: Option<Arc<dyn BaseArchiveGui>>,
+        gui: Option<Arc<dyn IBaseArchiveGui>>,
     ) -> CoreResult<()> {
         // 创建临时目录用于解压和新文件
         let temp_dir = std::env::temp_dir().join(format!("mcml_archive_{}", Uuid::new_v4()));
@@ -686,7 +731,7 @@ impl BaseArchive {
         &mut self,
         name: &str,
         data: &[u8],
-        gui: Option<Arc<dyn BaseArchiveGui>>,
+        gui: Option<Arc<dyn IBaseArchiveGui>>,
     ) -> CoreResult<()> {
         match self.archive_type {
             ArchiveType::Zip => self.add_data_zip(name, data),
@@ -723,19 +768,19 @@ impl BaseArchive {
 
         zip.start_file(name, options).map_err(|err| {
             ErrorType::ArchiveWriteError(ErrorData {
-                error: format!("无法创建条目 '{}': {}", name, err),
+                error: err.to_string(),
             })
         })?;
 
         zip.write_all(data).map_err(|err| {
             ErrorType::ArchiveWriteError(ErrorData {
-                error: format!("无法写入条目 '{}': {}", name, err),
+                error: err.to_string(),
             })
         })?;
 
         zip.finish().map_err(|err| {
             ErrorType::ArchiveWriteError(ErrorData {
-                error: format!("无法完成压缩包: {}", err),
+                error: err.to_string(),
             })
         })?;
 
@@ -790,13 +835,13 @@ impl BaseArchive {
             .append_data(&mut header, name, data)
             .map_err(|err| {
                 ErrorType::ArchiveWriteError(ErrorData {
-                    error: format!("无法追加到 tar '{}': {}", name, err),
+                    error: err.to_string(),
                 })
             })?;
 
         builder.finish().map_err(|err| {
             ErrorType::ArchiveWriteError(ErrorData {
-                error: format!("无法完成 tar: {}", err),
+                error: err.to_string(),
             })
         })?;
 
@@ -811,7 +856,7 @@ impl BaseArchive {
         &mut self,
         name: &str,
         data: &[u8],
-        gui: Option<Arc<dyn BaseArchiveGui>>,
+        gui: Option<Arc<dyn IBaseArchiveGui>>,
     ) -> CoreResult<()> {
         // 创建临时目录用于解压和新文件
         let temp_dir = std::env::temp_dir().join(format!("mcml_archive_{}", Uuid::new_v4()));
@@ -1048,26 +1093,26 @@ impl BaseArchive {
         let zip = zip.as_mut().ok_or_else(|| {
             ErrorType::ArchiveOpenError(FileSystemErrorData {
                 path: self.path.clone(),
-                error: "zip 缓存不可用".to_string(),
+                error: String::new(),
             })
         })?;
 
         let mut entry = zip.by_name(name).map_err(|err| {
             ErrorType::ArchiveReadError(ErrorData {
-                error: format!("条目 '{}' 未找到: {}", name, err),
+                error: err.to_string(),
             })
         })?;
 
         if entry.is_dir() {
             return Err(ErrorType::ArchiveReadError(ErrorData {
-                error: format!("条目 '{}' 是目录", name),
+                error: name.to_string(),
             }));
         }
 
         let mut buf = Vec::with_capacity(entry.size() as usize);
         entry.read_to_end(&mut buf).map_err(|err| {
             ErrorType::ArchiveReadError(ErrorData {
-                error: format!("无法读取条目 '{}': {}", name, err),
+                error: err.to_string(),
             })
         })?;
         Ok(buf)
@@ -1091,7 +1136,7 @@ impl BaseArchive {
                     found = true;
                     if entry.is_directory() {
                         result = None;
-                        return Err(sevenz_rust2::Error::Other("条目是目录".into()));
+                        return Err(sevenz_rust2::Error::Other("is directory".into()));
                     }
                     let mut buf = Vec::new();
                     std::io::Read::read_to_end(reader, &mut buf)?;
@@ -1103,19 +1148,19 @@ impl BaseArchive {
             })
             .map_err(|err| {
                 ErrorType::ArchiveReadError(ErrorData {
-                    error: format!("无法读取条目 '{}': {}", name, err),
+                    error: err.to_string(),
                 })
             })?;
 
         if !found {
             return Err(ErrorType::ArchiveReadError(ErrorData {
-                error: format!("条目 '{}' 在压缩包中未找到", name),
+                error: name.to_string(),
             }));
         }
 
         result.ok_or_else(|| {
             ErrorType::ArchiveReadError(ErrorData {
-                error: format!("条目 '{}' 是目录", name),
+                error: name.to_string(),
             })
         })
     }
@@ -1144,13 +1189,13 @@ impl BaseArchive {
                 let header = entry.header();
                 if header.entry_type() == tar::EntryType::Directory {
                     return Err(ErrorType::ArchiveReadError(ErrorData {
-                        error: format!("条目 '{}' 是目录", name),
+                        error: name.to_string(),
                     }));
                 }
                 let mut buf = Vec::with_capacity(header.size().unwrap_or(0) as usize);
                 entry.read_to_end(&mut buf).map_err(|err| {
                     ErrorType::ArchiveReadError(ErrorData {
-                        error: format!("无法读取条目 '{}': {}", name, err),
+                        error: err.to_string(),
                     })
                 })?;
                 return Ok(buf);
@@ -1158,7 +1203,7 @@ impl BaseArchive {
         }
 
         Err(ErrorType::ArchiveReadError(ErrorData {
-            error: format!("条目 '{}' 在压缩包中未找到", name),
+            error: name.to_string(),
         }))
     }
 
@@ -1185,7 +1230,7 @@ impl BaseArchive {
         &self,
         name: &str,
         output_path: &Path,
-        gui: Option<&dyn BaseArchiveGui>,
+        gui: Option<&dyn IBaseArchiveGui>,
     ) -> CoreResult<()> {
         if let Some(gui) = gui {
             gui.start(1);
@@ -1195,13 +1240,13 @@ impl BaseArchive {
         let zip = zip.as_mut().ok_or_else(|| {
             ErrorType::ArchiveOpenError(FileSystemErrorData {
                 path: self.path.clone(),
-                error: "zip 缓存不可用".to_string(),
+                error: String::new(),
             })
         })?;
 
         let mut entry = zip.by_name(name).map_err(|err| {
             ErrorType::ArchiveReadError(ErrorData {
-                error: format!("条目 '{}' 未找到: {}", name, err),
+                error: err.to_string(),
             })
         })?;
 
@@ -1226,7 +1271,7 @@ impl BaseArchive {
         &self,
         name: &str,
         output_path: &Path,
-        gui: Option<&dyn BaseArchiveGui>,
+        gui: Option<&dyn IBaseArchiveGui>,
     ) -> CoreResult<()> {
         if let Some(gui) = gui {
             gui.start(1);
@@ -1262,7 +1307,7 @@ impl BaseArchive {
 
         if !found {
             return Err(ErrorType::ArchiveReadError(ErrorData {
-                error: format!("条目 '{}' 在压缩包中未找到", name),
+                error: name.to_string(),
             }));
         }
 
@@ -1278,7 +1323,7 @@ impl BaseArchive {
         &self,
         name: &str,
         output_path: &Path,
-        gui: Option<&dyn BaseArchiveGui>,
+        gui: Option<&dyn IBaseArchiveGui>,
     ) -> CoreResult<()> {
         if let Some(gui) = gui {
             gui.start(1);
@@ -1319,7 +1364,7 @@ impl BaseArchive {
 
         if !found {
             return Err(ErrorType::ArchiveReadError(ErrorData {
-                error: format!("条目 '{}' 在压缩包中未找到", name),
+                error: name.to_string(),
             }));
         }
 

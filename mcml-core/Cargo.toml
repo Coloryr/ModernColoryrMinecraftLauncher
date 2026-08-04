@@ -39,31 +39,31 @@ members = [
 ]
 
 [workspace.dependencies]
-crossbeam-queue = "~0.3.12"
-tokio = { version = "~1.52.3", features = [
+crossbeam-queue = "~0.3.13"
+tokio = { version = "~1.53.1", features = [
     "rt",
     "macros",
     "io-util",
     "process",
     "fs",
 ] }
-tokio-util = "~0.7.18"
+tokio-util = "~0.7.19"
 semrs = "~0.5.2"
 reqwest = { version = "~0.13.4", features = ["json", "stream", "form"] }
 chrono = { version = "~0.4.45", features = ["serde"] }
-serde = { version = "~1.0.228", features = ["derive"] }
-serde_json = "~1.0.150"
-serde_repr = "~0.1.20"
-glow = "~0.17.0"
-skia-safe = "~0.97.2"
-glam = "~0.33.1"
-uuid = { version = "~1.23.3", features = ["v4", "serde"] }
+serde = { version = "~1.0.229", features = ["derive"] }
+serde_json = "~1.0.151"
+serde_repr = "~0.1.21"
+glow = "~0.18.0"
+skia-safe = "~0.99.0"
+glam = "~0.33.3"
+uuid = { version = "~1.24.0", features = ["v4", "serde"] }
 url = "~2.5.8"
 md-5 = "~0.11.0"
 sha1 = "~0.11.0"
 digest = "~0.11.3"
 sha2 = "~0.11.0"
-base64 = "~0.22.1"
+base64 = "~0.23.0"
 winreg = "~0.56.0"
 windows-sys = { version = "~0.61.2", features = [
     "Win32_Foundation",
@@ -76,20 +76,20 @@ windows-sys = { version = "~0.61.2", features = [
 zip = { version = "~8.6.0", features = ["chrono"] }
 tar = "~0.4.46"
 flate2 = "~1.1.9"
-sevenz-rust2 = "~0.21.0"
+sevenz-rust2 = "~0.21.4"
 xz2 = { version = "~0.1.7", features = ["static"] }
-lz4_flex = "~0.13.1"
+lz4_flex = "~0.14.0 "
 rayon = "~1.12.0"
 sys-locale = "~0.3.2"
-regex = "~1.12.4"
+regex = "~1.13.1"
 scraper = "~0.27.0"
-itertools = "~0.14.0"
+itertools = "~0.15.0"
 semka = "~2.0.7"
 soft-canonicalize = "~0.5.6"
 encoding_rs = "~0.8.35"
-async-trait = "~0.1"
+async-trait = "~0.1.91"
 encoding_rs_io = "~0.1.7"
 notify = "~8.2.0"
-toml = "~1.1.2"
+toml = "~1.1.4"
 if-addrs = "~0.15.0"
 socket2 = "~0.6.5"

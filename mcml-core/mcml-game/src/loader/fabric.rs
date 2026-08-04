@@ -2,7 +2,7 @@ use mcml_base::{
     file_item::{FileHash, FileItemObj, LaterRun},
     serialize_tools,
 };
-use mcml_names::i18_items::error_type::{CoreResult, ErrorType};
+use mcml_names::i18_items::error_type::{CoreResult, DataNotFoundData, ErrorType};
 use mcml_net::{fabric_api, maven_utils::version_name_to_path, url_helper};
 
 use crate::{
@@ -34,7 +34,7 @@ pub async fn get_fabric_libs(mc: &str, version: Option<&str>) -> CoreResult<Vec<
         let obj = version_path::add_fabric(obj, &data, mc, &fabric.version);
         Ok(obj.make_libs())
     } else {
-        Err(ErrorType::InfoNotFound(mc.to_string()))
+        Err(ErrorType::DataNotFound(DataNotFoundData::Info))
     }
 }
 

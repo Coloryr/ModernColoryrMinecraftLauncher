@@ -22,8 +22,8 @@ pub struct HttpReadErrorData {
 
 /// 文件找不到
 #[derive(Clone, Debug)]
-pub struct FileNotExistsData {
-    pub file: PathBuf,
+pub struct PathNotExistsData {
+    pub path: PathBuf,
 }
 
 /// 文件系统错误
@@ -62,8 +62,32 @@ pub struct DownloadFileHashErrorData {
 }
 
 #[derive(Clone, Debug)]
-pub struct ArgEmptyData {
-    pub arg: String,
+pub enum ArgEmptyData {
+    /// 名字参数为空
+    Name,
+    /// 标识
+    UUID,
+    /// 版本
+    Version,
+}
+
+#[derive(Clone, Debug)]
+pub enum ArgErrorData {
+    ArchiveType
+}
+
+#[derive(Clone, Debug)]
+pub enum DataNotFoundData {
+    /// 信息
+    Info,
+    /// 注册表
+    RegistryKey(String),
+    /// 网址
+    Url,
+    /// 游戏实例
+    GameInstance,
+    /// 游戏版本
+    Version(String),
 }
 
 /// mcml执行结果
@@ -110,7 +134,9 @@ pub enum ErrorType {
     /// 文件获取错误
     FileReadError(ErrorData),
     /// 文件不存在
-    FileNotExists(FileNotExistsData),
+    FileNotExists(PathNotExistsData),
+    /// 目录不存在
+    DirNotExists(PathNotExistsData),
 
     /// 压缩包打开错误
     ArchiveOpenError(FileSystemErrorData),
@@ -133,8 +159,12 @@ pub enum ErrorType {
     /// NBT读取失败
     NbtReadError,
 
+    /// 输入参数为空
+    ArgEmpty(ArgEmptyData),
+    /// 输入参数错误
+    ArgError(ArgErrorData),
     /// 所需文件未能找到
-    InfoNotFound(String),
+    DataNotFound(DataNotFoundData),
     /// 找不到合适的Java
     JavaNotFound,
 
@@ -146,9 +176,6 @@ pub enum ErrorType {
     DownloadFileHashError(DownloadFileHashErrorData),
     /// 文件下载失败
     DownloadFileFail,
-
-    /// 输入参数错误
-    ArgEmpty(ArgEmptyData),
 
     /// 错误的操作
     InvalidOperation,

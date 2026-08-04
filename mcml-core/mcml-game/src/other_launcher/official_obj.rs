@@ -87,9 +87,7 @@ impl OfficialObj {
 
             Ok(obj)
         } else {
-            Err(ErrorType::ArgEmpty(ArgEmptyData {
-                arg: "id".to_string(),
-            }))
+            Err(ErrorType::ArgEmpty(ArgEmptyData::Version))
         }
     }
 }

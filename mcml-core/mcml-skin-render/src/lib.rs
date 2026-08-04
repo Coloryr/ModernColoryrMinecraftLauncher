@@ -5,7 +5,10 @@ pub mod renders;
 pub mod skin_animation;
 pub mod texture;
 
-use glam::{Mat4, Vec2, Vec3, Vec4};
+use glam::{
+    camera::{lh::proj::directx, rh::view},
+    Mat4, Vec2, Vec3, Vec4,
+};
 use mcml_skin::SkinType;
 use skia_safe::Bitmap;
 use std::f32::consts::PI;
@@ -382,9 +385,9 @@ impl BaseSkinRender {
             }
             ModelPartType::Proj => {
                 let aspect = self.width as f32 / self.height as f32;
-                Mat4::perspective_lh(PI / 4.0, aspect, 0.1, 10.0)
+                directx::perspective(PI / 4.0, aspect, 0.1, 10.0)
             }
-            ModelPartType::View => Mat4::look_at_rh(
+            ModelPartType::View => view::look_at_mat4(
                 Vec3::new(0.0, 0.0, 7.0),
                 Vec3::new(0.0, 0.0, 0.0),
                 Vec3::new(0.0, 1.0, 0.0),

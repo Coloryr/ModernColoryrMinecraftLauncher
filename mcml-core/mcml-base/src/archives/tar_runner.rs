@@ -4,7 +4,9 @@ use std::{io::Read, path::Path};
 
 use flate2::read::GzDecoder;
 use flate2::{Compression, write::GzEncoder};
-use mcml_names::i18_items::error_type::{ArchiveErrorData, ErrorData, ErrorType};
+use mcml_names::i18_items::error_type::{
+    ArchiveErrorData, ErrorData, ErrorType, FileSystemErrorData,
+};
 use tar::{Archive, Builder};
 use xz2::{read::XzDecoder, write::XzEncoder};
 
@@ -185,15 +187,39 @@ impl TarProcess {
                     })
                 })?
                 .to_path_buf();
-            self.base.add_now(&path);
-            entry.unpack_in(output_dir).map_err(|err| {
-                ErrorType::ArchiveError(ArchiveErrorData {
-                    source: path.display().to_string(),
-                    target: output_dir.display().to_string(),
-                    error: err.to_string(),
-                })
-            })?;
+            // 文件名非法时询问 GUI 是否替换
+            let name = self.base.check_name(&path.to_string_lossy());
+            let name_path = Path::new(&name).to_path_buf();
+            self.base.add_now(&name_path);
+            if name_path != path {
+                let dest = output_dir.join(name_path);
+                if let Some(parent) = dest.parent() {
+                    std::fs::create_dir_all(parent).map_err(|err| {
+                        ErrorType::FileSystemError(FileSystemErrorData {
+                            path: parent.to_path_buf(),
+                            error: err.to_string(),
+                        })
+                    })?;
+                }
+                entry.unpack(dest).map_err(|err| {
+                    ErrorType::ArchiveError(ArchiveErrorData {
+                        source: path.display().to_string(),
+                        target: output_dir.display().to_string(),
+                        error: err.to_string(),
+                    })
+                })?;
+            } else {
+                entry.unpack_in(output_dir).map_err(|err| {
+                    ErrorType::ArchiveError(ArchiveErrorData {
+                        source: path.display().to_string(),
+                        target: output_dir.display().to_string(),
+                        error: err.to_string(),
+                    })
+                })?;
+            }
         }
+
+        self.base.done();
 
         Ok(())
     }

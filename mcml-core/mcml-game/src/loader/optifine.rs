@@ -1,5 +1,5 @@
 use mcml_base::file_item::{FileHash, FileItemObj, LaterRun};
-use mcml_names::i18_items::error_type::{CoreResult, ErrorType};
+use mcml_names::i18_items::error_type::{CoreResult, DataNotFoundData, ErrorType};
 use mcml_net::optifine_api;
 
 use crate::{
@@ -34,10 +34,10 @@ pub async fn get_optifine_libs(mc: &str, version: &str) -> CoreResult<Vec<FileIt
                     hash: FileHash::None,
                     later: LaterRun::None,
                 }]),
-                None => Err(ErrorType::InfoNotFound(mc.to_string())),
+                None => Err(ErrorType::DataNotFound(DataNotFoundData::Info)),
             }
         }
-        None => Err(ErrorType::InfoNotFound(mc.to_string())),
+        None => Err(ErrorType::DataNotFound(DataNotFoundData::Info)),
     }
 }
 

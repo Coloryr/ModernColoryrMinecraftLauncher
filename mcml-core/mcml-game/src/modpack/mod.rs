@@ -1,12 +1,10 @@
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
-use mcml_base::{
-    archives::{ArchiveEntryInfo, BaseArchive},
-    file_item::FileItemObj,
-};
+use mcml_base::{archives::BaseArchive, file_item::FileItemObj};
 use mcml_names::i18_items::error_type::CoreResult;
 use tokio_util::sync::CancellationToken;
+use uuid::Uuid;
 
 use crate::{
     GameInstance,
@@ -21,21 +19,21 @@ pub mod modrinth_worker;
 #[async_trait]
 pub trait ModPackWorker {
     /// 获取主信息
-    fn read_info(&mut self) -> bool;
+    fn read_info(&mut self) -> CoreResult<()>;
     /// 获取版本数据
-    async fn read_version(&mut self) -> bool;
+    async fn read_version(&mut self) -> CoreResult<()>;
     /// 创建游戏实例
-    async fn create_instance(&self, group: Option<String>) -> CoreResult<GameInstance>;
+    async fn create_instance(&self, group: Option<String>) -> CoreResult<Uuid>;
     /// 解压文件
-    async fn extract(&self, unselect: Option<Vec<String>>) -> bool;
+    async fn extract(&self, unselect: Option<Vec<String>>) -> CoreResult<()>;
     /// 获取模组信息
-    async fn get_info(&self) -> bool;
+    async fn get_info(&self) -> CoreResult<bool>;
     /// 下载所需文件
     async fn download(&self);
     /// 更新游戏实例版本信息
     fn update_game(&mut self, game: &GameInstance);
     /// 检查更新
-    async fn check_upgrade(&self) -> bool;
+    async fn check_upgrade(&self) -> CoreResult<()>;
 }
 
 /// 整合包安装器

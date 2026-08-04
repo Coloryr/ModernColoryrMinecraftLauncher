@@ -144,9 +144,13 @@ impl ZipProcess {
 
             // 安全检查：获取安全的输出路径
             let outpath = match file.enclosed_name() {
-                Some(path) => output_dir_canonical.join(path),
+                Some(path) => path,
                 None => continue, // 跳过不安全的路径
             };
+
+            // 文件名非法时询问 GUI 是否替换
+            let outpath =
+                output_dir_canonical.join(self.base.check_name(&outpath.to_string_lossy()));
 
             self.base.add_now(&outpath);
 
@@ -254,6 +258,8 @@ impl ZipProcess {
                 })
             })?;
         }
+
+        self.base.done();
 
         Ok(())
     }

@@ -1,5 +1,5 @@
 use mcml_base::{file_item::{FileHash, FileItemObj, LaterRun}, serialize_tools};
-use mcml_names::i18_items::error_type::{CoreResult, ErrorType};
+use mcml_names::i18_items::error_type::{CoreResult, DataNotFoundData, ErrorType};
 use mcml_net::{maven_utils::version_name_to_path, quilt_api, url_helper};
 
 use crate::{
@@ -44,7 +44,7 @@ pub async fn get_quilt_libs(mc: &str, version: Option<&str>) -> CoreResult<Vec<F
 
         Ok(list)
     } else {
-        Err(ErrorType::InfoNotFound(mc.to_string()))
+        Err(ErrorType::DataNotFound(DataNotFoundData::Info))
     }
 }
 

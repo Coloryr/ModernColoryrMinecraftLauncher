@@ -67,6 +67,7 @@ pub const SERVER_MANIFEST_FILE: &str = "server-manifest.json";
 pub const FABRIC_MOD_FILE: &str = "fabric.mod.json";
 pub const QUILT_MOD_FILE: &str = "quilt.mod.json";
 pub const SAVE_BACKUP_FILE: &str = "save_backups.json";
+pub const COUNT_DATA_FILE: &str = "count.dat";
 
 pub const MINECRAFT_KEY: &str = "minecraft";
 pub const LANG_KEY1: &str = "minecraft/lang/";

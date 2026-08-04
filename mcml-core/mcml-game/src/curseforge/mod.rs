@@ -24,7 +24,7 @@ use mcml_base::{
     archives::BaseArchive,
     file_item::{FileHash, FileItemObj, LaterRun},
 };
-use mcml_names::{i18_items::error_type::CoreResult, names};
+use mcml_names::{i18_items::error_type::{CoreResult, ErrorType}, names};
 use mcml_net::curseforge_api::{
     self, CurseFogreArg,
     categories_obj::CurseForgeCategoriesObj,
@@ -507,7 +507,7 @@ pub async fn upgrade_modpack(
     game: &GameInstance,
     data: &mut CurseForgeFileDataObj,
     gui: Option<Arc<dyn IAddGui>>,
-) -> bool {
+) -> CoreResult<()> {
     data.fix_download_url();
 
     let obj = make_file_item_obj(data, mcml_downloader::get_download_path());
@@ -520,7 +520,7 @@ pub async fn upgrade_modpack(
 
     let res = mcml_downloader::start_download_task(vec![obj]).await;
     if !res {
-        return false;
+        return Err(ErrorType::DownloadFileFail);
     }
 
     if let Some(ref gui) = gui {
@@ -528,21 +528,16 @@ pub async fn upgrade_modpack(
         gui.set_now(2, Some(6));
     }
 
-    let zip = BaseArchive::open(file);
-    if let Err(err) = zip {
-        mcml_log::error_type(err);
-        return false;
-    }
+    let zip = BaseArchive::open(file)?;
     let mut worker = CurseForgeWorker::new(BaseModPackWorker::new(
-        zip.unwrap(),
+        zip,
         None,
         gui.as_ref().cloned(),
         None,
     ));
 
-    if !worker.read_info() || !worker.read_version().await {
-        return false;
-    }
+    worker.read_info()?;
+    worker.read_version().await?;
 
     worker.update_game(game);
 
@@ -551,9 +546,7 @@ pub async fn upgrade_modpack(
         gui.set_now(3, Some(6));
     }
 
-    if !worker.extract(None).await {
-        return false;
-    }
+    worker.extract(None).await?;
 
     if let Some(ref gui) = gui {
         gui.set_sub_text(None);
@@ -562,9 +555,7 @@ pub async fn upgrade_modpack(
         gui.set_now(4, Some(6));
     }
 
-    if !worker.check_upgrade().await {
-        return false;
-    }
+    worker.check_upgrade().await?;
 
     if let Some(ref gui) = gui {
         gui.set_sub_text(None);
@@ -580,5 +571,5 @@ pub async fn upgrade_modpack(
         gui.set_now(6, Some(6));
     }
 
-    true
+    Ok(())
 }

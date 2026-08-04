@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use async_trait::async_trait;
-use mcml_base::archives::BaseArchiveGui;
+use mcml_base::archives::IBaseArchiveGui;
 
 use crate::GameInstance;
 
@@ -42,7 +42,7 @@ pub trait IAddModPackGui: Send + Sync {
     fn set_sub_now(&self, value: usize, all: Option<usize>);
 }
 
-pub trait IAddGui: IAddModPackGui + IProgressGui {}
+pub trait IAddGui: IAddModPackGui + IProgressGui + IBaseArchiveGui {}
 
 /// 复制文件界面回调
 pub trait ICopyGui {
@@ -50,12 +50,4 @@ pub trait ICopyGui {
     fn update(&self, index: usize, count: usize);
     /// 当前文件
     fn file(&self, file: PathBuf);
-}
-
-/// 压缩包解压界面
-pub trait IArchiveGui: BaseArchiveGui {
-    /// 解压完成
-    fn done(&self);
-    /// 文件名非法需要替换
-    fn file_rename(&self, name: Option<&str>);
 }

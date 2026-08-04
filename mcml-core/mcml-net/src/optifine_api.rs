@@ -17,7 +17,7 @@ use std::{collections::HashSet, path::Path, sync::OnceLock};
 use itertools::Itertools;
 use mcml_base::serialize_tools;
 use mcml_config::config_obj::SourceLocal;
-use mcml_names::i18_items::error_type::{CoreResult, ErrorType};
+use mcml_names::i18_items::error_type::{CoreResult, DataNotFoundData, ErrorType};
 use scraper::{ElementRef, Html, Selector, selectable::Selectable};
 use serde::{Deserialize, Serialize};
 
@@ -168,7 +168,7 @@ pub async fn get_optifine_version() -> CoreResult<Vec<GetOptifineObj>> {
         }
 
         if list.is_empty() {
-            return Err(ErrorType::InfoNotFound(String::from("optifine url")));
+            return Err(ErrorType::DataNotFound(DataNotFoundData::Url));
         }
     } else {
         let mut obj = serialize_tools::json_from_str::<Vec<OptifineListObj>>(&data)?;
@@ -192,7 +192,7 @@ pub async fn get_optifine_version() -> CoreResult<Vec<GetOptifineObj>> {
 }
 
 /// 获取Optifine下载地址
-/// 
+///
 /// - `obj`: 下载项目
 pub async fn get_optifine_download(
     source: &SourceLocal,

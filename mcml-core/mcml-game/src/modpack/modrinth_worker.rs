@@ -3,10 +3,11 @@ use std::path::Path;
 use async_trait::async_trait;
 use mcml_base::{file_item::FileItemObj, path_helper, serialize_tools, tools};
 use mcml_names::{
-    i18_items::error_type::{CoreResult, ErrorType},
+    i18_items::error_type::{CoreResult, DataNotFoundData, ErrorType},
     names,
 };
 use mcml_net::urls;
+use uuid::Uuid;
 
 use crate::{
     GameInstance,
@@ -40,7 +41,7 @@ impl ModrinthPackWorker {
 #[async_trait]
 impl ModPackWorker for ModrinthPackWorker {
     /// 获取主信息
-    fn read_info(&mut self) -> bool {
+    fn read_info(&mut self) -> CoreResult<()> {
         if let Some(item) = self
             .base
             .archive
@@ -48,23 +49,24 @@ impl ModPackWorker for ModrinthPackWorker {
             .iter()
             .filter(|item| item.name.eq_ignore_ascii_case(names::MODRINTH_FILE))
             .next()
-            && let Ok(data) = self
+        {
+            let data1 = self
                 .base
                 .archive
                 .read(&item.name)
-                .and_then(|data| serialize_tools::json_from_bytes::<ModrinthPackObj>(&data))
-        {
-            self.info = Some(data);
-            true
+                .and_then(|data| serialize_tools::json_from_bytes::<ModrinthPackObj>(&data))?;
+
+            self.info = Some(data1);
+            Ok(())
         } else {
-            false
+            Err(ErrorType::DataNotFound(DataNotFoundData::Info))
         }
     }
 
     /// 获取版本数据
-    async fn read_version(&mut self) -> bool {
+    async fn read_version(&mut self) -> CoreResult<()> {
         if self.info.is_none() {
-            return false;
+            return Err(ErrorType::DataNotFound(DataNotFoundData::Info));
         }
 
         let info = self.info.as_ref().unwrap();
@@ -90,13 +92,13 @@ impl ModPackWorker for ModrinthPackWorker {
             self.base.loader_version = version.clone();
         }
 
-        version_path::check_update(&self.base.game_version)
-            .await
-            .is_ok()
+        version_path::check_update(&self.base.game_version).await?;
+
+        Ok(())
     }
 
     /// 创建游戏实例
-    async fn create_instance(&self, group: Option<String>) -> CoreResult<GameInstance> {
+    async fn create_instance(&self, group: Option<String>) -> CoreResult<Uuid> {
         match &self.info {
             Some(info) => {
                 let name = format!("{}-{}", info.name, info.version_id);
@@ -110,9 +112,9 @@ impl ModPackWorker for ModrinthPackWorker {
                     loader_version: Some(self.base.loader_version.clone()),
                     ..Default::default()
                 };
-                game.create_instance(&self.base.gui).await
+                Ok(game.create_instance(&self.base.gui).await?.read().unwrap().uuid)
             }
-            None => Err(ErrorType::InfoNotFound("info".to_string())),
+            None => Err(ErrorType::DataNotFound(DataNotFoundData::Info)),
         }
     }
 
@@ -120,9 +122,9 @@ impl ModPackWorker for ModrinthPackWorker {
     ///
     /// `overrides/` 下的文件去除前缀后写入游戏根目录；其余文件直接
     /// 写入游戏路径。
-    async fn extract(&self, unselect: Option<Vec<String>>) -> bool {
+    async fn extract(&self, unselect: Option<Vec<String>>) -> CoreResult<()> {
         let Some(game) = &self.base.game else {
-            return false;
+            return Err(ErrorType::DataNotFound(DataNotFoundData::GameInstance));
         };
 
         let game = game.read().unwrap();
@@ -142,7 +144,7 @@ impl ModPackWorker for ModrinthPackWorker {
             if let Some(cancel) = &self.base.cancel
                 && cancel.is_cancelled()
             {
-                return false;
+                return Err(ErrorType::TaskCancel);
             }
             if entry.is_dir {
                 index += 1;
@@ -152,8 +154,8 @@ impl ModPackWorker for ModrinthPackWorker {
                 continue;
             }
             // 跳过不需要解压的条目
-            if let Some(unsel) = unselect {
-                if unsel.iter().any(|u| u.name == entry.name) {
+            if let Some(ref unsel) = unselect {
+                if unsel.iter().any(|u| u == &entry.name) {
                     index += 1;
                     if let Some(pgui) = &self.base.pack_gui {
                         pgui.set_sub_now(index, Some(total));
@@ -174,43 +176,31 @@ impl ModPackWorker for ModrinthPackWorker {
                 base_path.join(&entry.name)
             };
 
-            if self
-                .base
-                .archive
-                .extract_file(&entry.name, &output, None)
-                .is_err()
-            {
-                return false;
-            }
+            self.base.archive.extract_file(&entry.name, &output, None)?;
             if let Some(pgui) = &self.base.pack_gui {
                 pgui.set_sub_now(index, Some(total));
             }
         }
 
-        true
+        Ok(())
     }
 
     /// 获取模组下载信息。
     ///
     /// 批量解析 manifest 中的文件列表，构建下载项并存入
     /// `base.downloads`，后续由 [`download`] 统一下载。
-    async fn get_info(&self) -> bool {
+    async fn get_info(&self) -> CoreResult<bool> {
         let Some(info) = &self.info else {
-            return false;
+            return Err(ErrorType::DataNotFound(DataNotFoundData::Info));
         };
         let Some(game) = &self.base.game else {
-            return false;
+            return Err(ErrorType::DataNotFound(DataNotFoundData::GameInstance));
         };
 
         let path = game.read().unwrap().get_game_path();
         let list =
-            modrinth::get_mod_info(path, info, &self.base.pack_gui, self.base.cancel.clone()).await;
-
-        if list.is_err() {
-            return false;
-        }
-
-        let list = list.unwrap();
+            modrinth::get_mod_info(path, info, &self.base.pack_gui, self.base.cancel.clone())
+                .await?;
 
         // 构建下载列表
         let downloads = list.list;
@@ -218,22 +208,21 @@ impl ModPackWorker for ModrinthPackWorker {
 
         game.read().unwrap().save_online_info(&mods);
 
-        let Ok(mut guard) = self.base.downloads.lock() else {
-            return false;
-        };
+        let mut guard = self.base.downloads.lock().unwrap();
         *guard = downloads;
 
-        !guard.is_empty() || info.files.is_empty()
+        Ok(!guard.is_empty() || info.files.is_empty())
     }
 
     /// 统一下载所有模组文件。
     async fn download(&self) {
-        // 取出下载列表（在 .await 前释放 MutexGuard）
+        // 取出下载列表（在 .await 前释放 MutexGuard），取走后列表为空，
+        // 重复调用不会重复下载
         let items = {
-            let Ok(guard) = self.base.downloads.lock() else {
+            let Ok(mut guard) = self.base.downloads.lock() else {
                 return;
             };
-            guard.clone()
+            std::mem::take(&mut *guard)
         };
         if items.is_empty() {
             return;
@@ -260,12 +249,12 @@ impl ModPackWorker for ModrinthPackWorker {
     /// - 无旧 manifest：通过 API 获取文件信息后按 mod_id 比对
     ///
     /// 最终将需要下载的文件存入 `base.downloads`。
-    async fn check_upgrade(&self) -> bool {
+    async fn check_upgrade(&self) -> CoreResult<()> {
         let Some(info) = &self.info else {
-            return false;
+            return Err(ErrorType::DataNotFound(DataNotFoundData::Info));
         };
         let Some(game) = &self.base.game else {
-            return false;
+            return Err(ErrorType::DataNotFound(DataNotFoundData::GameInstance));
         };
 
         // 读取上次安装时保存的整合包 manifest（base 目录）
@@ -281,12 +270,9 @@ impl ModPackWorker for ModrinthPackWorker {
 
         // 获取新整合包的模组信息（下载列表 + 在线信息）
         let path = game.read().unwrap().get_game_path();
-        let Ok(res) =
+        let res =
             modrinth::get_mod_info(&path, info, &self.base.pack_gui, self.base.cancel.clone())
-                .await
-        else {
-            return false;
-        };
+                .await?;
 
         let mut online_info = game.read().unwrap().read_online_info();
 
@@ -294,7 +280,7 @@ impl ModPackWorker for ModrinthPackWorker {
         let mut new_downloads: Vec<FileItemObj> = Vec::new();
 
         if let Some(old_info) = old_info {
-            // ── 有旧 manifest：按 SHA1 对比新旧文件 ──
+            // 有旧 manifest：按 SHA1 对比新旧文件
             // temp1 = 新整合包文件，temp2 = 旧整合包文件
             let mut temp1: Vec<Option<&ModrinthPackFileObj>> =
                 info.files.iter().map(Some).collect();
@@ -318,7 +304,7 @@ impl ModPackWorker for ModrinthPackWorker {
             // 旧包中有、新包没有 → 需要删除
             let remove_list: Vec<&ModrinthPackFileObj> = temp2.into_iter().flatten().collect();
 
-            // ── 删除被移除的文件 ──
+            // 删除被移除的文件
             for item in &remove_list {
                 delete_with_disabled(path.join(&item.path));
 
@@ -332,7 +318,7 @@ impl ModPackWorker for ModrinthPackWorker {
                 }
             }
 
-            // ── 构建下载列表并更新在线信息 ──
+            // 构建下载列表并更新在线信息
             for item in &add_list {
                 let Some(download) = res
                     .list
@@ -369,7 +355,7 @@ impl ModPackWorker for ModrinthPackWorker {
                 }
             }
         } else {
-            // ── 无旧 manifest：通过 mod_id 对比在线信息 ──
+            // 无旧 manifest：通过 mod_id 对比在线信息
             // temp1 = 当前已安装模组，temp2 = 新整合包模组
             let temp1: Vec<OnlineInfoObj> = online_info.values().cloned().collect();
             let mut temp2: Vec<Option<OnlineInfoObj>> =
@@ -400,13 +386,13 @@ impl ModPackWorker for ModrinthPackWorker {
                 add_list.push(item.clone());
             }
 
-            // ── 删除旧文件 ──
+            // 删除旧文件
             for item in &remove_list {
                 delete_with_disabled(path.join(&item.path).join(&item.file));
                 online_info.remove(&item.modid);
             }
 
-            // ── 构建下载列表并更新在线信息 ──
+            // 构建下载列表并更新在线信息
             for item in &add_list {
                 if let Some(download) = res
                     .list
@@ -423,25 +409,19 @@ impl ModPackWorker for ModrinthPackWorker {
         // 保存更新后的在线信息
         game.read().unwrap().save_online_info(&online_info);
 
-        // 写入当前整合包 manifest，供下次更新对比
-        if let Err(err) = serialize_tools::json_to_file(
+        // 写入当前整合包 manifest
+        serialize_tools::json_to_file(
             info,
             game.read()
                 .unwrap()
                 .get_base_path()
                 .join(names::MODRINTH_FILE),
-        ) {
-            mcml_log::error_type(err);
-            return false;
-        }
+        )?;
 
         // 更新下载列表
-        let Ok(mut guard) = self.base.downloads.lock() else {
-            return false;
-        };
-        *guard = new_downloads;
+        *self.base.downloads.lock().unwrap() = new_downloads;
 
-        true
+        Ok(())
     }
 }
 

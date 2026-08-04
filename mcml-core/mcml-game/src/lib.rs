@@ -23,6 +23,7 @@ use crate::{
     launcher_path::instance_path::{self},
 };
 
+pub mod game_count;
 pub mod add_game;
 pub mod class_scan;
 pub mod curseforge;
@@ -422,9 +423,7 @@ pub fn delete_instance(uuid: &Uuid) -> CoreResult<()> {
         instance.read().unwrap().delete_files()?;
         Ok(())
     } else {
-        Err(ErrorType::ArgEmpty(ArgEmptyData {
-            arg: "uuid".to_string(),
-        }))
+        Err(ErrorType::ArgEmpty(ArgEmptyData::UUID))
     }
 }
 
@@ -504,9 +503,7 @@ impl InstanceSettingObj {
         }
 
         if self.name.is_empty() {
-            return Err(ErrorType::ArgEmpty(ArgEmptyData {
-                arg: "name".to_string(),
-            }));
+            return Err(ErrorType::ArgEmpty(ArgEmptyData::Name));
         }
 
         if let Some(instance) = old {

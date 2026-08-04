@@ -114,11 +114,16 @@ impl R7zProcess {
         self.base.set_count(seven.archive().files.len());
 
         match seven.for_each_entries(|entry, reader| {
-            let dest_path = output_dir.join(entry.name());
+            // 文件名非法时询问 GUI 是否替换
+            let name = self.base.check_name(entry.name());
+            let dest_path = output_dir.join(name);
             self.base.add_now(&dest_path);
             sevenz_rust2::default_entry_extract_fn(entry, reader, &dest_path)
         }) {
-            Ok(_) => Ok(()),
+            Ok(_) => {
+                self.base.done();
+                Ok(())
+            }
             Err(err) => Err(ErrorType::ArchiveReadError(ErrorData {
                 error: err.to_string(),
             })),
