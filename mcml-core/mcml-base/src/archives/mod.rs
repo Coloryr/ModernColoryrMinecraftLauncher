@@ -60,7 +60,7 @@ impl TarMode {
 
 pub(crate) struct ArchiveProcess {
     /// 进度回调
-    gui: Option<Arc<dyn IArchiveGui>>,
+    gui: Option<Arc<dyn BaseArchiveGui>>,
     /// 总文件数
     size: AtomicUsize,
     /// 当前处理数
@@ -69,7 +69,7 @@ pub(crate) struct ArchiveProcess {
 
 impl ArchiveProcess {
     /// 创建进度追踪器
-    pub fn new(gui: Option<Arc<dyn IArchiveGui>>) -> Self {
+    pub fn new(gui: Option<Arc<dyn BaseArchiveGui>>) -> Self {
         Self {
             gui,
             size: AtomicUsize::new(0),
@@ -110,7 +110,7 @@ pub(crate) trait ArchiveRun: Send + Sync {
 }
 
 /// 压缩包处理显示回调
-pub trait IArchiveGui: Send + Sync {
+pub trait BaseArchiveGui: Send + Sync {
     /// 开始处理压缩包
     /// 
     /// - `total`: 总计需要处理的数量
@@ -143,7 +143,7 @@ pub fn compress<P: AsRef<Path>>(
     pack_dir: P,
     root_path: Option<P>,
     filter: &Option<Vec<String>>,
-    gui: Option<Arc<dyn IArchiveGui>>,
+    gui: Option<Arc<dyn BaseArchiveGui>>,
 ) -> CoreResult<()> {
     BaseArchive::compress(archive_type, archive_file, pack_dir, root_path, filter, gui)?;
     Ok(())
@@ -154,7 +154,7 @@ pub fn decompress<P: AsRef<Path>>(
     archive_type: ArchiveType,
     archive_file: P,
     output_dir: P,
-    gui: Option<Arc<dyn IArchiveGui>>,
+    gui: Option<Arc<dyn BaseArchiveGui>>,
 ) -> CoreResult<()> {
     BaseArchive::decompress(archive_type, archive_file, output_dir, gui)
 }

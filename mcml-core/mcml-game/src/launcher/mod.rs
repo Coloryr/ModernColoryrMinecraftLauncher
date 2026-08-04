@@ -70,6 +70,4 @@ pub enum FileType {
     Lang,
 }
 
-impl FileType {
-    
-}
+impl FileType {}

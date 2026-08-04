@@ -12,6 +12,7 @@ use crate::{
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(default)]
 pub struct ServerObj {
+    pub enable: bool,
     /// 服务器地址
     #[serde(rename = "IP")]
     pub ip: Option<String>,
@@ -23,6 +24,7 @@ pub struct ServerObj {
 impl Default for ServerObj {
     fn default() -> Self {
         Self {
+            enable: Default::default(),
             ip: Default::default(),
             port: Default::default(),
         }

@@ -389,11 +389,11 @@ pub async fn upgrade_modpack(
     worker.update_game(game);
 
     if let Some(ref gui) = gui {
-        gui.set_state(AddModPackState::Unzip);
+        gui.set_state(AddModPackState::Extract);
         gui.set_now(3, Some(6));
     }
 
-    if !worker.unzip(None).await {
+    if !worker.extract(None).await {
         return false;
     }
 
