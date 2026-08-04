@@ -10,7 +10,7 @@ use mcml_base::{
 };
 use mcml_config::{config_obj::SourceLocal, config_save};
 use mcml_names::{
-    i18_items::error_type::{CoreResult, ErrorData, ErrorType},
+    i18_items::error_type::{CoreResult, DataNotFoundData, ErrorData, ErrorType},
     names, uuids,
 };
 use mcml_net::{mojang_api, url_helper};
@@ -463,7 +463,9 @@ pub async fn check_update(mc: &str) -> CoreResult<Arc<GameArgObj>> {
 
     match item {
         // 在线也没有这个版本号
-        None => Err(ErrorType::InfoNotFound(mc.to_string())),
+        None => Err(ErrorType::DataNotFound(DataNotFoundData::Version(
+            mc.to_string(),
+        ))),
         Some(item) => {
             let local = BASE_DIR.get().unwrap().join(format!("{}.json", mc));
             let sha1 = hash_helper::gen_hash_from_file_async(HashType::Sha1, &local).await?;

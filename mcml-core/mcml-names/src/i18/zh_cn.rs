@@ -42,7 +42,7 @@ impl I18Lang for ZhCn {
 
             ErrorType::SerializerError(data) => format!("Json解析失败：{}", data.error),
             ErrorType::FileNotExists(data) => {
-                format!("文件不存在：{}", data.file.display().to_string())
+                format!("文件不存在：{}", data.path.display().to_string())
             }
 
             ErrorType::AuthLoginFail(data) => format!("账户登录失败：{}", data),
@@ -70,6 +70,7 @@ impl I18Lang for ZhCn {
             ThreadType::LanClientV4 => String::from("局域网游戏V4监听线程"),
             ThreadType::LanClientV6 => String::from("局域网游戏V6监听线程"),
             ThreadType::LanServer => String::from("局域网游戏广播线程"),
+            ThreadType::GameCount => String::from("游戏启动统计线程"),
         }
     }
 }

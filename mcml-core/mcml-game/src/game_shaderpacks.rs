@@ -7,7 +7,7 @@ use std::{
 
 use mcml_base::path_helper;
 use mcml_names::{
-    i18_items::error_type::{CoreResult, ErrorType, FileSystemErrorData},
+    i18_items::error_type::{ArgErrorData, CoreResult, ErrorType, FileSystemErrorData},
     names,
 };
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
@@ -106,7 +106,7 @@ pub fn read_shaderpacks<P: AsRef<Path>>(path: P) -> CoreResult<ShaderpackObj> {
         }
     }
 
-    Err(ErrorType::InfoNotFound("Zip".to_string()))
+    Err(ErrorType::ArgError(ArgErrorData::ArchiveType))
 }
 
 impl InstanceSettingObj {

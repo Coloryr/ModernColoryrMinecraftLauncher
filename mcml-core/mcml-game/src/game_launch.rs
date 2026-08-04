@@ -20,7 +20,7 @@ use mcml_base::{
     path_helper,
     process_utils::{self},
 };
-use mcml_names::i18_items::error_type::{CoreResult, ErrorData, ErrorType, FileNotExistsData};
+use mcml_names::i18_items::error_type::{CoreResult, ErrorData, ErrorType, PathNotExistsData};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
@@ -505,8 +505,8 @@ impl InstanceSettingObj {
         }
 
         if !path.exists() {
-            return Err(ErrorType::FileNotExists(FileNotExistsData {
-                file: PathBuf::from(name),
+            return Err(ErrorType::FileNotExists(PathNotExistsData {
+                path: PathBuf::from(name),
             }));
         }
 

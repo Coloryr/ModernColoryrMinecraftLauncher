@@ -5,7 +5,7 @@
 
 use std::sync::LazyLock;
 
-use mcml_names::i18_items::error_type::{CoreResult, ErrorType};
+use mcml_names::i18_items::error_type::{CoreResult, DataNotFoundData, ErrorType};
 use serde::{Deserialize, Serialize};
 
 use crate::{WORK_CLIENT, url_helper};
@@ -100,7 +100,7 @@ pub async fn get_obj() -> CoreResult<AuthlibInjectorObj> {
         .find(|item| item.build_number == meta.latest_build_number);
 
     match item {
-        None => Err(ErrorType::InfoNotFound("meta".to_string())),
+        None => Err(ErrorType::DataNotFound(DataNotFoundData::Info)),
         Some(data) => Ok(WORK_CLIENT
             .get()
             .unwrap()

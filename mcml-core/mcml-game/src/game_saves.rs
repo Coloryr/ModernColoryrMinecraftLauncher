@@ -9,13 +9,15 @@ use std::{
 
 use chrono::{Datelike, Local, Timelike};
 use mcml_base::{
-    archives::{BaseArchiveGui, ArchiveType, BaseArchive},
+    archives::{ArchiveType, BaseArchive, IBaseArchiveGui},
     path_helper,
     serialize_tools::{self, MiniJsonObj},
 };
 use mcml_config::config_save;
 use mcml_names::{
-    i18_items::error_type::{CoreResult, ErrorData, ErrorType, FileSystemErrorData},
+    i18_items::error_type::{
+        CoreResult, DataNotFoundData, ErrorData, ErrorType, FileSystemErrorData,
+    },
     names, uuids,
 };
 use mcml_nbt::{
@@ -201,7 +203,7 @@ impl InstanceSettingObj {
         &self,
         info: &SaveBackupObj,
         file: &str,
-        gui: Option<Arc<dyn BaseArchiveGui>>,
+        gui: Option<Arc<dyn IBaseArchiveGui>>,
     ) -> CoreResult<()> {
         let dir = self.get_backup_path();
         let path = dir.join(info.dir.clone());
@@ -258,7 +260,7 @@ impl InstanceSettingObj {
         };
 
         path_helper::create_dir_all(&output_dir)?;
-        archive.extract_all(&output_dir, None)
+        archive.extract_all(&output_dir, None, None)
     }
 }
 
@@ -283,7 +285,7 @@ impl SaveObj {
         &self,
         path: P,
         archive_type: ArchiveType,
-        gui: Option<Arc<dyn BaseArchiveGui>>,
+        gui: Option<Arc<dyn IBaseArchiveGui>>,
     ) -> CoreResult<()> {
         BaseArchive::compress(
             archive_type,
@@ -300,7 +302,7 @@ impl SaveObj {
     pub fn backup(
         &self,
         instance: &Arc<InstanceSettingObj>,
-        gui: Option<Arc<dyn BaseArchiveGui>>,
+        gui: Option<Arc<dyn IBaseArchiveGui>>,
     ) -> CoreResult<()> {
         let path = instance.get_backup_path();
         path_helper::create_dir_all(&path)?;
@@ -455,10 +457,10 @@ impl SaveObj {
             .as_compound_mut()
             .and_then(|map| map.get_compound_mut("Data"))
         else {
-            return Err(ErrorType::InfoNotFound("Data".to_string()));
+            return Err(ErrorType::DataNotFound(DataNotFoundData::Info));
         };
         let Some(data_packs) = data.get_compound_mut("DataPacks") else {
-            return Err(ErrorType::InfoNotFound("DataPacks".to_string()));
+            return Err(ErrorType::DataNotFound(DataNotFoundData::Info));
         };
 
         // 先用不可变访问收集信息
@@ -469,10 +471,10 @@ impl SaveObj {
 
         {
             let Some(ens) = data_packs.get_list("Enabled") else {
-                return Err(ErrorType::InfoNotFound("Enabled".to_string()));
+                return Err(ErrorType::DataNotFound(DataNotFoundData::Info));
             };
             let Some(dis) = data_packs.get_list("Disabled") else {
-                return Err(ErrorType::InfoNotFound("Disabled".to_string()));
+                return Err(ErrorType::DataNotFound(DataNotFoundData::Info));
             };
 
             for item in list.iter() {
@@ -506,7 +508,7 @@ impl SaveObj {
         // 应用修改 — 每次只处理一个列表，避免双重可变借用
         {
             let Some(ens) = data_packs.get_list_mut("Enabled") else {
-                return Err(ErrorType::InfoNotFound("Enabled".to_string()));
+                return Err(ErrorType::DataNotFound(DataNotFoundData::Info));
             };
             remove_from_enabled.sort_by(|a, b| b.cmp(a));
             for idx in remove_from_enabled {
@@ -518,7 +520,7 @@ impl SaveObj {
         }
         {
             let Some(dis) = data_packs.get_list_mut("Disabled") else {
-                return Err(ErrorType::InfoNotFound("Disabled".to_string()));
+                return Err(ErrorType::DataNotFound(DataNotFoundData::Info));
             };
             remove_from_disabled.sort_by(|a, b| b.cmp(a));
             for idx in remove_from_disabled {
@@ -542,10 +544,10 @@ impl SaveObj {
             .as_compound_mut()
             .and_then(|map| map.get_compound_mut("Data"))
         else {
-            return Err(ErrorType::InfoNotFound("Data".to_string()));
+            return Err(ErrorType::DataNotFound(DataNotFoundData::Info));
         };
         let Some(data_packs) = data.get_compound_mut("DataPacks") else {
-            return Err(ErrorType::InfoNotFound("DataPacks".to_string()));
+            return Err(ErrorType::DataNotFound(DataNotFoundData::Info));
         };
 
         // 先用不可变访问收集要移除的索引
@@ -554,10 +556,10 @@ impl SaveObj {
 
         {
             let Some(ens) = data_packs.get_list("Enabled") else {
-                return Err(ErrorType::InfoNotFound("Enabled".to_string()));
+                return Err(ErrorType::DataNotFound(DataNotFoundData::Info));
             };
             let Some(dis) = data_packs.get_list("Disabled") else {
-                return Err(ErrorType::InfoNotFound("Disabled".to_string()));
+                return Err(ErrorType::DataNotFound(DataNotFoundData::Info));
             };
 
             for item in list.iter() {
@@ -584,7 +586,7 @@ impl SaveObj {
         // 应用删除 — 每次只处理一个列表，按索引降序排列
         if !remove_from_enabled.is_empty() {
             let Some(ens) = data_packs.get_list_mut("Enabled") else {
-                return Err(ErrorType::InfoNotFound("Enabled".to_string()));
+                return Err(ErrorType::DataNotFound(DataNotFoundData::Info));
             };
             remove_from_enabled.sort_by(|a, b| b.cmp(a));
             for idx in remove_from_enabled {
@@ -594,7 +596,7 @@ impl SaveObj {
 
         if !remove_from_disabled.is_empty() {
             let Some(dis) = data_packs.get_list_mut("Disabled") else {
-                return Err(ErrorType::InfoNotFound("Disabled".to_string()));
+                return Err(ErrorType::DataNotFound(DataNotFoundData::Info));
             };
             remove_from_disabled.sort_by(|a, b| b.cmp(a));
             for idx in remove_from_disabled {

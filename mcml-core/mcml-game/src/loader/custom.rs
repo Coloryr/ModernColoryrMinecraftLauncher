@@ -1,10 +1,14 @@
 use std::{io::Read, path::Path};
 
 use mcml_base::{
-    file_item::{FileHash, FileItemObj}, hash_helper::{self, HashType}, path_helper, serialize_tools,
+    file_item::{FileHash, FileItemObj},
+    hash_helper::{self, HashType},
+    path_helper, serialize_tools,
 };
 use mcml_names::{
-    i18_items::error_type::{CoreResult, ErrorData, ErrorType, FileSystemErrorData},
+    i18_items::error_type::{
+        CoreResult, DataNotFoundData, ErrorData, ErrorType, FileSystemErrorData,
+    },
     names,
 };
 use zip::ZipArchive;
@@ -74,7 +78,7 @@ impl InstanceSettingObj {
 
         // 两个文件都必须存在
         if !version_ok || !install_ok {
-            return Err(ErrorType::InfoNotFound(names::FILE_INSTALL_PROFILE.to_string()));
+            return Err(ErrorType::DataNotFound(DataNotFoundData::Info));
         }
 
         let obj1 = serialize_tools::json_from_str::<ForgeLaunchObj>(&version_json)?;
@@ -198,9 +202,7 @@ impl InstanceSettingObj {
     pub fn get_custom_loader_mainclass(&self) -> String {
         if let Some(data) = self.get_custom_loader() {
             match data.as_ref() {
-                CustomLoaderType::ForgeLaunch(forge) => {
-                    forge.main_class.clone()
-                }
+                CustomLoaderType::ForgeLaunch(forge) => forge.main_class.clone(),
             }
         } else {
             Default::default()

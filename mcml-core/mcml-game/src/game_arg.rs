@@ -7,10 +7,14 @@ use std::{
 
 use mcml_auth::{AuthType, LoginObj};
 use mcml_base::{
-    Os, file_item::{FileHash, FileItemObj, LaterRun}, hash_helper, path_helper, serialize_tools, tools,
+    Os,
+    file_item::{FileHash, FileItemObj, LaterRun},
+    hash_helper, path_helper, serialize_tools, tools,
 };
 use mcml_config::config_obj::GCType;
-use mcml_names::i18_items::error_type::{CoreResult, ErrorType};
+use mcml_names::i18_items::error_type::{
+    CoreResult, DataNotFoundData, ErrorType, PathNotExistsData,
+};
 use mcml_names::names;
 use mcml_net::{mojang_api, urls};
 
@@ -786,9 +790,9 @@ impl InstanceSettingObj {
                 LoaderType::Custom => {
                     let loader_file = self.get_loader_file();
                     if !loader_file.exists() {
-                        return Err(ErrorType::InfoNotFound(
-                            loader_file.to_string_lossy().to_string(),
-                        ));
+                        return Err(ErrorType::FileNotExists(PathNotExistsData {
+                            path: loader_file.clone(),
+                        }));
                     }
                     let res = self.decode_loader_jar_with_path(&loader_file).await?;
                     loader_libs = Some(res.libs);
@@ -863,7 +867,9 @@ impl InstanceSettingObj {
                 let data = mojang_api::get_assets(&asset_index.url).await?;
                 let assets_obj: AssetsObj = serialize_tools::json_from_bytes(&data)?;
                 if assets_obj.objects.is_empty() {
-                    return Err(ErrorType::InfoNotFound(asset_index.id.clone()));
+                    return Err(ErrorType::DataNotFound(DataNotFoundData::Version(
+                        asset_index.id.clone(),
+                    )));
                 }
                 assets_path::add_index(&game, &mut Cursor::new(data));
             }
@@ -929,7 +935,9 @@ impl InstanceSettingObj {
                     let data = mcml_net::mojang_api::get_assets(&asset_index.url).await?;
                     let assets_obj: AssetsObj = serialize_tools::json_from_bytes(&data)?;
                     if assets_obj.objects.is_empty() {
-                        return Err(ErrorType::InfoNotFound(asset_index.id.clone()));
+                        return Err(ErrorType::DataNotFound(DataNotFoundData::Version(
+                            asset_index.id.clone(),
+                        )));
                     }
                     assets_path::add_index(&item.base, &mut Cursor::new(data));
                 }

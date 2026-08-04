@@ -1,20 +1,21 @@
 use std::{
     collections::HashMap,
+    path::Path,
     sync::{Arc, Mutex},
 };
 
 use async_trait::async_trait;
 use mcml_base::{
-    archives::ArchiveEntryInfo,
     file_item::{FileHash, FileItemObj, LaterRun},
     path_helper, serialize_tools,
 };
 use mcml_names::{
-    i18_items::error_type::{CoreResult, ErrorType},
+    i18_items::error_type::{CoreResult, DataNotFoundData, ErrorType},
     names,
 };
 use mcml_net::curseforge_api::{self, file_obj::CurseForgeFileDataObj};
 use tokio_util::sync::CancellationToken;
+use uuid::Uuid;
 
 use crate::{
     GameInstance,
@@ -76,31 +77,32 @@ async fn resolve_files(
 #[async_trait]
 impl ModPackWorker for CurseForgeWorker {
     /// 获取主信息
-    fn read_info(&mut self) -> bool {
-        if let Some(item) = self
+    fn read_info(&mut self) -> CoreResult<()> {
+        let data = self
             .base
             .archive
             .entries()
             .iter()
             .filter(|item| item.name.eq_ignore_ascii_case(names::MANIFEST_FILE))
-            .next()
-            && let Ok(data) = self
-                .base
-                .archive
-                .read(&item.name)
-                .and_then(|data| serialize_tools::json_from_bytes::<CurseForgePackObj>(&data))
-        {
-            self.info = Some(data);
-            true
+            .next();
+
+        if let Some(item) = data {
+            let data1 =
+                self.base.archive.read(&item.name).and_then(|data| {
+                    serialize_tools::json_from_bytes::<CurseForgePackObj>(&data)
+                })?;
+
+            self.info = Some(data1);
+            Ok(())
         } else {
-            false
+            Err(ErrorType::DataNotFound(DataNotFoundData::Info))
         }
     }
 
     /// 获取版本数据
-    async fn read_version(&mut self) -> bool {
+    async fn read_version(&mut self) -> CoreResult<()> {
         if self.info.is_none() {
-            return false;
+            return Err(ErrorType::DataNotFound(DataNotFoundData::Info));
         }
 
         let info = self.info.as_ref().unwrap();
@@ -131,11 +133,13 @@ impl ModPackWorker for CurseForgeWorker {
 
         self.base.game_version = minecraft.clone();
 
-        version_path::check_update(minecraft).await.is_ok()
+        version_path::check_update(minecraft).await?;
+
+        Ok(())
     }
 
     /// 创建游戏实例
-    async fn create_instance(&self, group: Option<String>) -> CoreResult<GameInstance> {
+    async fn create_instance(&self, group: Option<String>) -> CoreResult<Uuid> {
         match &self.info {
             Some(info) => {
                 let name = format!("{}-{}", info.name, info.version);
@@ -149,9 +153,9 @@ impl ModPackWorker for CurseForgeWorker {
                     loader_version: Some(self.base.loader_version.clone()),
                     ..Default::default()
                 };
-                game.create_instance(&self.base.gui).await
+                Ok(game.create_instance(&self.base.gui).await?.read().unwrap().uuid)
             }
-            None => Err(ErrorType::InfoNotFound("info".to_string())),
+            None => Err(ErrorType::DataNotFound(DataNotFoundData::Info)),
         }
     }
 
@@ -159,12 +163,12 @@ impl ModPackWorker for CurseForgeWorker {
     ///
     /// `overrides/` 下的文件去除前缀后写入游戏根目录；其余文件直接
     /// 写入游戏路径。
-    async fn extract(&self, unselect: Option<Vec<String>>) -> bool {
+    async fn extract(&self, unselect: Option<Vec<String>>) -> CoreResult<()> {
         let Some(game) = &self.base.game else {
-            return false;
+            return Err(ErrorType::DataNotFound(DataNotFoundData::GameInstance));
         };
         let Some(info) = &self.info else {
-            return false;
+            return Err(ErrorType::DataNotFound(DataNotFoundData::Info));
         };
 
         let game = game.read().unwrap();
@@ -184,7 +188,7 @@ impl ModPackWorker for CurseForgeWorker {
             if let Some(cancel) = &self.base.cancel
                 && cancel.is_cancelled()
             {
-                return false;
+                return Err(ErrorType::TaskCancel);
             }
             if entry.is_dir {
                 index += 1;
@@ -194,8 +198,8 @@ impl ModPackWorker for CurseForgeWorker {
                 continue;
             }
             // 跳过不需要解压的条目
-            if let Some(unsel) = unselect {
-                if unsel.iter().any(|u| u.name == entry.name) {
+            if let Some(ref unsel) = unselect {
+                if unsel.iter().any(|u| u == &entry.name) {
                     index += 1;
                     if let Some(pgui) = &self.base.pack_gui {
                         pgui.set_sub_now(index, Some(total));
@@ -216,65 +220,49 @@ impl ModPackWorker for CurseForgeWorker {
                 base_path.join(&entry.name)
             };
 
-            if self
-                .base
-                .archive
-                .extract_file(&entry.name, &output, None)
-                .is_err()
-            {
-                return false;
-            }
+            self.base.archive.extract_file(&entry.name, &output, None)?;
             if let Some(pgui) = &self.base.pack_gui {
                 pgui.set_sub_now(index, Some(total));
             }
         }
 
-        true
+        Ok(())
     }
 
     /// 获取模组下载信息。
     ///
     /// 批量解析 manifest 中的文件列表，构建下载项并存入
     /// `base.downloads`，后续由 [`download`] 统一下载。
-    async fn get_info(&self) -> bool {
-        let Some(info) = &self.info else {
-            return false;
-        };
+    async fn get_info(&self) -> CoreResult<bool> {
         let Some(game) = &self.base.game else {
-            return false;
+            return Err(ErrorType::DataNotFound(DataNotFoundData::GameInstance));
+        };
+        let Some(info) = &self.info else {
+            return Err(ErrorType::DataNotFound(DataNotFoundData::Info));
         };
 
-        // 直接传入 GameInstance（Arc 引用），读锁在 get_modpack_info 内部
-        // 同步获取并立即释放，不会跨 .await 持有，也无需克隆整个实例
-        let list = curseforge::get_modpack_info(game, info, &self.base.pack_gui).await;
-
-        if list.is_err() {
-            return false;
-        }
-
-        let list = list.unwrap();
+        let list = curseforge::get_modpack_info(game, info, &self.base.pack_gui).await?;
 
         let downloads = list.list;
         let mods = list.online;
 
         game.read().unwrap().save_online_info(&mods);
 
-        let Ok(mut guard) = self.base.downloads.lock() else {
-            return false;
-        };
+        let mut guard = self.base.downloads.lock().unwrap();
         *guard = downloads;
 
-        !guard.is_empty() || info.files.is_empty()
+        Ok(!guard.is_empty() || info.files.is_empty())
     }
 
     /// 统一下载所有模组文件。
     async fn download(&self) {
-        // 取出下载列表（在 .await 前释放 MutexGuard）
+        // 取出下载列表（在 .await 前释放 MutexGuard），取走后列表为空，
+        // 重复调用不会重复下载
         let items = {
-            let Ok(guard) = self.base.downloads.lock() else {
+            let Ok(mut guard) = self.base.downloads.lock() else {
                 return;
             };
-            guard.clone()
+            std::mem::take(&mut *guard)
         };
         if items.is_empty() {
             return;
@@ -301,12 +289,12 @@ impl ModPackWorker for CurseForgeWorker {
     /// - 无旧 manifest：通过 API 获取文件信息后比对 SHA1
     ///
     /// 最终将需要下载的文件存入 `base.downloads`。
-    async fn check_upgrade(&self) -> bool {
-        let Some(info) = &self.info else {
-            return false;
-        };
+    async fn check_upgrade(&self) -> CoreResult<()> {
         let Some(game) = &self.base.game else {
-            return false;
+            return Err(ErrorType::DataNotFound(DataNotFoundData::GameInstance));
+        };
+        let Some(info) = &self.info else {
+            return Err(ErrorType::DataNotFound(DataNotFoundData::Info));
         };
 
         let old_info = {
@@ -328,7 +316,7 @@ impl ModPackWorker for CurseForgeWorker {
                 &self.base.pack_gui,
                 &self.base.cancel,
             )
-            .await
+            .await?;
         } else {
             // ── 无旧 manifest：通过 SHA1 比对 ──
             check_upgrade_sha1(
@@ -338,8 +326,19 @@ impl ModPackWorker for CurseForgeWorker {
                 &self.base.pack_gui,
                 &self.base.cancel,
             )
-            .await
+            .await?;
         }
+
+        // 写入当前整合包 manifest，作为下一次升级比对用的旧清单
+        serialize_tools::json_to_file(
+            info,
+            game.read()
+                .unwrap()
+                .get_base_path()
+                .join(names::MANIFEST_FILE),
+        )?;
+
+        Ok(())
     }
 }
 
@@ -357,7 +356,7 @@ async fn check_upgrade_with_old_manifest(
     downloads: &Mutex<Vec<FileItemObj>>,
     pack_gui: &Option<Arc<dyn IAddGui>>,
     cancel: &Option<CancellationToken>,
-) -> bool {
+) -> CoreResult<()> {
     let mut add_list: Vec<&FilesObj> = Vec::new();
     let mut remove_list: Vec<&FilesObj> = Vec::new();
 
@@ -391,7 +390,14 @@ async fn check_upgrade_with_old_manifest(
         }
     }
 
-    // ── 删除已移除的模组 ──
+    // 检查取消
+    if let Some(cancel) = cancel
+        && cancel.is_cancelled()
+    {
+        return Err(ErrorType::TaskCancel);
+    }
+
+    // 删除已移除的模组
     {
         let game = game.read().unwrap();
         let game_path = game.get_game_path();
@@ -401,23 +407,27 @@ async fn check_upgrade_with_old_manifest(
             let project_id_str = item.project_id.to_string();
             if let Some(mod_info) = online_info.remove(&project_id_str) {
                 let local = game_path.join(&mod_info.path).join(&mod_info.file);
-                let _ = path_helper::delete(local);
+                delete_with_disabled(local);
             }
         }
 
         game.save_online_info(&online_info);
     }
 
-    // 无需下载 → 完成
-    if add_list.is_empty() {
-        let Ok(mut guard) = downloads.lock() else {
-            return false;
-        };
-        guard.clear();
-        return true;
+    // 检查取消
+    if let Some(cancel) = cancel
+        && cancel.is_cancelled()
+    {
+        return Err(ErrorType::TaskCancel);
     }
 
-    // ── 逐个解析新增/变更的文件并构建下载列表 ──
+    // 无需下载 → 完成
+    if add_list.is_empty() {
+        downloads.lock().unwrap().clear();
+        return Ok(());
+    }
+
+    // 逐个解析新增/变更的文件并构建下载列表
     let (mods_path, mut online_info) = {
         let game = game.read().unwrap();
         (game.get_mods_path(), game.read_online_info())
@@ -435,49 +445,43 @@ async fn check_upgrade_with_old_manifest(
         if let Some(cancel) = cancel
             && cancel.is_cancelled()
         {
-            return false;
+            return Err(ErrorType::TaskCancel);
         }
 
         let pid = item.project_id.to_string();
         let fid = item.file_id.to_string();
 
-        match curseforge_api::get_mod(&pid, &fid).await {
-            Ok(res) => {
-                let mut data = res.data;
-                let mod_id_str = data.mod_id.to_string();
-                let sha1 = data.sha1_hash();
+        let res = curseforge_api::get_mod(&pid, &fid).await?;
 
-                data.fix_download_url();
+        let mut data = res.data;
+        let mod_id_str = data.mod_id.to_string();
+        let sha1 = data.sha1_hash();
 
-                let download = FileItemObj {
-                    url: data.download_url.clone().unwrap_or_default(),
-                    name: data.display_name.clone(),
-                    file: mods_path.join(&data.file_name),
-                    hash: FileHash::Sha1(sha1.clone()),
-                    later: LaterRun::None,
-                };
-                new_downloads.push(download);
+        data.fix_download_url();
 
-                // 更新在线信息：移除旧条目后插入新条目
-                online_info.remove(&mod_id_str);
-                online_info.insert(
-                    mod_id_str,
-                    OnlineInfoObj {
-                        path: names::GAME_MODS_DIR.to_string(),
-                        name: data.display_name.clone(),
-                        file: data.file_name.clone(),
-                        sha1,
-                        url: data.download_url.unwrap_or_default(),
-                        modid: data.mod_id.to_string(),
-                        fileid: data.id.to_string(),
-                    },
-                );
-            }
-            Err(err) => {
-                mcml_log::error_type(err);
-                return false;
-            }
-        }
+        let download = FileItemObj {
+            url: data.download_url.clone().unwrap_or_default(),
+            name: data.display_name.clone(),
+            file: mods_path.join(&data.file_name),
+            hash: FileHash::Sha1(sha1.clone()),
+            later: LaterRun::None,
+        };
+        new_downloads.push(download);
+
+        // 更新在线信息：移除旧条目后插入新条目
+        online_info.remove(&mod_id_str);
+        online_info.insert(
+            mod_id_str,
+            OnlineInfoObj {
+                path: names::GAME_MODS_DIR.to_string(),
+                name: data.display_name.clone(),
+                file: data.file_name.clone(),
+                sha1,
+                url: data.download_url.unwrap_or_default(),
+                modid: data.mod_id.to_string(),
+                fileid: data.id.to_string(),
+            },
+        );
 
         if let Some(pgui) = pack_gui {
             pgui.set_sub_now(b + 1, Some(total));
@@ -485,17 +489,10 @@ async fn check_upgrade_with_old_manifest(
     }
 
     // 保存更新后的在线信息
-    {
-        let game = game.read().unwrap();
-        game.save_online_info(&online_info);
-    }
+    game.read().unwrap().save_online_info(&online_info);
+    *downloads.lock().unwrap() = new_downloads;
 
-    let Ok(mut guard) = downloads.lock() else {
-        return false;
-    };
-    *guard = new_downloads;
-
-    true
+    Ok(())
 }
 
 /// 无旧 manifest 时：通过 API 获取最新文件信息，以 mod_id 和 SHA1 比对。
@@ -511,14 +508,11 @@ async fn check_upgrade_sha1(
     downloads: &Mutex<Vec<FileItemObj>>,
     pack_gui: &Option<Arc<dyn IAddGui>>,
     cancel: &Option<CancellationToken>,
-) -> bool {
+) -> CoreResult<()> {
     let file_ids: Vec<u64> = new_info.files.iter().map(|f| f.file_id).collect();
     if file_ids.is_empty() {
-        let Ok(mut guard) = downloads.lock() else {
-            return false;
-        };
-        guard.clear();
-        return true;
+        downloads.lock().unwrap().clear();
+        return Ok(());
     }
 
     // 批量解析文件信息，含进度回调
@@ -539,7 +533,7 @@ async fn check_upgrade_sha1(
                 if let Some(cancel) = cancel
                     && cancel.is_cancelled()
                 {
-                    return false;
+                    return Err(ErrorType::TaskCancel);
                 }
                 let fid_str = fid.to_string();
                 if let Ok(data) = curseforge_api::get_mod(&fid_str, &fid_str).await {
@@ -552,7 +546,7 @@ async fn check_upgrade_sha1(
         }
 
         if files.is_empty() {
-            return false;
+            return Err(ErrorType::DataNotFound(DataNotFoundData::Info));
         }
         files
     };
@@ -561,7 +555,7 @@ async fn check_upgrade_sha1(
     if let Some(cancel) = cancel
         && cancel.is_cancelled()
     {
-        return false;
+        return Err(ErrorType::TaskCancel);
     }
 
     // 从解析结果构建 mod_id → (FileOnlineInfoObj, FileItemObj) 映射
@@ -629,16 +623,13 @@ async fn check_upgrade_sha1(
         }
     }
 
-    // ── 删除旧文件 ──
+    // 删除旧文件
     for item in &remove_list {
-        let local = game_path.join(&item.path).join(&item.file);
-        if local.exists() {
-            let _ = path_helper::delete(&local);
-        }
+        delete_with_disabled(game_path.join(&item.path).join(&item.file));
         online_info.remove(&item.modid);
     }
 
-    // ── 构建下载列表 ──
+    // 构建下载列表
     let mut new_downloads: Vec<FileItemObj> = Vec::new();
 
     for item in &add_list {
@@ -649,15 +640,17 @@ async fn check_upgrade_sha1(
     }
 
     // 保存更新后的在线信息
-    {
-        let game = game.read().unwrap();
-        game.save_online_info(&online_info);
-    }
+    game.read().unwrap().save_online_info(&online_info);
+    *downloads.lock().unwrap() = new_downloads;
 
-    let Ok(mut guard) = downloads.lock() else {
-        return false;
-    };
-    *guard = new_downloads;
+    Ok(())
+}
 
-    true
+/// 删除文件，若文件已被禁用（追加了 `.disable`/`.disabled` 后缀）则一并删除。
+fn delete_with_disabled<P: AsRef<Path>>(file: P) {
+    let file = file.as_ref();
+    // `delete` 在文件不存在时是无操作
+    let _ = path_helper::delete(file);
+    let _ = path_helper::delete(format!("{}{}", file.display(), names::DISABLE_DOT_EXT));
+    let _ = path_helper::delete(format!("{}{}", file.display(), names::DISABLED_DOT_EXT));
 }

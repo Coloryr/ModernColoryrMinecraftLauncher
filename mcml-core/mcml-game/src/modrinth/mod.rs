@@ -24,9 +24,15 @@ use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use tokio_util::sync::CancellationToken;
 
 use crate::{
-    GameInstance, data_res::DownloadItemRes, gui_hook::{AddModPackState, IAddGui}, launcher::{
+    GameInstance,
+    data_res::DownloadItemRes,
+    gui_hook::{AddModPackState, IAddGui},
+    launcher::{
         FileType, file_online_info_obj::OnlineInfoObj, instance_setting_obj::InstanceSettingObj,
-    }, loader::LoaderType, modpack::{BaseModPackWorker, ModPackWorker, modrinth_worker::ModrinthPackWorker}, modrinth::pack_obj::{ModrinthPackFileObj, ModrinthPackObj},
+    },
+    loader::LoaderType,
+    modpack::{BaseModPackWorker, ModPackWorker, modrinth_worker::ModrinthPackWorker},
+    modrinth::pack_obj::{ModrinthPackFileObj, ModrinthPackObj},
 };
 
 pub mod pack_obj;
@@ -351,7 +357,7 @@ pub async fn upgrade_modpack(
     game: &GameInstance,
     data: &mut ModrinthVersionObj,
     gui: Option<Arc<dyn IAddGui>>,
-) -> bool {
+) -> CoreResult<()> {
     let obj = make_download_obj(data, mcml_downloader::get_download_path());
     let file = obj.file.clone();
 
@@ -362,7 +368,7 @@ pub async fn upgrade_modpack(
 
     let res = mcml_downloader::start_download_task(vec![obj]).await;
     if !res {
-        return false;
+        return Err(ErrorType::DownloadFileFail);
     }
 
     if let Some(ref gui) = gui {
@@ -370,21 +376,16 @@ pub async fn upgrade_modpack(
         gui.set_now(2, Some(6));
     }
 
-    let zip = BaseArchive::open(file);
-    if let Err(err) = zip {
-        mcml_log::error_type(err);
-        return false;
-    }
+    let zip = BaseArchive::open(file)?;
     let mut worker = ModrinthPackWorker::new(BaseModPackWorker::new(
-        zip.unwrap(),
+        zip,
         None,
         gui.as_ref().cloned(),
         None,
     ));
 
-    if !worker.read_info() || !worker.read_version().await {
-        return false;
-    }
+    worker.read_info()?;
+    worker.read_version().await?;
 
     worker.update_game(game);
 
@@ -393,9 +394,7 @@ pub async fn upgrade_modpack(
         gui.set_now(3, Some(6));
     }
 
-    if !worker.extract(None).await {
-        return false;
-    }
+    worker.extract(None).await?;
 
     if let Some(ref gui) = gui {
         gui.set_sub_text(None);
@@ -404,9 +403,7 @@ pub async fn upgrade_modpack(
         gui.set_now(4, Some(6));
     }
 
-    if !worker.check_upgrade().await {
-        return false;
-    }
+    worker.check_upgrade().await?;
 
     if let Some(ref gui) = gui {
         gui.set_sub_text(None);
@@ -422,7 +419,7 @@ pub async fn upgrade_modpack(
         gui.set_now(6, Some(6));
     }
 
-    true
+    Ok(())
 }
 
 impl InstanceSettingObj {
