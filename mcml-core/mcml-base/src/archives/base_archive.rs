@@ -83,7 +83,7 @@ impl ArchiveType {
 /// archive.extract_file("readme.txt", "output/readme.txt", None).unwrap();
 ///
 /// // 提取全部文件
-/// archive.extract_all("output_dir/", None, None).unwrap();
+/// archive.extract_all("output_dir/", None, None, None).unwrap();
 /// ```
 pub struct BaseArchive {
     /// 压缩包磁盘路径
@@ -534,35 +534,41 @@ impl BaseArchive {
     ///
     /// * `output_dir` — 目标目录。
     /// * `unselect` — 可选的排除条目名列表，名字完全匹配的条目将被跳过。
+    /// * `strip_dir` — 可选的顶层包裹目录名。压缩包整体被 `dir/` 包裹时
+    ///   （如 `dir/file.txt`），去掉该目录直接提取到 `output_dir`
+    ///   （`dir/file.txt` → `output_dir/file.txt`），避免多套一层文件夹。
+    ///   条目不在该目录下时保持原路径。
     /// * `gui` — 可选的进度回调。
     pub fn extract_all<P: AsRef<Path>>(
         &self,
         output_dir: P,
         unselect: Option<Vec<String>>,
+        strip_dir: Option<String>,
         gui: Option<Arc<dyn IBaseArchiveGui>>,
     ) -> CoreResult<()> {
-        let Some(patterns) = unselect else {
-            // 无排除项时走 runner 的批量解压路径
-            return Self::decompress(
-                self.archive_type,
-                self.path.as_path(),
-                output_dir.as_ref(),
-                gui,
-            );
-        };
-
-        // 有排除项时逐个提取，跳过名字完全匹配的条目
         let output_dir = output_dir.as_ref();
-        self.extract_where(
-            |entry| {
-                if patterns.iter().any(|u| u == &entry.name) {
-                    None
-                } else {
-                    Some(output_dir.join(&entry.name))
-                }
-            },
-            gui.as_deref(),
-        )
+
+        // 需要剥离目录或存在排除项时逐条提取（批量解压路径无法调整条目位置）
+        if strip_dir.is_some() || unselect.is_some() {
+            return self.extract_where(
+                |entry| {
+                    if let Some(patterns) = &unselect {
+                        if patterns.iter().any(|u| u == &entry.name) {
+                            return None;
+                        }
+                    }
+                    let rel = match &strip_dir {
+                        Some(dir) => strip_dir_prefix(&entry.name, dir),
+                        None => entry.name.clone(),
+                    };
+                    Some(output_dir.join(rel))
+                },
+                gui.as_deref(),
+            );
+        }
+
+        // 无排除项且无剥离目录时走 runner 的批量解压路径
+        Self::decompress(self.archive_type, self.path.as_path(), output_dir, gui)
     }
 
     /// 按条件提取选中条目到由闭包计算的输出路径。
@@ -823,4 +829,15 @@ impl BaseArchive {
         *self.handle.lock().unwrap() = handle;
         Ok(())
     }
+}
+
+/// 去掉条目名指定的顶层包裹目录前缀。
+///
+/// 例如 `dir/file.txt` 去掉 `dir` 后 → `file.txt`（兼容 `\` 分隔的条目名）。
+/// 条目不在该目录下、或本身就是 `dir`（没有更深路径段）时保持原名，避免误剥。
+fn strip_dir_prefix(name: &str, dir: &str) -> String {
+    name.strip_prefix(&format!("{dir}/"))
+        .or_else(|| name.strip_prefix(&format!("{dir}\\")))
+        .map(str::to_string)
+        .unwrap_or_else(|| name.to_string())
 }

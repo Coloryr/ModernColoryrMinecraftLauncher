@@ -393,12 +393,84 @@ fn extract_all_unselect_parallel() {
 
     // 排除 keep.txt，并行解压剩余文件（zip 走多线程路径）
     let out = file.join("out");
-    base.extract_all(&out, Some(vec!["keep.txt".to_string()]), None)
+    base.extract_all(&out, Some(vec!["keep.txt".to_string()]), None, None)
         .unwrap();
 
     assert!(!out.join("keep.txt").exists());
     assert_eq!(fs::read(out.join("a/one.txt")).unwrap(), b"1");
     assert_eq!(fs::read(out.join("a/two.txt")).unwrap(), b"2");
+
+    fs::remove_dir_all(file).ok();
+}
+
+#[test]
+fn extract_all_strip_single_top_dir() {
+    // 独立目录，避免与其它测试并行冲突
+    let file = Path::new("test_run_strip");
+    fs::remove_dir_all(file).ok();
+    let source = file.join("src");
+    fs::create_dir_all(source.join("wrapped/sub")).unwrap();
+    fs::write(source.join("wrapped/level.dat"), b"world").unwrap();
+    fs::write(source.join("wrapped/sub/region.bin"), b"1234").unwrap();
+
+    let arc = file.join("strip.zip");
+    BaseArchive::compress(ArchiveType::Zip, &arc, &source, Some(&source), &None, None).unwrap();
+    let base = BaseArchive::open(&arc).unwrap();
+    assert_eq!(base.single_top_dir(), Some("wrapped"));
+
+    // 不传 strip_dir：保持原路径，wrapped 目录保留
+    let out = file.join("out");
+    base.extract_all(&out, None, None, None).unwrap();
+    assert_eq!(fs::read(out.join("wrapped/level.dat")).unwrap(), b"world");
+    assert_eq!(
+        fs::read(out.join("wrapped/sub/region.bin")).unwrap(),
+        b"1234"
+    );
+
+    // 传入 strip_dir：去掉 wrapped 层，直接解压到目标目录
+    let out2 = file.join("out2");
+    base.extract_all(&out2, None, Some("wrapped".to_string()), None)
+        .unwrap();
+    assert_eq!(fs::read(out2.join("level.dat")).unwrap(), b"world");
+    assert_eq!(fs::read(out2.join("sub/region.bin")).unwrap(), b"1234");
+    assert!(!out2.join("wrapped").exists());
+
+    // 排除项与剥目录同时生效，排除仍按压缩包内完整条目名匹配
+    let out3 = file.join("out3");
+    base.extract_all(
+        &out3,
+        Some(vec!["wrapped/level.dat".to_string()]),
+        Some("wrapped".to_string()),
+        None,
+    )
+    .unwrap();
+    assert!(!out3.join("level.dat").exists());
+    assert_eq!(fs::read(out3.join("sub/region.bin")).unwrap(), b"1234");
+
+    fs::remove_dir_all(file).ok();
+}
+
+#[test]
+fn extract_all_keeps_multiple_top_dirs() {
+    // 独立目录，避免与其它测试并行冲突
+    let file = Path::new("test_run_multi");
+    fs::remove_dir_all(file).ok();
+    let source = file.join("src");
+    fs::create_dir_all(source.join("a")).unwrap();
+    fs::create_dir_all(source.join("b")).unwrap();
+    fs::write(source.join("a/one.txt"), b"1").unwrap();
+    fs::write(source.join("b/two.txt"), b"2").unwrap();
+
+    let arc = file.join("multi.zip");
+    BaseArchive::compress(ArchiveType::Zip, &arc, &source, Some(&source), &None, None).unwrap();
+    let base = BaseArchive::open(&arc).unwrap();
+    assert_eq!(base.single_top_dir(), None);
+
+    // 多个顶层目录保持原路径
+    let out = file.join("out");
+    base.extract_all(&out, None, None, None).unwrap();
+    assert_eq!(fs::read(out.join("a/one.txt")).unwrap(), b"1");
+    assert_eq!(fs::read(out.join("b/two.txt")).unwrap(), b"2");
 
     fs::remove_dir_all(file).ok();
 }

@@ -7,10 +7,10 @@ pub mod game_time_obj;
 pub mod instance_setting_obj;
 pub mod project_save_obj;
 
-/// 资源来源
+/// 整合包类型
 #[derive(Serialize_repr, Deserialize_repr, Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
-pub enum SourceType {
+pub enum ModPackType {
     CurseForge,
     Modrinth,
     McMod,
@@ -18,9 +18,9 @@ pub enum SourceType {
     None,
 }
 
-impl Default for SourceType {
+impl Default for ModPackType {
     fn default() -> Self {
-        SourceType::None
+        ModPackType::None
     }
 }
 

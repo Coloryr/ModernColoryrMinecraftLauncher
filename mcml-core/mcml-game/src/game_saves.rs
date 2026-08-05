@@ -260,7 +260,7 @@ impl InstanceSettingObj {
         };
 
         path_helper::create_dir_all(&output_dir)?;
-        archive.extract_all(&output_dir, None, None)
+        archive.extract_all(&output_dir, None, None, None)
     }
 }
 

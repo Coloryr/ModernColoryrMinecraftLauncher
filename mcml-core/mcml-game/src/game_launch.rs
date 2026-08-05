@@ -29,7 +29,7 @@ use crate::{
     game_log::GameLog,
     game_saves::SaveObj,
     launcher::{
-        LogEncoding, SourceType,
+        LogEncoding, ModPackType,
         instance_setting_obj::{InstanceSettingObj, ServerObj},
     },
     launcher_path::libraries_path,
@@ -428,7 +428,7 @@ impl InstanceSettingObj {
         arg: &mut GameLaunchArg,
         cancel: &CancellationToken,
     ) -> CoreResult<()> {
-        if !self.is_modpack || self.source_type != SourceType::ServerPack || None == self.server_url
+        if !self.is_modpack || self.modpack_type != ModPackType::ServerPack || None == self.server_url
         {
             Ok(())
         } else {

@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
-    launcher::{LogEncoding, SourceType},
+    launcher::{LogEncoding, ModPackType},
     loader::LoaderType,
     mojang::VersionType,
 };
@@ -162,7 +162,7 @@ pub struct InstanceSettingObj {
     pub is_modpack: bool,
     /// 整合包类型
     #[serde(rename = "ModPackType")]
-    pub source_type: SourceType,
+    pub modpack_type: ModPackType,
     /// 游戏发布类型
     #[serde(rename = "GameType")]
     pub game_type: VersionType,
@@ -204,7 +204,7 @@ impl Default for InstanceSettingObj {
             proxy_host: Default::default(),
             advance_jvm: Default::default(),
             is_modpack: Default::default(),
-            source_type: Default::default(),
+            modpack_type: Default::default(),
             game_type: Default::default(),
             pid: Default::default(),
             fid: Default::default(),

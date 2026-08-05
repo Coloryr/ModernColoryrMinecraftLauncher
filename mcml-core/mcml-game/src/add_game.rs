@@ -6,25 +6,38 @@ use std::{
 };
 
 use mcml_base::{
-    archives::{BaseArchive, IBaseArchiveGui}, path_helper, serialize_tools,
+    archives::{BaseArchive, IBaseArchiveGui},
+    path_helper, serialize_tools,
 };
 use mcml_names::{
-    i18_items::error_type::{ArgEmptyData, CoreResult, ErrorType, PathNotExistsData},
+    i18_items::error_type::{
+        ArgEmptyData, CoreResult, DataNotFoundData, ErrorType, PathNotExistsData,
+    },
     names,
 };
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::{
-    GameInstance, delete_instance, game_options,
+    GameInstance,
+    curseforge::pack_obj::CurseForgePackObj,
+    delete_instance, game_options,
     gui_hook::{AddModPackState, IAddGui, IAddInstanceGui, ICopyGui},
-    launcher::{SourceType, instance_setting_obj::InstanceSettingObj},
+    launcher::{
+        ModPackType,
+        instance_setting_obj::{CustomLoaderObj, InstanceSettingObj},
+    },
     launcher_path::version_path,
     modpack::{
         BaseModPackWorker, ModPackWorker, curseforge_worker::CurseForgeWorker,
         modrinth_worker::ModrinthPackWorker,
     },
-    other_launcher::{self, mmc_obj::MMCObj, official_obj::OfficialObj},
+    other_launcher::{
+        self,
+        hmcl_obj::{HMCLObj, HMCLServerObj},
+        mmc_obj::MMCObj,
+        official_obj::OfficialObj,
+    },
 };
 
 /// 压缩包类型
@@ -46,6 +59,7 @@ pub async fn add_game_folder<P: AsRef<Path>>(
     unselect: Option<Vec<PathBuf>>,
     gui: Option<Arc<dyn IAddInstanceGui>>,
     copy_gui: Option<Arc<dyn ICopyGui>>,
+    cancel: CancellationToken,
 ) -> CoreResult<GameInstance> {
     if !dir.as_ref().exists() || !dir.as_ref().is_dir() {
         return Err(ErrorType::DirNotExists(PathNotExistsData {
@@ -99,6 +113,10 @@ pub async fn add_game_folder<P: AsRef<Path>>(
         return Err(ErrorType::ArgEmpty(ArgEmptyData::Name));
     }
 
+    if cancel.is_cancelled() {
+        return Err(ErrorType::TaskCancel);
+    }
+
     let res = instance.create_instance(&gui).await?;
 
     res.read()
@@ -111,21 +129,27 @@ pub async fn add_game_folder<P: AsRef<Path>>(
 
 /// 从整合包添加实例
 async fn modpack<P: AsRef<Path>>(
-    source: SourceType,
     file: P,
+    source: ModPackType,
     group: Option<String>,
     unselect: Option<Vec<String>>,
     gui: Option<Arc<dyn IAddInstanceGui>>,
     pack_gui: Option<Arc<dyn IAddGui>>,
     cancel: CancellationToken,
 ) -> CoreResult<Uuid> {
+    if !file.as_ref().exists() || file.as_ref().is_dir() {
+        return Err(ErrorType::FileNotExists(PathNotExistsData {
+            path: file.as_ref().to_path_buf(),
+        }));
+    }
+
     if let Some(pack_gui) = &pack_gui {
         pack_gui.set_state(AddModPackState::ReadInfo);
         pack_gui.set_now(1, Some(5));
         pack_gui.set_sub_now(0, Some(1));
     }
 
-    let mut work: Box<dyn ModPackWorker> = if source == SourceType::CurseForge {
+    let mut work: Box<dyn ModPackWorker> = if source == ModPackType::CurseForge {
         Box::new(CurseForgeWorker::new(BaseModPackWorker::new(
             BaseArchive::open(file)?,
             gui,
@@ -195,22 +219,60 @@ async fn modpack<P: AsRef<Path>>(
     Ok(uuid)
 }
 
+/// 解压整合包压缩包到实例目录，统一处理压缩包整体套一层文件夹的情况。
+///
+/// * `output_dir` — 解压目标目录（实例基础目录）。
+/// * `unselect` — 按压缩包内完整条目名排除的文件列表。
+/// * `strip_dir` — 压缩包整体套的顶层目录名（不剥时传 `None`）。
+/// * `gui` — 可选的进度回调。
+fn extract_pack<P: AsRef<Path>>(
+    archive: &BaseArchive,
+    output_dir: P,
+    unselect: Vec<String>,
+    strip_dir: Option<String>,
+    gui: Option<Arc<dyn IBaseArchiveGui>>,
+) -> CoreResult<()> {
+    archive.extract_all(output_dir, Some(unselect), strip_dir, gui)
+}
+
 /// 直接解压
 async fn archive<P: AsRef<Path>>(
     file: P,
+    name: Option<String>,
+    group: Option<String>,
     unselect: Vec<String>,
     gui: Option<Arc<dyn IAddInstanceGui>>,
     pack_gui: Option<Arc<dyn IAddGui>>,
     cancel: CancellationToken,
 ) -> CoreResult<Uuid> {
+    if !file.as_ref().exists() || file.as_ref().is_dir() {
+        return Err(ErrorType::FileNotExists(PathNotExistsData {
+            path: file.as_ref().to_path_buf(),
+        }));
+    }
+
     if let Some(pack_gui) = &pack_gui {
         pack_gui.set_state(AddModPackState::ReadInfo);
         pack_gui.set_now(1, Some(3));
     }
 
     let archive = BaseArchive::open(file)?;
-    let data = archive.read(names::GAME_FILE)?;
-    let obj = serialize_tools::json_from_bytes::<InstanceSettingObj>(&data)?;
+    // 找到 game.json 所在条目，兼容压缩包整体套一层文件夹的情况
+    let game_entry = archive
+        .entries()
+        .iter()
+        .find(|e| !e.is_dir && e.name.ends_with(names::GAME_FILE))
+        .ok_or_else(|| ErrorType::DataNotFound(DataNotFoundData::Info))?;
+    let data = archive.read(&game_entry.name)?;
+    let mut obj = serialize_tools::json_from_bytes::<InstanceSettingObj>(&data)?;
+
+    if let Some(name) = name {
+        obj.name = name;
+    }
+
+    if let Some(group) = group {
+        obj.group = Some(group);
+    }
 
     let game = obj.create_instance(&gui).await?;
     let uuid = game.read().unwrap().uuid;
@@ -224,9 +286,18 @@ async fn archive<P: AsRef<Path>>(
         return Err(ErrorType::TaskCancel);
     }
 
-    archive.extract_all(
+    // game.json 所在目录即实例包裹目录，解压时去掉该层，直接放进实例目录
+    let strip_dir = game_entry
+        .name
+        .strip_suffix(names::GAME_FILE)
+        .filter(|s| !s.is_empty())
+        .map(|s| s.trim_end_matches(['/', '\\']).to_string());
+
+    extract_pack(
+        &archive,
         game.read().unwrap().get_base_path(),
-        Some(unselect),
+        unselect,
+        strip_dir,
         pack_gui.clone().map(|g| g as Arc<dyn IBaseArchiveGui>),
     )?;
 
@@ -238,6 +309,359 @@ async fn archive<P: AsRef<Path>>(
     Ok(uuid)
 }
 
-async fn mmc_archive<P: AsRef<Path>>(file: P) -> CoreResult<()> {
-    todo!()
+/// 导入MMC压缩包
+async fn mmc_archive<P: AsRef<Path>>(
+    file: P,
+    name: Option<String>,
+    group: Option<String>,
+    unselect: Vec<String>,
+    gui: Option<Arc<dyn IAddInstanceGui>>,
+    pack_gui: Option<Arc<dyn IAddGui>>,
+    cancel: CancellationToken,
+) -> CoreResult<Uuid> {
+    if !file.as_ref().exists() || file.as_ref().is_dir() {
+        return Err(ErrorType::FileNotExists(PathNotExistsData {
+            path: file.as_ref().to_path_buf(),
+        }));
+    }
+
+    if let Some(pack_gui) = &pack_gui {
+        pack_gui.set_state(AddModPackState::ReadInfo);
+        pack_gui.set_now(1, Some(3));
+    }
+
+    let archive = BaseArchive::open(&file)?;
+
+    let mut path = String::new();
+    let mut mmc = None;
+    let mut cfg = None;
+
+    for item in archive.entries() {
+        if item.is_dir {
+            continue;
+        } else if mmc.is_none() && item.name.ends_with(names::MMCJSON_FILE) {
+            path = item.name.replace(names::MMCJSON_FILE, "");
+            let data = archive.read(&item.name)?;
+            let obj = serialize_tools::json_from_bytes::<MMCObj>(&data)?;
+            mmc = Some(obj);
+        } else if cfg.is_none() && item.name.ends_with(names::MMCCFG_FILE) {
+            let data = archive.read_stream(&item.name)?;
+            cfg = Some(game_options::read_options(data, Some('='))?);
+        }
+
+        if mmc.is_some() && cfg.is_some() {
+            break;
+        }
+    }
+
+    if mmc.is_none() || cfg.is_none() {
+        return Err(ErrorType::DataNotFound(DataNotFoundData::Info));
+    }
+
+    let mut obj = mmc.unwrap().to_instance(cfg.unwrap());
+    if let Some(name) = name {
+        obj.name = name;
+    }
+
+    if let Some(group) = group {
+        obj.group = Some(group);
+    }
+
+    if obj.name.is_empty() {
+        obj.name = file
+            .as_ref()
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .to_string();
+    }
+
+    if cancel.is_cancelled() {
+        return Err(ErrorType::TaskCancel);
+    }
+
+    if let Some(pack_gui) = &pack_gui {
+        pack_gui.set_state(AddModPackState::Extract);
+        pack_gui.set_now(2, Some(3));
+    }
+
+    let game = obj.create_instance(&gui).await?;
+    let uuid = game.read().unwrap().uuid;
+
+    if cancel.is_cancelled() {
+        delete_instance(&uuid)?;
+        return Err(ErrorType::TaskCancel);
+    }
+
+    // MMC 元数据按完整条目名加入排除列表
+    let mut unselect = unselect;
+    unselect.push(format!("{path}{}", names::MMCJSON_FILE));
+    unselect.push(format!("{path}{}", names::MMCCFG_FILE));
+
+    // 解压到实例基础目录，`.minecraft/` 下的内容自然落到游戏目录（base/.minecraft）。
+    // mmc-pack.json 所在目录即包裹层，解压时去掉
+    let strip_dir = path.trim_end_matches(['/', '\\']).to_string();
+    extract_pack(
+        &archive,
+        game.read().unwrap().get_base_path(),
+        unselect,
+        (!strip_dir.is_empty()).then_some(strip_dir),
+        pack_gui.clone().map(|g| g as Arc<dyn IBaseArchiveGui>),
+    )?;
+
+    let json = game.read().unwrap().read_custom_json();
+    if !json.is_empty() {
+        game.write().unwrap().custom_loader = Some(CustomLoaderObj {
+            custom_json: true,
+            ..Default::default()
+        });
+        game.read().unwrap().save();
+    }
+
+    if let Some(pack_gui) = &pack_gui {
+        pack_gui.set_state(AddModPackState::Done);
+        pack_gui.set_now(3, Some(3));
+    }
+
+    Ok(uuid)
+}
+
+/// HMCL压缩包
+async fn hmcl_archive<P: AsRef<Path>>(
+    file: P,
+    name: Option<String>,
+    group: Option<String>,
+    unselect: Vec<String>,
+    gui: Option<Arc<dyn IAddInstanceGui>>,
+    pack_gui: Option<Arc<dyn IAddGui>>,
+    cancel: CancellationToken,
+) -> CoreResult<Uuid> {
+    if !file.as_ref().exists() || file.as_ref().is_dir() {
+        return Err(ErrorType::FileNotExists(PathNotExistsData {
+            path: file.as_ref().to_path_buf(),
+        }));
+    }
+
+    if let Some(pack_gui) = &pack_gui {
+        pack_gui.set_state(AddModPackState::ReadInfo);
+        pack_gui.set_now(1, Some(3));
+    }
+
+    let archive = BaseArchive::open(&file)?;
+
+    let mut path = String::new();
+    let mut hmcl = None;
+    let mut cfg = None;
+
+    for item in archive.entries() {
+        if item.is_dir {
+            continue;
+        } else if hmcl.is_none() && item.name.ends_with(names::HMCLFILE) {
+            path = item.name.replace(names::MMCJSON_FILE, "");
+            let data = archive.read(&item.name)?;
+            let obj = serialize_tools::json_from_bytes::<HMCLObj>(&data)?;
+            hmcl = Some(obj);
+        } else if cfg.is_none() && item.name.ends_with(names::MANIFEST_FILE) {
+            let data = archive.read(&item.name)?;
+            let obj = serialize_tools::json_from_bytes::<CurseForgePackObj>(&data)?;
+            cfg = Some(obj);
+        }
+
+        if hmcl.is_some() && cfg.is_some() {
+            break;
+        }
+    }
+
+    if hmcl.is_none() || cfg.is_none() {
+        return Err(ErrorType::DataNotFound(DataNotFoundData::Info));
+    }
+
+    let mut obj = hmcl.unwrap().to_instance();
+    if let Some(name) = name {
+        obj.name = name;
+    }
+
+    if let Some(group) = group {
+        obj.group = Some(group);
+    }
+
+    if obj.name.is_empty() {
+        obj.name = file
+            .as_ref()
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .to_string();
+    }
+
+    if cancel.is_cancelled() {
+        return Err(ErrorType::TaskCancel);
+    }
+
+    if let Some(pack_gui) = &pack_gui {
+        pack_gui.set_state(AddModPackState::Extract);
+        pack_gui.set_now(2, Some(3));
+    }
+
+    let game = obj.create_instance(&gui).await?;
+    let uuid = game.read().unwrap().uuid;
+
+    if cancel.is_cancelled() {
+        delete_instance(&uuid)?;
+        return Err(ErrorType::TaskCancel);
+    }
+
+    // HMCL 元数据按完整条目名加入排除列表
+    let mut unselect = unselect;
+    unselect.push(format!("{path}{}", names::HMCLFILE));
+
+    let over = if let Some(cfg) = cfg {
+        cfg.overrides.clone()
+    } else {
+        names::OVERRIDE_DIR.to_string()
+    };
+
+    let mut strip_dir = path.trim_end_matches(['/', '\\']).to_string();
+    let dir = if !strip_dir.is_empty() {
+        over
+    } else {
+        strip_dir.push_str(&over);
+        strip_dir
+    };
+
+    extract_pack(
+        &archive,
+        game.read().unwrap().get_base_path(),
+        unselect,
+        Some(dir),
+        pack_gui.clone().map(|g| g as Arc<dyn IBaseArchiveGui>),
+    )?;
+
+    if let Some(pack_gui) = &pack_gui {
+        pack_gui.set_state(AddModPackState::Done);
+        pack_gui.set_now(3, Some(3));
+    }
+
+    Ok(uuid)
+}
+
+/// HMCL服务器包
+async fn hmcl_server_archive<P: AsRef<Path>>(
+    file: P,
+    name: Option<String>,
+    group: Option<String>,
+    unselect: Vec<String>,
+    gui: Option<Arc<dyn IAddInstanceGui>>,
+    pack_gui: Option<Arc<dyn IAddGui>>,
+    cancel: CancellationToken,
+) -> CoreResult<Uuid> {
+    if !file.as_ref().exists() || file.as_ref().is_dir() {
+        return Err(ErrorType::FileNotExists(PathNotExistsData {
+            path: file.as_ref().to_path_buf(),
+        }));
+    }
+
+    if let Some(pack_gui) = &pack_gui {
+        pack_gui.set_state(AddModPackState::ReadInfo);
+        pack_gui.set_now(1, Some(3));
+    }
+
+    let archive = BaseArchive::open(&file)?;
+
+    let mut path = String::new();
+    let mut hmcl = None;
+
+    for item in archive.entries() {
+        if item.is_dir {
+            continue;
+        } else if hmcl.is_none() && item.name.ends_with(names::SERVER_MANIFEST_FILE) {
+            path = item.name.replace(names::SERVER_MANIFEST_FILE, "");
+            let data = archive.read(&item.name)?;
+            let obj = serialize_tools::json_from_bytes::<HMCLServerObj>(&data)?;
+            hmcl = Some(obj);
+            break;
+        }
+    }
+
+    if hmcl.is_none() {
+        return Err(ErrorType::DataNotFound(DataNotFoundData::Info));
+    }
+
+    let hmcl = hmcl.unwrap();
+
+    let mut obj = hmcl.to_instance();
+    if let Some(name) = name {
+        obj.name = name;
+    }
+
+    if let Some(group) = group {
+        obj.group = Some(group);
+    }
+
+    if obj.name.is_empty() {
+        obj.name = file
+            .as_ref()
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .to_string();
+    }
+
+    if cancel.is_cancelled() {
+        return Err(ErrorType::TaskCancel);
+    }
+
+    if let Some(pack_gui) = &pack_gui {
+        pack_gui.set_state(AddModPackState::Extract);
+        pack_gui.set_now(2, Some(3));
+    }
+
+    let game = obj.create_instance(&gui).await?;
+    let uuid = game.read().unwrap().uuid;
+
+    let mut online = game.read().unwrap().read_online_info();
+
+    if !hmcl.files.is_empty() && !hmcl.file_api.is_empty() {
+        let url = if hmcl.file_api.ends_with('/') {
+            format!("{}/", hmcl.file_api)
+        } else {
+            hmcl.file_api
+        };
+        for item in hmcl.files {
+            
+        }
+    }
+
+    if cancel.is_cancelled() {
+        delete_instance(&uuid)?;
+        return Err(ErrorType::TaskCancel);
+    }
+
+    // HMCL 元数据按完整条目名加入排除列表
+    let mut unselect = unselect;
+    unselect.push(format!("{path}{}", names::HMCLFILE));
+
+    let over = names::OVERRIDE_DIR.to_string();
+    let mut strip_dir = path.trim_end_matches(['/', '\\']).to_string();
+    let dir = if !strip_dir.is_empty() {
+        over
+    } else {
+        strip_dir.push_str(&over);
+        strip_dir
+    };
+
+    extract_pack(
+        &archive,
+        game.read().unwrap().get_base_path(),
+        unselect,
+        Some(dir),
+        pack_gui.clone().map(|g| g as Arc<dyn IBaseArchiveGui>),
+    )?;
+
+    if let Some(pack_gui) = &pack_gui {
+        pack_gui.set_state(AddModPackState::Done);
+        pack_gui.set_now(3, Some(3));
+    }
+
+    Ok(uuid)
 }

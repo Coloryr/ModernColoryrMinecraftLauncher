@@ -1,17 +1,14 @@
 use std::path::Path;
 
 use mcml_base::tools;
-use mcml_config::config_obj::{RunArgObj, WindowSettingObj};
+use mcml_config::config_obj::{JvmConfigObj, RunArgObj, WindowSettingObj};
 use mcml_names::names;
 
 use crate::{
-    game_options::InstanceCfg,
-    launcher::instance_setting_obj::{CustomLoaderObj, InstanceSettingObj, ServerObj},
-    launcher_path::version_path,
-    loader::LoaderType,
-    other_launcher::{mmc_obj::MMCObj, official_obj::OfficialObj},
+    game_options::InstanceCfg, launcher::{ModPackType, instance_setting_obj::{AdvanceJvmObj, CustomLoaderObj, InstanceSettingObj, ServerObj}}, launcher_path::version_path, loader::LoaderType, other_launcher::{hmcl_obj::{HMCLObj, HMCLServerObj}, mmc_obj::MMCObj, official_obj::OfficialObj},
 };
 
+pub mod hmcl_obj;
 pub mod mmc_obj;
 pub mod official_obj;
 
@@ -233,5 +230,121 @@ impl OfficialObj {
         }
 
         instance
+    }
+}
+
+impl HMCLObj {
+    /// 转换为实例信息
+    pub fn to_instance(self) -> InstanceSettingObj {
+        let mut obj = InstanceSettingObj {
+            name: self.name,
+            ..Default::default()
+        };
+
+        for item in self.addons {
+            if item.id == names::GAME_KEY {
+                obj.version = item.version
+            } else if item.id == names::FORGE_KEY {
+                obj.loader = LoaderType::Forge;
+                obj.loader_version = Some(item.version);
+            } else if item.id == names::NEOFORGE_KEY {
+                obj.loader = LoaderType::NeoForge;
+                obj.loader_version = Some(item.version);
+            } else if item.id == names::FABRIC_KEY {
+                obj.loader = LoaderType::Fabric;
+                obj.loader_version = Some(item.version);
+            } else if item.id == names::QUILT_KEY {
+                obj.loader = LoaderType::Quilt;
+                obj.loader_version = Some(item.version);
+            }
+        }
+
+        if let Some(info) = self.launch_info {
+            let mut jvm = RunArgObj {
+                min_memory: info.min_memory,
+                max_memory: info.max_memory,
+                ..Default::default()
+            };
+
+            if let Some(data) = info.java_argument {
+                let mut args = String::new();
+                for item in data {
+                    args.push_str(&item);
+                    args.push('\n');
+                }
+                jvm.jvm_args = Some(args);
+            }
+            if let Some(data) = info.launch_argument {
+                let mut args = String::new();
+                for item in data {
+                    args.push_str(&item);
+                    args.push('\n');
+                }
+                jvm.game_args = Some(args);
+            }
+            if let Some(data) = info.environment_variables {
+                let mut args = String::new();
+                for (key, value) in data {
+                    args.push_str(&key);
+                    args.push('=');
+                    args.push_str(&value);
+                    args.push('\n');
+                }
+                jvm.jvm_env = Some(args);
+            }
+            if let Some(data) = info.pre_launch_command {
+                jvm.launch_pre_run = Some(true);
+                jvm.pre_run_arg = Some(data);
+            }
+            if let Some(data) = info.post_exit_command {
+                jvm.launch_post_run = Some(true);
+                jvm.post_run_arg = Some(data);
+            }
+
+            obj.jvm_arg = Some(jvm);
+
+            let window = WindowSettingObj {
+                width: info.width,
+                height: info.height,
+                full_screen: info.fullscreen,
+                ..Default::default()
+            };
+
+            obj.window = Some(window);
+        }
+
+        obj
+    }
+}
+
+impl HMCLServerObj  {
+    /// 转换为实例信息
+    pub fn to_instance(&self) -> InstanceSettingObj {
+        let mut obj = InstanceSettingObj {
+            name: self.name.clone(),
+            is_modpack: true,
+            modpack_type: ModPackType::ServerPack,
+            ..Default::default()
+        };
+
+        for item in self.addons.iter() {
+            if item.id == names::GAME_KEY {
+                obj.version = item.version.clone()
+            } else if item.id == names::FORGE_KEY {
+                obj.loader = LoaderType::Forge;
+                obj.loader_version = Some(item.version.clone());
+            } else if item.id == names::NEOFORGE_KEY {
+                obj.loader = LoaderType::NeoForge;
+                obj.loader_version = Some(item.version.clone());
+            } else if item.id == names::FABRIC_KEY {
+                obj.loader = LoaderType::Fabric;
+                obj.loader_version = Some(item.version.clone());
+            } else if item.id == names::QUILT_KEY {
+                obj.loader = LoaderType::Quilt;
+                obj.loader_version = Some(item.version.clone());
+            }
+        }
+        
+        obj
     }
 }

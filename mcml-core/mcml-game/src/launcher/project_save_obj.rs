@@ -1,12 +1,12 @@
 use serde::{Deserialize, Serialize};
 
-use crate::launcher::SourceType;
+use crate::launcher::ModPackType;
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct McmlProjectSaveObj {
     #[serde(rename = "type")]
-    pub source_type: SourceType,
+    pub source_type: ModPackType,
     pub pid: String,
     pub fid: String,
 }

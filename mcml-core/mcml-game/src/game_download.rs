@@ -1,14 +1,14 @@
 use mcml_base::tools::check_is_not_number;
 
-use crate::launcher::SourceType;
+use crate::launcher::ModPackType;
 
 /// 检测下载源
 /// - `pid`: 项目号
 /// - `fid`: 文件号
-pub fn get_source_type(pid: &str, fid: &str) -> SourceType {
+pub fn get_source_type(pid: &str, fid: &str) -> ModPackType {
     if check_is_not_number(pid) || check_is_not_number(fid) {
-        SourceType::Modrinth
+        ModPackType::Modrinth
     } else {
-        SourceType::CurseForge
+        ModPackType::CurseForge
     }
 }
