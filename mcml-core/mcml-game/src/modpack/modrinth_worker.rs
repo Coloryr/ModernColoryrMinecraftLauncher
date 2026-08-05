@@ -12,7 +12,7 @@ use uuid::Uuid;
 use crate::{
     GameInstance,
     launcher::{
-        SourceType, file_online_info_obj::OnlineInfoObj, instance_setting_obj::InstanceSettingObj,
+        ModPackType, file_online_info_obj::OnlineInfoObj, instance_setting_obj::InstanceSettingObj,
     },
     launcher_path::version_path,
     loader::LoaderType,
@@ -108,7 +108,7 @@ impl ModPackWorker for ModrinthPackWorker {
                     version: self.base.game_version.clone(),
                     is_modpack: true,
                     loader: self.base.loader,
-                    source_type: SourceType::Modrinth,
+                    modpack_type: ModPackType::Modrinth,
                     loader_version: Some(self.base.loader_version.clone()),
                     ..Default::default()
                 };

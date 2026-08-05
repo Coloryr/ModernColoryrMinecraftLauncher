@@ -25,7 +25,7 @@ use crate::{
     },
     gui_hook::IAddGui,
     launcher::{
-        SourceType, file_online_info_obj::OnlineInfoObj, instance_setting_obj::InstanceSettingObj,
+        ModPackType, file_online_info_obj::OnlineInfoObj, instance_setting_obj::InstanceSettingObj,
     },
     launcher_path::{instance_path::OnlineInfoList, version_path},
     loader::LoaderType,
@@ -149,7 +149,7 @@ impl ModPackWorker for CurseForgeWorker {
                     version: self.base.game_version.clone(),
                     is_modpack: true,
                     loader: self.base.loader,
-                    source_type: SourceType::CurseForge,
+                    modpack_type: ModPackType::CurseForge,
                     loader_version: Some(self.base.loader_version.clone()),
                     ..Default::default()
                 };

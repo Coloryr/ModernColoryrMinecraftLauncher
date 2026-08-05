@@ -23,13 +23,13 @@ use crate::{
     launcher_path::instance_path::{self},
 };
 
-pub mod game_count;
 pub mod add_game;
 pub mod class_scan;
 pub mod curseforge;
 pub mod data_res;
 pub mod game_arg;
 pub mod game_check;
+pub mod game_count;
 pub mod game_download;
 pub mod game_export;
 pub mod game_lan;
@@ -53,6 +53,7 @@ pub mod modrinth;
 pub mod mojang;
 pub mod other_launcher;
 pub mod path_watch;
+pub mod serverpack;
 
 pub type GameInstance = Arc<RwLock<InstanceSettingObj>>;
 
@@ -570,7 +571,7 @@ impl InstanceSettingObj {
             proxy_host: self.proxy_host.clone(),
             advance_jvm: self.advance_jvm.clone(),
             is_modpack: self.is_modpack,
-            source_type: self.source_type,
+            modpack_type: self.modpack_type,
             game_type: self.game_type,
             pid: self.pid.clone(),
             fid: self.fid.clone(),

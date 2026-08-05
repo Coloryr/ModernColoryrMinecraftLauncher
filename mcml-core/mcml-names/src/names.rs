@@ -83,6 +83,7 @@ pub const FABRIC_LOADER_KEY: &str = "fabric-loader";
 pub const QUILT_KEY: &str = "quilt";
 pub const QUILT_MC_KEY: &str = "quiltmc";
 pub const QUILT_LOADER_KEY: &str = "quilt-loader";
+pub const GAME_KEY: &str = "game";
 
 pub const FILE_INSTALL: &str = "install";
 pub const FILE_INSTALLER: &str = "installer";
