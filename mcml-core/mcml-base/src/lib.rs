@@ -27,7 +27,6 @@
 //! | [`file_item`] | 文件下载项定义 |
 
 pub mod archives;
-pub mod tools;
 pub mod events;
 pub mod file_item;
 pub mod hash_helper;
@@ -35,6 +34,7 @@ pub mod inner_path;
 pub mod path_helper;
 pub mod process_utils;
 pub mod serialize_tools;
+pub mod tools;
 
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::{

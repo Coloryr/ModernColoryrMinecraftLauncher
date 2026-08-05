@@ -48,7 +48,7 @@ impl Default for LaterRun {
 
 impl FileHash {
     /// 检查是否符合校验值
-    /// 
+    ///
     /// - `check`: 目标校验值
     pub fn eq(&self, check: &str) -> bool {
         match self {

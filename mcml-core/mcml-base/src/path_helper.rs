@@ -264,7 +264,7 @@ fn move_to_trash_windows<P: AsRef<Path>>(dir: P) -> CoreResult<()> {
 }
 
 /// 检查非法名字
-/// 
+///
 /// - `name`: 需要检查的名字
 pub fn file_has_invalid_chars(name: &str) -> bool {
     if name.is_empty() || name.chars().all(|c| c == '.') {
@@ -279,7 +279,7 @@ pub fn file_has_invalid_chars(name: &str) -> bool {
 }
 
 /// 获取所有文件
-/// 
+///
 /// - `path`: 需要计算的路径
 pub fn get_all_files<P: AsRef<Path>>(local: P) -> Vec<PathBuf> {
     let mut files = Vec::new();
@@ -299,7 +299,7 @@ pub fn get_all_files<P: AsRef<Path>>(local: P) -> Vec<PathBuf> {
 }
 
 /// 获取当前目录所有文件
-/// 
+///
 /// - `path`: 需要获取的路径
 pub fn get_files<P: AsRef<Path>>(path: P) -> Vec<PathBuf> {
     let mut files = Vec::new();
@@ -316,7 +316,7 @@ pub fn get_files<P: AsRef<Path>>(path: P) -> Vec<PathBuf> {
 }
 
 /// 获取文件夹下面最后写入的文件
-/// 
+///
 /// - `path`: 获取的目录
 pub fn get_last_written_file<P: AsRef<Path>>(path: P) -> CoreResult<Option<PathBuf>> {
     let entries = fs::read_dir(&path).map_err(|err| {
@@ -356,7 +356,7 @@ pub fn get_last_written_file<P: AsRef<Path>>(path: P) -> CoreResult<Option<PathB
 }
 
 /// 获取目录占用大小
-/// 
+///
 /// - `path`: 需要获取的路径
 pub fn get_folder_size<P: AsRef<Path>>(path: P) -> u64 {
     let mut size = 0;
@@ -376,7 +376,7 @@ pub fn get_folder_size<P: AsRef<Path>>(path: P) -> u64 {
 }
 
 /// 获取当前目录所有目录
-/// 
+///
 /// - `path`: 需要获取的路径
 pub fn get_dirs<P: AsRef<Path>>(path: P) -> Vec<PathBuf> {
     let mut dirs = Vec::new();
@@ -394,7 +394,7 @@ pub fn get_dirs<P: AsRef<Path>>(path: P) -> Vec<PathBuf> {
 }
 
 /// 复制文件
-/// 
+///
 /// - `input`: 目标文件
 /// - `output`: 输出文件
 pub fn copy_file<P: AsRef<Path>>(input: P, output: P) -> CoreResult<()> {
@@ -408,7 +408,7 @@ pub fn copy_file<P: AsRef<Path>>(input: P, output: P) -> CoreResult<()> {
 }
 
 /// 异步复制文件
-/// 
+///
 /// - `input`: 目标文件
 /// - `output`: 输出文件
 pub async fn copy_file_async<P: AsRef<Path>>(input: P, output: P) -> CoreResult<()> {
@@ -422,7 +422,7 @@ pub async fn copy_file_async<P: AsRef<Path>>(input: P, output: P) -> CoreResult<
 }
 
 /// 搬运文件
-/// 
+///
 /// - `input`: 目标文件
 /// - `output`: 输出文件
 pub fn move_file<P: AsRef<Path>>(input: P, output: P) -> CoreResult<()> {
@@ -447,7 +447,7 @@ pub fn move_file<P: AsRef<Path>>(input: P, output: P) -> CoreResult<()> {
 }
 
 /// 异步搬运文件
-/// 
+///
 /// - `input`: 目标文件
 /// - `output`: 输出文件
 pub async fn move_file_async<P: AsRef<Path>>(input: P, output: P) -> CoreResult<()> {
@@ -472,7 +472,7 @@ pub async fn move_file_async<P: AsRef<Path>>(input: P, output: P) -> CoreResult<
 }
 
 /// 复制文件夹
-/// 
+///
 /// - `input`: 目标目录
 /// - `output`: 输出目录
 pub fn copy_dir<P: AsRef<Path>>(input: P, output: P) -> CoreResult<()> {
@@ -503,7 +503,7 @@ pub fn copy_dir<P: AsRef<Path>>(input: P, output: P) -> CoreResult<()> {
 }
 
 /// 异步复制文件夹
-/// 
+///
 /// - `input`: 目标目录
 /// - `output`: 输出目录
 pub async fn copy_dir_async<P: AsRef<Path>>(from: P, to: P) -> CoreResult<()> {
@@ -542,7 +542,7 @@ pub async fn copy_dir_async<P: AsRef<Path>>(from: P, to: P) -> CoreResult<()> {
 }
 
 /// 查找文件
-/// 
+///
 /// - `path`: 查找的目录
 /// - `name`: 查找的文件名
 pub fn search_file<P: AsRef<Path>>(path: P, name: &str) -> Option<PathBuf> {
@@ -551,7 +551,7 @@ pub fn search_file<P: AsRef<Path>>(path: P, name: &str) -> Option<PathBuf> {
 }
 
 /// 读文件
-/// 
+///
 /// - `file`: 文件路径
 pub fn open_read<P: AsRef<Path>>(file: P) -> CoreResult<fs::File> {
     match fs::File::open(&file) {
@@ -563,8 +563,21 @@ pub fn open_read<P: AsRef<Path>>(file: P) -> CoreResult<fs::File> {
     }
 }
 
+/// 以读写方式打开已存在的文件（不创建、不截断）
+///
+/// - `file`: 文件路径
+pub fn open_read_write<P: AsRef<Path>>(file: P) -> CoreResult<fs::File> {
+    match fs::OpenOptions::new().read(true).write(true).open(&file) {
+        Ok(ok) => Ok(ok),
+        Err(err) => Err(ErrorType::FileSystemError(FileSystemErrorData {
+            path: file.as_ref().to_path_buf(),
+            error: err.to_string(),
+        })),
+    }
+}
+
 /// 异步读文件
-/// 
+///
 /// - `file`: 文件路径
 pub async fn open_read_async<P: AsRef<Path>>(file: P) -> CoreResult<tfs::File> {
     match tfs::File::open(&file).await {
@@ -577,7 +590,7 @@ pub async fn open_read_async<P: AsRef<Path>>(file: P) -> CoreResult<tfs::File> {
 }
 
 /// 写文件
-/// 
+///
 /// - `file`: 文件路径
 pub fn open_write<P: AsRef<Path>>(file: P) -> CoreResult<fs::File> {
     if let Some(parent) = file.as_ref().parent() {
@@ -603,7 +616,7 @@ pub fn open_write<P: AsRef<Path>>(file: P) -> CoreResult<fs::File> {
 }
 
 /// 异步写文件
-/// 
+///
 /// - `file`: 文件路径
 pub async fn open_write_async<P: AsRef<Path>>(file: P) -> CoreResult<tfs::File> {
     if let Some(parent) = file.as_ref().parent() {
@@ -625,7 +638,7 @@ pub async fn open_write_async<P: AsRef<Path>>(file: P) -> CoreResult<tfs::File> 
 }
 
 /// 创建所有目录
-/// 
+///
 /// - `path`: 目录
 pub fn create_dir_all<P: AsRef<Path>>(path: P) -> CoreResult<()> {
     match fs::create_dir_all(&path) {
@@ -638,7 +651,7 @@ pub fn create_dir_all<P: AsRef<Path>>(path: P) -> CoreResult<()> {
 }
 
 /// 继续写文件
-/// 
+///
 /// - `file`: 文件路径
 pub fn open_append<P: AsRef<Path>>(file: P) -> CoreResult<fs::File> {
     if let Some(parent) = file.as_ref().parent() {
@@ -657,7 +670,7 @@ pub fn open_append<P: AsRef<Path>>(file: P) -> CoreResult<fs::File> {
 }
 
 /// 写文本
-/// 
+///
 /// - `file`: 文件路径
 /// - `text`: 文本内容
 pub fn write_text<P: AsRef<Path>>(file: P, text: &str) -> CoreResult<()> {
@@ -673,7 +686,7 @@ pub fn write_text<P: AsRef<Path>>(file: P, text: &str) -> CoreResult<()> {
 }
 
 /// 异步写文本
-/// 
+///
 /// - `file`: 文件路径
 /// - `text`: 文本内容
 pub async fn write_text_async<P: AsRef<Path>>(file: P, text: String) -> CoreResult<()> {
@@ -690,7 +703,7 @@ pub async fn write_text_async<P: AsRef<Path>>(file: P, text: String) -> CoreResu
 }
 
 /// 读文本
-/// 
+///
 /// - `file`: 文件路径
 pub fn read_text<P: AsRef<Path>>(file: P) -> CoreResult<String> {
     let mut stream = open_read(&file)?;
@@ -705,7 +718,7 @@ pub fn read_text<P: AsRef<Path>>(file: P) -> CoreResult<String> {
 }
 
 /// 异步读文件
-/// 
+///
 /// - `file`: 文件路径
 pub async fn read_text_async<P: AsRef<Path>>(file: P) -> CoreResult<String> {
     let mut stream = open_read_async(&file).await?;
@@ -720,7 +733,7 @@ pub async fn read_text_async<P: AsRef<Path>>(file: P) -> CoreResult<String> {
 }
 
 /// 读取byte数据
-/// 
+///
 /// - `file`: 文件路径
 pub fn read_byte<P: AsRef<Path>>(file: P) -> CoreResult<Vec<u8>> {
     let mut stream = open_read(&file)?;
@@ -735,7 +748,7 @@ pub fn read_byte<P: AsRef<Path>>(file: P) -> CoreResult<Vec<u8>> {
 }
 
 /// 异步读取byte数据
-/// 
+///
 /// - `file`: 文件路径
 pub async fn read_byte_async<P: AsRef<Path>>(file: P) -> CoreResult<Vec<u8>> {
     let mut stream = open_read(&file)?;
@@ -750,7 +763,7 @@ pub async fn read_byte_async<P: AsRef<Path>>(file: P) -> CoreResult<Vec<u8>> {
 }
 
 /// 删除文件
-/// 
+///
 /// - `file`: 文件路径
 pub fn delete<P: AsRef<Path>>(file: P) -> CoreResult<()> {
     if file.as_ref().is_file() {
@@ -765,7 +778,7 @@ pub fn delete<P: AsRef<Path>>(file: P) -> CoreResult<()> {
 }
 
 /// 异步删除文件
-/// 
+///
 /// - `file`: 文件路径
 pub async fn delete_async<P: AsRef<Path>>(file: P) -> CoreResult<()> {
     if file.as_ref().is_file() {
@@ -780,7 +793,7 @@ pub async fn delete_async<P: AsRef<Path>>(file: P) -> CoreResult<()> {
 }
 
 /// 写文件
-/// 
+///
 /// - `file`: 文件路径
 /// - `data`: 数据
 pub fn write_bytes<P: AsRef<Path>>(file: P, data: &[u8]) -> CoreResult<()> {
@@ -794,7 +807,7 @@ pub fn write_bytes<P: AsRef<Path>>(file: P, data: &[u8]) -> CoreResult<()> {
 }
 
 /// 异步写文件
-/// 
+///
 /// - `file`: 文件路径
 /// - `data`: 数据
 pub async fn write_bytes_async<P: AsRef<Path>>(file: P, data: &[u8]) -> CoreResult<()> {
@@ -808,7 +821,7 @@ pub async fn write_bytes_async<P: AsRef<Path>>(file: P, data: &[u8]) -> CoreResu
 }
 
 /// 写文件
-/// 
+///
 /// - `file`: 文件路径
 /// - `reader`: 数据流
 pub fn write_stream<P: AsRef<Path>, R: Read>(file: P, mut reader: R) -> CoreResult<()> {
@@ -823,7 +836,7 @@ pub fn write_stream<P: AsRef<Path>, R: Read>(file: P, mut reader: R) -> CoreResu
 }
 
 /// 写文件
-/// 
+///
 /// - `file`: 文件路径
 /// - `reader`: 数据流
 pub async fn write_stream_async<P: AsRef<Path>, R: AsyncRead + Unpin>(

@@ -33,7 +33,7 @@ fn test_is_game_version_1202() {
 #[test]
 fn test_is_game_version_120() {
     // 低于 1.20
-    assert_eq!(is_game_version_120(&"1.20.0".to_string()), false);
+    assert_eq!(is_game_version_120(&"1.19.2".to_string()), false);
     assert_eq!(is_game_version_120(&"1.19.4".to_string()), false);
     assert_eq!(is_game_version_120(&"1.7.10".to_string()), false);
     assert_eq!(is_game_version_120(&"a1.0.16".to_string()), false);

@@ -6,8 +6,7 @@ use std::{
 };
 
 use mcml_base::{
-    archives::{BaseArchive, IBaseArchiveGui},
-    path_helper, serialize_tools,
+    archives::{BaseArchive, IBaseArchiveGui}, path_helper, serialize_tools,
 };
 use mcml_names::{
     i18_items::error_type::{ArgEmptyData, CoreResult, ErrorType, PathNotExistsData},
@@ -17,7 +16,7 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::{
-    GameInstance, game_options,
+    GameInstance, delete_instance, game_options,
     gui_hook::{AddModPackState, IAddGui, IAddInstanceGui, ICopyGui},
     launcher::{SourceType, instance_setting_obj::InstanceSettingObj},
     launcher_path::version_path,
@@ -197,26 +196,48 @@ async fn modpack<P: AsRef<Path>>(
 }
 
 /// 直接解压
-async fn archive(zip: BaseArchive, unselect: Vec<String>, gui: Option<Arc<dyn IAddInstanceGui>>, pack_gui: Option<Arc<dyn IAddGui>>) -> CoreResult<Uuid> {
+async fn archive<P: AsRef<Path>>(
+    file: P,
+    unselect: Vec<String>,
+    gui: Option<Arc<dyn IAddInstanceGui>>,
+    pack_gui: Option<Arc<dyn IAddGui>>,
+    cancel: CancellationToken,
+) -> CoreResult<Uuid> {
     if let Some(pack_gui) = &pack_gui {
         pack_gui.set_state(AddModPackState::ReadInfo);
         pack_gui.set_now(1, Some(3));
     }
 
-    let data = zip.read(names::GAME_FILE)?;
+    let archive = BaseArchive::open(file)?;
+    let data = archive.read(names::GAME_FILE)?;
     let obj = serialize_tools::json_from_bytes::<InstanceSettingObj>(&data)?;
 
     let game = obj.create_instance(&gui).await?;
+    let uuid = game.read().unwrap().uuid;
     if let Some(pack_gui) = &pack_gui {
         pack_gui.set_state(AddModPackState::Extract);
         pack_gui.set_now(2, Some(3));
     }
 
-    zip.extract_all(
+    if cancel.is_cancelled() {
+        delete_instance(&uuid)?;
+        return Err(ErrorType::TaskCancel);
+    }
+
+    archive.extract_all(
         game.read().unwrap().get_base_path(),
         Some(unselect),
         pack_gui.clone().map(|g| g as Arc<dyn IBaseArchiveGui>),
-    );
+    )?;
 
+    if let Some(pack_gui) = &pack_gui {
+        pack_gui.set_state(AddModPackState::Done);
+        pack_gui.set_now(3, Some(3));
+    }
+
+    Ok(uuid)
+}
+
+async fn mmc_archive<P: AsRef<Path>>(file: P) -> CoreResult<()> {
     todo!()
 }

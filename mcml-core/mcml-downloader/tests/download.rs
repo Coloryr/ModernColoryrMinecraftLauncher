@@ -1,4 +1,4 @@
-use std::{env, sync::Arc};
+use std::{env, fs, sync::Arc};
 
 use mcml_base::file_item::{FileHash, FileItemObj, LaterRun};
 use mcml_downloader::{IDownloadGui, DownloadTaskState, download_item::DownloadItem};
@@ -70,4 +70,6 @@ async fn test_download() {
     assert!(res);
 
     mcml_downloader::stop();
+
+    fs::remove_file(run_dir.join("apache-tomcat-11.0.22.zip")).unwrap();
 }

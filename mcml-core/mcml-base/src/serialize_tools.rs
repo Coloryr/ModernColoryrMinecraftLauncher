@@ -11,7 +11,10 @@
 
 /// 序列化操作
 use std::{
-    cmp, collections::{HashMap, hash_map}, io::Read, path::Path,
+    cmp,
+    collections::{HashMap, hash_map},
+    io::Read,
+    path::Path,
 };
 
 use mcml_names::i18_items::error_type::{CoreResult, ErrorData, ErrorType};
@@ -32,14 +35,14 @@ pub struct MiniJsonMap {
 
 impl MiniJsonObj {
     /// 从json内容中创建
-    /// 
+    ///
     /// - `value`: json内容
     fn from_value(value: serde_json::Value) -> Self {
         Self { value }
     }
 
     /// 从字符串反序列化
-    /// 
+    ///
     /// - `str`: 需要反序列化的内容
     pub fn from_str(str: &str) -> CoreResult<Self> {
         let value = serde_json::from_str::<serde_json::Value>(str).map_err(|err| {
@@ -52,7 +55,7 @@ impl MiniJsonObj {
     }
 
     /// 从流中 反序列化
-    /// 
+    ///
     /// - `str`: 需要反序列化的内容
     pub fn from_stream<R: Read>(stream: R) -> CoreResult<Self> {
         let value = serde_json::from_reader::<_, serde_json::Value>(stream).map_err(|err| {
@@ -131,7 +134,7 @@ impl MiniJsonObj {
 
 impl MiniJsonMap {
     /// 取出map中的value，组成一个列表
-    /// 
+    ///
     /// - `str`: 需要取出的键
     pub fn extract_strings(&self, key: &str) -> Vec<String> {
         self.map
@@ -146,14 +149,14 @@ impl MiniJsonMap {
     }
 
     /// 获取可空字符串
-    /// 
+    ///
     /// - `key`: 需要取出的键
     pub fn get_opt_string(&self, key: &str) -> Option<String> {
         self.map.get(key).and_then(|v| v.as_string())
     }
 
     /// 获取不可空字符串
-    /// 
+    ///
     /// - `key`: 需要取出的键
     pub fn get_string(&self, key: &str) -> String {
         self.map
@@ -163,21 +166,21 @@ impl MiniJsonMap {
     }
 
     /// 获取数字
-    /// 
+    ///
     /// - `key`: 需要取出的键
     pub fn get_opt_i64(&self, key: &str) -> Option<i64> {
         self.map.get(key).and_then(|item| item.as_i64())
     }
 
     /// 获取键值对
-    /// 
+    ///
     /// - `key`: 需要取出的键
     pub fn get_object(&self, key: &str) -> Option<MiniJsonMap> {
         self.map.get(key).and_then(|item| item.as_object())
     }
 
     /// 获取列表
-    /// 
+    ///
     /// - `key`: 需要取出的键
     pub fn get_list(&self, key: &str) -> Option<Vec<MiniJsonObj>> {
         self.map.get(key).and_then(|item| item.as_list())
@@ -201,7 +204,7 @@ impl MiniTomlObj {
     }
 
     /// 获取可控字符串
-    /// 
+    ///
     /// - `key`: 需要取出的键
     pub fn get_opt_string(&self, key: &str) -> Option<String> {
         self.value
@@ -282,7 +285,7 @@ impl MiniTomlMap {
     }
 
     /// 获取队列
-    /// 
+    ///
     /// - `key`: 需要取出的键
     pub fn get_list(&self, key: &str) -> Option<Vec<MiniTomlObj>> {
         let value = self.table.get(key)?;
@@ -290,14 +293,14 @@ impl MiniTomlMap {
     }
 
     /// 获取键值对
-    /// 
+    ///
     /// - `key`: 需要取出的键
     pub fn get_object(&self, key: &str) -> Option<MiniTomlMap> {
         self.table.get(key).and_then(|item| item.as_object())
     }
 
     /// 获取字符串
-    /// 
+    ///
     /// - `key`: 需要取出的键
     pub fn get_opt_string(&self, key: &str) -> Option<String> {
         self.table
@@ -306,7 +309,7 @@ impl MiniTomlMap {
     }
 
     /// 获取布尔值
-    /// 
+    ///
     /// - `key`: 需要取出的键
     pub fn get_bool(&self, key: &str) -> bool {
         self.table
@@ -328,7 +331,7 @@ impl MiniTomlMap {
 }
 
 /// 从json文件序列化
-/// 
+///
 /// - `file`: 需要读取的文件
 pub fn json_from_file<T: de::DeserializeOwned>(file: impl AsRef<Path>) -> CoreResult<T> {
     let temp = path_helper::open_read(&file)?;
@@ -340,7 +343,7 @@ pub fn json_from_file<T: de::DeserializeOwned>(file: impl AsRef<Path>) -> CoreRe
 }
 
 /// 从bytes中序列化
-/// 
+///
 /// - `data`: 输入数据
 pub fn json_from_bytes<T: de::DeserializeOwned>(data: &[u8]) -> CoreResult<T> {
     Ok(serde_json::from_slice::<T>(&data).map_err(|err| {
@@ -351,7 +354,7 @@ pub fn json_from_bytes<T: de::DeserializeOwned>(data: &[u8]) -> CoreResult<T> {
 }
 
 /// 从流中序列化
-/// 
+///
 /// - `stream`: 输入数据流
 pub fn json_from_stream<T: de::DeserializeOwned>(stream: impl Read) -> CoreResult<T> {
     Ok(serde_json::from_reader::<_, T>(stream).map_err(|err| {
@@ -362,7 +365,7 @@ pub fn json_from_stream<T: de::DeserializeOwned>(stream: impl Read) -> CoreResul
 }
 
 /// 从字符串读取
-/// 
+///
 /// - `str`: 输入字符串
 pub fn json_from_str<T: de::DeserializeOwned>(str: &str) -> CoreResult<T> {
     Ok(serde_json::from_str::<T>(str).map_err(|err| {
@@ -373,7 +376,7 @@ pub fn json_from_str<T: de::DeserializeOwned>(str: &str) -> CoreResult<T> {
 }
 
 /// 写入json到文件中
-/// 
+///
 /// - `obj`: 需要序列化的内容
 /// - `file`: 需要写入的文件
 pub fn json_to_file<T: Serialize>(obj: &T, file: impl AsRef<Path>) -> CoreResult<()> {
@@ -388,7 +391,7 @@ pub fn json_to_file<T: Serialize>(obj: &T, file: impl AsRef<Path>) -> CoreResult
 }
 
 /// 转换到json字符串
-/// 
+///
 /// - `obj`: 需要序列化的内容
 pub fn json_to_string<T: Serialize>(obj: &T) -> CoreResult<String> {
     serde_json::to_string_pretty(obj).map_err(|err| {
@@ -399,7 +402,7 @@ pub fn json_to_string<T: Serialize>(obj: &T) -> CoreResult<String> {
 }
 
 /// 转换到bytes
-/// 
+///
 /// - `obj`: 需要序列化的内容
 pub fn json_to_bytes<T: Serialize>(obj: &T) -> CoreResult<Vec<u8>> {
     serde_json::to_vec(obj).map_err(|err| {
@@ -408,7 +411,6 @@ pub fn json_to_bytes<T: Serialize>(obj: &T) -> CoreResult<Vec<u8>> {
         })
     })
 }
-
 
 /// 反序列化一个可以是数字或数字数组的 JSON 值。
 /// 若是数字：直接返回。

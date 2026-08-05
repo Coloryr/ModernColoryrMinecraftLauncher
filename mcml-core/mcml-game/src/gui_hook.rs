@@ -24,12 +24,6 @@ pub trait IAddInstanceGui: Send + Sync {
     async fn overwrite(&self, obj: GameInstance) -> bool;
 }
 
-/// 进度条界面回调
-pub trait IProgressGui: Send + Sync {
-    /// 进度
-    fn set_now_process(&self, value: usize, all: Option<usize>);
-}
-
 /// 整合包安装界面回调
 pub trait IAddModPackGui: Send + Sync {
     /// 设置整合包安装状态
@@ -42,7 +36,7 @@ pub trait IAddModPackGui: Send + Sync {
     fn set_sub_now(&self, value: usize, all: Option<usize>);
 }
 
-pub trait IAddGui: IAddModPackGui + IProgressGui + IBaseArchiveGui {}
+pub trait IAddGui: IAddModPackGui + IBaseArchiveGui {}
 
 /// 复制文件界面回调
 pub trait ICopyGui {
