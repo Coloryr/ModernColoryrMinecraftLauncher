@@ -325,6 +325,142 @@ fn remove_file() {
 }
 
 #[test]
+fn open_read_extract() {
+    // 使用独立目录，避免与其它测试并行冲突
+    let file = Path::new("test_run_read");
+    fs::remove_dir_all(file).ok();
+    // 构建源目录
+    let source = file.join("src_read");
+    fs::create_dir_all(source.join("sub")).unwrap();
+    fs::write(source.join("readme.txt"), b"hello archive").unwrap();
+    fs::write(source.join("sub/data.bin"), vec![1u8, 2, 3, 4]).unwrap();
+
+    for (name, archive_type) in [
+        ("t.zip", ArchiveType::Zip),
+        ("t.7z", ArchiveType::R7Z),
+        ("t.tar.gz", ArchiveType::TarGz),
+    ] {
+        let arc = file.join(name);
+        // 压缩
+        BaseArchive::compress(archive_type, &arc, &source, Some(&source), &None, None).unwrap();
+        // 打开并查文件（条目名可能用 / 或 \ 分隔，按实际条目名查找）
+        let base = BaseArchive::open(&arc).unwrap();
+        let readme = base
+            .entries()
+            .iter()
+            .find(|e| e.name.ends_with("readme.txt"))
+            .unwrap()
+            .name
+            .clone();
+        let data = base
+            .entries()
+            .iter()
+            .find(|e| e.name.ends_with("data.bin"))
+            .unwrap()
+            .name
+            .clone();
+        assert_eq!(base.read(&readme).unwrap(), b"hello archive");
+        assert_eq!(base.read(&data).unwrap(), vec![1u8, 2, 3, 4]);
+        // 单文件解压
+        let out_dir = file.join(format!("out_{}", name.replace('.', "_")));
+        base.extract_file(&data, out_dir.join("data.bin"), None)
+            .unwrap();
+        assert_eq!(
+            fs::read(out_dir.join("data.bin")).unwrap(),
+            vec![1u8, 2, 3, 4]
+        );
+        // 清理
+        fs::remove_file(&arc).ok();
+        fs::remove_dir_all(&out_dir).ok();
+    }
+    fs::remove_dir_all(file).ok();
+}
+
+#[test]
+fn extract_all_unselect_parallel() {
+    // 独立目录，避免与其它测试并行冲突
+    let file = Path::new("test_run_par");
+    fs::remove_dir_all(file).ok();
+    let source = file.join("src");
+    fs::create_dir_all(source.join("a")).unwrap();
+    fs::write(source.join("keep.txt"), b"keep").unwrap();
+    fs::write(source.join("a/one.txt"), b"1").unwrap();
+    fs::write(source.join("a/two.txt"), b"2").unwrap();
+
+    let arc = file.join("par.zip");
+    BaseArchive::compress(ArchiveType::Zip, &arc, &source, Some(&source), &None, None).unwrap();
+    let base = BaseArchive::open(&arc).unwrap();
+
+    // 排除 keep.txt，并行解压剩余文件（zip 走多线程路径）
+    let out = file.join("out");
+    base.extract_all(&out, Some(vec!["keep.txt".to_string()]), None)
+        .unwrap();
+
+    assert!(!out.join("keep.txt").exists());
+    assert_eq!(fs::read(out.join("a/one.txt")).unwrap(), b"1");
+    assert_eq!(fs::read(out.join("a/two.txt")).unwrap(), b"2");
+
+    fs::remove_dir_all(file).ok();
+}
+
+#[test]
+fn tar_plain_roundtrip() {
+    // 独立目录，避免与其它测试并行冲突
+    let file = Path::new("test_run_tar");
+    fs::remove_dir_all(file).ok();
+    let source = file.join("src");
+    fs::create_dir_all(source.join("d")).unwrap();
+    fs::write(source.join("a.txt"), b"plain tar").unwrap();
+    fs::write(source.join("d/b.txt"), b"nested").unwrap();
+
+    let arc = file.join("plain.tar");
+    BaseArchive::compress(ArchiveType::Tar, &arc, &source, Some(&source), &None, None).unwrap();
+    let out = file.join("out");
+    BaseArchive::decompress(ArchiveType::Tar, &arc, &out, None).unwrap();
+
+    assert_eq!(fs::read(out.join("a.txt")).unwrap(), b"plain tar");
+    assert_eq!(fs::read(out.join("d/b.txt")).unwrap(), b"nested");
+
+    fs::remove_dir_all(file).ok();
+}
+
+#[test]
+fn add_files_data_inplace() {
+    // 独立目录，避免与其它测试并行冲突
+    let file = Path::new("test_run_add");
+    fs::remove_dir_all(file).ok();
+    let source = file.join("src");
+    fs::create_dir_all(&source).unwrap();
+    fs::write(source.join("a.txt"), b"a").unwrap();
+    let extra = file.join("extra.txt");
+    fs::write(&extra, b"extra").unwrap();
+
+    // Zip 就地追加（复用已打开句柄）
+    let arc = file.join("a.zip");
+    BaseArchive::compress(ArchiveType::Zip, &arc, &source, Some(&source), &None, None).unwrap();
+    let mut base = BaseArchive::open(&arc).unwrap();
+    base.add_files(&[(extra.clone(), PathBuf::from("extra.txt"))], None)
+        .unwrap();
+    assert_eq!(base.read("extra.txt").unwrap(), b"extra");
+    assert_eq!(base.read("a.txt").unwrap(), b"a");
+    base.add_data("data.bin", &[1u8, 2, 3], None).unwrap();
+    assert_eq!(base.read("data.bin").unwrap(), vec![1u8, 2, 3]);
+
+    // Tar 就地追加
+    let arc2 = file.join("a.tar");
+    BaseArchive::compress(ArchiveType::Tar, &arc2, &source, Some(&source), &None, None).unwrap();
+    let mut base2 = BaseArchive::open(&arc2).unwrap();
+    base2
+        .add_files(&[(extra.clone(), PathBuf::from("extra.txt"))], None)
+        .unwrap();
+    assert_eq!(base2.read("extra.txt").unwrap(), b"extra");
+    base2.add_data("data.bin", &[9u8], None).unwrap();
+    assert_eq!(base2.read("data.bin").unwrap(), vec![9u8]);
+
+    fs::remove_dir_all(file).ok();
+}
+
+#[test]
 fn archive_test() {
     zip();
     r7z();

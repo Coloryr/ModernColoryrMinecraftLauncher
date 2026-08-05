@@ -40,7 +40,7 @@ fn create_hasher(hash_type: HashType) -> Box<dyn DynDigest + Send> {
 }
 
 /// 生成校验值
-/// 
+///
 /// - `hash_type`: 校验类型
 /// - `data`: 需要校验的数据
 pub fn gen_hash(hash_type: HashType, data: &[u8]) -> String {
@@ -50,7 +50,7 @@ pub fn gen_hash(hash_type: HashType, data: &[u8]) -> String {
 }
 
 /// 从字符串生成校验值
-/// 
+///
 /// - `hash_type`: 校验类型
 /// - `data`: 需要计算的数据
 pub fn gen_hash_from_string(hash_type: HashType, data: &str) -> String {
@@ -60,7 +60,7 @@ pub fn gen_hash_from_string(hash_type: HashType, data: &str) -> String {
 }
 
 /// 从数据流生成校验值
-/// 
+///
 /// - `hash_type`: 校验类型
 /// - `reader`: 需要计算的数据流
 pub fn gen_hash_from_reader<R: Read>(hash_type: HashType, reader: &mut R) -> CoreResult<String> {
@@ -83,7 +83,7 @@ pub fn gen_hash_from_reader<R: Read>(hash_type: HashType, reader: &mut R) -> Cor
 }
 
 /// 异步从数据流生成校验值
-/// 
+///
 /// - `hash_type`: 校验类型
 /// - `reader`: 需要计算的数据流
 pub async fn gen_hash_from_reader_async<R: AsyncRead + Unpin>(
@@ -109,7 +109,7 @@ pub async fn gen_hash_from_reader_async<R: AsyncRead + Unpin>(
 }
 
 /// 从文件生成校验值
-/// 
+///
 /// - `hash_type`: 校验类型
 /// - `file`: 文件路径
 pub fn gen_hash_from_file<P: AsRef<Path>>(hash_type: HashType, file: P) -> CoreResult<String> {
@@ -118,7 +118,7 @@ pub fn gen_hash_from_file<P: AsRef<Path>>(hash_type: HashType, file: P) -> CoreR
 }
 
 /// 异步从文件生成校验值
-/// 
+///
 /// - `hash_type`: 校验类型
 /// - `file`: 文件路径
 pub async fn gen_hash_from_file_async<P: AsRef<Path>>(
@@ -130,14 +130,14 @@ pub async fn gen_hash_from_file_async<P: AsRef<Path>>(
 }
 
 /// 生成 Base64（字符串）
-/// 
+///
 /// - `input`: 需要生成的数据
 pub fn gen_base64(input: &str) -> String {
     BASE64.encode(input.as_bytes())
 }
 
 /// 反解 Base64
-/// 
+///
 /// - `input`: Base64字符串
 pub fn de_base64(input: &str) -> CoreResult<String> {
     let bytes = BASE64.decode(input).map_err(|err| {
