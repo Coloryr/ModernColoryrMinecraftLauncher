@@ -112,7 +112,12 @@ impl ModPackWorker for ModrinthPackWorker {
                     loader_version: Some(self.base.loader_version.clone()),
                     ..Default::default()
                 };
-                Ok(game.create_instance(&self.base.gui).await?.read().unwrap().uuid)
+                Ok(game
+                    .create_instance(self.base.instance_gui.clone())
+                    .await?
+                    .read()
+                    .unwrap()
+                    .uuid)
             }
             None => Err(ErrorType::DataNotFound(DataNotFoundData::Info)),
         }
@@ -123,66 +128,7 @@ impl ModPackWorker for ModrinthPackWorker {
     /// `overrides/` 下的文件去除前缀后写入游戏根目录；其余文件直接
     /// 写入游戏路径。
     async fn extract(&self, unselect: Option<Vec<String>>) -> CoreResult<()> {
-        let Some(game) = &self.base.game else {
-            return Err(ErrorType::DataNotFound(DataNotFoundData::GameInstance));
-        };
-
-        let game = game.read().unwrap();
-        let base_path = game.get_base_path();
-        let game_path = game.get_game_path();
-        let prefix = format!("{}/", names::OVERRIDE_DIR);
-
-        let entries: Vec<_> = self.base.archive.entries().iter().collect();
-        let total = entries.len();
-        let mut index = 0usize;
-
-        if let Some(pgui) = &self.base.pack_gui {
-            pgui.set_sub_now(0, Some(total));
-        }
-
-        for entry in entries {
-            if let Some(cancel) = &self.base.cancel
-                && cancel.is_cancelled()
-            {
-                return Err(ErrorType::TaskCancel);
-            }
-            if entry.is_dir {
-                index += 1;
-                if let Some(pgui) = &self.base.pack_gui {
-                    pgui.set_sub_now(index, Some(total));
-                }
-                continue;
-            }
-            // 跳过不需要解压的条目
-            if let Some(ref unsel) = unselect {
-                if unsel.iter().any(|u| u == &entry.name) {
-                    index += 1;
-                    if let Some(pgui) = &self.base.pack_gui {
-                        pgui.set_sub_now(index, Some(total));
-                    }
-                    continue;
-                }
-            }
-
-            if let Some(pgui) = &self.base.pack_gui {
-                pgui.set_sub_text(Some(entry.name.clone()));
-            }
-            index += 1;
-
-            let output = if let Some(rel) = entry.name.strip_prefix(&prefix) {
-                // 覆盖文件：去除 overrides 前缀后放到游戏根目录
-                game_path.join(rel)
-            } else {
-                base_path.join(&entry.name)
-            };
-
-            self.base.archive.extract_file(&entry.name, &output, None)?;
-            if let Some(pgui) = &self.base.pack_gui {
-                pgui.set_sub_now(index, Some(total));
-            }
-        }
-
-        Ok(())
+        self.base.extract_pack_files(names::OVERRIDE_DIR, unselect)
     }
 
     /// 获取模组下载信息。
@@ -198,9 +144,13 @@ impl ModPackWorker for ModrinthPackWorker {
         };
 
         let path = game.read().unwrap().get_game_path();
-        let list =
-            modrinth::get_mod_info(path, info, &self.base.pack_gui, self.base.cancel.clone())
-                .await?;
+        let list = modrinth::get_mod_info(
+            path,
+            info,
+            self.base.pack_gui.clone(),
+            self.base.cancel.clone(),
+        )
+        .await?;
 
         // 构建下载列表
         let downloads = list.list;
@@ -270,9 +220,13 @@ impl ModPackWorker for ModrinthPackWorker {
 
         // 获取新整合包的模组信息（下载列表 + 在线信息）
         let path = game.read().unwrap().get_game_path();
-        let res =
-            modrinth::get_mod_info(&path, info, &self.base.pack_gui, self.base.cancel.clone())
-                .await?;
+        let res = modrinth::get_mod_info(
+            &path,
+            info,
+            self.base.pack_gui.clone(),
+            self.base.cancel.clone(),
+        )
+        .await?;
 
         let mut online_info = game.read().unwrap().read_online_info();
 

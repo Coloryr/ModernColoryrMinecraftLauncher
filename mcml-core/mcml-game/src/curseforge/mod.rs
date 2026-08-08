@@ -8,12 +8,13 @@ use std::{
 };
 
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+use tokio_util::sync::CancellationToken;
 
 use crate::{
     GameInstance,
     curseforge::pack_obj::CurseForgePackObj,
     data_res::{DownloadItemRes, ItemPathRes},
-    gui_hook::{AddModPackState, IAddGui},
+    gui_hook::{AddModPackGui, AddModPackState, BaseArchiveGui},
     launcher::{
         FileType, file_online_info_obj::OnlineInfoObj, instance_setting_obj::InstanceSettingObj,
     },
@@ -24,7 +25,10 @@ use mcml_base::{
     archives::BaseArchive,
     file_item::{FileHash, FileItemObj, LaterRun},
 };
-use mcml_names::{i18_items::error_type::{CoreResult, ErrorType}, names};
+use mcml_names::{
+    i18_items::error_type::{CoreResult, ErrorType},
+    names,
+};
 use mcml_net::curseforge_api::{
     self, CurseFogreArg,
     categories_obj::CurseForgeCategoriesObj,
@@ -296,7 +300,7 @@ impl FileType {
 async fn build_results(
     game: &GameInstance,
     items: Vec<CurseForgeFileDataObj>,
-    gui: &Option<Arc<dyn IAddGui>>,
+    gui: &AddModPackGui,
     size: usize,
 ) -> DownloadItemRes {
     let mut list = Vec::with_capacity(size);
@@ -361,7 +365,7 @@ async fn build_results(
 pub async fn get_modpack_info(
     game: &GameInstance,
     obj: &CurseForgePackObj,
-    gui: &Option<Arc<dyn IAddGui>>,
+    gui: &AddModPackGui,
 ) -> CoreResult<DownloadItemRes> {
     let size = obj.files.len();
 
@@ -506,14 +510,16 @@ fn apply_class_id(class_id: u32, item: &mut ItemPathRes, instance: &InstanceSett
 pub async fn upgrade_modpack(
     game: &GameInstance,
     data: &mut CurseForgeFileDataObj,
-    gui: Option<Arc<dyn IAddGui>>,
+    pack_gui: AddModPackGui,
+    archive_gui: BaseArchiveGui,
+    cancel: CancellationToken,
 ) -> CoreResult<()> {
     data.fix_download_url();
 
     let obj = make_file_item_obj(data, mcml_downloader::get_download_path());
     let file = obj.file.clone();
 
-    if let Some(ref gui) = gui {
+    if let Some(gui) = &pack_gui {
         gui.set_state(AddModPackState::DownloadPack);
         gui.set_now(1, Some(6));
     }
@@ -523,7 +529,7 @@ pub async fn upgrade_modpack(
         return Err(ErrorType::DownloadFileFail);
     }
 
-    if let Some(ref gui) = gui {
+    if let Some(gui) = &pack_gui {
         gui.set_state(AddModPackState::ReadInfo);
         gui.set_now(2, Some(6));
     }
@@ -532,32 +538,41 @@ pub async fn upgrade_modpack(
     let mut worker = CurseForgeWorker::new(BaseModPackWorker::new(
         zip,
         None,
-        gui.as_ref().cloned(),
-        None,
+        pack_gui.clone(),
+        archive_gui.clone(),
+        cancel.clone(),
     ));
 
     worker.read_info()?;
     worker.read_version().await?;
 
+    if cancel.is_cancelled() {
+        return Err(ErrorType::TaskCancel);
+    }
+
     worker.update_game(game);
 
-    if let Some(ref gui) = gui {
+    if let Some(gui) = &pack_gui {
         gui.set_state(AddModPackState::Extract);
         gui.set_now(3, Some(6));
     }
 
     worker.extract(None).await?;
 
-    if let Some(ref gui) = gui {
+    if let Some(gui) = &pack_gui {
         gui.set_sub_text(None);
         gui.set_sub_now(0, None);
         gui.set_state(AddModPackState::GetInfo);
         gui.set_now(4, Some(6));
     }
 
+    if cancel.is_cancelled() {
+        return Err(ErrorType::TaskCancel);
+    }
+
     worker.check_upgrade().await?;
 
-    if let Some(ref gui) = gui {
+    if let Some(gui) = &pack_gui {
         gui.set_sub_text(None);
         gui.set_sub_now(0, None);
         gui.set_state(AddModPackState::DownloadFile);
@@ -566,7 +581,7 @@ pub async fn upgrade_modpack(
 
     worker.download().await;
 
-    if let Some(ref gui) = gui {
+    if let Some(gui) = &pack_gui {
         gui.set_state(AddModPackState::Done);
         gui.set_now(6, Some(6));
     }

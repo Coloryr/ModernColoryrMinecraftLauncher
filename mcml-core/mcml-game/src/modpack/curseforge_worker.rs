@@ -1,8 +1,4 @@
-use std::{
-    collections::HashMap,
-    path::Path,
-    sync::{Arc, Mutex},
-};
+use std::{collections::HashMap, path::Path, sync::Mutex};
 
 use async_trait::async_trait;
 use mcml_base::{
@@ -23,7 +19,7 @@ use crate::{
         self,
         pack_obj::{CurseForgePackObj, FilesObj},
     },
-    gui_hook::IAddGui,
+    gui_hook::AddModPackGui,
     launcher::{
         ModPackType, file_online_info_obj::OnlineInfoObj, instance_setting_obj::InstanceSettingObj,
     },
@@ -153,7 +149,12 @@ impl ModPackWorker for CurseForgeWorker {
                     loader_version: Some(self.base.loader_version.clone()),
                     ..Default::default()
                 };
-                Ok(game.create_instance(&self.base.gui).await?.read().unwrap().uuid)
+                Ok(game
+                    .create_instance(self.base.instance_gui.clone())
+                    .await?
+                    .read()
+                    .unwrap()
+                    .uuid)
             }
             None => Err(ErrorType::DataNotFound(DataNotFoundData::Info)),
         }
@@ -164,69 +165,10 @@ impl ModPackWorker for CurseForgeWorker {
     /// `overrides/` 下的文件去除前缀后写入游戏根目录；其余文件直接
     /// 写入游戏路径。
     async fn extract(&self, unselect: Option<Vec<String>>) -> CoreResult<()> {
-        let Some(game) = &self.base.game else {
-            return Err(ErrorType::DataNotFound(DataNotFoundData::GameInstance));
-        };
         let Some(info) = &self.info else {
             return Err(ErrorType::DataNotFound(DataNotFoundData::Info));
         };
-
-        let game = game.read().unwrap();
-        let base_path = game.get_base_path();
-        let game_path = game.get_game_path();
-        let prefix = format!("{}/", info.overrides);
-
-        let entries: Vec<_> = self.base.archive.entries().iter().collect();
-        let total = entries.len();
-        let mut index = 0usize;
-
-        if let Some(pgui) = &self.base.pack_gui {
-            pgui.set_sub_now(0, Some(total));
-        }
-
-        for entry in entries {
-            if let Some(cancel) = &self.base.cancel
-                && cancel.is_cancelled()
-            {
-                return Err(ErrorType::TaskCancel);
-            }
-            if entry.is_dir {
-                index += 1;
-                if let Some(pgui) = &self.base.pack_gui {
-                    pgui.set_sub_now(index, Some(total));
-                }
-                continue;
-            }
-            // 跳过不需要解压的条目
-            if let Some(ref unsel) = unselect {
-                if unsel.iter().any(|u| u == &entry.name) {
-                    index += 1;
-                    if let Some(pgui) = &self.base.pack_gui {
-                        pgui.set_sub_now(index, Some(total));
-                    }
-                    continue;
-                }
-            }
-
-            if let Some(pgui) = &self.base.pack_gui {
-                pgui.set_sub_text(Some(entry.name.clone()));
-            }
-            index += 1;
-
-            let output = if let Some(rel) = entry.name.strip_prefix(&prefix) {
-                // 覆盖文件：去除 overrides 前缀后放到游戏根目录
-                game_path.join(rel)
-            } else {
-                base_path.join(&entry.name)
-            };
-
-            self.base.archive.extract_file(&entry.name, &output, None)?;
-            if let Some(pgui) = &self.base.pack_gui {
-                pgui.set_sub_now(index, Some(total));
-            }
-        }
-
-        Ok(())
+        self.base.extract_pack_files(&info.overrides, unselect)
     }
 
     /// 获取模组下载信息。
@@ -354,8 +296,8 @@ async fn check_upgrade_with_old_manifest(
     old_info: &CurseForgePackObj,
     game: &GameInstance,
     downloads: &Mutex<Vec<FileItemObj>>,
-    pack_gui: &Option<Arc<dyn IAddGui>>,
-    cancel: &Option<CancellationToken>,
+    pack_gui: &AddModPackGui,
+    cancel: &CancellationToken,
 ) -> CoreResult<()> {
     let mut add_list: Vec<&FilesObj> = Vec::new();
     let mut remove_list: Vec<&FilesObj> = Vec::new();
@@ -391,9 +333,7 @@ async fn check_upgrade_with_old_manifest(
     }
 
     // 检查取消
-    if let Some(cancel) = cancel
-        && cancel.is_cancelled()
-    {
+    if cancel.is_cancelled() {
         return Err(ErrorType::TaskCancel);
     }
 
@@ -415,9 +355,7 @@ async fn check_upgrade_with_old_manifest(
     }
 
     // 检查取消
-    if let Some(cancel) = cancel
-        && cancel.is_cancelled()
-    {
+    if cancel.is_cancelled() {
         return Err(ErrorType::TaskCancel);
     }
 
@@ -442,9 +380,7 @@ async fn check_upgrade_with_old_manifest(
 
     for (b, item) in add_list.iter().enumerate() {
         // 检查取消
-        if let Some(cancel) = cancel
-            && cancel.is_cancelled()
-        {
+        if cancel.is_cancelled() {
             return Err(ErrorType::TaskCancel);
         }
 
@@ -506,8 +442,8 @@ async fn check_upgrade_sha1(
     new_info: &CurseForgePackObj,
     game: &GameInstance,
     downloads: &Mutex<Vec<FileItemObj>>,
-    pack_gui: &Option<Arc<dyn IAddGui>>,
-    cancel: &Option<CancellationToken>,
+    pack_gui: &AddModPackGui,
+    cancel: &CancellationToken,
 ) -> CoreResult<()> {
     let file_ids: Vec<u64> = new_info.files.iter().map(|f| f.file_id).collect();
     if file_ids.is_empty() {
@@ -530,9 +466,7 @@ async fn check_upgrade_sha1(
             // 逐文件降级
             let total = file_ids.len();
             for (idx, &fid) in file_ids.iter().enumerate() {
-                if let Some(cancel) = cancel
-                    && cancel.is_cancelled()
-                {
+                if cancel.is_cancelled() {
                     return Err(ErrorType::TaskCancel);
                 }
                 let fid_str = fid.to_string();
@@ -552,9 +486,7 @@ async fn check_upgrade_sha1(
     };
 
     // 检查取消
-    if let Some(cancel) = cancel
-        && cancel.is_cancelled()
-    {
+    if cancel.is_cancelled() {
         return Err(ErrorType::TaskCancel);
     }
 

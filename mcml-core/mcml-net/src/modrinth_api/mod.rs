@@ -1,7 +1,9 @@
 use std::collections::HashMap;
 
-use mcml_base::serialize_tools;
-use mcml_names::{i18_items::error_type::CoreResult, names};
+use mcml_names::{
+    i18_items::error_type::{CoreResult, ErrorData, ErrorType},
+    names,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -17,7 +19,7 @@ pub mod search_obj;
 pub mod team_obj;
 pub mod version_obj;
 
-pub const CLASS_MODPACK: &str = "Modpack";
+pub const CLASS_MODPACK: &str = "modpack";
 pub const CLASS_MOD: &str = "mod";
 pub const CLASS_RESOURCEPACK: &str = "resourcepack";
 pub const CLASS_SHADERPACK: &str = "shader";
@@ -126,18 +128,18 @@ async fn search(
     limit: u32,
     facets: Vec<FacetsObj>,
 ) -> CoreResult<ModrinthSearchObj> {
-    let url = format!(
-        "{}search?query={}&index={}&offset={}&limit={}&facets={}",
-        urls::MODRINTH,
-        query,
-        index.get_index(),
-        offset,
-        limit,
-        build_facets(facets)
-    );
+    // 查询词与 facets 含空格、引号、方括号等特殊字符，
+    // 必须经 URL 编码，否则服务端会静默返回空结果
+    let mut url = reqwest::Url::parse(&format!("{}search", urls::MODRINTH)).unwrap();
+    url.query_pairs_mut()
+        .append_pair("query", query)
+        .append_pair("index", index.get_index())
+        .append_pair("offset", &offset.to_string())
+        .append_pair("limit", &limit.to_string())
+        .append_pair("facets", &build_facets(facets));
 
     crate::get_work_client()
-        .get_json_limited(&url, LIMITE_PER_MIN)
+        .get_json_limited(url.as_str(), LIMITE_PER_MIN)
         .await
 }
 
@@ -293,14 +295,19 @@ pub async fn get_version(id: &str, version: &str) -> CoreResult<ModrinthVersionO
 ///
 /// - `ids`: 版本号
 pub async fn get_versions(ids: Vec<String>) -> CoreResult<Vec<ModrinthVersionObj>> {
-    let url = format!(
-        "{}versions?ids={}",
-        urls::MODRINTH,
-        serialize_tools::json_to_string(&ids)?
-    );
+    // 用紧凑 JSON + URL 编码：`json_to_string` 输出 pretty 多行格式，
+    // 直接拼进 URL 会带换行与缩进（服务端解析失败或必须依赖 reqwest 兜底清理）
+    let ids_json = serde_json::to_string(&ids).map_err(|err| {
+        ErrorType::SerializerError(ErrorData {
+            error: err.to_string(),
+        })
+    })?;
+
+    let mut url = reqwest::Url::parse(&format!("{}versions", urls::MODRINTH)).unwrap();
+    url.query_pairs_mut().append_pair("ids", &ids_json);
 
     crate::get_work_client()
-        .get_json_limited(&url, LIMITE_PER_MIN)
+        .get_json_limited(url.as_str(), LIMITE_PER_MIN)
         .await
 }
 

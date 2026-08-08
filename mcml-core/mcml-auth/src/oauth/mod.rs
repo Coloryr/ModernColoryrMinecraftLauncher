@@ -318,7 +318,7 @@ impl LoginObj {
     /// # 参数
     ///
     /// - `cancel`: 取消令牌，用于中断异步操作
-    pub async fn refresh_oauth(&mut self, cancel: &CancellationToken) -> CoreResult<()> {
+    pub async fn refresh_oauth(&mut self, cancel: CancellationToken) -> CoreResult<()> {
         // 快速路径：尝试用现有 token 获取 profile
         let profile = mojang_api::get_minecraft_profile(&self.access_token).await;
         if profile.is_ok() {

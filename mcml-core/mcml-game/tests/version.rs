@@ -1,4 +1,4 @@
-use mcml_game::mojang::version_checker::{is_game_version_117, is_game_version_120, is_game_version_1202, is_game_version_greater};
+use mcml_game::mojang::version_checker::{is_game_version_117, is_game_version_120, is_game_version_1202, is_game_version_greater, is_game_version_greater_equal};
 
 #[test]
 fn test_is_game_version_1202() {
@@ -106,4 +106,24 @@ fn test_version_comparison() {
     assert!(is_game_version_greater("26.1-pre-1", "26.1-snapshot-1"));
     assert!(is_game_version_greater("26.1-rc-1", "26.1-snapshot-1"));
     assert!(is_game_version_greater("26.1", "26.1-rc-1"));
+
+    // 无法解析时返回 false，而不是 panic
+    assert!(!is_game_version_greater("unknown", "1.20.2"));
+    assert!(!is_game_version_greater("1.20.2", "unknown"));
+}
+
+#[test]
+fn test_version_comparison_equal() {
+    // >=
+    assert!(is_game_version_greater_equal("1.20.2", "1.20.2"));
+    assert!(is_game_version_greater_equal("1.20.3", "1.20.2"));
+    assert!(!is_game_version_greater_equal("1.20.1", "1.20.2"));
+
+    // 新格式
+    assert!(is_game_version_greater_equal("26.1", "26.1"));
+    assert!(is_game_version_greater_equal("26.1", "1.21.1"));
+
+    // 无法解析时返回 false，而不是 panic
+    assert!(!is_game_version_greater_equal("unknown", "1.20.2"));
+    assert!(!is_game_version_greater_equal("1.20.2", "unknown"));
 }

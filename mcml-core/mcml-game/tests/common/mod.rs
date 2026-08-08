@@ -1,0 +1,151 @@
+//! 共享测试工具：网络样本的下载与缓存。
+//!
+//! 整合包 / 光影包等二进制样本不允许提交进 git，改为在测试运行时通过
+//! Modrinth API 解析下载地址、下载并缓存到系统临时目录。
+//! 网络不可用时调用方跳过对应测试（打印提示，不 fail）。
+//!
+//! 该模块按测试二进制单独编译，各二进制只用到部分函数，故关闭死代码警告。
+
+#![allow(dead_code)]
+
+use std::hash::{Hash, Hasher};
+use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
+
+use mcml_base::serialize_tools::json_from_bytes;
+use mcml_net::modrinth_api::version_obj::ModrinthVersionObj;
+
+/// 网络请求所需的一次性初始化（配置 + 语言 + HTTP 客户端）。
+fn init_net() {
+    static NET: OnceLock<()> = OnceLock::new();
+    NET.get_or_init(|| {
+        let dir = std::env::temp_dir().join("mcml-test-net-init");
+        std::fs::create_dir_all(&dir).ok();
+        mcml_config::init(&dir);
+        mcml_names::init(&dir);
+        mcml_net::init();
+    });
+}
+
+/// 在同步测试中执行异步请求。
+fn block_on<F: std::future::Future>(future: F) -> F::Output {
+    static RUNTIME: OnceLock<tokio::runtime::Runtime> = OnceLock::new();
+    let runtime = RUNTIME.get_or_init(|| {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("构建测试 tokio runtime 失败")
+    });
+    runtime.block_on(future)
+}
+
+/// 下载缓存目录（系统临时目录下，跨测试与跨进程复用）。
+fn cache_dir() -> PathBuf {
+    let dir = std::env::temp_dir().join("mcml-test-data");
+    std::fs::create_dir_all(&dir).expect("创建测试数据缓存目录失败");
+    dir
+}
+
+/// 由 URL 推导稳定的缓存文件名（文件名字段 + URL 哈希）。
+fn cache_path(url: &str) -> PathBuf {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    url.hash(&mut hasher);
+    let hash = hasher.finish();
+    let name = url
+        .rsplit(['/', '?'])
+        .find(|s| !s.is_empty() && s.contains('.'))
+        .map(|s| {
+            s.chars()
+                .map(|c| {
+                    if c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_') {
+                        c
+                    } else {
+                        '_'
+                    }
+                })
+                .collect::<String>()
+        })
+        .unwrap_or_else(|| "download".to_string());
+    cache_dir().join(format!("{hash:016x}-{name}"))
+}
+
+/// 下载 URL 到缓存目录并返回本地路径。
+///
+/// 已有缓存直接复用（不重新下载）；下载失败返回 `None`，由调用方决定跳过。
+pub fn download(url: &str) -> Option<PathBuf> {
+    let path = cache_path(url);
+    if path.exists() {
+        return Some(path);
+    }
+    init_net();
+    let data = block_on(mcml_net::get_work_client().get_bytes(url)).ok()?;
+    if data.is_empty() {
+        return None;
+    }
+    std::fs::write(&path, &data).ok()?;
+    Some(path)
+}
+
+/// 通过 Modrinth API 解析指定项目 + 版本号的主文件下载地址。
+///
+/// 返回 `(文件名, 下载地址)`；项目或版本不存在时返回 `None`。
+pub fn resolve_project_version(project: &str, version: &str) -> Option<(String, String)> {
+    let url = format!("https://api.modrinth.com/v2/project/{project}/version");
+    let versions: Vec<ModrinthVersionObj> = get_json(&url)?;
+    let target = versions.into_iter().find(|v| v.version_number == version)?;
+    pick_file(target)
+}
+
+/// 下载测试整合包（Fabulously Optimized 14.0.0-beta.3）到缓存目录。
+///
+/// 版本号是硬编码的：解析测试断言依赖该版本的具体字段与文件数，
+/// 若跟随最新版本，字段会随上游变动而失效。
+pub fn download_mrpack() -> Option<PathBuf> {
+    let (_name, url) = resolve_project_version("fabulously-optimized", "14.0.0-beta.3")?;
+    download(&url)
+}
+
+/// 常用光影包在 Modrinth 上的项目 slug（已逐一验证存在）。
+pub const SHADERPACK_SLUGS: &[&str] = &[
+    "bsl-shaders",
+    "complementary-reimagined",
+    "complementary-unbound",
+    "makeup-ultra-fast-shaders",
+    "solas-shader",
+    "miniature-shader",
+    "spooklementary",
+];
+
+/// 常用资源包在 Modrinth 上的项目 slug（已逐一验证存在）。
+pub const RESOURCEPACK_SLUGS: &[&str] = &[
+    "faithful-32x",
+    "faithful-64x",
+    "fresh-animations",
+    "3d-default",
+    "fancy-foliage",
+];
+
+/// 解析项目最新版本的主文件并下载到缓存目录。
+pub fn download_latest(slug: &str) -> Option<PathBuf> {
+    let url = format!("https://api.modrinth.com/v2/project/{slug}/version");
+    let versions: Vec<ModrinthVersionObj> = get_json(&url)?;
+    let target = versions.into_iter().next()?;
+    let (_name, file_url) = pick_file(target)?;
+    download(&file_url)
+}
+
+/// 请求 Modrinth API 并反序列化。
+fn get_json<T: serde::de::DeserializeOwned>(url: &str) -> Option<T> {
+    init_net();
+    let data = block_on(mcml_net::get_work_client().get_bytes(url)).ok()?;
+    json_from_bytes(&data).ok()
+}
+
+/// 从版本对象中挑选主文件（无主文件时取第一个非空地址）。
+fn pick_file(target: ModrinthVersionObj) -> Option<(String, String)> {
+    let file = target
+        .files
+        .into_iter()
+        .find(|f| f.primary || !f.url.is_empty())?;
+    Some((file.filename, file.url))
+}

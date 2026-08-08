@@ -199,7 +199,7 @@ impl LoginObj {
     /// # 参数
     ///
     /// - `cancel`: 取消令牌，用于中断异步操作
-    pub async fn refresh(&mut self, cancel: &CancellationToken) -> CoreResult<()> {
+    pub async fn refresh(&mut self, cancel: CancellationToken) -> CoreResult<()> {
         match &self.auth_type {
             AuthType::OAuth => self.refresh_oauth(cancel).await,
             AuthType::Nide8 => self.refresh_nide8(cancel).await,

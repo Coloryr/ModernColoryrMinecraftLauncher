@@ -1,31 +1,40 @@
-use std::{env, path::Path};
+//! 光影包读取测试。
+//!
+//! 光影包样本不提交进 git，测试运行时通过 Modrinth API 解析各项目的
+//! 最新版本并下载到缓存目录。网络不可用时跳过（打印提示，不 fail）。
 
-use mcml_base::path_helper;
+mod common;
+
 use mcml_game::game_shaderpacks;
 
-fn start(run_dir: &Path) {
-    mcml_names::init(run_dir);
-}
-
+/// 从 Modrinth 下载多个常见光影包并解析名称 / 说明。
 #[test]
 fn read_shaderpacks() {
-    let exe_path = env::current_exe().expect("Failed to get exe path");
-    let exe_dir = exe_path.parent().expect("Failed to get exe directory");
-    let run_dir = exe_dir.parent().unwrap().to_path_buf();
+    let mut downloaded = 0;
+    let mut parsed = 0;
 
-    start(&run_dir);
+    for slug in common::SHADERPACK_SLUGS {
+        let Some(path) = common::download_latest(slug) else {
+            eprintln!("[跳过] 光影包 {slug} 下载失败（网络不可用？）");
+            continue;
+        };
+        downloaded += 1;
 
-    let files = path_helper::get_files("./tests/shaderpacks/");
-    for item in files.iter() {
-        let obj = game_shaderpacks::read_shaderpacks(item);
-        match obj {
+        match game_shaderpacks::read_shaderpacks(&path) {
             Ok(obj) => {
-                println!("name = {}, comment = {}", obj.name, obj.comment);
+                parsed += 1;
+                println!("{slug}: name = {}, comment = {}", obj.name, obj.comment);
             }
             Err(err) => {
-                println!("error file: {}", item.to_string_lossy());
-                println!("error: {}", err);
+                // 下载成功但解析失败：多半是样本本身不含语言文件，仅提示不中断
+                eprintln!("[警告] 光影包 {slug} 解析失败：{err}");
             }
         }
     }
+
+    if downloaded == 0 {
+        eprintln!("全部光影包样本均无法下载（需要网络），测试跳过");
+        return;
+    }
+    assert!(parsed > 0, "下载成功但未能解析任何光影包");
 }

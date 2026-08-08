@@ -78,7 +78,7 @@ impl LoginObj {
     /// # 参数
     ///
     /// - `cancel`: 取消令牌
-    pub async fn refresh_authlib(&mut self, cancel: &CancellationToken) -> CoreResult<()> {
+    pub async fn refresh_authlib(&mut self, cancel: CancellationToken) -> CoreResult<()> {
         let server = self.text1.clone().unwrap();
         if legacy::validate(&server, self).await? {
             if cancel.is_cancelled() {

@@ -152,10 +152,11 @@ pub fn get_forge_jar(mc: &str, version: &str) -> String {
 /// - `mc`: 游戏版本
 /// - `version`: forge版本
 pub fn get_neoforge_jar(v2222: bool, mc: &str, version: &str) -> String {
+    // 内层路径不带结尾斜杠，外层拼接时会补上，避免出现双斜杠
     let url = if v2222 {
-        format!("neoforge/{version}/")
+        format!("neoforge/{version}")
     } else {
-        format!("forge/{mc}-{version}/")
+        format!("forge/{mc}-{version}")
     };
 
     match get_source() {

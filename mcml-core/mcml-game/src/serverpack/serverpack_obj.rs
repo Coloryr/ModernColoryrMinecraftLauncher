@@ -1,7 +1,10 @@
 use mcml_config::config_obj::{RunArgObj, WindowSettingObj};
 use serde::{Deserialize, Serialize};
 
-use crate::{launcher::instance_setting_obj::{AdvanceJvmObj, ServerObj}, loader::LoaderType};
+use crate::{
+    launcher::instance_setting_obj::{AdvanceJvmObj, ServerObj},
+    loader::LoaderType,
+};
 
 /// 服务器实例
 #[derive(Serialize, Deserialize, Debug)]
@@ -37,6 +40,99 @@ pub struct ServerPackObj {
     /// 服务器包版本
     #[serde(rename = "PackVersion")]
     pub pack_version: String,
+    /// 模组列表
+    #[serde(rename = "Files")]
+    pub online_list: Vec<ServerItemObj>,
+    /// 配置文件列表
+    #[serde(rename = "Archives")]
+    pub archive_list: Vec<ServerArchiveItemObj>,
+}
 
-    pub mod_list: 
+impl Default for ServerPackObj {
+    fn default() -> Self {
+        Self {
+            name: Default::default(),
+            version: Default::default(),
+            loader: Default::default(),
+            loader_version: Default::default(),
+            run_arg: Default::default(),
+            window: Default::default(),
+            start_server: Default::default(),
+            advance_jvm: Default::default(),
+            text: Default::default(),
+            pack_version: Default::default(),
+            online_list: Default::default(),
+            archive_list: Default::default(),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(default)]
+pub struct ServerArchiveItemObj {
+    /// 文件名
+    #[serde(rename = "File")]
+    pub file: String,
+    /// 解压到的位置
+    #[serde(rename = "Path")]
+    pub dir: String,
+    /// 是否删除旧的路径
+    #[serde(rename = "Over")]
+    pub delete_old: bool,
+    /// 下载地址
+    #[serde(rename = "Url")]
+    pub url: String,
+    #[serde(rename = "Sha1")]
+    pub sha1: Option<String>,
+    #[serde(rename = "Sha256")]
+    pub sha256: Option<String>,
+}
+
+impl Default for ServerArchiveItemObj {
+    fn default() -> Self {
+        Self {
+            file: Default::default(),
+            dir: Default::default(),
+            delete_old: Default::default(),
+            url: Default::default(),
+            sha1: Default::default(),
+            sha256: Default::default(),
+        }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(default)]
+pub struct ServerItemObj {
+    /// 游戏目录下的相对路径（如 `mods/foo.jar`、`config/bar.toml`）
+    #[serde(rename = "File")]
+    pub file: String,
+    /// 项目编号
+    #[serde(rename = "ProjectId")]
+    pub pid: Option<String>,
+    /// 文件编号
+    #[serde(rename = "FileId")]
+    pub fid: Option<String>,
+    /// 下载地址
+    #[serde(rename = "Url")]
+    pub url: Option<String>,
+    /// 文件校验
+    #[serde(rename = "Sha1")]
+    pub sha1: Option<String>,
+    /// 文件校验
+    #[serde(rename = "Sha256")]
+    pub sha256: Option<String>,
+}
+
+impl Default for ServerItemObj {
+    fn default() -> Self {
+        Self {
+            file: Default::default(),
+            pid: Default::default(),
+            fid: Default::default(),
+            url: Default::default(),
+            sha1: Default::default(),
+            sha256: Default::default(),
+        }
+    }
 }
