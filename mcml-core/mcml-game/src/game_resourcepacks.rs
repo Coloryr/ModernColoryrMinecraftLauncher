@@ -82,7 +82,7 @@ impl Default for ResourcepackObj {
     }
 }
 
-fn process_resourcepack<P: AsRef<Path>>(path: P) -> CoreResult<ResourcepackObj> {
+pub fn process_resourcepack<P: AsRef<Path>>(path: P) -> CoreResult<ResourcepackObj> {
     let file = path_helper::open_read(&path)?;
     let mut zip = ZipArchive::new(file).map_err(|err| {
         ErrorType::ArchiveOpenError(FileSystemErrorData {

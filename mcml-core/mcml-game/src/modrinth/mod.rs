@@ -1,7 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
     path::Path,
-    sync::{Arc, Mutex, OnceLock},
+    sync::{Mutex, OnceLock},
 };
 
 use mcml_base::{
@@ -26,7 +26,7 @@ use tokio_util::sync::CancellationToken;
 use crate::{
     GameInstance,
     data_res::DownloadItemRes,
-    gui_hook::{AddModPackState, IAddGui},
+    gui_hook::{AddModPackGui, AddModPackState, BaseArchiveGui},
     launcher::{
         FileType, file_online_info_obj::OnlineInfoObj, instance_setting_obj::InstanceSettingObj,
     },
@@ -132,8 +132,8 @@ pub async fn get_game_versions() -> CoreResult<Vec<String>> {
 pub async fn get_mod_info<P: AsRef<Path>>(
     path: P,
     info: &ModrinthPackObj,
-    gui: &Option<Arc<dyn IAddGui>>,
-    cancel: Option<CancellationToken>,
+    pack_gui: AddModPackGui,
+    cancel: CancellationToken,
 ) -> CoreResult<DownloadItemRes> {
     let mut list = Vec::new();
     let mut mods = HashMap::new();
@@ -144,9 +144,7 @@ pub async fn get_mod_info<P: AsRef<Path>>(
     let mut hash = HashMap::new();
 
     for item in info.files.iter() {
-        if let Some(cancel) = &cancel
-            && cancel.is_cancelled()
-        {
+        if cancel.is_cancelled() {
             return Err(ErrorType::TaskCancel);
         }
 
@@ -209,7 +207,7 @@ pub async fn get_mod_info<P: AsRef<Path>>(
 
         now += 1;
 
-        if let Some(gui) = gui {
+        if let Some(gui) = &pack_gui {
             gui.set_sub_now(now, Some(size));
         }
 
@@ -278,15 +276,18 @@ fn get_mod_dependencies_inner(
     let list: Mutex<Vec<ModrinthModDependenciesRes>> = Mutex::new(Vec::new());
 
     dependencies.par_iter().for_each(|item| {
+        // 无 project_id 的依赖是打包内置文件（如 Mod Menu Helper.zip），无法通过项目 API 解析
+        let Some(project_id) = &item.project_id else { return };
+
         // 原子检查并插入：HashSet::insert 在元素已存在时返回 false
         {
             let mut ids_guard = ids.lock().unwrap();
-            if !ids_guard.insert(item.project_id.clone()) {
+            if !ids_guard.insert(project_id.clone()) {
                 return;
             }
         }
 
-        let id = item.project_id.clone();
+        let id = project_id.clone();
         let opt = !item.dependency_type.eq_ignore_ascii_case("required");
 
         let (res1, res2) = handle.block_on(async {
@@ -296,7 +297,7 @@ fn get_mod_dependencies_inner(
                 Ok(data) => match &item.version_id {
                     Some(version) => (
                         Ok(data),
-                        modrinth_api::get_version(&item.project_id, &version).await,
+                        modrinth_api::get_version(project_id, version).await,
                     ),
                     None => {
                         let loader = if matches!(loader, LoaderType::Custom)
@@ -308,7 +309,7 @@ fn get_mod_dependencies_inner(
                             Some(loader.prefix())
                         };
                         let data1 = modrinth_api::get_file_versions(
-                            &item.project_id,
+                            project_id,
                             Some(version),
                             loader,
                         )
@@ -356,12 +357,14 @@ fn get_mod_dependencies_inner(
 pub async fn upgrade_modpack(
     game: &GameInstance,
     data: &mut ModrinthVersionObj,
-    gui: Option<Arc<dyn IAddGui>>,
+    pack_gui: AddModPackGui,
+    archive_gui: BaseArchiveGui,
+    cancel: CancellationToken,
 ) -> CoreResult<()> {
     let obj = make_download_obj(data, mcml_downloader::get_download_path());
     let file = obj.file.clone();
 
-    if let Some(ref gui) = gui {
+    if let Some(gui) = &pack_gui {
         gui.set_state(AddModPackState::DownloadPack);
         gui.set_now(1, Some(6));
     }
@@ -371,7 +374,7 @@ pub async fn upgrade_modpack(
         return Err(ErrorType::DownloadFileFail);
     }
 
-    if let Some(ref gui) = gui {
+    if let Some(gui) = &pack_gui {
         gui.set_state(AddModPackState::ReadInfo);
         gui.set_now(2, Some(6));
     }
@@ -380,32 +383,41 @@ pub async fn upgrade_modpack(
     let mut worker = ModrinthPackWorker::new(BaseModPackWorker::new(
         zip,
         None,
-        gui.as_ref().cloned(),
-        None,
+        pack_gui.clone(),
+        archive_gui,
+        cancel.clone(),
     ));
 
     worker.read_info()?;
     worker.read_version().await?;
 
+    if cancel.is_cancelled() {
+        return Err(ErrorType::TaskCancel);
+    }
+
     worker.update_game(game);
 
-    if let Some(ref gui) = gui {
+    if let Some(gui) = &pack_gui {
         gui.set_state(AddModPackState::Extract);
         gui.set_now(3, Some(6));
     }
 
     worker.extract(None).await?;
 
-    if let Some(ref gui) = gui {
+    if let Some(gui) = &pack_gui {
         gui.set_sub_text(None);
         gui.set_sub_now(0, None);
         gui.set_state(AddModPackState::GetInfo);
         gui.set_now(4, Some(6));
     }
 
+    if cancel.is_cancelled() {
+        return Err(ErrorType::TaskCancel);
+    }
+
     worker.check_upgrade().await?;
 
-    if let Some(ref gui) = gui {
+    if let Some(gui) = &pack_gui {
         gui.set_sub_text(None);
         gui.set_sub_now(0, None);
         gui.set_state(AddModPackState::DownloadFile);
@@ -414,7 +426,7 @@ pub async fn upgrade_modpack(
 
     worker.download().await;
 
-    if let Some(ref gui) = gui {
+    if let Some(gui) = &pack_gui {
         gui.set_state(AddModPackState::Done);
         gui.set_now(6, Some(6));
     }

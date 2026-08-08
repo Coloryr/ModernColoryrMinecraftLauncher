@@ -12,4 +12,8 @@
 **/*.rs.bk
 /mcml-game/tests/core_mods
 /mcml-game/tests/fail_mods
+
+# Test data samples are downloaded/generated at test time, not committed
+/mcml-game/tests/modpack
+/mcml-game/tests/shaderpacks
 /mcml-game/tests/schematics

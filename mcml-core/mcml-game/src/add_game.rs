@@ -1,14 +1,8 @@
 //! 添加游戏实例操作
 //! 导入文件夹，导入压缩包
-use std::{
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::path::{Path, PathBuf};
 
-use mcml_base::{
-    archives::{BaseArchive, IBaseArchiveGui},
-    path_helper, serialize_tools,
-};
+use mcml_base::{archives::BaseArchive, path_helper, serialize_tools};
 use mcml_names::{
     i18_items::error_type::{
         ArgEmptyData, CoreResult, DataNotFoundData, ErrorType, PathNotExistsData,
@@ -21,8 +15,8 @@ use uuid::Uuid;
 use crate::{
     GameInstance,
     curseforge::pack_obj::CurseForgePackObj,
-    delete_instance, game_options,
-    gui_hook::{AddModPackState, IAddGui, IAddInstanceGui, ICopyGui},
+    game_options,
+    gui_hook::{AddInstanceGui, AddModPackGui, AddModPackState, BaseArchiveGui, ProgressGui},
     launcher::{
         ModPackType,
         instance_setting_obj::{CustomLoaderObj, InstanceSettingObj},
@@ -57,8 +51,8 @@ pub async fn add_game_folder<P: AsRef<Path>>(
     name: Option<String>,
     group: Option<String>,
     unselect: Option<Vec<PathBuf>>,
-    gui: Option<Arc<dyn IAddInstanceGui>>,
-    copy_gui: Option<Arc<dyn ICopyGui>>,
+    instance_gui: AddInstanceGui,
+    progress_gui: ProgressGui,
     cancel: CancellationToken,
 ) -> CoreResult<GameInstance> {
     if !dir.as_ref().exists() || !dir.as_ref().is_dir() {
@@ -117,11 +111,11 @@ pub async fn add_game_folder<P: AsRef<Path>>(
         return Err(ErrorType::TaskCancel);
     }
 
-    let res = instance.create_instance(&gui).await?;
+    let res = instance.create_instance(instance_gui.clone()).await?;
 
     res.read()
         .unwrap()
-        .copy_files(dir, unselect, is_mmc, &copy_gui)
+        .copy_files(dir, unselect, is_mmc, progress_gui.clone())
         .await?;
 
     Ok(res)
@@ -133,8 +127,9 @@ async fn modpack<P: AsRef<Path>>(
     source: ModPackType,
     group: Option<String>,
     unselect: Option<Vec<String>>,
-    gui: Option<Arc<dyn IAddInstanceGui>>,
-    pack_gui: Option<Arc<dyn IAddGui>>,
+    instance_gui: AddInstanceGui,
+    pack_gui: AddModPackGui,
+    archive_gui: BaseArchiveGui,
     cancel: CancellationToken,
 ) -> CoreResult<Uuid> {
     if !file.as_ref().exists() || file.as_ref().is_dir() {
@@ -152,16 +147,18 @@ async fn modpack<P: AsRef<Path>>(
     let mut work: Box<dyn ModPackWorker> = if source == ModPackType::CurseForge {
         Box::new(CurseForgeWorker::new(BaseModPackWorker::new(
             BaseArchive::open(file)?,
-            gui,
+            instance_gui,
             pack_gui.clone(),
-            Some(cancel.clone()),
+            archive_gui,
+            cancel.clone(),
         )))
     } else {
         Box::new(ModrinthPackWorker::new(BaseModPackWorker::new(
             BaseArchive::open(file)?,
-            gui,
+            instance_gui,
             pack_gui.clone(),
-            Some(cancel.clone()),
+            archive_gui,
+            cancel.clone(),
         )))
     };
 
@@ -230,9 +227,9 @@ fn extract_pack<P: AsRef<Path>>(
     output_dir: P,
     unselect: Vec<String>,
     strip_dir: Option<String>,
-    gui: Option<Arc<dyn IBaseArchiveGui>>,
+    archive_gui: BaseArchiveGui,
 ) -> CoreResult<()> {
-    archive.extract_all(output_dir, Some(unselect), strip_dir, gui)
+    archive.extract_all(output_dir, Some(unselect), strip_dir, archive_gui)
 }
 
 /// 直接解压
@@ -241,8 +238,9 @@ async fn archive<P: AsRef<Path>>(
     name: Option<String>,
     group: Option<String>,
     unselect: Vec<String>,
-    gui: Option<Arc<dyn IAddInstanceGui>>,
-    pack_gui: Option<Arc<dyn IAddGui>>,
+    instance_gui: AddInstanceGui,
+    pack_gui: AddModPackGui,
+    archive_gui: BaseArchiveGui,
     cancel: CancellationToken,
 ) -> CoreResult<Uuid> {
     if !file.as_ref().exists() || file.as_ref().is_dir() {
@@ -274,7 +272,7 @@ async fn archive<P: AsRef<Path>>(
         obj.group = Some(group);
     }
 
-    let game = obj.create_instance(&gui).await?;
+    let game = obj.create_instance(instance_gui).await?;
     let uuid = game.read().unwrap().uuid;
     if let Some(pack_gui) = &pack_gui {
         pack_gui.set_state(AddModPackState::Extract);
@@ -282,7 +280,7 @@ async fn archive<P: AsRef<Path>>(
     }
 
     if cancel.is_cancelled() {
-        delete_instance(&uuid)?;
+        crate::delete_instance(&uuid)?;
         return Err(ErrorType::TaskCancel);
     }
 
@@ -298,7 +296,7 @@ async fn archive<P: AsRef<Path>>(
         game.read().unwrap().get_base_path(),
         unselect,
         strip_dir,
-        pack_gui.clone().map(|g| g as Arc<dyn IBaseArchiveGui>),
+        archive_gui,
     )?;
 
     if let Some(pack_gui) = &pack_gui {
@@ -315,8 +313,9 @@ async fn mmc_archive<P: AsRef<Path>>(
     name: Option<String>,
     group: Option<String>,
     unselect: Vec<String>,
-    gui: Option<Arc<dyn IAddInstanceGui>>,
-    pack_gui: Option<Arc<dyn IAddGui>>,
+    instance_gui: AddInstanceGui,
+    pack_gui: AddModPackGui,
+    archive_gui: BaseArchiveGui,
     cancel: CancellationToken,
 ) -> CoreResult<Uuid> {
     if !file.as_ref().exists() || file.as_ref().is_dir() {
@@ -385,11 +384,11 @@ async fn mmc_archive<P: AsRef<Path>>(
         pack_gui.set_now(2, Some(3));
     }
 
-    let game = obj.create_instance(&gui).await?;
+    let game = obj.create_instance(instance_gui).await?;
     let uuid = game.read().unwrap().uuid;
 
     if cancel.is_cancelled() {
-        delete_instance(&uuid)?;
+        crate::delete_instance(&uuid)?;
         return Err(ErrorType::TaskCancel);
     }
 
@@ -406,7 +405,7 @@ async fn mmc_archive<P: AsRef<Path>>(
         game.read().unwrap().get_base_path(),
         unselect,
         (!strip_dir.is_empty()).then_some(strip_dir),
-        pack_gui.clone().map(|g| g as Arc<dyn IBaseArchiveGui>),
+        archive_gui.clone(),
     )?;
 
     let json = game.read().unwrap().read_custom_json();
@@ -432,8 +431,9 @@ async fn hmcl_archive<P: AsRef<Path>>(
     name: Option<String>,
     group: Option<String>,
     unselect: Vec<String>,
-    gui: Option<Arc<dyn IAddInstanceGui>>,
-    pack_gui: Option<Arc<dyn IAddGui>>,
+    instance_gui: AddInstanceGui,
+    pack_gui: AddModPackGui,
+    archive_gui: BaseArchiveGui,
     cancel: CancellationToken,
 ) -> CoreResult<Uuid> {
     if !file.as_ref().exists() || file.as_ref().is_dir() {
@@ -503,11 +503,11 @@ async fn hmcl_archive<P: AsRef<Path>>(
         pack_gui.set_now(2, Some(3));
     }
 
-    let game = obj.create_instance(&gui).await?;
+    let game = obj.create_instance(instance_gui).await?;
     let uuid = game.read().unwrap().uuid;
 
     if cancel.is_cancelled() {
-        delete_instance(&uuid)?;
+        crate::delete_instance(&uuid)?;
         return Err(ErrorType::TaskCancel);
     }
 
@@ -534,7 +534,7 @@ async fn hmcl_archive<P: AsRef<Path>>(
         game.read().unwrap().get_base_path(),
         unselect,
         Some(dir),
-        pack_gui.clone().map(|g| g as Arc<dyn IBaseArchiveGui>),
+        archive_gui.clone(),
     )?;
 
     if let Some(pack_gui) = &pack_gui {
@@ -551,8 +551,9 @@ async fn hmcl_server_archive<P: AsRef<Path>>(
     name: Option<String>,
     group: Option<String>,
     unselect: Vec<String>,
-    gui: Option<Arc<dyn IAddInstanceGui>>,
-    pack_gui: Option<Arc<dyn IAddGui>>,
+    instance_gui: AddInstanceGui,
+    pack_gui: AddModPackGui,
+    archive_gui: BaseArchiveGui,
     cancel: CancellationToken,
 ) -> CoreResult<Uuid> {
     if !file.as_ref().exists() || file.as_ref().is_dir() {
@@ -616,7 +617,7 @@ async fn hmcl_server_archive<P: AsRef<Path>>(
         pack_gui.set_now(2, Some(3));
     }
 
-    let game = obj.create_instance(&gui).await?;
+    let game = obj.create_instance(instance_gui).await?;
     let uuid = game.read().unwrap().uuid;
 
     let mut online = game.read().unwrap().read_online_info();
@@ -627,13 +628,11 @@ async fn hmcl_server_archive<P: AsRef<Path>>(
         } else {
             hmcl.file_api
         };
-        for item in hmcl.files {
-            
-        }
+        for item in hmcl.files {}
     }
 
     if cancel.is_cancelled() {
-        delete_instance(&uuid)?;
+        crate::delete_instance(&uuid)?;
         return Err(ErrorType::TaskCancel);
     }
 
@@ -655,7 +654,7 @@ async fn hmcl_server_archive<P: AsRef<Path>>(
         game.read().unwrap().get_base_path(),
         unselect,
         Some(dir),
-        pack_gui.clone().map(|g| g as Arc<dyn IBaseArchiveGui>),
+        archive_gui.clone(),
     )?;
 
     if let Some(pack_gui) = &pack_gui {

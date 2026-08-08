@@ -18,7 +18,7 @@ use uuid::Uuid;
 use crate::{
     game_launch::InstanceHandle,
     game_log::{GameLog, GameLogItemObj, InstanceRuntimeLog},
-    gui_hook::{IAddInstanceGui, ICopyGui},
+    gui_hook::{AddInstanceGui, ProgressGui},
     launcher::{LogEncoding, game_time_obj::GameTimeObj, instance_setting_obj::InstanceSettingObj},
     launcher_path::instance_path::{self},
 };
@@ -478,15 +478,12 @@ pub(crate) fn add_run_game(handel: InstanceHandle) {
 
 impl InstanceSettingObj {
     /// 创建实例
-    pub async fn create_instance(
-        mut self,
-        gui: &Option<Arc<dyn IAddInstanceGui>>,
-    ) -> CoreResult<GameInstance> {
+    pub async fn create_instance(mut self, gui: AddInstanceGui) -> CoreResult<GameInstance> {
         path_watch::stop_watch();
 
         let old = get_instance_by_name(&self.name);
         if let Some(instance) = &old {
-            if let Some(gui) = gui {
+            if let Some(gui) = &gui {
                 let over = gui.overwrite(instance.clone()).await;
                 if !over && !gui.name_replace(&self.name).await {
                     return Err(ErrorType::TaskCancel);
@@ -584,11 +581,7 @@ impl InstanceSettingObj {
 
     /// 复制数据到新的实例
     /// - `name`: 新的实例名字
-    pub async fn copy_to_other(
-        &self,
-        name: &str,
-        gui: &Option<Arc<dyn IAddInstanceGui>>,
-    ) -> CoreResult<GameInstance> {
+    pub async fn copy_to_other(&self, name: &str, gui: AddInstanceGui) -> CoreResult<GameInstance> {
         let mut instance = self.copy_self();
         instance.name = name.to_string();
         let instance = instance.create_instance(gui).await?;
@@ -634,7 +627,7 @@ impl InstanceSettingObj {
         path: P,
         skip: Option<Vec<PathBuf>>,
         is_base: bool,
-        gui: &Option<Arc<dyn ICopyGui>>,
+        gui: ProgressGui,
     ) -> CoreResult<()> {
         let dir = if is_base {
             self.get_base_path()
@@ -646,8 +639,8 @@ impl InstanceSettingObj {
 
         let mut index = 0usize;
         let list = path_helper::get_all_files(&dir);
-        if let Some(gui) = gui {
-            gui.update(index, list.len());
+        if let Some(gui) = &gui {
+            gui.set_progress_now(index, Some(list.len()));
         }
         for item in list.iter() {
             let file = item.strip_prefix(&dir).map_err(|err| {
@@ -660,15 +653,15 @@ impl InstanceSettingObj {
             if let Some(skip) = &skip {
                 if skip.contains(&file.to_path_buf()) {
                     index += 1;
-                    if let Some(gui) = gui {
-                        gui.update(index, list.len());
+                    if let Some(gui) = &gui {
+                        gui.set_progress_now(index, Some(list.len()));
                     }
                     continue;
                 }
             }
 
-            if let Some(gui) = gui {
-                gui.file(item.clone());
+            if let Some(gui) = &gui {
+                gui.set_progress_text(Some(item.display().to_string()));
             }
 
             let now = path.as_ref().join(file);

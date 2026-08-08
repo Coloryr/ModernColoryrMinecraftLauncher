@@ -1,11 +1,22 @@
 use std::path::Path;
 
 use mcml_base::tools;
-use mcml_config::config_obj::{JvmConfigObj, RunArgObj, WindowSettingObj};
+use mcml_config::config_obj::{RunArgObj, WindowSettingObj};
 use mcml_names::names;
 
 use crate::{
-    game_options::InstanceCfg, launcher::{ModPackType, instance_setting_obj::{AdvanceJvmObj, CustomLoaderObj, InstanceSettingObj, ServerObj}}, launcher_path::version_path, loader::LoaderType, other_launcher::{hmcl_obj::{HMCLObj, HMCLServerObj}, mmc_obj::MMCObj, official_obj::OfficialObj},
+    game_options::InstanceCfg,
+    launcher::{
+        ModPackType,
+        instance_setting_obj::{CustomLoaderObj, InstanceSettingObj, ServerObj},
+    },
+    launcher_path::version_path,
+    loader::LoaderType,
+    other_launcher::{
+        hmcl_obj::{HMCLObj, HMCLServerObj},
+        mmc_obj::MMCObj,
+        official_obj::OfficialObj,
+    },
 };
 
 pub mod hmcl_obj;
@@ -317,7 +328,7 @@ impl HMCLObj {
     }
 }
 
-impl HMCLServerObj  {
+impl HMCLServerObj {
     /// 转换为实例信息
     pub fn to_instance(&self) -> InstanceSettingObj {
         let mut obj = InstanceSettingObj {
@@ -344,7 +355,7 @@ impl HMCLServerObj  {
                 obj.loader_version = Some(item.version.clone());
             }
         }
-        
+
         obj
     }
 }

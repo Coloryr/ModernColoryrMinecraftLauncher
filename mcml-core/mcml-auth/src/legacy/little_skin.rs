@@ -102,7 +102,7 @@ impl LoginObj {
     /// # 参数
     ///
     /// - `cancel`: 取消令牌
-    pub async fn refresh_littleskin(&mut self, cancel: &CancellationToken) -> CoreResult<()> {
+    pub async fn refresh_littleskin(&mut self, cancel: CancellationToken) -> CoreResult<()> {
         let mut server = if self.auth_type == AuthType::LittleSkin {
             String::from(urls::LITTLE_SKIN_URL)
         } else {

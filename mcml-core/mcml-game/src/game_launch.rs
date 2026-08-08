@@ -1,5 +1,4 @@
 /// 游戏实例启动相关
-
 use std::{
     collections::HashMap,
     io::{BufRead, BufReader},
@@ -13,14 +12,19 @@ use std::{
     time::Instant,
 };
 
-use async_trait::async_trait;
 use encoding_rs_io::DecodeReaderBytesBuilder;
 use mcml_auth::LoginObj;
 use mcml_base::{
+    file_item::FileHash,
+    hash_helper::{self, HashType},
     path_helper,
     process_utils::{self},
+    serialize_tools,
 };
-use mcml_names::i18_items::error_type::{CoreResult, ErrorData, ErrorType, PathNotExistsData};
+use mcml_names::{
+    i18_items::error_type::{CoreResult, ErrorData, ErrorType, PathNotExistsData},
+    names,
+};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
@@ -28,36 +32,15 @@ use crate::{
     game_arg::GameLaunchObj,
     game_log::GameLog,
     game_saves::SaveObj,
+    gui_hook::{LaunchGui, LaunchState, ProcessRunType},
     launcher::{
         LogEncoding, ModPackType,
         instance_setting_obj::{InstanceSettingObj, ServerObj},
     },
     launcher_path::libraries_path,
     loader::LoaderType,
+    serverpack::serverpack_obj::ServerPackObj,
 };
-
-/// 进程运行时机
-pub enum ProcessRunType {
-    /// 启动前运行
-    PreLaunch,
-    /// 启动后运行
-    PostLaunch,
-}
-
-/// 界面回调
-#[async_trait]
-pub trait ILaunchGui {
-    /// 启动状态修改
-    fn update_state(&self, setting: &InstanceSettingObj, state: LaunchState);
-    /// 登陆失败
-    async fn login_fail(&self, auth: &LoginObj) -> bool;
-    /// 请求是否要下载文件
-    async fn requesst_download_file(&self) -> bool;
-    /// 没有合适的java
-    fn no_java(&self, java: i32);
-    /// 是否运行启动其他进程
-    fn launch_process(&self, run_type: ProcessRunType) -> bool;
-}
 
 /// 启动后自动操作
 pub enum AutoJoinType {
@@ -71,7 +54,7 @@ pub enum AutoJoinType {
 /// 游戏启动所使用的参数
 pub struct GameLaunchArg {
     /// 登录账户
-    pub auth: Arc<LoginObj>,
+    pub auth: LoginObj,
     /// 自动进入的操作
     pub auto: AutoJoinType,
     /// 是否以管理员方式启动
@@ -89,7 +72,7 @@ pub struct GameRunObj {
     /// 日志编码
     pub encoding: LogEncoding,
     /// 登陆的账户
-    pub auth: Arc<LoginObj>,
+    pub auth: LoginObj,
     /// 运行路径
     pub path: PathBuf,
     /// Java路径
@@ -102,30 +85,6 @@ pub struct GameRunObj {
     pub admin: bool,
 }
 
-/// 实例启动状态
-pub enum LaunchState {
-    /// 登陆账户
-    Login,
-    /// 检查文件
-    Check,
-    /// 读取信息
-    ReadInfo,
-    /// 下载文件
-    Download,
-    /// 准备启动参数
-    Jvm,
-    /// 启动前运行
-    Pre,
-    /// 启动后运行
-    Post,
-    /// 结束
-    End,
-    LoadServerPack,
-    CheckServerPack,
-    DownloadServerPack,
-    DownloadServerPackEnd,
-}
-
 /// 创建启动命令参数
 pub struct LaunchCmd {
     pub java: PathBuf,
@@ -135,7 +94,7 @@ pub struct LaunchCmd {
 }
 
 /// 游戏句柄
-pub struct InstanceHandle {
+pub(crate) struct InstanceHandle {
     /// 游戏进程（共享所有权，用于等待退出和强制结束）
     /// 提权启动时存储的是启动器进程（PowerShell/pkexec/osascript），
     /// 该进程在目标进程运行期间保持存活，可通过 try_wait 检测退出
@@ -303,11 +262,11 @@ impl InstanceSettingObj {
     async fn auth_login(
         &self,
         arg: &mut GameLaunchArg,
-        cancel: &CancellationToken,
-        gui: &Option<impl ILaunchGui>,
+        gui: LaunchGui,
+        cancel: CancellationToken,
     ) -> CoreResult<()> {
         let start = Instant::now();
-        let res = Arc::make_mut(&mut arg.auth).refresh(cancel).await;
+        let res = arg.auth.refresh(cancel.clone()).await;
         let time = start.elapsed();
         crate::add_game_log_item(&self.uuid, GameLog::LoginTime(time));
 
@@ -325,7 +284,7 @@ impl InstanceSettingObj {
                     && gui.login_fail(&arg.auth).await
                 {
                     let old = &arg.auth;
-                    arg.auth = Arc::new(LoginObj {
+                    arg.auth = LoginObj {
                         user_name: old.user_name.clone(),
                         uuid: old.uuid.clone(),
                         access_token: Default::default(),
@@ -334,7 +293,7 @@ impl InstanceSettingObj {
                         text1: Default::default(),
                         text2: Default::default(),
                         last_login: Default::default(),
-                    });
+                    };
                     Ok(())
                 } else {
                     Err(err)
@@ -348,9 +307,10 @@ impl InstanceSettingObj {
     async fn check_game_file(
         &self,
         arg: &mut GameLaunchArg,
-        gui: &Option<impl ILaunchGui>,
+        gui: LaunchGui,
+        cancel: CancellationToken,
     ) -> CoreResult<GameLaunchObj> {
-        if let Some(gui) = gui {
+        if let Some(gui) = &gui {
             gui.update_state(self, LaunchState::Check);
         }
 
@@ -365,12 +325,16 @@ impl InstanceSettingObj {
             check.push(data);
         }
 
+        if cancel.is_cancelled() {
+            return Err(ErrorType::TaskCancel);
+        }
+
         // 有文件需要下载，则开始下载
         if check.is_empty() {
             Ok(obj)
         } else {
             let download = if mcml_config::read_config().http.auto_download == false
-                && let Some(gui) = gui
+                && let Some(gui) = &gui
             {
                 gui.requesst_download_file().await
             } else {
@@ -378,7 +342,7 @@ impl InstanceSettingObj {
             };
 
             if download {
-                if let Some(gui) = gui {
+                if let Some(gui) = &gui {
                     gui.update_state(self, LaunchState::Download);
                 }
                 let start = Instant::now();
@@ -425,11 +389,60 @@ impl InstanceSettingObj {
     /// 检查服务器包更新
     async fn server_pack_update(
         &self,
-        arg: &mut GameLaunchArg,
-        cancel: &CancellationToken,
+        gui: LaunchGui,
+        cancel: CancellationToken,
     ) -> CoreResult<()> {
-        if !self.is_modpack || self.modpack_type != ModPackType::ServerPack || None == self.server_url
+        if self.is_modpack
+            && self.modpack_type != ModPackType::ServerPack
+            && let Some(mut url) = self.server_url.clone()
         {
+            if let Some(gui) = &gui {
+                gui.update_state(self, LaunchState::CheckServerPack);
+            }
+
+            let start = Instant::now();
+
+            let file = self.get_server_pack_file();
+            let hash = if file.exists() {
+                FileHash::Sha1(hash_helper::gen_hash_from_file(HashType::Sha1, &file)?)
+            } else {
+                FileHash::None
+            };
+
+            if !url.ends_with('/') {
+                url.push('/');
+            }
+
+            if cancel.is_cancelled() {
+                return Err(ErrorType::TaskCancel);
+            }
+
+            let client = mcml_net::get_work_client();
+            let sha1 = client
+                .get_text(&format!(
+                    "{}{}{}",
+                    url,
+                    names::SERVER_FILE,
+                    names::SHA1_DOT_EXT
+                ))
+                .await?;
+
+            if matches!(hash, FileHash::None) || hash.get_sha1().unwrap() != sha1 {
+                let data = client
+                    .get_bytes(&format!("{}{}", url, names::SERVER_FILE))
+                    .await?;
+
+                if let Some(gui) = &gui {
+                    gui.update_state(self, LaunchState::DownloadServerPack);
+                }
+
+                let obj = serialize_tools::json_from_bytes::<ServerPackObj>(&data)?;
+                self.move_serverpack_to_old()?;
+                self.upgrade_serverpack(obj, cancel.clone()).await?;
+            }
+
+            let time = start.elapsed();
+            crate::add_game_log_item(&self.uuid, GameLog::ServerPackCheckTime(time));
             Ok(())
         } else {
             Ok(())
@@ -437,7 +450,7 @@ impl InstanceSettingObj {
     }
 
     /// 获取启动使用的java
-    fn get_java(&self, obj: &GameLaunchObj, gui: &Option<impl ILaunchGui>) -> Option<PathBuf> {
+    fn get_java(&self, obj: &GameLaunchObj, gui: LaunchGui) -> Option<PathBuf> {
         if let Some(data) = &self.jvm_local {
             let path = PathBuf::from(data);
 
@@ -569,7 +582,7 @@ impl InstanceSettingObj {
         &self,
         arg: &mut GameLaunchArg,
         cancel: &CancellationToken,
-        gui: &Option<impl ILaunchGui>,
+        gui: LaunchGui,
     ) -> CoreResult<LaunchCmd> {
         if self.version.is_empty() {
             return Err(ErrorType::InstanceVersionError);
@@ -589,17 +602,17 @@ impl InstanceSettingObj {
             return Err(ErrorType::InstanceVersionError);
         }
 
-        if let Some(gui) = gui {
+        if let Some(gui) = &gui {
             gui.update_state(&self, LaunchState::Login);
         }
 
-        self.auth_login(arg, cancel, gui).await?;
+        self.auth_login(arg, gui.clone(), cancel.clone()).await?;
 
         if cancel.is_cancelled() {
             return Err(ErrorType::TaskCancel);
         }
 
-        if let Some(gui) = gui {
+        if let Some(gui) = &gui {
             gui.update_state(&self, LaunchState::ReadInfo);
         }
 
@@ -609,7 +622,7 @@ impl InstanceSettingObj {
             return Err(ErrorType::TaskCancel);
         }
 
-        let java = self.get_java(&obj, gui);
+        let java = self.get_java(&obj, gui.clone());
 
         if java.is_none() {
             return Err(ErrorType::JavaNotFound);
@@ -619,7 +632,7 @@ impl InstanceSettingObj {
             return Err(ErrorType::TaskCancel);
         }
 
-        if let Some(gui) = gui {
+        if let Some(gui) = &gui {
             gui.update_state(&self, LaunchState::Jvm);
         }
 
@@ -641,8 +654,8 @@ impl InstanceSettingObj {
     pub async fn start_game(
         &self,
         arg: &mut GameLaunchArg,
-        cancel: &CancellationToken,
-        gui: &Option<impl ILaunchGui>,
+        gui: LaunchGui,
+        cancel: CancellationToken,
     ) -> CoreResult<()> {
         // 清理之前的日志
         crate::clear_game_log(&self.uuid);
@@ -667,32 +680,34 @@ impl InstanceSettingObj {
         }
 
         // 登陆账户
-        self.auth_login(arg, cancel, gui).await?;
+        self.auth_login(arg, gui.clone(), cancel.clone()).await?;
 
         if cancel.is_cancelled() {
             return Err(ErrorType::TaskCancel);
         }
 
         // 服务器包更新
-        self.server_pack_update(arg, cancel).await?;
+        self.server_pack_update(gui.clone(), cancel.clone()).await?;
 
         if cancel.is_cancelled() {
             return Err(ErrorType::TaskCancel);
         }
 
-        if let Some(gui) = gui {
+        if let Some(gui) = &gui {
             gui.update_state(self, LaunchState::Check);
         }
 
         // 检查游戏文件
-        let mut obj = self.check_game_file(arg, gui).await?;
+        let mut obj = self
+            .check_game_file(arg, gui.clone(), cancel.clone())
+            .await?;
 
         if cancel.is_cancelled() {
             return Err(ErrorType::TaskCancel);
         }
 
         // 获取启动用的JAVA
-        let jvm = self.get_java(&mut obj, gui);
+        let jvm = self.get_java(&mut obj, gui.clone());
 
         if cancel.is_cancelled() {
             return Err(ErrorType::TaskCancel);
@@ -708,7 +723,7 @@ impl InstanceSettingObj {
             return Err(ErrorType::TaskCancel);
         }
 
-        if let Some(gui) = gui {
+        if let Some(gui) = &gui {
             gui.update_state(self, LaunchState::Jvm);
         }
 
@@ -763,12 +778,12 @@ impl InstanceSettingObj {
                 .unwrap_or(default.pre_run_with_game.unwrap_or_default());
 
             let mut can_run = true;
-            if let Some(gui) = gui {
+            if let Some(gui) = &gui {
                 can_run = gui.launch_process(ProcessRunType::PreLaunch);
             }
 
             if can_run {
-                if let Some(gui) = gui {
+                if let Some(gui) = &gui {
                     gui.update_state(self, LaunchState::Pre);
                 }
                 let start = Instant::now();
@@ -809,12 +824,12 @@ impl InstanceSettingObj {
 
         if post_run && !post_run_cmd.is_empty() {
             let mut can_run = true;
-            if let Some(gui) = gui {
+            if let Some(gui) = &gui {
                 can_run = gui.launch_process(ProcessRunType::PreLaunch);
             }
 
             if can_run {
-                if let Some(gui) = gui {
+                if let Some(gui) = &gui {
                     gui.update_state(self, LaunchState::Post);
                 }
                 let start = Instant::now();

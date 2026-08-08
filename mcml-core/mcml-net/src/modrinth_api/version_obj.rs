@@ -70,7 +70,8 @@ impl Default for HasheObj {
 #[serde(default)]
 pub struct DependencieObj {
     pub version_id: Option<String>,
-    pub project_id: String,
+    // 内置打包文件（如 Mod Menu Helper.zip）无 project_id，为 null
+    pub project_id: Option<String>,
     // 依赖类型（required 必选 / optional 可选）
     pub dependency_type: String,
 }

@@ -19,6 +19,8 @@ use crate::{url_helper, urls};
 /// # 示例
 ///
 /// ```
+/// use mcml_net::maven_utils::version_name_to_path;
+///
 /// // 标准坐标
 /// version_name_to_path("com.example:artifact:1.0");
 /// // -> "com/example/artifact/1.0/artifact-1.0.jar"
