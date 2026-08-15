@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { t } from "../lib/i18n";
-import { openWindow } from "../windows/windowManager";
+import { openWindow } from "../../windows/windowManager";
 import type { Account } from "../lib/types";
 
 const props = defineProps<{

@@ -7,16 +7,16 @@ import {
   onInstanceChange,
   onLaunchError,
   onLaunchState,
-} from "../lib/api";
-import { t } from "../lib/i18n";
-import { theme, toggleTheme } from "../lib/theme";
-import { newsImage } from "../lib/newsBanner";
-import { openWindow } from "../windows/windowManager";
+} from "../../lib/api";
+import { t } from "../../lib/i18n";
+import { theme, toggleTheme } from "../../lib/theme";
+import { newsImage } from "../../lib/newsBanner";
+import { openWindow } from "../windowManager";
 import {
   sidebarCollapsed,
   sidebarSide,
   setSidebarCollapsed,
-} from "../lib/settings";
+} from "../../lib/settings";
 import type {
   Account,
   InstanceArgs,
@@ -24,20 +24,20 @@ import type {
   JavaInfo,
   NewsItem,
   VersionInfo,
-} from "../lib/types";
-import InstanceIcon from "../components/InstanceIcon.vue";
-import InstanceSelect from "../components/InstanceSelect.vue";
-import InstanceMetaPanel from "../components/InstanceMetaPanel.vue";
-import LaunchArgsPanel from "../components/LaunchArgsPanel.vue";
-import AccountSelector from "../components/AccountSelector.vue";
-import HomePage from "../components/HomePage.vue";
-import CustomExecPanel from "../components/CustomExecPanel.vue";
-import ProxyPanel from "../components/ProxyPanel.vue";
-import LaunchScreen from "../components/LaunchScreen.vue";
-import BaseButton from "../components/ui/BaseButton.vue";
-import BaseModal from "../components/ui/BaseModal.vue";
-import SegmentedTabs from "../components/ui/SegmentedTabs.vue";
-import NumberStepper from "../components/ui/NumberStepper.vue";
+} from "../../lib/types";
+import InstanceIcon from "../../components/InstanceIcon.vue";
+import InstanceSelect from "../../components/InstanceSelect.vue";
+import InstanceMetaPanel from "../../components/InstanceMetaPanel.vue";
+import LaunchArgsPanel from "../../components/LaunchArgsPanel.vue";
+import AccountSelector from "../../components/AccountSelector.vue";
+import HomePage from "../../components/HomePage.vue";
+import CustomExecPanel from "../../components/CustomExecPanel.vue";
+import ProxyPanel from "../../components/ProxyPanel.vue";
+import LaunchScreen from "../../components/LaunchScreen.vue";
+import BaseButton from "../../components/ui/BaseButton.vue";
+import BaseModal from "../../components/ui/BaseModal.vue";
+import SegmentedTabs from "../../components/ui/SegmentedTabs.vue";
+import NumberStepper from "../../components/ui/NumberStepper.vue";
 
 // ================= 基础状态 =================
 
@@ -45,7 +45,7 @@ import NumberStepper from "../components/ui/NumberStepper.vue";
 const bootFailed = ref(false);
 const initError = ref("");
 const initLoading = ref(false);
-import { closeSplash, splashVisible } from "../lib/splash";
+import { closeSplash, splashVisible } from "../../lib/splash";
 const localDir = ref(localStorage.getItem("mcml.localDir") ?? "");
 const playerName = ref(localStorage.getItem("mcml.playerName") ?? "Player");
 
@@ -233,7 +233,7 @@ import {
   accounts as storeAccounts,
   currentAccount as storeCurrentAccount,
   setCurrentAccount,
-} from "../lib/accountStore";
+} from "../../lib/accountStore";
 const accounts = storeAccounts;
 const currentAccount = storeCurrentAccount;
 

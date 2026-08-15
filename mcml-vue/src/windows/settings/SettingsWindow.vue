@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { ref } from "vue";
-import WindowFrame from "../components/ui/WindowFrame.vue";
-import SegmentedTabs from "../components/ui/SegmentedTabs.vue";
-import { t, locale, setLocale } from "../lib/i18n";
-import { multiWindow, setMultiWindow, openWindow, isTauri } from "./windowManager";
-import { sidebarSide, setSidebarSide } from "../lib/settings";
-import BaseButton from "../components/ui/BaseButton.vue";
+import WindowFrame from "../../components/ui/WindowFrame.vue";
+import SegmentedTabs from "../../components/ui/SegmentedTabs.vue";
+import { t, locale, setLocale } from "../../lib/i18n";
+import { multiWindow, setMultiWindow, openWindow, isTauri } from "../windowManager";
+import { sidebarSide, setSidebarSide } from "../../lib/settings";
+import BaseButton from "../../components/ui/BaseButton.vue";
 
 const inTauri = isTauri();
 const windowMode = ref(multiWindow.value ? "multi" : "single");

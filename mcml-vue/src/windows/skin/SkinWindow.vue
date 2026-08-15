@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref } from "vue";
-import WindowFrame from "../components/ui/WindowFrame.vue";
-import BaseButton from "../components/ui/BaseButton.vue";
-import { t } from "../lib/i18n";
+import WindowFrame from "../../components/ui/WindowFrame.vue";
+import BaseButton from "../../components/ui/BaseButton.vue";
+import { t } from "../../lib/i18n";
 
 const uploading = ref(false);
 const uploaded = ref(false);

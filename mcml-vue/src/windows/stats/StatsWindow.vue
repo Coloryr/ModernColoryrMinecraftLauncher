@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
-import WindowFrame from "../components/ui/WindowFrame.vue";
-import InstanceIcon from "../components/InstanceIcon.vue";
-import { api } from "../lib/api";
-import { t } from "../lib/i18n";
-import type { InstanceInfo } from "../lib/types";
+import WindowFrame from "../../components/ui/WindowFrame.vue";
+import InstanceIcon from "../../components/InstanceIcon.vue";
+import { api } from "../../lib/api";
+import { t } from "../../lib/i18n";
+import type { InstanceInfo } from "../../lib/types";
 
 const instances = ref<InstanceInfo[]>([]);
 

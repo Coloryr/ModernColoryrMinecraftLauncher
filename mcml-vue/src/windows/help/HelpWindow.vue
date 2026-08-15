@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
-import WindowFrame from "../components/ui/WindowFrame.vue";
-import { t, locale } from "../lib/i18n";
-import { faqs as zhFaqs } from "../lib/i18n/locales/zh-CN";
-import { faqs as enFaqs } from "../lib/i18n/locales/en-US";
+import WindowFrame from "../../components/ui/WindowFrame.vue";
+import { t, locale } from "../../lib/i18n";
+import { faqs as zhFaqs } from "../../lib/i18n/locales/zh-CN";
+import { faqs as enFaqs } from "../../lib/i18n/locales/en-US";
 
 const faqs = computed(() => (locale.value === "en-US" ? enFaqs : zhFaqs));
 
