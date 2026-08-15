@@ -588,12 +588,9 @@ impl InstanceSettingObj {
             return Err(ErrorType::InstanceVersionError);
         }
 
-        if self.loader != LoaderType::Normal || self.loader != LoaderType::Custom {
-            if let Some(data) = &self.loader_version
-                && data.is_empty()
-            {
-                return Err(ErrorType::InstanceVersionError);
-            } else {
+        // 有加载器的实例必须填写加载器版本
+        if self.loader != LoaderType::Normal && self.loader != LoaderType::Custom {
+            if self.loader_version.as_deref().is_none_or(|data| data.is_empty()) {
                 return Err(ErrorType::InstanceVersionError);
             }
         }
@@ -665,12 +662,9 @@ impl InstanceSettingObj {
             return Err(ErrorType::InstanceVersionError);
         }
 
-        if self.loader != LoaderType::Normal || self.loader != LoaderType::Custom {
-            if let Some(data) = &self.loader_version
-                && data.is_empty()
-            {
-                return Err(ErrorType::InstanceVersionError);
-            } else {
+        // 有加载器的实例必须填写加载器版本
+        if self.loader != LoaderType::Normal && self.loader != LoaderType::Custom {
+            if self.loader_version.as_deref().is_none_or(|data| data.is_empty()) {
                 return Err(ErrorType::InstanceVersionError);
             }
         }

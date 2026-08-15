@@ -1,8 +1,8 @@
 [package]
 name = "mcml-gui"
 version = "0.1.0"
-description = "A Tauri App"
-authors = ["you"]
+description = "MCML Launcher"
+authors = ["coloryr"]
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -20,8 +20,10 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
-serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+
+# 说明：当前阶段只做界面（前端使用模拟数据），暂不链接 mcml-core。
+# 接入后端时再恢复 mcml-game / mcml-auth / mcml-base / mcml-config /
+# mcml-downloader / mcml-jvms / mcml-log / mcml-net 等依赖与命令。
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration

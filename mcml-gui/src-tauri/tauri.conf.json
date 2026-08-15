@@ -4,17 +4,20 @@
   "version": "0.1.0",
   "identifier": "com.coloryr.mcml",
   "build": {
-    "beforeDevCommand": "npm run dev",
+    "beforeDevCommand": "cd ../mcml-vue && npm run dev",
     "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "npm run build",
-    "frontendDist": "../dist"
+    "beforeBuildCommand": "cd ../mcml-vue && npm run build",
+    "frontendDist": "../mcml-vue/dist"
   },
   "app": {
     "windows": [
       {
-        "title": "mcml-gui",
-        "width": 800,
-        "height": 600
+        "title": "MCML 启动器",
+        "width": 1100,
+        "height": 720,
+        "minWidth": 900,
+        "minHeight": 600,
+        "center": true
       }
     ],
     "security": {

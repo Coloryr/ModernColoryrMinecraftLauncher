@@ -87,13 +87,15 @@ pub fn init(arg: CoreInitObj) {
 
     mcml_names::init(dir);
 
+    // 先启动日志，再输出启动信息
+    mcml_log::start(dir);
     mcml_log::info_type(InfoType::CoreStart);
 
-    mcml_log::start(dir);
+    // 配置必须先于下载器/网络初始化（二者启动时都会读取配置）
+    mcml_config::init(dir);
     mcml_config::config_save::start();
     mcml_downloader::start();
     mcml_net::init();
-    mcml_config::init(dir);
 
     CORE_STOP_EVENT.add_handler(mcml_config::config_save::stop);
     CORE_STOP_EVENT.add_handler(mcml_downloader::stop);

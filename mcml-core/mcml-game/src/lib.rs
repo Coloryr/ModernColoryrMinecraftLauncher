@@ -476,6 +476,23 @@ pub(crate) fn add_run_game(handel: InstanceHandle) {
     games.insert(handel.uuid, handel);
 }
 
+/// 获取正在运行的实例UUID列表
+pub fn get_running_instances() -> Vec<Uuid> {
+    HANDELS.read().unwrap().keys().cloned().collect()
+}
+
+/// 判断实例是否正在运行
+pub fn is_running(uuid: &Uuid) -> bool {
+    HANDELS.read().unwrap().contains_key(uuid)
+}
+
+/// 强制结束正在运行的实例
+pub fn stop_game(uuid: &Uuid) {
+    if let Some(handle) = HANDELS.read().unwrap().get(uuid) {
+        handle.kill();
+    }
+}
+
 impl InstanceSettingObj {
     /// 创建实例
     pub async fn create_instance(mut self, gui: AddInstanceGui) -> CoreResult<GameInstance> {
