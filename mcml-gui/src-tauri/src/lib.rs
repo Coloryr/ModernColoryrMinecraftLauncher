@@ -12,12 +12,18 @@ fn app_info() -> String {
     String::from("MCML Launcher UI")
 }
 
-/// 打开一个功能窗口（多窗口模式）
+/// 打开一个功能窗口（多窗口模式，备用命令）
 ///
-/// 每个窗口加载 `index.html?window=<kind>`，前端按查询参数渲染对应页面。
+/// 注意：当前前端改用官方 JS API `new WebviewWindow()` 创建窗口
+/// （见 mcml-vue/src/windows/windowManager.ts），本命令保留作备用。
+/// 必须保持 async：同步命令在 Windows 上跑在主线程，而窗口创建会阻塞
+/// 等待主线程，导致整个应用冻结（新窗口白屏、无法点击）。
+/// 异步命令跑在 tokio 工作线程，阻塞的是工作线程，主线程不受影响。
+///
+/// 每个窗口加载主页面 `index.html`，前端按窗口标签（mcml-<kind>）渲染对应页面。
 /// 同一窗口已存在时聚焦，不重复创建。
 #[tauri::command]
-fn open_window(app: AppHandle, kind: String) -> Result<(), String> {
+async fn open_window(app: AppHandle, kind: String) -> Result<(), String> {
     let (title, width, height) = match kind.as_str() {
         "settings" => ("启动器设置", 760.0, 600.0),
         "stats" => ("游戏统计", 760.0, 600.0),
