@@ -84,7 +84,7 @@ pub enum ProcessRunType {
 
 /// 界面回调
 #[async_trait]
-pub trait ILaunchGui {
+pub trait ILaunchGui: Send + Sync {
     /// 启动状态修改
     fn update_state(&self, setting: &InstanceSettingObj, state: LaunchState);
     /// 登陆失败
