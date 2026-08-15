@@ -2,11 +2,11 @@
 // 资源管理窗口：存档 / 模组 / 资源包 / 截图 / 服务器 / 光影包 / 结构文件
 // 存档分类下有「存档 / 数据包」子页
 import { computed, onMounted, ref } from "vue";
-import WindowFrame from "../components/ui/WindowFrame.vue";
-import SegmentedTabs from "../components/ui/SegmentedTabs.vue";
-import { t } from "../lib/i18n";
-import { api } from "../lib/api";
-import type { InstanceInfo } from "../lib/types";
+import WindowFrame from "../../components/ui/WindowFrame.vue";
+import SegmentedTabs from "../../components/ui/SegmentedTabs.vue";
+import { t } from "../../lib/i18n";
+import { api } from "../../lib/api";
+import type { InstanceInfo } from "../../lib/types";
 
 type CategoryId =
   | "saves"

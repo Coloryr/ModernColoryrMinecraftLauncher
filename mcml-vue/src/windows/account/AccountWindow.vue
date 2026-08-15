@@ -1,11 +1,11 @@
 <script setup lang="ts">
 // 账户管理窗口：平铺 / 列表 / 详情 三种展示 + 类型筛选 + 搜索 + 添加账户
 import { computed, ref } from "vue";
-import WindowFrame from "../components/ui/WindowFrame.vue";
-import BaseButton from "../components/ui/BaseButton.vue";
-import BaseModal from "../components/ui/BaseModal.vue";
-import SegmentedTabs from "../components/ui/SegmentedTabs.vue";
-import { t } from "../lib/i18n";
+import WindowFrame from "../../components/ui/WindowFrame.vue";
+import BaseButton from "../../components/ui/BaseButton.vue";
+import BaseModal from "../../components/ui/BaseModal.vue";
+import SegmentedTabs from "../../components/ui/SegmentedTabs.vue";
+import { t } from "../../lib/i18n";
 import {
   ACCOUNT_TYPES,
   accounts,
@@ -15,10 +15,10 @@ import {
   refreshAccountToken,
   setCurrentAccount,
   typeLabelKey,
-} from "../lib/accountStore";
-import { avatarImage, capeImage, skinImage } from "../lib/accountImages";
-import AccountActions from "../components/AccountActions.vue";
-import type { Account } from "../lib/types";
+} from "../../lib/accountStore";
+import { avatarImage, capeImage, skinImage } from "../../lib/accountImages";
+import AccountActions from "../../components/AccountActions.vue";
+import type { Account } from "../../lib/types";
 
 type ViewMode = "grid" | "list" | "detail";
 const view = ref<ViewMode>("grid");
