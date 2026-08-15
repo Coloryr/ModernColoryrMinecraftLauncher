@@ -1,14 +1,15 @@
 // 窗口管理器：负责窗口打开 / 关闭、单窗口 / 多窗口模式切换
 //
 // 多窗口模式：
-// - Tauri 环境：调用后端 open_window 命令创建真实 WebviewWindow
+// - Tauri 环境：用官方 JS API new WebviewWindow() 创建真实窗口
+//   （避免从 Rust 同步命令创建——Windows 上会阻塞主线程导致应用冻结）
 // - 浏览器环境：用新标签页模拟独立窗口
 // 单窗口模式：应用内页面切换（history 同步，可返回）
 
 import { ref } from "vue";
-import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { isWindowKind, type WindowKind } from "./registry";
+import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { isWindowKind, type WindowKind, WINDOW_REGISTRY } from "./registry";
 
 const MODE_KEY = "mcml.windowMode";
 const WIN_PARAM = "window";
@@ -69,11 +70,32 @@ export function openWindow(kind: WindowKind) {
 
   if (isTauri()) {
     // Tauri 环境始终创建真实 WebviewWindow（多窗口）
-    invoke("open_window", { kind }).catch((e) => {
-      console.error("[windowManager] open_window 失败，回退到应用内切换", e);
-      // 失败时回退：应用内切换，保证功能可用
-      currentKind.value = kind;
-      window.history.pushState({}, "", urlFor(kind));
+    // 注意：从 Rust 命令里同步创建窗口在 Windows 上可能阻塞主线程，
+    // 导致新窗口白屏、整个应用卡死。这里改用官方 JS API new WebviewWindow() 创建（标准路径）。
+    const label = `mcml-${kind}`;
+    WebviewWindow.getByLabel(label).then((existing) => {
+      if (existing) {
+        // 窗口已存在则聚焦
+        existing.setFocus();
+        return;
+      }
+      const info = WINDOW_REGISTRY.find((w) => w.kind === kind);
+      const win = new WebviewWindow(label, {
+        url: "index.html",
+        title: info?.title ?? kind,
+        width: info?.width ?? 1100,
+        height: info?.height ?? 720,
+        resizable: true,
+      });
+      win.once("tauri://created", () => {
+        console.log("[windowManager] 已创建窗口", label);
+      });
+      win.once("tauri://error", (e) => {
+        console.error("[windowManager] 创建窗口失败，回退到应用内切换", label, e);
+        // 失败时回退：应用内切换，保证功能可用
+        currentKind.value = kind;
+        window.history.pushState({}, "", urlFor(kind));
+      });
     });
   } else if (multiWindow.value) {
     // 浏览器：新标签页模拟
