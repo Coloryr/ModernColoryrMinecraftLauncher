@@ -7,7 +7,7 @@ MCML 启动器的 Tauri 壳。
 ```
 mcml-vue  前端界面（独立 Vue 3 项目，纯浏览器可运行）
 mcml-gui  Tauri 壳（Rust 后端 + 打包）
-mcml-core 启动器核心（Rust，暂未链接）
+mcml-core 启动器核心（Rust，独立项目，GUI 不依赖）
 ```
 
 `mcml-gui` 本身不含前端代码，通过 `src-tauri/tauri.conf.json` 引用 `../mcml-vue`：
@@ -30,6 +30,6 @@ npm run tauri dev
 ## 状态
 
 当前阶段只做界面：前端使用模拟数据（`mcml-vue/src/lib/api.ts`），
-后端（`src-tauri/src/lib.rs`）保持最小化，未链接 mcml-core。
-接入后端时恢复 `src-tauri/Cargo.toml` 中的 mcml 依赖与 `lib.rs` 中的命令，
-并把 `mcml-vue/src/lib/api-real.ts`（真实 invoke 实现）切换为默认。
+后端（`src-tauri/src/lib.rs`）保持最小化。
+gui 与 mcml-core 已解耦：核心依赖已在 `src-tauri/Cargo.toml` 中注释掉，
+`mcml-vue/src/lib/api-real.ts`（旧的真实 invoke 实现）也已注释，仅作历史参考。

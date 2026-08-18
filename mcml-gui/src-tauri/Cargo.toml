@@ -15,15 +15,24 @@ name = "mcml_gui_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
-tauri-build = { version = "2", features = [] }
+tauri-build = { version = "2.6.3", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
-tauri-plugin-opener = "2"
+tauri = { version = "2.11.5", features = [] }
+tauri-plugin-opener = "2.5.4"
 
-# 说明：当前阶段只做界面（前端使用模拟数据），暂不链接 mcml-core。
-# 接入后端时再恢复 mcml-game / mcml-auth / mcml-base / mcml-config /
-# mcml-downloader / mcml-jvms / mcml-log / mcml-net 等依赖与命令。
+# ---- mcml-core（启动器核心）----
+# 当前阶段：gui 与 core 解耦，不链接核心，只做界面（前端使用模拟数据）。
+# 后续接入核心时建议走独立进程 IPC；如需直接链接，取消下面注释：
+# mcml-game = { path = "../../mcml-core/mcml-game" }
+# mcml-auth = { path = "../../mcml-core/mcml-auth" }
+# mcml-base = { path = "../../mcml-core/mcml-base" }
+# mcml-config = { path = "../../mcml-core/mcml-config" }
+# mcml-downloader = { path = "../../mcml-core/mcml-downloader" }
+# mcml-jvms = { path = "../../mcml-core/mcml-jvms" }
+# mcml-log = { path = "../../mcml-core/mcml-log" }
+# mcml-net = { path = "../../mcml-core/mcml-net" }
+
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration

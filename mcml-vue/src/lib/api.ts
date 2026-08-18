@@ -1,7 +1,7 @@
 // MCML 前端 API（界面开发阶段的模拟实现）
 //
 // 当前不依赖任何后端命令，可在纯浏览器（npm run dev）中运行，
-// 方便先做界面。接入后端后请改用 `./api-real`（真实 invoke 实现）。
+// 方便先做界面。gui 与 core 已解耦，旧的真实实现 `./api-real` 已注释掉。
 import type {
   ErrorEvent,
   ExitEvent,

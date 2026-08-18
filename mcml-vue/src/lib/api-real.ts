@@ -1,9 +1,9 @@
-// @ts-nocheck — 真实实现仅作参考：依赖 @tauri-apps/api，接入后端时启用
-// MCML 前端 API 封装（真实实现，接入后端时启用）
-//
-// 当前 `src/lib/api.ts` 是界面开发阶段的模拟实现；
-// 恢复后端后，把 `App.vue` 的导入从 `./lib/api` 改回本文件即可，
-// 同时恢复 `src-tauri` 中对应的 Rust 命令。
+// @ts-nocheck — 早期接入 mcml-core 时的真实实现参考
+// 当前 gui 与 core 已解耦（不依赖 core），本文件代码全部注释掉，仅作历史参考。
+// 界面数据由 `./api.ts`（模拟实现）提供；如需重新接入核心，
+// 取消下方注释，并恢复 src-tauri 中对应的 Rust 命令即可。
+
+/*
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
@@ -46,3 +46,4 @@ export function onLaunchError(cb: (e: ErrorEvent) => void): Promise<UnlistenFn> 
 export function onInstanceChange(cb: () => void): Promise<UnlistenFn> {
   return listen("instance-change", cb);
 }
+*/

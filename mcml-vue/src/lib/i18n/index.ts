@@ -26,6 +26,14 @@ export function applyLocale() {
   document.documentElement.lang = locale.value;
 }
 
+// 跨窗口同步：某个窗口改了语言后，其它已打开的窗口实时生效
+window.addEventListener("storage", (e) => {
+  if (e.key === LOCALE_KEY && (e.newValue === "zh-CN" || e.newValue === "en-US")) {
+    locale.value = e.newValue;
+    document.documentElement.lang = e.newValue;
+  }
+});
+
 /** 翻译：key 用点号分隔的扁平键，{param} 插值 */
 export function t(key: string, params?: Record<string, string | number>): string {
   const msg = messages[locale.value][key];

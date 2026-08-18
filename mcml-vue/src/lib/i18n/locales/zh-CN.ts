@@ -4,6 +4,9 @@ export default {
   "app.name": "MCML 启动器",
   "app.sub": "Modern Minecraft Launcher",
 
+  // 通用窗口
+  "winCommon.back": "返回主页面",
+
   // 列表模式
   "mode.group": "分组",
   "mode.grid": "平铺",
@@ -317,6 +320,21 @@ export default {
   "winSettings.currentMulti": "多窗口（功能按钮将打开独立窗口）",
   "winSettings.currentSingle": "单窗口（功能在应用内切换）",
   "winSettings.language": "语言 / Language",
+  "winSettings.accent": "界面颜色",
+  "winSettings.accentDesc": "选择启动器的强调色",
+  "winSettings.accent.blue": "蓝色",
+  "winSettings.accent.sky": "天蓝",
+  "winSettings.accent.cyan": "青色",
+  "winSettings.accent.teal": "青绿",
+  "winSettings.accent.green": "绿色",
+  "winSettings.accent.lime": "柠檬",
+  "winSettings.accent.yellow": "黄色",
+  "winSettings.accent.orange": "橙色",
+  "winSettings.accent.red": "红色",
+  "winSettings.accent.pink": "粉色",
+  "winSettings.accent.fuchsia": "品红",
+  "winSettings.accent.purple": "紫色",
+  "winSettings.accent.indigo": "靛蓝",
   "winSettings.downloadSource": "下载源",
   "winSettings.downloadSourceDesc": "Mojang 官方 / BMCLAPI 镜像（开发中）",
   "winSettings.network": "网络与代理",
