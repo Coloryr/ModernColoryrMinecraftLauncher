@@ -7,7 +7,6 @@ edition = "2024"
 mcml-names = { path = "../mcml-names" }
 mcml-config = { path = "../mcml-config" }
 mcml-base = { path = "../mcml-base" }
+mcml-sys = { path = "../mcml-sys" }
 tokio.workspace = true
 
-[target.'cfg(windows)'.dependencies]
-winreg.workspace = true

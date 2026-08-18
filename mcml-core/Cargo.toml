@@ -35,7 +35,7 @@ members = [
     "mcml-net",
     "mcml-skin",
     "mcml-skin-draw",
-    "mcml-skin-render",
+    "mcml-skin-render", "mcml-sys",
 ]
 
 [workspace.dependencies]

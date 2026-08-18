@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::io::Read;
 
-use mcml_base::process_utils;
+use mcml_sys::process_utils;
 
 // ============================================================================
 // 测试辅助函数
@@ -395,7 +395,7 @@ mod windows_pipe_tests {
     use std::sync::Arc;
     use std::time::Duration;
 
-    use mcml_base::process_utils;
+    use mcml_sys::process_utils;
 
     /// 打开命名管道客户端（模拟提权进程通过 -RedirectStandardOutput 连接管道）
     fn open_pipe_client(name: &str) -> std::io::Result<std::fs::File> {

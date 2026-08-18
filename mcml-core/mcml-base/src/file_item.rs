@@ -7,10 +7,9 @@ use std::{
     path::PathBuf,
 };
 
-use crate::{
-    hash_helper::{self, HashType},
-    path_helper,
-};
+use mcml_sys::path_helper;
+
+use crate::hash_helper::{self, HashType};
 
 /// 文件校验
 #[derive(Debug, Clone)]

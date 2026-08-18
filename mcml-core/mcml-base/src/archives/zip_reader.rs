@@ -10,11 +10,11 @@ use std::{
 use mcml_names::i18_items::error_type::{
     ArchiveErrorData, CoreResult, ErrorData, ErrorType, FileSystemErrorData,
 };
+use mcml_sys::path_helper;
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, DateTime, ZipArchive, ZipWriter};
 
 use crate::archives::{self, ArchiveEntryInfo, ArchiveHandle, ArchiveProcess, IBaseArchiveGui};
-use crate::path_helper;
 
 /// 保持打开的 Zip 读取句柄（缓存 [`ZipArchive`]，中央目录只解析一次）。
 ///

@@ -5,8 +5,8 @@
 
 use std::sync::OnceLock;
 
-use mcml_base::Os;
 use mcml_names::i18_items::error_type::ErrorType;
+use mcml_sys::Os;
 use serde::{Deserialize, Serialize};
 
 use crate::{WORK_CLIENT, urls::ADOPTIUM_URL};

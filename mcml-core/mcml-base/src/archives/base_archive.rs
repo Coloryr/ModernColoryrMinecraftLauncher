@@ -16,14 +16,12 @@ use mcml_names::{
     i18_items::error_type::{CoreResult, ErrorData, ErrorType, FileSystemErrorData},
     names,
 };
+use mcml_sys::path_helper;
 use uuid::Uuid;
 
-use crate::{
-    archives::{
-        ArchiveHandle, ArchiveType, IBaseArchiveGui, TarMode, r7z_reader::R7zReader,
-        replace_invalid_name, tar_reader::TarReader, zip_reader::ZipReader,
-    },
-    path_helper,
+use crate::archives::{
+    ArchiveHandle, ArchiveType, IBaseArchiveGui, TarMode, r7z_reader::R7zReader,
+    replace_invalid_name, tar_reader::TarReader, zip_reader::ZipReader,
 };
 
 /// 压缩包条目信息

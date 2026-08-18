@@ -7,10 +7,10 @@ use std::{
     path::Path,
 };
 
-use mcml_base::path_helper;
 use mcml_names::i18_items::error_type::{
     ArchiveErrorData, CoreResult, ErrorData, ErrorType, FileSystemErrorData,
 };
+use mcml_sys::path_helper;
 use zip::ZipArchive;
 
 /// 解压 Minecraft native 库

@@ -11,10 +11,10 @@ use std::{
 use mcml_names::i18_items::error_type::{
     ArchiveErrorData, CoreResult, ErrorData, ErrorType, FileSystemErrorData,
 };
+use mcml_sys::path_helper;
 use sevenz_rust2::{ArchiveEntry, ArchiveReader, ArchiveWriter, Password};
 
 use crate::archives::{self, ArchiveEntryInfo, ArchiveHandle, ArchiveProcess, IBaseArchiveGui};
-use crate::path_helper;
 
 /// 保持打开文件句柄的 7z 读取句柄。
 ///
