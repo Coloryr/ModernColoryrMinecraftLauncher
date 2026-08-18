@@ -4,6 +4,9 @@ export default {
   "app.name": "MCML Launcher",
   "app.sub": "Modern Minecraft Launcher",
 
+  // Common window
+  "winCommon.back": "Back to main",
+
   // List modes
   "mode.group": "Group",
   "mode.grid": "Grid",
@@ -317,6 +320,21 @@ export default {
   "winSettings.currentMulti": "Multi-window (feature buttons open separate windows)",
   "winSettings.currentSingle": "Single-window (features switch in-app)",
   "winSettings.language": "Language",
+  "winSettings.accent": "Accent color",
+  "winSettings.accentDesc": "Choose the launcher accent color",
+  "winSettings.accent.blue": "Blue",
+  "winSettings.accent.sky": "Sky",
+  "winSettings.accent.cyan": "Cyan",
+  "winSettings.accent.teal": "Teal",
+  "winSettings.accent.green": "Green",
+  "winSettings.accent.lime": "Lime",
+  "winSettings.accent.yellow": "Yellow",
+  "winSettings.accent.orange": "Orange",
+  "winSettings.accent.red": "Red",
+  "winSettings.accent.pink": "Pink",
+  "winSettings.accent.fuchsia": "Fuchsia",
+  "winSettings.accent.purple": "Purple",
+  "winSettings.accent.indigo": "Indigo",
   "winSettings.downloadSource": "Download Source",
   "winSettings.downloadSourceDesc": "Mojang official / BMCLAPI mirror (WIP)",
   "winSettings.network": "Network & Proxy",

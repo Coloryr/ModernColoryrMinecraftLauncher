@@ -1,18 +1,27 @@
 <script setup lang="ts">
-// 子窗口通用框架：返回按钮 + 标题 + 内容区
+// 子窗口通用框架：标题 + 内容区
+// “返回主页面”按钮只在单窗口模式（应用内切换）显示；
+// 多窗口模式下子窗口是独立真实窗口/标签页，用系统原生按钮关闭。
+import { computed } from "vue";
+import { t } from "../../lib/i18n";
+import { isTauri, multiWindow } from "../../windows/windowManager";
+
 defineProps<{ title: string }>();
 
 const emit = defineEmits<{ (e: "close"): void }>();
+
+/** 单窗口模式（仅浏览器存在）才显示返回按钮 */
+const showBack = computed(() => !isTauri() && !multiWindow.value);
 </script>
 
 <template>
   <div class="window-frame">
     <header class="frame-head">
-      <button class="back-btn" @click="emit('close')">
+      <button v-if="showBack" class="back-btn" @click="emit('close')">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
           <path d="m15 18-6-6 6-6" />
         </svg>
-        返回主界面
+        {{ t("winCommon.back") }}
       </button>
       <h1>{{ title }}</h1>
       <span class="spacer"></span>

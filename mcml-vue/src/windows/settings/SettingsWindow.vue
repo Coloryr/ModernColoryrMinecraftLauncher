@@ -5,6 +5,7 @@ import SegmentedTabs from "../../components/ui/SegmentedTabs.vue";
 import { t, locale, setLocale } from "../../lib/i18n";
 import { multiWindow, setMultiWindow, openWindow, isTauri } from "../windowManager";
 import { sidebarSide, setSidebarSide } from "../../lib/settings";
+import { ACCENTS, accent, setAccent } from "../../lib/theme";
 import BaseButton from "../../components/ui/BaseButton.vue";
 
 const inTauri = isTauri();
@@ -42,6 +43,36 @@ function testWindow() {
         ]"
         @update:model-value="onLangChange"
       />
+    </section>
+
+    <section class="card">
+      <h2 class="card-title">{{ t("winSettings.accent") }}</h2>
+      <p class="card-desc">{{ t("winSettings.accentDesc") }}</p>
+      <div class="accent-list">
+        <button
+          v-for="a in ACCENTS"
+          :key="a.id"
+          class="accent-swatch"
+          :class="{ active: accent === a.id }"
+          :style="{ background: a.color }"
+          :title="t(`winSettings.accent.${a.id}`)"
+          @click="setAccent(a.id)"
+        >
+          <svg
+            v-if="accent === a.id"
+            viewBox="0 0 24 24"
+            width="16"
+            height="16"
+            fill="none"
+            :stroke="a.check"
+            stroke-width="3.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="m5 13 4 4L19 7" />
+          </svg>
+        </button>
+      </div>
     </section>
 
     <section class="card">
@@ -128,6 +159,33 @@ function testWindow() {
   color: var(--text-dim);
   margin-bottom: 12px;
   line-height: 1.6;
+}
+
+.accent-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.accent-swatch {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.12s, border-color 0.12s, box-shadow 0.12s;
+}
+
+.accent-swatch:hover {
+  transform: scale(1.12);
+}
+
+.accent-swatch.active {
+  border-color: var(--text);
+  box-shadow: 0 0 0 3px var(--bg-card), 0 0 0 5px var(--text-dim);
 }
 
 .hint {

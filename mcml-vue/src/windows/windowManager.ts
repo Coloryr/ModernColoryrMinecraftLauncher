@@ -106,15 +106,16 @@ export function openWindow(kind: WindowKind) {
   }
 }
 
-/** 关闭当前窗口并回到主窗口 */
+/** 关闭当前窗口（单窗口模式的返回按钮触发：切回主页面） */
 export function closeWindow() {
   if (isTauri()) {
-    // 关闭当前 WebviewWindow
+    // Tauri：关闭当前 WebviewWindow（多窗口模式子窗口用系统原生按钮关闭）
     getCurrentWindow().close();
   } else if (multiWindow.value) {
-    // 由脚本打开的标签页允许 window.close()
+    // 浏览器多窗口：由脚本打开的标签页允许 window.close()
     window.close();
   } else {
+    // 单窗口模式：应用内切回主页面
     currentKind.value = "main";
     window.history.pushState({}, "", urlFor("main"));
   }
