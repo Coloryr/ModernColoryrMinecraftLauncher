@@ -21,9 +21,10 @@ use std::{
     sync::{Arc, LazyLock, OnceLock, RwLock},
 };
 
-use mcml_base::{ArchEnum, events::EventHandler};
+use mcml_base::{events::EventHandler};
 use mcml_config::config_obj::JvmConfigObj;
 use mcml_names::names;
+use mcml_sys::{ArchEnum, Os, java_scan, path_helper};
 
 pub mod java_helper;
 
@@ -267,7 +268,7 @@ fn add_list(list: &Vec<JvmConfigObj>) {
 /// 找到则返回匹配的 Java 信息，未找到返回 `None`
 pub fn get_java(version: i32, over: bool) -> Option<Arc<JavaInfoObj>> {
     let list = JVMS.read().ok()?;
-    let system_arch = mcml_base::get_system_info().system_arch;
+    let system_arch = mcml_sys::get_system_info().system_arch;
 
     let mut filtered: Vec<&Arc<JavaInfoObj>> = list
         .iter()
@@ -300,13 +301,25 @@ pub fn get_all_java() -> Vec<Arc<JavaInfoObj>> {
     vec
 }
 
+/// 在指定目录中查找 Java 可执行文件
+///
+/// - `dir`: 查找路径
+pub fn find_java_from_path<P: AsRef<Path>>(dir: P) -> Option<PathBuf> {
+    let sys = mcml_sys::get_system_info();
+    match sys.os {
+        Os::Windows => path_helper::search_file(dir, names::JAVAW_FILE),
+        Os::Linux | Os::MacOS => path_helper::search_file(dir, names::JAVA_FILE),
+        _ => None,
+    }
+}
+
 /// 从系统注册表或标准路径中搜索已安装的 Java
 ///
 /// 返回去重后的 Java 列表，按路径排序。
 fn find_java() -> Option<Vec<JavaInfoObj>> {
     let mut java_paths = HashSet::new();
 
-    java_helper::find_java_inner(&mut java_paths);
+    java_scan::find_java_inner(&mut java_paths);
 
     if java_paths.is_empty() {
         return None;

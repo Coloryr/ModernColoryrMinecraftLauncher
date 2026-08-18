@@ -7,14 +7,13 @@ use std::{io::Read, path::Path};
 
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use mcml_names::i18_items::error_type::{CoreResult, ErrorData, ErrorType};
+use mcml_sys::path_helper;
 use md5::Md5;
 use sha1::Sha1;
 use sha2::{Sha256, Sha512};
 use tokio::io::{AsyncRead, AsyncReadExt};
 
 use digest::{Digest, DynDigest};
-
-use crate::path_helper;
 
 /// 哈希算法类型
 pub enum HashType {

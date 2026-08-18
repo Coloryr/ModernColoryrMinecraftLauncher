@@ -22,7 +22,6 @@ use std::{
     },
 };
 
-use crate::path_helper;
 use mcml_names::{
     i18_items::error_type::{CoreResult, ErrorType},
     names,
@@ -34,6 +33,7 @@ pub mod tar_reader;
 pub mod zip_reader;
 
 pub use base_archive::{ArchiveEntryInfo, BaseArchive};
+use mcml_sys::path_helper;
 
 /// 压缩包类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

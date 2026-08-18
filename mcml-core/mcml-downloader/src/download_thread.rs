@@ -31,13 +31,13 @@ use mcml_base::{
     archives::{ArchiveType, BaseArchive},
     file_item::{FileHash, LaterRun},
     hash_helper::{self, HashType},
-    path_helper,
 };
 use mcml_names::i18_items::error_type::{
     CoreResult, DownloadFileHashErrorData, DownloadFileOverFailData, DownloadFileSizeErrorData,
     ErrorData,
     ErrorType::{self, StreamError},
 };
+use mcml_sys::path_helper;
 use reqwest::Response;
 use semka::Sem;
 

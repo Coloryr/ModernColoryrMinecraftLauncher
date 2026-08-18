@@ -12,11 +12,11 @@
 
 use std::{env, fs, path::PathBuf, sync::LazyLock};
 
-use crate::Os;
+use mcml_sys::Os;
 
 /// 内部数据存储路径（惰性初始化，自动创建目录）
 static INNER: LazyLock<PathBuf> = LazyLock::new(|| {
-    let inner_path = if crate::get_system_info().os == Os::MacOS {
+    let inner_path = if mcml_sys::get_system_info().os == Os::MacOS {
         let home = env::var("HOME").expect("");
         PathBuf::from(home).join(".mcml")
     } else {

@@ -1309,6 +1309,7 @@ dependencies = [
  "digest",
  "flate2",
  "mcml-names",
+ "mcml-sys",
  "md-5",
  "regex",
  "serde",
@@ -1321,7 +1322,6 @@ dependencies = [
  "tokio",
  "toml",
  "uuid",
- "windows-sys 0.61.2",
  "xz2",
  "zip",
 ]
@@ -1333,6 +1333,7 @@ dependencies = [
  "mcml-base",
  "mcml-log",
  "mcml-names",
+ "mcml-sys",
  "semrs",
  "serde",
  "serde_json",
@@ -1368,6 +1369,7 @@ dependencies = [
  "mcml-log",
  "mcml-names",
  "mcml-net",
+ "mcml-sys",
  "reqwest",
  "semka",
  "serde",
@@ -1421,8 +1423,8 @@ dependencies = [
  "mcml-base",
  "mcml-config",
  "mcml-names",
+ "mcml-sys",
  "tokio",
- "winreg",
 ]
 
 [[package]]
@@ -1462,6 +1464,7 @@ dependencies = [
  "mcml-config",
  "mcml-log",
  "mcml-names",
+ "mcml-sys",
  "reqwest",
  "scraper",
  "serde",
@@ -1495,6 +1498,17 @@ dependencies = [
  "glow",
  "mcml-skin",
  "skia-safe",
+]
+
+[[package]]
+name = "mcml-sys"
+version = "0.1.0"
+dependencies = [
+ "mcml-names",
+ "tokio",
+ "uuid",
+ "windows-sys 0.61.2",
+ "winreg",
 ]
 
 [[package]]

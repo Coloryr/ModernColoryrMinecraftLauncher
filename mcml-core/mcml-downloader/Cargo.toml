@@ -9,6 +9,7 @@ mcml-config = { path = "../mcml-config" }
 mcml-base = { path = "../mcml-base" }
 mcml-names = { path = "../mcml-names" }
 mcml-net = { path = "../mcml-net" }
+mcml-sys = { path = "../mcml-sys" }
 crossbeam-queue.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true

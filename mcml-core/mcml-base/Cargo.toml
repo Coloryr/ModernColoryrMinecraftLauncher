@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 mcml-names = { path = "../mcml-names" }
+mcml-sys = { path = "../mcml-sys" }
 uuid.workspace = true
 tokio.workspace = true
 md-5.workspace = true
@@ -23,6 +24,3 @@ xz2.workspace = true
 regex.workspace = true
 digest.workspace = true
 toml.workspace = true
-
-[target.'cfg(windows)'.dependencies]
-windows-sys.workspace = true

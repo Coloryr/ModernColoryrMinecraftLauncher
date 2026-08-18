@@ -12,13 +12,13 @@ use flate2::{Compression, write::GzEncoder};
 use mcml_names::i18_items::error_type::{
     ArchiveErrorData, CoreResult, ErrorData, ErrorType, FileSystemErrorData,
 };
+use mcml_sys::path_helper;
 use tar::{Archive, Builder};
 use xz2::{read::XzDecoder, write::XzEncoder};
 
 use crate::archives::{
     self, ArchiveEntryInfo, ArchiveHandle, ArchiveProcess, ArchiveType, IBaseArchiveGui, TarMode,
 };
-use crate::path_helper;
 
 /// 保持打开文件句柄的 Tar/TarGz/TarXz 读取句柄。
 ///

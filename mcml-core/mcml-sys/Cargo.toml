@@ -1,0 +1,13 @@
+[package]
+name = "mcml-sys"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+mcml-names = { path = "../mcml-names" }
+uuid.workspace = true
+tokio.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys.workspace = true
+winreg.workspace = true
