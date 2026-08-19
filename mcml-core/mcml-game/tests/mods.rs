@@ -1,5 +1,5 @@
-use mcml_base::path_helper;
 use mcml_game::{class_scan, game_mods};
+use mcml_sys::path_helper;
 use toml::Table;
 
 #[tokio::test]

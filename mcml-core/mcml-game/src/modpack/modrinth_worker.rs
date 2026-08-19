@@ -1,12 +1,13 @@
 use std::path::Path;
 
 use async_trait::async_trait;
-use mcml_base::{file_item::FileItemObj, path_helper, serialize_tools, tools};
+use mcml_base::{file_item::FileItemObj, serialize_tools, tools};
 use mcml_names::{
     i18_items::error_type::{CoreResult, DataNotFoundData, ErrorType},
     names,
 };
 use mcml_net::urls;
+use mcml_sys::path_helper;
 use uuid::Uuid;
 
 use crate::{
@@ -98,10 +99,14 @@ impl ModPackWorker for ModrinthPackWorker {
     }
 
     /// 创建游戏实例
-    async fn create_instance(&self, group: Option<String>) -> CoreResult<Uuid> {
+    async fn create_instance(
+        &self,
+        name: Option<String>,
+        group: Option<String>,
+    ) -> CoreResult<Uuid> {
         match &self.info {
             Some(info) => {
-                let name = format!("{}-{}", info.name, info.version_id);
+                let name = name.unwrap_or(format!("{}-{}", info.name, info.version_id));
                 let game = InstanceSettingObj {
                     group,
                     name,

@@ -6,11 +6,11 @@ use std::{
 };
 
 use mcml_base::{
-    Os,
     file_item::{FileHash, FileItemObj, LaterRun},
 };
 use mcml_names::names;
 use mcml_net::{maven_utils, url_helper};
+use mcml_sys::{ArchEnum, Os};
 use tokio::task;
 
 use crate::{
@@ -87,7 +87,7 @@ impl GameArgObj {
         .unwrap();
 
         // 阶段 2：ARM 本地库回退（在异步上下文中进行网络请求）
-        let sys = mcml_base::get_system_info();
+        let sys = mcml_sys::get_system_info();
         if sys.is_arm {
             for item in natives_arm.iter() {
                 natives.remove(item);
@@ -182,7 +182,7 @@ fn process_one_library(
     }
 
     let mut isadd = false;
-    let sys = mcml_base::get_system_info();
+    let sys = mcml_sys::get_system_info();
 
     // 旧版 - 直接使用 url 字段
     if !item.url.is_empty() {
@@ -259,7 +259,6 @@ fn process_one_library(
 
         // Windows 下如果主 native 为空，尝试 32/64 位特定版本
         if lib.path.is_empty() && sys.os == Os::Windows {
-            use mcml_base::ArchEnum;
             if sys.system_arch == ArchEnum::X86 {
                 lib = &classifiers.natives_windows_32;
             } else {

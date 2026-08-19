@@ -34,11 +34,9 @@ pub mod inner_path;
 pub mod serialize_tools;
 pub mod tools;
 
-use serde_repr::{Deserialize_repr, Serialize_repr};
 use std::{
-    fmt,
     path::{Path, PathBuf},
-    sync::{LazyLock, OnceLock},
+    sync::OnceLock,
 };
 
 /// 程序运行根目录（全局单例）

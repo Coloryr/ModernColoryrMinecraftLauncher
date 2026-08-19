@@ -1,8 +1,9 @@
 use std::path::Path;
 
-use mcml_base::tools;
+use mcml_base::{serialize_tools::MiniJsonObj, tools};
 use mcml_config::config_obj::{RunArgObj, WindowSettingObj};
 use mcml_names::names;
+use mcml_sys::path_helper;
 
 use crate::{
     game_options::InstanceCfg,
@@ -29,6 +30,36 @@ pub fn is_mmc_version<P: AsRef<Path>>(dir: P) -> bool {
     let file1 = dir.as_ref().join(names::MMCCFG_FILE);
 
     file.exists() && file.is_file() && file1.exists() && file1.is_file()
+}
+
+/// 检测是否为官方实例
+pub fn is_minecraft_version<P: AsRef<Path>>(dir: P) -> bool {
+    let files = path_helper::get_files(dir);
+
+    for item in files {
+        if !item.ends_with(names::JSON_DOT_EXT) {
+            continue;
+        }
+
+        let stream = path_helper::open_read(item);
+        if stream.is_err() {
+            return false;
+        }
+        let json = MiniJsonObj::from_stream(stream.unwrap());
+        if json.is_err() {
+            return false;
+        }
+
+        let json = json.unwrap().as_object().unwrap_or_default();
+        if json.have_key("id")
+            && (json.have_key("arguments") || json.have_key("minecraftArguments"))
+            && json.have_key("mainClass")
+        {
+            return true;
+        }
+    }
+
+    return false;
 }
 
 impl MMCObj {

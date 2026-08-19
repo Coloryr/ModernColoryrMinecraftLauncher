@@ -1,6 +1,5 @@
-/// 游戏启动统计
-///
-/// 统计启动器的启动次数、成功/失败次数、总游戏时长以及每次启动的时间段
+//! 游戏启动统计
+//! 统计启动器的启动次数、成功/失败次数、总游戏时长以及每次启动的时间段
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
@@ -13,7 +12,6 @@ use std::{
 };
 
 use chrono::{DateTime, Local, TimeDelta, Utc};
-use mcml_base::path_helper;
 use mcml_names::{
     i18,
     i18_items::{error_type::CoreResult, thread_type::ThreadType},
@@ -24,6 +22,7 @@ use mcml_nbt::{
     nbt_file::{CompressType, NbtFile},
     nbt_types::{NbtByte, NbtCompound, NbtList, NbtLong, NbtString},
 };
+use mcml_sys::path_helper;
 use uuid::Uuid;
 
 use crate::{get_instance, get_instances, launcher::game_time_obj::GameTimeObj};

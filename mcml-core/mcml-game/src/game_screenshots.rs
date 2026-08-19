@@ -1,9 +1,9 @@
-/// 游戏实例屏幕截图相关
+//! 游戏实例屏幕截图相关
 
 use std::path::PathBuf;
 
-use mcml_base::path_helper;
 use mcml_names::{i18_items::error_type::CoreResult, names};
+use mcml_sys::path_helper;
 
 use crate::launcher::instance_setting_obj::InstanceSettingObj;
 

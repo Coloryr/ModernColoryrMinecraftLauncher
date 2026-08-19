@@ -6,7 +6,7 @@ use std::{
 
 use mcml_base::{
     hash_helper::{self, HashType},
-    path_helper, serialize_tools,
+    serialize_tools,
 };
 use mcml_config::{config_obj::SourceLocal, config_save};
 use mcml_names::{
@@ -14,6 +14,7 @@ use mcml_names::{
     names, uuids,
 };
 use mcml_net::{mojang_api, url_helper};
+use mcml_sys::path_helper;
 use tokio::task;
 use uuid::Uuid;
 
@@ -34,8 +35,6 @@ use crate::{
         version_obj::{VersionObj, VersionsObj},
     },
 };
-
-const NOW_VERSION: &str = "26.2";
 
 static BASE_DIR: OnceLock<PathBuf> = OnceLock::new();
 static FORGE_DIR: OnceLock<PathBuf> = OnceLock::new();
@@ -239,7 +238,7 @@ pub fn get_latest_version() -> String {
     let versions = read.as_ref();
     match versions {
         Some(data) => data.latest.release.clone(),
-        None => NOW_VERSION.to_string(),
+        None => names::NOW_VERSION.to_string(),
     }
 }
 

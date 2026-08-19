@@ -1,7 +1,9 @@
+use std::io::Read;
 use std::path::Path;
 
-use mcml_base::{path_helper, serialize_tools::MiniJsonObj};
+use mcml_base::serialize_tools::MiniJsonObj;
 use mcml_names::i18_items::error_type::{ArgEmptyData, CoreResult, ErrorType};
+use mcml_sys::path_helper;
 
 /// 官方实例信息
 pub struct OfficialObj {
@@ -46,12 +48,11 @@ impl Default for ArgumentsObj {
 }
 
 impl OfficialObj {
-    /// 从文件读取信息
+    /// 从读取流解析信息
     ///
-    /// - `file`: 文件位置
-    pub fn read_from_file<P: AsRef<Path>>(file: P) -> CoreResult<Self> {
-        let stream = path_helper::open_read(file)?;
-        let json = MiniJsonObj::from_stream(stream)?;
+    /// - `stream`: 数据流（文件、内存字节等）
+    pub fn from_reader<R: Read>(mut stream: R) -> CoreResult<Self> {
+        let json = MiniJsonObj::from_stream(&mut stream)?;
 
         if let Some(data) = json.as_object() {
             let mut obj = OfficialObj {
@@ -89,5 +90,13 @@ impl OfficialObj {
         } else {
             Err(ErrorType::ArgEmpty(ArgEmptyData::Version))
         }
+    }
+
+    /// 从文件读取信息
+    ///
+    /// - `file`: 文件位置
+    pub fn read_from_file<P: AsRef<Path>>(file: P) -> CoreResult<Self> {
+        let stream = path_helper::open_read(file)?;
+        Self::from_reader(stream)
     }
 }

@@ -2,13 +2,13 @@
 //!
 //! 这些测试不依赖全局状态（实例列表、路径缓存等），可以独立运行。
 
-use mcml_base::{Os, get_system_info};
 use mcml_game::launcher_path::libraries_path::LibVersionObj;
 use mcml_game::launcher_path::version_path::get_forge_json_name;
 use mcml_game::loader::{LoaderKey, LoaderType};
 use mcml_game::mojang::check_allow;
 use mcml_game::mojang::game_arg_obj::{GameOsObj, GameRulesObj};
 use mcml_game::mojang::version_parse::parse_game_version;
+use mcml_sys::Os;
 
 /// 版本号解析：覆盖正式版、快照、预发布、RC、新格式、远古版本。
 #[test]
@@ -166,7 +166,7 @@ fn loader_type_prefix() {
 /// 规则判断：allow / disallow 及平台匹配。
 #[test]
 fn check_allow_rules() {
-    let sys = get_system_info();
+    let sys = mcml_sys::get_system_info();
 
     // 空规则 → 允许
     assert!(check_allow(&Vec::new()));

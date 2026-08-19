@@ -1,5 +1,5 @@
-/// 游戏实例日志相关
-/// 包括运行日志和过往日志处理
+//! 游戏实例日志相关
+//! 包括运行日志和过往日志处理
 use std::{
     collections::VecDeque,
     fs,
@@ -12,8 +12,8 @@ use std::{
 use chrono::{DateTime, FixedOffset, Local};
 use encoding_rs_io::DecodeReaderBytesBuilder;
 use flate2::write::GzDecoder;
-use mcml_base::path_helper;
 use mcml_names::names;
+use mcml_sys::path_helper;
 use regex::Regex;
 
 use crate::launcher::{LogEncoding, instance_setting_obj::InstanceSettingObj};

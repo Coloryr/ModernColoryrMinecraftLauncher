@@ -64,6 +64,7 @@ pub const MOD_LIST_FILE: &str = "modlist.html";
 pub const LATEST_LOG_FILE: &str = "latest.log";
 pub const DEBUG_LOG_FILE: &str = "debug.log";
 pub const SERVER_MANIFEST_FILE: &str = "server-manifest.json";
+pub const LAUNCHER_PROFILES_FILE: &str = "launcher_profiles.json";
 pub const FABRIC_MOD_FILE: &str = "fabric.mod.json";
 pub const QUILT_MOD_FILE: &str = "quilt.mod.json";
 pub const SAVE_BACKUP_FILE: &str = "save_backups.json";
@@ -180,3 +181,5 @@ pub const GCZGC: [&str; 2] = ["-XX:+UseZGC", "-XX:+ZGenerational"];
 
 pub const LANG_ZH_CN: &str = "zh_CN";
 pub const LANG_EN_US: &str = "en_US";
+
+pub const NOW_VERSION: &str = "26.2";

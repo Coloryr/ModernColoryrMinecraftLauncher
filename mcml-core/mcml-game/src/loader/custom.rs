@@ -3,7 +3,7 @@ use std::{io::Read, path::Path};
 use mcml_base::{
     file_item::{FileHash, FileItemObj},
     hash_helper::{self, HashType},
-    path_helper, serialize_tools,
+    serialize_tools,
 };
 use mcml_names::{
     i18_items::error_type::{
@@ -11,6 +11,7 @@ use mcml_names::{
     },
     names,
 };
+use mcml_sys::path_helper;
 use zip::ZipArchive;
 
 use crate::{

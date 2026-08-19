@@ -14,6 +14,7 @@ impl I18Lang for ZhCn {
         match info {
             InfoType::CoreStart => format!("MCML启动，版本：{}", *VERSION),
             InfoType::CoreStop => format!("MCML停止"),
+            InfoType::TempFile => format!("临时文件"),
         }
     }
 

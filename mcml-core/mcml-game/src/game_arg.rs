@@ -7,9 +7,8 @@ use std::{
 
 use mcml_auth::{AuthType, LoginObj};
 use mcml_base::{
-    Os,
     file_item::{FileHash, FileItemObj, LaterRun},
-    hash_helper, path_helper, serialize_tools, tools,
+    hash_helper, serialize_tools, tools,
 };
 use mcml_config::config_obj::GCType;
 use mcml_names::i18_items::error_type::{
@@ -17,6 +16,7 @@ use mcml_names::i18_items::error_type::{
 };
 use mcml_names::names;
 use mcml_net::{mojang_api, urls};
+use mcml_sys::{Os, path_helper};
 
 use crate::{
     game_launch::{AutoJoinType, GameLaunchArg},
@@ -555,7 +555,7 @@ impl InstanceSettingObj {
             ),
         };
 
-        let sep = if mcml_base::get_system_info().os == Os::Windows {
+        let sep = if mcml_sys::get_system_info().os == Os::Windows {
             ';'
         } else {
             ':'
@@ -613,7 +613,7 @@ impl InstanceSettingObj {
         obj: &mut GameLaunchObj,
         check: bool,
     ) -> Vec<String> {
-        let sep = if mcml_base::get_system_info().os == Os::Windows {
+        let sep = if mcml_sys::get_system_info().os == Os::Windows {
             ';'
         } else {
             ':'

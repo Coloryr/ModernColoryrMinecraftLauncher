@@ -3,13 +3,14 @@ use std::{collections::HashMap, path::Path, sync::Mutex};
 use async_trait::async_trait;
 use mcml_base::{
     file_item::{FileHash, FileItemObj, LaterRun},
-    path_helper, serialize_tools,
+    serialize_tools,
 };
 use mcml_names::{
     i18_items::error_type::{CoreResult, DataNotFoundData, ErrorType},
     names,
 };
 use mcml_net::curseforge_api::{self, file_obj::CurseForgeFileDataObj};
+use mcml_sys::path_helper;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
@@ -135,10 +136,14 @@ impl ModPackWorker for CurseForgeWorker {
     }
 
     /// 创建游戏实例
-    async fn create_instance(&self, group: Option<String>) -> CoreResult<Uuid> {
+    async fn create_instance(
+        &self,
+        name: Option<String>,
+        group: Option<String>,
+    ) -> CoreResult<Uuid> {
         match &self.info {
             Some(info) => {
-                let name = format!("{}-{}", info.name, info.version);
+                let name = name.unwrap_or(format!("{}-{}", info.name, info.version));
                 let game = InstanceSettingObj {
                     group,
                     name,

@@ -6,7 +6,7 @@ use std::{
 use mcml_base::{
     archives::{ArchiveType, BaseArchive},
     file_item::{FileHash, FileItemObj, LaterRun},
-    path_helper, serialize_tools,
+    serialize_tools,
 };
 use mcml_config::config_save;
 use mcml_names::{
@@ -17,6 +17,7 @@ use mcml_net::{
     curseforge_api,
     modrinth_api::{self, version_obj::ModrinthVersionObj},
 };
+use mcml_sys::path_helper;
 use tokio_util::sync::CancellationToken;
 
 use crate::{

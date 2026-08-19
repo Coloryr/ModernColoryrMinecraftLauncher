@@ -1,3 +1,4 @@
+use mcml_base::tools;
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
 pub mod custom_game_arg_obj;
@@ -71,3 +72,14 @@ pub enum FileType {
 }
 
 impl FileType {}
+
+/// 检测下载源
+/// - `pid`: 项目号
+/// - `fid`: 文件号
+pub fn get_source_type(pid: &str, fid: &str) -> ModPackType {
+    if tools::check_is_not_number(pid) || tools::check_is_not_number(fid) {
+        ModPackType::Modrinth
+    } else {
+        ModPackType::CurseForge
+    }
+}

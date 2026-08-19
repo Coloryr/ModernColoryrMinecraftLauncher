@@ -1,5 +1,5 @@
-/// 游戏实例结构文件相关
-/// 包括模组的结构文件读取
+//! 游戏实例结构文件相关
+//! 包括模组的结构文件读取
 use std::{
     collections::HashMap,
     io::{Read, Seek},
@@ -7,12 +7,12 @@ use std::{
     sync::Mutex,
 };
 
-use mcml_base::path_helper;
 use mcml_names::{
     i18_items::error_type::{CoreResult, DataNotFoundData, ErrorType},
     names,
 };
 use mcml_nbt::{NbtType, nbt_file::NbtFile, nbt_types::NbtCompound};
+use mcml_sys::path_helper;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
 use crate::launcher::instance_setting_obj::InstanceSettingObj;

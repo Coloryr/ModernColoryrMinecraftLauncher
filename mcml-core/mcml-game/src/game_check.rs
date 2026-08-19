@@ -1,13 +1,13 @@
-/// 检查游戏实例文件
+//! 检查游戏实例文件
 
 use std::{collections::HashMap, path::{Path, PathBuf}};
 
 use mcml_base::{
     file_item::{FileHash, FileItemObj},
     hash_helper::{self, HashType},
-    path_helper,
 };
 use mcml_names::{i18_items::error_type::CoreResult, names};
+use mcml_sys::path_helper;
 use tokio::task;
 
 use crate::{

@@ -115,20 +115,6 @@ impl MiniJsonObj {
     pub fn as_i64(&self) -> Option<i64> {
         self.value.as_i64()
     }
-
-    /// 从键中获取列表
-    /// - `key`: 键名
-    pub fn get_list(&self, key: &str) -> Option<Vec<MiniJsonObj>> {
-        self.value
-            .as_object()
-            .and_then(|data| data.get(key))
-            .and_then(|item| item.as_array())
-            .map(|item| {
-                item.iter()
-                    .map(|item| MiniJsonObj::from_value(item.clone()))
-                    .collect()
-            })
-    }
 }
 
 impl MiniJsonMap {
@@ -185,9 +171,24 @@ impl MiniJsonMap {
         self.map.get(key).and_then(|item| item.as_list())
     }
 
+    /// 是否存在键
+    /// 
+    /// - `key`: 需要查找的键
+    pub fn have_key(&self, key: &str) -> bool {
+        self.map.contains_key(key)
+    }
+
     /// 遍历所有
     pub fn iter(&self) -> hash_map::Iter<'_, String, MiniJsonObj> {
         self.map.iter()
+    }
+}
+
+impl Default for MiniJsonMap {
+    fn default() -> Self {
+        Self {
+            map: Default::default(),
+        }
     }
 }
 

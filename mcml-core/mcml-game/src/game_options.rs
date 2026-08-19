@@ -1,12 +1,12 @@
-/// 游戏实例配置相关
+//! 游戏实例配置相关
 use std::{
     collections::HashMap,
     io::{BufRead, BufReader, Read, Write},
     path::Path,
 };
 
-use mcml_base::path_helper;
 use mcml_names::i18_items::error_type::{CoreResult, ErrorData, ErrorType};
+use mcml_sys::path_helper;
 
 use crate::launcher::instance_setting_obj::InstanceSettingObj;
 
