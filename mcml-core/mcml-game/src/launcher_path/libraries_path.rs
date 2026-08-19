@@ -13,7 +13,6 @@ use mcml_base::{
         FileItemObj,
     },
     hash_helper::{self, HashType},
-    path_helper,
 };
 use mcml_names::{i18_items::error_type::CoreResult, names};
 use mcml_net::{
@@ -21,6 +20,7 @@ use mcml_net::{
     nide8_api::{self, Nide8Obj},
     urls,
 };
+use mcml_sys::path_helper;
 
 use crate::{
     game_arg::GameLaunchObj, launcher::instance_setting_obj::InstanceSettingObj, loader::LoaderType,
@@ -126,7 +126,7 @@ impl LibVersionObj {
 pub(crate) fn init<P: AsRef<Path>>(dir: P) -> CoreResult<()> {
     let dir = LIB_DIR.get_or_init(|| dir.as_ref().join(names::LIBRARIES_DIR));
 
-    let sys = mcml_base::get_system_info();
+    let sys = mcml_sys::get_system_info();
 
     if !dir.exists() {
         path_helper::create_dir_all(dir)?;

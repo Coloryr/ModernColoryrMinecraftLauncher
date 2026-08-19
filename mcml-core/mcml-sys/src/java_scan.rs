@@ -1,8 +1,4 @@
-use std::{collections::HashSet, path::{Path, PathBuf}, process::Command};
-
-use mcml_names::names;
-
-use crate::{Os, path_helper};
+use std::{collections::HashSet, path::PathBuf, process::Command};
 
 /// 执行命令并返回输出行列表
 fn get_list<I, S>(command: &str, args: I) -> Result<Vec<String>, std::io::Error>

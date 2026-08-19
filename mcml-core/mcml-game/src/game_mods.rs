@@ -1,4 +1,4 @@
-/// 游戏实例模组相关
+//! 游戏实例模组相关
 use std::{
     collections::HashMap,
     io::{Cursor, Read, Seek},
@@ -9,13 +9,13 @@ use std::{
 use mcml_base::{
     file_item::FileHash,
     hash_helper::{self, HashType},
-    path_helper,
     serialize_tools::{MiniJsonObj, MiniTomlMap},
 };
 use mcml_names::{
     i18_items::error_type::{CoreResult, ErrorData, ErrorType, FileSystemErrorData},
     names,
 };
+use mcml_sys::path_helper;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use zip::ZipArchive;
 
@@ -298,7 +298,7 @@ fn read_forge_json(mut reader: impl Read, mod_info: &mut ModObj) -> CoreResult<(
 
     let values = if obj.is_list() {
         obj.as_list()
-    } else if obj.is_obj() {
+    } else if let Some(obj) = obj.as_object() {
         obj.get_list("modList")
     } else {
         None

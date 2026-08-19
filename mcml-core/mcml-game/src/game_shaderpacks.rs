@@ -1,15 +1,15 @@
-/// 光影包相关
+//! 光影包相关
 use std::{
     io::Read,
     path::{Path, PathBuf},
     sync::Mutex,
 };
 
-use mcml_base::path_helper;
 use mcml_names::{
     i18_items::error_type::{ArgErrorData, CoreResult, ErrorType, FileSystemErrorData},
     names,
 };
+use mcml_sys::path_helper;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use zip::ZipArchive;
 

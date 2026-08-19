@@ -5,15 +5,13 @@ use std::{
     sync::OnceLock,
 };
 
-use mcml_base::{
-    path_helper::{self},
-    serialize_tools,
-};
+use mcml_base::serialize_tools;
 use mcml_config::config_save;
 use mcml_names::{
     i18_items::error_type::{CoreResult, ErrorType, FileSystemErrorData},
     names, uuids,
 };
+use mcml_sys::path_helper;
 
 use crate::launcher::{
     custom_game_arg_obj::CustomGameArgObj, file_online_info_obj::OnlineInfoObj,

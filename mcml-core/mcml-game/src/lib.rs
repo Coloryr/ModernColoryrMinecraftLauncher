@@ -13,6 +13,7 @@ use mcml_names::{
 };
 
 use mcml_net::input_file::InputFile;
+use mcml_sys::{Os, path_helper};
 use uuid::Uuid;
 
 use crate::{
@@ -30,7 +31,6 @@ pub mod data_res;
 pub mod game_arg;
 pub mod game_check;
 pub mod game_count;
-pub mod game_download;
 pub mod game_export;
 pub mod game_lan;
 pub mod game_launch;
@@ -50,6 +50,7 @@ pub mod launcher_path;
 pub mod loader;
 pub mod modpack;
 pub mod modrinth;
+pub mod scan_game;
 pub mod mojang;
 pub mod other_launcher;
 pub mod path_watch;
@@ -548,7 +549,7 @@ impl InstanceSettingObj {
         self.save_online_info(&HashMap::new());
         self.save_launch_count_data(&GameTimeObj::new());
 
-        if mcml_base::get_system_info().os == Os::Windows {
+        if mcml_sys::get_system_info().os == Os::Windows {
             self.encoding = LogEncoding::GBK;
         }
 

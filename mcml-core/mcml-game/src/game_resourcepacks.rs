@@ -1,4 +1,4 @@
-/// 游戏实例资源包相关
+//! 游戏实例资源包相关
 use std::{
     io::Read,
     path::{Path, PathBuf},
@@ -8,12 +8,13 @@ use std::{
 use mcml_base::{
     file_item::FileHash,
     hash_helper::{self, HashType},
-    path_helper, serialize_tools,
+    serialize_tools,
 };
 use mcml_names::{
     i18_items::error_type::{CoreResult, ErrorData, ErrorType, FileSystemErrorData},
     names,
 };
+use mcml_sys::path_helper;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use serde::Deserialize;
 use zip::ZipArchive;
@@ -82,6 +83,7 @@ impl Default for ResourcepackObj {
     }
 }
 
+/// 解析材质包
 pub fn process_resourcepack<P: AsRef<Path>>(path: P) -> CoreResult<ResourcepackObj> {
     let file = path_helper::open_read(&path)?;
     let mut zip = ZipArchive::new(file).map_err(|err| {

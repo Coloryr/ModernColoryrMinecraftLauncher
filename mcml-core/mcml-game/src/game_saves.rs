@@ -1,5 +1,5 @@
-/// 游戏实例存档相关
-/// 包括存档里面的数据包
+//! 游戏实例存档相关
+//! 包括存档里面的数据包
 use std::{
     collections::HashMap,
     io::{Read, Seek},
@@ -10,7 +10,6 @@ use std::{
 use chrono::{Datelike, Local, Timelike};
 use mcml_base::{
     archives::{ArchiveType, BaseArchive, IBaseArchiveGui},
-    path_helper,
     serialize_tools::{self, MiniJsonObj},
 };
 use mcml_config::config_save;
@@ -24,6 +23,7 @@ use mcml_nbt::{
     nbt_file::NbtFile,
     nbt_types::{NbtCompound, NbtList, NbtString},
 };
+use mcml_sys::path_helper;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use zip::ZipArchive;

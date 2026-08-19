@@ -4,6 +4,7 @@ use std::sync::LazyLock;
 pub mod path_helper;
 pub mod process_utils;
 pub mod java_scan;
+pub mod memory_helper;
 
 /// 操作系统类型枚举
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

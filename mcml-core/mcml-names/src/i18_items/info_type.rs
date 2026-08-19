@@ -2,4 +2,6 @@
 pub enum InfoType {
     CoreStart,
     CoreStop,
+
+    TempFile,
 }

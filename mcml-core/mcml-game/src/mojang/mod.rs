@@ -1,9 +1,8 @@
 use mcml_base::{
-    Os,
     file_item::{FileHash, FileItemObj},
-    get_system_info,
 };
 use mcml_net::url_helper;
+use mcml_sys::Os;
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
 use crate::{
@@ -38,7 +37,7 @@ impl Default for VersionType {
 /// - `list`: 规则列表
 pub fn check_allow(list: &Vec<GameRulesObj>) -> bool {
     let mut allow = true;
-    let sys = get_system_info();
+    let sys = mcml_sys::get_system_info();
     for item in list.iter() {
         if item.action == "allow" {
             if let Some(os) = &item.os {

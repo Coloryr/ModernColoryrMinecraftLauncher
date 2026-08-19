@@ -3,8 +3,9 @@ use std::{
     sync::LazyLock,
 };
 
-use mcml_base::{file_item::FileItemObj, path_helper};
+use mcml_base::file_item::FileItemObj;
 use mcml_names::{i18_items::error_type::CoreResult, names};
+use mcml_sys::path_helper;
 
 pub mod assets_path;
 pub mod instance_path;
