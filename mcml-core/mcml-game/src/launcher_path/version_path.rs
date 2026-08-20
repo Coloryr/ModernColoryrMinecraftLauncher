@@ -6,7 +6,7 @@ use std::{
 
 use mcml_base::{
     hash_helper::{self, HashType},
-    serialize_tools,
+    serialize_tools, version_parse,
 };
 use mcml_config::{config_obj::SourceLocal, config_save};
 use mcml_names::{
@@ -31,7 +31,6 @@ use crate::{
     },
     mojang::{
         game_arg_obj::GameArgObj,
-        version_checker,
         version_obj::{VersionObj, VersionsObj},
     },
 };
@@ -319,7 +318,7 @@ pub fn add_forge(
     version: &str,
     neo: bool,
 ) -> Arc<ForgeLaunchObj> {
-    let v222 = version_checker::is_game_version_1202(mc);
+    let v222 = version_parse::is_game_version_1202(mc);
     let name = if neo && v222 {
         format!("{}-{}", names::NEOFORGE_KEY, version)
     } else {
@@ -480,7 +479,7 @@ pub async fn check_update(mc: &str) -> CoreResult<Arc<GameArgObj>> {
 /// 获取json名字
 pub fn get_forge_json_name(mc: &str, version: &str, neo: bool, install: bool) -> String {
     if neo {
-        let v222 = version_checker::is_game_version_1202(&mc);
+        let v222 = version_parse::is_game_version_1202(&mc);
 
         if install {
             if v222 {

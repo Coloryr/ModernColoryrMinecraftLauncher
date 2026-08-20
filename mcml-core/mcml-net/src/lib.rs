@@ -58,6 +58,7 @@ pub mod optifine_api;
 pub mod quilt_api;
 pub mod url_helper;
 pub mod urls;
+pub mod chunkbase_api;
 
 /// 默认 HTTP 超时时间（秒）
 const DEFAULT_TIMEOUT: u64 = 10;

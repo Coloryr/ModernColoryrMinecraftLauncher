@@ -1,24 +1,4 @@
-use std::{collections::HashSet, path::PathBuf, process::Command};
-
-/// 执行命令并返回输出行列表
-fn get_list<I, S>(command: &str, args: I) -> Result<Vec<String>, std::io::Error>
-where
-    I: IntoIterator<Item = S>,
-    S: AsRef<std::ffi::OsStr>,
-{
-    let output = Command::new(command).args(args).output()?;
-
-    if !output.status.success() {
-        return Ok(Vec::new());
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    Ok(stdout
-        .lines()
-        .map(|s| s.trim().to_string())
-        .filter(|s| !s.is_empty())
-        .collect())
-}
+use std::{collections::HashSet, path::PathBuf};
 
 /// 搜索Java
 ///
@@ -29,6 +9,8 @@ pub fn find_java_inner(java_paths: &mut HashSet<PathBuf>) {
     use mcml_names::i18_items::error_type::DataNotFoundData;
     use mcml_names::i18_items::error_type::ErrorType;
     use winreg::{RegKey, enums::HKEY_LOCAL_MACHINE};
+
+    use crate::process_helper;
 
     /// Windows 注册表读取
     fn get_oracle_java_from_registry(key_path: &str) -> CoreResult<Vec<PathBuf>> {
@@ -97,7 +79,7 @@ pub fn find_java_inner(java_paths: &mut HashSet<PathBuf>) {
         Ok(paths)
     }
 
-    if let Ok(paths) = get_list("where", &["javaw.exe"]) {
+    if let Ok(paths) = process_helper::run_command_arg("where", &["javaw.exe"]) {
         for path in paths {
             java_paths.insert(PathBuf::from(path));
         }

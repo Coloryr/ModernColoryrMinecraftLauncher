@@ -23,12 +23,13 @@ use mcml_nbt::{
     nbt_file::NbtFile,
     nbt_types::{NbtCompound, NbtList, NbtString},
 };
+use mcml_net::chunkbase_api;
 use mcml_sys::path_helper;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use zip::ZipArchive;
 
-use crate::launcher::instance_setting_obj::InstanceSettingObj;
+use crate::{GameInstance, launcher::instance_setting_obj::InstanceSettingObj};
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(default)]
@@ -101,7 +102,7 @@ impl Default for SaveObj {
             icon: Default::default(),
             broken: Default::default(),
             last_played: Default::default(),
-            nbt: Default::default(),
+            nbt: Default::default()
         }
     }
 }
@@ -607,6 +608,13 @@ impl SaveObj {
         self.save_nbt()?;
 
         Ok(())
+    }
+
+    /// 打开种子信息网站
+    pub fn open_world_seed(&self, version: &str) {
+        let url = chunkbase_api::gen_url(version, self.random_seed, self.generator_name == "minecraft:large_biomes");
+
+        
     }
 }
 

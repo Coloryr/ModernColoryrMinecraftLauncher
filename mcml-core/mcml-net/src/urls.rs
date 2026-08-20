@@ -135,3 +135,9 @@ pub const CURSEFORGE: &str = "https://api.curseforge.com/v1/";
 
 pub const MODRINTH: &str = "https://api.modrinth.com/v2/";
 pub const MODRINTH_DOWNLOAD: &str = "https://cdn.modrinth.com/";
+
+// ============================================================================
+// chunkbase API
+// ============================================================================
+
+pub const CHUNKBASE: &str = "https://www.chunkbase.com/apps/seed-map#";

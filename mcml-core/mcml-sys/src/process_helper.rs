@@ -66,8 +66,8 @@ pub struct LaunchResult {
 pub fn is_run_as_admin() -> bool {
     #[cfg(target_os = "windows")]
     {
-        use windows_sys::Win32::UI::Shell::IsUserAnAdmin;
-        unsafe { IsUserAnAdmin() != 0 }
+        use windows::Win32::UI::Shell::IsUserAnAdmin;
+        unsafe { IsUserAnAdmin().as_bool() }
     }
     #[cfg(not(target_os = "windows"))]
     {
@@ -233,8 +233,11 @@ pub fn launch_with_elevation_windows<P: AsRef<Path>>(
     working_dir: P,
 ) -> CoreResult<LaunchResult> {
     use std::io::{BufRead, BufReader};
+    use std::os::windows::io::AsRawHandle;
     use std::os::windows::io::{FromRawHandle, OwnedHandle};
     use std::time::Duration;
+
+    use windows::Win32::Foundation::HANDLE;
 
     use mcml_names::i18_items::error_type::{ErrorData, ErrorType};
 
@@ -245,8 +248,8 @@ pub fn launch_with_elevation_windows<P: AsRef<Path>>(
     // 创建命名管道（服务器端）
     let stdout_handle = create_named_pipe(&stdout_pipe_name)?;
     let stderr_handle = create_named_pipe(&stderr_pipe_name)?;
-    let stdout_owned = unsafe { OwnedHandle::from_raw_handle(stdout_handle) };
-    let stderr_owned = unsafe { OwnedHandle::from_raw_handle(stderr_handle) };
+    let stdout_owned = unsafe { OwnedHandle::from_raw_handle(stdout_handle.0) };
+    let stderr_owned = unsafe { OwnedHandle::from_raw_handle(stderr_handle.0) };
 
     // 构建目标进程参数（在 PowerShell 中作为字符串传递给 $psi.Arguments）
     let arg_str = args
@@ -328,12 +331,18 @@ pub fn launch_with_elevation_windows<P: AsRef<Path>>(
 
     std::thread::spawn(move || {
         tx_stdout
-            .send(connect_named_pipe_with_timeout(stdout_owned, 10_000))
+            .send(connect_named_pipe_with_timeout(
+                HANDLE(stdout_owned.as_raw_handle()),
+                10_000,
+            ))
             .ok();
     });
     std::thread::spawn(move || {
         tx_stderr
-            .send(connect_named_pipe_with_timeout(stderr_owned, 10_000))
+            .send(connect_named_pipe_with_timeout(
+                HANDLE(stderr_owned.as_raw_handle()),
+                10_000,
+            ))
             .ok();
     });
 
@@ -384,30 +393,33 @@ const PIPE_WAIT: u32 = 0x00000000;
 
 /// 创建一个命名管道服务器并返回原始 HANDLE
 #[cfg(target_os = "windows")]
-pub fn create_named_pipe(name: &str) -> Result<windows_sys::Win32::Foundation::HANDLE, ErrorType> {
-    use windows_sys::Win32::Foundation::INVALID_HANDLE_VALUE;
-    use windows_sys::Win32::System::Pipes::CreateNamedPipeW;
+pub fn create_named_pipe(name: &str) -> Result<windows::Win32::Foundation::HANDLE, ErrorType> {
+    use windows::Win32::Foundation::INVALID_HANDLE_VALUE;
+    use windows::Win32::Storage::FileSystem::FILE_FLAGS_AND_ATTRIBUTES;
+    use windows::Win32::System::Pipes::CreateNamedPipeW;
+    use windows::Win32::System::Pipes::NAMED_PIPE_MODE;
+    use windows::core::{HSTRING, PCWSTR};
 
-    let full_name: Vec<u16> = format!(r"\\.\pipe\{}", name)
-        .encode_utf16()
-        .chain(std::iter::once(0))
-        .collect();
+    let full_name = format!(r"\\.\pipe\{}", name);
+
+    let hstring = HSTRING::from(full_name);
+    let pcwstr = PCWSTR(hstring.as_ptr());
 
     let handle = unsafe {
         CreateNamedPipeW(
-            full_name.as_ptr(),
-            PIPE_ACCESS_INBOUND | FILE_FLAG_OVERLAPPED,
-            PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
-            1,                // 最大实例数
-            8192,             // 输出缓冲区大小
-            8192,             // 输入缓冲区大小
-            0,                // 默认超时
-            std::ptr::null(), // 默认安全描述符
+            pcwstr,
+            FILE_FLAGS_AND_ATTRIBUTES(PIPE_ACCESS_INBOUND | FILE_FLAG_OVERLAPPED),
+            NAMED_PIPE_MODE(PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT),
+            1,    // 最大实例数
+            8192, // 输出缓冲区大小
+            8192, // 输入缓冲区大小
+            0,    // 默认超时
+            None, // 默认安全描述符
         )
     };
 
     // INVALID_HANDLE_VALUE 比较（HANDLE 是 *mut c_void，需要转为 usize）
-    if handle as usize == INVALID_HANDLE_VALUE as usize {
+    if handle == INVALID_HANDLE_VALUE {
         return Err(ErrorType::ProcessError(ErrorData {
             error: format!(
                 "CreateNamedPipeW failed: {}",
@@ -425,44 +437,50 @@ pub fn create_named_pipe(name: &str) -> Result<windows_sys::Win32::Foundation::H
 /// 连接成功后转移所有权给 `File`
 #[cfg(target_os = "windows")]
 pub fn connect_named_pipe_with_timeout(
-    handle: std::os::windows::io::OwnedHandle,
+    handle: windows::Win32::Foundation::HANDLE,
     timeout_ms: u32,
-) -> Result<std::fs::File, ErrorType> {
-    use std::os::windows::io::{AsRawHandle, FromRawHandle, IntoRawHandle};
+) -> CoreResult<std::fs::File> {
+    use std::os::windows::io::FromRawHandle;
 
-    use windows_sys::Win32::Foundation::{
-        CloseHandle, ERROR_IO_PENDING, ERROR_PIPE_CONNECTED, GetLastError, WAIT_OBJECT_0,
-        WAIT_TIMEOUT,
+    use windows::Win32::Foundation::{
+        CloseHandle, ERROR_IO_PENDING, ERROR_PIPE_CONNECTED, WAIT_OBJECT_0, WAIT_TIMEOUT,
     };
-    use windows_sys::Win32::System::IO::{CancelIo, OVERLAPPED};
-    use windows_sys::Win32::System::Pipes::ConnectNamedPipe;
-    use windows_sys::Win32::System::Threading::{CreateEventW, WaitForSingleObject};
+    use windows::Win32::System::IO::{CancelIo, OVERLAPPED};
+    use windows::Win32::System::Pipes::ConnectNamedPipe;
+    use windows::Win32::System::Threading::{CreateEventW, WaitForSingleObject};
+    use windows::core::HRESULT;
 
     // 创建事件用于 Overlapped I/O
-    let event = unsafe { CreateEventW(std::ptr::null(), 1, 0, std::ptr::null()) };
-    if event.is_null() {
+    let event = unsafe { CreateEventW(None, true, false, None) };
+    if let Err(err) = event {
         return Err(ErrorType::ProcessError(ErrorData {
-            error: format!("CreateEventW failed: {}", std::io::Error::last_os_error()),
+            error: format!("CreateEventW failed: {}", err.message()),
         }));
     }
-
-    let raw_handle = handle.as_raw_handle();
+    let event = event.unwrap();
 
     let mut overlapped: OVERLAPPED = unsafe { std::mem::zeroed() };
     overlapped.hEvent = event;
 
     // 异步等待客户端连接
-    let result = unsafe { ConnectNamedPipe(raw_handle, &mut overlapped) };
+    let result = unsafe { ConnectNamedPipe(handle, Some(&mut overlapped)) };
 
-    if result == 0 {
-        let err = unsafe { GetLastError() };
-        if err == ERROR_IO_PENDING {
+    if let Err(err) = result {
+        if err.code() == HRESULT(ERROR_IO_PENDING.0 as i32) {
             // 等待连接完成或超时
             let wait_result = unsafe { WaitForSingleObject(event, timeout_ms) };
             if wait_result != WAIT_OBJECT_0 {
                 unsafe {
-                    CancelIo(raw_handle);
-                    CloseHandle(event);
+                    CancelIo(handle).map_err(|err| {
+                        ErrorType::ProcessError(ErrorData {
+                            error: err.message(),
+                        })
+                    })?;
+                    CloseHandle(event).map_err(|err| {
+                        ErrorType::ProcessError(ErrorData {
+                            error: err.message(),
+                        })
+                    })?;
                 }
                 // handle 被 drop，CloseHandle 会被调用
                 return Err(ErrorType::ProcessError(ErrorData {
@@ -476,10 +494,16 @@ pub fn connect_named_pipe_with_timeout(
                     },
                 }));
             }
-        } else if err == ERROR_PIPE_CONNECTED {
+        } else if err.code() == HRESULT(ERROR_PIPE_CONNECTED.0 as i32) {
             // 客户端已连接（在 ConnectNamedPipe 之前就连接了）
         } else {
-            unsafe { CloseHandle(event) };
+            unsafe {
+                CloseHandle(event).map_err(|err| {
+                    ErrorType::ProcessError(ErrorData {
+                        error: err.message(),
+                    })
+                })?;
+            };
             return Err(ErrorType::ProcessError(ErrorData {
                 error: format!("ConnectNamedPipe failed: error code {}", err),
             }));
@@ -488,11 +512,14 @@ pub fn connect_named_pipe_with_timeout(
     // result != 0 → 立即连接成功
 
     // 清理事件句柄，将管道 HANDLE 所有权转移给 File
-    unsafe { CloseHandle(event) };
-
-    // 从 OwnedHandle 中取出原始 HANDLE（不关闭），转移给 File
-    let raw = handle.into_raw_handle();
-    let file = unsafe { std::fs::File::from_raw_handle(raw) };
+    unsafe {
+        CloseHandle(event).map_err(|err| {
+            ErrorType::ProcessError(ErrorData {
+                error: err.message(),
+            })
+        })?;
+    };
+    let file = unsafe { std::fs::File::from_raw_handle(handle.0) };
     Ok(file)
 }
 
@@ -571,4 +598,48 @@ pub fn launch_admin(args: &[String]) -> CoreResult<()> {
             "Admin elevation not supported on this platform",
         ))
     }
+}
+
+/// 执行命令并返回输出行列表
+pub fn run_command(command: &str) -> CoreResult<Vec<String>> {
+    let output = Command::new(command).output().map_err(|err| {
+        ErrorType::ProcessError(ErrorData {
+            error: err.to_string(),
+        })
+    })?;
+
+    if !output.status.success() {
+        return Ok(Vec::new());
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    Ok(stdout
+        .lines()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect())
+}
+
+/// 执行命令并返回输出行列表
+pub fn run_command_arg<I, S>(command: &str, args: I) -> CoreResult<Vec<String>>
+where
+    I: IntoIterator<Item = S>,
+    S: AsRef<std::ffi::OsStr>,
+{
+    let output = Command::new(command).args(args).output().map_err(|err| {
+        ErrorType::ProcessError(ErrorData {
+            error: err.to_string(),
+        })
+    })?;
+
+    if !output.status.success() {
+        return Ok(Vec::new());
+    }
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    Ok(stdout
+        .lines()
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty())
+        .collect())
 }

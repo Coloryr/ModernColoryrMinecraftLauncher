@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::io::Read;
 
-use mcml_sys::process_utils;
+use mcml_sys::process_helper;
 
 // ============================================================================
 // 测试辅助函数
@@ -30,7 +30,7 @@ fn test_working_dir() -> &'static str {
 
 #[test]
 fn test_is_run_as_admin_returns_bool() {
-    let result = process_utils::is_run_as_admin();
+    let result = process_helper::is_run_as_admin();
     // 不应该 panic，返回 bool
     assert!(result == true || result == false);
 }
@@ -42,7 +42,7 @@ fn test_is_run_as_admin_returns_bool() {
 #[test]
 fn test_launch_normal_captures_stdout() {
     let (cmd, args) = get_test_echo_cmd();
-    let result = process_utils::launch(
+    let result = process_helper::launch(
         cmd,
         args,
         HashMap::new(),
@@ -77,7 +77,7 @@ fn test_launch_normal_captures_stdout() {
 #[test]
 fn test_launch_result_child_wait() {
     let (cmd, args) = get_test_echo_cmd();
-    let mut result = process_utils::launch(cmd, args, HashMap::new(), test_working_dir(), false)
+    let mut result = process_helper::launch(cmd, args, HashMap::new(), test_working_dir(), false)
         .expect("launch should succeed");
 
     // try_wait 可能在进程退出后返回 Some，也可能进程还在运行返回 None
@@ -100,7 +100,7 @@ fn test_launch_result_child_wait() {
 /// - stdout / stderr 正常捕获
 #[test]
 fn test_launch_admin_when_is_admin() {
-    let running_as_admin = process_utils::is_run_as_admin();
+    let running_as_admin = process_helper::is_run_as_admin();
     eprintln!("=== is_run_as_admin() = {running_as_admin} ===");
 
     if !running_as_admin {
@@ -109,7 +109,7 @@ fn test_launch_admin_when_is_admin() {
     }
 
     let (cmd, args) = get_test_echo_cmd();
-    let mut result = process_utils::launch(cmd, args, HashMap::new(), test_working_dir(), true)
+    let mut result = process_helper::launch(cmd, args, HashMap::new(), test_working_dir(), true)
         .expect("launch should succeed");
 
     eprintln!(
@@ -175,7 +175,7 @@ fn test_launch_admin_when_is_admin() {
 /// - 行为和结果取决于平台提权机制（UAC / pkexec / osascript）
 #[test]
 fn test_launch_admin_when_not_admin() {
-    let running_as_admin = process_utils::is_run_as_admin();
+    let running_as_admin = process_helper::is_run_as_admin();
     eprintln!("=== is_run_as_admin() = {running_as_admin} ===");
 
     if running_as_admin {
@@ -186,12 +186,12 @@ fn test_launch_admin_when_not_admin() {
     // 先验证普通启动不受影响
     let (cmd, args) = get_test_echo_cmd();
     let normal =
-        process_utils::launch(cmd, args.clone(), HashMap::new(), test_working_dir(), false)
+        process_helper::launch(cmd, args.clone(), HashMap::new(), test_working_dir(), false)
             .expect("normal launch should succeed");
     assert!(!normal.is_admin, "normal launch: is_admin should be false");
 
     // 提权启动
-    let elevated = process_utils::launch(cmd, args, HashMap::new(), test_working_dir(), true);
+    let elevated = process_helper::launch(cmd, args, HashMap::new(), test_working_dir(), true);
 
     eprintln!(
         "Current process: non-admin (is_run_as_admin=false)\n\
@@ -227,7 +227,7 @@ fn test_launch_admin_when_not_admin() {
 #[test]
 fn test_launch_result_fields_consistency() {
     let (cmd, args) = get_test_echo_cmd();
-    let result = process_utils::launch(cmd, args, HashMap::new(), test_working_dir(), false)
+    let result = process_helper::launch(cmd, args, HashMap::new(), test_working_dir(), false)
         .expect("launch should succeed");
 
     // is_admin 和 pid 的一致性：普通启动时 pid 应为 None
@@ -254,12 +254,12 @@ mod linux_admin_tests {
     /// 且返回的 is_admin 应为 true（走了提权路径）。
     #[test]
     fn test_launch_admin_linux_elevation_path() {
-        if process_utils::is_run_as_admin() {
+        if process_helper::is_run_as_admin() {
             eprintln!("SKIP: already root, pkexec elevation path not tested");
             return;
         }
 
-        let result = process_utils::launch(
+        let result = process_helper::launch(
             "/bin/echo",
             vec!["hello_admin".into()],
             HashMap::new(),
@@ -293,12 +293,12 @@ mod linux_admin_tests {
     /// 以 root 身份运行时，admin=true 应直接 spawn（不走 pkexec）
     #[test]
     fn test_launch_admin_linux_when_root() {
-        if !process_utils::is_run_as_admin() {
+        if !process_helper::is_run_as_admin() {
             eprintln!("SKIP: not root, direct admin path not tested");
             return;
         }
 
-        let result = process_utils::launch(
+        let result = process_helper::launch(
             "/bin/echo",
             vec!["hello_root".into()],
             HashMap::new(),
@@ -329,12 +329,12 @@ mod macos_admin_tests {
     /// 且返回的 is_admin 应为 true。
     #[test]
     fn test_launch_admin_macos_elevation_path() {
-        if process_utils::is_run_as_admin() {
+        if process_helper::is_run_as_admin() {
             eprintln!("SKIP: already root, osascript elevation path not tested");
             return;
         }
 
-        let result = process_utils::launch(
+        let result = process_helper::launch(
             "/bin/echo",
             vec!["hello_admin".into()],
             HashMap::new(),
@@ -365,12 +365,12 @@ mod macos_admin_tests {
     /// 以 root 身份运行时，admin=true 应直接 spawn（不走 osascript）
     #[test]
     fn test_launch_admin_macos_when_root() {
-        if !process_utils::is_run_as_admin() {
+        if !process_helper::is_run_as_admin() {
             eprintln!("SKIP: not root, direct admin path not tested");
             return;
         }
 
-        let result = process_utils::launch(
+        let result = process_helper::launch(
             "/bin/echo",
             vec!["hello_root".into()],
             HashMap::new(),
@@ -391,11 +391,13 @@ mod macos_admin_tests {
 #[cfg(target_os = "windows")]
 mod windows_pipe_tests {
     use std::io::{BufRead, Read, Write};
-    use std::os::windows::io::{FromRawHandle, OwnedHandle};
+    use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
     use std::sync::Arc;
     use std::time::Duration;
 
-    use mcml_sys::process_utils;
+    use mcml_sys::process_helper;
+    use windows::Win32::Foundation::HANDLE;
+    use windows::core::Free;
 
     /// 打开命名管道客户端（模拟提权进程通过 -RedirectStandardOutput 连接管道）
     fn open_pipe_client(name: &str) -> std::io::Result<std::fs::File> {
@@ -407,22 +409,22 @@ mod windows_pipe_tests {
     #[test]
     fn test_create_named_pipe_success() {
         let name = format!("test_pipe_create_{}", std::process::id());
-        let handle =
-            process_utils::create_named_pipe(&name).expect("create_named_pipe should succeed");
+        let mut handle =
+            process_helper::create_named_pipe(&name).expect("create_named_pipe should succeed");
 
         // 有效 HANDLE 不是 INVALID_HANDLE_VALUE
-        assert_ne!(handle as usize, usize::MAX, "handle should be valid");
+        assert!(handle.is_invalid(), "handle should be valid");
 
-        // 用 OwnedHandle 接管生命周期，drop 时自动 CloseHandle
-        let _owned = unsafe { OwnedHandle::from_raw_handle(handle) };
+        unsafe {
+            handle.free();
+        }
     }
 
     #[test]
     fn test_named_pipe_connect_and_read() {
         let name = format!("test_pipe_rw_{}", std::process::id());
 
-        let handle = process_utils::create_named_pipe(&name).expect("create pipe");
-        let owned = unsafe { OwnedHandle::from_raw_handle(handle) };
+        let handle = process_helper::create_named_pipe(&name).expect("create pipe");
 
         let pipe_name = name.clone();
         let client = std::thread::spawn(move || {
@@ -430,7 +432,7 @@ mod windows_pipe_tests {
             file.write_all(b"hello from pipe").expect("client write");
         });
 
-        let mut server_file = process_utils::connect_named_pipe_with_timeout(owned, 5000)
+        let mut server_file = process_helper::connect_named_pipe_with_timeout(handle, 5000)
             .expect("connect should succeed");
 
         let mut buf = Vec::new();
@@ -444,10 +446,9 @@ mod windows_pipe_tests {
     fn test_named_pipe_timeout() {
         let name = format!("test_pipe_timeout_{}", std::process::id());
 
-        let handle = process_utils::create_named_pipe(&name).expect("create pipe");
-        let owned = unsafe { OwnedHandle::from_raw_handle(handle) };
+        let handle = process_helper::create_named_pipe(&name).expect("create pipe");
 
-        let result = process_utils::connect_named_pipe_with_timeout(owned, 200);
+        let result = process_helper::connect_named_pipe_with_timeout(handle, 200);
         assert!(result.is_err(), "should timeout with no client");
         let err_msg = format!("{:?}", result.unwrap_err());
         assert!(
@@ -462,24 +463,22 @@ mod windows_pipe_tests {
         let name_a = format!("test_pipe_multi_a_{}", std::process::id());
         let name_b = format!("test_pipe_multi_b_{}", std::process::id());
 
-        let h1 = process_utils::create_named_pipe(&name_a).expect("pipe A");
-        let h2 = process_utils::create_named_pipe(&name_b).expect("pipe B");
+        let mut h1 = process_helper::create_named_pipe(&name_a).expect("pipe A");
+        let mut h2 = process_helper::create_named_pipe(&name_b).expect("pipe B");
 
-        assert_ne!(
-            h1 as usize, h2 as usize,
-            "different pipes should have different handles"
-        );
+        assert_ne!(h1, h2, "different pipes should have different handles");
 
-        let _owned1 = unsafe { OwnedHandle::from_raw_handle(h1) };
-        let _owned2 = unsafe { OwnedHandle::from_raw_handle(h2) };
+        unsafe {
+            h1.free();
+            h2.free();
+        }
     }
 
     #[test]
     fn test_named_pipe_large_data() {
         let name = format!("test_pipe_large_{}", std::process::id());
 
-        let handle = process_utils::create_named_pipe(&name).expect("create pipe");
-        let owned = unsafe { OwnedHandle::from_raw_handle(handle) };
+        let handle = process_helper::create_named_pipe(&name).expect("create pipe");
 
         let pipe_name = name.clone();
         let client = std::thread::spawn(move || {
@@ -489,7 +488,7 @@ mod windows_pipe_tests {
         });
 
         let mut server_file =
-            process_utils::connect_named_pipe_with_timeout(owned, 5000).expect("connect");
+            process_helper::connect_named_pipe_with_timeout(handle, 5000).expect("connect");
 
         let mut buf = Vec::new();
         server_file.read_to_end(&mut buf).expect("server read");
@@ -504,8 +503,7 @@ mod windows_pipe_tests {
     fn test_named_pipe_client_first_connect() {
         let name = format!("test_pipe_early_{}", std::process::id());
 
-        let handle = process_utils::create_named_pipe(&name).expect("create pipe");
-        let owned = unsafe { OwnedHandle::from_raw_handle(handle) };
+        let handle = process_helper::create_named_pipe(&name).expect("create pipe");
 
         let pipe_name = name.clone();
         let barrier = Arc::new(std::sync::Barrier::new(2));
@@ -523,7 +521,7 @@ mod windows_pipe_tests {
         barrier.wait();
         std::thread::sleep(Duration::from_millis(100));
 
-        let mut server_file = process_utils::connect_named_pipe_with_timeout(owned, 5000)
+        let mut server_file = process_helper::connect_named_pipe_with_timeout(handle, 5000)
             .expect("connect after client");
 
         client_ready.wait();
@@ -543,7 +541,7 @@ mod windows_pipe_tests {
     fn test_launch_with_elevation_windows_e2e() {
         use std::collections::HashMap;
 
-        let result = process_utils::launch_with_elevation_windows(
+        let result = process_helper::launch_with_elevation_windows(
             "cmd",
             vec!["/c".into(), "echo".into(), "hello_from_pipe".into()],
             HashMap::new(),
@@ -602,7 +600,7 @@ mod windows_pipe_tests {
             return;
         }
 
-        let result = process_utils::launch_with_elevation_windows(
+        let result = process_helper::launch_with_elevation_windows(
             "java",
             vec!["-version".into()],
             HashMap::new(),
@@ -668,13 +666,16 @@ mod windows_pipe_tests {
         );
         let pipe_out = format!("mcml_sp_out_{}", id);
 
-        let h_out = process_utils::create_named_pipe(&pipe_out).expect("create pipe");
-        let o_out = unsafe { OwnedHandle::from_raw_handle(h_out) };
+        let h_out = process_helper::create_named_pipe(&pipe_out).expect("create pipe");
+        let o_out = unsafe { OwnedHandle::from_raw_handle(h_out.0) };
         let (tx_out, rx_out) = std::sync::mpsc::channel();
 
         std::thread::spawn(move || {
             tx_out
-                .send(process_utils::connect_named_pipe_with_timeout(o_out, 5_000))
+                .send(process_helper::connect_named_pipe_with_timeout(
+                    HANDLE(o_out.as_raw_handle()),
+                    5_000,
+                ))
                 .ok();
         });
         std::thread::sleep(Duration::from_millis(100));
@@ -737,25 +738,25 @@ mod windows_pipe_tests {
         let pipe_err = format!("mcml_child_err_{}", id);
 
         // 1. 创建管道 + 连接线程（必须在 PowerShell 之前）
-        let h_out = process_utils::create_named_pipe(&pipe_out).expect("create pipe out");
-        let h_err = process_utils::create_named_pipe(&pipe_err).expect("create pipe err");
-        let o_out = unsafe { OwnedHandle::from_raw_handle(h_out) };
-        let o_err = unsafe { OwnedHandle::from_raw_handle(h_err) };
+        let h_out = process_helper::create_named_pipe(&pipe_out).expect("create pipe out");
+        let h_err = process_helper::create_named_pipe(&pipe_err).expect("create pipe err");
+        let o_out = unsafe { OwnedHandle::from_raw_handle(h_out.0) };
+        let o_err = unsafe { OwnedHandle::from_raw_handle(h_err.0) };
 
         let (tx_out, rx_out) = std::sync::mpsc::channel();
         let (tx_err, rx_err) = std::sync::mpsc::channel();
 
         std::thread::spawn(move || {
             tx_out
-                .send(process_utils::connect_named_pipe_with_timeout(
-                    o_out, 10_000,
+                .send(process_helper::connect_named_pipe_with_timeout(
+                    HANDLE(o_out.as_raw_handle()), 10_000,
                 ))
                 .ok();
         });
         std::thread::spawn(move || {
             tx_err
-                .send(process_utils::connect_named_pipe_with_timeout(
-                    o_err, 10_000,
+                .send(process_helper::connect_named_pipe_with_timeout(
+                    HANDLE(o_err.as_raw_handle()), 10_000,
                 ))
                 .ok();
         });

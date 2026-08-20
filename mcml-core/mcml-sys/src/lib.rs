@@ -1,10 +1,14 @@
 use core::fmt;
 use std::sync::LazyLock;
 
-pub mod path_helper;
-pub mod process_utils;
-pub mod java_scan;
+pub mod clipboard_helper;
+pub mod java_scan_helper;
 pub mod memory_helper;
+pub mod path_helper;
+pub mod process_helper;
+pub mod protocol_helper;
+pub mod open_helper;
+pub mod shortcut_helper;
 
 /// 操作系统类型枚举
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

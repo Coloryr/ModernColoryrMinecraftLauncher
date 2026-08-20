@@ -183,3 +183,9 @@ pub const LANG_ZH_CN: &str = "zh_CN";
 pub const LANG_EN_US: &str = "en_US";
 
 pub const NOW_VERSION: &str = "26.2";
+
+pub const COMMAND_INSTALL: &str = "--install";
+pub const COMMAND_GAME: &str = "--game";
+pub const COMMAND_IMPORT: &str = "--import";
+pub const COMMAND_REGISTER: &str = "--register";
+pub const COMMAND_REMAP: &str = "--remap_modrinth";

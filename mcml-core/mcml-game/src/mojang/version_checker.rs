@@ -1,32 +1,9 @@
+use mcml_base::version_parse;
+
 use crate::{
-    launcher::instance_setting_obj::InstanceSettingObj,
-    launcher_path::version_path,
-    mojang::{game_arg_obj::GameArgObj, version_parse::parse_game_version},
+    launcher::instance_setting_obj::InstanceSettingObj, launcher_path::version_path,
+    mojang::game_arg_obj::GameArgObj,
 };
-
-/// 比较两个 Minecraft 版本号
-/// 返回 true 如果 version1 > version2
-pub fn is_game_version_greater(v1: &str, v2: &str) -> bool {
-    let parts1 = parse_game_version(v1);
-    let parts2 = parse_game_version(v2);
-
-    match (parts1, parts2) {
-        (Some(p1), Some(p2)) => p1 > p2,
-        _ => false,
-    }
-}
-
-/// 比较两个 Minecraft 版本号
-/// 返回 true 如果 version1 >= version2
-pub fn is_game_version_greater_equal(v1: &str, v2: &str) -> bool {
-    let parts1 = parse_game_version(v1);
-    let parts2 = parse_game_version(v2);
-
-    match (parts1, parts2) {
-        (Some(p1), Some(p2)) => p1 >= p2,
-        _ => false,
-    }
-}
 
 impl InstanceSettingObj {
     /// 是否为V2版本
@@ -47,51 +24,33 @@ impl GameArgObj {
 
     /// 判断是否是 1.17 以上版本
     pub fn is_game_version_117(&self) -> bool {
-        is_game_version_117(&self.id)
+        version_parse::is_game_version_117(&self.id)
     }
 
     /// 判断是否是 1.20 以上版本
     pub fn is_game_version_120(&self) -> bool {
-        is_game_version_120(&self.id)
+        version_parse::is_game_version_120(&self.id)
     }
 
     /// 判断是否是 1.20.2 以上版本
     pub fn is_game_version_1202(&self) -> bool {
-        is_game_version_1202(&self.id)
+        version_parse::is_game_version_1202(&self.id)
     }
 }
 
 impl InstanceSettingObj {
     /// 判断是否是 1.17 以上版本
     pub fn is_game_version_117(&self) -> bool {
-        is_game_version_117(&self.version)
+        version_parse::is_game_version_117(&self.version)
     }
 
     /// 判断是否是 1.20 以上版本
     pub fn is_game_version_120(&self) -> bool {
-        is_game_version_120(&self.version)
+        version_parse::is_game_version_120(&self.version)
     }
 
     /// 判断是否是 1.20.2 以上版本
     pub fn is_game_version_1202(&self) -> bool {
-        is_game_version_1202(&self.version)
+        version_parse::is_game_version_1202(&self.version)
     }
-}
-
-/// 判断是否是 1.17 以上版本（含 1.17）
-/// - `version`: 版本号字符串
-pub fn is_game_version_117(version: &str) -> bool {
-    is_game_version_greater_equal(version, "1.17")
-}
-
-/// 判断是否是 1.20 以上版本（含 1.20）
-/// - `version`: 版本号字符串
-pub fn is_game_version_120(version: &str) -> bool {
-    is_game_version_greater_equal(version, "1.20")
-}
-
-/// 判断是否是 1.20.2 以上版本（含 1.20.2）
-/// - `version`: 版本号字符串
-pub fn is_game_version_1202(version: &str) -> bool {
-    is_game_version_greater_equal(version, "1.20.2")
 }

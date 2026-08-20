@@ -2,7 +2,7 @@ use std::{collections::HashMap, io::Read};
 
 use mcml_base::{
     file_item::{FileHash, FileItemObj},
-    serialize_tools,
+    serialize_tools, version_parse,
 };
 use mcml_names::{
     i18_items::error_type::{
@@ -25,7 +25,7 @@ use crate::{
         forge_install_obj::{ForgeInstallObj, ForgeInstallOldObj},
         forge_launch_obj::{ForgeDownloadsObj, ForgeLaunchObj, ForgeLibrariesObj},
     },
-    mojang::{game_arg_obj::ArtifactObj, version_checker},
+    mojang::game_arg_obj::ArtifactObj,
 };
 
 /// 根据名字构建运行库信息
@@ -248,7 +248,7 @@ async fn build_forge_item(mc: &str, version: &str, jar_type: &str, hash: bool) -
 /// - `version`: forge版本号
 /// - `jar`: 类型
 async fn build_neoforge_item(mc: &str, version: &str, jar: &str, hash: bool) -> FileItemObj {
-    let v2222 = version_checker::is_game_version_1202(mc);
+    let v2222 = version_parse::is_game_version_1202(mc);
     let name = if v2222 {
         format!("neoforge-{version}-{jar}")
     } else {
@@ -405,7 +405,7 @@ pub async fn build_forge_libs(
     }
 
     if !universal {
-        if !neo || version_checker::is_game_version_1202(mc) {
+        if !neo || version_parse::is_game_version_1202(mc) {
             list.insert(
                 String::from(names::FILE_UNIVERSAL),
                 if neo {
@@ -417,7 +417,7 @@ pub async fn build_forge_libs(
         }
     }
 
-    if v2 && !version_checker::is_game_version_117(mc) && !launcher {
+    if v2 && !version_parse::is_game_version_117(mc) && !launcher {
         list.insert(
             String::from(names::FILE_LAUNCHER),
             build_forge_launcher(mc, version, false).await,
