@@ -24,7 +24,7 @@ use std::{
 use mcml_base::{events::EventHandler};
 use mcml_config::config_obj::JvmConfigObj;
 use mcml_names::names;
-use mcml_sys::{ArchEnum, Os, java_scan, path_helper};
+use mcml_sys::{ArchEnum, Os, java_scan_helper, path_helper};
 
 pub mod java_helper;
 
@@ -319,7 +319,7 @@ pub fn find_java_from_path<P: AsRef<Path>>(dir: P) -> Option<PathBuf> {
 fn find_java() -> Option<Vec<JavaInfoObj>> {
     let mut java_paths = HashSet::new();
 
-    java_scan::find_java_inner(&mut java_paths);
+    java_scan_helper::find_java_inner(&mut java_paths);
 
     if java_paths.is_empty() {
         return None;

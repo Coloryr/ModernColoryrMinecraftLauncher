@@ -35,7 +35,8 @@ members = [
     "mcml-net",
     "mcml-skin",
     "mcml-skin-draw",
-    "mcml-skin-render", "mcml-sys",
+    "mcml-skin-render",
+    "mcml-sys",
 ]
 
 [workspace.dependencies]
@@ -65,13 +66,17 @@ digest = "~0.11.3"
 sha2 = "~0.11.0"
 base64 = "~0.23.0"
 winreg = "~0.56.0"
-windows-sys = { version = "~0.61.2", features = [
+windows = { version = "~0.62.2", features = [
     "Win32_Foundation",
     "Win32_System_IO",
     "Win32_System_Pipes",
     "Win32_System_Threading",
+    "Win32_Security",
+    "Win32_Storage_FileSystem",
+    "Win32_System_SystemInformation",
     "Win32_Storage_FileSystem",
     "Win32_UI_Shell",
+    "Win32_System_Com",
 ] }
 zip = { version = "~8.6.0", features = ["chrono"] }
 tar = "~0.4.46"
@@ -93,3 +98,8 @@ notify = "~8.2.0"
 toml = "~1.1.4"
 if-addrs = "~0.15.0"
 socket2 = "~0.6.5"
+image = "~0.25.10"
+ico = "~0.5.0"
+clipboard-rs = "~0.3.5"
+webbrowser = "~1.2.4"
+opener = { version = "~0.8.5", features = ["reveal"] }

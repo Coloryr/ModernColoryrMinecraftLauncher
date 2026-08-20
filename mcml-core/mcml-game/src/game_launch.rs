@@ -23,7 +23,7 @@ use mcml_names::{
     i18_items::error_type::{CoreResult, ErrorData, ErrorType, PathNotExistsData},
     names,
 };
-use mcml_sys::{path_helper, process_utils};
+use mcml_sys::{path_helper, process_helper};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
@@ -118,7 +118,7 @@ impl InstanceHandle {
         path_helper::create_dir_all(&run.path)?;
 
         // 启动进程
-        let result = process_utils::launch(run.java, run.args, run.env, run.path, run.admin)?;
+        let result = process_helper::launch(run.java, run.args, run.env, run.path, run.admin)?;
 
         if result.is_admin {
             crate::add_game_log_item(&run.uuid, GameLog::JavaRedirect);
@@ -530,7 +530,7 @@ impl InstanceSettingObj {
             .filter(|s| !s.is_empty())
             .collect();
 
-        match process_utils::launch(&path, proc_args, env.clone(), &self.get_game_path(), admin) {
+        match process_helper::launch(&path, proc_args, env.clone(), &self.get_game_path(), admin) {
             Ok(mut result) => {
                 // 读取 stdout 线程
                 if let Some(stdout) = result.stdout {

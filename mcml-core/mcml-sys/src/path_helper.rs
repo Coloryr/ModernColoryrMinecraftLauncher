@@ -216,35 +216,30 @@ fn move_to_trash_macos(dir: &str) -> io::Result<bool> {
 /// 将文件夹挪到回收站
 #[cfg(target_os = "windows")]
 fn move_to_trash_windows<P: AsRef<Path>>(dir: P) -> CoreResult<()> {
-    use std::iter::once;
-    use std::os::windows::ffi::OsStrExt;
-    use windows_sys::Win32::Foundation::HWND;
-    use windows_sys::Win32::UI::Shell::FO_DELETE;
-    use windows_sys::Win32::UI::Shell::FOF_ALLOWUNDO;
-    use windows_sys::Win32::UI::Shell::FOF_NOCONFIRMATION;
-    use windows_sys::Win32::UI::Shell::FOF_NOERRORUI;
-    use windows_sys::Win32::UI::Shell::FOF_SILENT;
-    use windows_sys::Win32::UI::Shell::SHFILEOPSTRUCTW;
-    use windows_sys::Win32::UI::Shell::SHFileOperationW;
+    use windows::Win32::Foundation::HWND;
+    use windows::Win32::UI::Shell::FO_DELETE;
+    use windows::Win32::UI::Shell::FOF_ALLOWUNDO;
+    use windows::Win32::UI::Shell::FOF_NOCONFIRMATION;
+    use windows::Win32::UI::Shell::FOF_NOERRORUI;
+    use windows::Win32::UI::Shell::FOF_SILENT;
+    use windows::Win32::UI::Shell::SHFILEOPSTRUCTW;
+    use windows::Win32::UI::Shell::SHFileOperationW;
+    use windows::core::BOOL;
+    use windows::core::HSTRING;
+    use windows::core::PCWSTR;
 
-    // 将字符串转换为 Windows 宽字符串（双重 null 结尾）
-    let wide_path: Vec<u16> = dir
-        .as_ref()
-        .as_os_str()
-        .encode_wide()
-        .chain(once(0))
-        .chain(once(0))
-        .collect();
+    let hstring = HSTRING::from(dir.as_ref().as_os_str());
+    let pcwstr = PCWSTR(hstring.as_ptr());
 
     let mut operation = SHFILEOPSTRUCTW {
         hwnd: HWND::default(),
         wFunc: FO_DELETE,
-        pFrom: wide_path.as_ptr(),
-        pTo: std::ptr::null(),
-        fFlags: (FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_SILENT | FOF_NOERRORUI) as u16,
-        fAnyOperationsAborted: 0,
+        pFrom: pcwstr,
+        pTo: PCWSTR::null(),
+        fFlags: (FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_SILENT | FOF_NOERRORUI).0 as u16,
+        fAnyOperationsAborted: BOOL::from(false),
         hNameMappings: std::ptr::null_mut(),
-        lpszProgressTitle: std::ptr::null(),
+        lpszProgressTitle: PCWSTR::null(),
     };
 
     let result = unsafe { SHFileOperationW(&mut operation) };
