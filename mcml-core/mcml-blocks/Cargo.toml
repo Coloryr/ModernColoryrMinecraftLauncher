@@ -1,0 +1,10 @@
+[package]
+name = "mcml-blocks"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+mcml-names = { path = "../mcml-names" }
+mcml-sys = { path = "../mcml-sys" }
+skia-safe.workspace = true
+glam.workspace = true

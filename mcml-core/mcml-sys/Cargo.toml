@@ -8,8 +8,10 @@ mcml-names = { path = "../mcml-names" }
 uuid.workspace = true
 tokio.workspace = true
 clipboard-rs.workspace = true
-opener.workspace = true
-webbrowser.workspace = true
+url.workspace = true
+
+[target.'cfg(linux)'.dependencies]
+dbus.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 windows.workspace = true
