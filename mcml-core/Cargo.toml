@@ -25,9 +25,11 @@ chrono.workspace = true
 members = [
     "mcml-auth",
     "mcml-base",
+    "mcml-blocks",
     "mcml-config",
     "mcml-downloader",
     "mcml-game",
+    "mcml-ipc",
     "mcml-jvms",
     "mcml-log",
     "mcml-names",
@@ -77,6 +79,7 @@ windows = { version = "~0.62.2", features = [
     "Win32_Storage_FileSystem",
     "Win32_UI_Shell",
     "Win32_System_Com",
+    "Win32_UI_Shell_Common",
 ] }
 zip = { version = "~8.6.0", features = ["chrono"] }
 tar = "~0.4.46"
@@ -101,5 +104,5 @@ socket2 = "~0.6.5"
 image = "~0.25.10"
 ico = "~0.5.0"
 clipboard-rs = "~0.3.5"
-webbrowser = "~1.2.4"
-opener = { version = "~0.8.5", features = ["reveal"] }
+dbus = "~0.9.12"
+bytes = "~1.12.1"

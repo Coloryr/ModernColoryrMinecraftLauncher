@@ -141,3 +141,17 @@ pub const MODRINTH_DOWNLOAD: &str = "https://cdn.modrinth.com/";
 // ============================================================================
 
 pub const CHUNKBASE: &str = "https://www.chunkbase.com/apps/seed-map#";
+
+// ============================================================================
+// OpenFrp API
+// ============================================================================
+
+pub const OPENFRP: &str = "https://of-dev-api.bfsea.com/api";
+pub const OPENFRP_DOWNLOAD: &str = "https://console.openfrp.net/web/commonQuery/get?key=software";
+
+// ============================================================================
+// SakuraFrp API
+// ============================================================================
+
+pub const SAKURA_FRP: &str = "https://api.natfrp.com/v4/";
+
