@@ -317,6 +317,11 @@ const gcOptions = [
   flex: 0 0 84px;
 }
 
+/* 扩展参数区内的独立标题（列布局）：flex-basis 会作用到高度，需重置，避免 84px 大空白 */
+.advanced-body > .args-label {
+  flex: none;
+}
+
 /* 与内存行对齐用的小标签（最小/最大/宽/高） */
 .sub-tag {
   flex: 0 0 28px;
@@ -422,16 +427,16 @@ const gcOptions = [
 
 .line-add {
   align-self: flex-start;
-  padding: 4px 12px;
-  border-radius: 8px;
+  padding: 8px 22px;
+  border-radius: 9px;
   border: 1px dashed var(--border);
   background: transparent;
   color: var(--text-dim);
-  font-size: 12.5px;
+  font-size: 13.5px;
+  font-weight: 600;
   font-family: inherit;
   cursor: pointer;
   transition: all 0.12s;
-  margin-top: -2px;
 }
 
 .line-add:hover {

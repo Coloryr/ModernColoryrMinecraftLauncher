@@ -123,6 +123,8 @@ let nextMockId = 1000;
 const runningUuids = new Set<string>();
 const runtimeLogs: Record<string, string[]> = {};
 const extraGroups = new Set<string>();
+/** 分组显示顺序（getGroups 返回的顺序），可被 moveGroup 调整 */
+let groupOrder: string[] = [];
 
 // ---------- 简易事件总线（模拟 Tauri 事件） ----------
 
@@ -172,7 +174,7 @@ export const api = {
     return [...MOCK_VERSIONS];
   },
 
-  /** 获取全部分组名（实例自带分组 + 手动添加的空分组） */
+  /** 获取全部分组名（实例自带分组 + 手动添加的空分组，按持久顺序） */
   async getGroups(): Promise<string[]> {
     await delay(80);
     const names = new Set<string>();
@@ -180,7 +182,13 @@ export const api = {
       if (inst.group) names.add(inst.group);
     }
     for (const g of extraGroups) names.add(g);
-    return [...names];
+    // 保持历史顺序，新出现的分组追加在末尾
+    const ordered = [
+      ...groupOrder.filter((n) => names.has(n)),
+      ...[...names].filter((n) => !groupOrder.includes(n)),
+    ];
+    groupOrder = ordered;
+    return [...ordered];
   },
 
   /** 添加空分组，成功返回 true */
@@ -196,19 +204,52 @@ export const api = {
     return true;
   },
 
-  async createInstance(name: string, version: string): Promise<InstanceInfo> {
+  /** 删除分组（仅移除空分组；组内实例由调用方先处理） */
+  async removeGroup(name: string): Promise<boolean> {
+    await delay(120);
+    const ok = extraGroups.delete(name.trim());
+    if (ok) emit("instance-change", { type: "group" });
+    return ok;
+  },
+
+  /** 调整分组显示顺序（index 为分组列表中的目标下标） */
+  async moveGroup(name: string, index: number): Promise<boolean> {
+    await delay(80);
+    const list = await this.getGroups();
+    const from = list.indexOf(name);
+    if (from < 0) return false;
+    list.splice(from, 1);
+    list.splice(Math.max(0, Math.min(index, list.length)), 0, name);
+    groupOrder = list;
+    emit("instance-change", { type: "group" });
+    return true;
+  },
+
+  async createInstance(
+    name: string,
+    version: string,
+    opts?: {
+      loader?: string;
+      loaderVersion?: string | null;
+      group?: string | null;
+      modpackType?: string;
+      source?: string;
+    },
+  ): Promise<InstanceInfo> {
     await delay(600);
     const inst: InstanceInfo = {
       uuid: `mock-${nextMockId++}`,
       name,
-      group: null,
+      group: opts?.group ?? null,
       version,
       versionType: "release",
-      loader: "原版",
-      loaderVersion: null,
+      loader: opts?.loader ?? "原版",
+      loaderVersion: opts?.loaderVersion ?? null,
       dir: name,
       running: false,
     };
+    if (opts?.modpackType) inst.modpackType = opts.modpackType;
+    if (opts?.source) inst.source = opts.source;
     MOCK_INSTANCES.unshift(inst);
     emit("instance-change", { type: "add" });
     return inst;
@@ -233,6 +274,22 @@ export const api = {
     const inst = MOCK_INSTANCES.find((i) => i.uuid === uuid);
     if (!inst) return false;
     Object.assign(inst, patch);
+    emit("instance-change", { type: "edit" });
+    return true;
+  },
+
+  /** 移动实例到 (分组, 组内位置)：支持组内排序与跨组移动 */
+  async moveInstance(uuid: string, group: string | null, index: number): Promise<boolean> {
+    await delay(100);
+    const inst = MOCK_INSTANCES.find((i) => i.uuid === uuid);
+    if (!inst) return false;
+    MOCK_INSTANCES.splice(MOCK_INSTANCES.indexOf(inst), 1);
+    inst.group = group;
+    const key = (i: InstanceInfo) => i.group ?? null;
+    const others = MOCK_INSTANCES.filter((i) => key(i) === group);
+    const anchor = others[Math.max(0, Math.min(index, others.length))];
+    const at = anchor ? MOCK_INSTANCES.indexOf(anchor) : MOCK_INSTANCES.length;
+    MOCK_INSTANCES.splice(at, 0, inst);
     emit("instance-change", { type: "edit" });
     return true;
   },

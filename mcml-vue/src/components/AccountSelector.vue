@@ -5,7 +5,7 @@ import { openWindow } from "../windows/windowManager";
 import type { Account } from "../lib/types";
 
 const props = defineProps<{
-  account: Account;
+  account: Account | null;
   accounts: Account[];
 }>();
 
@@ -16,6 +16,7 @@ const emit = defineEmits<{
 const open = ref(false);
 
 const typeText = computed(() => {
+  if (!props.account) return "";
   switch (props.account.type) {
     case "microsoft":
       return t("account.microsoft");
@@ -27,7 +28,7 @@ const typeText = computed(() => {
 });
 
 const typeClass = computed(() =>
-  props.account.type === "microsoft" ? "type-ms" : "type-offline",
+  props.account?.type === "microsoft" ? "type-ms" : "type-offline",
 );
 
 function toggle() {
@@ -43,13 +44,21 @@ function pick(account: Account) {
 <template>
   <div class="account-wrap">
     <button class="account-btn" @click="toggle">
-      <span class="avatar" :style="{ background: account.avatarColor }">
-        {{ account.name.charAt(0).toUpperCase() }}
-      </span>
-      <span class="account-meta">
-        <span class="account-name">{{ account.name }}</span>
-        <span class="account-type" :class="typeClass">{{ typeText }}</span>
-      </span>
+      <template v-if="account">
+        <span class="avatar" :style="{ background: account.avatarColor }">
+          {{ account.name.charAt(0).toUpperCase() }}
+        </span>
+        <span class="account-meta">
+          <span class="account-name">{{ account.name }}</span>
+          <span class="account-type" :class="typeClass">{{ typeText }}</span>
+        </span>
+      </template>
+      <template v-else>
+        <span class="avatar placeholder">＋</span>
+        <span class="account-meta">
+          <span class="account-name dim">{{ t("account.noAccount") }}</span>
+        </span>
+      </template>
       <svg class="chevron" :class="{ flip: open }" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
         <path d="m6 9 6 6 6-6" />
       </svg>
@@ -59,11 +68,12 @@ function pick(account: Account) {
 
     <div v-if="open" class="account-menu">
       <div class="menu-title">{{ t("account.switch") }}</div>
+      <div v-if="accounts.length === 0" class="empty-tip">{{ t("account.noAccount") }}</div>
       <button
         v-for="acc in accounts"
         :key="acc.uuid"
         class="menu-item"
-        :class="{ active: acc.uuid === account.uuid }"
+        :class="{ active: acc.uuid === account?.uuid }"
         @click="pick(acc)"
       >
         <span class="avatar small" :style="{ background: acc.avatarColor }">

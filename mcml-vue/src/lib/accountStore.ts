@@ -1,54 +1,13 @@
 // 账户共享存储（主窗口、账户选择器、账户窗口共用）
+// 数据由 Rust 提供（windows/account.rs，持久化 accounts.json），
+// 操作通过 IPC；跨窗口通过 account-change 事件同步。
 import { ref } from "vue";
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import type { Account } from "./types";
 
-export const accounts = ref<Account[]>([
-  {
-    uuid: "acc-1",
-    name: "Player",
-    type: "offline",
-    avatarColor: "linear-gradient(135deg, #3f8cff, #5f6cff)",
-    skin: "#3f8cff",
-    lastLogin: "2026-04-15 21:30",
-    tokenStatus: "valid",
-  },
-  {
-    uuid: "acc-2",
-    name: "Notch_MS",
-    type: "microsoft",
-    avatarColor: "linear-gradient(135deg, #34d399, #22d3ee)",
-    skin: "#34d399",
-    lastLogin: "2026-04-15 19:05",
-    tokenStatus: "valid",
-  },
-  {
-    uuid: "acc-3",
-    name: "LittleSkin_User",
-    type: "littleskin",
-    avatarColor: "linear-gradient(135deg, #a855f7, #ec4899)",
-    skin: "#a855f7",
-    lastLogin: "2026-04-12 20:44",
-    tokenStatus: "valid",
-  },
-  {
-    uuid: "acc-4",
-    name: "CustomServer",
-    type: "authlib",
-    avatarColor: "linear-gradient(135deg, #f59e0b, #ef4444)",
-    skin: "#f59e0b",
-    lastLogin: "2026-04-01 12:10",
-    tokenStatus: "expired",
-  },
-  {
-    uuid: "acc-5",
-    name: "UnifiedUser",
-    type: "nide8",
-    avatarColor: "linear-gradient(135deg, #06b6d4, #6366f1)",
-    skin: "#06b6d4",
-    lastLogin: "2026-03-28 08:22",
-    tokenStatus: "expired",
-  },
-]);
+export const accounts = ref<Account[]>([]);
+export const currentAccount = ref<Account | null>(null);
 
 /** 账户类型显示名 */
 export const ACCOUNT_TYPES: Array<{ value: string; labelKey: string }> = [
@@ -63,41 +22,71 @@ export function typeLabelKey(type: string): string {
   return ACCOUNT_TYPES.find((t) => t.value === type)?.labelKey ?? "account.typeOffline";
 }
 
-/** 当前选中（使用中）的账户 */
-export const currentAccount = ref<Account>(accounts.value[0]);
-
-export function setCurrentAccount(acc: Account) {
-  const target = accounts.value.find((a) => a.uuid === acc.uuid);
-  if (target) currentAccount.value = target;
+interface AccountStoreView {
+  accounts: Account[];
+  currentUuid: string | null;
 }
 
-export function removeAccount(uuid: string) {
+/** 从 Rust 加载账户列表 */
+export async function loadAccounts(): Promise<void> {
+  try {
+    const view = await invoke<AccountStoreView>("get_accounts");
+    accounts.value = view.accounts;
+    currentAccount.value =
+      view.accounts.find((a) => a.uuid === view.currentUuid) ??
+      view.accounts[0] ??
+      null;
+  } catch {
+    /* 浏览器环境：保持为空 */
+  }
+}
+
+/** 设置当前使用账户 */
+export async function setCurrentAccount(acc: Account) {
+  try {
+    await invoke("set_current_account", { uuid: acc.uuid });
+  } catch {
+    /* 忽略 */
+  }
+  currentAccount.value = acc;
+}
+
+/** 删除账户 */
+export async function removeAccount(uuid: string) {
+  try {
+    await invoke("remove_account", { uuid });
+  } catch {
+    /* 忽略 */
+  }
   const idx = accounts.value.findIndex((a) => a.uuid === uuid);
   if (idx >= 0) accounts.value.splice(idx, 1);
+  if (currentAccount.value?.uuid === uuid) {
+    currentAccount.value = accounts.value[0] ?? null;
+  }
 }
 
-export function refreshAccountToken(uuid: string) {
+/** 刷新账户 Token */
+export async function refreshAccountToken(uuid: string) {
+  try {
+    await invoke("refresh_account_token", { uuid });
+  } catch {
+    /* 忽略 */
+  }
   const acc = accounts.value.find((a) => a.uuid === uuid);
   if (acc) acc.tokenStatus = "valid";
 }
 
-/** 添加账户（模拟） */
-export function addAccount(type: string, name: string) {
-  const palette = [
-    ["#3f8cff", "#5f6cff"],
-    ["#34d399", "#22d3ee"],
-    ["#a855f7", "#ec4899"],
-    ["#f59e0b", "#ef4444"],
-    ["#06b6d4", "#6366f1"],
-  ];
-  const [c1, c2] = palette[accounts.value.length % palette.length];
-  accounts.value.push({
-    uuid: `acc-${Date.now()}`,
-    name,
-    type,
-    avatarColor: `linear-gradient(135deg, ${c1}, ${c2})`,
-    skin: c1,
-    lastLogin: "刚刚",
-    tokenStatus: "valid",
-  });
+/** 添加账户（真实由 Rust 创建），返回创建的账户；失败返回 null */
+export async function addAccount(type: string, name: string): Promise<Account | null> {
+  try {
+    const acc = await invoke<Account>("add_account", { name, accountType: type });
+    accounts.value.push(acc);
+    if (!currentAccount.value) currentAccount.value = acc;
+    return acc;
+  } catch {
+    return null;
+  }
 }
+
+// 跨窗口同步：某个窗口改了账户后，其它窗口重新加载
+listen("account-change", () => loadAccounts());

@@ -1,8 +1,9 @@
-// 国际化：zh-CN / en-US
+// 国际化：zh-CN / en-US（状态持久化到 gui_config.json）
 // 用法：模板中 {{ t("launch.play") }}；带参数 {{ t("detail.launchCount", { count: 3 }) }}
 import { ref } from "vue";
 import zhCN from "./locales/zh-CN";
 import enUS from "./locales/en-US";
+import { saveGuiConfig } from "../guiConfig";
 
 export type Locale = "zh-CN" | "en-US";
 
@@ -20,6 +21,7 @@ export function setLocale(l: Locale) {
   locale.value = l;
   localStorage.setItem(LOCALE_KEY, l);
   document.documentElement.lang = l;
+  saveGuiConfig({ locale: l });
 }
 
 export function applyLocale() {

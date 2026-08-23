@@ -7,8 +7,9 @@ import {
   onInstanceChange,
   onLaunchError,
   onLaunchState,
-} from "../../lib/api";
+} from "../../lib/api-ipc";
 import { t } from "../../lib/i18n";
+import { showToast } from "../../lib/toast";
 import { theme, toggleTheme } from "../../lib/theme";
 import { newsImage } from "../../lib/newsBanner";
 import { openWindow } from "../windowManager";
@@ -29,11 +30,17 @@ import InstanceIcon from "../../components/InstanceIcon.vue";
 import InstanceSelect from "../../components/InstanceSelect.vue";
 import InstanceMetaPanel from "../../components/InstanceMetaPanel.vue";
 import LaunchArgsPanel from "../../components/LaunchArgsPanel.vue";
-import AccountSelector from "../../components/AccountSelector.vue";
 import HomePage from "../../components/HomePage.vue";
 import CustomExecPanel from "../../components/CustomExecPanel.vue";
 import ProxyPanel from "../../components/ProxyPanel.vue";
-import LaunchScreen from "../../components/LaunchScreen.vue";
+import SplashScreen from "../../components/ui/SplashScreen.vue";
+import MainTopbar from "./topbar/MainTopbar.vue";
+import MainSidebar from "./sidebar/MainSidebar.vue";
+import MainCtxMenu from "./ctxmenu/MainCtxMenu.vue";
+import { useInstanceDrag } from "../../composables/useInstanceDrag";
+import { useMultiSelect } from "../../composables/useMultiSelect";
+import { useFileDrop } from "../../composables/useFileDrop";
+import type { CtxMenuState, FeatureId, InstMenuAction, ViewMode } from "./types";
 import BaseButton from "../../components/ui/BaseButton.vue";
 import BaseModal from "../../components/ui/BaseModal.vue";
 import SegmentedTabs from "../../components/ui/SegmentedTabs.vue";
@@ -104,7 +111,6 @@ function select(inst: InstanceInfo) {
 
 // ================= 游戏列表模式 =================
 
-type ViewMode = "group" | "grid" | "list";
 const mode = ref<ViewMode>("group");
 const MODE_OPTIONS = computed(() => [
   { value: "group", label: t("mode.group"), icon: "folder" },
@@ -116,16 +122,27 @@ const MODE_OPTIONS = computed(() => [
 const extraGroups = ref<string[]>([]);
 
 const groups = computed(() => {
+  const defaultKey = t("group.default");
   const map = new Map<string, InstanceInfo[]>();
   for (const inst of instances.value) {
-    const key = inst.group || t("group.default");
+    const key = inst.group || defaultKey;
     if (!map.has(key)) map.set(key, []);
     map.get(key)!.push(inst);
   }
   for (const g of extraGroups.value) {
     if (!map.has(g)) map.set(g, []);
   }
-  return [...map.entries()].map(([name, items]) => ({ name, items }));
+  // 默认分组永远存在且置顶
+  if (!map.has(defaultKey)) map.set(defaultKey, []);
+  // 分组顺序：默认分组 → extraGroups（持久顺序）→ 其余按首次出现顺序
+  const order = [
+    defaultKey,
+    ...extraGroups.value.filter((k) => k !== defaultKey),
+    ...[...map.keys()].filter(
+      (k) => k !== defaultKey && !extraGroups.value.includes(k),
+    ),
+  ];
+  return order.map((name) => ({ name, items: map.get(name) ?? [] }));
 });
 
 // 分组收缩状态
@@ -245,8 +262,6 @@ function onAccountChange(account: Account) {
 
 // ================= 启动状态 =================
 
-const gameActive = ref(false);
-const running = ref(false);
 const statusText = ref(t("launch.ready"));
 const logs = ref<string[]>([]);
 
@@ -418,56 +433,283 @@ async function onMetaUpdate(patch: Partial<InstanceInfo>) {
 
 // ================= 分组拖拽移动 =================
 
-const dragUuid = ref<string | null>(null);
-const dropGroup = ref<string | null>(null);
+// ================= 自定义拖拽（useInstanceDrag，见下方多选初始化之后） =================
 
-function onDragStart(inst: InstanceInfo, e: DragEvent) {
-  dragUuid.value = inst.uuid;
-  if (e.dataTransfer) {
-    e.dataTransfer.effectAllowed = "move";
-    e.dataTransfer.setData("text/plain", inst.uuid);
+/** 点击分组标题（拖拽结束后抑制误触折叠） */
+function onGroupTitleClick(name: string) {
+  if (consumeSuppressClick()) return;
+  toggleGroup(name);
+}
+
+// ================= 多选模式（逻辑见 composables/useMultiSelect） =================
+// 入口：右键分组 → 全选 → 进入多选；多选模式下右键实例出现操作菜单。
+
+const {
+  multiSelect,
+  selectedIds,
+  enterMultiSelect,
+  exitMultiSelect,
+  toggleSelect,
+} = useMultiSelect({
+  selected,
+  newsActive,
+  collapsedGroups,
+  onExit: closeCtxMenu,
+});
+
+const {
+  dragActive,
+  draggingUuid,
+  onDragPointerDown,
+  isInstInsert,
+  isInstInsertEnd,
+  isGroupInsert,
+  consumeSuppressClick,
+} = useInstanceDrag({
+  multiSelect,
+  groups,
+  collapsedGroups,
+  loadInstances,
+  loadGroups,
+});
+
+/** 实例点击：多选模式切换勾选，普通模式单选（拖拽结束后忽略误触点击） */
+function onInstClick(inst: InstanceInfo) {
+  if (consumeSuppressClick()) return;
+  if (multiSelect.value) toggleSelect(inst);
+  else select(inst);
+}
+
+// ----- 自定义右键菜单 -----
+
+const ctxMenu = ref<CtxMenuState | null>(null);
+/** 移动分组二级视图（列出所有分组） */
+const moveGroupView = ref(false);
+/** 转移分组的源分组（null 表示多选实例移动） */
+const groupMoveSource = ref<string | null>(null);
+
+function openCtxMenu(e: MouseEvent, payload: Omit<CtxMenuState, "x" | "y">) {
+  // 简单边界钳制，避免菜单超出窗口
+  const x = Math.min(e.clientX, window.innerWidth - 200);
+  const y = Math.min(e.clientY, window.innerHeight - 180);
+  ctxMenu.value = { x, y, ...payload };
+  moveGroupView.value = false;
+  groupMoveSource.value = null;
+}
+
+function closeCtxMenu() {
+  ctxMenu.value = null;
+  moveGroupView.value = false;
+}
+
+/** 右键分组标题：菜单提供“全选”进入多选 */
+function onGroupContext(e: MouseEvent, groupName: string) {
+  openCtxMenu(e, { kind: "group", group: groupName });
+}
+
+/** 分组菜单“全选”：选中该分组全部实例并进入多选 */
+function onGroupSelectAll(groupName?: string) {
+  const g = groups.value.find((x) => x.name === groupName);
+  closeCtxMenu();
+  if (!g || g.items.length === 0) return;
+  enterMultiSelect(g.items.map((i) => i.uuid));
+  showToast(t("multi.selectAllDone", { count: g.items.length }));
+}
+
+/** 分组菜单“启动全部”：启动该分组全部实例 */
+async function launchGroupAll(groupName?: string) {
+  const g = groups.value.find((x) => x.name === groupName);
+  closeCtxMenu();
+  if (!g || g.items.length === 0) return;
+  for (const inst of g.items) {
+    try {
+      await api.launchGame(inst.uuid, playerName.value);
+      inst.running = true;
+    } catch {
+      /* 忽略单个失败 */
+    }
+  }
+  showToast(t("multi.launched", { count: g.items.length }));
+}
+
+/** 分组菜单“转移分组”：打开目标分组选择视图 */
+function openGroupMoveView(groupName?: string) {
+  const g = groups.value.find((x) => x.name === groupName);
+  if (!g) return;
+  groupMoveSource.value = g.name;
+  moveGroupView.value = true;
+}
+
+/** 把源分组的全部实例合并到目标分组（默认分组 = null），保留空分组 */
+async function moveGroupTo(sourceName: string, targetName: string | null) {
+  const g = groups.value.find((x) => x.name === sourceName);
+  const target = targetName === t("group.default") ? null : targetName;
+  closeCtxMenu();
+  if (!g || g.items.length === 0 || target === sourceName) return;
+  for (const inst of g.items) {
+    if (inst.group !== target) {
+      await api.updateInstance(inst.uuid, { group: target });
+    }
+  }
+  await loadInstances();
+  showToast(t("multi.moved", { count: g.items.length }));
+}
+
+/** 移动目标点击：按当前视图路由到分组转移或多选实例移动 */
+function onMoveTarget(targetName: string | null) {
+  if (groupMoveSource.value) moveGroupTo(groupMoveSource.value, targetName);
+  else moveSelectedToGroup(targetName);
+}
+
+/** 删除分组（组内实例移至默认分组） */
+const showDeleteGroup = ref(false);
+const deleteGroupName = ref("");
+const deleteGroupCount = ref(0);
+const deleteGroupBusy = ref(false);
+
+function onDeleteGroup(groupName?: string) {
+  if (!groupName || groupName === t("group.default")) return;
+  const g = groups.value.find((x) => x.name === groupName);
+  closeCtxMenu();
+  if (!g) return;
+  deleteGroupName.value = g.name;
+  deleteGroupCount.value = g.items.length;
+  showDeleteGroup.value = true;
+}
+
+async function doDeleteGroup() {
+  deleteGroupBusy.value = true;
+  const name = deleteGroupName.value;
+  for (const inst of instances.value) {
+    const key = inst.group || t("group.default");
+    if (key === name) {
+      await api.updateInstance(inst.uuid, { group: null });
+    }
+  }
+  await api.removeGroup(name);
+  deleteGroupBusy.value = false;
+  showDeleteGroup.value = false;
+  await Promise.all([loadInstances(), loadGroups()]);
+  showToast(t("group.deleted", { name }));
+}
+
+/** 右键实例：多选模式打开操作菜单；普通模式弹出实例操作菜单 */
+function onInstContext(e: MouseEvent, inst: InstanceInfo) {
+  if (multiSelect.value) {
+    // 右键未勾选的实例时先加入选择
+    if (!selectedIds.value.has(inst.uuid)) {
+      const s = new Set(selectedIds.value);
+      s.add(inst.uuid);
+      selectedIds.value = s;
+    }
+    openCtxMenu(e, { kind: "multi" });
+  } else {
+    // 普通模式：先选中该实例，再弹出实例菜单
+    select(inst);
+    openCtxMenu(e, { kind: "instance", instance: inst });
   }
 }
 
-function onDragEnd() {
-  dragUuid.value = null;
-  dropGroup.value = null;
+/** 实例右键菜单动作（与详情面板一致） */
+function onInstMenuAction(id: InstMenuAction) {
+  closeCtxMenu();
+  switch (id) {
+    case "launch":
+      launch();
+      break;
+    case "rename":
+      onAction("rename");
+      break;
+    case "delete":
+      onAction("delete");
+      break;
+    default:
+      onAction(id);
+  }
 }
 
-function onDragOverGroup(groupName: string) {
-  dropGroup.value = groupName;
+/** 顶部工具栏的“移动分组”直接打开分组列表视图 */
+function openMoveFromBar(e: MouseEvent) {
+  openCtxMenu(e, { kind: "multi" });
+  moveGroupView.value = true;
 }
 
-function onDropGroup(groupName: string) {
-  const uuid = dragUuid.value;
-  dropGroup.value = null;
-  dragUuid.value = null;
-  if (!uuid) return;
-  const inst = instances.value.find((i) => i.uuid === uuid);
-  if (!inst) return;
+/** 把选中的实例移动到指定分组（null = 默认分组） */
+async function moveSelectedToGroup(groupName: string | null) {
+  const ids = [...selectedIds.value];
   const target = groupName === t("group.default") ? null : groupName;
-  if (inst.group === target) return;
-  api.updateInstance(uuid, { group: target }).then(() => {
-    loadInstances();
-    // 展开目标分组
-    const key = target || t("group.default");
-    collapsedGroups.value = { ...collapsedGroups.value, [key]: false };
-  });
+  for (const uuid of ids) {
+    const inst = instances.value.find((i) => i.uuid === uuid);
+    if (inst && inst.group !== target) {
+      await api.updateInstance(uuid, { group: target });
+    }
+  }
+  closeCtxMenu();
+  await loadInstances();
+  const key = target || t("group.default");
+  collapsedGroups.value = { ...collapsedGroups.value, [key]: false };
+  showToast(t("multi.moved", { count: ids.length }));
 }
 
-// 轻提示
-const toast = ref("");
-let toastTimer: number | undefined;
+/** 多选删除 */
+const showMultiDelete = ref(false);
+const multiDeleteBusy = ref(false);
 
-function showToast(msg: string) {
-  toast.value = msg;
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => {
-    toast.value = "";
-  }, 2200);
+function onMultiDelete() {
+  closeCtxMenu();
+  showMultiDelete.value = true;
 }
 
-// 重命名 / 删除
+async function doMultiDelete() {
+  multiDeleteBusy.value = true;
+  const ids = [...selectedIds.value];
+  for (const uuid of ids) {
+    await api.deleteInstance(uuid);
+  }
+  multiDeleteBusy.value = false;
+  showMultiDelete.value = false;
+  exitMultiSelect();
+  await Promise.all([loadInstances(), loadGroups()]);
+  showToast(t("multi.deleted", { count: ids.length }));
+}
+
+/** 启动所有选中实例 */
+async function multiLaunch() {
+  const ids = [...selectedIds.value];
+  closeCtxMenu();
+  for (const uuid of ids) {
+    const inst = instances.value.find((i) => i.uuid === uuid);
+    try {
+      await api.launchGame(uuid, playerName.value);
+      if (inst) inst.running = true;
+    } catch {
+      /* 忽略单个失败 */
+    }
+  }
+  exitMultiSelect();
+  showToast(t("multi.launched", { count: ids.length }));
+}
+
+// 点击空白处关闭菜单；Esc 依次关闭菜单 / 退出多选
+function onDocClick() {
+  if (ctxMenu.value) closeCtxMenu();
+}
+
+function onDocKeyDown(e: KeyboardEvent) {
+  if (e.key !== "Escape") return;
+  if (ctxMenu.value) closeCtxMenu();
+  else if (multiSelect.value) exitMultiSelect();
+}
+
+/** 添加实例窗口创建成功后（跨窗口 storage 事件），刷新并选中新实例 */
+async function onAddedInstanceStorage(e: StorageEvent) {
+  if (e.key !== "mcml.addedInstance" || !e.newValue) return;
+  await Promise.all([loadInstances(), loadGroups()]);
+  const inst = instances.value.find((i) => i.uuid === e.newValue);
+  if (inst) select(inst);
+}
+
+// 轻提示（统一使用全局 showToast）
 const showRename = ref(false);
 const renameName = ref("");
 const renameBusy = ref(false);
@@ -520,21 +762,23 @@ async function doDelete() {
 
 // ================= 启动器功能入口（顶部栏） =================
 
-const features: Array<{ id: "settings" | "stats" | "skin" | "help"; icon: string }> = [
+const features: Array<{ id: FeatureId; icon: string }> = [
   { id: "settings", icon: "gear" },
   { id: "stats", icon: "chart" },
   { id: "skin", icon: "user" },
   { id: "help", icon: "book" },
 ];
 
-// ================= 添加实例 / 添加分组 弹窗 =================
+// ================= 添加分组 弹窗 =================
 
-const showAdd = ref(false);
 const versions = ref<VersionInfo[]>([]);
-const newName = ref("");
-const newVersion = ref("");
-const creating = ref(false);
-const addError = ref("");
+
+// ================= 拖拽整合包文件（逻辑见 composables/useFileDrop） =================
+
+const { fileDragOver } = useFileDrop({
+  versions,
+  loadInstances,
+});
 
 const showAddGroup = ref(false);
 const groupName = ref("");
@@ -577,8 +821,6 @@ async function subscribeEvents() {
     }),
     onGameExit((e) => {
       if (e.uuid !== selected.value?.uuid) return;
-      gameActive.value = false;
-      running.value = false;
       statusText.value =
         e.code === 0 ? t("launch.exited") : t("launch.exitedCode", { code: e.code });
       appendLog(
@@ -591,8 +833,6 @@ async function subscribeEvents() {
     }),
     onLaunchError((e) => {
       if (e.uuid && e.uuid !== selected.value?.uuid) return;
-      gameActive.value = false;
-      running.value = false;
       statusText.value = t("launch.failed");
       appendLog(t("launch.error", { msg: e.message }));
       if (e.uuid) {
@@ -618,7 +858,9 @@ async function doInit() {
     localStorage.setItem("mcml.localDir", localDir.value);
     localStorage.setItem("mcml.playerName", playerName.value);
     bootFailed.value = false;
-    await Promise.all([loadInstances(), loadGroups(), loadJava(), loadVersions()]);
+    await Promise.all([loadInstances(), loadGroups(), loadJava()]);
+    // 版本列表走网络（Mojang 清单），不阻塞启动
+    loadVersions();
     // 初始化完成，关闭启动画面
     closeSplash();
   } catch (e) {
@@ -671,31 +913,21 @@ async function loadVersions() {
   }
 }
 
-// ================= 启动 / 停止 =================
+// ================= 启动 =================
+// 不弹窗：只有正在运行的实例的启动按钮显示加载态并禁用
 
 async function launch() {
-  if (!selected.value) return;
+  if (!selected.value || selected.value.running) return;
   const uuid = selected.value.uuid;
   localStorage.setItem("mcml.lastInstance", uuid);
-  gameActive.value = true;
-  running.value = true;
+  selected.value.running = true;
   statusText.value = t("launch.launching");
   logs.value = [];
   try {
     await api.launchGame(uuid, playerName.value);
   } catch (e) {
-    gameActive.value = false;
-    running.value = false;
+    if (selected.value) selected.value.running = false;
     statusText.value = t("launch.failed");
-    appendLog(t("launch.error", { msg: String(e) }));
-  }
-}
-
-async function stop() {
-  if (!selected.value) return;
-  try {
-    await api.stopGame(selected.value.uuid);
-  } catch (e) {
     appendLog(t("launch.error", { msg: String(e) }));
   }
 }
@@ -705,64 +937,10 @@ function onPickInstance(uuid: string) {
   if (inst) select(inst);
 }
 
-// ================= 添加实例 =================
+// ================= 添加实例（独立窗口） =================
 
-async function openAdd() {
-  showAdd.value = true;
-  addError.value = "";
-  versions.value = [];
-  newName.value = selected.value ? `${selected.value.name} 副本` : "";
-  newVersion.value = "";
-  try {
-    const list = await api.getVersions();
-    versions.value = sortVersions(list);
-    newVersion.value = versions.value[0]?.id ?? "";
-  } catch (e) {
-    addError.value = t("add.versionFail", { msg: String(e) });
-  }
-}
-
-function sortVersions(list: VersionInfo[]): VersionInfo[] {
-  const rank = (v: string) => (v === "release" ? 0 : 1);
-  return [...list].sort((a, b) => {
-    const r = rank(a.versionType) - rank(b.versionType);
-    if (r !== 0) return r;
-    return compareVersion(b.id, a.id);
-  });
-}
-
-function compareVersion(a: string, b: string): number {
-  const pa = a.split(".").map((n) => parseInt(n, 10) || 0);
-  const pb = b.split(".").map((n) => parseInt(n, 10) || 0);
-  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-    const x = pa[i] ?? 0;
-    const y = pb[i] ?? 0;
-    if (x !== y) return x - y;
-  }
-  return 0;
-}
-
-async function create() {
-  if (!newName.value.trim()) {
-    addError.value = t("add.nameEmpty");
-    return;
-  }
-  if (!newVersion.value) {
-    addError.value = t("add.versionEmpty");
-    return;
-  }
-  creating.value = true;
-  addError.value = "";
-  try {
-    const inst = await api.createInstance(newName.value.trim(), newVersion.value);
-    showAdd.value = false;
-    await loadInstances();
-    select(inst);
-  } catch (e) {
-    addError.value = t("add.createFail", { msg: String(e) });
-  } finally {
-    creating.value = false;
-  }
+function openAdd() {
+  openWindow("add");
 }
 
 // ================= 添加分组 =================
@@ -790,11 +968,16 @@ async function createGroup() {
 
 onMounted(async () => {
   subscribeEvents();
+  document.addEventListener("click", onDocClick);
+  document.addEventListener("keydown", onDocKeyDown);
+  window.addEventListener("storage", onAddedInstanceStorage);
   initLoading.value = true;
   try {
     await api.initCore(localDir.value.trim() || null, playerName.value);
     bootFailed.value = false;
-    await Promise.all([loadInstances(), loadGroups(), loadJava(), loadVersions()]);
+    await Promise.all([loadInstances(), loadGroups(), loadJava()]);
+    // 版本列表走网络（Mojang 清单），不阻塞启动
+    loadVersions();
     // 启动时选中上次启动的实例并展开其分组
     initSelection();
     // 初始化完成，关闭启动画面
@@ -809,114 +992,69 @@ onMounted(async () => {
 
 onUnmounted(() => {
   unlistens.forEach((fn) => fn());
+  document.removeEventListener("click", onDocClick);
+  document.removeEventListener("keydown", onDocKeyDown);
+  window.removeEventListener("storage", onAddedInstanceStorage);
 });
 </script>
 
 <template>
   <div class="main-window">
-    <!-- ===== 启动画面（初始化中，由 closeSplash() 关闭） ===== -->
-    <div v-if="splashVisible" class="splash">
-      <div class="splash-logo">MC</div>
-      <div class="splash-name">{{ t("app.name") }}</div>
-      <div class="splash-spinner"></div>
-      <div class="splash-text">{{ t("init.splash") }}</div>
-    </div>
-
-    <!-- ===== 初始化引导（仅初始化失败时出现） ===== -->
-    <div v-else-if="bootFailed" class="setup">
-      <div class="setup-card">
-        <div class="setup-logo">MCML</div>
-        <h1>{{ t("app.name") }}</h1>
-        <p class="setup-sub">{{ t("init.title") }}</p>
-
-        <label class="field-label">{{ t("init.dataDir") }}</label>
-        <input v-model="localDir" class="field-input" :placeholder="t('init.dataDirPlaceholder')" spellcheck="false" />
-
-        <label class="field-label">{{ t("init.playerName") }}</label>
-        <input v-model="playerName" class="field-input" :placeholder="t('init.playerNamePlaceholder')" spellcheck="false" />
-
-        <p v-if="initError" class="error-text">{{ initError }}</p>
-
-        <BaseButton variant="primary" size="lg" block :disabled="initLoading" @click="doInit">
-          {{ initLoading ? t("init.initializing") : t("init.button") }}
-        </BaseButton>
-      </div>
-    </div>
+    <!-- ===== 启动画面 / 初始化引导（SplashScreen 组件） ===== -->
+    <SplashScreen
+      v-if="splashVisible || bootFailed"
+      :splash-visible="splashVisible"
+      :boot-failed="bootFailed"
+      :init-loading="initLoading"
+      :init-error="initError"
+      v-model:local-dir="localDir"
+      v-model:player-name="playerName"
+      @retry="doInit"
+    />
 
     <!-- ===== 主界面 ===== -->
     <template v-else>
       <!-- 顶部栏 -->
-      <header class="topbar">
-        <div class="brand">
-          <div class="brand-logo">MC</div>
-          <div class="brand-text">
-            <div class="brand-name">{{ t("app.name") }}</div>
-            <div class="brand-sub">{{ t("app.sub") }}</div>
-          </div>
-        </div>
-
-        <div class="topbar-right">
-          <!-- 启动器主页（切换按钮） -->
-          <button
-            class="topbar-icon-btn"
-            :class="{ pressed: newsActive }"
-            :title="t('home.entry')"
-            @click="toggleNews"
-          >
-            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-              <path d="m3 10 9-7 9 7v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V10z" />
-              <path d="M9 22V12h6v10" />
-            </svg>
-          </button>
-
-          <!-- 功能入口 -->
-          <button
-            v-for="f in features"
-            :key="f.id"
-            class="topbar-icon-btn"
-            :title="t('features.' + f.id)"
-            @click="openWindow(f.id)"
-          >
-            <svg v-if="f.icon === 'gear'" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8">
-              <circle cx="12" cy="12" r="3.2" />
-              <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 1 1-4 0v-.09a1.7 1.7 0 0 0-1.03-1.56 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.56-1.03H3a2 2 0 1 1 0-4h.09a1.7 1.7 0 0 0 1.56-1.03 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34h.01a1.7 1.7 0 0 0 1.03-1.56V3a2 2 0 1 1 4 0v.09a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87v.01a1.7 1.7 0 0 0 1.56 1.03H21a2 2 0 1 1 0 4h-.09a1.7 1.7 0 0 0-1.56 1.03z" />
-            </svg>
-            <svg v-else-if="f.icon === 'chart'" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
-              <path d="M18 20V10M12 20V4M6 20v-6" />
-            </svg>
-            <svg v-else-if="f.icon === 'user'" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
-              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-              <circle cx="12" cy="7" r="4" />
-            </svg>
-            <svg v-else viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
-              <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
-              <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-            </svg>
-          </button>
-
-          <!-- 主题切换 -->
-          <button class="topbar-icon-btn" :title="theme === 'dark' ? 'Light' : 'Dark'" @click="toggleTheme">
-            <svg v-if="theme === 'dark'" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
-              <circle cx="12" cy="12" r="4.5" />
-              <path d="M12 2v2.5M12 19.5V22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M2 12h2.5M19.5 12H22M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8" />
-            </svg>
-            <svg v-else viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
-              <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />
-            </svg>
-          </button>
-
-          <AccountSelector
-            :account="currentAccount"
-            :accounts="accounts"
-            @update:account="onAccountChange"
-          />
-        </div>
-      </header>
+      <MainTopbar
+        :features="features"
+        :news-active="newsActive"
+        :theme="theme"
+        :current-account="currentAccount"
+        :accounts="accounts"
+        @toggle-news="toggleNews"
+        @feature="openWindow"
+        @toggle-theme="toggleTheme"
+        @update:account="onAccountChange"
+      />
 
       <!-- 主体 -->
       <main class="main" :class="{ 'side-right': sidebarSide === 'right' }">
+        <!-- 多选模式浮动工具栏 -->
+        <div v-if="multiSelect" class="multi-bar" @contextmenu.prevent @click.stop>
+          <span class="multi-count">{{ t("multi.selected", { count: selectedIds.size }) }}</span>
+          <button class="multi-btn" @click="openMoveFromBar($event)">{{ t("multi.moveGroup") }}</button>
+          <button class="multi-btn danger" @click="onMultiDelete">{{ t("multi.delete") }}</button>
+          <button class="multi-btn" @click="multiLaunch">{{ t("multi.launch") }}</button>
+          <span class="multi-sep"></span>
+          <button class="multi-exit" @click="exitMultiSelect">{{ t("multi.exit") }}</button>
+        </div>
+
+        <!-- 空实例：强制打开启动器主页，主页内融合空状态引导（隐藏实例分组） -->
+        <template v-if="instances.length === 0">
+          <section class="news-page">
+            <HomePage
+              :items="news"
+              :last-instance="null"
+              :empty="true"
+              @add-instance="openAdd"
+              @add-account="openWindow('account')"
+              @add-java="openWindow('settings')"
+            />
+          </section>
+        </template>
+
         <!-- 列表模式下启动器主页整页显示 -->
-        <template v-if="newsActive && mode === 'list'">
+        <template v-else-if="newsActive && mode === 'list'">
           <section class="news-page">
             <HomePage
               :items="news"
@@ -939,122 +1077,36 @@ onUnmounted(() => {
 
           <div v-if="!sidebarCollapsed" class="sidebar-backdrop" @click="setSidebarCollapsed(true)"></div>
 
-          <aside v-if="!sidebarCollapsed" class="sidebar">
-            <div class="sidebar-head">
-              <SegmentedTabs
-                :model-value="mode"
-                :options="MODE_OPTIONS"
-                @update:model-value="mode = $event as ViewMode"
-              />
-              <div class="sidebar-head-actions">
-                <button class="icon-btn" :title="t('group.addGroup')" @click="showAddGroup = true">＋</button>
-                <button class="icon-btn" :title="t('sidebar.collapse')" @click="setSidebarCollapsed(true)">‹</button>
-              </div>
-            </div>
-
-            <!-- 实例搜索 -->
-            <div class="search-box">
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
-                <circle cx="11" cy="11" r="7" />
-                <path d="m20 20-3.5-3.5" />
-              </svg>
-              <input
-                v-model="searchText"
-                class="search-input"
-                :placeholder="t('search.placeholder')"
-                spellcheck="false"
-              />
-              <button v-if="searchText" class="search-clear" @click="searchText = ''">✕</button>
-            </div>
-
-            <!-- 分组：可收缩，组内顶部有添加 -->
-            <div v-if="mode === 'group'" class="group-list">
-              <div
-                v-for="g in filteredGroups"
-                :key="g.name"
-                class="group-block"
-                :class="{ 'drop-target': dropGroup === g.name }"
-                @dragover.prevent="onDragOverGroup(g.name)"
-                @drop.prevent="onDropGroup(g.name)"
-              >
-                <div class="group-title-row">
-                  <button class="group-title" :title="t('group.collapse')" @click="toggleGroup(g.name)">
-                    <svg
-                      class="group-chevron"
-                      :class="{ collapsed: isCollapsed(g.name) }"
-                      viewBox="0 0 24 24"
-                      width="13"
-                      height="13"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                    >
-                      <path d="m6 9 6 6 6-6" />
-                    </svg>
-                    <span>{{ g.name }}</span>
-                    <span class="group-count">{{ g.items.length }}</span>
-                  </button>
-                </div>
-
-                <!-- 拖拽时自动展开，便于投放 -->
-                <div
-                  v-show="!isCollapsed(g.name) || searching || dragUuid !== null"
-                  class="group-items"
-                >
-                  <!-- 添加实例（与实例行同尺寸，位于实例上方） -->
-                  <button class="add-inst-row" @click="openAdd">
-                    <span class="add-inst-icon">＋</span>
-                    <span class="add-inst-text">{{ t("list.add") }}</span>
-                  </button>
-                  <div
-                    v-for="inst in g.items"
-                    :key="inst.uuid"
-                    class="inst-row"
-                    :class="{
-                      active: selected?.uuid === inst.uuid,
-                      dragging: dragUuid === inst.uuid,
-                    }"
-                    draggable="true"
-                    @dragstart="onDragStart(inst, $event)"
-                    @dragend="onDragEnd"
-                    @click="select(inst)"
-                  >
-                    <InstanceIcon :name="inst.name" :uuid="inst.uuid" :size="38" />
-                    <span v-if="inst.loader !== '原版'" class="loader-text">{{ inst.loader }}</span>
-                    <span class="inst-name">{{ inst.name }}</span>
-                    <span v-if="inst.running" class="run-dot" title="running"></span>
-                  </div>
-                </div>
-              </div>
-              <div v-if="groups.length === 0" class="empty-tip">{{ t("list.empty") }}</div>
-              <div v-else-if="filteredGroups.length === 0" class="empty-tip">{{ t("search.empty") }}</div>
-            </div>
-
-            <!-- 平铺：首格为添加 -->
-            <div v-else class="tile-list">
-              <div class="tile add-tile" @click="openAdd">
-                <span class="add-plus">＋</span>
-                <span class="tile-name">{{ t("group.add") }}</span>
-              </div>
-              <div
-                v-for="inst in filteredInstances"
-                :key="inst.uuid"
-                class="tile"
-                :class="{ active: selected?.uuid === inst.uuid }"
-                @click="select(inst)"
-              >
-                <InstanceIcon :name="inst.name" :uuid="inst.uuid" :size="44" />
-                <span
-                  v-if="inst.loader !== '原版'"
-                  class="loader-corner loader-text"
-                >{{ inst.loader }}</span>
-                <span class="tile-name">{{ inst.name }}</span>
-                <span v-if="inst.running" class="run-dot" title="running"></span>
-              </div>
-              <div v-if="instances.length === 0" class="empty-tip tile-empty">{{ t("list.empty") }}</div>
-              <div v-else-if="filteredInstances.length === 0" class="empty-tip tile-empty">{{ t("search.empty") }}</div>
-            </div>
-          </aside>
+          <MainSidebar
+            v-if="!sidebarCollapsed"
+            :mode="mode"
+            :mode-options="MODE_OPTIONS"
+            :search-text="searchText"
+            :groups="groups"
+            :filtered-groups="filteredGroups"
+            :filtered-instances="filteredInstances"
+            :searching="searching"
+            :selected="selected"
+            :multi-select="multiSelect"
+            :selected-ids="selectedIds"
+            :collapsed-groups="collapsedGroups"
+            :drag-active="dragActive"
+            :dragging-uuid="draggingUuid"
+            :is-collapsed="isCollapsed"
+            :on-drag-pointer-down="onDragPointerDown"
+            :on-inst-click="onInstClick"
+            :on-inst-context="onInstContext"
+            :on-group-context="onGroupContext"
+            :on-group-title-click="onGroupTitleClick"
+            :is-inst-insert="isInstInsert"
+            :is-inst-insert-end="isInstInsertEnd"
+            :is-group-insert="isGroupInsert"
+            @update:mode="mode = $event"
+            @update:search-text="searchText = $event"
+            @add-instance="openAdd"
+            @add-group="showAddGroup = true"
+            @collapse="setSidebarCollapsed(true)"
+          />
 
           <!-- 右侧内容区：实例详情 / 启动器主页 -->
           <section ref="detailEl" class="detail">
@@ -1076,7 +1128,16 @@ onUnmounted(() => {
                   </div>
                   <!-- 右侧：启动游戏（大）+ 添加/管理资源（小） -->
                   <div class="detail-side">
-                    <BaseButton variant="primary" size="lg" class="play-btn" @click="launch">▶ {{ t("launch.play") }}</BaseButton>
+                    <BaseButton
+                      variant="primary"
+                      size="lg"
+                      class="play-btn"
+                      :disabled="selected.running"
+                      @click="launch"
+                    >
+                      <span v-if="selected.running" class="btn-spinner"></span>
+                      <span v-else>▶</span> {{ t("launch.play") }}
+                    </BaseButton>
                     <div class="side-row">
                       <BaseButton size="sm" variant="accent" @click="onAction('addResource')">{{ t("actions.addResource") }}</BaseButton>
                       <BaseButton size="sm" variant="accent" @click="onAction('manageResource')">{{ t("actions.manageResource") }}</BaseButton>
@@ -1278,6 +1339,13 @@ onUnmounted(() => {
                   />
                 </div>
               </template>
+              <template v-else-if="multiSelect">
+                <div class="multi-detail">
+                  <div class="multi-detail-icon">☑</div>
+                  <h2>{{ t("multi.detailTitle") }}</h2>
+                  <p>{{ t("multi.detailDesc", { count: selectedIds.size }) }}</p>
+                </div>
+              </template>
               <div v-else class="placeholder">{{ t("detail.selectHint") }}</div>
             </template>
           </section>
@@ -1308,8 +1376,15 @@ onUnmounted(() => {
             />
 
             <div class="launch-actions">
-              <BaseButton variant="primary" size="lg" :disabled="!selected" @click="launch">
-                ▶ {{ t("launch.play") }}
+              <BaseButton
+                variant="primary"
+                size="lg"
+                class="list-launch-btn"
+                :disabled="!selected || selected.running"
+                @click="launch"
+              >
+                <span v-if="selected?.running" class="btn-spinner"></span>
+                <span v-else>▶</span> {{ t("launch.play") }}
               </BaseButton>
               <BaseButton :disabled="!selected" @click="argsOpen = !argsOpen">
                 ⚙ {{ t("args.title") }}
@@ -1356,40 +1431,28 @@ onUnmounted(() => {
           </div>
         </div>
       </div>
+
+      <!-- ===== 右键菜单（MainCtxMenu 组件） ===== -->
+      <MainCtxMenu
+        :menu="ctxMenu"
+        :move-group-view="moveGroupView"
+        :groups="groups"
+        @select-all="onGroupSelectAll"
+        @launch-group="launchGroupAll"
+        @open-move-view="openGroupMoveView"
+        @delete-group="onDeleteGroup"
+        @inst-action="onInstMenuAction"
+        @back="moveGroupView = false"
+        @move-target="onMoveTarget"
+        @multi-move="moveGroupView = true"
+        @multi-delete="onMultiDelete"
+        @multi-launch="multiLaunch"
+      />
     </template>
 
-    <!-- ===== 启动界面（启动中 / 运行中） ===== -->
-    <LaunchScreen
-      v-if="gameActive && selected"
-      :instance="selected"
-      :status-text="statusText"
-      :logs="logs"
-      :running="running"
-      @stop="stop"
-    />
+    <!-- ===== 启动界面：已移除（启动按钮显示加载态，不弹窗） ===== -->
 
-    <!-- ===== 添加实例弹窗 ===== -->
-    <BaseModal v-if="showAdd" :title="t('add.title')" @close="showAdd = false">
-      <label class="field-label">{{ t("add.name") }}</label>
-      <input v-model="newName" class="field-input" :placeholder="t('add.namePlaceholder')" spellcheck="false" />
-
-      <label class="field-label">{{ t("add.version") }}</label>
-      <select v-model="newVersion" class="version-select" size="8">
-        <option v-for="v in versions" :key="v.id" :value="v.id">
-          {{ v.id }}（{{ v.versionType }}）
-        </option>
-      </select>
-      <div v-if="versions.length === 0 && !addError" class="empty-tip">{{ t("add.loading") }}</div>
-
-      <p v-if="addError" class="error-text">{{ addError }}</p>
-
-      <div class="modal-actions">
-        <BaseButton @click="showAdd = false">{{ t("add.cancel") }}</BaseButton>
-        <BaseButton variant="primary" :disabled="creating" @click="create">
-          {{ creating ? t("add.creating") : t("add.create") }}
-        </BaseButton>
-      </div>
-    </BaseModal>
+    <!-- ===== 添加实例：独立窗口（openAdd 打开） ===== -->
 
     <!-- ===== 重命名实例弹窗 ===== -->
     <BaseModal v-if="showRename && selected" :title="t('actions.renameTitle')" @close="showRename = false">
@@ -1416,10 +1479,29 @@ onUnmounted(() => {
       </div>
     </BaseModal>
 
-    <!-- ===== 轻提示 ===== -->
-    <Transition name="toast">
-      <div v-if="toast" class="toast">{{ toast }}</div>
-    </Transition>
+    <!-- ===== 多选删除确认 ===== -->
+    <BaseModal v-if="showMultiDelete" :title="t('multi.deleteTitle')" @close="showMultiDelete = false">
+      <p class="delete-tip">{{ t("multi.deleteConfirm", { count: selectedIds.size }) }}</p>
+
+      <div class="modal-actions">
+        <BaseButton @click="showMultiDelete = false">{{ t("add.cancel") }}</BaseButton>
+        <BaseButton variant="danger" :disabled="multiDeleteBusy" @click="doMultiDelete">
+          {{ t("multi.delete") }}
+        </BaseButton>
+      </div>
+    </BaseModal>
+
+    <!-- ===== 删除分组确认 ===== -->
+    <BaseModal v-if="showDeleteGroup" :title="t('group.delete')" @close="showDeleteGroup = false">
+      <p class="delete-tip">{{ t("group.deleteConfirm", { name: deleteGroupName, count: deleteGroupCount }) }}</p>
+
+      <div class="modal-actions">
+        <BaseButton @click="showDeleteGroup = false">{{ t("add.cancel") }}</BaseButton>
+        <BaseButton variant="danger" :disabled="deleteGroupBusy" @click="doDeleteGroup">
+          {{ t("group.delete") }}
+        </BaseButton>
+      </div>
+    </BaseModal>
 
     <!-- ===== 添加分组弹窗 ===== -->
     <BaseModal v-if="showAddGroup" :title="t('group.addGroup')" @close="showAddGroup = false">
@@ -1435,6 +1517,19 @@ onUnmounted(() => {
         </BaseButton>
       </div>
     </BaseModal>
+
+    <!-- ===== 拖拽整合包文件遮罩层 ===== -->
+    <div v-if="fileDragOver" class="file-drop-layer">
+      <div class="file-drop-box">
+        <svg viewBox="0 0 24 24" width="42" height="42" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 8v13H3V8" />
+          <path d="M1 3h22v5H1z" />
+          <path d="M10 12h4" />
+        </svg>
+        <h2>{{ t("drop.title") }}</h2>
+        <p>{{ t("drop.desc") }}</p>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -1443,184 +1538,6 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   height: 100vh;
-}
-
-/* ================= 启动画面 ================= */
-
-.splash {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 14px;
-  background: linear-gradient(160deg, var(--bg-side) 0%, var(--bg) 100%);
-}
-
-.splash-logo {
-  width: 72px;
-  height: 72px;
-  border-radius: 18px;
-  background: linear-gradient(135deg, #4f8cff, #7c5cff);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 800;
-  font-size: 30px;
-  color: #fff;
-  box-shadow: 0 8px 24px rgba(79, 140, 255, 0.35);
-}
-
-.splash-name {
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--text);
-}
-
-.splash-spinner {
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  border: 3px solid var(--border);
-  border-top-color: var(--accent);
-  animation: splash-rotate 0.9s linear infinite;
-  margin-top: 8px;
-}
-
-@keyframes splash-rotate {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.splash-text {
-  font-size: 13px;
-  color: var(--text-dim);
-}
-
-/* ================= 初始化界面 ================= */
-
-.setup {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(160deg, var(--bg-side) 0%, var(--bg) 100%);
-}
-
-.setup-card {
-  width: 400px;
-  padding: 36px;
-  border-radius: 14px;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow-lg);
-}
-
-.setup-logo {
-  font-size: 34px;
-  font-weight: 800;
-  letter-spacing: 2px;
-  background: linear-gradient(120deg, #4f8cff, #7c5cff);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
-  text-align: center;
-}
-
-.setup-card h1 {
-  font-size: 20px;
-  text-align: center;
-  margin: 10px 0 4px;
-}
-
-.setup-sub {
-  color: var(--text-dim);
-  font-size: 13px;
-  text-align: center;
-  margin-bottom: 22px;
-}
-
-/* ================= 顶部栏 ================= */
-
-.topbar {
-  height: 64px;
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 0 18px;
-  background: var(--bg-side);
-  border-bottom: 1px solid var(--border);
-}
-
-.brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.brand-logo {
-  width: 38px;
-  height: 38px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, #4f8cff, #7c5cff);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 800;
-  font-size: 16px;
-  color: #fff;
-  box-shadow: 0 3px 10px rgba(79, 140, 255, 0.35);
-}
-
-.brand-text {
-  display: flex;
-  flex-direction: column;
-  line-height: 1.2;
-}
-
-.brand-name {
-  font-size: 15px;
-  font-weight: 700;
-}
-
-.brand-sub {
-  font-size: 11px;
-  color: var(--text-dim);
-}
-
-.topbar-right {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.topbar-icon-btn {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  border: 1px solid transparent;
-  background: transparent;
-  color: var(--text-dim);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.15s;
-}
-
-.topbar-icon-btn:hover {
-  background: var(--bg-card);
-  border-color: var(--border);
-  color: var(--text);
-}
-
-.topbar-icon-btn.pressed {
-  background: var(--accent-soft);
-  border-color: var(--accent-border);
-  color: var(--accent);
 }
 
 /* ================= 主体 ================= */
@@ -1635,115 +1552,7 @@ onUnmounted(() => {
   flex-direction: row-reverse;
 }
 
-/* ----- 侧栏（分组 / 平铺） ----- */
-
-.sidebar {
-  width: 320px;
-  min-width: 320px;
-  background: var(--bg-side);
-  border-right: 1px solid var(--border);
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-}
-
-.main.side-right .sidebar {
-  border-right: none;
-  border-left: 1px solid var(--border);
-}
-
-.sidebar-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 12px 12px 10px;
-}
-
-.sidebar-head-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-}
-
-/* 实例搜索框 */
-.search-box {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin: 0 12px 8px;
-  padding: 0 10px;
-  height: 34px;
-  border-radius: 9px;
-  border: 1px solid var(--border);
-  background: var(--bg-card);
-  color: var(--text-dim);
-  flex-shrink: 0;
-}
-
-.search-box:focus-within {
-  border-color: var(--accent);
-}
-
-.search-input {
-  flex: 1;
-  min-width: 0;
-  border: none;
-  background: transparent;
-  color: var(--text);
-  font-size: 12.5px;
-  outline: none;
-  font-family: inherit;
-}
-
-.search-input::placeholder {
-  color: var(--text-dim);
-}
-
-.search-clear {
-  border: none;
-  background: transparent;
-  color: var(--text-dim);
-  font-size: 12px;
-  cursor: pointer;
-  padding: 2px 4px;
-}
-
-.search-clear:hover {
-  color: var(--text);
-}
-
-/* 窗口过小时侧栏悬浮 */
-.sidebar-backdrop {
-  display: none;
-}
-
-@media (max-width: 880px) {
-  .sidebar-backdrop {
-    display: block;
-    position: fixed;
-    inset: 64px 0 0 0;
-    background: var(--overlay);
-    z-index: 154;
-  }
-
-  .sidebar {
-    position: fixed;
-    top: 64px;
-    bottom: 0;
-    left: 0;
-    z-index: 160;
-    box-shadow: var(--shadow-lg);
-  }
-
-  .main.side-right .sidebar {
-    left: auto;
-    right: 0;
-  }
-}
-
-/* 侧栏收起后的展开把手 */
+/* 侧栏收起后的展开把手 / 遮罩（侧栏本体样式见 MainSidebar.vue） */
 .sidebar-expand {
   width: 24px;
   border: none;
@@ -1766,301 +1575,21 @@ onUnmounted(() => {
   color: var(--accent);
 }
 
-.icon-btn {
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--bg-card);
-  color: var(--text);
-  font-size: 16px;
-  line-height: 1;
-  cursor: pointer;
-  transition: all 0.15s;
-  flex-shrink: 0;
+.sidebar-backdrop {
+  display: none;
 }
 
-.icon-btn:hover {
-  background: var(--bg-hover);
-  border-color: var(--accent);
+@media (max-width: 880px) {
+  .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 64px 0 0 0;
+    background: var(--overlay);
+    z-index: 154;
+  }
 }
 
-/* ----- 分组模式列表 ----- */
-
-.group-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 2px 10px 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.group-title-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 2px;
-}
-
-.group-title {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--text-dim);
-  padding: 8px 6px;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  letter-spacing: 0.5px;
-  font-family: inherit;
-  border-radius: 8px;
-  transition: background 0.12s;
-  text-align: left;
-}
-
-.group-title:hover {
-  background: var(--bg-hover);
-  color: var(--text);
-}
-
-.group-chevron {
-  transition: transform 0.15s;
-  flex-shrink: 0;
-}
-
-.group-chevron.collapsed {
-  transform: rotate(-90deg);
-}
-
-.group-count {
-  font-size: 11px;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 20px;
-  padding: 0 8px;
-  color: var(--text-dim);
-  font-weight: 500;
-  margin-left: auto;
-}
-
-.group-items {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-top: 0;
-}
-
-/* 添加实例行（与实例行同尺寸，位于实例上方） */
-.add-inst-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 9px 12px;
-  border: 1px dashed var(--border);
-  border-radius: 10px;
-  background: transparent;
-  color: var(--text-dim);
-  font-size: 13px;
-  font-family: inherit;
-  cursor: pointer;
-  transition: all 0.12s;
-  min-height: 48px;
-}
-
-.add-inst-row:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: var(--accent-soft);
-}
-
-.add-inst-icon {
-  width: 38px;
-  height: 38px;
-  border-radius: 10px;
-  background: var(--bg-hover);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 20px;
-  flex-shrink: 0;
-}
-
-.add-inst-row:hover .add-inst-icon {
-  background: var(--accent-soft);
-}
-
-.add-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 9px 12px;
-  border: 1px dashed var(--border);
-  border-radius: 10px;
-  background: transparent;
-  color: var(--text-dim);
-  font-size: 12.5px;
-  font-family: inherit;
-  cursor: pointer;
-  transition: all 0.15s;
-  margin-bottom: 6px;
-}
-
-.add-row:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: var(--accent-soft);
-}
-
-.inst-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 9px 12px;
-  border-radius: 10px;
-  cursor: grab;
-  transition: background 0.12s;
-  min-height: 50px;
-}
-
-.inst-row:active {
-  cursor: grabbing;
-}
-
-.inst-row.dragging {
-  opacity: 0.45;
-}
-
-.group-block.drop-target {
-  border: 1px dashed var(--accent);
-  border-radius: 12px;
-  background: var(--accent-soft);
-  margin: 0 -4px;
-  padding: 0 4px;
-}
-
-.inst-row:hover {
-  background: var(--bg-hover);
-}
-
-.inst-row.active {
-  background: var(--accent-soft);
-  outline: 1px solid var(--accent-border);
-}
-
-.inst-name {
-  font-size: 13.5px;
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  flex: 1;
-}
-
-/* ----- 平铺模式网格 ----- */
-
-.tile-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 6px 10px 14px;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
-  gap: 10px;
-  align-content: start;
-}
-
-.tile {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  padding: 16px 8px 12px;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.tile:hover {
-  background: var(--bg-hover);
-  transform: translateY(-2px);
-}
-
-.tile.active {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-}
-
-.tile.add-tile {
-  border: 1px solid var(--border);
-  background: var(--bg-card);
-  justify-content: center;
-}
-
-.tile.add-tile:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: var(--accent-soft);
-}
-
-.add-plus {
-  font-size: 26px;
-  line-height: 1;
-  color: var(--text-dim);
-}
-
-.tile.add-tile:hover .add-plus {
-  color: var(--accent);
-}
-
-.add-tile .tile-name {
-  color: var(--accent);
-  font-weight: 600;
-}
-
-.tile-empty {
-  grid-column: 1 / -1;
-}
-
-.loader-corner {
-  position: absolute;
-  top: 8px;
-  left: 8px;
-}
-
-.tile-name {
-  font-size: 12px;
-  text-align: center;
-  line-height: 1.3;
-  word-break: break-all;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.tile .run-dot {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-}
-
-.run-dot {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: var(--green);
-  box-shadow: 0 0 6px var(--green);
-  flex-shrink: 0;
-}
+/* ----- 侧栏（分组 / 平铺）：样式见 MainSidebar.vue ----- */
 
 /* ----- 右侧内容区 ----- */
 
@@ -2130,11 +1659,17 @@ onUnmounted(() => {
   min-width: 0;
 }
 
-/* 启动游戏按钮：更大、阴影更柔和，撑满整列 */
+/* 启动游戏按钮：更大、阴影更柔和，撑满整列；固定最小高度，加载态切换不跳动 */
 .play-btn {
   width: 100%;
   font-size: 16px;
   padding: 16px 0;
+  min-height: 52px;
+}
+
+/* 列表模式的启动按钮：同样固定高度 */
+.list-launch-btn {
+  min-height: 46px;
 }
 
 /* 服务器 MOTD 悬浮卡片（启动器下方居中，左图标右信息） */
@@ -2573,45 +2108,7 @@ onUnmounted(() => {
   max-width: 560px;
 }
 
-.delete-tip {
-  font-size: 13.5px;
-  color: var(--text);
-  line-height: 1.7;
-  margin: 6px 0 2px;
-}
-
-.delete-tip.dim {
-  color: var(--text-dim);
-  font-size: 12.5px;
-}
-
-/* ----- 轻提示 ----- */
-
-.toast {
-  position: fixed;
-  bottom: 34px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: var(--bg-card);
-  border: 1px solid var(--accent-border);
-  color: var(--text);
-  font-size: 13px;
-  padding: 11px 22px;
-  border-radius: 10px;
-  box-shadow: var(--shadow-lg);
-  z-index: 500;
-}
-
-.toast-enter-active,
-.toast-leave-active {
-  transition: opacity 0.2s, transform 0.2s;
-}
-
-.toast-enter-from,
-.toast-leave-to {
-  opacity: 0;
-  transform: translateX(-50%) translateY(8px);
-}
+/* ----- 弹窗 / 轻提示：统一使用全局样式（theme.css） ----- */
 
 .placeholder {
   flex: 1;
@@ -2657,19 +2154,207 @@ onUnmounted(() => {
   align-items: center;
 }
 
-/* ================= 弹窗细节 ================= */
+/* ================= 多选模式 ================= */
 
-.modal-sub {
-  font-size: 12.5px;
-  color: var(--text-dim);
-  margin-bottom: 4px;
-  word-break: break-all;
+/* 顶部浮动工具栏 */
+.multi-bar {
+  position: fixed;
+  top: 72px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 90;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--bg-card);
+  border: 1px solid var(--accent-border);
+  border-radius: 14px;
+  box-shadow: var(--shadow-md);
 }
 
-.modal-actions {
+.multi-count {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent);
+  margin-right: 4px;
+  white-space: nowrap;
+}
+
+.multi-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 12px;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 12.5px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.multi-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent);
+}
+
+.multi-btn.danger:hover {
+  border-color: var(--red);
+  color: var(--red);
+}
+
+.multi-sep {
+  width: 1px;
+  height: 18px;
+  background: var(--border);
+}
+
+.multi-exit {
+  padding: 7px 12px;
+  border-radius: 9px;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 12.5px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.multi-exit:hover {
+  color: var(--red);
+  background: rgba(255, 95, 86, 0.1);
+}
+
+/* 实例勾选 */
+.row-check {
+  position: absolute;
+  left: 5px;
+  top: 5px;
+  z-index: 3;
+  width: 19px;
+  height: 19px;
+  border-radius: 50%;
+  border: 1.5px solid var(--text-dim);
+  background: var(--bg-card);
+  color: transparent;
+  font-size: 12px;
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.12s;
+  pointer-events: none;
+}
+
+.row-check.on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.inst-row.multi-checked {
+  background: var(--accent-soft);
+  outline: 1px solid var(--accent-border);
+}
+
+.tile.multi-checked {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/* 多选详情提示 */
+.multi-detail {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 40px;
+}
+
+.multi-detail-icon {
+  width: 72px;
+  height: 72px;
+  border-radius: 22px;
+  background: var(--accent-soft);
+  border: 1px solid var(--accent-border);
+  color: var(--accent);
+  font-size: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 8px;
+}
+
+.multi-detail h2 {
+  font-size: 19px;
+  font-weight: 700;
+}
+
+.multi-detail p {
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+/* 右键菜单样式见 MainCtxMenu.vue */
+
+/* ================= 拖拽整合包文件遮罩层 ================= */
+
+.file-drop-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  background: var(--overlay);
+  backdrop-filter: blur(2px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* 事件穿透到 window 级拖拽处理器 */
+  pointer-events: none;
+}
+
+.file-drop-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   gap: 10px;
-  margin-top: 18px;
+  padding: 44px 64px;
+  border: 2px dashed var(--accent);
+  border-radius: 20px;
+  background: var(--bg-card);
+  color: var(--accent);
+  box-shadow: var(--shadow-lg);
+}
+
+.file-drop-box h2 {
+  font-size: 19px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.file-drop-box p {
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+/* 启动按钮加载态：与 ▶ 字号保持一致，避免按钮高度跳动 */
+.btn-spinner {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+  animation: btn-spin 0.8s linear infinite;
+  flex-shrink: 0;
+}
+
+@keyframes btn-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 </style>

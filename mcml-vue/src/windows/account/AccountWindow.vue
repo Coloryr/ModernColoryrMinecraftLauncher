@@ -1,27 +1,33 @@
 <script setup lang="ts">
 // 账户管理窗口：平铺 / 列表 / 详情 三种展示 + 类型筛选 + 搜索 + 添加账户
-import { computed, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import WindowFrame from "../../components/ui/WindowFrame.vue";
 import BaseButton from "../../components/ui/BaseButton.vue";
 import BaseModal from "../../components/ui/BaseModal.vue";
 import SegmentedTabs from "../../components/ui/SegmentedTabs.vue";
 import { t } from "../../lib/i18n";
+import { showToast } from "../../lib/toast";
+import AccountGrid from "./views/AccountGrid.vue";
+import AccountList from "./views/AccountList.vue";
+import AccountDetail from "./views/AccountDetail.vue";
 import {
   ACCOUNT_TYPES,
   accounts,
   addAccount,
   currentAccount,
+  loadAccounts,
   removeAccount,
   refreshAccountToken,
   setCurrentAccount,
   typeLabelKey,
 } from "../../lib/accountStore";
-import { avatarImage, capeImage, skinImage } from "../../lib/accountImages";
-import AccountActions from "../../components/AccountActions.vue";
 import type { Account } from "../../lib/types";
 
 type ViewMode = "grid" | "list" | "detail";
 const view = ref<ViewMode>("grid");
+
+// 进入窗口时从 Rust 加载账户数据
+onMounted(loadAccounts);
 
 const VIEW_OPTIONS = computed(() => [
   { value: "grid", label: t("account.view.grid"), icon: "grid" },
@@ -126,10 +132,6 @@ function switchAccount(acc: Account) {
   showToast(t("account.switched", { name: acc.name }));
 }
 
-function isCurrent(acc: Account): boolean {
-  return acc.uuid === currentAccount.value.uuid;
-}
-
 // 图片种子
 function seedOf(uuid: string): number {
   let h = 0;
@@ -138,17 +140,6 @@ function seedOf(uuid: string): number {
 }
 
 // 操作
-const toast = ref("");
-let toastTimer: number | undefined;
-
-function showToast(msg: string) {
-  toast.value = msg;
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => {
-    toast.value = "";
-  }, 2000);
-}
-
 function refreshToken(acc: Account) {
   refreshAccountToken(acc.uuid);
   showToast(t("account.refreshed"));
@@ -208,103 +199,41 @@ function tokenLabel(acc: Account): string {
       </div>
     </div>
 
-    <!-- 平铺：皮肤 / 头像 / 披风 三图卡片 -->
-    <div v-if="view === 'grid'" class="acc-grid">
-      <div
-        v-for="acc in filtered"
-        :key="acc.uuid"
-        class="acc-card"
-        :class="{ current: isCurrent(acc) }"
-        @dblclick="switchAccount(acc)"
-      >
-        <div class="acc-images">
-          <span v-if="isCurrent(acc)" class="current-badge">{{ t("account.current") }}</span>
-          <img :src="avatarImage(seedOf(acc.uuid), acc.skin)" class="img-avatar" :alt="t('account.avatar')" />
-          <img :src="skinImage(seedOf(acc.uuid), acc.skin)" class="img-skin" :alt="t('account.skin')" />
-          <img :src="capeImage(seedOf(acc.uuid), acc.skin)" class="img-cape" :alt="t('account.cape')" />
-        </div>
-        <div class="acc-head">
-          <span class="acc-name">{{ acc.name }}</span>
-          <span class="acc-type" :class="acc.type">{{ typeLabel(acc) }}</span>
-          <AccountActions
-            @refresh="refreshToken(acc)"
-            @relogin="relogin(acc)"
-            @delete="deleteTarget = acc"
-          />
-        </div>
-      </div>
-      <div v-if="filtered.length === 0" class="empty-tip">{{ t("account.searchEmpty") }}</div>
-    </div>
-
-    <!-- 列表：头像 / 名字 / 类型 / UUID + 操作 -->
-    <div v-else-if="view === 'list'" class="acc-list">
-      <div
-        v-for="acc in filtered"
-        :key="acc.uuid"
-        class="acc-row"
-        :class="{ current: isCurrent(acc) }"
-        @dblclick="switchAccount(acc)"
-      >
-        <img :src="avatarImage(seedOf(acc.uuid), acc.skin)" class="row-avatar" alt="" />
-        <div class="row-meta">
-          <span class="row-name">{{ acc.name }}</span>
-          <span class="row-sub">{{ typeLabel(acc) }} · {{ acc.uuid }}</span>
-        </div>
-        <span v-if="isCurrent(acc)" class="current-tag">{{ t("account.current") }}</span>
-        <span class="token-tag" :class="acc.tokenStatus">{{ tokenLabel(acc) }}</span>
-        <AccountActions
-          @refresh="refreshToken(acc)"
-          @relogin="relogin(acc)"
-          @delete="deleteTarget = acc"
-        />
-      </div>
-      <div v-if="filtered.length === 0" class="empty-tip">{{ t("account.searchEmpty") }}</div>
-    </div>
-
-    <!-- 详情：表格展示所有账户，操作按钮在表格左边 -->
-    <div v-else class="acc-detail">
-      <table class="detail-table wide">
-        <thead>
-          <tr>
-            <th class="col-actions">{{ t("account.actions") }}</th>
-            <th>{{ t("account.name") }}</th>
-            <th>{{ t("account.uuid") }}</th>
-            <th>{{ t("account.type") }}</th>
-            <th>{{ t("account.lastLogin") }}</th>
-            <th>{{ t("account.tokenStatus") }}</th>
-            <th>{{ t("account.capeName") }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr
-            v-for="acc in filtered"
-            :key="acc.uuid"
-            :class="{ current: isCurrent(acc) }"
-            @dblclick="switchAccount(acc)"
-          >
-            <td class="col-actions">
-              <AccountActions
-                @refresh="refreshToken(acc)"
-                @relogin="relogin(acc)"
-                @delete="deleteTarget = acc"
-              />
-            </td>
-            <td class="cell-name">
-              {{ acc.name }}
-              <span v-if="isCurrent(acc)" class="current-tag">{{ t("account.current") }}</span>
-            </td>
-            <td class="mono">{{ acc.uuid }}</td>
-            <td>{{ typeLabel(acc) }}</td>
-            <td>{{ acc.lastLogin }}</td>
-            <td>
-              <span class="token-tag" :class="acc.tokenStatus">{{ tokenLabel(acc) }}</span>
-            </td>
-            <td>{{ acc.name }}_cape</td>
-          </tr>
-        </tbody>
-      </table>
-      <div v-if="filtered.length === 0" class="empty-tip">{{ t("account.searchEmpty") }}</div>
-    </div>
+    <!-- 视图：平铺 / 列表 / 详情（见 views/ 目录） -->
+    <AccountGrid
+      v-if="view === 'grid'"
+      :accounts="filtered"
+      :current-uuid="currentAccount?.uuid ?? ''"
+      :type-label="typeLabel"
+      :seed-of="seedOf"
+      @switch="switchAccount"
+      @refresh="refreshToken"
+      @relogin="relogin"
+      @delete="deleteTarget = $event"
+    />
+    <AccountList
+      v-else-if="view === 'list'"
+      :accounts="filtered"
+      :current-uuid="currentAccount?.uuid ?? ''"
+      :type-label="typeLabel"
+      :token-label="tokenLabel"
+      :seed-of="seedOf"
+      @switch="switchAccount"
+      @refresh="refreshToken"
+      @relogin="relogin"
+      @delete="deleteTarget = $event"
+    />
+    <AccountDetail
+      v-else
+      :accounts="filtered"
+      :current-uuid="currentAccount?.uuid ?? ''"
+      :type-label="typeLabel"
+      :token-label="tokenLabel"
+      @switch="switchAccount"
+      @refresh="refreshToken"
+      @relogin="relogin"
+      @delete="deleteTarget = $event"
+    />
 
     <!-- 添加账户弹窗（按类型显示不同输入框） -->
     <BaseModal
@@ -366,10 +295,6 @@ function tokenLabel(acc: Account): string {
         <BaseButton variant="danger" @click="confirmDelete">{{ t("actions.confirm") }}</BaseButton>
       </div>
     </BaseModal>
-
-    <Transition name="toast">
-      <div v-if="toast" class="toast">{{ toast }}</div>
-    </Transition>
   </WindowFrame>
 </template>
 
@@ -450,253 +375,6 @@ function tokenLabel(acc: Account): string {
 }
 
 /* 平铺 */
-.acc-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: 16px;
-}
-
-.acc-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  padding: 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.acc-images {
-  position: relative;
-  display: flex;
-  align-items: flex-end;
-  gap: 12px;
-  justify-content: center;
-  padding: 18px 0;
-  background: var(--bg-side);
-  border-radius: 12px;
-}
-
-/* 当前账户角标 */
-.current-badge {
-  position: absolute;
-  top: 8px;
-  left: 8px;
-  font-size: 10.5px;
-  padding: 2px 9px;
-  border-radius: 20px;
-  background: var(--accent);
-  color: #fff;
-  white-space: nowrap;
-}
-
-.img-avatar {
-  width: 72px;
-  height: 72px;
-  border-radius: 8px;
-  image-rendering: pixelated;
-}
-
-.img-skin {
-  width: 36px;
-  height: 72px;
-  border-radius: 5px;
-  image-rendering: pixelated;
-}
-
-.img-cape {
-  width: 72px;
-  height: 36px;
-  border-radius: 5px;
-  image-rendering: pixelated;
-}
-
-.acc-head .acc-name {
-  font-size: 15px;
-}
-
-.acc-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
-.acc-name {
-  flex: 1;
-  min-width: 0;
-  font-size: 14px;
-  font-weight: 700;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.acc-type {
-  flex-shrink: 0;
-}
-
-/* 当前选中账户 */
-.acc-card.current {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent);
-}
-
-.acc-row.current {
-  border-color: var(--accent);
-  box-shadow: 0 0 0 1px var(--accent);
-}
-
-.detail-table tbody tr.current td {
-  background: var(--accent-soft);
-}
-
-.current-tag {
-  font-size: 10.5px;
-  padding: 2px 8px;
-  border-radius: 20px;
-  background: var(--accent);
-  color: #fff;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-.acc-type {
-  font-size: 10.5px;
-  padding: 2px 8px;
-  border-radius: 20px;
-  white-space: nowrap;
-  background: var(--bg-hover);
-  color: var(--text-dim);
-  flex-shrink: 0;
-}
-
-.acc-type.microsoft {
-  background: rgba(63, 140, 255, 0.16);
-  color: #8fb0ff;
-}
-
-.acc-type.littleskin {
-  background: rgba(168, 85, 247, 0.16);
-  color: #c084fc;
-}
-
-.acc-type.authlib {
-  background: rgba(245, 158, 11, 0.16);
-  color: var(--yellow);
-}
-
-.acc-type.nide8 {
-  background: rgba(6, 182, 212, 0.16);
-  color: #22d3ee;
-}
-
-/* 列表 */
-.acc-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.acc-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  cursor: default;
-}
-
-.row-avatar {
-  width: 40px;
-  height: 40px;
-  border-radius: 6px;
-  image-rendering: pixelated;
-  flex-shrink: 0;
-}
-
-.row-meta {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.row-name {
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.row-sub {
-  font-size: 11.5px;
-  color: var(--text-dim);
-  font-family: "Cascadia Code", Consolas, monospace;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.token-tag {
-  font-size: 11px;
-  padding: 2px 9px;
-  border-radius: 20px;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-.token-tag.valid {
-  background: rgba(62, 207, 142, 0.14);
-  color: var(--green);
-}
-
-.token-tag.expired {
-  background: rgba(255, 95, 86, 0.14);
-  color: var(--red);
-}
-
-/* 详情：全账户表格，操作按钮在左侧 */
-.acc-detail {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.detail-table.wide {
-  border-collapse: collapse;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  overflow: hidden;
-  width: 100%;
-}
-
-.detail-table th,
-.detail-table td {
-  padding: 10px 14px;
-  font-size: 12.5px;
-  border-bottom: 1px solid var(--border);
-  text-align: left;
-  white-space: nowrap;
-}
-
-.detail-table thead th {
-  color: var(--text-dim);
-  font-weight: 600;
-  background: var(--bg-side);
-}
-
-.detail-table tbody tr:last-child th,
-.detail-table tbody tr:last-child td {
-  border-bottom: none;
-}
-
-.col-actions {
-  width: 108px;
-}
-
 .oauth-code {
   font-size: 18px;
   font-weight: 800;
@@ -720,10 +398,6 @@ function tokenLabel(acc: Account): string {
   word-break: break-all;
 }
 
-.cell-name {
-  font-weight: 700;
-}
-
 .hint {
   font-size: 12px;
   color: var(--text-dim);
@@ -732,45 +406,5 @@ function tokenLabel(acc: Account): string {
 
 .mono {
   font-family: "Cascadia Code", Consolas, monospace;
-}
-
-.delete-tip {
-  font-size: 13.5px;
-  color: var(--text);
-  line-height: 1.7;
-  margin: 6px 0 2px;
-}
-
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  margin-top: 18px;
-}
-
-.toast {
-  position: fixed;
-  bottom: 34px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: var(--bg-card);
-  border: 1px solid var(--accent-border);
-  color: var(--text);
-  font-size: 13px;
-  padding: 11px 22px;
-  border-radius: 10px;
-  box-shadow: var(--shadow-lg);
-  z-index: 500;
-}
-
-.toast-enter-active,
-.toast-leave-active {
-  transition: opacity 0.2s, transform 0.2s;
-}
-
-.toast-enter-from,
-.toast-leave-to {
-  opacity: 0;
-  transform: translateX(-50%) translateY(8px);
 }
 </style>

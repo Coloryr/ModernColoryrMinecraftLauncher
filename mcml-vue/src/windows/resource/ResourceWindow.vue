@@ -5,6 +5,7 @@ import { computed, onMounted, ref } from "vue";
 import WindowFrame from "../../components/ui/WindowFrame.vue";
 import SegmentedTabs from "../../components/ui/SegmentedTabs.vue";
 import { t } from "../../lib/i18n";
+import { showToast } from "../../lib/toast";
 import { api } from "../../lib/api";
 import type { InstanceInfo } from "../../lib/types";
 
@@ -49,17 +50,6 @@ const currentItems = computed(() => {
   }
   return MOCK_ITEMS[category.value] ?? [];
 });
-
-const toast = ref("");
-let toastTimer: number | undefined;
-
-function showToast(msg: string) {
-  toast.value = msg;
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => {
-    toast.value = "";
-  }, 2000);
-}
 
 function act(name: string) {
   showToast(t("actions.wip", { name }));
@@ -123,10 +113,6 @@ onMounted(async () => {
         </div>
       </section>
     </div>
-
-    <Transition name="toast">
-      <div v-if="toast" class="toast">{{ toast }}</div>
-    </Transition>
   </WindowFrame>
 </template>
 
@@ -268,31 +254,5 @@ onMounted(async () => {
 .mini-btn.danger:hover {
   color: var(--red);
   border-color: var(--red);
-}
-
-.toast {
-  position: fixed;
-  bottom: 34px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: var(--bg-card);
-  border: 1px solid var(--accent-border);
-  color: var(--text);
-  font-size: 13px;
-  padding: 11px 22px;
-  border-radius: 10px;
-  box-shadow: var(--shadow-lg);
-  z-index: 500;
-}
-
-.toast-enter-active,
-.toast-leave-active {
-  transition: opacity 0.2s, transform 0.2s;
-}
-
-.toast-enter-from,
-.toast-leave-to {
-  opacity: 0;
-  transform: translateX(-50%) translateY(8px);
 }
 </style>

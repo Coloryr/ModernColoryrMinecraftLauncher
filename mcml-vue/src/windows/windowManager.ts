@@ -9,6 +9,7 @@
 import { ref } from "vue";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { saveGuiConfig } from "../lib/guiConfig";
 import { isWindowKind, type WindowKind, WINDOW_REGISTRY } from "./registry";
 
 const MODE_KEY = "mcml.windowMode";
@@ -20,6 +21,7 @@ export const multiWindow = ref(localStorage.getItem(MODE_KEY) !== "single");
 export function setMultiWindow(v: boolean) {
   multiWindow.value = v;
   localStorage.setItem(MODE_KEY, v ? "multi" : "single");
+  saveGuiConfig({ windowMode: v ? "multi" : "single" });
 }
 
 /** 是否运行在 Tauri 环境 */
