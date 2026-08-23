@@ -9,6 +9,7 @@
     "core:window:allow-get-all-windows",
     "core:window:allow-set-focus",
     "core:webview:allow-create-webview-window",
-    "opener:default"
+    "opener:default",
+    "dialog:default"
   ]
 }

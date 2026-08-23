@@ -21,6 +21,8 @@ export interface InstanceInfo {
   lang?: string;
   /** 日志编码：utf8 / gbk */
   logEncoding?: string;
+  /** 来源：导入的压缩包 / 文件夹 / 在线网址 */
+  source?: string;
 }
 
 export interface JavaInfo {

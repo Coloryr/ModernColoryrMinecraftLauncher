@@ -28,6 +28,8 @@ pub const DEFAULT_DIR: &str = "default";
 pub const OPEN_LOADER_DIR: &str = "openloader";
 pub const DATA_DIR: &str = "data";
 pub const NATIVE_DIR: &str = "native";
+pub const MCML_DIR: &str = "mcml";
+pub const MCML_INNER_DIR: &str = ".mcml";
 
 pub const LOG_FILE: &str = "logs.log";
 pub const LANG_FILE: &str = "lang.txt";
@@ -69,6 +71,7 @@ pub const FABRIC_MOD_FILE: &str = "fabric.mod.json";
 pub const QUILT_MOD_FILE: &str = "quilt.mod.json";
 pub const SAVE_BACKUP_FILE: &str = "save_backups.json";
 pub const COUNT_DATA_FILE: &str = "count.dat";
+pub const WINDOW_SAVE_FILE: &str = "window_save.json";
 
 pub const MINECRAFT_KEY: &str = "minecraft";
 pub const LANG_KEY1: &str = "minecraft/lang/";

@@ -73,11 +73,4 @@ const emit = defineEmits<{ (e: "close"): void }>();
   background: var(--bg-hover);
   color: var(--text);
 }
-
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  margin-top: 18px;
-}
 </style>

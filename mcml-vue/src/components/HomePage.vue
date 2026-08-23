@@ -1,7 +1,8 @@
 <script setup lang="ts">
 // 启动器主页：上次启动实例 / 联机大厅 / 每日抽奖 入口 + Minecraft 新闻
-import { ref } from "vue";
+// empty=true 时（无任何实例）顶部展示空实例引导块（含添加实例按钮）
 import { t } from "../lib/i18n";
+import { showToast } from "../lib/toast";
 import type { InstanceInfo, NewsItem } from "../lib/types";
 import NewsPanel from "./NewsPanel.vue";
 import InstanceIcon from "./InstanceIcon.vue";
@@ -9,23 +10,16 @@ import InstanceIcon from "./InstanceIcon.vue";
 defineProps<{
   items: NewsItem[];
   lastInstance: InstanceInfo | null;
+  empty?: boolean;
 }>();
 
 const emit = defineEmits<{
   (e: "select", inst: InstanceInfo): void;
   (e: "quick-launch"): void;
+  (e: "add-instance"): void;
+  (e: "add-account"): void;
+  (e: "add-java"): void;
 }>();
-
-const toast = ref("");
-let toastTimer: number | undefined;
-
-function showToast(msg: string) {
-  toast.value = msg;
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => {
-    toast.value = "";
-  }, 2000);
-}
 
 function entry(name: string) {
   showToast(t("actions.wip", { name }));
@@ -34,8 +28,33 @@ function entry(name: string) {
 
 <template>
   <div class="home-page">
+    <!-- 无实例：空实例引导块（融合空状态设计） -->
+    <div v-if="empty" class="empty-block">
+      <div class="empty-block-icon">
+        <svg viewBox="0 0 24 24" width="44" height="44" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 3 4.5 7.5v9L12 21l7.5-4.5v-9L12 3z" />
+          <path d="M4.5 7.5 12 12l7.5-4.5" />
+          <path d="M12 12v9" />
+        </svg>
+        <span class="empty-block-badge">＋</span>
+      </div>
+      <h2 class="empty-block-title">{{ t("empty.title") }}</h2>
+      <p class="empty-block-desc">{{ t("empty.desc") }}</p>
+      <div class="empty-block-actions">
+        <button class="empty-block-btn primary" @click="emit('add-instance')">
+          ＋ {{ t("list.add") }}
+        </button>
+        <button class="empty-block-btn" @click="emit('add-account')">
+          {{ t("empty.addAccount") }}
+        </button>
+        <button class="empty-block-btn" @click="emit('add-java')">
+          {{ t("empty.setJava") }}
+        </button>
+      </div>
+    </div>
+
     <!-- 上次启动实例（常驻显示） -->
-    <div class="last-card" :class="{ empty: !lastInstance }">
+    <div v-else class="last-card" :class="{ empty: !lastInstance }">
       <InstanceIcon v-if="lastInstance" :name="lastInstance.name" :uuid="lastInstance.uuid" :size="52" />
       <span v-else class="last-icon-placeholder">▶</span>
       <div class="last-info">
@@ -93,10 +112,6 @@ function entry(name: string) {
     </div>
 
     <NewsPanel :items="items" />
-
-    <Transition name="toast">
-      <div v-if="toast" class="toast">{{ toast }}</div>
-    </Transition>
   </div>
 </template>
 
@@ -105,6 +120,100 @@ function entry(name: string) {
   display: flex;
   flex-direction: column;
   gap: 18px;
+}
+
+/* 空实例引导块 */
+.empty-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 26px 20px 22px;
+  border: 1px dashed var(--accent-border);
+  border-radius: 16px;
+  background: var(--bg-card);
+}
+
+.empty-block-icon {
+  position: relative;
+  width: 96px;
+  height: 96px;
+  border-radius: 28px;
+  background: var(--accent-grad);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  box-shadow: 0 14px 36px var(--accent-soft);
+  margin-bottom: 14px;
+}
+
+.empty-block-badge {
+  position: absolute;
+  right: -8px;
+  top: -8px;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--bg-card);
+  border: 2px solid var(--accent);
+  color: var(--accent);
+  font-size: 17px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.empty-block-title {
+  font-size: 19px;
+  font-weight: 700;
+}
+
+.empty-block-desc {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-bottom: 10px;
+  text-align: center;
+}
+
+.empty-block-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.empty-block-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 20px;
+  border: 1px solid var(--accent-border);
+  border-radius: 10px;
+  background: var(--bg-card);
+  color: var(--accent);
+  font-size: 13.5px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.empty-block-btn:hover {
+  background: var(--accent-soft);
+}
+
+.empty-block-btn.primary {
+  border: none;
+  background: var(--accent);
+  color: #fff;
+}
+
+.empty-block-btn.primary:hover {
+  filter: brightness(1.12);
+  background: var(--accent);
 }
 
 /* 上次启动实例 */
@@ -283,31 +392,5 @@ function entry(name: string) {
 
 .entry-card:hover .entry-arrow {
   color: var(--accent);
-}
-
-.toast {
-  position: fixed;
-  bottom: 34px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: var(--bg-card);
-  border: 1px solid var(--accent-border);
-  color: var(--text);
-  font-size: 13px;
-  padding: 11px 22px;
-  border-radius: 10px;
-  box-shadow: var(--shadow-lg);
-  z-index: 500;
-}
-
-.toast-enter-active,
-.toast-leave-active {
-  transition: opacity 0.2s, transform 0.2s;
-}
-
-.toast-enter-from,
-.toast-leave-to {
-  opacity: 0;
-  transform: translateX(-50%) translateY(8px);
 }
 </style>

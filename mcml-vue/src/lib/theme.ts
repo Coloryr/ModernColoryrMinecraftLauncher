@@ -1,5 +1,6 @@
-// 主题管理：暗色 / 亮色 + 强调色预设
+// 主题管理：暗色 / 亮色 + 强调色预设（状态持久化到 gui_config.json）
 import { ref } from "vue";
+import { saveGuiConfig } from "./guiConfig";
 
 export type Theme = "dark" | "light";
 
@@ -61,6 +62,7 @@ export function toggleTheme() {
   theme.value = theme.value === "dark" ? "light" : "dark";
   localStorage.setItem(THEME_KEY, theme.value);
   applyTheme();
+  saveGuiConfig({ theme: theme.value });
 }
 
 export function setAccent(a: AccentId) {

@@ -2,22 +2,11 @@
 #[derive(Debug)]
 pub struct CoreInitObj {
     /// 运行路径
-    pub local: PathBuf,
+    pub path: PathBuf,
     /// 微软登录密钥
     pub oauth_key: String,
     /// CF平台密钥
     pub curseforge_key: String,
-}
-
-impl CoreInitObj {
-    /// 创建核心初始化参数
-    pub fn new(local: PathBuf, oauth_key: String, curseforge_key: String) -> Self {
-        CoreInitObj {
-            local,
-            oauth_key,
-            curseforge_key,
-        }
-    }
 }
 
 use std::{
@@ -65,11 +54,11 @@ pub fn get_state() -> bool {
 /// 初始化核心
 /// arg 核心参数
 pub fn init(arg: CoreInitObj) {
-    if arg.local.as_os_str().is_empty() {
+    if arg.path.as_os_str().is_empty() {
         panic!("{}", i18::get_panic(PanicType::CoreArgLocalEmpty));
     }
-    if !arg.local.exists() {
-        let res = fs::DirBuilder::new().recursive(true).create(&arg.local);
+    if !arg.path.exists() {
+        let res = fs::DirBuilder::new().recursive(true).create(&arg.path);
         if let Err(err) = res {
             panic!(
                 "{}",
@@ -80,7 +69,7 @@ pub fn init(arg: CoreInitObj) {
 
     let arg = CORE_ARG.get_or_init(|| arg);
 
-    let dir = BASE_DIR.get_or_init(|| arg.local.to_path_buf());
+    let dir = BASE_DIR.get_or_init(|| arg.path.to_path_buf());
 
     oauth::set_key(&arg.oauth_key);
     curseforge_api::set_key(&arg.curseforge_key);

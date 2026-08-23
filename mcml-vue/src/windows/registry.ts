@@ -9,7 +9,8 @@ export type WindowKind =
   | "skin"
   | "help"
   | "resource"
-  | "account";
+  | "account"
+  | "add";
 
 export interface WindowInfo {
   kind: WindowKind;
@@ -27,6 +28,7 @@ export const WINDOW_REGISTRY: WindowInfo[] = [
   { kind: "help", title: "帮助手册", width: 760, height: 600 },
   { kind: "resource", title: "资源管理", width: 900, height: 640 },
   { kind: "account", title: "账户管理", width: 920, height: 640 },
+  { kind: "add", title: "添加实例", width: 900, height: 660 },
 ];
 
 export function isWindowKind(v: string | null): v is WindowKind {
