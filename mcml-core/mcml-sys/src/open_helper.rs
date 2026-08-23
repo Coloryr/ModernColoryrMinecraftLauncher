@@ -1,16 +1,163 @@
 use std::path::Path;
+use std::process::Command;
 
 /// 在浏览器打开网址
+#[inline(always)]
 pub fn open_url(url: &str) {
-    webbrowser::open(url).unwrap();
+    open_url_inner(url);
+}
+
+#[cfg(target_os = "windows")]
+fn open_url_inner(url: &str) {
+    Command::new("cmd")
+        .args(&["/C", "start", "", url])
+        .spawn()
+        .unwrap();
+}
+
+#[cfg(target_os = "linux")]
+fn open_url_inner(url: &str) {
+    Command::new("xdg-open").arg(url).spawn().unwrap();
+}
+
+#[cfg(target_os = "macos")]
+fn open_url_inner(url: &str) {
+    Command::new("open").arg(url).spawn().unwrap();
 }
 
 /// 在资源管理器打开文件
+#[inline(always)]
 pub fn open_file_with_explorer<P: AsRef<Path>>(path: P) {
-    opener::reveal(path.as_ref()).unwrap();
+    open_file_with_explorer_inner(path);
+}
+
+#[cfg(target_os = "windows")]
+fn open_file_with_explorer_inner<P: AsRef<Path>>(path: P) {
+    unsafe {
+        use windows::{
+            Win32::{
+                System::Com::{CoInitialize, CoUninitialize},
+                UI::Shell::{ILCreateFromPathW, ILFree, SHOpenFolderAndSelectItems},
+            },
+            core::{HSTRING, PCWSTR},
+        };
+
+        CoInitialize(None).unwrap();
+
+        let hstring = HSTRING::from(path.as_ref().as_os_str());
+        let pcwstr = PCWSTR(hstring.as_ptr());
+
+        let folder_pidl = ILCreateFromPathW(pcwstr);
+
+        SHOpenFolderAndSelectItems(folder_pidl, None, 0).unwrap();
+
+        ILFree(Some(folder_pidl));
+
+        CoUninitialize();
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn open_file_with_explorer_inner<P: AsRef<Path>>(path: P) {
+    Command::new("open")
+        .args(&["-R", path.as_ref().as_os_str()])
+        .spawn()
+        .unwrap();
 }
 
 /// 以系统默认方式打开文件
+#[inline(always)]
 pub fn open_file<P: AsRef<Path>>(path: P) {
-    opener::open(path.as_ref()).unwrap();
+    open_url_inner(&path.as_ref().to_string_lossy());
+}
+
+/// 在文件管理器中打开并选中指定的文件或文件夹（Linux 实现）
+///
+/// 模仿 opener::reveal 的行为：
+/// - 优先通过 D-Bus 调用 FileManager1.ShowItems 实现精确选中。
+/// - 若不可用，尝试 OpenURI 接口（通常只打开文件夹）。
+/// - 最后回退到 `xdg-open` 打开父目录（不会选中目标）。
+#[cfg(target_os = "linux")]
+fn open_file_with_explorer_inner<P: AsRef<Path>>(path: P) {
+    let abs_path = Path::new(path.as_ref()).canonicalize()?;
+    let abs_path_str = abs_path.to_str().ok_or("路径包含非 UTF-8 字符")?;
+
+    if let Ok(_) = try_dbus_filemanager1(abs_path_str) {
+        return;
+    }
+
+    if let Ok(_) = try_dbus_openuri(abs_path_str) {
+        return;
+    }
+
+    let parent = abs_path.parent().unwrap_or(Path::new("/"));
+    Command::new("xdg-open")
+        .arg(parent)
+        .spawn()
+        .map_err(|e| format!("无法打开父文件夹: {}", e))
+        .unwrap();
+}
+
+/// 通过 `org.freedesktop.FileManager1` 接口显示并选中
+#[cfg(target_os = "linux")]
+fn try_dbus_filemanager1(path: &str) -> Result<(), Box<dyn std::error::Error>> {
+    use dbus::{BusType, Connection, Message, Path as DbusPath};
+    use std::path::Path;
+    use std::process::Command;
+    use url::Url;
+
+    let uri = url_to_file_uri(path)?;
+    let conn = Connection::get_private(BusType::Session)?;
+    let proxy = conn.with_proxy(
+        "org.freedesktop.FileManager1",
+        "/org/freedesktop/FileManager1",
+        std::time::Duration::from_millis(5000),
+    );
+
+    // 构造参数：字符串数组 (要选中的 URI 列表) + 启动目录 (空字符串)
+    let items: Vec<&str> = vec![&uri];
+    let startup_dir = "";
+    let (): () = proxy.method_call(
+        "org.freedesktop.FileManager1",
+        "ShowItems",
+        (items, startup_dir),
+    )?;
+    Ok(())
+}
+
+/// 通过 `org.freedesktop.portal.OpenURI` 接口打开（可能不选中）
+#[cfg(target_os = "linux")]
+fn try_dbus_openuri(path: &str) -> Result<(), Box<dyn std::error::Error>> {
+    use dbus::{BusType, Connection, Message, Path as DbusPath};
+    use std::path::Path;
+    use std::process::Command;
+    use url::Url;
+
+    let uri = url_to_file_uri(path)?;
+    let conn = Connection::get_private(BusType::Session)?;
+    let proxy = conn.with_proxy(
+        "org.freedesktop.portal.OpenURI",
+        "/org/freedesktop/portal/desktop",
+        std::time::Duration::from_millis(5000),
+    );
+
+    // 参数：父窗口句柄 (0)，URI，选项 (空字典)
+    let parent_window = "";
+    let options: std::collections::HashMap<&str, &str> = std::collections::HashMap::new();
+    let (): () = proxy.method_call(
+        "org.freedesktop.portal.OpenURI",
+        "OpenURI",
+        (parent_window, uri, options),
+    )?;
+    Ok(())
+}
+
+/// 将本地路径转换为 file:// URI（使用 url crate 自动处理特殊字符）
+#[cfg(target_os = "linux")]
+fn url_to_file_uri(path: &str) -> Result<String, Box<dyn std::error::Error>> {
+    use url::Url;
+
+    let abs = Path::new(path).canonicalize()?;
+    let url = Url::from_file_path(&abs).map_err(|_| "无法将路径转换为 URL")?;
+    Ok(url.to_string())
 }

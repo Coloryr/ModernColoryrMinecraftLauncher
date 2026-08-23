@@ -45,8 +45,10 @@ use tokio::sync::Mutex;
 
 pub mod adoptium_api;
 pub mod authlib_api;
+pub mod openfrp_api;
 pub mod coloryr_api;
 pub mod curseforge_api;
+pub mod sakurafrp_api;
 pub mod fabric_api;
 pub mod input_file;
 pub mod liteloader_api;

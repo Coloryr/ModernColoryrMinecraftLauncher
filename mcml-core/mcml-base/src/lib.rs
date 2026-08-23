@@ -32,8 +32,8 @@ pub mod file_item;
 pub mod hash_helper;
 pub mod inner_path;
 pub mod serialize_tools;
-pub mod version_parse;
 pub mod tools;
+pub mod version_parse;
 
 use std::{
     path::{Path, PathBuf},
