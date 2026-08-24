@@ -38,8 +38,7 @@ use std::{
 use mcml_base::serialize_tools;
 use mcml_log;
 use mcml_names::{
-    i18_items::error_type::{ErrorType, FileSystemErrorData},
-    names, uuids,
+    i18_items::error_type::{CoreResult, ErrorType, FileSystemErrorData}, names, uuids,
 };
 
 use crate::config_obj::ConfigObj;
@@ -62,9 +61,8 @@ static FILE: OnceLock<PathBuf> = OnceLock::new();
 ///
 /// `true` — 首次创建配置（文件原先不存在）
 /// `false` — 从已有文件加载配置
-pub fn init<P: AsRef<Path>>(dir: P) -> bool {
+pub fn init<P: AsRef<Path>>(dir: P) -> CoreResult<()> {
     FILE.get_or_init(|| dir.as_ref().join(names::CONFIG_FILE));
-
     load(FILE.get().unwrap())
 }
 
@@ -117,26 +115,17 @@ pub fn save() {
 ///
 /// `true` — 首次创建（文件不存在）
 /// `false` — 从文件加载成功或读取失败
-pub fn load<P: AsRef<Path>>(file: P) -> bool {
+pub fn load<P: AsRef<Path>>(file: P) -> CoreResult<()> {
     let config = CONFIG.get_or_init(|| RwLock::new(Default::default()));
 
     if !file.as_ref().exists() {
         save_now();
-        return true;
+        return Ok(());
     }
 
-    let json = serialize_tools::json_from_file::<ConfigObj>(&file);
+    let json = serialize_tools::json_from_file::<ConfigObj>(&file)?;
 
-    if let Err(err) = json {
-        mcml_log::error_type(ErrorType::ConfigReadError(FileSystemErrorData {
-            error: err.to_string(),
-            path: file.as_ref().to_path_buf(),
-        }));
-
-        return false;
-    }
-
-    let mut config_obj = json.unwrap();
+    let mut config_obj = json;
     let version = mcml_names::VERSION.clone();
     if config_obj.version != version {
         config_obj.version = version;
@@ -146,5 +135,5 @@ pub fn load<P: AsRef<Path>>(file: P) -> bool {
     let mut guard = config.write().unwrap();
     *guard = config_obj;
 
-    false
+    Ok(())
 }

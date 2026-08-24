@@ -13,6 +13,7 @@ use std::{
 
 use crate::{
     i18::{I18Lang, en_us::EnUs, zh_cn::ZhCn},
+    i18_items::error_type::{CoreResult, ErrorType::FileSystemError, FileSystemErrorData},
     names::{LANG_EN_US, LANG_ZH_CN},
 };
 
@@ -31,7 +32,12 @@ pub enum Lang {
 }
 
 /// 加载的语言
-static LANG: OnceLock<RwLock<Lang>> = OnceLock::new();
+static LANG: LazyLock<RwLock<Lang>> = LazyLock::new(|| {
+    let local = get_current_locale();
+    let lang = check_lang(&local);
+    load_lang(lang);
+    RwLock::new(lang)
+});
 /// 语言配置
 static FILE: OnceLock<PathBuf> = OnceLock::new();
 
@@ -76,8 +82,8 @@ fn check_lang(data: &String) -> Lang {
 }
 
 /// 加载语言
-fn load_lang() {
-    let i18: Box<dyn I18Lang + Send + Sync> = match *LANG.get().unwrap().read().unwrap() {
+fn load_lang(lang: Lang) {
+    let i18: Box<dyn I18Lang + Send + Sync> = match lang {
         Lang::zh_cn => Box::new(ZhCn),
         Lang::en_us => Box::new(EnUs),
     };
@@ -86,49 +92,73 @@ fn load_lang() {
 }
 
 /// 从文件加载语言类型
-fn load(file: &PathBuf) {
-    let mut file = File::open(file).unwrap();
+fn load<P: AsRef<Path>>(file: P) -> CoreResult<()> {
+    let mut stream = File::open(file.as_ref()).map_err(|err| {
+        FileSystemError(FileSystemErrorData {
+            path: file.as_ref().to_path_buf(),
+            error: err.to_string(),
+        })
+    })?;
     let mut str = String::new();
-    file.read_to_string(&mut str).unwrap();
-    LANG.get_or_init(|| RwLock::new(check_lang(&str)));
+    stream.read_to_string(&mut str).map_err(|err| {
+        FileSystemError(FileSystemErrorData {
+            path: file.as_ref().to_path_buf(),
+            error: err.to_string(),
+        })
+    })?;
+    let lang = check_lang(&str);
+    *LANG.write().unwrap() = lang;
+    load_lang(lang);
+    
+    Ok(())
 }
 
 /// 保存语言类型
-fn save() {
-    let data = LANG.get().unwrap().read().unwrap();
+fn save() -> CoreResult<()> {
+    let data = LANG.read().unwrap();
     let str = get_lang(*data);
 
-    let mut file = File::create(FILE.get().unwrap()).unwrap();
-    file.write_all(str.as_bytes()).unwrap();
+    let file = FILE.get().unwrap();
+    let mut stream = File::create(file).map_err(|err| {
+        FileSystemError(FileSystemErrorData {
+            path: file.to_path_buf(),
+            error: err.to_string(),
+        })
+    })?;
+    stream.write_all(str.as_bytes()).map_err(|err| {
+        FileSystemError(FileSystemErrorData {
+            path: file.to_path_buf(),
+            error: err.to_string(),
+        })
+    })?;
+
+    Ok(())
 }
 
 /// 获取语言类型
 pub fn get_lang_type() -> Lang {
-    LANG.get().unwrap().read().unwrap().clone()
+    LANG.read().unwrap().clone()
 }
 
 /// 设置语言类型
-pub fn set_lang(lang: Lang) {
-    *LANG.get().unwrap().write().unwrap() = lang;
-    save();
+pub fn set_lang(lang: Lang) -> CoreResult<()> {
+    *LANG.write().unwrap() = lang;
+    save()?;
 
-    load_lang();
+    load_lang(lang);
+
+    Ok(())
 }
 
 /// 初始化语言
-pub fn init<P: AsRef<Path>>(path: P) {
+pub fn init<P: AsRef<Path>>(path: P) -> CoreResult<()> {
+    // 读取文件语言
     let file = path.as_ref().with_file_name(names::LANG_FILE);
     let file = FILE.get_or_init(|| file);
 
     if file.exists() {
-        load(file);
-    } else {
-        let local = get_current_locale();
-
-        LANG.get_or_init(|| RwLock::new(check_lang(&local)));
-
-        save();
+        load(file)?;
     }
 
-    load_lang();
+    Ok(())
 }

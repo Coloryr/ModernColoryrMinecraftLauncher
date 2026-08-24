@@ -6,7 +6,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
 
-use super::create;
+use crate::window_manager::create_window;
 
 /// 账户信息（窗口专属模型）
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -231,5 +231,5 @@ pub const HEIGHT: f64 = 640.0;
 
 /// 打开账户窗口
 pub fn open(app: &AppHandle) -> Result<(), String> {
-    create(app, LABEL, TITLE, WIDTH, HEIGHT)
+    create_window(app, LABEL, TITLE, WIDTH, HEIGHT)
 }

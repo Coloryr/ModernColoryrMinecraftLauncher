@@ -12,19 +12,24 @@ pub struct CoreInitObj {
 use std::{
     fs::{self},
     path::PathBuf,
-    sync::{LazyLock, OnceLock, RwLock},
+    sync::{LazyLock, RwLock},
 };
 
-use mcml_auth::oauth;
+use mcml_auth::{auths, oauth};
 use mcml_base::events::EventHandler;
+use mcml_config::config_save;
 use mcml_log;
-use mcml_names::{i18, i18_items::info_type::InfoType, i18_items::panic_type::PanicType};
+use mcml_names::{
+    i18,
+    i18_items::{
+        error_type::{CoreResult, ErrorType::Panic},
+        info_type::InfoType,
+        panic_type::PanicType,
+    },
+    names,
+};
 use mcml_net::curseforge_api;
 
-/// 基础运行路径
-pub static BASE_DIR: OnceLock<PathBuf> = OnceLock::new();
-/// 核心参数
-pub static CORE_ARG: OnceLock<CoreInitObj> = OnceLock::new();
 /// 是否为第一次启动
 pub static NEW_START: RwLock<bool> = RwLock::new(false);
 
@@ -52,45 +57,47 @@ pub fn get_state() -> bool {
 }
 
 /// 初始化核心
+/// 这一步只设置允许目录，不加载内容
+///
 /// arg 核心参数
-pub fn init(arg: CoreInitObj) {
+pub fn init(arg: CoreInitObj) -> CoreResult<()> {
     if arg.path.as_os_str().is_empty() {
-        panic!("{}", i18::get_panic(PanicType::CoreArgLocalEmpty));
+        return Err(Panic(PanicType::CoreArgLocalEmpty));
     }
     if !arg.path.exists() {
-        let res = fs::DirBuilder::new().recursive(true).create(&arg.path);
-        if let Err(err) = res {
-            panic!(
-                "{}",
-                i18::get_panic(PanicType::CoreArgLocalError(err.to_string()))
-            );
-        }
+        return Err(Panic(PanicType::CoreArgLocalError));
     }
 
-    let arg = CORE_ARG.get_or_init(|| arg);
-
-    let dir = BASE_DIR.get_or_init(|| arg.path.to_path_buf());
+    mcml_base::init(arg.path.to_path_buf());
 
     oauth::set_key(&arg.oauth_key);
     curseforge_api::set_key(&arg.curseforge_key);
 
-    mcml_names::init(dir);
-
-    // 先启动日志，再输出启动信息
-    mcml_log::start(dir);
+    mcml_names::init(mcml_base::get_base_dir())?;
+    mcml_log::start(mcml_base::get_base_dir())?;
     mcml_log::info_type(InfoType::CoreStart);
+    mcml_config::init(mcml_base::get_base_dir())?;
+    mcml_game::init(mcml_base::get_base_dir())?;
 
-    // 配置必须先于下载器/网络初始化（二者启动时都会读取配置）
-    mcml_config::init(dir);
-    mcml_config::config_save::start();
-    mcml_downloader::start();
+    config_save::start();
+
+    Ok(())
+}
+
+/// 加载配置
+pub fn load() -> CoreResult<()> {
     mcml_net::init();
+    auths::init();
 
-    CORE_STOP_EVENT.add_handler(mcml_config::config_save::stop);
+    mcml_game::load()?;
+
+    CORE_STOP_EVENT.add_handler(config_save::stop);
     CORE_STOP_EVENT.add_handler(mcml_downloader::stop);
     CORE_STOP_EVENT.add_handler(mcml_log::stop);
 
     *STATE.write().unwrap() = true;
+
+    Ok(())
 }
 
 pub fn stop() {

@@ -6,7 +6,7 @@ use std::{
     time::Duration,
 };
 
-use mcml_base::{ events::EventArgHandler};
+use mcml_base::events::EventArgHandler;
 use mcml_names::{
     i18_items::error_type::{ArgEmptyData, CoreResult, ErrorType, FileSystemErrorData},
     names,
@@ -21,7 +21,10 @@ use crate::{
     game_log::{GameLog, GameLogItemObj, InstanceRuntimeLog},
     gui_hook::{AddInstanceGui, ProgressGui},
     launcher::{LogEncoding, game_time_obj::GameTimeObj, instance_setting_obj::InstanceSettingObj},
-    launcher_path::instance_path::{self},
+    launcher_path::{
+        instance_path::{self},
+        version_path,
+    },
 };
 
 pub mod add_game;
@@ -50,10 +53,10 @@ pub mod launcher_path;
 pub mod loader;
 pub mod modpack;
 pub mod modrinth;
-pub mod scan_game;
 pub mod mojang;
 pub mod other_launcher;
 pub mod path_watch;
+pub mod scan_game;
 pub mod serverpack;
 
 pub type GameInstance = Arc<RwLock<InstanceSettingObj>>;
@@ -162,7 +165,13 @@ pub(crate) fn invoke_run_log(uuid: Uuid, log: InstanceLogType) {
 /// 初始化
 /// - `dir`: 运行路径
 pub fn init<P: AsRef<Path>>(dir: P) -> CoreResult<()> {
-    launcher_path::init(dir)?;
+    launcher_path::init(dir)
+}
+
+/// 开始加载数据
+pub fn load() -> CoreResult<()> {
+    version_path::load();
+
     path_watch::init_watch()?;
 
     thread::spawn(|| {
@@ -198,11 +207,6 @@ pub fn init<P: AsRef<Path>>(dir: P) -> CoreResult<()> {
         }
     });
 
-    Ok(())
-}
-
-/// 开始加载数据
-pub fn load() -> CoreResult<()> {
     let installs = instance_path::load_instance_dir()?;
 
     for item in installs {

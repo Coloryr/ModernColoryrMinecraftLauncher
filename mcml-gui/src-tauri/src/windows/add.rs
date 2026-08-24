@@ -2,7 +2,7 @@
 use serde::Serialize;
 use tauri::AppHandle;
 
-use super::create;
+use crate::window_manager::create_window;
 
 /// 目录项（list_dir 返回）
 #[derive(Serialize)]
@@ -38,5 +38,5 @@ pub const HEIGHT: f64 = 660.0;
 
 /// 打开添加实例窗口
 pub fn open(app: &AppHandle) -> Result<(), String> {
-    create(app, LABEL, TITLE, WIDTH, HEIGHT)
+    create_window(app, LABEL, TITLE, WIDTH, HEIGHT)
 }

@@ -4,6 +4,7 @@
 use std::path::PathBuf;
 
 use mcml_core::CoreInitObj;
+use mcml_gui_lib::{err_box, gui_config, window_manager};
 use mcml_names::names;
 use mcml_sys::path_helper;
 
@@ -18,6 +19,14 @@ fn main() {
     let temp = path.join("test");
     let res = path_helper::write_text(temp, "test write");
     obj.path = if res.is_err() { get_save_path() } else { path };
+
+    // 窗口状态 / GUI 配置与核心共用同一运行路径
+    window_manager::init(obj.path.clone());
+    gui_config::init(obj.path.clone());
+
+    if let Err(e) = mcml_core::init(obj) {
+        err_box::fatal_error(e);
+    }
 
     mcml_gui_lib::run()
 }

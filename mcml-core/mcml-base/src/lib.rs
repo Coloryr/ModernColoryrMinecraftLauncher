@@ -22,7 +22,6 @@
 //! | [`hash_helper`] | 哈希和 Base64 |
 //! | [`archives`] | 压缩包处理 |
 //! | [`events`] | 事件发布订阅 |
-//! | [`process_utils`] | 进程管理 |
 //! | [`inner_path`] | 内部数据存储路径 |
 //! | [`file_item`] | 文件下载项定义 |
 

@@ -1,5 +1,5 @@
-// GUI 状态（由 Rust 提供）：gui_config.json（界面状态）+ windows.json（窗口几何）
-// 主窗口使用固定 uuid，与 Rust windows/state.rs 一致。
+// GUI 状态（由 Rust 提供）：gui_config.json（界面状态）+ window_save.json（窗口几何）
+// 主窗口使用固定 uuid，与 Rust window_manager.rs 一致。
 import { invoke } from "@tauri-apps/api/core";
 
 export interface GuiConfig {
@@ -24,8 +24,8 @@ export interface WindowState {
   height: number;
 }
 
-/** 主窗口固定 uuid（与 Rust 一致） */
-export const MAIN_WINDOW_UUID = "8f6b1c2e-3d4a-4e5b-9c6d-7e8f9a0b1c2d";
+/** 主窗口固定 uuid（与 Rust window_manager.rs 一致） */
+export const MAIN_WINDOW_UUID = "00000000-0000-0000-0000-000000000001";
 
 /** 读取 GUI 状态；非 Tauri 环境返回 null（浏览器回退 localStorage） */
 export async function loadGuiConfig(): Promise<GuiConfig | null> {

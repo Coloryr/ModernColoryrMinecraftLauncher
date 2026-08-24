@@ -102,10 +102,13 @@ pub(crate) fn init<P: AsRef<Path>>(dir: P) -> CoreResult<()> {
         path_helper::create_dir_all(neoforge)?;
     }
 
+    Ok(())
+}
+
+/// 开始读取文件加载
+pub(crate) fn load() {
     load_optifine();
     load_liteloader();
-
-    Ok(())
 }
 
 /// 获取目录

@@ -1,14 +1,16 @@
 // 窗口管理器：负责窗口打开 / 关闭、单窗口 / 多窗口模式切换
 //
 // 多窗口模式：
-// - Tauri 环境：用官方 JS API new WebviewWindow() 创建真实窗口
-//   （避免从 Rust 同步命令创建——Windows 上会阻塞主线程导致应用冻结）
+// - Tauri 环境：统一调用 Rust 窗口管理器（window_manager.rs）的
+//   open_window / close_window 命令创建 / 关闭真实窗口（创建/关闭逻辑都在 Rust 侧）；
+//   命令失败时回退到官方 JS API new WebviewWindow()，再失败回退应用内切换。
 // - 浏览器环境：用新标签页模拟独立窗口
 // 单窗口模式：应用内页面切换（history 同步，可返回）
 
 import { ref } from "vue";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
+import { invoke } from "@tauri-apps/api/core";
 import { saveGuiConfig } from "../lib/guiConfig";
 import { isWindowKind, type WindowKind, WINDOW_REGISTRY } from "./registry";
 
@@ -71,35 +73,17 @@ export function openWindow(kind: WindowKind) {
   });
 
   if (isTauri()) {
-    // Tauri 环境始终创建真实 WebviewWindow（多窗口）
-    // 注意：从 Rust 命令里同步创建窗口在 Windows 上可能阻塞主线程，
-    // 导致新窗口白屏、整个应用卡死。这里改用官方 JS API new WebviewWindow() 创建（标准路径）。
-    const label = `mcml-${kind}`;
-    WebviewWindow.getByLabel(label).then((existing) => {
-      if (existing) {
-        // 窗口已存在则聚焦
-        existing.setFocus();
-        return;
-      }
-      const info = WINDOW_REGISTRY.find((w) => w.kind === kind);
-      const win = new WebviewWindow(label, {
-        url: "index.html",
-        title: info?.title ?? kind,
-        width: info?.width ?? 1100,
-        height: info?.height ?? 720,
-        resizable: true,
-      });
-      win.once("tauri://created", () => {
-        console.log("[windowManager] 已创建窗口", label);
-      });
-      win.once("tauri://error", (e) => {
-        console.error("[windowManager] 创建窗口失败，回退到应用内切换", label, e);
-        // 失败时回退：应用内切换，保证功能可用
-        currentKind.value = kind;
-        window.history.pushState({}, "", urlFor(kind));
-      });
+    // 统一走 Rust 窗口管理器：创建 / 聚焦在 window_manager.rs 处理。
+    // open_window 是 async 命令（不在 Windows 主线程创建窗口，避免冻结）。
+    // 命令失败（例如窗口创建被拒）时回退到官方 JS API。
+    invoke("open_window", { kind }).catch((e) => {
+      console.error("[windowManager] Rust 打开窗口失败，回退 JS API", kind, e);
+      createViaJs(kind);
     });
-  } else if (multiWindow.value) {
+    return;
+  }
+
+  if (multiWindow.value) {
     // 浏览器：新标签页模拟
     window.open(urlFor(kind), kind, "noopener");
   } else {
@@ -108,11 +92,45 @@ export function openWindow(kind: WindowKind) {
   }
 }
 
+/** 回退路径：用官方 JS API 创建 / 聚焦真实 WebviewWindow */
+function createViaJs(kind: WindowKind) {
+  const label = `mcml-${kind}`;
+  WebviewWindow.getByLabel(label).then((existing) => {
+    if (existing) {
+      // 窗口已存在则聚焦
+      existing.setFocus();
+      return;
+    }
+    const info = WINDOW_REGISTRY.find((w) => w.kind === kind);
+    const win = new WebviewWindow(label, {
+      url: "index.html",
+      title: info?.title ?? kind,
+      width: info?.width ?? 1100,
+      height: info?.height ?? 720,
+      resizable: true,
+    });
+    win.once("tauri://created", () => {
+      console.log("[windowManager] 已创建窗口（JS 回退）", label);
+    });
+    win.once("tauri://error", (e) => {
+      console.error("[windowManager] 创建窗口失败，回退到应用内切换", label, e);
+      // 失败时回退：应用内切换，保证功能可用
+      currentKind.value = kind;
+      window.history.pushState({}, "", urlFor(kind));
+    });
+  });
+}
+
 /** 关闭当前窗口（单窗口模式的返回按钮触发：切回主页面） */
 export function closeWindow() {
   if (isTauri()) {
-    // Tauri：关闭当前 WebviewWindow（多窗口模式子窗口用系统原生按钮关闭）
-    getCurrentWindow().close();
+    // 统一走 Rust 窗口管理器关闭当前窗口（kind → 标签映射在 window_manager.rs）。
+    // 命令失败时回退到官方 JS API 关闭当前窗口。
+    const kind = currentKind.value;
+    invoke("close_window", { kind }).catch((e) => {
+      console.error("[windowManager] Rust 关闭窗口失败，回退 JS API", kind, e);
+      getCurrentWindow().close();
+    });
   } else if (multiWindow.value) {
     // 浏览器多窗口：由脚本打开的标签页允许 window.close()
     window.close();

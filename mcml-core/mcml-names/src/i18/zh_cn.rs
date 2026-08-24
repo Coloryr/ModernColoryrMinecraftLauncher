@@ -57,7 +57,7 @@ impl I18Lang for ZhCn {
     fn get_panic(&self, panic: &PanicType) -> String {
         match panic {
             PanicType::CoreArgLocalEmpty => String::from("运行路径为空"),
-            PanicType::CoreArgLocalError(data) => format!("运行路径无法创建：{}", data),
+            PanicType::CoreArgLocalError => String::from("运行路径不存在"),
             PanicType::LogOpenFail(data, data1) => {
                 format!("日志系统初始化失败：{} 路径：{}", data1, data)
             }
