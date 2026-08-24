@@ -11,6 +11,7 @@ mcml-downloader = { path = "mcml-downloader" }
 mcml-auth = { path = "mcml-auth" }
 mcml-base = { path = "mcml-base" }
 mcml-net = { path = "mcml-net" }
+mcml-game = { path = "mcml-game" }
 crossbeam-queue.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true

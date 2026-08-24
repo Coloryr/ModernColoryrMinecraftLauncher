@@ -1,6 +1,6 @@
 #[derive(Clone, Debug)]
 pub enum PanicType {
     CoreArgLocalEmpty,
-    CoreArgLocalError(String),
+    CoreArgLocalError,
     LogOpenFail(String, String)
 }

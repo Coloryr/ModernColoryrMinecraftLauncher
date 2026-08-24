@@ -29,7 +29,10 @@ use crossbeam_queue::SegQueue;
 use mcml_names::{
     i18,
     i18_items::{
-        error_type::ErrorType, info_type::InfoType, panic_type::PanicType, thread_type::ThreadType,
+        error_type::{CoreResult, ErrorType},
+        info_type::InfoType,
+        panic_type::PanicType,
+        thread_type::ThreadType,
     },
     names,
 };
@@ -40,7 +43,7 @@ use std::{
     io::{BufWriter, Write},
     path::Path,
     sync::{
-        Arc, Mutex, OnceLock, RwLock,
+        Arc, OnceLock, RwLock,
         atomic::{AtomicBool, Ordering},
     },
     thread::{self},
@@ -51,7 +54,7 @@ use crate::log_item::{LogItem, LogLevel};
 /// 日志写入队列（无锁分段队列，支持高并发推送）
 static QUEUE: RwLock<SegQueue<LogItem>> = RwLock::new(SegQueue::new());
 /// 日志文件写入流（带缓冲）
-static STREAM: OnceLock<Mutex<BufWriter<File>>> = OnceLock::new();
+static STREAM: OnceLock<BufWriter<File>> = OnceLock::new();
 /// 日志线程运行标志
 static IS_RUN: AtomicBool = AtomicBool::new(true);
 /// 唤醒日志线程的信号量
@@ -65,27 +68,24 @@ static SEM: OnceLock<Arc<Semaphore>> = OnceLock::new();
 /// # 参数
 ///
 /// - `local`: 日志文件存储目录
-pub fn start<P: AsRef<Path>>(local: P) {
+pub fn start<P: AsRef<Path>>(local: P) -> CoreResult<()> {
     SEM.get_or_init(|| Arc::new(Semaphore::new(0)));
 
     let log_path = local.as_ref().join(names::LOG_FILE);
 
-    let file = match OpenOptions::new()
+    let file = OpenOptions::new()
         .create(true)
         .append(true)
         .write(true)
         .open(&log_path)
-    {
-        Ok(f) => f,
-        Err(e) => {
-            panic!(
-                "{}",
-                PanicType::LogOpenFail(log_path.display().to_string(), e.to_string())
-            );
-        }
-    };
+        .map_err(|err| {
+            ErrorType::Panic(PanicType::LogOpenFail(
+                log_path.display().to_string(),
+                err.to_string(),
+            ))
+        })?;
 
-    STREAM.set(Mutex::new(BufWriter::new(file))).unwrap();
+    STREAM.set(BufWriter::new(file)).unwrap();
 
     thread::Builder::new()
         .name(i18::get_thread(ThreadType::LogThread))
@@ -98,6 +98,8 @@ pub fn start<P: AsRef<Path>>(local: P) {
             save();
         })
         .unwrap();
+
+    Ok(())
 }
 
 /// 停止日志系统
@@ -110,7 +112,7 @@ pub fn stop() {
 /// 将队列中的所有日志写入文件
 fn save() {
     let log = QUEUE.read().unwrap();
-    let mut file = STREAM.get().unwrap().lock().unwrap();
+    let mut file = STREAM.get().unwrap().get_ref();
 
     while !log.is_empty() {
         let item = log.pop();

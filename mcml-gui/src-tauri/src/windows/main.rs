@@ -13,7 +13,7 @@ use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::models::{InstanceArgs, InstanceInfo, JavaInfo, VersionInfo};
 
-use super::create;
+use crate::window_manager::create_window;
 
 // ================= 模型（窗口专属） =================
 
@@ -652,7 +652,7 @@ pub const TITLE: &str = "MCML 启动器";
 pub const WIDTH: f64 = 1100.0;
 pub const HEIGHT: f64 = 720.0;
 
-/// 打开主窗口（由 tauri.conf.json 创建，一般不需要）
+/// 打开主窗口（由 window_manager 创建，一般不需要）
 pub fn open(app: &AppHandle) -> Result<(), String> {
-    create(app, LABEL, TITLE, WIDTH, HEIGHT)
+    create_window(app, LABEL, TITLE, WIDTH, HEIGHT)
 }

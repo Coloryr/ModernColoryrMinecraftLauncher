@@ -3,7 +3,7 @@ name = "mcml-gui"
 version = "0.1.0"
 description = "MCML Launcher"
 authors = ["coloryr"]
-edition = "2021"
+edition = "2024"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -26,10 +26,14 @@ serde_json = "1"
 ureq = "2"
 
 mcml-core = { path = "../../mcml-core" }
+mcml-config = { path = "../../mcml-core/mcml-config" }
 mcml-sys = { path = "../../mcml-core/mcml-sys" }
 mcml-base = { path = "../../mcml-core/mcml-base" }
 mcml-names = { path = "../../mcml-core/mcml-names" }
+uuid = { version = "~1.24.0", features = ["v4", "serde"] }
 dirs = "~6.0.0"
+# 原生系统弹窗（启动失败等 Tauri 运行前场景）
+rfd = "0.16"
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
 [profile.release]

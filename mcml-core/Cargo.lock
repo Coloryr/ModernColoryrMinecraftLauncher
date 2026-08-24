@@ -1527,6 +1527,7 @@ dependencies = [
  "mcml-base",
  "mcml-config",
  "mcml-downloader",
+ "mcml-game",
  "mcml-log",
  "mcml-names",
  "mcml-net",

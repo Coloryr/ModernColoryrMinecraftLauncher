@@ -1,5 +1,7 @@
 use std::{path::PathBuf, result};
 
+use crate::i18_items::panic_type::PanicType;
+
 #[derive(Clone, Debug)]
 pub struct ErrorData {
     pub error: String,
@@ -96,6 +98,9 @@ pub type CoreResult<T> = result::Result<T, ErrorType>;
 /// mcml错误类型
 #[derive(Clone, Debug)]
 pub enum ErrorType {
+    /// 严重错误，直接结束程序
+    Panic(PanicType),
+
     /// 配置文件保存时出错
     ConfigSaveError(FileSystemErrorData),
     /// 配置文件读取时出错
