@@ -30,7 +30,7 @@ export const MAIN_WINDOW_UUID = "00000000-0000-0000-0000-000000000001";
 /** 读取 GUI 状态；非 Tauri 环境返回 null（浏览器回退 localStorage） */
 export async function loadGuiConfig(): Promise<GuiConfig | null> {
   try {
-    return await invoke<GuiConfig>("get_gui_config");
+    return await invoke<GuiConfig>("window_get_gui_config");
   } catch {
     return null;
   }
@@ -40,7 +40,7 @@ export async function loadGuiConfig(): Promise<GuiConfig | null> {
 export async function saveGuiConfig(patch: Partial<GuiConfig>): Promise<void> {
   try {
     const cur = (await loadGuiConfig()) ?? defaultConfig();
-    await invoke("save_gui_config", { config: { ...cur, ...patch } });
+    await invoke("window_save_gui_config", { config: { ...cur, ...patch } });
   } catch {
     /* 浏览器环境忽略 */
   }
@@ -59,7 +59,7 @@ function defaultConfig(): GuiConfig {
 /** 保存窗口几何到 windows.json（按 uuid 更新） */
 export async function saveWindowState(state: WindowState): Promise<void> {
   try {
-    await invoke("save_window_state", { state });
+    await invoke("window_save_window_state", { state });
   } catch {
     /* 浏览器环境忽略 */
   }

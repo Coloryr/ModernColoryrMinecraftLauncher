@@ -257,7 +257,7 @@ fn now_time() -> String {
 
 /// 初始化核心：返回数据目录（前端启动时调用）
 #[tauri::command]
-pub fn init_core(app: AppHandle, local_dir: Option<String>, user_name: String) -> Result<String, String> {
+pub fn main_init_core(app: AppHandle, local_dir: Option<String>, user_name: String) -> Result<String, String> {
     let dir = MainWindowModel::data_path(&app)?;
     println!("[init_core] local_dir={local_dir:?} user={user_name} data_dir={}", dir.display());
     Ok(dir.to_string_lossy().to_string())
@@ -265,7 +265,7 @@ pub fn init_core(app: AppHandle, local_dir: Option<String>, user_name: String) -
 
 /// 获取实例列表（合并运行状态）
 #[tauri::command]
-pub fn get_instances(state: State<'_, Mutex<MainWindowModel>>) -> Vec<InstanceInfo> {
+pub fn main_get_instances(state: State<'_, Mutex<MainWindowModel>>) -> Vec<InstanceInfo> {
     let store = state.lock().unwrap();
     store
         .instances
@@ -280,19 +280,19 @@ pub fn get_instances(state: State<'_, Mutex<MainWindowModel>>) -> Vec<InstanceIn
 
 /// 获取分组列表（实例分组 + 手动空分组）
 #[tauri::command]
-pub fn get_groups(state: State<'_, Mutex<MainWindowModel>>) -> Vec<String> {
+pub fn main_get_groups(state: State<'_, Mutex<MainWindowModel>>) -> Vec<String> {
     state.lock().unwrap().all_groups()
 }
 
 /// 获取 Java 列表（系统检测）
 #[tauri::command]
-pub fn get_java_list(state: State<'_, Mutex<MainWindowModel>>) -> Vec<JavaInfo> {
+pub fn main_get_java_list(state: State<'_, Mutex<MainWindowModel>>) -> Vec<JavaInfo> {
     state.lock().unwrap().javas.clone()
 }
 
 /// 获取游戏版本列表（从 Mojang 版本清单拉取，缓存于存储）
 #[tauri::command]
-pub async fn get_versions(
+pub async fn main_get_versions(
     state: State<'_, Mutex<MainWindowModel>>,
 ) -> Result<Vec<VersionInfo>, String> {
     {
@@ -377,7 +377,7 @@ fn emit_instance_change(app: &AppHandle, r#type: &str) {
 
 /// 添加空分组
 #[tauri::command]
-pub fn add_group(app: AppHandle, state: State<'_, Mutex<MainWindowModel>>, name: String) -> Result<bool, String> {
+pub fn main_add_group(app: AppHandle, state: State<'_, Mutex<MainWindowModel>>, name: String) -> Result<bool, String> {
     let n = name.trim().to_string();
     if n.is_empty() {
         return Ok(false);
@@ -395,7 +395,7 @@ pub fn add_group(app: AppHandle, state: State<'_, Mutex<MainWindowModel>>, name:
 
 /// 删除空分组
 #[tauri::command]
-pub fn remove_group(app: AppHandle, state: State<'_, Mutex<MainWindowModel>>, name: String) -> Result<bool, String> {
+pub fn main_remove_group(app: AppHandle, state: State<'_, Mutex<MainWindowModel>>, name: String) -> Result<bool, String> {
     let mut store = state.lock().unwrap();
     let before = store.extra_groups.len();
     store.extra_groups.retain(|g| g != &name);
@@ -410,7 +410,7 @@ pub fn remove_group(app: AppHandle, state: State<'_, Mutex<MainWindowModel>>, na
 
 /// 调整分组显示顺序
 #[tauri::command]
-pub fn move_group(app: AppHandle, state: State<'_, Mutex<MainWindowModel>>, name: String, index: i64) -> Result<bool, String> {
+pub fn main_move_group(app: AppHandle, state: State<'_, Mutex<MainWindowModel>>, name: String, index: i64) -> Result<bool, String> {
     let mut store = state.lock().unwrap();
     let mut list = store.all_groups();
     let from = list.iter().position(|g| g == &name).ok_or_else(|| "分组不存在".to_string())?;
@@ -426,7 +426,7 @@ pub fn move_group(app: AppHandle, state: State<'_, Mutex<MainWindowModel>>, name
 /// 创建实例
 #[allow(clippy::too_many_arguments)]
 #[tauri::command]
-pub fn create_instance(
+pub fn main_create_instance(
     app: AppHandle,
     state: State<'_, Mutex<MainWindowModel>>,
     name: String,
@@ -467,7 +467,7 @@ pub fn create_instance(
 
 /// 重命名实例
 #[tauri::command]
-pub fn rename_instance(app: AppHandle, state: State<'_, Mutex<MainWindowModel>>, uuid: String, name: String) -> Result<bool, String> {
+pub fn main_rename_instance(app: AppHandle, state: State<'_, Mutex<MainWindowModel>>, uuid: String, name: String) -> Result<bool, String> {
     let n = name.trim().to_string();
     if n.is_empty() {
         return Ok(false);
@@ -485,7 +485,7 @@ pub fn rename_instance(app: AppHandle, state: State<'_, Mutex<MainWindowModel>>,
 
 /// 更新实例元信息（补丁式）
 #[tauri::command]
-pub fn update_instance(app: AppHandle, state: State<'_, Mutex<MainWindowModel>>, uuid: String, patch: InstancePatch) -> Result<bool, String> {
+pub fn main_update_instance(app: AppHandle, state: State<'_, Mutex<MainWindowModel>>, uuid: String, patch: InstancePatch) -> Result<bool, String> {
     let mut store = state.lock().unwrap();
     let Some(inst) = store.instances.iter_mut().find(|i| i.uuid == uuid) else {
         return Ok(false);
@@ -530,7 +530,7 @@ pub fn update_instance(app: AppHandle, state: State<'_, Mutex<MainWindowModel>>,
 
 /// 删除实例
 #[tauri::command]
-pub fn delete_instance(app: AppHandle, state: State<'_, Mutex<MainWindowModel>>, uuid: String) -> Result<bool, String> {
+pub fn main_delete_instance(app: AppHandle, state: State<'_, Mutex<MainWindowModel>>, uuid: String) -> Result<bool, String> {
     let mut store = state.lock().unwrap();
     let before = store.instances.len();
     store.instances.retain(|i| i.uuid != uuid);
@@ -547,7 +547,7 @@ pub fn delete_instance(app: AppHandle, state: State<'_, Mutex<MainWindowModel>>,
 
 /// 移动实例到 (分组, 组内位置)：支持同组排序与跨组移动
 #[tauri::command]
-pub fn move_instance(app: AppHandle, state: State<'_, Mutex<MainWindowModel>>, uuid: String, group: Option<String>, index: i64) -> Result<bool, String> {
+pub fn main_move_instance(app: AppHandle, state: State<'_, Mutex<MainWindowModel>>, uuid: String, group: Option<String>, index: i64) -> Result<bool, String> {
     let mut store = state.lock().unwrap();
     let Some(pos) = store.instances.iter().position(|i| i.uuid == uuid) else {
         return Ok(false);
@@ -573,7 +573,7 @@ pub fn move_instance(app: AppHandle, state: State<'_, Mutex<MainWindowModel>>, u
 
 /// 启动游戏（占位：标记运行 + 发事件；接入核心后替换为真实启动）
 #[tauri::command]
-pub fn launch_game(app: AppHandle, state: State<'_, Mutex<MainWindowModel>>, uuid: String, user_name: String) -> Result<(), String> {
+pub fn main_launch_game(app: AppHandle, state: State<'_, Mutex<MainWindowModel>>, uuid: String, user_name: String) -> Result<(), String> {
     println!("[launch_game] uuid={uuid} user={user_name}");
     {
         let mut store = state.lock().unwrap();
@@ -612,7 +612,7 @@ pub fn launch_game(app: AppHandle, state: State<'_, Mutex<MainWindowModel>>, uui
 
 /// 停止游戏
 #[tauri::command]
-pub fn stop_game(app: AppHandle, state: State<'_, Mutex<MainWindowModel>>, uuid: String) -> Result<(), String> {
+pub fn main_stop_game(app: AppHandle, state: State<'_, Mutex<MainWindowModel>>, uuid: String) -> Result<(), String> {
     {
         let mut store = state.lock().unwrap();
         store.running.remove(&uuid);
@@ -624,13 +624,13 @@ pub fn stop_game(app: AppHandle, state: State<'_, Mutex<MainWindowModel>>, uuid:
 
 /// 获取实例日志
 #[tauri::command]
-pub fn get_game_log(state: State<'_, Mutex<MainWindowModel>>, uuid: String) -> Vec<String> {
+pub fn main_get_game_log(state: State<'_, Mutex<MainWindowModel>>, uuid: String) -> Vec<String> {
     state.lock().unwrap().logs.get(&uuid).cloned().unwrap_or_default()
 }
 
 /// 获取运行中实例
 #[tauri::command]
-pub fn get_running(state: State<'_, Mutex<MainWindowModel>>) -> Vec<String> {
+pub fn main_get_running(state: State<'_, Mutex<MainWindowModel>>) -> Vec<String> {
     state.lock().unwrap().running.iter().cloned().collect()
 }
 

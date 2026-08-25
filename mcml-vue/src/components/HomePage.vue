@@ -53,29 +53,18 @@ function entry(name: string) {
       </div>
     </div>
 
-    <!-- 上次启动实例（常驻显示） -->
-    <div v-else class="last-card" :class="{ empty: !lastInstance }">
-      <InstanceIcon v-if="lastInstance" :name="lastInstance.name" :uuid="lastInstance.uuid" :size="52" />
-      <span v-else class="last-icon-placeholder">▶</span>
+    <!-- 上次启动实例（有记录才显示，无记录则整块隐藏） -->
+    <div v-if="lastInstance" class="last-card">
+      <InstanceIcon :name="lastInstance.name" :uuid="lastInstance.uuid" :size="52" />
       <div class="last-info">
         <span class="last-title">{{ t("home.lastInstance") }}</span>
-        <span v-if="lastInstance" class="last-name">{{ lastInstance.name }}</span>
-        <span v-else class="last-name">{{ t("home.lastEmpty") }}</span>
+        <span class="last-name">{{ lastInstance.name }}</span>
         <span class="last-desc">{{ t("home.lastInstanceDesc") }}</span>
       </div>
-      <button
-        v-if="lastInstance"
-        class="last-play"
-        :disabled="!lastInstance"
-        @click="emit('quick-launch')"
-      >
+      <button class="last-play" @click="emit('quick-launch')">
         ▶ {{ t("home.lastPlay") }}
       </button>
-      <button
-        v-if="lastInstance"
-        class="last-open"
-        @click="emit('select', lastInstance)"
-      >›</button>
+      <button class="last-open" @click="emit('select', lastInstance)">›</button>
     </div>
 
     <div class="entry-cards">
@@ -225,24 +214,6 @@ function entry(name: string) {
   border-radius: 14px;
   border: 1px solid var(--accent-border);
   background: var(--accent-soft);
-}
-
-.last-card.empty {
-  border-style: dashed;
-  background: var(--bg-card);
-}
-
-.last-icon-placeholder {
-  width: 52px;
-  height: 52px;
-  border-radius: 12px;
-  background: var(--bg-hover);
-  color: var(--text-dim);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 20px;
-  flex-shrink: 0;
 }
 
 .last-info {

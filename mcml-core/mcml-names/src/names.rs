@@ -31,6 +31,7 @@ pub const NATIVE_DIR: &str = "native";
 pub const MCML_DIR: &str = "mcml";
 pub const MCML_INNER_DIR: &str = ".mcml";
 pub const BLOCK_DIR: &str = "block";
+pub const MINECRAFT_DIR: &str = "minecraft";
 
 pub const LOG_FILE: &str = "logs.log";
 pub const LANG_FILE: &str = "lang.txt";

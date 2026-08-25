@@ -87,7 +87,6 @@ export default {
   "home.lastInstance": "上次启动实例",
   "home.lastInstanceDesc": "快速回到上次游玩的实例",
   "home.lastPlay": "继续启动",
-  "home.lastEmpty": "暂无上次启动记录",
 
   // 自定义服务器
   "server.title": "自定义服务器",

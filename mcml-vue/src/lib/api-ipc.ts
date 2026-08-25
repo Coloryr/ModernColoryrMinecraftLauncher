@@ -25,35 +25,35 @@ export interface CreateInstanceOpts {
 export const api = {
   /** 初始化核心：返回数据目录 */
   async initCore(localDir: string | null, userName: string): Promise<string> {
-    return invoke<string>("init_core", { localDir, userName });
+    return invoke<string>("main_init_core", { localDir, userName });
   },
 
   async getInstances(): Promise<InstanceInfo[]> {
-    return invoke<InstanceInfo[]>("get_instances");
+    return invoke<InstanceInfo[]>("main_get_instances");
   },
 
   async getGroups(): Promise<string[]> {
-    return invoke<string[]>("get_groups");
+    return invoke<string[]>("main_get_groups");
   },
 
   async getJavaList(): Promise<JavaInfo[]> {
-    return invoke<JavaInfo[]>("get_java_list");
+    return invoke<JavaInfo[]>("main_get_java_list");
   },
 
   async getVersions(): Promise<VersionInfo[]> {
-    return invoke<VersionInfo[]>("get_versions");
+    return invoke<VersionInfo[]>("main_get_versions");
   },
 
   async addGroup(name: string): Promise<boolean> {
-    return invoke<boolean>("add_group", { name });
+    return invoke<boolean>("main_add_group", { name });
   },
 
   async removeGroup(name: string): Promise<boolean> {
-    return invoke<boolean>("remove_group", { name });
+    return invoke<boolean>("main_remove_group", { name });
   },
 
   async moveGroup(name: string, index: number): Promise<boolean> {
-    return invoke<boolean>("move_group", { name, index });
+    return invoke<boolean>("main_move_group", { name, index });
   },
 
   async createInstance(
@@ -61,7 +61,7 @@ export const api = {
     version: string,
     opts?: CreateInstanceOpts,
   ): Promise<InstanceInfo> {
-    return invoke<InstanceInfo>("create_instance", {
+    return invoke<InstanceInfo>("main_create_instance", {
       name,
       version,
       loader: opts?.loader,
@@ -73,36 +73,36 @@ export const api = {
   },
 
   async renameInstance(uuid: string, name: string): Promise<boolean> {
-    return invoke<boolean>("rename_instance", { uuid, name });
+    return invoke<boolean>("main_rename_instance", { uuid, name });
   },
 
   /** 更新实例元信息（补丁式，Partial<InstanceInfo>） */
   async updateInstance(uuid: string, patch: Partial<InstanceInfo>): Promise<boolean> {
-    return invoke<boolean>("update_instance", { uuid, patch });
+    return invoke<boolean>("main_update_instance", { uuid, patch });
   },
 
   async deleteInstance(uuid: string): Promise<boolean> {
-    return invoke<boolean>("delete_instance", { uuid });
+    return invoke<boolean>("main_delete_instance", { uuid });
   },
 
   async moveInstance(uuid: string, group: string | null, index: number): Promise<boolean> {
-    return invoke<boolean>("move_instance", { uuid, group, index });
+    return invoke<boolean>("main_move_instance", { uuid, group, index });
   },
 
   async launchGame(uuid: string, userName: string): Promise<void> {
-    return invoke<void>("launch_game", { uuid, userName });
+    return invoke<void>("main_launch_game", { uuid, userName });
   },
 
   async stopGame(uuid: string): Promise<void> {
-    return invoke<void>("stop_game", { uuid });
+    return invoke<void>("main_stop_game", { uuid });
   },
 
   async getGameLog(uuid: string): Promise<string[]> {
-    return invoke<string[]>("get_game_log", { uuid });
+    return invoke<string[]>("main_get_game_log", { uuid });
   },
 
   async getRunning(): Promise<string[]> {
-    return invoke<string[]>("get_running");
+    return invoke<string[]>("main_get_running");
   },
 };
 
