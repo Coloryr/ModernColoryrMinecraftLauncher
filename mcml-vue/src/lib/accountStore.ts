@@ -30,7 +30,7 @@ interface AccountStoreView {
 /** 从 Rust 加载账户列表 */
 export async function loadAccounts(): Promise<void> {
   try {
-    const view = await invoke<AccountStoreView>("get_accounts");
+    const view = await invoke<AccountStoreView>("account_get_accounts");
     accounts.value = view.accounts;
     currentAccount.value =
       view.accounts.find((a) => a.uuid === view.currentUuid) ??
@@ -44,7 +44,7 @@ export async function loadAccounts(): Promise<void> {
 /** 设置当前使用账户 */
 export async function setCurrentAccount(acc: Account) {
   try {
-    await invoke("set_current_account", { uuid: acc.uuid });
+    await invoke("account_set_current_account", { uuid: acc.uuid });
   } catch {
     /* 忽略 */
   }
@@ -54,7 +54,7 @@ export async function setCurrentAccount(acc: Account) {
 /** 删除账户 */
 export async function removeAccount(uuid: string) {
   try {
-    await invoke("remove_account", { uuid });
+    await invoke("account_remove_account", { uuid });
   } catch {
     /* 忽略 */
   }
@@ -68,7 +68,7 @@ export async function removeAccount(uuid: string) {
 /** 刷新账户 Token */
 export async function refreshAccountToken(uuid: string) {
   try {
-    await invoke("refresh_account_token", { uuid });
+    await invoke("account_refresh_account_token", { uuid });
   } catch {
     /* 忽略 */
   }
@@ -79,7 +79,7 @@ export async function refreshAccountToken(uuid: string) {
 /** 添加账户（真实由 Rust 创建），返回创建的账户；失败返回 null */
 export async function addAccount(type: string, name: string): Promise<Account | null> {
   try {
-    const acc = await invoke<Account>("add_account", { name, accountType: type });
+    const acc = await invoke<Account>("account_add_account", { name, accountType: type });
     accounts.value.push(acc);
     if (!currentAccount.value) currentAccount.value = acc;
     return acc;

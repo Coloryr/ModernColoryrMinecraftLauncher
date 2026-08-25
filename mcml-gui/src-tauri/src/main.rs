@@ -48,7 +48,7 @@ fn get_run_path() -> PathBuf {
     let exe_path = env::current_exe().expect("Failed to get exe path");
     let exe_dir = exe_path.parent().expect("Failed to get exe directory");
 
-    exe_dir.join(names::MCML)
+    exe_dir.join(names::MCML_DIR)
 }
 
 #[cfg(not(debug_assertions))]

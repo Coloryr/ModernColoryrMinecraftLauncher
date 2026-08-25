@@ -170,7 +170,7 @@ async function pickFolder() {
 
 /** 列出目录直接内容为树节点（目录标记 lazy，展开时再加载） */
 async function listDirNodes(dirPath: string, rel: string): Promise<FileNode[]> {
-  const entries = await invoke<Array<{ name: string; is_dir: boolean }>>("list_dir", {
+  const entries = await invoke<Array<{ name: string; is_dir: boolean }>>("add_list_dir", {
     path: dirPath,
   });
   return entries.map((en) => {

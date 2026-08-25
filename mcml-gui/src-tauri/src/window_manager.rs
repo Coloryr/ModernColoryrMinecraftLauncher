@@ -115,7 +115,7 @@ pub fn create_window(
     Ok(())
 }
 
-/// 创建主窗口（恢复上次几何）；已存在则聚焦
+/// 创建主窗口（有上次几何则恢复位置/大小，否则按默认居中显示）；已存在则聚焦
 pub fn create_main(app: &AppHandle) -> Result<(), String> {
     if let Some(win) = app.get_webview_window(MAIN_WINDOW_LABEL) {
         let _ = win.set_focus();
@@ -153,7 +153,7 @@ pub fn close_label(app: &AppHandle, label: &str) -> Result<(), String> {
 /// 注意：必须保持 async：同步命令在 Windows 上跑在主线程，而窗口创建会阻塞
 /// 等待主线程，导致整个应用冻结（新窗口白屏、无法点击）。
 #[tauri::command]
-pub async fn open_window(app: AppHandle, kind: String) -> Result<(), String> {
+pub async fn window_open_window(app: AppHandle, kind: String) -> Result<(), String> {
     println!("[window_manager] 打开窗口 kind={kind}");
     match kind.as_str() {
         "main" => crate::windows::main::open(&app),
@@ -170,7 +170,7 @@ pub async fn open_window(app: AppHandle, kind: String) -> Result<(), String> {
 
 /// 关闭窗口（kind → 标签；main 关闭主窗口）
 #[tauri::command]
-pub fn close_window(app: AppHandle, kind: String) -> Result<(), String> {
+pub fn window_close_window(app: AppHandle, kind: String) -> Result<(), String> {
     let label = match kind.as_str() {
         "main" => MAIN_WINDOW_LABEL.to_string(),
         _ => format!("mcml-{kind}"),
@@ -180,26 +180,26 @@ pub fn close_window(app: AppHandle, kind: String) -> Result<(), String> {
 
 /// 获取 GUI 状态（无文件时返回默认值）
 #[tauri::command]
-pub fn get_gui_config() -> GuiConfig {
+pub fn window_get_gui_config() -> GuiConfig {
     crate::gui_config::get()
 }
 
 /// 保存 GUI 状态到 gui_config.json
 #[tauri::command]
-pub fn save_gui_config(config: GuiConfig) -> Result<(), String> {
+pub fn window_save_gui_config(config: GuiConfig) -> Result<(), String> {
     crate::gui_config::set(config);
     Ok(())
 }
 
 /// 获取全部窗口几何状态
 #[tauri::command]
-pub fn get_window_states() -> Vec<WindowState> {
+pub fn window_get_window_states() -> Vec<WindowState> {
     WINDOWS.read().unwrap().values().cloned().collect()
 }
 
 /// 保存（或更新）某个窗口的几何状态，按 uuid 去重
 #[tauri::command]
-pub fn save_window_state(state: WindowState) -> Result<(), String> {
+pub fn window_save_window_state(state: WindowState) -> Result<(), String> {
     let uuid = Uuid::parse_str(&state.uuid).map_err(|e| e.to_string())?;
     WINDOWS.write().unwrap().insert(uuid, state);
     save();

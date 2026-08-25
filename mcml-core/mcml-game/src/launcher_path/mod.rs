@@ -54,7 +54,7 @@ static OPTIFINE_WRAPPER: LazyLock<PathBuf> = LazyLock::new(|| {
 /// 初始化文件夹
 /// - `dir`: 工作的目录
 pub(crate) fn init<P: AsRef<Path>>(dir: P) -> CoreResult<()> {
-    let dir = dir.as_ref().join(names::MINECRAFT);
+    let dir = dir.as_ref().join(names::MINECRAFT_DIR);
     if !dir.exists() {
         path_helper::create_dir_all(&dir)?;
     }

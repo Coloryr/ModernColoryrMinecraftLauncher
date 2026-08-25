@@ -1,4 +1,4 @@
-// @ts-nocheck — 早期接入 mcml-core 时的真实实现参考
+﻿// @ts-nocheck — 早期接入 mcml-core 时的真实实现参考
 // 当前 gui 与 core 已解耦（不依赖 core），本文件代码全部注释掉，仅作历史参考。
 // 界面数据由 `./api.ts`（模拟实现）提供；如需重新接入核心，
 // 取消下方注释，并恢复 src-tauri 中对应的 Rust 命令即可。
@@ -18,16 +18,16 @@ import type {
 
 export const api = {
   initCore: (localDir: string | null, userName: string) =>
-    invoke<string>("init_core", { localDir, userName }),
-  getInstances: () => invoke<InstanceInfo[]>("get_instances"),
-  getJavaList: () => invoke<JavaInfo[]>("get_java_list"),
-  getVersions: () => invoke<VersionInfo[]>("get_versions"),
+    invoke<string>("main_init_core", { localDir, userName }),
+  getInstances: () => invoke<InstanceInfo[]>("main_get_instances"),
+  getJavaList: () => invoke<JavaInfo[]>("main_get_java_list"),
+  getVersions: () => invoke<VersionInfo[]>("main_get_versions"),
   createInstance: (name: string, version: string) =>
-    invoke<InstanceInfo>("create_instance", { name, version }),
+    invoke<InstanceInfo>("main_create_instance", { name, version }),
   launchGame: (uuid: string, userName: string) =>
-    invoke<void>("launch_game", { uuid, userName }),
-  stopGame: (uuid: string) => invoke<void>("stop_game", { uuid }),
-  getGameLog: (uuid: string) => invoke<string[]>("get_game_log", { uuid }),
+    invoke<void>("main_launch_game", { uuid, userName }),
+  stopGame: (uuid: string) => invoke<void>("main_stop_game", { uuid }),
+  getGameLog: (uuid: string) => invoke<string[]>("main_get_game_log", { uuid }),
   getRunning: () => invoke<string[]>("get_running_instances"),
 };
 

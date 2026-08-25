@@ -87,7 +87,6 @@ export default {
   "home.lastInstance": "Last Launched Instance",
   "home.lastInstanceDesc": "Quickly return to your last played instance",
   "home.lastPlay": "Play Again",
-  "home.lastEmpty": "No previous launch record",
 
   // Custom server
   "server.title": "Custom Server",

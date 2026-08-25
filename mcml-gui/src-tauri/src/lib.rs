@@ -34,39 +34,39 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             // 窗口状态 / 配置（window_manager.rs）
-            window_manager::get_gui_config,
-            window_manager::save_gui_config,
-            window_manager::get_window_states,
-            window_manager::save_window_state,
+            window_manager::window_get_gui_config,
+            window_manager::window_save_gui_config,
+            window_manager::window_get_window_states,
+            window_manager::window_save_window_state,
             // 窗口打开 / 关闭（window_manager.rs）
-            window_manager::open_window,
-            window_manager::close_window,
+            window_manager::window_open_window,
+            window_manager::window_close_window,
             // 账户（windows/account.rs）
-            windows::account::get_accounts,
-            windows::account::add_account,
-            windows::account::remove_account,
-            windows::account::refresh_account_token,
-            windows::account::set_current_account,
+            windows::account::account_get_accounts,
+            windows::account::account_add_account,
+            windows::account::account_remove_account,
+            windows::account::account_refresh_account_token,
+            windows::account::account_set_current_account,
             // 主窗口（windows/main.rs）
-            windows::main::init_core,
-            windows::main::get_instances,
-            windows::main::get_groups,
-            windows::main::get_java_list,
-            windows::main::get_versions,
-            windows::main::add_group,
-            windows::main::remove_group,
-            windows::main::move_group,
-            windows::main::create_instance,
-            windows::main::rename_instance,
-            windows::main::update_instance,
-            windows::main::delete_instance,
-            windows::main::move_instance,
-            windows::main::launch_game,
-            windows::main::stop_game,
-            windows::main::get_game_log,
-            windows::main::get_running,
+            windows::main::main_init_core,
+            windows::main::main_get_instances,
+            windows::main::main_get_groups,
+            windows::main::main_get_java_list,
+            windows::main::main_get_versions,
+            windows::main::main_add_group,
+            windows::main::main_remove_group,
+            windows::main::main_move_group,
+            windows::main::main_create_instance,
+            windows::main::main_rename_instance,
+            windows::main::main_update_instance,
+            windows::main::main_delete_instance,
+            windows::main::main_move_instance,
+            windows::main::main_launch_game,
+            windows::main::main_stop_game,
+            windows::main::main_get_game_log,
+            windows::main::main_get_running,
             // 添加实例窗口（windows/add.rs）
-            windows::add::list_dir
+            windows::add::add_list_dir
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

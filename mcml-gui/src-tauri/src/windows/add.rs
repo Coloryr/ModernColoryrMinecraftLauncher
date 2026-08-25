@@ -14,7 +14,7 @@ pub struct DirEntry {
 /// 列出目录的直接内容（目录优先，再按名称排序）；
 /// 添加实例窗口选择文件夹时调用，用于预览文件夹内容树
 #[tauri::command]
-pub fn list_dir(path: String) -> Result<Vec<DirEntry>, String> {
+pub fn add_list_dir(path: String) -> Result<Vec<DirEntry>, String> {
     let mut entries = Vec::new();
     for entry in std::fs::read_dir(&path).map_err(|e| e.to_string())? {
         let entry = entry.map_err(|e| e.to_string())?;

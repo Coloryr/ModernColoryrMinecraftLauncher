@@ -139,7 +139,7 @@ fn palette(uuid: &str) -> (String, String) {
 
 /// 获取账户列表 + 当前账户
 #[tauri::command]
-pub fn get_accounts(state: State<'_, Mutex<AccountStore>>) -> AccountStoreView {
+pub fn account_get_accounts(state: State<'_, Mutex<AccountStore>>) -> AccountStoreView {
     let s = state.lock().unwrap();
     AccountStoreView {
         accounts: s.accounts.clone(),
@@ -149,7 +149,7 @@ pub fn get_accounts(state: State<'_, Mutex<AccountStore>>) -> AccountStoreView {
 
 /// 添加账户（离线 / 皮肤站等由前端传账户类型与名称）
 #[tauri::command]
-pub fn add_account(
+pub fn account_add_account(
     app: AppHandle,
     state: State<'_, Mutex<AccountStore>>,
     name: String,
@@ -182,7 +182,7 @@ pub fn add_account(
 
 /// 删除账户
 #[tauri::command]
-pub fn remove_account(app: AppHandle, state: State<'_, Mutex<AccountStore>>, uuid: String) -> Result<bool, String> {
+pub fn account_remove_account(app: AppHandle, state: State<'_, Mutex<AccountStore>>, uuid: String) -> Result<bool, String> {
     let mut s = state.lock().unwrap();
     let before = s.accounts.len();
     s.accounts.retain(|a| a.uuid != uuid);
@@ -199,7 +199,7 @@ pub fn remove_account(app: AppHandle, state: State<'_, Mutex<AccountStore>>, uui
 
 /// 刷新账户 Token（置为有效）
 #[tauri::command]
-pub fn refresh_account_token(app: AppHandle, state: State<'_, Mutex<AccountStore>>, uuid: String) -> Result<bool, String> {
+pub fn account_refresh_account_token(app: AppHandle, state: State<'_, Mutex<AccountStore>>, uuid: String) -> Result<bool, String> {
     let mut s = state.lock().unwrap();
     let Some(acc) = s.accounts.iter_mut().find(|a| a.uuid == uuid) else {
         return Ok(false);
@@ -212,7 +212,7 @@ pub fn refresh_account_token(app: AppHandle, state: State<'_, Mutex<AccountStore
 
 /// 设置当前使用账户
 #[tauri::command]
-pub fn set_current_account(app: AppHandle, state: State<'_, Mutex<AccountStore>>, uuid: String) -> Result<bool, String> {
+pub fn account_set_current_account(app: AppHandle, state: State<'_, Mutex<AccountStore>>, uuid: String) -> Result<bool, String> {
     let mut s = state.lock().unwrap();
     if !s.accounts.iter().any(|a| a.uuid == uuid) {
         return Ok(false);
