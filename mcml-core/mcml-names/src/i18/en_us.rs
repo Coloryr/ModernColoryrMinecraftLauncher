@@ -1,4 +1,10 @@
-use crate::{i18::I18Lang, i18_items::{error_type::ErrorType, info_type::InfoType, panic_type::PanicType, thread_type::ThreadType}};
+use crate::{
+    i18::I18Lang,
+    i18_items::{
+        error_type::ErrorType, gui_type::GuiType, info_type::InfoType, panic_type::PanicType,
+        thread_type::ThreadType,
+    },
+};
 pub struct EnUs;
 
 impl I18Lang for EnUs {
@@ -20,10 +26,16 @@ impl I18Lang for EnUs {
             _ => todo!(),
         }
     }
-    
+
     fn get_thread(&self, thread: &ThreadType) -> String {
         match thread {
             _ => todo!(),
+        }
+    }
+
+    fn get_gui(&self, gui: &GuiType) -> String {
+        match gui {
+            _ => String::new(),
         }
     }
 }

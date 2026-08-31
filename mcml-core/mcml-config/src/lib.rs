@@ -37,9 +37,7 @@ use std::{
 
 use mcml_base::serialize_tools;
 use mcml_log;
-use mcml_names::{
-    i18_items::error_type::{CoreResult, ErrorType, FileSystemErrorData}, names, uuids,
-};
+use mcml_names::{i18_items::error_type::CoreResult, names, uuids};
 
 use crate::config_obj::ConfigObj;
 
@@ -130,7 +128,7 @@ pub fn load<P: AsRef<Path>>(file: P) -> CoreResult<()> {
     if config_obj.version != version {
         config_obj.version = version;
 
-        config_save::save(uuids::CONFIG_UUID, &config_obj, FILE.get().unwrap());
+        save_now();
     }
     let mut guard = config.write().unwrap();
     *guard = config_obj;

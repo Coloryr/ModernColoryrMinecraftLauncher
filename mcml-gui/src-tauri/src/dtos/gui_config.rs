@@ -10,9 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use mcml_names::Lang;
 
-use crate::gui_config::{
-    lang_to_str, str_to_lang, GuiConfig, MainWindowConfig, SidebarSide, Theme, WindowMode,
-};
+use crate::gui_config::{GuiConfig, MainWindowConfig, SidebarSide, Theme, WindowMode};
 
 /// 主窗口配置（前端 wire：camelCase，字段即 `mainWindow`）
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -31,7 +29,7 @@ pub struct GuiConfigDto {
     /// 主题：Dark / Light
     pub theme: Theme,
     /// 语言：zh_cn / en_us
-    pub locale: String,
+    pub locale: Lang,
     /// 窗口模式：Multi / Single
     pub window_mode: WindowMode,
     /// 主窗口配置
@@ -42,7 +40,7 @@ impl From<GuiConfig> for GuiConfigDto {
     fn from(c: GuiConfig) -> Self {
         Self {
             theme: c.theme,
-            locale: lang_to_str(c.locale).to_string(),
+            locale: c.locale,
             window_mode: c.window_mode,
             main_window: MainWindowConfigDto {
                 sidebar_side: c.main_window.sidebar_side,
@@ -56,7 +54,7 @@ impl From<GuiConfigDto> for GuiConfig {
     fn from(d: GuiConfigDto) -> Self {
         Self {
             theme: d.theme,
-            locale: str_to_lang(&d.locale).unwrap_or(Lang::zh_cn),
+            locale: d.locale,
             window_mode: d.window_mode,
             main_window: MainWindowConfig {
                 sidebar_side: d.main_window.sidebar_side,

@@ -1,7 +1,8 @@
 use std::sync::{OnceLock, RwLock};
 
 use crate::i18_items::{
-    error_type::ErrorType, info_type::InfoType, panic_type::PanicType, thread_type::ThreadType,
+    error_type::ErrorType, gui_type::GuiType, info_type::InfoType, panic_type::PanicType,
+    thread_type::ThreadType,
 };
 
 pub mod en_us;
@@ -12,6 +13,7 @@ pub trait I18Lang {
     fn get_error(&self, error: &ErrorType) -> String;
     fn get_panic(&self, panic: &PanicType) -> String;
     fn get_thread(&self, thread: &ThreadType) -> String;
+    fn get_gui(&self, gui: &GuiType) -> String;
 }
 
 static I18: OnceLock<RwLock<Box<dyn I18Lang + Send + Sync>>> = OnceLock::new();
@@ -38,6 +40,10 @@ pub fn get_thread(thread: ThreadType) -> String {
     with_thread(&thread)
 }
 
+pub fn get_gui(gui: GuiType) -> String {
+    with_gui(&gui)
+}
+
 pub fn with_info(info: &InfoType) -> String {
     let i18 = I18.get_or_init(|| RwLock::new(Box::new(zh_cn::ZhCn)));
     let lang = i18.read().unwrap();
@@ -60,4 +66,10 @@ pub fn with_thread(thread: &ThreadType) -> String {
     let i18 = I18.get_or_init(|| RwLock::new(Box::new(zh_cn::ZhCn)));
     let lang = i18.read().unwrap();
     lang.get_thread(thread)
+}
+
+pub fn with_gui(gui: &GuiType) -> String {
+    let i18 = I18.get_or_init(|| RwLock::new(Box::new(zh_cn::ZhCn)));
+    let lang = i18.read().unwrap();
+    lang.get_gui(gui)
 }

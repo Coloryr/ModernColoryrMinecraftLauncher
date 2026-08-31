@@ -15,7 +15,7 @@ use std::{
 
 use mcml_base::serialize_tools;
 use mcml_config::config_save;
-use mcml_names::{names, uuids};
+use mcml_names::{i18, i18_items::gui_type::GuiType, names, uuids};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 use uuid::{Uuid, uuid};
@@ -51,6 +51,12 @@ impl Default for WindowState {
 pub const MAIN_WINDOW_UUID: Uuid = uuid!("00000000-0000-0000-0000-000000000001");
 /// 主窗口标签
 pub const MAIN_WINDOW_LABEL: &str = "main";
+
+pub const WINDOW_MIN_WIDTH: f64 = 900.0;
+pub const WINDOW_MIN_HEIGHT: f64 = 600.0;
+
+pub const WINDOW_DEFAULT_WIDHT: f64 = 1100.0;
+pub const WINDOW_DEFAULT_HEIGHT: f64 = 720.0;
 
 /// 窗口几何状态（uuid → 几何），内存中的唯一数据源
 static WINDOWS: LazyLock<RwLock<HashMap<Uuid, WindowState>>> =
@@ -124,14 +130,17 @@ pub fn create_main(app: &AppHandle) -> Result<(), String> {
     let geom = window_state_for(MAIN_WINDOW_UUID);
     let builder =
         WebviewWindowBuilder::new(app, MAIN_WINDOW_LABEL, WebviewUrl::App("index.html".into()))
-            .title("MCML 启动器")
-            .min_inner_size(900.0, 600.0);
+            .title(i18::get_gui(GuiType::MainWindowTitle))
+            .min_inner_size(WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT);
     let win = match geom {
         Some(g) => builder
             .inner_size(g.width as f64, g.height as f64)
             .position(g.x as f64, g.y as f64)
             .build(),
-        None => builder.inner_size(1100.0, 720.0).center().build(),
+        None => builder
+            .inner_size(WINDOW_DEFAULT_WIDHT, WINDOW_DEFAULT_HEIGHT)
+            .center()
+            .build(),
     };
     let win = win.map_err(|e| e.to_string())?;
     let _ = MAIN_WINDOW.set(win);
