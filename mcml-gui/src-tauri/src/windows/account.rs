@@ -2,15 +2,24 @@
 //!
 //! 账户数据统一由 `mcml_auth::auths`（mcml-auth 全局账户存储）管理，
 //! 持久化到核心数据目录的 auth.json；本模块只负责 IPC 转接与窗口规格。
-use mcml_auth::{LoginObj, auths};
+use std::sync::RwLock;
+
+use mcml_auth::{AuthType, LoginObj, auths, oauth};
 use tauri::{AppHandle, Emitter};
+use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-use crate::dtos::account::{AccountStoreDto, AccountStoreViewDto, auth_type_from_str};
+use crate::dtos::account::{
+    AccountOAuthDto, AccountStoreDto, AccountStoreViewDto, auth_type_from_str,
+};
+use crate::listens;
 use crate::window_manager::create_window;
 
+static OAUTH_NOW: RwLock<Option<CancellationToken>> = RwLock::new(None);
+
+
 fn emit_account_change(app: &AppHandle) {
-    let _ = app.emit("account-change", ());
+    let _ = app.emit(listens::ACCOUT_CHANGE, ());
 }
 
 // ================= IPC 命令 =================
@@ -29,11 +38,37 @@ pub fn account_get_accounts() -> AccountStoreViewDto {
 
 /// 添加账户（离线 / 皮肤站等由前端传账户类型与名称）
 #[tauri::command]
-pub fn account_add_account(
+pub async fn account_add_account(
     app: AppHandle,
     name: String,
     account_type: String,
 ) -> Result<AccountStoreDto, String> {
+    let auth_type = auth_type_from_str(&account_type);
+    if auth_type == AuthType::OAuth {
+        let code = oauth::get_code().await;
+        match code {
+            Ok(ok) => {
+                let dto = AccountOAuthDto {
+                    code: ok.code.clone(),
+                    url: format!("{}?otc={}", ok.url, ok.code),
+                };
+
+                let cancel = CancellationToken::new();
+
+                *OAUTH_NOW.write().unwrap() = Some(cancel.clone());
+
+                app.emit(listens::ACCOUT_OAUTH, dto);
+
+                let res = oauth::run_get_code(&ok, &cancel).await;
+                match res {
+                    Ok(ok) => todo!(),
+                    Err(err) => todo!(),
+                }
+            }
+            Err(err) => return Err(err.to_string()),
+        }
+    }
+
     let n = name.trim().to_string();
     if n.is_empty() {
         return Err("账户名不能为空".to_string());

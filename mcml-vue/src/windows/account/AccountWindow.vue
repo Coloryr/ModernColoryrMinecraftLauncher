@@ -22,6 +22,8 @@ import {
   typeLabelKey,
 } from "../../lib/accountStore";
 import type { Account } from "../../lib/types";
+import { listen } from "@tauri-apps/api/event";
+import { AccountOAuthDto } from "../../lib/dtos/account.ts";
 
 type ViewMode = "grid" | "list" | "detail";
 const view = ref<ViewMode>("grid");
@@ -55,8 +57,10 @@ const showAdd = ref(false);
 const addType = ref("offline");
 const addFields = ref<Record<string, string>>({});
 const showOauth = ref(false);
-const oauthCode = ref("ABCD-EFGH");
-const oauthUrl = ref("https://www.microsoft.com/link");
+const showOauthRun = ref(false);
+const oauthCode = ref("");
+const oauthUrl = ref("");
+const oauthState = ref("");
 
 interface AddField {
   key: string;
@@ -102,10 +106,7 @@ function confirmAdd() {
   }
 
   if (addType.value === "microsoft") {
-    // 微软：设备码流程弹窗
-    showAdd.value = false;
-    oauthCode.value = "ABCD-EFGH";
-    showOauth.value = true;
+
     return;
   }
 
@@ -149,6 +150,12 @@ function relogin(acc: Account) {
   showToast(t("actions.wip", { name: acc.userName }));
 }
 
+function cancelLogin(type: string) {
+  if (type == "showOauthRun") {
+    showOauthRun.value = false
+  }
+}
+
 const deleteTarget = ref<Account | null>(null);
 
 function confirmDelete() {
@@ -170,6 +177,14 @@ function typeLabel(acc: Account): string {
 function tokenLabel(acc: Account): string {
   return acc.tokenStatus === "valid" ? t("account.tokenValid") : t("account.tokenExpired");
 }
+
+listen<AccountOAuthDto>(AccountOAuth, (data) => {
+  // 微软：设备码流程弹窗
+  showAdd.value = false;
+  oauthCode.value = data.payload.code;
+  oauthUrl.value = data.payload.url;
+  showOauth.value = true;
+});
 </script>
 
 <template>
@@ -181,7 +196,8 @@ function tokenLabel(acc: Account): string {
           <option v-for="o in TYPE_OPTIONS" :key="o.value" :value="o.value">{{ o.label }}</option>
         </select>
         <div class="search-box">
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round">
             <circle cx="11" cy="11" r="7" />
             <path d="m20 20-3.5-3.5" />
           </svg>
@@ -190,72 +206,34 @@ function tokenLabel(acc: Account): string {
         </div>
       </div>
       <div class="toolbar-right">
-        <SegmentedTabs
-          :model-value="view"
-          :options="VIEW_OPTIONS"
-          @update:model-value="view = $event as ViewMode"
-        />
+        <SegmentedTabs :model-value="view" :options="VIEW_OPTIONS" @update:model-value="view = $event as ViewMode" />
         <BaseButton variant="accent" size="sm" @click="openAdd">＋ {{ t("account.add") }}</BaseButton>
       </div>
     </div>
 
     <!-- 视图：平铺 / 列表 / 详情（见 views/ 目录） -->
-    <AccountGrid
-      v-if="view === 'grid'"
-      :accounts="filtered"
-      :current-uuid="currentAccount?.uuid ?? ''"
-      :type-label="typeLabel"
-      :seed-of="seedOf"
-      @switch="switchAccount"
-      @refresh="refreshToken"
-      @relogin="relogin"
-      @delete="deleteTarget = $event"
-    />
-    <AccountList
-      v-else-if="view === 'list'"
-      :accounts="filtered"
-      :current-uuid="currentAccount?.uuid ?? ''"
-      :type-label="typeLabel"
-      :token-label="tokenLabel"
-      :seed-of="seedOf"
-      @switch="switchAccount"
-      @refresh="refreshToken"
-      @relogin="relogin"
-      @delete="deleteTarget = $event"
-    />
-    <AccountDetail
-      v-else
-      :accounts="filtered"
-      :current-uuid="currentAccount?.uuid ?? ''"
-      :type-label="typeLabel"
-      :token-label="tokenLabel"
-      @switch="switchAccount"
-      @refresh="refreshToken"
-      @relogin="relogin"
-      @delete="deleteTarget = $event"
-    />
+    <AccountGrid v-if="view === 'grid'" :accounts="filtered" :current-uuid="currentAccount?.uuid ?? ''"
+      :type-label="typeLabel" :seed-of="seedOf" @switch="switchAccount" @refresh="refreshToken" @relogin="relogin"
+      @delete="deleteTarget = $event" />
+    <AccountList v-else-if="view === 'list'" :accounts="filtered" :current-uuid="currentAccount?.uuid ?? ''"
+      :type-label="typeLabel" :token-label="tokenLabel" :seed-of="seedOf" @switch="switchAccount"
+      @refresh="refreshToken" @relogin="relogin" @delete="deleteTarget = $event" />
+    <AccountDetail v-else :accounts="filtered" :current-uuid="currentAccount?.uuid ?? ''" :type-label="typeLabel"
+      :token-label="tokenLabel" @switch="switchAccount" @refresh="refreshToken" @relogin="relogin"
+      @delete="deleteTarget = $event" />
 
     <!-- 添加账户弹窗（按类型显示不同输入框） -->
-    <BaseModal
-      v-if="showAdd"
-      :title="t('account.addTitle')"
-      :closable="false"
-      @close="showAdd = false"
-    >
+    <BaseModal v-if="showAdd" :title="t('account.addTitle')" :closable="false" @close="showAdd = false; cancelLogin">
       <label class="field-label">{{ t("account.type") }}</label>
-      <select v-model="addType" class="field-select" @change="onAddTypeChange(($event.target as HTMLSelectElement).value)">
+      <select v-model="addType" class="field-select"
+        @change="onAddTypeChange(($event.target as HTMLSelectElement).value)">
         <option v-for="x in ACCOUNT_TYPES" :key="x.value" :value="x.value">{{ t(x.labelKey) }}</option>
       </select>
 
       <template v-for="f in ADD_FIELDS[addType] ?? []" :key="f.key">
         <label class="field-label">{{ t(f.labelKey) }}</label>
-        <input
-          v-model="addFields[f.key]"
-          class="field-input"
-          :type="f.password ? 'password' : 'text'"
-          spellcheck="false"
-          @keyup.enter="confirmAdd"
-        />
+        <input v-model="addFields[f.key]" class="field-input" :type="f.password ? 'password' : 'text'"
+          spellcheck="false" @keyup.enter="confirmAdd" />
       </template>
 
       <p v-if="addType === 'microsoft'" class="hint">{{ t("account.loginHint") }}</p>
@@ -267,12 +245,8 @@ function tokenLabel(acc: Account): string {
     </BaseModal>
 
     <!-- 微软登录：请求码 + 地址 + 打开浏览器 / 取消 -->
-    <BaseModal
-      v-if="showOauth"
-      :title="t('account.oauthTitle')"
-      :closable="false"
-      @close="showOauth = false"
-    >
+    <BaseModal v-if="showOauth" :title="t('account.oauthTitle')" :closable="false"
+      @close="showOauth = false; cancelLogin">
       <label class="field-label">{{ t("account.oauthCode") }}</label>
       <div class="oauth-code">{{ oauthCode }}</div>
 
@@ -284,6 +258,14 @@ function tokenLabel(acc: Account): string {
       <div class="modal-actions">
         <BaseButton @click="showOauth = false">{{ t("add.cancel") }}</BaseButton>
         <BaseButton variant="primary" @click="openBrowser">{{ t("account.openBrowser") }}</BaseButton>
+      </div>
+    </BaseModal>
+
+    <BaseModal v-if="showOauthRun" :title="t('account.oauthTitle')" :closable="false" @close="showOauthRun = false">
+      <p class="hint">{{ oauthState }}</p>
+
+      <div class="modal-actions">
+        <BaseButton @click="cancelLogin('showOauthRun')">{{ t("add.cancel") }}</BaseButton>
       </div>
     </BaseModal>
 

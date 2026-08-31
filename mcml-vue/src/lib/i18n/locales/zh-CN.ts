@@ -309,7 +309,7 @@ export default {
   "account.add": "添加",
   "account.addTitle": "添加账户",
   "account.added": "账户已添加",
-  "account.loginHint": "在线登录（开发中），当前仅记录账户",
+  "account.loginHint": "点击添加开始微软登录",
   "account.actions": "操作",
   "account.username": "账户",
   "account.password": "密码",

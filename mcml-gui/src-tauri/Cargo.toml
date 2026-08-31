@@ -31,10 +31,11 @@ mcml-sys = { path = "../../mcml-core/mcml-sys" }
 mcml-base = { path = "../../mcml-core/mcml-base" }
 mcml-auth = { path = "../../mcml-core/mcml-auth" }
 mcml-names = { path = "../../mcml-core/mcml-names" }
+
 uuid = { version = "~1.24.0", features = ["v4", "serde"] }
 dirs = "~6.0.0"
-# 原生系统弹窗（启动失败等 Tauri 运行前场景）
-rfd = "0.16"
+rfd = "~0.16"
+tokio-util = "~0.7.19"
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
 [profile.release]

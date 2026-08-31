@@ -89,4 +89,4 @@ export async function addAccount(type: string, name: string): Promise<Account | 
 }
 
 // 跨窗口同步：某个窗口改了账户后，其它窗口重新加载
-listen("account-change", () => loadAccounts());
+listen(AccountChange, () => loadAccounts());
