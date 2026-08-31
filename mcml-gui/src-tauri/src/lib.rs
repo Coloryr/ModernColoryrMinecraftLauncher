@@ -5,6 +5,7 @@
 //! 每个窗口的规格 / 专属模型 / 创建操作 / 窗口按钮调用的方法见 `windows/`。
 //! 所有窗口的创建 / 聚焦 / 关闭统一由 `window_manager.rs` 处理。
 
+pub mod dtos;
 pub mod gui_config;
 pub mod models;
 pub mod window_manager;

@@ -1,8 +1,7 @@
 // 主题管理：暗色 / 亮色 + 强调色预设（状态持久化到 gui_config.json）
 import { ref } from "vue";
-import { saveGuiConfig } from "./guiConfig";
-
-export type Theme = "dark" | "light";
+import { saveGuiConfig, type Theme } from "./guiConfig";
+export type { Theme } from "./guiConfig";
 
 export type AccentId =
   | "blue"
@@ -40,7 +39,7 @@ const THEME_KEY = "mcml.theme";
 const ACCENT_KEY = "mcml.accent";
 
 const storedTheme = localStorage.getItem(THEME_KEY) as Theme | null;
-export const theme = ref<Theme>(storedTheme === "light" ? "light" : "dark");
+export const theme = ref<Theme>(storedTheme === "Light" ? "Light" : "Dark");
 
 const storedAccent = localStorage.getItem(ACCENT_KEY) as AccentId | null;
 export const accent = ref<AccentId>(
@@ -59,7 +58,7 @@ export function applyTheme() {
 }
 
 export function toggleTheme() {
-  theme.value = theme.value === "dark" ? "light" : "dark";
+  theme.value = theme.value === "Dark" ? "Light" : "Dark";
   localStorage.setItem(THEME_KEY, theme.value);
   applyTheme();
   saveGuiConfig({ theme: theme.value });
@@ -73,7 +72,7 @@ export function setAccent(a: AccentId) {
 
 // 跨窗口同步：某个窗口改了主题/颜色后，其它已打开的窗口实时生效
 window.addEventListener("storage", (e) => {
-  if (e.key === THEME_KEY && (e.newValue === "dark" || e.newValue === "light")) {
+  if (e.key === THEME_KEY && (e.newValue === "Dark" || e.newValue === "Light")) {
     theme.value = e.newValue;
     applyTheme();
   } else if (e.key === ACCENT_KEY) {

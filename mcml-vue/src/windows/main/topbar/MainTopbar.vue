@@ -8,7 +8,7 @@ import type { FeatureId } from "../types";
 defineProps<{
   features: Array<{ id: FeatureId; icon: string }>;
   newsActive: boolean;
-  theme: "dark" | "light";
+  theme: "Dark" | "Light";
   currentAccount: Account | null;
   accounts: Account[];
 }>();
@@ -71,8 +71,8 @@ const emit = defineEmits<{
       </button>
 
       <!-- 主题切换 -->
-      <button class="topbar-icon-btn" :title="theme === 'dark' ? 'Light' : 'Dark'" @click="emit('toggle-theme')">
-        <svg v-if="theme === 'dark'" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
+      <button class="topbar-icon-btn" :title="theme === 'Dark' ? 'Light' : 'Dark'" @click="emit('toggle-theme')">
+        <svg v-if="theme === 'Dark'" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
           <circle cx="12" cy="12" r="4.5" />
           <path d="M12 2v2.5M12 19.5V22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M2 12h2.5M19.5 12H22M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8" />
         </svg>

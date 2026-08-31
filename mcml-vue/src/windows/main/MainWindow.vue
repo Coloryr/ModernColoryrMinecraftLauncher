@@ -1028,7 +1028,7 @@ onUnmounted(() => {
       />
 
       <!-- 主体 -->
-      <main class="main" :class="{ 'side-right': sidebarSide === 'right' }">
+      <main class="main" :class="{ 'side-right': sidebarSide === 'Right' }">
         <!-- 多选模式浮动工具栏 -->
         <div v-if="multiSelect" class="multi-bar" @contextmenu.prevent @click.stop>
           <span class="multi-count">{{ t("multi.selected", { count: selectedIds.size }) }}</span>

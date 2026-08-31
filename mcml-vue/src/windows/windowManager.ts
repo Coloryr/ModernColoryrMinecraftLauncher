@@ -18,12 +18,12 @@ const MODE_KEY = "mcml.windowMode";
 const WIN_PARAM = "window";
 
 /** 是否多窗口模式（默认多窗口） */
-export const multiWindow = ref(localStorage.getItem(MODE_KEY) !== "single");
+export const multiWindow = ref(localStorage.getItem(MODE_KEY) !== "Single");
 
 export function setMultiWindow(v: boolean) {
   multiWindow.value = v;
-  localStorage.setItem(MODE_KEY, v ? "multi" : "single");
-  saveGuiConfig({ windowMode: v ? "multi" : "single" });
+  localStorage.setItem(MODE_KEY, v ? "Multi" : "Single");
+  saveGuiConfig({ windowMode: v ? "Multi" : "Single" });
 }
 
 /** 是否运行在 Tauri 环境 */

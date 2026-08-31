@@ -27,13 +27,11 @@ document.addEventListener("contextmenu", (e) => {
 async function bootstrap() {
   const cfg = await loadGuiConfig();
   if (cfg) {
-    if (cfg.theme === "light" || cfg.theme === "dark") theme.value = cfg.theme;
-    if (cfg.locale === "zh-CN" || cfg.locale === "en-US") locale.value = cfg.locale;
-    if (cfg.sidebarSide === "left" || cfg.sidebarSide === "right") {
-      sidebarSide.value = cfg.sidebarSide;
-    }
-    sidebarCollapsed.value = cfg.sidebarCollapsed;
-    setMultiWindow(cfg.windowMode !== "single");
+    theme.value = cfg.theme;
+    locale.value = cfg.locale;
+    sidebarSide.value = cfg.mainWindow.sidebarSide;
+    sidebarCollapsed.value = cfg.mainWindow.sidebarCollapsed;
+    setMultiWindow(cfg.windowMode !== "Single");
   }
   applyTheme();
   applyLocale();

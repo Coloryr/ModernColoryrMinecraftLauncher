@@ -6,6 +6,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
 
+use crate::dtos::AccountStoreView;
 use crate::window_manager::create_window;
 
 /// 账户信息（窗口专属模型）
@@ -52,14 +53,6 @@ impl Account {
 /// 账户存储（持久化到 accounts.json）
 pub struct AccountStore {
     data_path: PathBuf,
-    pub accounts: Vec<Account>,
-    pub current_uuid: Option<String>,
-}
-
-/// 账户列表视图（IPC 返回 / 磁盘持久化）
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct AccountStoreView {
     pub accounts: Vec<Account>,
     pub current_uuid: Option<String>,
 }
