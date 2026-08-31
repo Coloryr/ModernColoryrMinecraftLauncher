@@ -11,6 +11,7 @@ pub mod gui_config;
 pub mod models;
 pub mod window_manager;
 pub mod windows;
+pub mod listens;
 
 use std::sync::Mutex;
 
@@ -47,6 +48,7 @@ pub fn run() {
             window_manager::window_close_window,
             // 账户（windows/account.rs）
             windows::account::account_get_accounts,
+            windows::account::account_start_oauth,
             windows::account::account_add_account,
             windows::account::account_remove_account,
             windows::account::account_refresh_account_token,

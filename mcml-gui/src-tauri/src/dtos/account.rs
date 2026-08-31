@@ -37,6 +37,16 @@ pub struct AccountStoreDto {
     pub avatar: Option<String>,
 }
 
+/// OAuth登录开始
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountOAuthDto {
+    /// 登录码
+    pub code: String,
+    /// 登录网址
+    pub url: String,
+}
+
 impl AccountStoreDto {
     /// 从 LoginObj（账户完整凭据）构造前端 DTO
     ///
