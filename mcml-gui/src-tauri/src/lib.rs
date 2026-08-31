@@ -6,11 +6,11 @@
 //! 所有窗口的创建 / 聚焦 / 关闭统一由 `window_manager.rs` 处理。
 
 pub mod dtos;
+pub mod err_box;
 pub mod gui_config;
 pub mod models;
 pub mod window_manager;
 pub mod windows;
-pub mod err_box;
 
 use std::sync::Mutex;
 
@@ -29,8 +29,6 @@ pub fn run() {
 
             let store = windows::main::MainWindowModel::init(app.handle());
             app.manage(Mutex::new(store));
-            let account_store = windows::account::AccountStore::init(app.handle());
-            app.manage(Mutex::new(account_store));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

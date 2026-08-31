@@ -1,103 +1,10 @@
 //! 账户窗口：账户模型 + 账户存储 + IPC 命令 + 规格 + 创建操作
-use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Emitter, State};
 
-use crate::dtos::AccountStoreView;
 use crate::window_manager::create_window;
-
-/// 账户信息（窗口专属模型）
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Account {
-    pub uuid: String,
-    pub name: String,
-    /// 账户类型：offline（离线）/ microsoft（微软）/ littleskin / authlib / nide8 等
-    #[serde(rename = "type")]
-    pub account_type: String,
-    /// 头像渐变起点色（CSS）
-    pub avatar_color: String,
-    /// 皮肤主色（SVG 生成用）
-    pub skin: String,
-    /// 最后登录时间
-    pub last_login: String,
-    /// Token 状态：valid / expired
-    pub token_status: String,
-}
-
-impl Account {
-    /// Token 是否有效
-    pub fn is_valid(&self) -> bool {
-        self.token_status == "valid"
-    }
-
-    /// Token 是否过期
-    pub fn is_expired(&self) -> bool {
-        self.token_status == "expired"
-    }
-
-    /// 是否为微软账户
-    pub fn is_microsoft(&self) -> bool {
-        self.account_type == "microsoft"
-    }
-
-    /// 是否为离线账户
-    pub fn is_offline(&self) -> bool {
-        self.account_type == "offline"
-    }
-}
-
-/// 账户存储（持久化到 accounts.json）
-pub struct AccountStore {
-    data_path: PathBuf,
-    pub accounts: Vec<Account>,
-    pub current_uuid: Option<String>,
-}
-
-impl AccountStore {
-    fn data_path(app: &AppHandle) -> Result<PathBuf, String> {
-        let dir = app
-            .path()
-            .app_data_dir()
-            .map_err(|e| format!("无法获取应用数据目录: {e}"))?;
-        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-        Ok(dir.join("accounts.json"))
-    }
-
-    /// 初始化：从磁盘加载
-    pub fn init(app: &AppHandle) -> Self {
-        let data_path = Self::data_path(app).unwrap_or_else(|_| PathBuf::from("accounts.json"));
-        let mut store = Self {
-            data_path,
-            accounts: Vec::new(),
-            current_uuid: None,
-        };
-        store.load();
-        store
-    }
-
-    fn load(&mut self) {
-        if let Ok(text) = std::fs::read_to_string(&self.data_path) {
-            if let Ok(data) = serde_json::from_str::<AccountStoreView>(&text) {
-                self.accounts = data.accounts;
-                self.current_uuid = data.current_uuid;
-            }
-        }
-    }
-
-    pub fn save(&self) {
-        let data = AccountStoreView {
-            accounts: self.accounts.clone(),
-            current_uuid: self.current_uuid.clone(),
-        };
-        if let Ok(text) = serde_json::to_string_pretty(&data) {
-            let _ = std::fs::write(&self.data_path, text);
-        }
-    }
-}
 
 fn emit_account_change(app: &AppHandle) {
     let _ = app.emit("account-change", ());
@@ -123,7 +30,9 @@ fn palette(uuid: &str) -> (String, String) {
         ("#06b6d4", "#6366f1"),
         ("#f472b6", "#8b5cf6"),
     ];
-    let h = uuid.bytes().fold(0u32, |acc, b| acc.wrapping_mul(31).wrapping_add(b as u32));
+    let h = uuid
+        .bytes()
+        .fold(0u32, |acc, b| acc.wrapping_mul(31).wrapping_add(b as u32));
     let (c1, c2) = P[(h as usize) % P.len()];
     (c1.to_string(), c2.to_string())
 }
@@ -132,9 +41,9 @@ fn palette(uuid: &str) -> (String, String) {
 
 /// 获取账户列表 + 当前账户
 #[tauri::command]
-pub fn account_get_accounts(state: State<'_, Mutex<AccountStore>>) -> AccountStoreView {
+pub fn account_get_accounts(state: State<'_, Mutex<AccountStore>>) -> AccountStoreDto {
     let s = state.lock().unwrap();
-    AccountStoreView {
+    AccountStoreDto {
         accounts: s.accounts.clone(),
         current_uuid: s.current_uuid.clone(),
     }
@@ -175,7 +84,11 @@ pub fn account_add_account(
 
 /// 删除账户
 #[tauri::command]
-pub fn account_remove_account(app: AppHandle, state: State<'_, Mutex<AccountStore>>, uuid: String) -> Result<bool, String> {
+pub fn account_remove_account(
+    app: AppHandle,
+    state: State<'_, Mutex<AccountStore>>,
+    uuid: String,
+) -> Result<bool, String> {
     let mut s = state.lock().unwrap();
     let before = s.accounts.len();
     s.accounts.retain(|a| a.uuid != uuid);
@@ -192,7 +105,11 @@ pub fn account_remove_account(app: AppHandle, state: State<'_, Mutex<AccountStor
 
 /// 刷新账户 Token（置为有效）
 #[tauri::command]
-pub fn account_refresh_account_token(app: AppHandle, state: State<'_, Mutex<AccountStore>>, uuid: String) -> Result<bool, String> {
+pub fn account_refresh_account_token(
+    app: AppHandle,
+    state: State<'_, Mutex<AccountStore>>,
+    uuid: String,
+) -> Result<bool, String> {
     let mut s = state.lock().unwrap();
     let Some(acc) = s.accounts.iter_mut().find(|a| a.uuid == uuid) else {
         return Ok(false);
@@ -205,7 +122,11 @@ pub fn account_refresh_account_token(app: AppHandle, state: State<'_, Mutex<Acco
 
 /// 设置当前使用账户
 #[tauri::command]
-pub fn account_set_current_account(app: AppHandle, state: State<'_, Mutex<AccountStore>>, uuid: String) -> Result<bool, String> {
+pub fn account_set_current_account(
+    app: AppHandle,
+    state: State<'_, Mutex<AccountStore>>,
+    uuid: String,
+) -> Result<bool, String> {
     let mut s = state.lock().unwrap();
     if !s.accounts.iter().any(|a| a.uuid == uuid) {
         return Ok(false);

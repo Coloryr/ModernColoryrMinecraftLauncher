@@ -10,7 +10,6 @@ pub struct CoreInitObj {
 }
 
 use std::{
-    fs::{self},
     path::PathBuf,
     sync::{LazyLock, RwLock},
 };
@@ -19,14 +18,10 @@ use mcml_auth::{auths, oauth};
 use mcml_base::events::EventHandler;
 use mcml_config::config_save;
 use mcml_log;
-use mcml_names::{
-    i18,
-    i18_items::{
-        error_type::{CoreResult, ErrorType::Panic},
-        info_type::InfoType,
-        panic_type::PanicType,
-    },
-    names,
+use mcml_names::i18_items::{
+    error_type::{CoreResult, ErrorType::Panic},
+    info_type::InfoType,
+    panic_type::PanicType,
 };
 use mcml_net::curseforge_api;
 

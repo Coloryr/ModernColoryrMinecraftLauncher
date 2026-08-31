@@ -1,5 +1,6 @@
 use crate::VERSION;
 
+use crate::i18_items::gui_type::GuiType;
 use crate::{
     i18::I18Lang,
     i18_items::{
@@ -72,6 +73,12 @@ impl I18Lang for ZhCn {
             ThreadType::LanClientV6 => String::from("局域网游戏V6监听线程"),
             ThreadType::LanServer => String::from("局域网游戏广播线程"),
             ThreadType::GameCount => String::from("游戏启动统计线程"),
+        }
+    }
+
+    fn get_gui(&self, gui: &GuiType) -> String {
+        match gui {
+            GuiType::MainWindowTitle => String::from("Mcml 启动器"),
         }
     }
 }

@@ -11,6 +11,8 @@ use std::{
     sync::{LazyLock, OnceLock, RwLock},
 };
 
+use serde::{Deserialize, Serialize};
+
 use crate::{
     i18::{I18Lang, en_us::EnUs, zh_cn::ZhCn},
     i18_items::error_type::{CoreResult, ErrorType::FileSystemError, FileSystemErrorData},
@@ -20,15 +22,21 @@ use crate::{
 /// 启动器主版本号
 pub const VERSION_NUM: i32 = 1;
 /// 启动器日期
-pub const DATE: &str = "20260714";
+pub const DATE: &str = "20260831";
 /// 启动器版本号
 pub const VERSION: LazyLock<String> = LazyLock::new(|| format!("1.{}.{DATE}", VERSION_NUM));
 
 #[allow(non_camel_case_types)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Serialize, Deserialize, Debug)]
 pub enum Lang {
     zh_cn,
     en_us,
+}
+
+impl Default for Lang {
+    fn default() -> Self {
+        Lang::zh_cn
+    }
 }
 
 /// 加载的语言
@@ -109,7 +117,7 @@ fn load<P: AsRef<Path>>(file: P) -> CoreResult<()> {
     let lang = check_lang(&str);
     *LANG.write().unwrap() = lang;
     load_lang(lang);
-    
+
     Ok(())
 }
 
