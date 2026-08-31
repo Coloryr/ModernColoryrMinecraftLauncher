@@ -1,20 +1,19 @@
-// 国际化：zh-CN / en-US（状态持久化到 gui_config.json）
+// 国际化：zh_cn / en_us（状态持久化到 gui_config.json，与 core Lang 同名）
 // 用法：模板中 {{ t("launch.play") }}；带参数 {{ t("detail.launchCount", { count: 3 }) }}
 import { ref } from "vue";
 import zhCN from "./locales/zh-CN";
 import enUS from "./locales/en-US";
-import { saveGuiConfig } from "../guiConfig";
-
-export type Locale = "zh-CN" | "en-US";
+import { saveGuiConfig, type Locale } from "../guiConfig";
+export type { Locale } from "../guiConfig";
 
 const LOCALE_KEY = "mcml.locale";
 const stored = localStorage.getItem(LOCALE_KEY);
 
-export const locale = ref<Locale>(stored === "en-US" ? "en-US" : "zh-CN");
+export const locale = ref<Locale>(stored === "en_us" ? "en_us" : "zh_cn");
 
 const messages: Record<Locale, Record<string, string>> = {
-  "zh-CN": zhCN as Record<string, string>,
-  "en-US": enUS as Record<string, string>,
+  zh_cn: zhCN as Record<string, string>,
+  en_us: enUS as Record<string, string>,
 };
 
 export function setLocale(l: Locale) {
@@ -30,7 +29,7 @@ export function applyLocale() {
 
 // 跨窗口同步：某个窗口改了语言后，其它已打开的窗口实时生效
 window.addEventListener("storage", (e) => {
-  if (e.key === LOCALE_KEY && (e.newValue === "zh-CN" || e.newValue === "en-US")) {
+  if (e.key === LOCALE_KEY && (e.newValue === "zh_cn" || e.newValue === "en_us")) {
     locale.value = e.newValue;
     document.documentElement.lang = e.newValue;
   }

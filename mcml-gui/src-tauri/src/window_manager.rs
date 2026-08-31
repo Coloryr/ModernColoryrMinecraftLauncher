@@ -20,7 +20,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 use uuid::{Uuid, uuid};
 
-use crate::gui_config::GuiConfig;
+use crate::dtos::GuiConfigDto;
 
 /// 窗口几何状态（window_save.json）
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -178,16 +178,16 @@ pub fn window_close_window(app: AppHandle, kind: String) -> Result<(), String> {
     close_label(&app, &label)
 }
 
-/// 获取 GUI 状态（无文件时返回默认值）
+/// 获取 GUI 状态（无文件时返回默认值；前端 wire 为 DTO，TS 命名 camelCase）
 #[tauri::command]
-pub fn window_get_gui_config() -> GuiConfig {
-    crate::gui_config::get()
+pub fn window_get_gui_config() -> GuiConfigDto {
+    crate::gui_config::get().into()
 }
 
-/// 保存 GUI 状态到 gui_config.json
+/// 保存 GUI 状态到 gui_config.json（前端 DTO 转内部 GuiConfig）
 #[tauri::command]
-pub fn window_save_gui_config(config: GuiConfig) -> Result<(), String> {
-    crate::gui_config::set(config);
+pub fn window_save_gui_config(config: GuiConfigDto) -> Result<(), String> {
+    crate::gui_config::set(config.into());
     Ok(())
 }
 

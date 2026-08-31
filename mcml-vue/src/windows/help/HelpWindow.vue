@@ -5,7 +5,7 @@ import { t, locale } from "../../lib/i18n";
 import { faqs as zhFaqs } from "../../lib/i18n/locales/zh-CN";
 import { faqs as enFaqs } from "../../lib/i18n/locales/en-US";
 
-const faqs = computed(() => (locale.value === "en-US" ? enFaqs : zhFaqs));
+const faqs = computed(() => (locale.value === "en_us" ? enFaqs : zhFaqs));
 
 const openIndex = ref<number | null>(0);
 

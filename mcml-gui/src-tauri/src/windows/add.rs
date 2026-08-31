@@ -1,15 +1,8 @@
 //! 添加实例窗口：规格 + 创建操作 + 窗口按钮调用的方法（list_dir）
-use serde::Serialize;
 use tauri::AppHandle;
 
+use crate::dtos::DirEntry;
 use crate::window_manager::create_window;
-
-/// 目录项（list_dir 返回）
-#[derive(Serialize)]
-pub struct DirEntry {
-    pub name: String,
-    pub is_dir: bool,
-}
 
 /// 列出目录的直接内容（目录优先，再按名称排序）；
 /// 添加实例窗口选择文件夹时调用，用于预览文件夹内容树

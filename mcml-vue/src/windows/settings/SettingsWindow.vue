@@ -9,20 +9,20 @@ import { ACCENTS, accent, setAccent } from "../../lib/theme";
 import BaseButton from "../../components/ui/BaseButton.vue";
 
 const inTauri = isTauri();
-const windowMode = ref(multiWindow.value ? "multi" : "single");
+const windowMode = ref(multiWindow.value ? "Multi" : "Single");
 const side = ref(sidebarSide.value);
 
 function onModeChange(v: string) {
   windowMode.value = v;
-  setMultiWindow(v === "multi");
+  setMultiWindow(v === "Multi");
 }
 
 function onLangChange(v: string) {
-  setLocale(v === "en-US" ? "en-US" : "zh-CN");
+  setLocale(v === "en_us" ? "en_us" : "zh_cn");
 }
 
 function onSideChange(v: string) {
-  side.value = v === "right" ? "right" : "left";
+  side.value = v === "Right" ? "Right" : "Left";
   setSidebarSide(side.value);
 }
 
@@ -38,8 +38,8 @@ function testWindow() {
       <SegmentedTabs
         :model-value="locale"
         :options="[
-          { value: 'zh-CN', label: '简体中文' },
-          { value: 'en-US', label: 'English' },
+          { value: 'zh_cn', label: '简体中文' },
+          { value: 'en_us', label: 'English' },
         ]"
         @update:model-value="onLangChange"
       />
@@ -86,14 +86,14 @@ function testWindow() {
         <SegmentedTabs
           :model-value="windowMode"
           :options="[
-            { value: 'single', label: t('winSettings.single') },
-            { value: 'multi', label: t('winSettings.multi') },
+            { value: 'Single', label: t('winSettings.single') },
+            { value: 'Multi', label: t('winSettings.multi') },
           ]"
           @update:model-value="onModeChange"
         />
         <p class="hint">
           {{
-            windowMode === "multi"
+            windowMode === "Multi"
               ? t("winSettings.currentMulti")
               : t("winSettings.currentSingle")
           }}
@@ -110,8 +110,8 @@ function testWindow() {
       <SegmentedTabs
         :model-value="side"
         :options="[
-          { value: 'left', label: t('winSettings.sidebarLeft') },
-          { value: 'right', label: t('winSettings.sidebarRight') },
+          { value: 'Left', label: t('winSettings.sidebarLeft') },
+          { value: 'Right', label: t('winSettings.sidebarRight') },
         ]"
         @update:model-value="onSideChange"
       />
