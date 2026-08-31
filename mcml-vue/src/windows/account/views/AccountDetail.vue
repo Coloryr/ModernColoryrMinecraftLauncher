@@ -52,16 +52,16 @@ function isCurrent(acc: Account): boolean {
             />
           </td>
           <td class="cell-name">
-            {{ acc.name }}
+            {{ acc.userName }}
             <span v-if="isCurrent(acc)" class="current-tag">{{ t("account.current") }}</span>
           </td>
           <td class="mono">{{ acc.uuid }}</td>
           <td>{{ typeLabel(acc) }}</td>
-          <td>{{ acc.lastLogin }}</td>
+          <td>{{ acc.loginTime }}</td>
           <td>
             <span class="token-tag" :class="acc.tokenStatus">{{ tokenLabel(acc) }}</span>
           </td>
-          <td>{{ acc.name }}_cape</td>
+          <td>{{ acc.avatar ? acc.userName + "_cape" : t("account.noSkin") }}</td>
         </tr>
       </tbody>
     </table>

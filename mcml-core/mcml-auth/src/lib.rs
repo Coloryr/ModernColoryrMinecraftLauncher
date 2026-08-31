@@ -27,7 +27,7 @@
 
 /// 游戏账户
 use chrono::{DateTime, FixedOffset, Local};
-use mcml_names::i18_items::error_type::CoreResult;
+use mcml_names::{i18, i18_items::{error_type::CoreResult, info_type::InfoType}};
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use tokio_util::sync::CancellationToken;
@@ -64,6 +64,19 @@ pub enum AuthType {
 impl Default for AuthType {
     fn default() -> Self {
         AuthType::Offline
+    }
+}
+
+impl AuthType {
+    pub fn get_name(&self) -> String {
+        match self {
+            AuthType::Offline => i18::get_info(InfoType::AuthTypeOffline),
+            AuthType::OAuth => i18::get_info(InfoType::AuthTypeOAuth),
+            AuthType::Nide8 => i18::get_info(InfoType::AuthTypeNide8),
+            AuthType::AuthlibInjector => i18::get_info(InfoType::AuthTypeAuthlibInjector),
+            AuthType::LittleSkin => i18::get_info(InfoType::AuthTypeLittleSkin),
+            AuthType::SelfLittleSkin => i18::get_info(InfoType::AuthTypeSelfLittleSkin),
+        }
     }
 }
 

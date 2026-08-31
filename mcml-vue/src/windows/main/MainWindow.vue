@@ -256,8 +256,8 @@ const currentAccount = storeCurrentAccount;
 
 function onAccountChange(account: Account) {
   setCurrentAccount(account);
-  playerName.value = account.name;
-  localStorage.setItem("mcml.playerName", account.name);
+  playerName.value = account.userName;
+  localStorage.setItem("mcml.playerName", account.userName);
 }
 
 // ================= 启动状态 =================

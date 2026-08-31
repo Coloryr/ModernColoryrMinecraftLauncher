@@ -34,9 +34,9 @@ function isCurrent(acc: Account): boolean {
       :class="{ current: isCurrent(acc) }"
       @dblclick="emit('switch', acc)"
     >
-      <img :src="avatarImage(seedOf(acc.uuid), acc.skin)" class="row-avatar" alt="" />
+      <img :src="acc.avatar || avatarImage(seedOf(acc.uuid), acc.skin)" class="row-avatar" alt="" />
       <div class="row-meta">
-        <span class="row-name">{{ acc.name }}</span>
+        <span class="row-name">{{ acc.userName }}</span>
         <span class="row-sub">{{ typeLabel(acc) }} · {{ acc.uuid }}</span>
       </div>
       <span v-if="isCurrent(acc)" class="current-tag">{{ t("account.current") }}</span>

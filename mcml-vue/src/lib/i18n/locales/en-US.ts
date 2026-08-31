@@ -340,6 +340,7 @@ export default {
   "account.skin": "Skin",
   "account.avatar": "Avatar",
   "account.cape": "Cape",
+  "account.noSkin": "No skin",
   "account.name": "Username",
   "account.uuid": "UUID",
   "account.lastLogin": "Last login",

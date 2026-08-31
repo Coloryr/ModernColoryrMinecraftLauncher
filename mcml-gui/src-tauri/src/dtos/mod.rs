@@ -9,7 +9,7 @@ pub mod add;
 pub mod gui_config;
 pub mod main;
 
-pub use account::AccountStoreView;
+pub use account::{AccountStoreDto, AccountStoreViewDto};
 pub use add::DirEntry;
 pub use gui_config::{GuiConfigDto, MainWindowConfigDto};
 pub use main::{

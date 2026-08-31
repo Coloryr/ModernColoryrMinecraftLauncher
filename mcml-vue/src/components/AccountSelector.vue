@@ -17,18 +17,18 @@ const open = ref(false);
 
 const typeText = computed(() => {
   if (!props.account) return "";
-  switch (props.account.type) {
+  switch (props.account.authType) {
     case "microsoft":
       return t("account.microsoft");
     case "offline":
       return t("account.offline");
     default:
-      return props.account.type;
+      return props.account.authType;
   }
 });
 
 const typeClass = computed(() =>
-  props.account?.type === "microsoft" ? "type-ms" : "type-offline",
+  props.account?.authType === "microsoft" ? "type-ms" : "type-offline",
 );
 
 function toggle() {
@@ -46,10 +46,10 @@ function pick(account: Account) {
     <button class="account-btn" @click="toggle">
       <template v-if="account">
         <span class="avatar" :style="{ background: account.avatarColor }">
-          {{ account.name.charAt(0).toUpperCase() }}
+          {{ account.userName.charAt(0).toUpperCase() }}
         </span>
         <span class="account-meta">
-          <span class="account-name">{{ account.name }}</span>
+          <span class="account-name">{{ account.userName }}</span>
           <span class="account-type" :class="typeClass">{{ typeText }}</span>
         </span>
       </template>
@@ -77,11 +77,11 @@ function pick(account: Account) {
         @click="pick(acc)"
       >
         <span class="avatar small" :style="{ background: acc.avatarColor }">
-          {{ acc.name.charAt(0).toUpperCase() }}
+          {{ acc.userName.charAt(0).toUpperCase() }}
         </span>
         <span class="menu-meta">
-          <span class="menu-name">{{ acc.name }}</span>
-          <span class="menu-type">{{ acc.type === "microsoft" ? t("account.microsoft") : t("account.offline") }}</span>
+          <span class="menu-name">{{ acc.userName }}</span>
+          <span class="menu-type">{{ acc.authType === "microsoft" ? t("account.microsoft") : t("account.offline") }}</span>
         </span>
       </button>
       <div

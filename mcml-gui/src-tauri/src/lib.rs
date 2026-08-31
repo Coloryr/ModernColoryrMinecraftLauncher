@@ -29,6 +29,11 @@ pub fn run() {
 
             let store = windows::main::MainWindowModel::init(app.handle());
             app.manage(Mutex::new(store));
+
+            // 账户存储走 mcml-auth：启动后台配置保存线程并加载 auth.json
+            // （接入完整 mcml_core::init 后这两行由 core 启动流程接管）
+            mcml_config::config_save::start();
+            mcml_auth::auths::init();
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

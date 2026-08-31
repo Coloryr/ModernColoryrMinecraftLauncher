@@ -63,20 +63,23 @@ export interface ErrorEvent {
 
 // ---------- 主界面 UI 数据 ----------
 
-/** 账户信息 */
+/** 账户信息（字段与 Rust 端 AccountStoreDto 一一对应） */
 export interface Account {
   uuid: string;
-  name: string;
+  /** 玩家用户名 */
+  userName: string;
   /** 账户类型：offline（离线）/ microsoft（微软）/ littleskin / authlib / nide8 等 */
-  type: string;
-  /** 头像渐变起点色（CSS） */
+  authType: string;
+  /** 最后登录时间 */
+  loginTime: string;
+  /** 头像渐变起点色（CSS，无皮肤时回退占位图） */
   avatarColor: string;
   /** 皮肤主色（SVG 生成用） */
   skin: string;
-  /** 最后登录时间 */
-  lastLogin: string;
   /** Token 状态：valid / expired */
   tokenStatus: string;
+  /** 皮肤渲染头像（mcml-skin-draw 生成的 data URI PNG）；无皮肤为 null */
+  avatar: string | null;
 }
 
 /** Minecraft 新闻条目 */
