@@ -2773,6 +2773,7 @@ name = "mcml-gui"
 version = "0.1.0"
 dependencies = [
  "dirs",
+ "mcml-auth",
  "mcml-base",
  "mcml-config",
  "mcml-core",

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 账户平铺视图：皮肤 / 头像 / 披风 三图卡片
 import { t } from "../../../lib/i18n";
-import { avatarImage, capeImage, skinImage } from "../../../lib/accountImages";
+import { capeImage, skinImage } from "../../../lib/accountImages";
 import AccountActions from "../../../components/AccountActions.vue";
 import type { Account } from "../../../lib/types";
 
@@ -35,13 +35,16 @@ function isCurrent(acc: Account): boolean {
     >
       <div class="acc-images">
         <span v-if="isCurrent(acc)" class="current-badge">{{ t("account.current") }}</span>
-        <img :src="avatarImage(seedOf(acc.uuid), acc.skin)" class="img-avatar" :alt="t('account.avatar')" />
-        <img :src="skinImage(seedOf(acc.uuid), acc.skin)" class="img-skin" :alt="t('account.skin')" />
-        <img :src="capeImage(seedOf(acc.uuid), acc.skin)" class="img-cape" :alt="t('account.cape')" />
+        <template v-if="acc.avatar">
+          <img :src="acc.avatar" class="img-avatar" :alt="t('account.avatar')" />
+          <img :src="skinImage(seedOf(acc.uuid), acc.skin)" class="img-skin" :alt="t('account.skin')" />
+          <img :src="capeImage(seedOf(acc.uuid), acc.skin)" class="img-cape" :alt="t('account.cape')" />
+        </template>
+        <div v-else class="no-skin">{{ t("account.noSkin") }}</div>
       </div>
       <div class="acc-head">
-        <span class="acc-name">{{ acc.name }}</span>
-        <span class="acc-type" :class="acc.type">{{ typeLabel(acc) }}</span>
+        <span class="acc-name">{{ acc.userName }}</span>
+        <span class="acc-type" :class="acc.authType">{{ typeLabel(acc) }}</span>
         <AccountActions
           @refresh="emit('refresh', acc)"
           @relogin="emit('relogin', acc)"
@@ -118,6 +121,18 @@ function isCurrent(acc: Account): boolean {
   height: 36px;
   border-radius: 5px;
   image-rendering: pixelated;
+}
+
+.no-skin {
+  flex: 1;
+  height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12.5px;
+  color: var(--text-dim);
+  border: 1px dashed var(--border);
+  border-radius: 8px;
 }
 
 .acc-head {

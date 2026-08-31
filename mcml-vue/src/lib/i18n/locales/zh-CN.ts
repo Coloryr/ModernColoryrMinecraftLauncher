@@ -340,6 +340,7 @@ export default {
   "account.skin": "皮肤",
   "account.avatar": "头像",
   "account.cape": "披风",
+  "account.noSkin": "无皮肤",
   "account.name": "用户名",
   "account.uuid": "UUID",
   "account.lastLogin": "最后登录",

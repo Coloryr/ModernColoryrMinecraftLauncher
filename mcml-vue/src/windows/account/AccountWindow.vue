@@ -42,9 +42,9 @@ const searchText = ref("");
 const filtered = computed(() => {
   const q = searchText.value.trim().toLowerCase();
   return accounts.value.filter((a) => {
-    if (typeFilter.value !== "all" && a.type !== typeFilter.value) return false;
+    if (typeFilter.value !== "all" && a.authType !== typeFilter.value) return false;
     if (q) {
-      return [a.name, a.uuid, a.type].some((s) => s.toLowerCase().includes(q));
+      return [a.userName, a.uuid, a.authType].some((s) => s.toLowerCase().includes(q));
     }
     return true;
   });
@@ -129,7 +129,7 @@ function openBrowser() {
 /** 双击切换当前账户 */
 function switchAccount(acc: Account) {
   setCurrentAccount(acc);
-  showToast(t("account.switched", { name: acc.name }));
+  showToast(t("account.switched", { name: acc.userName }));
 }
 
 // 图片种子
@@ -146,7 +146,7 @@ function refreshToken(acc: Account) {
 }
 
 function relogin(acc: Account) {
-  showToast(t("actions.wip", { name: acc.name }));
+  showToast(t("actions.wip", { name: acc.userName }));
 }
 
 const deleteTarget = ref<Account | null>(null);
@@ -164,7 +164,7 @@ const TYPE_OPTIONS = computed(() => [
 ]);
 
 function typeLabel(acc: Account): string {
-  return t(typeLabelKey(acc.type));
+  return t(typeLabelKey(acc.authType));
 }
 
 function tokenLabel(acc: Account): string {
@@ -289,7 +289,7 @@ function tokenLabel(acc: Account): string {
 
     <!-- 删除确认 -->
     <BaseModal v-if="deleteTarget" :title="t('account.delete')" @close="deleteTarget = null">
-      <p class="delete-tip">{{ t("account.deleteConfirm", { name: deleteTarget.name }) }}</p>
+      <p class="delete-tip">{{ t("account.deleteConfirm", { name: deleteTarget.userName }) }}</p>
       <div class="modal-actions">
         <BaseButton @click="deleteTarget = null">{{ t("add.cancel") }}</BaseButton>
         <BaseButton variant="danger" @click="confirmDelete">{{ t("actions.confirm") }}</BaseButton>

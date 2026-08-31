@@ -4,4 +4,11 @@ pub enum InfoType {
     CoreStop,
 
     TempFile,
+
+    AuthTypeOffline,
+    AuthTypeOAuth,
+    AuthTypeNide8,
+    AuthTypeAuthlibInjector,
+    AuthTypeLittleSkin,
+    AuthTypeSelfLittleSkin,
 }

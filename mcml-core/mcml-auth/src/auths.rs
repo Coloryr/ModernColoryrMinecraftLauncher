@@ -121,6 +121,32 @@ pub fn clear_auths() {
     save();
 }
 
+/// 当前使用的账户 UUID（内存态；重启后由前端回退到默认选中第一个）
+static CURRENT_UUID: LazyLock<RwLock<Option<String>>> = LazyLock::new(|| RwLock::new(None));
+
+/// 获取全部账户（按最后登录时间倒序，最近使用的排在前面）
+pub fn get_all() -> Vec<LoginObj> {
+    let mut list: Vec<LoginObj> = AUTHS.read().unwrap().values().cloned().collect();
+    list.sort_by(|a, b| b.last_login.cmp(&a.last_login));
+    list
+}
+
+/// 按 UUID 查询账户（不区分认证类型）
+pub fn get_by_uuid(uuid: String) -> Option<LoginObj> {
+    let auths = AUTHS.read().unwrap();
+    auths.values().find(|a| a.uuid == uuid).cloned()
+}
+
+/// 获取当前使用的账户 UUID
+pub fn get_current() -> Option<String> {
+    CURRENT_UUID.read().unwrap().clone()
+}
+
+/// 设置当前使用的账户 UUID
+pub fn set_current(uuid: Option<String>) {
+    *CURRENT_UUID.write().unwrap() = uuid;
+}
+
 impl LoginObj {
     /// 将当前账户保存到全局存储并持久化到磁盘
     ///
