@@ -60,16 +60,15 @@ serde_json = "~1.0.151"
 serde_repr = "~0.1.21"
 glow = "~0.18.0"
 skia-safe = "~0.99.0"
-glam = "~0.33.3"
-uuid = { version = "~1.24.0", features = ["v4", "serde"] }
+glam = "~0.33.6"
+uuid = { version = "~1.26.0", features = ["v4", "v5", "serde"] }
 url = "~2.5.8"
 md-5 = "~0.11.0"
 sha1 = "~0.11.0"
 digest = "~0.11.3"
 sha2 = "~0.11.0"
-base64 = "~0.23.0"
+base64 = "~0.23.1"
 winreg = "~0.56.0"
-dirs = "~6.0.0"
 windows = { version = "~0.62.2", features = [
     "Win32_Foundation",
     "Win32_System_IO",
@@ -85,8 +84,8 @@ windows = { version = "~0.62.2", features = [
 ] }
 zip = { version = "~8.6.0", features = ["chrono"] }
 tar = "~0.4.46"
-flate2 = "~1.1.9"
-sevenz-rust2 = "~0.21.4"
+flate2 = "~1.1.10"
+sevenz-rust2 = "~0.22.2"
 xz2 = { version = "~0.1.7", features = ["static"] }
 lz4_flex = "~0.14.0 "
 rayon = "~1.12.0"
@@ -96,14 +95,13 @@ scraper = "~0.27.0"
 itertools = "~0.15.0"
 semka = "~2.0.7"
 soft-canonicalize = "~0.5.6"
+async-trait = "~0.1.92"
 encoding_rs = "~0.8.35"
-async-trait = "~0.1.91"
-encoding_rs_io = "~0.1.7"
+encoding_rs_io = "~0.1.8"
 notify = "~8.2.0"
 toml = "~1.1.4"
 if-addrs = "~0.15.0"
 socket2 = "~0.6.5"
-image = "~0.25.10"
 ico = "~0.5.0"
 clipboard-rs = "~0.3.5"
 dbus = "~0.9.12"

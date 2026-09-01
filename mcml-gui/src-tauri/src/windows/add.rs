@@ -1,8 +1,5 @@
 //! 添加实例窗口：规格 + 创建操作 + 窗口按钮调用的方法（list_dir）
-use tauri::AppHandle;
-
 use crate::dtos::DirEntry;
-use crate::window_manager::create_window;
 
 /// 列出目录的直接内容（目录优先，再按名称排序）；
 /// 添加实例窗口选择文件夹时调用，用于预览文件夹内容树
@@ -28,8 +25,3 @@ pub const LABEL: &str = "mcml-add";
 pub const TITLE: &str = "添加实例";
 pub const WIDTH: f64 = 900.0;
 pub const HEIGHT: f64 = 660.0;
-
-/// 打开添加实例窗口
-pub fn open(app: &AppHandle) -> Result<(), String> {
-    create_window(app, LABEL, TITLE, WIDTH, HEIGHT)
-}

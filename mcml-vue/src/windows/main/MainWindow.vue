@@ -46,6 +46,8 @@ import BaseModal from "../../components/ui/BaseModal.vue";
 import SegmentedTabs from "../../components/ui/SegmentedTabs.vue";
 import NumberStepper from "../../components/ui/NumberStepper.vue";
 
+await getCurrentWindow().setTitle(t("winTitle.main"));
+
 // ================= 基础状态 =================
 
 /** 初始化是否失败（失败则显示引导页） */
@@ -251,6 +253,7 @@ import {
   currentAccount as storeCurrentAccount,
   setCurrentAccount,
 } from "../../lib/accountStore";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 const accounts = storeAccounts;
 const currentAccount = storeCurrentAccount;
 

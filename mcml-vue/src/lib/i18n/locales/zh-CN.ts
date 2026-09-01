@@ -449,6 +449,10 @@ export default {
   // 帮助窗口
   "winHelp.stillStuck": "仍无法解决问题？",
   "winHelp.report": "请提供游戏日志（logs 目录）与启动器版本号，前往 GitHub Issues 反馈。",
+
+  // 窗口标题
+  "winTitle.main": "MCML 启动器",
+  "winTitle.account": "MCML 账户管理",
 };
 
 export const faqs: Array<{ q: string; a: string }> = [

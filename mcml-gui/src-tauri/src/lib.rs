@@ -5,26 +5,30 @@
 //! 每个窗口的规格 / 专属模型 / 创建操作 / 窗口按钮调用的方法见 `windows/`。
 //! 所有窗口的创建 / 聚焦 / 关闭统一由 `window_manager.rs` 处理。
 
+use tauri::{Manager, async_runtime::Mutex};
+
 pub mod dtos;
 pub mod err_box;
 pub mod gui_config;
+pub mod image_manager;
+pub mod listens;
 pub mod models;
 pub mod window_manager;
 pub mod windows;
-pub mod listens;
-
-use std::sync::Mutex;
-
-use tauri::Manager;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .register_asynchronous_uri_scheme_protocol("mcml-image", move |_app, request, responder| {
+            tokio::spawn(async move {
+                image_manager::url_image(request, responder).await;
+            });
+        })
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             // 主窗口由窗口管理器创建（恢复上次几何）
-            if let Err(e) = window_manager::create_main(app.handle()) {
+            if let Err(e) = window_manager::show_main_window(app.handle()) {
                 err_box::fatal_error_text(&e);
             }
 
@@ -41,14 +45,11 @@ pub fn run() {
             // 窗口状态 / 配置（window_manager.rs）
             window_manager::window_get_gui_config,
             window_manager::window_save_gui_config,
-            window_manager::window_get_window_states,
-            window_manager::window_save_window_state,
             // 窗口打开 / 关闭（window_manager.rs）
             window_manager::window_open_window,
             window_manager::window_close_window,
             // 账户（windows/account.rs）
             windows::account::account_get_accounts,
-            windows::account::account_start_oauth,
             windows::account::account_add_account,
             windows::account::account_remove_account,
             windows::account::account_refresh_account_token,

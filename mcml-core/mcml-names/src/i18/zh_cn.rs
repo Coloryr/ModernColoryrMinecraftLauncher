@@ -84,7 +84,7 @@ impl I18Lang for ZhCn {
 
     fn get_gui(&self, gui: &GuiType) -> String {
         match gui {
-            GuiType::MainWindowTitle => String::from("Mcml 启动器"),
+            _ => Default::default()
         }
     }
 }

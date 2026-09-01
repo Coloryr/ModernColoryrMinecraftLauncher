@@ -39,9 +39,6 @@ export interface WindowState {
   height: number;
 }
 
-/** 主窗口固定 uuid（与 Rust window_manager.rs 一致） */
-export const MAIN_WINDOW_UUID = "00000000-0000-0000-0000-000000000001";
-
 /** 读取 GUI 状态；非 Tauri 环境返回 null（浏览器回退 localStorage） */
 export async function loadGuiConfig(): Promise<GuiConfig | null> {
   try {
@@ -85,13 +82,4 @@ function defaultConfig(): GuiConfig {
       sidebarCollapsed: localStorage.getItem("mcml.sidebarCollapsed") === "1",
     },
   };
-}
-
-/** 保存窗口几何到 windows.json（按 uuid 更新） */
-export async function saveWindowState(state: WindowState): Promise<void> {
-  try {
-    await invoke(WindowSaveWindowState, { state });
-  } catch {
-    /* 浏览器环境忽略 */
-  }
 }

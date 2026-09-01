@@ -42,14 +42,5 @@ pub fn check_uuid(uuid: Uuid) -> bool {
 
 /// 混合UUID
 pub fn mix_uuid(uuid1: Uuid, uuid2: Uuid) -> Uuid {
-    let data1 = uuid1.as_bytes();
-    let data2 = uuid2.as_bytes();
-
-    let mut data = [0u8; 16];
-
-    for i in 0..16 {
-        data[i] = data1[i] + data2[i];
-    }
-
-    Uuid::from_bytes(data)
+    Uuid::new_v5(&uuid1, uuid2.as_bytes())
 }

@@ -7,7 +7,7 @@
     "beforeDevCommand": "cd ../mcml-vue && npm run dev",
     "devUrl": "http://localhost:1420",
     "beforeBuildCommand": "cd ../mcml-vue && npm run build",
-    "frontendDist": "../mcml-vue/dist"
+    "frontendDist": "../../mcml-vue/dist"
   },
   "app": {
     "windows": [],
