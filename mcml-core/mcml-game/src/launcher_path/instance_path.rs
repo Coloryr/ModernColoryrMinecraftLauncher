@@ -260,7 +260,7 @@ impl InstanceSettingObj {
             .get()
             .unwrap()
             .join(&self.dir)
-            .join(names::ICON_FILE)
+            .join(self.icon.as_ref().map_or(names::ICON_FILE, |item| item))
     }
 
     /// 获取存档备份信息文件

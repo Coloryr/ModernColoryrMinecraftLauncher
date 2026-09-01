@@ -1,7 +1,4 @@
-//! 账户窗口：账户数据 + IPC 命令 + 规格 + 创建操作
-//!
-//! 账户数据统一由 `mcml_auth::auths`（mcml-auth 全局账户存储）管理，
-//! 持久化到核心数据目录的 auth.json；本模块只负责 IPC 转接与窗口规格。
+//! 账户窗口
 use std::sync::RwLock;
 
 use mcml_auth::{AuthType, LoginObj, auths, oauth};
@@ -9,20 +6,16 @@ use tauri::{AppHandle, Emitter};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-use crate::dtos::account::{
+use crate::dtos::account_dto::{
     AccountOAuthDto, AccountStoreDto, AccountStoreViewDto, auth_type_from_str,
 };
 use crate::listens;
-use crate::window_manager::create_window;
 
 static OAUTH_NOW: RwLock<Option<CancellationToken>> = RwLock::new(None);
 
-
 fn emit_account_change(app: &AppHandle) {
-    let _ = app.emit(listens::ACCOUT_CHANGE, ());
+    app.emit(listens::ACCOUT_CHANGE, ());
 }
-
-// ================= IPC 命令 =================
 
 /// 获取账户列表 + 当前账户
 #[tauri::command]
@@ -117,15 +110,4 @@ pub fn account_set_current_account(app: AppHandle, uuid: String) -> Result<bool,
     auths::set_current(Some(uuid));
     emit_account_change(&app);
     Ok(true)
-}
-
-/// 窗口规格（模型）
-pub const LABEL: &str = "mcml-account";
-pub const TITLE: &str = "账户管理";
-pub const WIDTH: f64 = 920.0;
-pub const HEIGHT: f64 = 640.0;
-
-/// 打开账户窗口
-pub fn open(app: &AppHandle) -> Result<(), String> {
-    create_window(app, LABEL, TITLE, WIDTH, HEIGHT)
 }

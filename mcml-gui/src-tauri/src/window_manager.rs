@@ -5,19 +5,21 @@
 //! - 功能窗口通过 [`create_window`] 创建或聚焦；`open_window` / `close_window`
 //!   命令供前端调用（多窗口模式）
 //! - 窗口几何状态（`window_save.json`）与 GUI 配置（`gui_config.json`）也在此维护，
-//!   主窗口使用固定 [`MAIN_WINDOW_UUID`]。
 
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
+    str::FromStr,
     sync::{LazyLock, OnceLock, RwLock},
 };
 
 use mcml_base::serialize_tools;
 use mcml_config::config_save;
-use mcml_names::{i18, i18_items::gui_type::GuiType, names, uuids};
+use mcml_names::{names, uuids};
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
+use tauri::{
+    AppHandle, Error::WindowNotFound, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
+};
 use uuid::{Uuid, uuid};
 
 use crate::dtos::GuiConfigDto;
@@ -26,19 +28,15 @@ use crate::dtos::GuiConfigDto;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct WindowState {
-    pub uuid: String,
-    pub label: String,
     pub x: i32,
     pub y: i32,
-    pub width: i32,
-    pub height: i32,
+    pub width: u32,
+    pub height: u32,
 }
 
 impl Default for WindowState {
     fn default() -> Self {
         Self {
-            uuid: String::new(),
-            label: String::new(),
             x: 0,
             y: 0,
             width: 0,
@@ -47,91 +45,95 @@ impl Default for WindowState {
     }
 }
 
-/// 主窗口固定 UUID
-pub const MAIN_WINDOW_UUID: Uuid = uuid!("00000000-0000-0000-0000-000000000001");
-/// 主窗口标签
-pub const MAIN_WINDOW_LABEL: &str = "main";
+pub enum WindowType {
+    MainWindow(String),
+    AccountWindow(String),
+}
 
-pub const WINDOW_MIN_WIDTH: f64 = 900.0;
-pub const WINDOW_MIN_HEIGHT: f64 = 600.0;
+const MAIN_WINDOW_UUID: Uuid = uuid!("00000000-0000-0000-0000-000000000001");
 
-pub const WINDOW_DEFAULT_WIDHT: f64 = 1100.0;
-pub const WINDOW_DEFAULT_HEIGHT: f64 = 720.0;
+const WINDOWS_INFO: LazyLock<HashMap<Uuid, WindowType>> = LazyLock::new(|| {
+    let mut map = HashMap::new();
+
+    map.insert(
+        MAIN_WINDOW_UUID,
+        WindowType::MainWindow(String::from("mcml-main")),
+    );
+    map.insert(
+        uuid!("00000000-0000-0000-0000-000000000002"),
+        WindowType::AccountWindow(String::from("mcml-account")),
+    );
+
+    map
+});
+
+const WINDOW_MIN_WIDTH: f64 = 900.0;
+const WINDOW_MIN_HEIGHT: f64 = 600.0;
+const WINDOW_DEFAULT_WIDHT: f64 = 1100.0;
+const WINDOW_DEFAULT_HEIGHT: f64 = 720.0;
 
 /// 窗口几何状态（uuid → 几何），内存中的唯一数据源
-static WINDOWS: LazyLock<RwLock<HashMap<Uuid, WindowState>>> =
+static WINDOWS_STATE: LazyLock<RwLock<HashMap<Uuid, WindowState>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 
 /// 窗口状态文件路径（window_save.json）
-static FILE: OnceLock<PathBuf> = OnceLock::new();
+static STATE_FILE: OnceLock<PathBuf> = OnceLock::new();
 
 /// 主窗口句柄（创建后记录，供关闭 / 判断使用）
-static MAIN_WINDOW: OnceLock<WebviewWindow<tauri::Wry>> = OnceLock::new();
+static MAIN_WINDOW: RwLock<Option<WebviewWindow<tauri::Wry>>> = RwLock::new(None);
+static ACCOUNT_WINDOW: RwLock<Option<WebviewWindow<tauri::Wry>>> = RwLock::new(None);
 
 /// 读取窗口状态文件（启动时调用，位于运行路径下）
 pub fn init<P: AsRef<Path>>(path: P) {
-    let file = FILE.get_or_init(|| path.as_ref().join(names::WINDOW_SAVE_FILE));
+    let file = STATE_FILE.get_or_init(|| path.as_ref().join(names::WINDOW_SAVE_FILE));
 
     if file.exists() && file.is_file() {
         if let Ok(data) = serialize_tools::json_from_file::<HashMap<Uuid, WindowState>>(file) {
-            WINDOWS.write().unwrap().extend(data);
+            WINDOWS_STATE.write().unwrap().extend(data);
         }
     }
 }
 
-/// 保存窗口几何（异步写入 window_save.json）
+/// 保存窗口状态
 pub fn save() {
-    let Some(file) = FILE.get() else {
+    let Some(file) = STATE_FILE.get() else {
         return;
     };
-    let data = WINDOWS.read().unwrap();
+    let data = WINDOWS_STATE.read().unwrap();
     config_save::save(uuids::WINDOW_FILE_UUID, &*data, file);
 }
 
 /// 读取指定 uuid 的窗口几何（用于启动时恢复位置大小）
-pub fn window_state_for(uuid: Uuid) -> Option<WindowState> {
-    WINDOWS.read().unwrap().get(&uuid).cloned()
+pub fn window_state_for(uuid: &Uuid) -> Option<WindowState> {
+    WINDOWS_STATE.read().unwrap().get(uuid).cloned()
+}
+
+/// 设置窗口状态
+pub fn window_state_set(uuid: &Uuid, state: WindowState) {
+    WINDOWS_STATE.write().unwrap().insert(uuid.clone(), state);
+    save();
 }
 
 /// 主窗口句柄（若已创建）
-pub fn main_window() -> Option<&'static WebviewWindow<tauri::Wry>> {
-    MAIN_WINDOW.get()
+pub fn main_window() -> Option<WebviewWindow<tauri::Wry>> {
+    MAIN_WINDOW.read().unwrap().clone()
 }
 
 /// 创建（或聚焦）一个窗口
 ///
 /// 注意：必须由 async 命令调用（同步命令在 Windows 主线程阻塞创建会冻结应用）。
-pub fn create_window(
-    app: &AppHandle,
-    label: &str,
-    title: &str,
-    width: f64,
-    height: f64,
-) -> Result<(), String> {
+pub fn create_window(app: &AppHandle, label: &str, uuid: &Uuid) -> Result<WebviewWindow, String> {
     // 已存在则聚焦，避免重复窗口
     if let Some(win) = app.get_webview_window(label) {
-        let _ = win.set_focus();
-        return Ok(());
+        win.set_focus().map_err(|err| err.to_string())?;
+        return Ok(win);
     }
-    WebviewWindowBuilder::new(app, label, WebviewUrl::App("index.html".into()))
-        .title(title)
-        .inner_size(width, height)
-        .build()
-        .map_err(|e| e.to_string())?;
-    Ok(())
-}
 
-/// 创建主窗口（有上次几何则恢复位置/大小，否则按默认居中显示）；已存在则聚焦
-pub fn create_main(app: &AppHandle) -> Result<(), String> {
-    if let Some(win) = app.get_webview_window(MAIN_WINDOW_LABEL) {
-        let _ = win.set_focus();
-        return Ok(());
-    }
-    let geom = window_state_for(MAIN_WINDOW_UUID);
-    let builder =
-        WebviewWindowBuilder::new(app, MAIN_WINDOW_LABEL, WebviewUrl::App("index.html".into()))
-            .title(i18::get_gui(GuiType::MainWindowTitle))
-            .min_inner_size(WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT);
+    let geom = window_state_for(uuid);
+
+    let builder = WebviewWindowBuilder::new(app, label, WebviewUrl::App("index.html".into()))
+        .title(names::MCML)
+        .min_inner_size(WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT);
     let win = match geom {
         Some(g) => builder
             .inner_size(g.width as f64, g.height as f64)
@@ -142,17 +144,84 @@ pub fn create_main(app: &AppHandle) -> Result<(), String> {
             .center()
             .build(),
     };
-    let win = win.map_err(|e| e.to_string())?;
-    let _ = MAIN_WINDOW.set(win);
+    Ok(win.map_err(|e| e.to_string())?)
+}
+
+pub fn save_window_state(uuid: &Uuid, window: WebviewWindow) -> Result<(), String> {
+    let pos = window.inner_position().map_err(|err| err.to_string())?;
+    let size = window.outer_size().map_err(|err| err.to_string())?;
+
+    let mut geom = match window_state_for(&uuid) {
+        Some(geom) => geom,
+        None => WindowState::default(),
+    };
+
+    geom.x = pos.x;
+    geom.y = pos.y;
+    geom.width = size.width;
+    geom.height = size.height;
+    window_state_set(&uuid, geom);
+
     Ok(())
 }
 
-/// 按标签关闭窗口
-pub fn close_label(app: &AppHandle, label: &str) -> Result<(), String> {
-    if let Some(win) = app.get_webview_window(label) {
-        win.close().map_err(|e| e.to_string())?;
+pub fn close_window_from_uuid(_app: &AppHandle, uuid: &str, _sub_uuid: &str) -> Result<(), String> {
+    let uuid = Uuid::from_str(uuid).map_err(|err| err.to_string())?;
+    let binding = WINDOWS_INFO;
+    let info = binding.get(&uuid);
+
+    match info {
+        Some(window_type) => match window_type {
+            WindowType::MainWindow(_label) => {
+                let window = MAIN_WINDOW.read().unwrap().clone();
+                match window {
+                    Some(window) => {
+                        save_window_state(&uuid, window);
+                        *MAIN_WINDOW.write().unwrap() = None;
+                        Ok(())
+                    }
+                    None => Err(WindowNotFound.to_string()),
+                }
+            }
+            WindowType::AccountWindow(_label) => {
+                let window = ACCOUNT_WINDOW.read().unwrap().clone();
+                match window {
+                    Some(window) => {
+                        save_window_state(&uuid, window);
+                        *ACCOUNT_WINDOW.write().unwrap() = None;
+                        Ok(())
+                    }
+                    None => Err(WindowNotFound.to_string()),
+                }
+            }
+        },
+        None => Err(WindowNotFound.to_string()),
     }
-    Ok(())
+}
+
+pub fn open_window_from_uuid(app: &AppHandle, uuid: &Uuid, _sub_uuid: &str) -> Result<(), String> {
+    let binding = WINDOWS_INFO;
+    let info = binding.get(&uuid);
+
+    match info {
+        Some(window_type) => match window_type {
+            WindowType::MainWindow(label) => {
+                let window = create_window(app, label, uuid)?;
+                *MAIN_WINDOW.write().unwrap() = Some(window);
+                Ok(())
+            }
+            WindowType::AccountWindow(label) => {
+                let window = create_window(app, label, uuid)?;
+                *ACCOUNT_WINDOW.write().unwrap() = Some(window);
+                Ok(())
+            }
+        },
+        None => Err(WindowNotFound.to_string()),
+    }
+}
+
+pub fn show_main_window(app: &AppHandle) -> Result<(), String> {
+    open_window_from_uuid(app, &MAIN_WINDOW_UUID, "")
 }
 
 // ================= IPC 命令 =================
@@ -162,29 +231,19 @@ pub fn close_label(app: &AppHandle, label: &str) -> Result<(), String> {
 /// 注意：必须保持 async：同步命令在 Windows 上跑在主线程，而窗口创建会阻塞
 /// 等待主线程，导致整个应用冻结（新窗口白屏、无法点击）。
 #[tauri::command]
-pub async fn window_open_window(app: AppHandle, kind: String) -> Result<(), String> {
-    println!("[window_manager] 打开窗口 kind={kind}");
-    match kind.as_str() {
-        "main" => crate::windows::main::open(&app),
-        "settings" => crate::windows::settings::open(&app),
-        "stats" => crate::windows::stats::open(&app),
-        "skin" => crate::windows::skin::open(&app),
-        "help" => crate::windows::help::open(&app),
-        "resource" => crate::windows::resource::open(&app),
-        "account" => crate::windows::account::open(&app),
-        "add" => crate::windows::add::open(&app),
-        _ => Err(format!("未知窗口类型: {kind}")),
-    }
+pub async fn window_open_window(
+    app: AppHandle,
+    uuid: String,
+    sub_uuid: String,
+) -> Result<(), String> {
+    let uuid = Uuid::from_str(&uuid).map_err(|err| err.to_string())?;
+    open_window_from_uuid(&app, &uuid, &sub_uuid)
 }
 
 /// 关闭窗口（kind → 标签；main 关闭主窗口）
 #[tauri::command]
-pub fn window_close_window(app: AppHandle, kind: String) -> Result<(), String> {
-    let label = match kind.as_str() {
-        "main" => MAIN_WINDOW_LABEL.to_string(),
-        _ => format!("mcml-{kind}"),
-    };
-    close_label(&app, &label)
+pub fn window_close_window(app: AppHandle, uuid: String, sub_uuid: String) -> Result<(), String> {
+    close_window_from_uuid(&app, &uuid, &sub_uuid)
 }
 
 /// 获取 GUI 状态（无文件时返回默认值；前端 wire 为 DTO，TS 命名 camelCase）
@@ -197,20 +256,5 @@ pub fn window_get_gui_config() -> GuiConfigDto {
 #[tauri::command]
 pub fn window_save_gui_config(config: GuiConfigDto) -> Result<(), String> {
     crate::gui_config::set(config.into());
-    Ok(())
-}
-
-/// 获取全部窗口几何状态
-#[tauri::command]
-pub fn window_get_window_states() -> Vec<WindowState> {
-    WINDOWS.read().unwrap().values().cloned().collect()
-}
-
-/// 保存（或更新）某个窗口的几何状态，按 uuid 去重
-#[tauri::command]
-pub fn window_save_window_state(state: WindowState) -> Result<(), String> {
-    let uuid = Uuid::parse_str(&state.uuid).map_err(|e| e.to_string())?;
-    WINDOWS.write().unwrap().insert(uuid, state);
-    save();
     Ok(())
 }

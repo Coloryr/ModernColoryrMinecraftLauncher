@@ -53,6 +53,8 @@ fn get_run_path() -> PathBuf {
 
 #[cfg(not(debug_assertions))]
 fn get_config_path() -> Option<PathBuf> {
+    use std::path::Path;
+
     let dir = dirs::data_local_dir()?;
     let file = dir.join(names::MCML_DIR).join("run");
 

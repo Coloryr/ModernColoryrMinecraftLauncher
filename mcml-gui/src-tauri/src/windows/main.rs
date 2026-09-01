@@ -14,8 +14,6 @@ use tauri::{AppHandle, Emitter, Manager, State};
 use crate::dtos::{ExitEvent, InstanceChangeEvent, InstancePatch, LogEvent, StateEvent};
 use crate::models::{InstanceArgs, InstanceInfo, JavaInfo, VersionInfo};
 
-use crate::window_manager::create_window;
-
 // ================= 数据存储 =================
 
 /// 主窗口数据存储：实例 / 启动参数 / 分组 / 运行状态 / 日志
@@ -575,14 +573,3 @@ fn uuid_short() -> String {
     format!("{:016x}", n)
 }
 
-// ================= 窗口规格 =================
-
-pub const LABEL: &str = "main";
-pub const TITLE: &str = "MCML 启动器";
-pub const WIDTH: f64 = 1100.0;
-pub const HEIGHT: f64 = 720.0;
-
-/// 打开主窗口（由 window_manager 创建，一般不需要）
-pub fn open(app: &AppHandle) -> Result<(), String> {
-    create_window(app, LABEL, TITLE, WIDTH, HEIGHT)
-}

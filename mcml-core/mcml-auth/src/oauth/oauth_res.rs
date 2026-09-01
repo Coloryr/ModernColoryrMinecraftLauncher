@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 /// OAuth 设备码授权——第一步返回结果
 ///
 /// 包含用户完成浏览器授权所需的信息。
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct OAuthGetCodeRes {
     /// 用户需要在浏览器中输入的设备码
     pub code: String,

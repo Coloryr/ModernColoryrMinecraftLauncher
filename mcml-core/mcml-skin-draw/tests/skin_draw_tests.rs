@@ -1,6 +1,5 @@
 use std::path::Path;
 
-use mcml_skin::skin::{self};
 use mcml_skin_draw::{
     cape_2d_draw,
     head_2d_draw, head_3d_draw, skin_2d_draw,
@@ -44,7 +43,7 @@ fn assert_bitmap_eq(a: &mut Bitmap, b: &mut Bitmap) {
 fn test_cape_draw() {
     let file = Path::new("tests").join("cape.png");
     let file = file.as_path();
-    let image = skin::open_bitmap(file);
+    let image = mcml_skin::open_bitmap(file);
     assert!(image.is_some());
     let mut image = image.unwrap();
     let res = cape_2d_draw::draw_cape_2d(&mut image);
@@ -54,7 +53,7 @@ fn test_cape_draw() {
     let file = Path::new("tests").join("out_cape.png");
     let file = file.as_path();
 
-    let out = skin::open_bitmap(file);
+    let out = mcml_skin::open_bitmap(file);
     assert!(out.is_some());
     let mut out = out.unwrap();
 
@@ -67,7 +66,7 @@ fn test_cape_draw() {
 fn test_cape_back_draw() {
     let file = Path::new("tests").join("cape.png");
     let file = file.as_path();
-    let image = skin::open_bitmap(file);
+    let image = mcml_skin::open_bitmap(file);
     assert!(image.is_some());
     let mut image = image.unwrap();
     let res = cape_2d_draw::draw_cape_back_2d(&mut image);
@@ -77,7 +76,7 @@ fn test_cape_back_draw() {
     let file = Path::new("tests").join("out_cape_back.png");
     let file = file.as_path();
 
-    let out = skin::open_bitmap(file);
+    let out = mcml_skin::open_bitmap(file);
     assert!(out.is_some());
     let mut out = out.unwrap();
 
@@ -90,7 +89,7 @@ fn test_cape_back_draw() {
 fn test_head_draw_typea() {
     let file = Path::new("tests").join("skin_slim.png");
     let file = file.as_path();
-    let image = skin::open_bitmap(file);
+    let image = mcml_skin::open_bitmap(file);
     assert!(image.is_some());
     let mut image = image.unwrap();
     let res = head_2d_draw::head_2d_draw_typea(&mut image);
@@ -100,7 +99,7 @@ fn test_head_draw_typea() {
     let file = Path::new("tests").join("out_head_a.png");
     let file = file.as_path();
 
-    let out = skin::open_bitmap(file);
+    let out = mcml_skin::open_bitmap(file);
     assert!(out.is_some());
     let mut out = out.unwrap();
 
@@ -113,7 +112,7 @@ fn test_head_draw_typea() {
 fn test_head_draw_typeb() {
     let file = Path::new("tests").join("skin_slim.png");
     let file = file.as_path();
-    let image = skin::open_bitmap(file);
+    let image = mcml_skin::open_bitmap(file);
     assert!(image.is_some());
     let mut image = image.unwrap();
     let res = head_2d_draw::head_2d_draw_typeb(&mut image);
@@ -123,7 +122,7 @@ fn test_head_draw_typeb() {
     let file = Path::new("tests").join("out_head_b.png");
     let file = file.as_path();
 
-    let out = skin::open_bitmap(file);
+    let out = mcml_skin::open_bitmap(file);
     assert!(out.is_some());
     let mut out = out.unwrap();
 
@@ -136,7 +135,7 @@ fn test_head_draw_typeb() {
 fn test_skin_draw_typea() {
     let file = Path::new("tests").join("skin_slim.png");
     let file = file.as_path();
-    let image = skin::open_bitmap(file);
+    let image = mcml_skin::open_bitmap(file);
     assert!(image.is_some());
     let mut image = image.unwrap();
     let res = skin_2d_draw::skin_2d_draw_typea(&mut image, None);
@@ -146,7 +145,7 @@ fn test_skin_draw_typea() {
     let file = Path::new("tests").join("out_skin_2d_a.png");
     let file = file.as_path();
 
-    let out = skin::open_bitmap(file);
+    let out = mcml_skin::open_bitmap(file);
     assert!(out.is_some());
     let mut out = out.unwrap();
 
@@ -159,7 +158,7 @@ fn test_skin_draw_typea() {
 fn test_skin_draw_typeb() {
     let file = Path::new("tests").join("skin_slim.png");
     let file = file.as_path();
-    let image = skin::open_bitmap(file);
+    let image = mcml_skin::open_bitmap(file);
     assert!(image.is_some());
     let mut image = image.unwrap();
     let res = skin_2d_draw::skin_2d_draw_typeb(&mut image, None);
@@ -169,7 +168,7 @@ fn test_skin_draw_typeb() {
     let file = Path::new("tests").join("out_skin_2d_b.png");
     let file = file.as_path();
 
-    let out = skin::open_bitmap(file);
+    let out = mcml_skin::open_bitmap(file);
     assert!(out.is_some());
     let mut out = out.unwrap();
 
@@ -182,7 +181,7 @@ fn test_skin_draw_typeb() {
 fn test_head_3d_draw_typea() {
     let file = Path::new("tests").join("skin_slim.png");
     let file = file.as_path();
-    let image = skin::open_bitmap(file);
+    let image = mcml_skin::open_bitmap(file);
     assert!(image.is_some());
     let mut image = image.unwrap();
     let res = head_3d_draw::draw_head_3d_typea(&mut image);
@@ -192,7 +191,7 @@ fn test_head_3d_draw_typea() {
     let file = Path::new("tests").join("out_head_3d_a.png");
     let file = file.as_path();
 
-    let out = skin::open_bitmap(file);
+    let out = mcml_skin::open_bitmap(file);
     assert!(out.is_some());
     let mut out = out.unwrap();
 
@@ -205,7 +204,7 @@ fn test_head_3d_draw_typea() {
 fn test_head_3d_draw_typeb() {
     let file = Path::new("tests").join("skin_slim.png");
     let file = file.as_path();
-    let image = skin::open_bitmap(file);
+    let image = mcml_skin::open_bitmap(file);
     assert!(image.is_some());
     let mut image = image.unwrap();
     let res = head_3d_draw::draw_head_3d_typeb(&mut image, 15.0, 65.0);
@@ -215,7 +214,7 @@ fn test_head_3d_draw_typeb() {
     let file = Path::new("tests").join("out_head_3d_b.png");
     let file = file.as_path();
 
-    let out = skin::open_bitmap(file);
+    let out = mcml_skin::open_bitmap(file);
     assert!(out.is_some());
     let mut out = out.unwrap();
 
