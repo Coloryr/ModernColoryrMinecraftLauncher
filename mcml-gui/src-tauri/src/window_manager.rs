@@ -176,7 +176,7 @@ pub fn close_window_from_uuid(_app: &AppHandle, uuid: &str, _sub_uuid: &str) -> 
                 let window = MAIN_WINDOW.read().unwrap().clone();
                 match window {
                     Some(window) => {
-                        save_window_state(&uuid, window);
+                        save_window_state(&uuid, window)?;
                         *MAIN_WINDOW.write().unwrap() = None;
                         Ok(())
                     }
@@ -187,7 +187,7 @@ pub fn close_window_from_uuid(_app: &AppHandle, uuid: &str, _sub_uuid: &str) -> 
                 let window = ACCOUNT_WINDOW.read().unwrap().clone();
                 match window {
                     Some(window) => {
-                        save_window_state(&uuid, window);
+                        save_window_state(&uuid, window)?;
                         *ACCOUNT_WINDOW.write().unwrap() = None;
                         Ok(())
                     }
@@ -223,8 +223,6 @@ pub fn open_window_from_uuid(app: &AppHandle, uuid: &Uuid, _sub_uuid: &str) -> R
 pub fn show_main_window(app: &AppHandle) -> Result<(), String> {
     open_window_from_uuid(app, &MAIN_WINDOW_UUID, "")
 }
-
-// ================= IPC 命令 =================
 
 /// 打开一个功能窗口（多窗口模式，窗口按钮调用）
 ///

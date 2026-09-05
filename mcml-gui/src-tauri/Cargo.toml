@@ -29,6 +29,8 @@ mcml-core = { path = "../../mcml-core" }
 mcml-game = { path = "../../mcml-core/mcml-game" }
 mcml-config = { path = "../../mcml-core/mcml-config" }
 mcml-sys = { path = "../../mcml-core/mcml-sys" }
+mcml-net = { path = "../../mcml-core/mcml-net" }
+mcml-log = { path = "../../mcml-core/mcml-log" }
 mcml-base = { path = "../../mcml-core/mcml-base" }
 mcml-auth = { path = "../../mcml-core/mcml-auth" }
 mcml-names = { path = "../../mcml-core/mcml-names" }

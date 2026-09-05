@@ -23,7 +23,8 @@ use std::{
 
 use mcml_base::{inner_path, serialize_tools};
 use mcml_config::config_save;
-use mcml_names::{i18_items::error_type::CoreResult, names, uuids::AUTH_UUID};
+use mcml_names::{i18_items::error_type::CoreResult, names, uuids};
+use serde::{Deserialize, Serialize};
 
 use crate::{AuthType, LoginObj, UserKeyObj};
 
@@ -33,6 +34,23 @@ use crate::{AuthType, LoginObj, UserKeyObj};
 /// 键为 `UserKeyObj`（UUID + 认证类型），值为 `LoginObj`（完整账户信息）。
 static AUTHS: LazyLock<RwLock<HashMap<UserKeyObj, LoginObj>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
+
+/// 当前使用的账户 UUID（内存态；重启后由前端回退到默认选中第一个）
+static CURRENT_USER: LazyLock<RwLock<Option<UserKeyObj>>> = LazyLock::new(|| RwLock::new(None));
+
+#[derive(Serialize, Deserialize)]
+#[serde(default)]
+struct SelectUserObj {
+    pub user: Option<UserKeyObj>,
+}
+
+impl Default for SelectUserObj {
+    fn default() -> Self {
+        Self {
+            user: Default::default(),
+        }
+    }
+}
 
 /// 从磁盘加载账户列表到内存
 ///
@@ -49,13 +67,30 @@ fn load<P: AsRef<Path>>(path: P) {
     }
 }
 
+fn load_select<P: AsRef<Path>>(path: P) {
+    let json = serialize_tools::json_from_file::<SelectUserObj>(path);
+    if let Err(err) = json {
+        mcml_log::error_type(err);
+        return;
+    }
+
+    let user = json.unwrap();
+    *CURRENT_USER.write().unwrap() = user.user;
+}
+
 /// 将内存中所有账户持久化到磁盘
 ///
 /// 数据以 `Vec<LoginObj>` 格式序列化为 JSON 文件。
 fn save() {
     let auths: Vec<LoginObj> = AUTHS.read().unwrap().values().cloned().collect();
-    let local = inner_path::get_inner_path().join(names::AUTH_FILE);
-    config_save::save(AUTH_UUID, &auths, &local);
+    let file = inner_path::get_inner_path().join(names::AUTH_FILE);
+    config_save::save(uuids::AUTH_UUID, &auths, &file);
+}
+
+fn save_select() {
+    let user = CURRENT_USER.read().unwrap().clone();
+    let file = inner_path::get_inner_path().join(names::AUTH_SELECT_FILE);
+    config_save::save(uuids::AUTH_SELECT_UUID, &user, &file);
 }
 
 /// 初始化账户存储
@@ -70,6 +105,11 @@ pub fn init() {
     } else {
         save();
     }
+
+    let local = inner_path::get_inner_path().join(names::AUTH_SELECT_FILE);
+    if local.exists() {
+        load_select(&local);
+    }
 }
 
 /// 根据 UUID 和认证类型查询已保存的账户
@@ -82,9 +122,14 @@ pub fn init() {
 /// # 返回值
 ///
 /// 找到则返回 `Some(LoginObj)` 克隆，未找到则返回 `None`
-pub fn get(uuid: String, auth_type: AuthType) -> Option<LoginObj> {
+pub fn get(uuid: &str, auth_type: AuthType) -> Option<LoginObj> {
     let auths = AUTHS.read().unwrap();
-    auths.get(&UserKeyObj { uuid, auth_type }).cloned()
+    auths
+        .get(&UserKeyObj {
+            uuid: uuid.to_string(),
+            auth_type,
+        })
+        .cloned()
 }
 
 /// 从 JSON 文件批量导入账户列表
@@ -121,9 +166,6 @@ pub fn clear_auths() {
     save();
 }
 
-/// 当前使用的账户 UUID（内存态；重启后由前端回退到默认选中第一个）
-static CURRENT_UUID: LazyLock<RwLock<Option<String>>> = LazyLock::new(|| RwLock::new(None));
-
 /// 获取全部账户（按最后登录时间倒序，最近使用的排在前面）
 pub fn get_all() -> Vec<LoginObj> {
     let mut list: Vec<LoginObj> = AUTHS.read().unwrap().values().cloned().collect();
@@ -131,20 +173,16 @@ pub fn get_all() -> Vec<LoginObj> {
     list
 }
 
-/// 按 UUID 查询账户（不区分认证类型）
-pub fn get_by_uuid(uuid: String) -> Option<LoginObj> {
-    let auths = AUTHS.read().unwrap();
-    auths.values().find(|a| a.uuid == uuid).cloned()
+/// 获取当前使用的账户
+pub fn get_current() -> Option<UserKeyObj> {
+    CURRENT_USER.read().unwrap().clone()
 }
 
-/// 获取当前使用的账户 UUID
-pub fn get_current() -> Option<String> {
-    CURRENT_UUID.read().unwrap().clone()
-}
+/// 设置当前使用的账户
+pub fn set_current(user: Option<UserKeyObj>) {
+    *CURRENT_USER.write().unwrap() = user;
 
-/// 设置当前使用的账户 UUID
-pub fn set_current(uuid: Option<String>) {
-    *CURRENT_UUID.write().unwrap() = uuid;
+    save_select();
 }
 
 impl LoginObj {

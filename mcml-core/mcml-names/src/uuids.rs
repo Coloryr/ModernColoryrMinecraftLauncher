@@ -12,6 +12,7 @@ pub const LAUNCH_COUNT_DATA_FILE_UUID: Uuid = uuid!("00000000-0000-0000-0000-000
 pub const SERVERPACK_FILE_UUID: Uuid = uuid!("00000000-0000-0000-0000-000000000008");
 pub const WINDOW_FILE_UUID: Uuid = uuid!("00000000-0000-0000-0000-000000000009");
 pub const GUI_CONFIG_FILE_UUID: Uuid = uuid!("00000000-0000-0000-0000-00000000000a");
+pub const AUTH_SELECT_UUID: Uuid = uuid!("00000000-0000-0000-0000-00000000000b");
 
 static UUIDS: LazyLock<Vec<Uuid>> = LazyLock::new(|| {
     vec![
@@ -24,6 +25,8 @@ static UUIDS: LazyLock<Vec<Uuid>> = LazyLock::new(|| {
         LAUNCH_COUNT_DATA_FILE_UUID,
         SERVERPACK_FILE_UUID,
         WINDOW_FILE_UUID,
+        GUI_CONFIG_FILE_UUID,
+        AUTH_SELECT_UUID
     ]
 });
 
