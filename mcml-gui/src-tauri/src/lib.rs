@@ -5,16 +5,19 @@
 //! 每个窗口的规格 / 专属模型 / 创建操作 / 窗口按钮调用的方法见 `windows/`。
 //! 所有窗口的创建 / 聚焦 / 关闭统一由 `window_manager.rs` 处理。
 
-use tauri::{Manager, async_runtime::Mutex};
+use mcml_names::i18;
+
+use crate::windows::main;
 
 pub mod dtos;
 pub mod err_box;
 pub mod gui_config;
 pub mod image_manager;
-pub mod listens;
 pub mod models;
 pub mod window_manager;
 pub mod windows;
+
+include!(concat!(env!("OUT_DIR"), "/invokes_gen.rs"));
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -24,57 +27,29 @@ pub fn run() {
                 image_manager::url_image(request, responder).await;
             });
         })
-        .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .on_window_event(window_manager::on_window_event)
         .setup(|app| {
-            // 主窗口由窗口管理器创建（恢复上次几何）
             if let Err(e) = window_manager::show_main_window(app.handle()) {
                 err_box::fatal_error_text(&e);
             }
 
-            let store = windows::main::MainWindowModel::init(app.handle());
-            app.manage(Mutex::new(store));
+            let handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                match mcml_core::load() {
+                    Ok(()) => {
+                        main::emit_load_done(&handle, None);
+                    }
+                    Err(err) => {
+                        mcml_log::error_type(err.clone());
+                        main::emit_load_done(&handle, Some(i18::get_error(err)));
+                    }
+                }
+            });
 
-            // 账户存储走 mcml-auth：启动后台配置保存线程并加载 auth.json
-            // （接入完整 mcml_core::init 后这两行由 core 启动流程接管）
-            mcml_config::config_save::start();
-            mcml_auth::auths::init();
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![
-            // 窗口状态 / 配置（window_manager.rs）
-            window_manager::window_get_gui_config,
-            window_manager::window_save_gui_config,
-            // 窗口打开 / 关闭（window_manager.rs）
-            window_manager::window_open_window,
-            window_manager::window_close_window,
-            // 账户（windows/account.rs）
-            windows::account::account_get_accounts,
-            windows::account::account_add_account,
-            windows::account::account_remove_account,
-            windows::account::account_refresh_account_token,
-            windows::account::account_set_current_account,
-            // 主窗口（windows/main.rs）
-            windows::main::main_init_core,
-            windows::main::main_get_instances,
-            windows::main::main_get_groups,
-            windows::main::main_get_java_list,
-            windows::main::main_get_versions,
-            windows::main::main_add_group,
-            windows::main::main_remove_group,
-            windows::main::main_move_group,
-            windows::main::main_create_instance,
-            windows::main::main_rename_instance,
-            windows::main::main_update_instance,
-            windows::main::main_delete_instance,
-            windows::main::main_move_instance,
-            windows::main::main_launch_game,
-            windows::main::main_stop_game,
-            windows::main::main_get_game_log,
-            windows::main::main_get_running,
-            // 添加实例窗口（windows/add.rs）
-            windows::add::add_list_dir
-        ])
+        .invoke_handler(tauri_commands!())
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

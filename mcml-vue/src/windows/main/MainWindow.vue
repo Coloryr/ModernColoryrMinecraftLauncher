@@ -11,7 +11,6 @@ import {
 import { t } from "../../lib/i18n";
 import { showToast } from "../../lib/toast";
 import { theme, toggleTheme } from "../../lib/theme";
-import { newsImage } from "../../lib/newsBanner";
 import { openWindow } from "../windowManager";
 import {
   sidebarCollapsed,
@@ -46,15 +45,16 @@ import BaseModal from "../../components/ui/BaseModal.vue";
 import SegmentedTabs from "../../components/ui/SegmentedTabs.vue";
 import NumberStepper from "../../components/ui/NumberStepper.vue";
 
-await getCurrentWindow().setTitle(t("winTitle.main"));
+// 注意：不能用顶层 await —— 会让 <script setup> 变成 async setup，
+// App.vue 没有 <Suspense> 包裹，Vue 将不渲染该组件（窗口白屏）
+getCurrentWindow().setTitle(t("winTitle.main")).catch(() => { /* 忽略 */ });
 
 // ================= 基础状态 =================
 
-/** 初始化是否失败（失败则显示引导页） */
 const bootFailed = ref(false);
 const initError = ref("");
 const initLoading = ref(false);
-import { closeSplash, splashVisible } from "../../lib/splash";
+import { closeSplash, openSplash, splashError, splashVisible } from "../../lib/splash";
 const localDir = ref(localStorage.getItem("mcml.localDir") ?? "");
 const playerName = ref(localStorage.getItem("mcml.playerName") ?? "Player");
 
@@ -191,6 +191,7 @@ function initSelection() {
 // ================= 启动器主页（默认打开） =================
 
 const newsActive = ref(true);
+const newsLoading = ref(false);
 
 /** 打开 / 关闭启动器主页（保留选中实例） */
 function toggleNews() {
@@ -221,29 +222,51 @@ function quickLaunch() {
   }
 }
 
-const news = ref<NewsItem[]>([
-  {
-    id: 1,
-    title: "Minecraft 1.21.5 正式版发布，全新装饰方块上线",
-    date: "2026-04-15",
-    tag: "更新",
-    image: newsImage(1, "#3f8cff", "#7c5cff"),
-  },
-  {
-    id: 2,
-    title: "夏季更新预览：新增生物群系与结构",
-    date: "2026-04-08",
-    tag: "预览",
-    image: newsImage(2, "#34d399", "#22d3ee"),
-  },
-  {
-    id: 3,
-    title: "年度建筑大赛开始报名，奖品丰厚",
-    date: "2026-03-30",
-    tag: "活动",
-    image: newsImage(3, "#f59e0b", "#ef4444"),
-  },
-]);
+const news = ref<NewsItem[]>([]);
+const newsPage = ref(1);
+const newsHasMore = ref(true);
+let newsLoadedPage = 0; // 已成功加载的页码（0 = 未加载）
+
+/** 拉取指定页的新闻（页码从 1 开始；翻页翻到空页时回退并禁用下一页） */
+async function fetchNews(page: number) {
+  if (newsLoading.value) return;
+  newsLoading.value = true;
+  try {
+    const list = await api.getNews(page);
+    if (list.length === 0 && page > 1) {
+      newsHasMore.value = false;
+      return;
+    }
+    newsHasMore.value = true;
+    newsPage.value = page;
+    news.value = list;
+    newsLoadedPage = page;
+  } catch (e) {
+    console.warn("[news] 加载失败", e);
+  } finally {
+    newsLoading.value = false;
+  }
+}
+
+/** 启动 / 核心加载完成后加载首页新闻（已加载则跳过） */
+function loadNews() {
+  if (newsLoadedPage) return;
+  fetchNews(1);
+}
+
+function nextNewsPage() {
+  if (!newsHasMore.value) return;
+  fetchNews(newsPage.value + 1);
+}
+
+/** 打开新闻原文（系统浏览器） */
+function openNews(url: string) {
+  api.openUrl(url);
+}
+
+function prevNewsPage() {
+  if (newsPage.value > 1) fetchNews(newsPage.value - 1);
+}
 
 // ================= 账户 =================
 
@@ -254,6 +277,9 @@ import {
   setCurrentAccount,
 } from "../../lib/accountStore";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { listen } from "@tauri-apps/api/event";
+import { LoadDone } from "../../lib/listens.ts";
+import { LoadState } from "../../lib/dtos/main.ts";
 const accounts = storeAccounts;
 const currentAccount = storeCurrentAccount;
 
@@ -862,15 +888,22 @@ async function doInit() {
     localStorage.setItem("mcml.playerName", playerName.value);
     bootFailed.value = false;
     await Promise.all([loadInstances(), loadGroups(), loadJava()]);
-    // 版本列表走网络（Mojang 清单），不阻塞启动
     loadVersions();
-    // 初始化完成，关闭启动画面
     closeSplash();
+    loadNews();
   } catch (e) {
     initError.value = String(e);
+    // 初始化失败：关闭启动页并显示错误页
+    closeSplash(String(e));
   } finally {
     initLoading.value = false;
   }
+}
+
+// 错误页重试：重新显示启动页并再次初始化
+function retryBoot() {
+  openSplash();
+  doInit();
 }
 
 // ================= 数据加载 =================
@@ -975,6 +1008,7 @@ onMounted(async () => {
   document.addEventListener("keydown", onDocKeyDown);
   window.addEventListener("storage", onAddedInstanceStorage);
   initLoading.value = true;
+  // 加载页最短显示时长：初始化太快时也保留一会儿，避免一闪而过
   try {
     await api.initCore(localDir.value.trim() || null, playerName.value);
     bootFailed.value = false;
@@ -983,11 +1017,13 @@ onMounted(async () => {
     loadVersions();
     // 启动时选中上次启动的实例并展开其分组
     initSelection();
-    // 初始化完成，关闭启动画面
     closeSplash();
-  } catch {
+    loadNews();
+  } catch (e) {
+    initError.value = String(e);
     bootFailed.value = true;
-    closeSplash();
+    // 加载完成但出错：关闭启动页并显示错误页
+    closeSplash(String(e));
   } finally {
     initLoading.value = false;
   }
@@ -999,20 +1035,40 @@ onUnmounted(() => {
   document.removeEventListener("keydown", onDocKeyDown);
   window.removeEventListener("storage", onAddedInstanceStorage);
 });
+
+// 后端核心加载完成事件：决定关闭启动页（进入主界面）还是显示错误页
+listen<LoadState>(LoadDone, (data) => {
+  const state = data.payload;
+  if (state.ok) {
+    bootFailed.value = false;
+    closeSplash();
+    // 核心加载完成后实例 / 分组表才填充，重拉一次
+    loadInstances();
+    loadGroups();
+    loadNews();
+  } else {
+    const msg = state.error || t("init.failed");
+    initError.value = msg;
+    bootFailed.value = true;
+    closeSplash(msg);
+  }
+});
 </script>
 
 <template>
   <div class="main-window">
     <!-- ===== 启动画面 / 初始化引导（SplashScreen 组件） ===== -->
     <SplashScreen
-      v-if="splashVisible || bootFailed"
+      v-if="splashVisible || bootFailed || splashError"
       :splash-visible="splashVisible"
       :boot-failed="bootFailed"
+      :splash-error="splashError"
       :init-loading="initLoading"
       :init-error="initError"
       v-model:local-dir="localDir"
       v-model:player-name="playerName"
       @retry="doInit"
+      @retry-boot="retryBoot"
     />
 
     <!-- ===== 主界面 ===== -->
@@ -1047,6 +1103,13 @@ onUnmounted(() => {
           <section class="news-page">
             <HomePage
               :items="news"
+              :loading="newsLoading"
+              @refresh="fetchNews(newsPage)"
+              :page="newsPage"
+              :has-more="newsHasMore"
+              @prev="prevNewsPage"
+              @next="nextNewsPage"
+              @open="openNews"
               :last-instance="null"
               :empty="true"
               @add-instance="openAdd"
@@ -1061,6 +1124,13 @@ onUnmounted(() => {
           <section class="news-page">
             <HomePage
               :items="news"
+              :loading="newsLoading"
+              @refresh="fetchNews(newsPage)"
+              :page="newsPage"
+              :has-more="newsHasMore"
+              @prev="prevNewsPage"
+              @next="nextNewsPage"
+              @open="openNews"
               :last-instance="lastInstance"
               @select="(inst: InstanceInfo) => select(inst)"
               @quick-launch="quickLaunch"
@@ -1116,6 +1186,13 @@ onUnmounted(() => {
             <template v-if="newsActive">
               <HomePage
                 :items="news"
+                :loading="newsLoading"
+                @refresh="fetchNews(newsPage)"
+              :page="newsPage"
+              :has-more="newsHasMore"
+              @prev="prevNewsPage"
+              @next="nextNewsPage"
+              @open="openNews"
                 :last-instance="lastInstance"
                 @select="(inst: InstanceInfo) => select(inst)"
                 @quick-launch="quickLaunch"

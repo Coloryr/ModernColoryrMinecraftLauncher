@@ -1,0 +1,69 @@
+{
+  // 运行任务（不是调试）：终端 → 运行任务...，或 Ctrl+Shift+B 执行默认任务
+  // 只启动、不附加调试器；需要调试时再用 F5 / launch.json
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "启动前端（仅 vite，端口 1420）",
+      "type": "shell",
+      "command": "npm run dev",
+      "options": {
+        "cwd": "${workspaceFolder}/mcml-vue"
+      },
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "vite",
+        "pattern": {
+          "regexp": "^$"
+        },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "^.*VITE.*ready|$",
+          "endsPattern": "^.*(Local:|ready in).*$"
+        }
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "启动桌面端（tauri dev，自动带前端）",
+      "type": "shell",
+      "command": "npm run tauri dev",
+      "options": {
+        "cwd": "${workspaceFolder}/mcml-gui"
+      },
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true
+      }
+    },
+    {
+      "label": "构建前端（vue-tsc + vite build）",
+      "type": "shell",
+      "command": "npm run build",
+      "options": {
+        "cwd": "${workspaceFolder}/mcml-vue"
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "Rust 检查（cargo check）",
+      "type": "shell",
+      "command": "cargo check",
+      "options": {
+        "cwd": "${workspaceFolder}/mcml-gui/src-tauri"
+      },
+      "problemMatcher": []
+    }
+  ]
+}

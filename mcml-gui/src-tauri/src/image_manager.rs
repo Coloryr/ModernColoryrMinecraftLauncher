@@ -124,10 +124,9 @@ async fn load_skin_image(uri: Vec<&str>, res: UriSchemeResponder) {
             return;
         }
 
-        let data =data.unwrap();
-        for item in data.properties {
-            if item.value
-        }
+        // TODO: 解析 properties 中的 textures（base64 JSON）取出皮肤地址，下载后渲染头像
+        let _ = data.unwrap();
+        send_bad(res);
     }
 }
 

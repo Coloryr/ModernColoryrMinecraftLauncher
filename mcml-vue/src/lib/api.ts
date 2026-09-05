@@ -2,6 +2,7 @@
 //
 // 当前不依赖任何后端命令，可在纯浏览器（npm run dev）中运行，
 // 方便先做界面。gui 与 core 已解耦，旧的真实实现 `./api-real` 已注释掉。
+import { InstanceChange, GameExit, GameLog, LaunchState, LaunchError } from "./listens";
 import type {
   ErrorEvent,
   ExitEvent,
@@ -200,7 +201,7 @@ export const api = {
       extraGroups.has(n) || MOCK_INSTANCES.some((i) => i.group === n);
     if (exists) return false;
     extraGroups.add(n);
-    emit("instance-change", { type: "group" });
+    emit(InstanceChange, { type: "group" });
     return true;
   },
 
@@ -208,7 +209,7 @@ export const api = {
   async removeGroup(name: string): Promise<boolean> {
     await delay(120);
     const ok = extraGroups.delete(name.trim());
-    if (ok) emit("instance-change", { type: "group" });
+    if (ok) emit(InstanceChange, { type: "group" });
     return ok;
   },
 
@@ -221,7 +222,7 @@ export const api = {
     list.splice(from, 1);
     list.splice(Math.max(0, Math.min(index, list.length)), 0, name);
     groupOrder = list;
-    emit("instance-change", { type: "group" });
+    emit(InstanceChange, { type: "group" });
     return true;
   },
 
@@ -251,7 +252,7 @@ export const api = {
     if (opts?.modpackType) inst.modpackType = opts.modpackType;
     if (opts?.source) inst.source = opts.source;
     MOCK_INSTANCES.unshift(inst);
-    emit("instance-change", { type: "add" });
+    emit(InstanceChange, { type: "add" });
     return inst;
   },
 
@@ -264,7 +265,7 @@ export const api = {
     if (!n) return false;
     inst.name = n;
     inst.dir = n;
-    emit("instance-change", { type: "edit" });
+    emit(InstanceChange, { type: "edit" });
     return true;
   },
 
@@ -274,7 +275,7 @@ export const api = {
     const inst = MOCK_INSTANCES.find((i) => i.uuid === uuid);
     if (!inst) return false;
     Object.assign(inst, patch);
-    emit("instance-change", { type: "edit" });
+    emit(InstanceChange, { type: "edit" });
     return true;
   },
 
@@ -290,7 +291,7 @@ export const api = {
     const anchor = others[Math.max(0, Math.min(index, others.length))];
     const at = anchor ? MOCK_INSTANCES.indexOf(anchor) : MOCK_INSTANCES.length;
     MOCK_INSTANCES.splice(at, 0, inst);
-    emit("instance-change", { type: "edit" });
+    emit(InstanceChange, { type: "edit" });
     return true;
   },
 
@@ -301,7 +302,7 @@ export const api = {
     if (idx < 0) return false;
     MOCK_INSTANCES.splice(idx, 1);
     runningUuids.delete(uuid);
-    emit("instance-change", { type: "remove" });
+    emit(InstanceChange, { type: "remove" });
     return true;
   },
 
@@ -312,7 +313,7 @@ export const api = {
 
   async stopGame(uuid: string): Promise<void> {
     runningUuids.delete(uuid);
-    emit("game-exit", { uuid, code: 0 } as ExitEvent);
+    emit(GameExit, { uuid, code: 0 } as ExitEvent);
   },
 
   async getGameLog(uuid: string): Promise<string[]> {
@@ -328,15 +329,15 @@ export const api = {
 
 function pushLog(uuid: string, text: string) {
   (runtimeLogs[uuid] ??= []).push(text);
-  emit("game-log", { uuid, time: now(), text, clear: false } as LogEvent);
+  emit(GameLog, { uuid, time: now(), text, clear: false } as LogEvent);
 }
 
 function simulateLaunch(uuid: string) {
   runtimeLogs[uuid] = [];
-  emit("game-log", { uuid, time: now(), text: "", clear: true } as LogEvent);
+  emit(GameLog, { uuid, time: now(), text: "", clear: true } as LogEvent);
 
   const setState = (state: string, text: string) => {
-    emit("launch-state", { uuid, state } as StateEvent);
+    emit(LaunchState, { uuid, state } as StateEvent);
     pushLog(uuid, `[状态] ${text}`);
   };
 
@@ -391,7 +392,7 @@ export function onGameExit(cb: (e: ExitEvent) => void): () => void {
   return on<ExitEvent>("game-exit", cb);
 }
 export function onLaunchError(cb: (e: ErrorEvent) => void): () => void {
-  return on<ErrorEvent>("launch-error", cb);
+  return on<ErrorEvent>(LaunchError, cb);
 }
 export function onInstanceChange(cb: () => void): () => void {
   return on("instance-change", cb);

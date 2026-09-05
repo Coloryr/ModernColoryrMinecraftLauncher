@@ -1,5 +1,6 @@
 <script setup lang="ts">
-// 启动画面：初始化中显示 splash，初始化失败显示引导表单（数据目录 / 玩家名）
+// 启动画面：初始化中显示 splash，初始化失败显示错误页（splashError），
+// 引导表单（数据目录 / 玩家名）用于重新初始化
 import { t } from "../../lib/i18n";
 import BaseButton from "./BaseButton.vue";
 
@@ -7,6 +8,7 @@ withDefaults(
   defineProps<{
     splashVisible: boolean;
     bootFailed: boolean;
+    splashError: string;
     initLoading: boolean;
     initError: string;
     localDir: string;
@@ -15,6 +17,7 @@ withDefaults(
   {
     splashVisible: true,
     bootFailed: false,
+    splashError: "",
     initLoading: false,
     initError: "",
     localDir: "",
@@ -26,6 +29,7 @@ const emit = defineEmits<{
   (e: "update:localDir", v: string): void;
   (e: "update:playerName", v: string): void;
   (e: "retry"): void;
+  (e: "retryBoot"): void;
 }>();
 </script>
 
@@ -36,6 +40,18 @@ const emit = defineEmits<{
     <div class="splash-name">{{ t("app.name") }}</div>
     <div class="splash-spinner"></div>
     <div class="splash-text">{{ t("init.splash") }}</div>
+  </div>
+
+  <!-- 初始化失败错误页（closeSplash(error) 后显示） -->
+  <div v-else-if="splashError" class="boot-error">
+    <div class="boot-error-card">
+      <div class="boot-error-icon">!</div>
+      <h1>{{ t("init.failed") }}</h1>
+      <p class="boot-error-text">{{ splashError }}</p>
+      <BaseButton variant="primary" size="lg" block @click="emit('retryBoot')">
+        {{ t("init.retry") }}
+      </BaseButton>
+    </div>
   </div>
 
   <!-- 初始化引导（仅初始化失败时出现） -->
@@ -122,6 +138,60 @@ const emit = defineEmits<{
 .splash-text {
   font-size: 13px;
   color: var(--text-dim);
+}
+
+/* 初始化失败错误页 */
+.boot-error {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(160deg, var(--bg-side) 0%, var(--bg) 100%);
+}
+
+.boot-error-card {
+  width: 440px;
+  padding: 36px;
+  border-radius: 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.boot-error-icon {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: rgba(255, 99, 99, 0.14);
+  color: #ff6363;
+  font-size: 30px;
+  font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.boot-error-card h1 {
+  font-size: 18px;
+  margin: 14px 0 10px;
+  color: var(--text);
+}
+
+.boot-error-text {
+  width: 100%;
+  margin-bottom: 22px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  background: var(--bg-side);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: 13px;
+  word-break: break-all;
+  max-height: 180px;
+  overflow-y: auto;
 }
 
 /* 初始化界面 */

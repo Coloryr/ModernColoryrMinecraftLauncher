@@ -8,3 +8,10 @@ pub struct DirEntry {
     pub name: String,
     pub is_dir: bool,
 }
+
+/// 加载器支持列表查询进度（step / total，前端弹窗显示进度条）
+#[derive(Clone, Serialize)]
+pub struct LoaderProgressDto {
+    pub step: u32,
+    pub total: u32,
+}

@@ -25,6 +25,8 @@ const showBack = computed(() => !isTauri() && !multiWindow.value);
       </button>
       <h1>{{ title }}</h1>
       <span class="spacer"></span>
+      <!-- 标题栏右侧扩展区（如查询进度指示） -->
+      <slot name="head-right" />
     </header>
     <div class="frame-body">
       <slot />
