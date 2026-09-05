@@ -601,6 +601,9 @@ pub fn open_write<P: AsRef<Path>>(file: P) -> CoreResult<fs::File> {
         .create(true)
         .read(true)
         .write(true)
+        // 整文件重写语义：新内容比旧文件短时必须截断，
+        // 否则残留旧尾巴会污染 JSON 等结构化文件
+        .truncate(true)
         .open(&file)
         .map_err(|err| {
             ErrorType::FileSystemError(FileSystemErrorData {
@@ -622,6 +625,8 @@ pub async fn open_write_async<P: AsRef<Path>>(file: P) -> CoreResult<tfs::File> 
         .create(true)
         .read(true)
         .write(true)
+        // 与 open_write 一致：整文件重写语义，写前截断
+        .truncate(true)
         .open(&file)
         .await
         .map_err(|err| {

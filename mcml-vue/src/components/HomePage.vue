@@ -7,11 +7,17 @@ import type { InstanceInfo, NewsItem } from "../lib/types";
 import NewsPanel from "./NewsPanel.vue";
 import InstanceIcon from "./InstanceIcon.vue";
 
-defineProps<{
-  items: NewsItem[];
-  lastInstance: InstanceInfo | null;
-  empty?: boolean;
-}>();
+withDefaults(
+  defineProps<{
+    items: NewsItem[];
+    lastInstance: InstanceInfo | null;
+    empty?: boolean;
+    loading?: boolean;
+    page?: number;
+    hasMore?: boolean;
+  }>(),
+  { loading: false, page: 1, hasMore: true },
+);
 
 const emit = defineEmits<{
   (e: "select", inst: InstanceInfo): void;
@@ -19,6 +25,10 @@ const emit = defineEmits<{
   (e: "add-instance"): void;
   (e: "add-account"): void;
   (e: "add-java"): void;
+  (e: "refresh"): void;
+  (e: "prev"): void;
+  (e: "next"): void;
+  (e: "open", url: string): void;
 }>();
 
 function entry(name: string) {
@@ -100,7 +110,16 @@ function entry(name: string) {
       </button>
     </div>
 
-    <NewsPanel :items="items" />
+    <NewsPanel
+      :items="items"
+      :loading="loading"
+      :page="page"
+      :has-more="hasMore"
+      @refresh="emit('refresh')"
+      @prev="emit('prev')"
+      @next="emit('next')"
+      @open="(url: string) => emit('open', url)"
+    />
   </div>
 </template>
 

@@ -22,7 +22,7 @@ use std::{
         Arc, Mutex, OnceLock,
         atomic::{AtomicBool, Ordering},
     },
-    thread::Builder,
+    thread::{Builder, JoinHandle},
 };
 
 use mcml_base::serialize_tools;
@@ -74,6 +74,8 @@ static QUEUE: Mutex<Vec<ConfigSaveObj>> = Mutex::new(Vec::new());
 static IS_RUN: AtomicBool = AtomicBool::new(true);
 /// 信号量，用于唤醒保存线程
 static SEM: OnceLock<Arc<Semaphore>> = OnceLock::new();
+/// 后台保存线程句柄（stop 时 join，确保最后一次保存落盘后才返回）
+static HANDLE: Mutex<Option<JoinHandle<()>>> = Mutex::new(None);
 
 /// 将对象加入保存队列
 ///
@@ -114,7 +116,7 @@ fn save_now() {
 pub fn start() {
     SEM.get_or_init(|| Arc::new(Semaphore::new(0)));
 
-    Builder::new()
+    let handle = Builder::new()
         .name(i18::get_thread(ThreadType::ConfigSaveThread))
         .spawn(|| {
             while IS_RUN.load(Ordering::Acquire) {
@@ -127,12 +129,24 @@ pub fn start() {
             save_now();
         })
         .unwrap();
+
+    *HANDLE.lock().unwrap() = Some(handle);
 }
 
 /// 停止后台保存线程
 ///
-/// 设置运行标志为 false，通过信号量唤醒线程使其退出。
-/// 线程退出前会执行最后一次保存。
+/// 设置运行标志为 false，唤醒线程使其退出，并阻塞等待线程结束——
+/// 线程退出前会执行最后一次保存，因此本函数返回即保证队列内任务全部落盘。
 pub fn stop() {
+    // 未调用过 start（信号量未初始化）时无事可做
+    let Some(sem) = SEM.get() else {
+        return;
+    };
     IS_RUN.store(false, Ordering::Release);
+    // 唤醒线程，使其离开 down() 检查 IS_RUN 并退出
+    sem.up();
+    // 等待线程执行完最后一次保存
+    if let Some(handle) = HANDLE.lock().unwrap().take() {
+        let _ = handle.join();
+    }
 }

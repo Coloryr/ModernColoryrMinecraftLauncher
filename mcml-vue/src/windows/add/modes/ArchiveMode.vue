@@ -63,7 +63,7 @@ const emit = defineEmits<{
       class="field-select"
       @change="emit('update:packType', ($event.target as HTMLSelectElement).value)"
     >
-      <option v-for="p in packTypes" :key="p" :value="p">{{ p }}</option>
+      <option v-for="p in packTypes" :key="p" :value="p">{{ t(`add.pack.${p}`) }}</option>
     </select>
   </template>
 </template>

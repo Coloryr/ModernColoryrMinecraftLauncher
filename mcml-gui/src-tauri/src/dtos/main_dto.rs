@@ -8,12 +8,22 @@ use serde::{Deserialize, Serialize};
 /// Minecraft 新闻条目
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct LoadState {
+    pub ok: bool,
+    pub error: Option<String>,
+}
+
+/// Minecraft 新闻条目
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct NewsItem {
     pub id: i64,
     pub title: String,
     pub date: String,
     pub tag: String,
     pub image: String,
+    /// 原文链接（点击卡片用系统浏览器打开）
+    pub url: String,
 }
 
 /// 游戏日志事件

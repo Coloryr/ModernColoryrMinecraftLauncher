@@ -16,6 +16,7 @@ import {
   addAccount,
   currentAccount,
   loadAccounts,
+  loginMicrosoft,
   removeAccount,
   refreshAccountToken,
   setCurrentAccount,
@@ -23,16 +24,52 @@ import {
 } from "../../lib/accountStore";
 import type { Account } from "../../lib/types";
 import { listen } from "@tauri-apps/api/event";
-import { AccountOAuthDto } from "../../lib/dtos/account.ts";
+import { invoke } from "@tauri-apps/api/core";
+import { AccountOAuth, AccountOAuthState } from "../../lib/listens";
+import { AccountOpenBrowser, AccountCancelOAuth } from "../../lib/invokes";
+import { AccountOAuthDto, AccountOAuthStateDto } from "../../lib/dtos/account.ts";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
-await getCurrentWindow().setTitle(t("winTitle.account"));
+// 注意：不能用顶层 await —— 会让 <script setup> 变成 async setup，
+// App.vue 没有 <Suspense> 包裹，Vue 将不渲染该组件（窗口白屏）
+getCurrentWindow().setTitle(t("winTitle.account")).catch(() => { /* 忽略 */ });
 
 type ViewMode = "grid" | "list" | "detail";
 const view = ref<ViewMode>("grid");
 
-// 进入窗口时从 Rust 加载账户数据
-onMounted(loadAccounts);
+// 进入窗口时从 Rust 加载账户数据，并注册微软登录事件
+onMounted(() => {
+  loadAccounts();
+
+  // 后端拿到设备码：弹出授权码窗口
+  listen<AccountOAuthDto>(AccountOAuth, (data) => {
+    showAdd.value = false;
+    oauthCode.value = data.payload.code;
+    oauthUrl.value = data.payload.url;
+    showOauth.value = true;
+  });
+
+  // 登录阶段进度：waiting / xbox / xsts / token / profile / ok / fail
+  listen<AccountOAuthStateDto>(AccountOAuthState, (data) => {
+    const s = data.payload;
+    if (s.state === "ok") {
+      showOauth.value = false;
+      showOauthRun.value = false;
+      showToast(t("account.oauthOk"));
+      loadAccounts();
+    } else if (s.state === "fail") {
+      showOauth.value = false;
+      showOauthRun.value = false;
+      showToast(s.message || t("account.oauthFail"));
+    } else {
+      oauthState.value = t(`account.oauthState.${s.state}`);
+      // 授权码弹窗还开着（用户尚未点「打开浏览器」）时不抢焦点，只静默更新文案
+      if (!showOauth.value) {
+        showOauthRun.value = true;
+      }
+    }
+  });
+});
 
 const VIEW_OPTIONS = computed(() => [
   { value: "grid", label: t("account.view.grid"), icon: "grid" },
@@ -109,7 +146,8 @@ function confirmAdd() {
   }
 
   if (addType.value === "microsoft") {
-
+    // 触发后端设备码流程，弹窗由 account-oauth 事件接管
+    loginMicrosoft();
     return;
   }
 
@@ -119,15 +157,12 @@ function confirmAdd() {
   showToast(t("account.added"));
 }
 
-// 微软授权弹窗
-function openBrowser() {
-  showToast(t("account.openBrowser"));
-  // 模拟：等待授权后添加账户
-  setTimeout(() => {
-    addAccount("microsoft", "MS_User_" + Date.now().toString().slice(-4));
-    showOauth.value = false;
-    showToast(t("account.added"));
-  }, 1200);
+// 微软授权弹窗：打开浏览器并切换到进度窗口
+async function openBrowser() {
+  await invoke(AccountOpenBrowser, { url: oauthUrl.value }).catch(() => { /* 忽略 */ });
+  showOauth.value = false;
+  showOauthRun.value = true;
+  oauthState.value = t("account.oauthState.waiting");
 }
 
 /** 双击切换当前账户 */
@@ -153,10 +188,11 @@ function relogin(acc: Account) {
   showToast(t("actions.wip", { name: acc.userName }));
 }
 
-function cancelLogin(type: string) {
-  if (type == "showOauthRun") {
-    showOauthRun.value = false
-  }
+// 取消微软登录：通知后端终止轮询并关闭弹窗
+async function cancelLogin() {
+  await invoke(AccountCancelOAuth).catch(() => { /* 忽略 */ });
+  showOauth.value = false;
+  showOauthRun.value = false;
 }
 
 const deleteTarget = ref<Account | null>(null);
@@ -180,14 +216,6 @@ function typeLabel(acc: Account): string {
 function tokenLabel(acc: Account): string {
   return acc.tokenStatus === "valid" ? t("account.tokenValid") : t("account.tokenExpired");
 }
-
-listen<AccountOAuthDto>(AccountOAuth, (data) => {
-  // 微软：设备码流程弹窗
-  showAdd.value = false;
-  oauthCode.value = data.payload.code;
-  oauthUrl.value = data.payload.url;
-  showOauth.value = true;
-});
 </script>
 
 <template>
@@ -226,7 +254,7 @@ listen<AccountOAuthDto>(AccountOAuth, (data) => {
       @delete="deleteTarget = $event" />
 
     <!-- 添加账户弹窗（按类型显示不同输入框） -->
-    <BaseModal v-if="showAdd" :title="t('account.addTitle')" :closable="false" @close="showAdd = false; cancelLogin">
+    <BaseModal v-if="showAdd" :title="t('account.addTitle')" :closable="false" @close="showAdd = false">
       <label class="field-label">{{ t("account.type") }}</label>
       <select v-model="addType" class="field-select"
         @change="onAddTypeChange(($event.target as HTMLSelectElement).value)">
@@ -248,8 +276,7 @@ listen<AccountOAuthDto>(AccountOAuth, (data) => {
     </BaseModal>
 
     <!-- 微软登录：请求码 + 地址 + 打开浏览器 / 取消 -->
-    <BaseModal v-if="showOauth" :title="t('account.oauthTitle')" :closable="false"
-      @close="showOauth = false; cancelLogin">
+    <BaseModal v-if="showOauth" :title="t('account.oauthTitle')" :closable="false" @close="cancelLogin">
       <label class="field-label">{{ t("account.oauthCode") }}</label>
       <div class="oauth-code">{{ oauthCode }}</div>
 
@@ -259,16 +286,16 @@ listen<AccountOAuthDto>(AccountOAuth, (data) => {
       <p class="hint">{{ t("account.oauthHint") }}</p>
 
       <div class="modal-actions">
-        <BaseButton @click="showOauth = false">{{ t("add.cancel") }}</BaseButton>
+        <BaseButton @click="cancelLogin">{{ t("add.cancel") }}</BaseButton>
         <BaseButton variant="primary" @click="openBrowser">{{ t("account.openBrowser") }}</BaseButton>
       </div>
     </BaseModal>
 
-    <BaseModal v-if="showOauthRun" :title="t('account.oauthTitle')" :closable="false" @close="showOauthRun = false">
+    <BaseModal v-if="showOauthRun" :title="t('account.oauthTitle')" :closable="false" @close="cancelLogin">
       <p class="hint">{{ oauthState }}</p>
 
       <div class="modal-actions">
-        <BaseButton @click="cancelLogin('showOauthRun')">{{ t("add.cancel") }}</BaseButton>
+        <BaseButton @click="cancelLogin">{{ t("add.cancel") }}</BaseButton>
       </div>
     </BaseModal>
 

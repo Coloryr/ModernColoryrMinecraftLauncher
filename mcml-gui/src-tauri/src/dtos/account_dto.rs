@@ -47,6 +47,16 @@ pub struct AccountOAuthDto {
     pub url: String,
 }
 
+/// OAuth登录阶段进度（state：waiting / xbox / xsts / token / profile / ok / fail）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountOAuthStateDto {
+    /// 当前阶段标识（前端按 key 做 i18n）
+    pub state: String,
+    /// 附加信息（fail 时的错误文案）
+    pub message: Option<String>,
+}
+
 impl AccountStoreDto {
     /// 从 LoginObj（账户完整凭据）构造前端 DTO
     ///

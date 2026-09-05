@@ -90,6 +90,8 @@ export interface NewsItem {
   tag: string;
   /** 新闻配图（URL 或 data URI） */
   image: string;
+  /** 原文链接（系统浏览器打开） */
+  url: string;
 }
 
 /** 启动设置（模拟） */

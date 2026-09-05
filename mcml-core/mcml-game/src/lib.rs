@@ -245,6 +245,14 @@ pub fn get_group_keys() -> Vec<String> {
     list
 }
 
+/// 获取游戏版本类型列表（Mojang 版本清单的 type 字段取值）
+///
+/// 返回独立 ID：release / snapshot / old_beta / old_alpha，
+/// 显示名由前端 i18n 翻译。
+pub fn get_version_types() -> Vec<&'static str> {
+    vec!["release", "snapshot", "old_beta", "old_alpha"]
+}
+
 /// 从分组名字获取对应的实例
 /// - `key`: 分组名字
 pub fn get_group(key: &str) -> Vec<GameInstance> {

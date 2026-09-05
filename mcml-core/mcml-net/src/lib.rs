@@ -549,6 +549,12 @@ pub fn init() {
     LOGIN_CLIENT.get_or_init(|| Arc::new(client));
 }
 
+/// HTTP 客户端是否已初始化（[`init`] 之后为 true；
+/// 供调用方判断能否安全使用 [`get_work_client`]，避免 unwrap panic）
+pub fn is_init() -> bool {
+    WORK_CLIENT.get().is_some()
+}
+
 /// 获取全局通用 HTTP 客户端（用于资源下载和一般 API 请求）
 pub fn get_work_client() -> Arc<Client> {
     WORK_CLIENT.get().unwrap().clone()

@@ -10,7 +10,7 @@ pub mod gui_config_dto;
 pub mod main_dto;
 
 pub use account_dto::{AccountStoreDto, AccountStoreViewDto};
-pub use add_dto::DirEntry;
+pub use add_dto::{DirEntry, LoaderProgressDto};
 pub use gui_config_dto::{GuiConfigDto, MainWindowConfigDto};
 pub use main_dto::{
     ErrorEvent, ExitEvent, InstanceChangeEvent, InstancePatch, LogEvent, NewsItem, StateEvent,

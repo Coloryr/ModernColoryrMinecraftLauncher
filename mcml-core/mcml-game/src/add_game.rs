@@ -65,6 +65,48 @@ pub enum PackType {
     LauncherPack,
 }
 
+impl PackType {
+    /// 压缩包独立 ID（与前端 i18n 键对应，不随语言变化）
+    pub fn id(&self) -> &'static str {
+        match self {
+            PackType::CurseForge => "curseforge",
+            PackType::Modrinth => "modrinth",
+            PackType::MMC => "mmc",
+            PackType::HMCL => "hmcl",
+            PackType::HMCLServer => "hmcl_server",
+            PackType::ArchivePack => "archive",
+            PackType::LauncherPack => "launcher_pack",
+        }
+    }
+
+    /// 按 ID 解析压缩包类型
+    pub fn from_id(id: &str) -> Option<Self> {
+        match id {
+            "curseforge" => Some(PackType::CurseForge),
+            "modrinth" => Some(PackType::Modrinth),
+            "mmc" => Some(PackType::MMC),
+            "hmcl" => Some(PackType::HMCL),
+            "hmcl_server" => Some(PackType::HMCLServer),
+            "archive" => Some(PackType::ArchivePack),
+            "launcher_pack" => Some(PackType::LauncherPack),
+            _ => None,
+        }
+    }
+
+    /// 全部压缩包 ID（下拉列表数据源）
+    pub fn ids() -> Vec<&'static str> {
+        vec![
+            "curseforge",
+            "modrinth",
+            "mmc",
+            "hmcl",
+            "hmcl_server",
+            "archive",
+            "launcher_pack",
+        ]
+    }
+}
+
 /// 导入文件夹
 pub async fn add_game_folder<P: AsRef<Path>>(
     dir: P,
