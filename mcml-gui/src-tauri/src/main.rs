@@ -16,6 +16,9 @@ fn main() {
     };
 
     let path = get_run_path();
+
+    println!("Run path: {}", path.display().to_string());
+
     let temp = path.join("test");
     let res = path_helper::write_text(temp, "test write");
     obj.path = if res.is_err() { get_save_path() } else { path };

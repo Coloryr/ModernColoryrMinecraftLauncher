@@ -16,12 +16,6 @@ impl I18Lang for ZhCn {
             InfoType::CoreStart => format!("MCML启动，版本：{}", *VERSION),
             InfoType::CoreStop => format!("MCML停止"),
             InfoType::TempFile => format!("临时文件"),
-            InfoType::AuthTypeOffline => String::from("离线账户"),
-            InfoType::AuthTypeOAuth => String::from("微软登录"),
-            InfoType::AuthTypeNide8 => String::from("统一通行证"),
-            InfoType::AuthTypeAuthlibInjector => String::from("外置登录"),
-            InfoType::AuthTypeLittleSkin => String::from("皮肤站"),
-            InfoType::AuthTypeSelfLittleSkin => String::from("自建皮肤站"),
         }
     }
 

@@ -59,6 +59,7 @@ pub const OPTION_FILE: &str = "options.txt";
 pub const GAME_SERVER_FILE: &str = "servers.dat";
 pub const VERSION_FILE: &str = "version.json";
 pub const AUTH_FILE: &str = "auth.json";
+pub const AUTH_SELECT_FILE: &str = "auth_select.json";
 pub const MAVEN_FILE: &str = "maven.json";
 pub const JAVA_FILE: &str = "java";
 pub const JAVAW_FILE: &str = "javaw.exe";

@@ -27,7 +27,7 @@
 
 /// 游戏账户
 use chrono::{DateTime, FixedOffset, Local};
-use mcml_names::{i18, i18_items::{error_type::CoreResult, info_type::InfoType}};
+use mcml_names::i18_items::error_type::CoreResult;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use tokio_util::sync::CancellationToken;
@@ -68,14 +68,21 @@ impl Default for AuthType {
 }
 
 impl AuthType {
-    pub fn get_name(&self) -> String {
-        match self {
-            AuthType::Offline => i18::get_info(InfoType::AuthTypeOffline),
-            AuthType::OAuth => i18::get_info(InfoType::AuthTypeOAuth),
-            AuthType::Nide8 => i18::get_info(InfoType::AuthTypeNide8),
-            AuthType::AuthlibInjector => i18::get_info(InfoType::AuthTypeAuthlibInjector),
-            AuthType::LittleSkin => i18::get_info(InfoType::AuthTypeLittleSkin),
-            AuthType::SelfLittleSkin => i18::get_info(InfoType::AuthTypeSelfLittleSkin),
+    pub fn from_str(str: &str) -> AuthType {
+        if str == "Offline" {
+            AuthType::Offline
+        } else if str == "OAuth" {
+            AuthType::OAuth
+        } else if str == "Nide8" {
+            AuthType::Nide8
+        } else if str == "AuthlibInjector" {
+            AuthType::AuthlibInjector
+        } else if str == "LittleSkin" {
+            AuthType::LittleSkin
+        } else if str == "SelfLittleSkin" {
+            AuthType::SelfLittleSkin
+        } else {
+            AuthType::Offline
         }
     }
 }
@@ -245,7 +252,7 @@ impl Default for LoginObj {
 ///
 /// 由 UUID 和认证类型组成，用于在账户存储中唯一标识一个账户。
 /// 同一 UUID 的不同认证类型视为不同账户。
-#[derive(Eq, Hash, PartialEq, Debug)]
+#[derive(Eq, Hash, PartialEq, Debug, Clone, Serialize, Deserialize)]
 pub struct UserKeyObj {
     /// 账户标识（Minecraft UUID）
     pub uuid: String,
