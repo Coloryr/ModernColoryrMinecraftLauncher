@@ -4,12 +4,11 @@
 //! 持久化到应用数据目录的 `main_data.json`；前端通过 IPC 调用本模块命令。
 
 use std::collections::{HashMap, HashSet};
-use std::path::PathBuf;
 use std::sync::{Arc, LazyLock, Mutex, RwLock};
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, Manager, WebviewWindow};
+use tauri::{AppHandle, Emitter, WebviewWindow};
 
 use crate::dtos::main_dto::{LoadState, NewsItem};
 use crate::dtos::{ErrorEvent, ExitEvent, InstanceChangeEvent, InstancePatch, LogEvent, StateEvent};
@@ -18,7 +17,8 @@ use crate::models::{InstanceArgs, InstanceInfo, JavaInfo, VersionInfo};
 use mcml_game::launcher::instance_setting_obj::InstanceSettingObj;
 use mcml_game::loader::LoaderType;
 use mcml_game::mojang::VersionType;
-use mcml_game::launcher::ModPackType;
+use mcml_game::launcher::{LogEncoding, ModPackType};
+use uuid::Uuid;
 
 /// 核心加载完成事件（ok：加载成功；error：失败信息，前端据此显示错误页）
 #[gui_macros::emit]
@@ -31,7 +31,6 @@ pub fn emit_load_done(app: &AppHandle, data: Option<String>) {
 
 /// 主窗口数据存储：实例 / 启动参数 / 分组 / 运行状态 / 日志
 pub struct MainWindowModel {
-    data_path: PathBuf,
     pub instances: Vec<InstanceInfo>,
     pub args: HashMap<String, InstanceArgs>,
     pub extra_groups: Vec<String>,
@@ -42,20 +41,8 @@ pub struct MainWindowModel {
 }
 
 impl MainWindowModel {
-    fn data_path(app: &AppHandle) -> Result<PathBuf, String> {
-        let dir = app
-            .path()
-            .app_data_dir()
-            .map_err(|e| format!("无法获取应用数据目录: {e}"))?;
-        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-        Ok(dir.join("main_data.json"))
-    }
-
-    /// 初始化：从磁盘加载（无文件则为空存储），并做环境检测
     pub fn init(app: &AppHandle) -> Self {
-        let data_path = Self::data_path(app).unwrap_or_else(|_| PathBuf::from("main_data.json"));
-        let mut store = Self {
-            data_path,
+        Self {
             instances: Vec::new(),
             args: HashMap::new(),
             extra_groups: Vec::new(),
@@ -63,31 +50,6 @@ impl MainWindowModel {
             running: HashSet::new(),
             logs: HashMap::new(),
             javas: detect_javas(),
-        };
-        store.load();
-        store
-    }
-
-    fn load(&mut self) {
-        if let Ok(text) = std::fs::read_to_string(&self.data_path) {
-            if let Ok(data) = serde_json::from_str::<PersistedData>(&text) {
-                self.instances = data.instances;
-                self.args = data.args;
-                self.extra_groups = data.extra_groups;
-                self.group_order = data.group_order;
-            }
-        }
-    }
-
-    pub fn save(&self) {
-        let data = PersistedData {
-            instances: self.instances.clone(),
-            args: self.args.clone(),
-            extra_groups: self.extra_groups.clone(),
-            group_order: self.group_order.clone(),
-        };
-        if let Ok(text) = serde_json::to_string_pretty(&data) {
-            let _ = std::fs::write(&self.data_path, text);
         }
     }
 
@@ -203,14 +165,6 @@ fn model(window: &WebviewWindow) -> Result<Arc<Mutex<MainWindowModel>>, String> 
         .ok_or_else(|| "主窗口模型未初始化".to_string())
 }
 
-/// 初始化核心：返回数据目录（前端启动时调用）
-#[tauri::command]
-pub fn main_init_core(app: AppHandle, local_dir: Option<String>, user_name: String) -> Result<String, String> {
-    let dir = MainWindowModel::data_path(&app)?;
-    println!("[init_core] local_dir={local_dir:?} user={user_name} data_dir={}", dir.display());
-    Ok(dir.to_string_lossy().to_string())
-}
-
 /// 获取实例列表（mcml-game::get_instances 对接，合并运行状态）
 #[tauri::command]
 pub fn main_get_instances() -> Vec<InstanceInfo> {
@@ -232,7 +186,9 @@ pub fn main_get_instances() -> Vec<InstanceInfo> {
                 pid: inst.pid.clone(),
                 fid: inst.fid.clone(),
                 lang: None,
-                log_encoding: None,
+                log_encoding: Some(
+                    if matches!(inst.encoding, LogEncoding::GBK) { "gbk" } else { "utf8" }.to_string(),
+                ),
                 source: None,
             }
         })
@@ -462,14 +418,15 @@ pub fn main_add_group(app: AppHandle, window: WebviewWindow, name: String) -> Re
     if n.is_empty() {
         return Ok(false);
     }
-    let store = model(&window)?;
-    let mut store = store.lock().unwrap();
-    let exists = store.all_groups().contains(&n);
-    if exists {
+    // 核心分组表：同名已存在则拒绝
+    if !mcml_game::add_group(&n) {
         return Ok(false);
     }
-    store.extra_groups.push(n);
-    store.save();
+    let store = model(&window)?;
+    let mut store = store.lock().unwrap();
+    if !store.all_groups().contains(&n) {
+        store.extra_groups.push(n.clone());
+    }
     emit_instance_change(&app, "group");
     Ok(true)
 }
@@ -477,6 +434,12 @@ pub fn main_add_group(app: AppHandle, window: WebviewWindow, name: String) -> Re
 /// 删除空分组
 #[tauri::command]
 pub fn main_remove_group(app: AppHandle, window: WebviewWindow, name: String) -> Result<bool, String> {
+    if name.trim().is_empty() {
+        // 空白分组即默认分组，不允许删除
+        return Ok(false);
+    }
+    // 核心分组表：组内实例移入默认分组
+    mcml_game::remove_group(&name);
     let store = model(&window)?;
     let mut store = store.lock().unwrap();
     let before = store.extra_groups.len();
@@ -484,7 +447,6 @@ pub fn main_remove_group(app: AppHandle, window: WebviewWindow, name: String) ->
     store.group_order.retain(|g| g != &name);
     let ok = store.extra_groups.len() < before;
     if ok {
-        store.save();
         emit_instance_change(&app, "group");
     }
     Ok(ok)
@@ -501,7 +463,6 @@ pub fn main_move_group(app: AppHandle, window: WebviewWindow, name: String, inde
     let at = (index as usize).min(list.len());
     list.insert(at, name.clone());
     store.group_order = list;
-    store.save();
     emit_instance_change(&app, "group");
     Ok(true)
 }
@@ -543,19 +504,27 @@ pub fn main_create_instance(
     let mut store = store.lock().unwrap();
     store.instances.insert(0, inst.clone());
     store.args.insert(uuid, InstanceArgs::default());
-    store.save();
     drop(store);
     emit_instance_change(&app, "add");
     Ok(inst)
 }
 
-/// 重命名实例
+/// 重命名实例（核心实例走 mcml-game：重名报错、实例目录跟随改名）
 #[tauri::command]
 pub fn main_rename_instance(app: AppHandle, window: WebviewWindow, uuid: String, name: String) -> Result<bool, String> {
     let n = name.trim().to_string();
     if n.is_empty() {
         return Ok(false);
     }
+    // 核心实例：mcml-game 重命名（重名返回 Err 由前端提示）
+    if let Ok(id) = Uuid::parse_str(&uuid) {
+        if mcml_game::get_instance(&id).is_some() {
+            mcml_game::rename_instance(&id, &n).map_err(|e| e.to_string())?;
+            emit_instance_change(&app, "edit");
+            return Ok(true);
+        }
+    }
+    // 遗留数据（假 uuid）：只改本地存储
     let store = model(&window)?;
     let mut store = store.lock().unwrap();
     let Some(inst) = store.instances.iter_mut().find(|i| i.uuid == uuid) else {
@@ -563,60 +532,154 @@ pub fn main_rename_instance(app: AppHandle, window: WebviewWindow, uuid: String,
     };
     inst.name = n.clone();
     inst.dir = n;
-    store.save();
     emit_instance_change(&app, "edit");
     Ok(true)
 }
 
-/// 更新实例元信息（补丁式）
+/// 前端加载器显示名 -> LoaderType（[`loader_name`] 的逆映射）
+fn loader_from_name(name: &str) -> Option<LoaderType> {
+    match name {
+        "原版" => Some(LoaderType::Normal),
+        "Forge" => Some(LoaderType::Forge),
+        "Fabric" => Some(LoaderType::Fabric),
+        "Quilt" => Some(LoaderType::Quilt),
+        "NeoForge" => Some(LoaderType::NeoForge),
+        "OptiFine" => Some(LoaderType::OptiFine),
+        "LiteLoader" => Some(LoaderType::LiteLoader),
+        "自定义" => Some(LoaderType::Custom),
+        _ => None,
+    }
+}
+
+/// 前端整合包平台名 -> ModPackType（None / 空 = 非整合包）
+fn modpack_type_from_name(name: Option<&str>) -> ModPackType {
+    match name {
+        Some("CurseForge") => ModPackType::CurseForge,
+        Some("Modrinth") => ModPackType::Modrinth,
+        Some("McMod") => ModPackType::McMod,
+        Some("ServerPack") => ModPackType::ServerPack,
+        _ => ModPackType::None,
+    }
+}
+
+/// 更新实例元信息（补丁式；核心实例直接写配置并保存，遗留数据只改本地存储）
 #[tauri::command]
 pub fn main_update_instance(app: AppHandle, window: WebviewWindow, uuid: String, patch: InstancePatch) -> Result<bool, String> {
+    // 核心实例：写真实配置
+    let core = Uuid::parse_str(&uuid)
+        .ok()
+        .and_then(|id| mcml_game::get_instance(&id).map(|inst| (id, inst)));
+    if let Some((id, instance)) = core {
+        // 名字改动走 rename（实例目录跟随改名，重名报错）
+        if let Some(v) = &patch.name {
+            let n = v.trim();
+            if !n.is_empty() && instance.read().unwrap().name != *n {
+                mcml_game::rename_instance(&id, n).map_err(|e| e.to_string())?;
+            }
+        }
+        // 分组切换走 mcml-game（自动建组 + 保存实例 + 发事件）
+        if let Some(v) = patch.group.clone() {
+            // 空白分组即默认分组
+            let group = match v {
+                Some(g) if !g.trim().is_empty() => Some(g),
+                _ => None,
+            };
+            mcml_game::move_group(vec![id], group);
+        }
+        {
+            let mut obj = instance.write().unwrap();
+            if let Some(v) = &patch.version {
+                obj.version = v.clone();
+            }
+            if let Some(v) = &patch.version_type {
+                obj.game_type = match v.as_str() {
+                    "release" => VersionType::Release,
+                    "snapshot" => VersionType::Snapshot,
+                    _ => obj.game_type,
+                };
+            }
+            if let Some(v) = &patch.loader {
+                if let Some(l) = loader_from_name(v) {
+                    obj.loader = l;
+                }
+            }
+            if let Some(v) = &patch.loader_version {
+                obj.loader_version = Some(v.clone());
+            }
+            if let Some(v) = patch.modpack_type.clone() {
+                obj.modpack_type = modpack_type_from_name(v.as_deref());
+                obj.is_modpack = obj.modpack_type != ModPackType::None;
+            }
+            if let Some(v) = patch.pid.clone() {
+                obj.pid = v;
+            }
+            if let Some(v) = patch.fid.clone() {
+                obj.fid = v;
+            }
+            if let Some(v) = &patch.log_encoding {
+                obj.encoding = match v.as_str() {
+                    "gbk" => LogEncoding::GBK,
+                    _ => LogEncoding::UTF8,
+                };
+            }
+            // lang 无核心字段，仅前端显示
+            obj.save();
+        }
+    }
     let store = model(&window)?;
     let mut store = store.lock().unwrap();
-    let Some(inst) = store.instances.iter_mut().find(|i| i.uuid == uuid) else {
-        return Ok(false);
-    };
-    if let Some(v) = patch.group {
-        inst.group = v;
+    if let Some(inst) = store.instances.iter_mut().find(|i| i.uuid == uuid) {
+        if let Some(v) = patch.group {
+            inst.group = v;
+        }
+        if let Some(v) = patch.name {
+            inst.name = v;
+        }
+        if let Some(v) = patch.version {
+            inst.version = v;
+        }
+        if let Some(v) = patch.version_type {
+            inst.version_type = Some(v);
+        }
+        if let Some(v) = patch.loader {
+            inst.loader = v;
+        }
+        if let Some(v) = patch.loader_version {
+            inst.loader_version = Some(v);
+        }
+        if let Some(v) = patch.modpack_type {
+            inst.modpack_type = v;
+        }
+        if let Some(v) = patch.pid {
+            inst.pid = v;
+        }
+        if let Some(v) = patch.fid {
+            inst.fid = v;
+        }
+        if let Some(v) = patch.lang {
+            inst.lang = Some(v);
+        }
+        if let Some(v) = patch.log_encoding {
+            inst.log_encoding = Some(v);
+        }
     }
-    if let Some(v) = patch.name {
-        inst.name = v;
-    }
-    if let Some(v) = patch.version {
-        inst.version = v;
-    }
-    if let Some(v) = patch.version_type {
-        inst.version_type = Some(v);
-    }
-    if let Some(v) = patch.loader {
-        inst.loader = v;
-    }
-    if let Some(v) = patch.loader_version {
-        inst.loader_version = Some(v);
-    }
-    if let Some(v) = patch.modpack_type {
-        inst.modpack_type = v;
-    }
-    if let Some(v) = patch.pid {
-        inst.pid = v;
-    }
-    if let Some(v) = patch.fid {
-        inst.fid = v;
-    }
-    if let Some(v) = patch.lang {
-        inst.lang = Some(v);
-    }
-    if let Some(v) = patch.log_encoding {
-        inst.log_encoding = Some(v);
-    }
-    store.save();
+    drop(store);
     emit_instance_change(&app, "edit");
     Ok(true)
 }
 
-/// 删除实例
+/// 删除实例（核心实例走 mcml-game：删除实例与文件；同时清理本地运行态缓存）
 #[tauri::command]
 pub fn main_delete_instance(app: AppHandle, window: WebviewWindow, uuid: String) -> Result<bool, String> {
+    // 核心实例：删除实例数据与文件
+    let mut ok = false;
+    if let Ok(id) = Uuid::parse_str(&uuid) {
+        if mcml_game::get_instance(&id).is_some() {
+            mcml_game::delete_instance(&id).map_err(|e| e.to_string())?;
+            ok = true;
+        }
+    }
+    // 本地存储：清理遗留实例项与运行态缓存（运行状态 / 日志 / 启动参数）
     let store = model(&window)?;
     let mut store = store.lock().unwrap();
     let before = store.instances.len();
@@ -624,9 +687,11 @@ pub fn main_delete_instance(app: AppHandle, window: WebviewWindow, uuid: String)
     store.args.remove(&uuid);
     store.running.remove(&uuid);
     store.logs.remove(&uuid);
-    let ok = store.instances.len() < before;
+    if store.instances.len() < before {
+        ok = true;
+    }
+    drop(store);
     if ok {
-        store.save();
         emit_instance_change(&app, "remove");
     }
     Ok(ok)
@@ -635,10 +700,22 @@ pub fn main_delete_instance(app: AppHandle, window: WebviewWindow, uuid: String)
 /// 移动实例到 (分组, 组内位置)：支持同组排序与跨组移动
 #[tauri::command]
 pub fn main_move_instance(app: AppHandle, window: WebviewWindow, uuid: String, group: Option<String>, index: i64) -> Result<bool, String> {
+    // 核心实例：分组切换走 mcml-game（自动建组 + 保存实例 + 发事件）
+    if let Ok(id) = Uuid::parse_str(&uuid) {
+        if mcml_game::get_instance(&id).is_some() {
+            // 空白分组即默认分组
+            let group = if group.as_deref().map_or(true, |g| g.trim().is_empty()) {
+                None
+            } else {
+                group.clone()
+            };
+            mcml_game::move_group(vec![id], group);
+        }
+    }
     let store = model(&window)?;
     let mut store = store.lock().unwrap();
     let Some(pos) = store.instances.iter().position(|i| i.uuid == uuid) else {
-        return Ok(false);
+        return Ok(true);
     };
     let mut inst = store.instances.remove(pos);
     inst.group = group.clone();
@@ -654,7 +731,6 @@ pub fn main_move_instance(app: AppHandle, window: WebviewWindow, uuid: String, g
         None => store.instances.len(),
     };
     store.instances.insert(at, inst);
-    store.save();
     emit_instance_change(&app, "edit");
     Ok(true)
 }
@@ -670,7 +746,6 @@ pub fn main_launch_game(app: AppHandle, window: WebviewWindow, uuid: String, use
             return Err("实例已在运行中".to_string());
         }
         store.running.insert(uuid.clone());
-        store.save();
     }
     emit_launch_state(&app, StateEvent { uuid: uuid.clone(), state: "launching".into() });
     emit_game_log(&app, LogEvent { uuid: uuid.clone(), time: now_time(), text: "游戏启动中…".into(), clear: true });
@@ -685,7 +760,6 @@ pub fn main_launch_game(app: AppHandle, window: WebviewWindow, uuid: String, use
         emit_game_exit(&app, ExitEvent { uuid: uuid2.clone(), code: 0 });
         let mut s = store2.lock().unwrap();
         s.running.remove(&uuid2);
-        s.save();
     });
     Ok(())
 }
@@ -696,7 +770,6 @@ pub fn main_stop_game(app: AppHandle, window: WebviewWindow, uuid: String) -> Re
     let store = model(&window)?;
     let mut store = store.lock().unwrap();
     store.running.remove(&uuid);
-    store.save();
     emit_game_exit(&app, ExitEvent { uuid, code: 0 });
     Ok(())
 }

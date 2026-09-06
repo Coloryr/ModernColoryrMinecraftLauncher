@@ -7,7 +7,7 @@ import {
   onInstanceChange,
   onLaunchError,
   onLaunchState,
-} from "../../lib/api-ipc";
+} from "../../lib/api";
 import { t } from "../../lib/i18n";
 import { showToast } from "../../lib/toast";
 import { theme, toggleTheme } from "../../lib/theme";
@@ -104,7 +104,7 @@ function select(inst: InstanceInfo) {
   newsActive.value = false;
   // 分组模式下展开所在分组
   if (mode.value === "group") {
-    const key = inst.group || t("group.default");
+    const key = groupKeyOf(inst.group);
     if (collapsedGroups.value[key]) {
       collapsedGroups.value = { ...collapsedGroups.value, [key]: false };
     }
@@ -123,23 +123,30 @@ const MODE_OPTIONS = computed(() => [
 // 手动添加的空分组（来自 api.getGroups）
 const extraGroups = ref<string[]>([]);
 
+/** 空白分组名（后端默认分组的 key 是空格）统一视为默认分组 */
+function groupKeyOf(group?: string | null): string {
+  return group && group.trim() ? group : t("group.default");
+}
+
 const groups = computed(() => {
   const defaultKey = t("group.default");
   const map = new Map<string, InstanceInfo[]>();
   for (const inst of instances.value) {
-    const key = inst.group || defaultKey;
+    const key = groupKeyOf(inst.group);
     if (!map.has(key)) map.set(key, []);
     map.get(key)!.push(inst);
   }
   for (const g of extraGroups.value) {
-    if (!map.has(g)) map.set(g, []);
+    // 空白分组就是默认分组，不重复展示
+    if (!g.trim() || map.has(g)) continue;
+    map.set(g, []);
   }
   // 默认分组永远存在且置顶
   if (!map.has(defaultKey)) map.set(defaultKey, []);
-  // 分组顺序：默认分组 → extraGroups（持久顺序）→ 其余按首次出现顺序
+  // 分组顺序：默认分组 → extraGroups（持久顺序，空白跳过）→ 其余按首次出现顺序
   const order = [
     defaultKey,
-    ...extraGroups.value.filter((k) => k !== defaultKey),
+    ...extraGroups.value.filter((k) => k.trim() && k !== defaultKey),
     ...[...map.keys()].filter(
       (k) => k !== defaultKey && !extraGroups.value.includes(k),
     ),
@@ -160,7 +167,7 @@ function toggleGroup(name: string) {
 
 /** 默认只展开选中实例所在的分组 */
 function collapseToSelected() {
-  const selGroup = selected.value?.group || t("group.default");
+  const selGroup = groupKeyOf(selected.value?.group);
   const map: Record<string, boolean> = {};
   for (const g of groups.value) {
     map[g.name] = g.name !== selGroup;
@@ -177,7 +184,7 @@ function initSelection() {
 
   if (lastInst) {
     selected.value = lastInst;
-    const key = lastInst.group || t("group.default");
+    const key = groupKeyOf(lastInst.group);
     const map: Record<string, boolean> = {};
     for (const g of groups.value) {
       map[g.name] = g.name !== key;
@@ -452,12 +459,19 @@ function onMenuPick(opt: { labelKey: string }) {
 
 // ================= 元信息（版本 / 加载器 / 整合包 / 语言，合并进实例设置） =================
 
-const LOADERS = ["原版", "Forge", "Fabric", "Quilt", "NeoForge", "OptiFine", "LiteLoader", "自定义"];
-
 async function onMetaUpdate(patch: Partial<InstanceInfo>) {
   if (!selected.value) return;
-  await api.updateInstance(selected.value.uuid, patch);
-  await loadInstances();
+  try {
+    await api.updateInstance(selected.value.uuid, patch);
+    await loadInstances();
+  } catch (e) {
+    showToast(String(e));
+  }
+}
+
+/** 实例设置面板刷新版本列表（清空后端缓存重新拉取） */
+function onVersionsRefreshed(list: VersionInfo[]) {
+  versions.value = list;
 }
 
 // ================= 分组拖拽移动 =================
@@ -576,7 +590,8 @@ async function moveGroupTo(sourceName: string, targetName: string | null) {
   closeCtxMenu();
   if (!g || g.items.length === 0 || target === sourceName) return;
   for (const inst of g.items) {
-    if (inst.group !== target) {
+    // 空白分组名与默认分组（null）等价
+    if (groupKeyOf(inst.group) !== groupKeyOf(target)) {
       await api.updateInstance(inst.uuid, { group: target });
     }
   }
@@ -610,8 +625,7 @@ async function doDeleteGroup() {
   deleteGroupBusy.value = true;
   const name = deleteGroupName.value;
   for (const inst of instances.value) {
-    const key = inst.group || t("group.default");
-    if (key === name) {
+    if (groupKeyOf(inst.group) === name) {
       await api.updateInstance(inst.uuid, { group: null });
     }
   }
@@ -669,13 +683,14 @@ async function moveSelectedToGroup(groupName: string | null) {
   const target = groupName === t("group.default") ? null : groupName;
   for (const uuid of ids) {
     const inst = instances.value.find((i) => i.uuid === uuid);
-    if (inst && inst.group !== target) {
+    // 空白分组名与默认分组（null）等价
+    if (inst && groupKeyOf(inst.group) !== groupKeyOf(target)) {
       await api.updateInstance(uuid, { group: target });
     }
   }
   closeCtxMenu();
   await loadInstances();
-  const key = target || t("group.default");
+  const key = groupKeyOf(target);
   collapsedGroups.value = { ...collapsedGroups.value, [key]: false };
   showToast(t("multi.moved", { count: ids.length }));
 }
@@ -768,24 +783,34 @@ function onAction(id: ActionId) {
 async function doRename() {
   if (!selected.value) return;
   renameBusy.value = true;
-  const ok = await api.renameInstance(selected.value.uuid, renameName.value);
-  renameBusy.value = false;
-  if (ok) {
-    showRename.value = false;
-    await loadInstances();
-    showToast(t("actions.rename"));
+  try {
+    const ok = await api.renameInstance(selected.value.uuid, renameName.value);
+    if (ok) {
+      showRename.value = false;
+      await loadInstances();
+      showToast(t("actions.rename"));
+    }
+  } catch (e) {
+    // 重名等核心错误直接提示
+    showToast(String(e));
+  } finally {
+    renameBusy.value = false;
   }
 }
 
 async function doDelete() {
   if (!selected.value) return;
   deleteBusy.value = true;
-  const ok = await api.deleteInstance(selected.value.uuid);
-  deleteBusy.value = false;
-  showDelete.value = false;
-  if (ok) {
+  try {
+    await api.deleteInstance(selected.value.uuid);
+    showDelete.value = false;
     selected.value = null;
     await Promise.all([loadInstances(), loadGroups()]);
+  } catch (e) {
+    // 删除失败（如文件被占用）直接提示
+    showToast(String(e));
+  } finally {
+    deleteBusy.value = false;
   }
 }
 
@@ -883,7 +908,6 @@ async function doInit() {
   initLoading.value = true;
   initError.value = "";
   try {
-    await api.initCore(localDir.value.trim() || null, playerName.value);
     localStorage.setItem("mcml.localDir", localDir.value);
     localStorage.setItem("mcml.playerName", playerName.value);
     bootFailed.value = false;
@@ -1010,7 +1034,6 @@ onMounted(async () => {
   initLoading.value = true;
   // 加载页最短显示时长：初始化太快时也保留一会儿，避免一闪而过
   try {
-    await api.initCore(localDir.value.trim() || null, playerName.value);
     bootFailed.value = false;
     await Promise.all([loadInstances(), loadGroups(), loadJava()]);
     // 版本列表走网络（Mojang 清单），不阻塞启动
@@ -1297,8 +1320,8 @@ listen<LoadState>(LoadDone, (data) => {
                   <InstanceMetaPanel
                     :instance="selected"
                     :versions="versions"
-                    :loaders="LOADERS"
                     @update="onMetaUpdate"
+                    @refreshed="onVersionsRefreshed"
                   />
                   <LaunchArgsPanel
                     :args="argsOf(selected.uuid)"

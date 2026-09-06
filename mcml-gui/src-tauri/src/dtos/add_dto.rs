@@ -15,3 +15,11 @@ pub struct LoaderProgressDto {
     pub step: u32,
     pub total: u32,
 }
+
+/// 实例重名确认（kind：overwrite 覆盖 / rename 自动改名，前端弹窗询问）
+#[derive(Clone, Serialize)]
+pub struct NameConflictDto {
+    pub id: u32,
+    pub kind: String,
+    pub name: String,
+}

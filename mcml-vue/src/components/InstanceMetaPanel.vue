@@ -1,17 +1,21 @@
 <script setup lang="ts">
 // 实例元信息面板：版本类型+版本 / 加载器+加载器版本 / 整合包平台 / 游戏内语言+日志编码
+// 改动经 update 事件走 IPC 写入核心实例配置
 import { computed, ref } from "vue";
 import { t } from "../lib/i18n";
+import { api } from "../lib/api";
+import { showToast } from "../lib/toast";
+import BaseButton from "./ui/BaseButton.vue";
 import type { InstanceInfo, VersionInfo } from "../lib/types";
 
 const props = defineProps<{
   instance: InstanceInfo;
   versions: VersionInfo[];
-  loaders: string[];
 }>();
 
 const emit = defineEmits<{
   (e: "update", patch: Partial<InstanceInfo>): void;
+  (e: "refreshed", versions: VersionInfo[]): void;
 }>();
 
 function change(patch: Partial<InstanceInfo>) {
@@ -48,24 +52,64 @@ function onVersionTypeChange(value: string) {
   }
 }
 
-// 加载器版本（按加载器提供下拉选项）
-const LOADER_VERSIONS: Record<string, string[]> = {
-  原版: [],
-  Forge: ["47.3.0", "47.2.0", "47.1.0", "43.4.0"],
-  NeoForge: ["21.1.0", "21.0.0", "20.4.80"],
-  Fabric: ["0.16.9", "0.15.11", "0.14.24"],
-  Quilt: ["0.27.1", "0.26.0", "0.25.0"],
-  OptiFine: ["HD_U_I6", "HD_U_H6", "HD_U_G5"],
-  LiteLoader: ["1.12.2-SNAPSHOT", "1.8.9-SNAPSHOT"],
-  自定义: ["custom-1.0"],
+// 刷新版本列表（清空后端缓存重新拉取，与添加实例窗口一致）
+const verLoading = ref(false);
+
+async function onRefreshVersions() {
+  verLoading.value = true;
+  try {
+    emit("refreshed", await api.refreshVersions());
+  } catch (e) {
+    showToast(String(e));
+  } finally {
+    verLoading.value = false;
+  }
+}
+
+// 加载器类型：只有原版、当前加载器、自定义（已安装的加载器不能随意切换）
+const loaderOptions = computed(() => {
+  const opts = ["原版"];
+  const cur = props.instance.loader;
+  if (cur && !opts.includes(cur)) opts.push(cur);
+  if (!opts.includes("自定义")) opts.push("自定义");
+  return opts;
+});
+
+// 加载器版本默认锁死：点刷新按钮拉取真实列表后解锁
+const LOADER_IDS: Record<string, string> = {
+  "原版": "normal",
+  "Forge": "forge",
+  "Fabric": "fabric",
+  "Quilt": "quilt",
+  "NeoForge": "neoforge",
+  "OptiFine": "optifine",
+  "LiteLoader": "liteloader",
+  "自定义": "custom",
 };
 
-const loaderVersions = computed(() => LOADER_VERSIONS[props.instance.loader] ?? []);
+const loaderVersions = ref<string[]>([]);
+const lvLocked = ref(true);
+const lvLoading = ref(false);
+
+async function onRefreshLoaderVersions() {
+  const id = LOADER_IDS[props.instance.loader];
+  if (!id || !props.instance.version) return;
+  lvLoading.value = true;
+  try {
+    loaderVersions.value = await api.addLoaderVersions(id, props.instance.version);
+    lvLocked.value = false;
+  } catch (e) {
+    showToast(String(e));
+  } finally {
+    lvLoading.value = false;
+  }
+}
 
 function onLoaderChange(value: string) {
-  const list = LOADER_VERSIONS[value] ?? [];
-  const first = list[0] ?? null;
-  change({ loader: value, loaderVersion: first });
+  // 切换加载器后重新锁死版本列表（需要重新拉取）
+  lvLocked.value = true;
+  loaderVersions.value = [];
+  change({ loader: value, loaderVersion: null });
 }
 
 // 整合包平台
@@ -110,13 +154,27 @@ const langs = [
       </option>
     </select>
     <span class="meta-label small">{{ t("meta.version") }}</span>
-    <select
-      class="field-select"
-      :value="instance.version"
-      @change="change({ version: ($event.target as HTMLSelectElement).value })"
-    >
-      <option v-for="v in filteredVersions" :key="v.id" :value="v.id">{{ v.id }}</option>
-    </select>
+    <div class="select-row">
+      <select
+        class="field-select"
+        :value="instance.version"
+        @change="change({ version: ($event.target as HTMLSelectElement).value })"
+      >
+        <option v-for="v in filteredVersions" :key="v.id" :value="v.id">{{ v.id }}</option>
+      </select>
+      <BaseButton
+        size="sm"
+        variant="ghost"
+        :disabled="verLoading"
+        :title="t('add.versionRefresh')"
+        @click="onRefreshVersions"
+      >
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+          <polyline points="21 3 21 9 15 9" />
+        </svg>
+      </BaseButton>
+    </div>
 
     <!-- 加载器 + 加载器版本 -->
     <span class="meta-label">{{ t("meta.loader") }}</span>
@@ -125,16 +183,32 @@ const langs = [
       :value="instance.loader"
       @change="onLoaderChange(($event.target as HTMLSelectElement).value)"
     >
-      <option v-for="l in loaders" :key="l" :value="l">{{ loaderLabel(l) }}</option>
+      <option v-for="l in loaderOptions" :key="l" :value="l">{{ loaderLabel(l) }}</option>
     </select>
     <span class="meta-label small">{{ t("meta.loaderVersion") }}</span>
-    <select
-      class="field-select"
-      :value="instance.loaderVersion ?? ''"
-      @change="change({ loaderVersion: ($event.target as HTMLSelectElement).value || null })"
-    >
-      <option v-for="lv in loaderVersions" :key="lv" :value="lv">{{ lv }}</option>
-    </select>
+    <div class="select-row">
+      <!-- 默认锁死，点刷新按钮拉取真实版本列表后解锁 -->
+      <select
+        class="field-select"
+        :value="instance.loaderVersion ?? ''"
+        :disabled="lvLocked"
+        @change="change({ loaderVersion: ($event.target as HTMLSelectElement).value || null })"
+      >
+        <option v-for="lv in loaderVersions" :key="lv" :value="lv">{{ lv }}</option>
+      </select>
+      <BaseButton
+        size="sm"
+        variant="ghost"
+        :disabled="lvLoading || !instance.version || instance.loader === '原版' || instance.loader === '自定义'"
+        :title="t('add.loaderVerRefresh')"
+        @click="onRefreshLoaderVersions"
+      >
+        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+          <polyline points="21 3 21 9 15 9" />
+        </svg>
+      </BaseButton>
+    </div>
 
     <!-- 整合包平台（选中后下方输入 ID） -->
     <span class="meta-label">{{ t("meta.modpack") }}</span>
@@ -209,6 +283,19 @@ const langs = [
 
 .meta-label.small {
   text-align: right;
+}
+
+/* 下拉 + 刷新按钮（与添加实例窗口一致的排布） */
+.select-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+}
+
+.select-row .field-select {
+  flex: 1;
+  min-width: 0;
 }
 
 .modpack-select {

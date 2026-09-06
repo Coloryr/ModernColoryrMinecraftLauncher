@@ -3,7 +3,7 @@
 // 改为指针事件模拟：按下记录候选 → 移动超阈值开始拖拽 →
 // 组内插入占位（淡化的实例）→ 松开提交；支持同组排序与跨组移动。
 import { computed, onMounted, onUnmounted, ref, type Ref } from "vue";
-import { api } from "../lib/api-ipc";
+import { api } from "../lib/api";
 import { t } from "../lib/i18n";
 import type { InstanceInfo } from "../lib/types";
 
