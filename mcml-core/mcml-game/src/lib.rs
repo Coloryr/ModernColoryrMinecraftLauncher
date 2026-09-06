@@ -22,6 +22,7 @@ use crate::{
     gui_hook::{AddInstanceGui, ProgressGui},
     launcher::{LogEncoding, game_time_obj::GameTimeObj, instance_setting_obj::InstanceSettingObj},
     launcher_path::{
+        assets_path,
         instance_path::{self},
         version_path,
     },
@@ -232,6 +233,36 @@ pub fn get_instance(uuid: &Uuid) -> Option<GameInstance> {
     let list = INSTANCES.read().unwrap();
 
     Some(list.get(uuid)?.clone())
+}
+
+/// 获取实例的游戏内语言列表（从资源索引文件里查 minecraft/lang/*.json）
+///
+/// 资源索引未下载 / 版本数据缺失时返回空列表，由前端回退默认语言（中文 / 英文）。
+pub fn get_instance_langs(uuid: &Uuid) -> Vec<String> {
+    let Some(instance) = get_instance(uuid) else {
+        return Vec::new();
+    };
+    let version = instance.read().unwrap().version.clone();
+    let Ok(obj) = version_path::get_version(&version) else {
+        return Vec::new();
+    };
+    let Some(index) = &obj.asset_index else {
+        return Vec::new();
+    };
+    let Ok(assets) = assets_path::get_index(index) else {
+        return Vec::new();
+    };
+    let mut langs: Vec<String> = assets
+        .objects
+        .keys()
+        .filter_map(|key| {
+            key.strip_prefix("minecraft/lang/")?
+                .strip_suffix(".json")
+                .map(String::from)
+        })
+        .collect();
+    langs.sort();
+    langs
 }
 
 /// 获取所有分组名字

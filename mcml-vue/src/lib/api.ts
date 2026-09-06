@@ -5,18 +5,27 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
+  DetectedPackInfo,
+  DownloadItemEvent,
+  DownloadTaskEvent,
+  DownloadTaskInfo,
   ErrorEvent,
   ExitEvent,
+  InstanceArgs,
   InstanceInfo,
   JavaInfo,
   LogEvent,
+  ModpackFile,
+  ModpackSearchResult,
   NewsItem,
+  PackProgress,
   StateEvent,
   VersionInfo,
 } from "./types";
-import { MainGetInstances, MainGetGroups, MainGetJavaList, MainGetVersions, MainGetNews, MainOpenUrl, MainAddGroup, MainRemoveGroup, MainMoveGroup, MainCreateInstance, MainRenameInstance, MainUpdateInstance, MainDeleteInstance, MainMoveInstance, MainLaunchGame, MainStopGame, MainGetGameLog, MainGetRunning, MainRefreshVersions } from "./invokes";
-import { AddCreateNew, AddImportFolder, AddImportArchive, AddImportUrl, AddCancel, AddGetLoaderVersions, AddGetLoaders, AddGetPackTypes, AddGetVersionTypes, AddGetSupportLoaders, AddSetCloseGuard, AddAnswerNameConflict } from "./invokes";
-import { GameLog, LaunchState, GameExit, LaunchError, InstanceChange, CloseBlocked, AddLoaderProgress, AddNameConflict } from "./listens";
+import { MainGetInstances, MainGetGroups, MainGetInstanceArgs, MainGetInstanceLangs, MainGetJavaList, MainGetVersions, MainGetNews, MainOpenUrl, MainAddGroup, MainRemoveGroup, MainMoveGroup, MainCreateInstance, MainRenameInstance, MainUpdateInstance, MainUpdateInstanceArgs, MainDeleteInstance, MainMoveInstance, MainLaunchGame, MainStopGame, MainGetGameLog, MainGetRunning, MainRefreshVersions, MainAddJava, MainRemoveJava, MainScanJava } from "./invokes";
+import { AddCreateNew, AddImportFolder, AddImportArchive, AddImportUrl, AddCancel, AddDetectArchive, AddGetModpackFiles, AddSearchModpacks, AddInstallModpack, AddGetLoaderVersions, AddGetLoaders, AddGetPackTypes, AddGetVersionTypes, AddGetSupportLoaders, AddSetCloseGuard, AddAnswerNameConflict } from "./invokes";
+import { DownloadCancelTask, DownloadGetTasks } from "./invokes";
+import { GameLog, LaunchState, GameExit, LaunchError, InstanceChange, CloseBlocked, AddLoaderProgress, AddNameConflict, AddPackProgress, JavaChange, DownloadItem, DownloadTask } from "./listens";
 
 export interface CreateInstanceOpts {
   loader?: string;
@@ -35,8 +44,28 @@ export const api = {
     return invoke<string[]>(MainGetGroups);
   },
 
+  /** 获取实例的游戏内语言列表（从资源索引查 minecraft/lang/*.json，资源未下载时为空） */
+  async getInstanceLangs(uuid: string): Promise<string[]> {
+    return invoke<string[]>(MainGetInstanceLangs, { uuid });
+  },
+
   async getJavaList(): Promise<JavaInfo[]> {
     return invoke<JavaInfo[]>(MainGetJavaList);
+  },
+
+  /** 添加 Java（后端校验有效后入列表；无效返回 false） */
+  async addJava(name: string, path: string): Promise<boolean> {
+    return invoke<boolean>(MainAddJava, { name, path });
+  },
+
+  /** 删除指定名称的 Java */
+  async removeJava(name: string): Promise<void> {
+    return invoke<void>(MainRemoveJava, { name });
+  },
+
+  /** 扫描系统已安装的 Java（耗时查询）并返回最新列表 */
+  async scanJava(): Promise<JavaInfo[]> {
+    return invoke<JavaInfo[]>(MainScanJava);
   },
 
   async getVersions(): Promise<VersionInfo[]> {
@@ -80,13 +109,45 @@ export const api = {
     packType: string,
     name: string,
     group: string | null,
+    unselect: string[] | null,
   ): Promise<string> {
-    return invoke<string>(AddImportArchive, { path, packType, name, group });
+    return invoke<string>(AddImportArchive, { path, packType, name, group, unselect });
   },
 
   /** 从网址安装实例 */
   async addImportUrl(url: string, name: string, group: string | null): Promise<string> {
     return invoke<string>(AddImportUrl, { url, name, group });
+  },
+
+  /** 检测压缩包的整合包类型与推荐实例名（识别失败抛错） */
+  async addDetectArchive(path: string): Promise<DetectedPackInfo> {
+    return invoke<DetectedPackInfo>(AddDetectArchive, { path });
+  },
+
+  /** 搜索在线整合包（source：curseforge / modrinth，page 从 0 开始） */
+  async searchModpacks(
+    source: string,
+    query: string | null,
+    version: string | null,
+    sort: string,
+    page: number,
+  ): Promise<ModpackSearchResult> {
+    return invoke<ModpackSearchResult>(AddSearchModpacks, { source, query, version, sort, page });
+  },
+
+  /** 获取整合包的可安装版本列表（version 传 null 取全部） */
+  async getModpackFiles(source: string, projectId: string, version: string | null): Promise<ModpackFile[]> {
+    return invoke<ModpackFile[]>(AddGetModpackFiles, { source, projectId, version });
+  },
+
+  /** 安装在线整合包（实例名取自整合包元数据，返回新实例 uuid） */
+  async installModpack(
+    source: string,
+    projectId: string,
+    fileId: string,
+    group: string | null,
+  ): Promise<string> {
+    return invoke<string>(AddInstallModpack, { source, projectId, fileId, group });
   },
 
   /** 取消进行中的安装任务 */
@@ -161,6 +222,16 @@ export const api = {
     return invoke<boolean>(MainUpdateInstance, { uuid, patch });
   },
 
+  /** 获取实例启动参数（核心实例读配置，遗留数据读内存缓存） */
+  async getInstanceArgs(uuid: string): Promise<InstanceArgs> {
+    return invoke<InstanceArgs>(MainGetInstanceArgs, { uuid });
+  },
+
+  /** 更新实例启动参数（核心实例写配置并保存） */
+  async updateInstanceArgs(uuid: string, args: InstanceArgs): Promise<boolean> {
+    return invoke<boolean>(MainUpdateInstanceArgs, { uuid, args });
+  },
+
   async deleteInstance(uuid: string): Promise<boolean> {
     return invoke<boolean>(MainDeleteInstance, { uuid });
   },
@@ -184,6 +255,16 @@ export const api = {
   async getRunning(): Promise<string[]> {
     return invoke<string[]>(MainGetRunning);
   },
+
+  /** 获取进行中的下载任务快照（下载管理窗口） */
+  async getDownloadTasks(): Promise<DownloadTaskInfo[]> {
+    return invoke<DownloadTaskInfo[]>(DownloadGetTasks);
+  },
+
+  /** 取消一个下载任务（任务不存在返回 false） */
+  async cancelDownloadTask(id: number): Promise<boolean> {
+    return invoke<boolean>(DownloadCancelTask, { id });
+  },
 };
 
 // ---------------- 事件订阅（Rust emit → 前端 listen） ----------------
@@ -203,6 +284,19 @@ export function onLaunchError(cb: (e: ErrorEvent) => void): Promise<UnlistenFn> 
 export function onInstanceChange(cb: () => void): Promise<UnlistenFn> {
   return listen(InstanceChange, () => cb());
 }
+export function onJavaChange(cb: () => void): Promise<UnlistenFn> {
+  return listen(JavaChange, () => cb());
+}
+
+/** 下载任务状态事件（type：add / remove / update） */
+export function onDownloadTask(cb: (e: DownloadTaskEvent) => void): Promise<UnlistenFn> {
+  return listen<DownloadTaskEvent>(DownloadTask, (e) => cb(e.payload));
+}
+
+/** 下载线程当前文件状态事件 */
+export function onDownloadItem(cb: (e: DownloadItemEvent) => void): Promise<UnlistenFn> {
+  return listen<DownloadItemEvent>(DownloadItem, (e) => cb(e.payload));
+}
 
 /** 关闭被拒绝（窗口处于关闭保护时，前端弹提示说明原因） */
 export function onCloseBlocked(cb: () => void): Promise<UnlistenFn> {
@@ -219,6 +313,11 @@ export function onAddNameConflict(
   cb: (e: { id: number; kind: string; name: string }) => void,
 ): Promise<UnlistenFn> {
   return listen<{ id: number; kind: string; name: string }>(AddNameConflict, (e) => cb(e.payload));
+}
+
+/** 整合包安装进度（本地压缩包 / 在线整合包安装共用） */
+export function onAddPackProgress(cb: (e: PackProgress) => void): Promise<UnlistenFn> {
+  return listen<PackProgress>(AddPackProgress, (e) => cb(e.payload));
 }
 
 export function answerNameConflict(id: number, answer: boolean): Promise<void> {

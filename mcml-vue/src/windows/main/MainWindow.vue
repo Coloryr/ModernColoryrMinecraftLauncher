@@ -5,6 +5,7 @@ import {
   onGameExit,
   onGameLog,
   onInstanceChange,
+  onJavaChange,
   onLaunchError,
   onLaunchState,
 } from "../../lib/api";
@@ -312,14 +313,16 @@ function appendLog(line: string) {
   if (logs.value.length > 3000) logs.value.splice(0, logs.value.length - 3000);
 }
 
-// ================= 启动参数（模拟） =================
+// ================= 启动参数（经 IPC 读写核心实例配置） =================
 
 const argsOpen = ref(false);
 const execOpen = ref(false);
 const serverOpen = ref(false);
 const proxyOpen = ref(false);
 const argsMap = ref<Record<string, InstanceArgs>>({});
+const argsLoaded = ref<Record<string, boolean>>({});
 
+// 加载完成前先用骨架默认值占位（真实值随后端返回覆盖）
 function argsOf(uuid: string): InstanceArgs {
   if (!argsMap.value[uuid]) {
     argsMap.value[uuid] = {
@@ -355,17 +358,42 @@ function argsOf(uuid: string): InstanceArgs {
   return argsMap.value[uuid];
 }
 
+async function loadArgs(uuid: string) {
+  try {
+    argsMap.value[uuid] = await api.getInstanceArgs(uuid);
+    argsLoaded.value[uuid] = true;
+  } catch {
+    showToast(t("args.loadFailed"));
+  }
+}
+
+// 切换选中实例后拉取该实例的启动参数
+watch(
+  () => selected.value?.uuid,
+  (uuid) => {
+    if (uuid && !argsLoaded.value[uuid]) loadArgs(uuid);
+  },
+  { immediate: true },
+);
+
+// 修改后防抖写回后端（每个按键都保存会产生大量写盘）
+let argsSaveTimer: ReturnType<typeof setTimeout> | null = null;
+
 /** 自动加入服务器信息（按实例存储） */
+function patchArgs(patch: Partial<InstanceArgs>) {
+  if (selected.value) updateArgs({ ...argsOf(selected.value.uuid), ...patch });
+}
+
 function onServerIp(value: string) {
-  if (selected.value) argsMap.value[selected.value.uuid] = { ...argsOf(selected.value.uuid), serverIp: value };
+  patchArgs({ serverIp: value });
 }
 
 function onServerPort(v: number) {
-  if (selected.value) argsMap.value[selected.value.uuid] = { ...argsOf(selected.value.uuid), serverPort: v };
+  patchArgs({ serverPort: v });
 }
 
 function onServerJoin(checked: boolean) {
-  if (selected.value) argsMap.value[selected.value.uuid] = { ...argsOf(selected.value.uuid), joinServer: checked };
+  patchArgs({ joinServer: checked });
 }
 
 // 累计游戏时间（模拟数据）
@@ -382,7 +410,13 @@ function playHoursOf(uuid: string): number {
 }
 
 function updateArgs(v: InstanceArgs) {
-  if (selected.value) argsMap.value[selected.value.uuid] = v;
+  const uuid = selected.value?.uuid;
+  if (!uuid) return;
+  argsMap.value[uuid] = v;
+  if (argsSaveTimer) clearTimeout(argsSaveTimer);
+  argsSaveTimer = setTimeout(() => {
+    api.updateInstanceArgs(uuid, argsMap.value[uuid]).catch((e) => showToast(String(e)));
+  }, 600);
 }
 
 // ================= 实例操作 =================
@@ -820,6 +854,7 @@ const features: Array<{ id: FeatureId; icon: string }> = [
   { id: "settings", icon: "gear" },
   { id: "stats", icon: "chart" },
   { id: "skin", icon: "user" },
+  { id: "download", icon: "download" },
   { id: "help", icon: "book" },
 ];
 
@@ -897,6 +932,10 @@ async function subscribeEvents() {
     onInstanceChange(() => {
       loadInstances();
       loadGroups();
+    }),
+    // Java 列表变更（添加 / 删除 / 配置加载完成）→ 重新拉取
+    onJavaChange(() => {
+      loadJava();
     }),
   ]);
   unlistens.push(...fns);

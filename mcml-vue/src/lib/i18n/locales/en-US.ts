@@ -55,6 +55,10 @@ export default {
   "multi.detailTitle": "Multi-select",
   "multi.detailDesc": "{count} instances selected. Right-click an instance or use the toolbar.",
 
+  // Common tips
+  "tip.refreshed": "Refreshed",
+  "args.loadFailed": "Failed to load instance launch args",
+
   // News
   "news.title": "Minecraft New",
   "news.head": "Latest Minecraft News",
@@ -140,9 +144,11 @@ export default {
   "meta.versionType": "Version type",
   "meta.loader": "Loader",
   "meta.loaderVersion": "Loader version",
-  "meta.modpack": "Modpack",
+  "meta.modpack": "Modpack type",
   "meta.platform": "Modpack platform",
   "meta.platformNone": "None",
+  "meta.platformOnline": "Online modpack",
+  "meta.serverUrl": "URL",
   "meta.pid": "Project ID",
   "meta.fid": "File ID",
   "meta.lang": "In-game language",
@@ -270,6 +276,7 @@ export default {
   "add.type.snapshot": "Snapshot",
   "add.type.old_beta": "Legacy Beta",
   "add.type.old_alpha": "Legacy Alpha",
+  "add.type.other": "Legacy",
   "add.typeAll": "All types",
   "add.loader.normal": "Vanilla",
   "add.loader.forge": "Forge",
@@ -298,6 +305,9 @@ export default {
   "add.nameConflictTitle": "Instance Name Conflict",
   "add.nameConflictOverwrite": "Instance “{name}” already exists. Overwrite it? (the old one will be deleted)",
   "add.nameConflictRename": "Instance name conflict. Allow auto-renaming?",
+  "add.addedTitle": "Instance Added",
+  "add.askContinue": "Instance “{name}” was added. Add another one?",
+  "add.archiveReadFail": "Failed to read archive contents",
   "add.yes": "Yes",
   "add.no": "No",
   "add.closeBlocked": "Loading data — the window can't be closed yet",
@@ -412,6 +422,7 @@ export default {
   "features.stats": "Game Stats",
   "features.skin": "Skin Viewer",
   "features.help": "Help Manual",
+  "features.download": "Downloads",
 
   // Setup
   "init.title": "First run: set data directory and offline player name",
@@ -497,6 +508,52 @@ export default {
   // Help window
   "winHelp.stillStuck": "Still stuck?",
   "winHelp.report": "Please provide the game logs (logs directory) and launcher version, then report at GitHub Issues.",
+
+  // Download manager window
+  "winDownload.tasks": "Download Tasks",
+  "winDownload.threads": "Download Threads",
+  "winDownload.empty": "No downloads in progress",
+  "winDownload.loading": "Loading task list…",
+  "winDownload.idle": "All download threads are idle",
+  "winDownload.cancel": "Cancel",
+  "winDownload.counts": "{done} / {total} done ({failed} failed)",
+  "winDownload.state.wait": "Waiting",
+  "winDownload.state.getinfo": "Fetching Info",
+  "winDownload.state.download": "Downloading",
+  "winDownload.state.pause": "Paused",
+  "winDownload.state.init": "Initializing",
+  "winDownload.state.action": "Processing",
+  "winDownload.state.done": "Done",
+  "winDownload.state.error": "Error",
+
+  // Modpack mode (add instance window)
+  "add.modeModpack": "Modpacks",
+  "add.installing": "Installing Modpack",
+  "add.packState.downloadPack": "Downloading modpack",
+  "add.packState.readInfo": "Reading info",
+  "add.packState.getInfo": "Fetching file info",
+  "add.packState.downloadFile": "Downloading files",
+  "add.packState.extract": "Extracting",
+  "add.packState.done": "Done",
+  "modpack.curseforge": "CurseForge",
+  "modpack.modrinth": "Modrinth",
+  "modpack.allVersions": "All game versions",
+  "modpack.sortPopularity": "Popular",
+  "modpack.sortDownloads": "Most downloaded",
+  "modpack.sortUpdated": "Recently updated",
+  "modpack.sortName": "Name",
+  "modpack.searchHint": "Search modpacks…",
+  "modpack.search": "Search",
+  "modpack.loading": "Searching…",
+  "modpack.searchFail": "Search failed, check your network and try again",
+  "modpack.empty": "No modpacks found",
+  "modpack.downloads": "{n} downloads",
+  "modpack.loadingVersions": "Loading versions…",
+  "modpack.noVersions": "No versions available for this game version",
+  "modpack.install": "Install",
+  "modpack.prevPage": "Prev",
+  "modpack.nextPage": "Next",
+  "modpack.unknownSize": "Unknown size",
 };
 
 export const faqs: Array<{ q: string; a: string }> = [

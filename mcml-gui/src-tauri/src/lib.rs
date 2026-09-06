@@ -7,7 +7,7 @@
 
 use mcml_names::i18;
 
-use crate::windows::main;
+use crate::windows::{download, main};
 
 pub mod dtos;
 pub mod err_box;
@@ -33,6 +33,17 @@ pub fn run() {
             if let Err(e) = window_manager::show_main_window(app.handle()) {
                 err_box::fatal_error_text(&e);
             }
+
+            // Java 列表变更（mcml_jvms 添加 / 删除 / 配置加载完成）→ 通知前端刷新
+            let handle = app.handle().clone();
+            mcml_jvms::add_jvm_change(move || {
+                main::emit_java_change(&handle);
+            });
+
+            // 下载器：挂接 UI 回调（转发为前端事件）并启动下载线程池
+            let handle = app.handle().clone();
+            mcml_downloader::set_gui_handel(Box::new(download::DownloadGuiHook::new(handle)));
+            mcml_downloader::start();
 
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {

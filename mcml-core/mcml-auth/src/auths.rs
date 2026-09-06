@@ -160,8 +160,11 @@ pub fn import<P: AsRef<Path>>(file: P) -> CoreResult<()> {
 ///
 /// 谨慎使用，此操作不可逆。
 pub fn clear_auths() {
-    let mut auths = AUTHS.write().unwrap();
-    auths.clear();
+    // 先释放写锁再落盘：save() 内部要拿读锁，同线程写锁未释放时重入会死锁
+    {
+        let mut auths = AUTHS.write().unwrap();
+        auths.clear();
+    }
 
     save();
 }
@@ -191,9 +194,11 @@ impl LoginObj {
     /// 如果已存在相同键（UUID + 认证类型）的账户，则覆盖更新。
     pub fn save(&self) {
         let key = self.get_key();
-        let mut auths = AUTHS.write().unwrap();
-
-        auths.insert(key, self.clone());
+        // 先释放写锁再落盘：save() 内部要拿读锁，同线程写锁未释放时重入会死锁
+        {
+            let mut auths = AUTHS.write().unwrap();
+            auths.insert(key, self.clone());
+        }
 
         save();
     }
@@ -202,9 +207,11 @@ impl LoginObj {
     pub fn delete(&self) {
         let key = self.get_key();
 
-        let mut auths = AUTHS.write().unwrap();
-
-        auths.remove(&key);
+        // 先释放写锁再落盘：save() 内部要拿读锁，同线程写锁未释放时重入会死锁
+        {
+            let mut auths = AUTHS.write().unwrap();
+            auths.remove(&key);
+        }
 
         save();
     }

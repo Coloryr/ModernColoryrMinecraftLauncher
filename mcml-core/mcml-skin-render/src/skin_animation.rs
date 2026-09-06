@@ -118,3 +118,115 @@ impl SkinAnimation {
         self.frame = frame % 120;
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 初始状态：frame 为 0，手臂默认抬起 40 度
+    #[test]
+    fn test_new_animation_defaults() {
+        let anim = SkinAnimation::new();
+        assert_eq!(anim.get_frame(), 0);
+        assert!(!anim.run);
+        assert_eq!(anim.arm, Vec3::new(40.0, 0.0, 0.0));
+        assert_eq!(anim.leg, Vec3::ZERO);
+        assert_eq!(anim.head, Vec3::ZERO);
+        assert_eq!(anim.cape, 0.0);
+    }
+
+    /// run 为 false 时 tick 不推进帧，但返回 true（未关闭）
+    #[test]
+    fn test_tick_without_run() {
+        let mut anim = SkinAnimation::new();
+        assert!(anim.tick(1.0));
+        assert_eq!(anim.get_frame(), 0);
+        // 关闭后 tick 返回 false
+        anim.close();
+        assert!(!anim.run);
+        assert!(!anim.tick(0.01));
+    }
+
+    /// set_frame 对 120 帧取模
+    #[test]
+    fn test_set_frame_modulo() {
+        let mut anim = SkinAnimation::new();
+        anim.set_frame(130);
+        assert_eq!(anim.get_frame(), 10);
+        anim.set_frame(120);
+        assert_eq!(anim.get_frame(), 0);
+    }
+
+    /// 正常播放：每累计 0.01 秒推进一帧，并按帧号更新各部件角度
+    #[test]
+    fn test_tick_advances_frames_and_values() {
+        let mut anim = SkinAnimation::new();
+        anim.run = true;
+        anim.set_frame(30);
+
+        // 0.02 秒 -> 推进 1 帧 -> frame 31
+        anim.tick(0.02);
+        assert_eq!(anim.get_frame(), 31);
+
+        // frame <= 60 分支的角度公式
+        assert_eq!(anim.arm.x, 40.0, "arm.x 不受前半段影响");
+        assert_eq!(anim.arm.y, 31.0 * 6.0 - 180.0);
+        assert_eq!(anim.leg.y, 90.0 - 31.0 * 3.0);
+        assert_eq!(anim.cape, 31.0 / 10.0);
+
+        // 非纤细：head.x 为 0，head.z 摆动
+        assert_eq!(anim.head.x, 0.0);
+        assert_eq!(anim.head.z, 31.0 - 30.0);
+    }
+
+    /// 纤细 (NewSlim) 皮肤动画走 head.x 摆动、head.z 固定为 0
+    #[test]
+    fn test_tick_slim_head_axis() {
+        let mut anim = SkinAnimation::new();
+        anim.run = true;
+        anim.skin_type = SkinType::NewSlim;
+        anim.set_frame(30);
+        anim.tick(0.02);
+        assert_eq!(anim.head.z, 0.0);
+        assert_eq!(anim.head.x, 31.0 - 30.0);
+    }
+
+    /// 帧到达 120 后应回绕到 0
+    #[test]
+    fn test_frame_wraps_at_120() {
+        let mut anim = SkinAnimation::new();
+        anim.run = true;
+        anim.set_frame(119);
+        // 0.03 秒 -> 推进 3 帧 -> 122 -> 回绕为 0
+        anim.tick(0.03);
+        assert_eq!(anim.get_frame(), 0);
+
+        // 后半段 (frame > 60) 的角度公式
+        // 注意：set_frame 不清空内部的时间累计，第一次 tick(0.03) 后剩余 count=0.01，
+        // 再 tick(0.02) 会累计出 3 帧推进：61 -> 63
+        anim.set_frame(61);
+        anim.tick(0.02); // -> 63
+        assert_eq!(anim.get_frame(), 63);
+        assert_eq!(anim.arm.y, 540.0 - 63.0 * 6.0);
+        assert_eq!(anim.leg.y, 63.0 * 3.0 - 270.0);
+        assert_eq!(anim.cape, 6.0 - (63.0 - 60.0) / 10.0);
+    }
+
+    /// reset 应恢复初始状态并解除关闭标记
+    #[test]
+    fn test_reset() {
+        let mut anim = SkinAnimation::new();
+        anim.run = true;
+        anim.set_frame(100);
+        anim.tick(0.05);
+        anim.close();
+        assert!(!anim.tick(0.01));
+
+        anim.reset();
+        assert_eq!(anim.get_frame(), 0);
+        assert_eq!(anim.arm, Vec3::new(40.0, 0.0, 0.0));
+        // reset 后重新可播放
+        anim.run = true;
+        assert!(anim.tick(0.01));
+    }
+}

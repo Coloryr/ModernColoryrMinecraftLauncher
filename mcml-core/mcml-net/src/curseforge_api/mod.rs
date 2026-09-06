@@ -399,7 +399,7 @@ pub async fn get_mods_info(ids: Vec<u64>) -> CoreResult<CurseForgeListPageObj> {
 /// 获取文件列表
 pub async fn get_files_page(arg: CurseFogreArg) -> CoreResult<CurseFogreFilePageObj> {
     let mut url = format!(
-        "{}mods/{}/files?index={}pageSize=50&gameVersion={}",
+        "{}mods/{}/files?index={}&pageSize=50&gameVersion={}",
         urls::CURSEFORGE,
         arg.id.unwrap_or_default(),
         arg.page.unwrap_or(0) * 50,
@@ -437,5 +437,104 @@ impl CurseForgeFileDataObj {
             .find(|h| h.algo == 1)
             .map(|h| h.value.clone())
             .unwrap_or_default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::curseforge_api::file_obj::HashesObj;
+
+    /// 排序方式编号：与 CurseForge API 的 sortField 取值一致
+    /// （Featured=1, Popularity=2, LastUpdated=3, Name=4, TotalDownloads=6）
+    #[test]
+    fn sort_type_index() {
+        assert_eq!(CurseForgeSortType::Featured.get_index(), 1);
+        assert_eq!(CurseForgeSortType::Popularity.get_index(), 2);
+        assert_eq!(CurseForgeSortType::LastUpdated.get_index(), 3);
+        assert_eq!(CurseForgeSortType::Name.get_index(), 4);
+        assert_eq!(CurseForgeSortType::TotalDownloads.get_index(), 6);
+    }
+
+    /// 排序方向编号：除 Name 外均为 1（升序），Name 为 0（字母序）
+    #[test]
+    fn sort_type_order_index() {
+        assert_eq!(CurseForgeSortType::Featured.get_order_index(), 1);
+        assert_eq!(CurseForgeSortType::Popularity.get_order_index(), 1);
+        assert_eq!(CurseForgeSortType::LastUpdated.get_order_index(), 1);
+        assert_eq!(CurseForgeSortType::TotalDownloads.get_order_index(), 1);
+        assert_eq!(CurseForgeSortType::Name.get_order_index(), 0);
+    }
+
+    /// 默认排序方式应为流行度
+    #[test]
+    fn sort_type_default() {
+        assert!(matches!(
+            CurseForgeSortType::default(),
+            CurseForgeSortType::Popularity
+        ));
+    }
+
+    /// 构造一个测试用的文件数据对象
+    fn make_file(id: u64, file_name: &str, sha1: Option<&str>) -> CurseForgeFileDataObj {
+        CurseForgeFileDataObj {
+            id,
+            file_name: file_name.to_string(),
+            hashes: match sha1 {
+                Some(value) => vec![HashesObj {
+                    value: value.to_string(),
+                    algo: 1,
+                }],
+                None => Vec::new(),
+            },
+            ..Default::default()
+        }
+    }
+
+    /// fix_download_url：downloadUrl 缺失时按 CF 的 CDN 规则补齐
+    /// （{CDN}files/{id/1000}/{id%1000}/{文件名}）
+    #[test]
+    fn fix_download_url_when_missing() {
+        let mut obj = make_file(5152805, "jei-1.20.4-forge-15.3.0.4.jar", Some("aaa"));
+        assert!(obj.download_url.is_none());
+
+        obj.fix_download_url();
+
+        assert_eq!(
+            obj.download_url.as_deref(),
+            Some("https://edge.forgecdn.net/files/5152/805/jei-1.20.4-forge-15.3.0.4.jar")
+        );
+    }
+
+    /// fix_download_url：已有下载地址时不应覆盖
+    #[test]
+    fn fix_download_url_keeps_existing() {
+        let mut obj = make_file(1000, "a.jar", None);
+        obj.download_url = Some(String::from("https://example.com/a.jar"));
+
+        obj.fix_download_url();
+
+        assert_eq!(obj.download_url.as_deref(), Some("https://example.com/a.jar"));
+    }
+
+    /// sha1_hash：algo == 1 的哈希即 SHA1
+    #[test]
+    fn sha1_hash_extraction() {
+        let mut obj = make_file(1, "a.jar", None);
+        obj.hashes = vec![
+            HashesObj {
+                value: String::from("md5-value"),
+                algo: 2,
+            },
+            HashesObj {
+                value: String::from("sha1-value"),
+                algo: 1,
+            },
+        ];
+        assert_eq!(obj.sha1_hash(), "sha1-value");
+
+        // 无哈希时返回空字符串
+        let obj = make_file(1, "a.jar", None);
+        assert_eq!(obj.sha1_hash(), "");
     }
 }
