@@ -1,18 +1,20 @@
 <script setup lang="ts">
 // 添加实例 · 模式一：从头新建（版本类型 / 版本 / 加载器 / 加载器版本 / 自定义加载器路径）
 // 选项数据（版本类型 / 加载器 / 加载器版本）全部来自 mcml-core 的独立 ID，显示名走 i18n
-import { ref } from "vue";
+// 版本类型为多选：下拉展开后是复选项；选中多个类型时，右侧版本列表按类型分组
+import { computed, onUnmounted, ref } from "vue";
 import { t } from "../../../lib/i18n";
 import BaseButton from "../../../components/ui/BaseButton.vue";
 import type { VersionInfo } from "../../../lib/types";
 
-defineProps<{
+const props = defineProps<{
   versions: VersionInfo[];
   /** 版本列表是否已加载（区分"加载中"与"该类型下无版本"） */
   versionsLoaded: boolean;
   /** 版本列表刷新中 */
   verLoading: boolean;
-  verType: string;
+  /** 已选版本类型（多选，空 = 不过滤） */
+  verTypes: string[];
   /** 版本类型 ID 列表（mcml-core） */
   versionTypes: string[];
   newVersion: string;
@@ -32,7 +34,7 @@ defineProps<{
 }>();
 
 const emit = defineEmits<{
-  (e: "update:verType", v: string): void;
+  (e: "update:verTypes", v: string[]): void;
   (e: "update:newVersion", v: string): void;
   (e: "update:loader", v: string): void;
   (e: "update:loaderVersion", v: string): void;
@@ -44,8 +46,44 @@ const emit = defineEmits<{
 
 const loaderPathInput = ref<HTMLInputElement | null>(null);
 
-function onVerTypeChange(e: Event) {
-  emit("update:verType", (e.target as HTMLSelectElement).value);
+// ================= 版本类型多选下拉 =================
+
+const typeOpen = ref(false);
+const comboEl = ref<HTMLDivElement | null>(null);
+
+/** 点击下拉外部时收起（复选项在面板内点击不收起） */
+function onDocMousedown(e: MouseEvent) {
+  if (typeOpen.value && comboEl.value && !comboEl.value.contains(e.target as Node)) {
+    typeOpen.value = false;
+  }
+}
+document.addEventListener("mousedown", onDocMousedown);
+onUnmounted(() => document.removeEventListener("mousedown", onDocMousedown));
+
+/** 触发按钮文字：已选类型名，未选时显示“全部类型” */
+const typeLabel = computed(() => {
+  const names = props.verTypes.map((vt) => t(`add.type.${vt}`));
+  return names.length ? names.join("、") : t("add.typeAll");
+});
+
+/** 版本列表按类型分组（多个类型选中时分组合并展示） */
+const groupedVersions = computed(() => {
+  const types = props.versionTypes.filter((vt) =>
+    props.verTypes.length === 0 || props.verTypes.includes(vt),
+  );
+  return types
+    .map((vt) => ({
+      type: vt,
+      items: props.versions.filter((v) => v.versionType === vt),
+    }))
+    .filter((g) => g.items.length > 0);
+});
+
+function toggleType(vt: string) {
+  const sel = props.verTypes.includes(vt)
+    ? props.verTypes.filter((x) => x !== vt)
+    : [...props.verTypes, vt];
+  emit("update:verTypes", sel);
 }
 
 function onLoaderChange(e: Event) {
@@ -67,27 +105,45 @@ function onLoaderPathPick(e: Event) {
   <div class="add-row2">
     <div class="add-field">
       <label class="field-label">{{ t("add.verType") }}</label>
-      <select
-        :value="verType"
-        class="field-select"
-        @change="onVerTypeChange"
-      >
-        <option v-for="vt in versionTypes" :key="vt" :value="vt">
-          {{ t(`add.type.${vt}`) }}
-        </option>
-      </select>
+      <!-- 多选下拉：展开后是复选项，勾选不关闭，点外部关闭 -->
+      <div ref="comboEl" class="type-combo">
+        <button
+          type="button"
+          class="field-select type-trigger"
+          @click="typeOpen = !typeOpen"
+        >
+          <span class="type-label">{{ typeLabel }}</span>
+        </button>
+        <div v-if="typeOpen" class="type-drop">
+          <button
+            v-for="vt in versionTypes"
+            :key="vt"
+            type="button"
+            class="type-opt"
+            :class="{ selected: verTypes.includes(vt) }"
+            @click="toggleType(vt)"
+          >
+            {{ t(`add.type.${vt}`) }}
+          </button>
+        </div>
+      </div>
     </div>
     <div class="add-field">
       <label class="field-label">{{ t("add.version") }} <span class="req">*</span></label>
       <div class="path-row">
+        <!-- 选中多个版本类型时按类型分组展示 -->
         <select
           :value="newVersion"
           class="field-select"
           @change="emit('update:newVersion', ($event.target as HTMLSelectElement).value)"
         >
-          <option v-for="v in versions" :key="v.id" :value="v.id">
-            {{ v.id }}（{{ v.versionType }}）
-          </option>
+          <optgroup
+            v-for="grp in groupedVersions"
+            :key="grp.type"
+            :label="t(`add.type.${grp.type}`)"
+          >
+            <option v-for="v in grp.items" :key="v.id" :value="v.id">{{ v.id }}</option>
+          </optgroup>
         </select>
         <BaseButton
           size="sm"
@@ -204,6 +260,68 @@ function onLoaderPathPick(e: Event) {
   display: flex;
   gap: 8px;
   align-items: center;
+}
+
+/* 版本类型多选下拉 */
+.type-combo {
+  position: relative;
+}
+
+.type-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.type-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.type-drop {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: var(--bg-elev, var(--bg, #fff));
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: var(--shadow-lg, 0 8px 24px rgba(0, 0, 0, 0.15));
+  padding: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.type-opt {
+  display: block;
+  width: 100%;
+  margin: 2px 0;
+  padding: 7px 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+  font-family: inherit;
+  text-align: left;
+}
+
+.type-opt:hover {
+  background: var(--hover, rgba(0, 0, 0, 0.06));
+}
+
+/* 已选中：背景高亮 */
+.type-opt.selected {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
 }
 
 .hidden-input {

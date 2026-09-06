@@ -4,12 +4,13 @@
 import { computed, onMounted, onUnmounted, ref, watch, type Ref } from "vue";
 import WindowFrame from "../../components/ui/WindowFrame.vue";
 import BaseButton from "../../components/ui/BaseButton.vue";
+import BaseModal from "../../components/ui/BaseModal.vue";
 import NewMode from "./modes/NewMode.vue";
 import ArchiveMode from "./modes/ArchiveMode.vue";
 import FolderMode from "./modes/FolderMode.vue";
 import OnlineMode from "./modes/OnlineMode.vue";
 import { buildTree, collectDirKeys, collectFileKeys, type FileNode } from "../../lib/fileTree";
-import { api, onCloseBlocked, onAddLoaderProgress } from "../../lib/api-ipc";
+import { api, onCloseBlocked, onAddLoaderProgress, onAddNameConflict, answerNameConflict } from "../../lib/api";
 import { showToast } from "../../lib/toast";
 import { t } from "../../lib/i18n";
 import { isTauri } from "../windowManager";
@@ -58,11 +59,14 @@ function pickGroup(name: string) {
 const versions = ref<VersionInfo[]>([]);
 /** 版本类型列表（mcml-core 提供独立 ID，显示名走 i18n） */
 const versionTypes = ref<string[]>([]);
-/** 版本类型（mcml-core 独立 ID） */
-const verType = ref("release");
+/** 版本类型（可多选，mcml-core 独立 ID；空 = 不过滤） */
+const verTypes = ref<string[]>(["release"]);
 
 const filteredVersions = computed(() => {
-  return versions.value.filter((v) => v.versionType === verType.value).sort((a, b) => compareVersion(b.id, a.id));
+  const sel = verTypes.value;
+  return versions.value
+    .filter((v) => sel.length === 0 || sel.includes(v.versionType))
+    .sort((a, b) => compareVersion(b.id, a.id));
 });
 
 /** 加载器 ID 列表（选中版本后按支持情况从 mcml-core 查询，显示名走 i18n） */
@@ -564,6 +568,20 @@ async function create() {
   }
 }
 
+// ================= 实例重名确认 =================
+
+/** 当前弹出的重名确认（kind：overwrite 覆盖 / rename 自动改名；null = 无） */
+const nameConflict = ref<{ id: number; kind: string; name: string } | null>(null);
+
+/** 答复后端创建流程（关闭弹窗视为拒绝，避免创建流程挂起） */
+async function answerConflict(answer: boolean) {
+  const cur = nameConflict.value;
+  nameConflict.value = null;
+  if (cur) {
+    await answerNameConflict(cur.id, answer).catch(() => {});
+  }
+}
+
 // ================= 初始化 =================
 
 /** 版本列表未就绪（核心尚在加载 / 请求失败）时轮询重试，最长约 60s */
@@ -593,8 +611,14 @@ onMounted(async () => {
     loaderProgressTotal.value = e.total;
   });
   onUnmounted(unlistenProgress);
+  // 实例重名确认（后端创建流程暂停等待答复）
+  const unlistenConflict = await onAddNameConflict((e) => {
+    nameConflict.value = e;
+  });
+  onUnmounted(unlistenConflict);
   try {
-    groups.value = await api.getGroups();
+    // 默认分组（空白键）不进下拉：输入框留空即默认分组
+    groups.value = (await api.getGroups()).filter((g) => g.trim());
   } catch {
     groups.value = [];
   }
@@ -686,7 +710,7 @@ onMounted(async () => {
         :versions="filteredVersions"
         :versions-loaded="versions.length > 0"
         :ver-loading="verLoading"
-        :ver-type="verType"
+        :ver-types="verTypes"
         :version-types="versionTypes"
         :new-version="newVersion"
         :loader="addLoader"
@@ -700,7 +724,7 @@ onMounted(async () => {
         @refresh-versions="refreshVersions"
         @refresh-loaders="refreshSupportLoaders"
         @refresh-loader-versions="refreshLoaderVersions"
-        @update:ver-type="verType = $event"
+        @update:ver-types="verTypes = $event"
         @update:new-version="newVersion = $event"
         @update:loader="onLoaderChange"
         @update:loader-version="addLoaderVer = $event"
@@ -756,6 +780,25 @@ onMounted(async () => {
     <input ref="archiveInput" type="file" accept=".zip,.mrpack" class="hidden-input" @change="onArchivePick" />
     <input ref="folderInput" type="file" webkitdirectory class="hidden-input" @change="onFolderPick" />
 
+    <!-- 实例重名确认弹窗（后端创建流程暂停等待答复，关闭视为拒绝） -->
+    <BaseModal
+      v-if="nameConflict"
+      :title="t('add.nameConflictTitle')"
+      @close="answerConflict(false)"
+    >
+      <p class="conflict-text">
+        {{
+          nameConflict.kind === "overwrite"
+            ? t("add.nameConflictOverwrite", { name: nameConflict.name })
+            : t("add.nameConflictRename")
+        }}
+      </p>
+      <div class="modal-actions">
+        <BaseButton @click="answerConflict(false)">{{ t("add.no") }}</BaseButton>
+        <BaseButton variant="primary" @click="answerConflict(true)">{{ t("add.yes") }}</BaseButton>
+      </div>
+    </BaseModal>
+
     <!-- 右上角浮动进度提示（不阻挡操作，每查完一种加载器推进一步） -->
     <Teleport to="body">
       <Transition name="load-pop">
@@ -776,6 +819,12 @@ onMounted(async () => {
 </template>
 
 <style scoped>
+/* 重名确认弹窗文案 */
+.conflict-text {
+  margin: 0 0 10px;
+  color: var(--text);
+}
+
 /* 右上角浮动进度提示：不阻挡窗口操作 */
 .load-float {
   position: fixed;

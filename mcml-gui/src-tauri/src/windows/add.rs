@@ -4,18 +4,22 @@
 //! 创建成功后发 instance-change 事件通知主窗口刷新列表。
 //! 模型只保存跟随窗口生命周期的运行态：当前安装任务的取消令牌。
 
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 
+use async_trait::async_trait;
 use mcml_game::add_game::{self, PackType};
-use mcml_game::gui_hook::{IProgressGui, ProgressGui};
+use mcml_game::gui_hook::{AddInstanceGui, IAddInstanceGui, IProgressGui, ProgressGui};
 use mcml_game::launcher::instance_setting_obj::InstanceSettingObj;
 use mcml_game::loader::LoaderType;
+use mcml_game::GameInstance;
 use tauri::{AppHandle, Emitter, WebviewWindow};
+use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-use crate::dtos::{DirEntry, LoaderProgressDto};
+use crate::dtos::{DirEntry, LoaderProgressDto, NameConflictDto};
 use crate::listens;
 
 /// 添加实例窗口模型：只存运行态，不落盘
@@ -24,6 +28,8 @@ pub struct AddWindowModel {
     cancel: Mutex<Option<CancellationToken>>,
     /// 关闭保护（查询数据期间为 true，`CloseRequested` 阶段拒绝关闭）
     close_guard: AtomicBool,
+    /// 重名确认对话框的应答通道（id → 发送端，前端答复后唤醒创建流程）
+    dialog: Mutex<HashMap<u32, oneshot::Sender<bool>>>,
 }
 
 impl AddWindowModel {
@@ -31,6 +37,7 @@ impl AddWindowModel {
         Self {
             cancel: Mutex::new(None),
             close_guard: AtomicBool::new(false),
+            dialog: Mutex::new(HashMap::new()),
         }
     }
 
@@ -49,6 +56,14 @@ impl AddWindowModel {
     pub fn close_guard(&self) -> bool {
         self.close_guard.load(Ordering::Acquire)
     }
+
+    fn set_dialog(&self, id: u32, tx: oneshot::Sender<bool>) {
+        self.dialog.lock().unwrap().insert(id, tx);
+    }
+
+    fn take_dialog(&self, id: u32) -> Option<oneshot::Sender<bool>> {
+        self.dialog.lock().unwrap().remove(&id)
+    }
 }
 
 /// 取添加实例窗口模型（模型跟随窗口生命周期，见 window_manager）
@@ -65,6 +80,72 @@ fn parse_loader(id: &str) -> Result<LoaderType, String> {
 /// 前端压缩包 ID -> PackType（ID 列表见 [`add_get_pack_types`]）
 fn parse_pack_type(id: &str) -> Result<PackType, String> {
     PackType::from_id(id).ok_or_else(|| format!("未知的压缩包类型: {id}"))
+}
+
+/// 重名确认对话框事件 id 自增
+static DIALOG_ID: AtomicU32 = AtomicU32::new(1);
+
+/// 实例重名确认对话框事件（kind：overwrite 覆盖 / rename 自动改名）
+#[gui_macros::emit]
+pub fn emit_add_name_conflict(window: &WebviewWindow, dto: NameConflictDto) {
+    let _ = window.emit_to(window.label(), listens::ADD_NAME_CONFLICT, dto);
+}
+
+/// 实例创建重名确认：向添加实例窗口发事件弹窗，等待用户在对话框上答复
+struct AddInstanceDialogGui {
+    window: WebviewWindow,
+}
+
+impl AddInstanceDialogGui {
+    /// 弹出确认框并等待答复；窗口已关闭时视为拒绝
+    async fn ask(&self, kind: &str, name: &str) -> bool {
+        let Ok(store) = model(&self.window) else {
+            return false;
+        };
+        let id = DIALOG_ID.fetch_add(1, Ordering::Relaxed);
+        let (tx, rx) = oneshot::channel();
+        store.lock().unwrap().set_dialog(id, tx);
+        emit_add_name_conflict(
+            &self.window,
+            NameConflictDto {
+                id,
+                kind: kind.to_string(),
+                name: name.to_string(),
+            },
+        );
+        rx.await.unwrap_or(false)
+    }
+}
+
+#[async_trait]
+impl IAddInstanceGui for AddInstanceDialogGui {
+    /// 是否同意覆盖重名实例
+    async fn overwrite(&self, obj: GameInstance) -> bool {
+        let name = obj.read().unwrap().name.clone();
+        self.ask("overwrite", &name).await
+    }
+
+    /// 是否同意自动修改名字
+    async fn name_replace(&self, name: &str) -> bool {
+        self.ask("rename", name).await
+    }
+}
+
+/// 构建重名确认回调（跟随添加实例窗口）
+fn instance_gui(window: &WebviewWindow) -> AddInstanceGui {
+    Some(Arc::new(AddInstanceDialogGui {
+        window: window.clone(),
+    }) as Arc<dyn IAddInstanceGui>)
+}
+
+/// 用户对重名确认对话框的答复（唤醒等待中的创建流程）
+#[tauri::command]
+pub fn add_answer_name_conflict(window: WebviewWindow, id: u32, answer: bool) {
+    if let Ok(store) = model(&window) {
+        if let Some(tx) = store.lock().unwrap().take_dialog(id) {
+            let _ = tx.send(answer);
+        }
+    }
 }
 
 /// 任务前置检查：核心加载完成（HTTP 客户端就绪）+ 模型存在，返回模型与取消令牌
@@ -122,8 +203,9 @@ pub async fn add_create_new(
         ..Default::default()
     };
     // mcml-game 的安装 future 非 Send，放阻塞线程上 block_on 执行
+    let gui = instance_gui(&window);
     let res = tauri::async_runtime::spawn_blocking(move || {
-        tauri::async_runtime::block_on(obj.create_instance(None))
+        tauri::async_runtime::block_on(obj.create_instance(gui))
     })
     .await
     .map_err(|e| e.to_string())?
@@ -144,9 +226,10 @@ pub async fn add_import_folder(
 ) -> Result<String, String> {
     let (_store, token) = prepare(&window)?;
     // 安装 future 非 Send：阻塞线程 block_on；读锁在块内释放后再发事件
+    let gui = instance_gui(&window);
     let res = tauri::async_runtime::spawn_blocking(move || {
         tauri::async_runtime::block_on(async {
-            add_game::add_game_folder(&path, name, group, None, None, None, token).await
+            add_game::add_game_folder(&path, name, group, None, gui, None, token).await
         })
     })
     .await
@@ -169,10 +252,11 @@ pub async fn add_import_archive(
 ) -> Result<String, String> {
     let (_store, token) = prepare(&window)?;
     let pack = parse_pack_type(&pack_type)?;
+    let gui = instance_gui(&window);
     let uuid = tauri::async_runtime::spawn_blocking(move || {
         tauri::async_runtime::block_on(async {
             add_game::install_archive_from_file(
-                &path, name, group, None, None, None, None, pack, token,
+                &path, name, group, None, gui, None, None, pack, token,
             )
             .await
         })
@@ -194,10 +278,11 @@ pub async fn add_import_url(
     group: Option<String>,
 ) -> Result<String, String> {
     let (_store, token) = prepare(&window)?;
+    let gui = instance_gui(&window);
     let uuid = tauri::async_runtime::spawn_blocking(move || {
         tauri::async_runtime::block_on(async {
             add_game::install_archive_from_url(
-                &url, name, group, None, None, None, None, PackType::ArchivePack, token,
+                &url, name, group, None, gui, None, None, PackType::ArchivePack, token,
             )
             .await
         })

@@ -216,6 +216,7 @@ fn move_to_trash_macos(dir: &str) -> io::Result<bool> {
 /// 将文件夹挪到回收站
 #[cfg(target_os = "windows")]
 fn move_to_trash_windows<P: AsRef<Path>>(dir: P) -> CoreResult<()> {
+    use std::os::windows::ffi::OsStrExt;
     use windows::Win32::Foundation::HWND;
     use windows::Win32::UI::Shell::FO_DELETE;
     use windows::Win32::UI::Shell::FOF_ALLOWUNDO;
@@ -225,11 +226,19 @@ fn move_to_trash_windows<P: AsRef<Path>>(dir: P) -> CoreResult<()> {
     use windows::Win32::UI::Shell::SHFILEOPSTRUCTW;
     use windows::Win32::UI::Shell::SHFileOperationW;
     use windows::core::BOOL;
-    use windows::core::HSTRING;
     use windows::core::PCWSTR;
 
-    let hstring = HSTRING::from(dir.as_ref().as_os_str());
-    let pcwstr = PCWSTR(hstring.as_ptr());
+    // pFrom 要求双 \0 结尾的路径列表；直接用 HSTRING 只有一个 \0，
+    // 结尾字节取决于堆内存内容，导致 SHFileOperationW 间歇性返回 0x2。
+    // 这里手动构建缓冲区并补足双 \0。
+    let mut buf: Vec<u16> = dir
+        .as_ref()
+        .as_os_str()
+        .encode_wide()
+        .collect();
+    buf.push(0);
+    buf.push(0);
+    let pcwstr = PCWSTR(buf.as_ptr());
 
     let mut operation = SHFILEOPSTRUCTW {
         hwnd: HWND::default(),

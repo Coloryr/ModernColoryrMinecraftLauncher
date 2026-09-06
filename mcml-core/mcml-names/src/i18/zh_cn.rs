@@ -51,6 +51,9 @@ impl I18Lang for ZhCn {
             ErrorType::AuthLoginNoProfile => String::from("账户登录错误，没有找到账户"),
             ErrorType::AuthRefreshFail(data) => format!("账户刷新失败：{}", data),
             ErrorType::AuthRefreshNoProfile => String::from("账户刷新错误，没有找到账户"),
+            ErrorType::TaskCancel => String::from("任务已取消"),
+            ErrorType::TaskTimeout => String::from("任务执行超时"),
+            ErrorType::TaskError(data) => format!("任务出错：{}", data.error),
             _ => String::new(),
         }
     }
