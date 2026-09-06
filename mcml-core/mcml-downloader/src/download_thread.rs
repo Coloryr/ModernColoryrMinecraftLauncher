@@ -100,8 +100,13 @@ impl DownloadThread {
                     break;
                 }
 
-                let item = crate::get_item();
-                if let Some(item) = item {
+                // 消化队列中所有可取的任务，取不到新任务再休眠
+                // （此前每次唤醒只下载一个文件，任务入队时仅唤醒一轮，
+                //   剩余文件无人再唤醒线程，多文件任务会卡在中途）
+                while let Some(item) = crate::get_item() {
+                    if is_stop_clone.load(Ordering::SeqCst) {
+                        break;
+                    }
                     download(index, item);
                 }
             }
@@ -193,6 +198,8 @@ fn download(index: u32, mut obj: DownloadObj) {
     let mut use_break = false;
     let mut server_ranges = true;
     let mut is_keep = false;
+    // 重试次数耗尽后放弃此文件（不能把残缺的临时文件移到目标路径）
+    let mut is_fail = false;
 
     let mut temp_file;
 
@@ -208,6 +215,7 @@ fn download(index: u32, mut obj: DownloadObj) {
         if let Err(err) = file {
             obj.item.add_error();
             if is_need_err(err, &mut times) {
+                is_fail = true;
                 break;
             } else {
                 continue;
@@ -224,6 +232,7 @@ fn download(index: u32, mut obj: DownloadObj) {
             if let Err(err) = result {
                 obj.item.add_error();
                 if is_need_err(err, &mut times) {
+                    is_fail = true;
                     break;
                 } else {
                     continue;
@@ -245,6 +254,7 @@ fn download(index: u32, mut obj: DownloadObj) {
             if let Err(err) = result {
                 obj.item.add_error();
                 if is_need_err(err, &mut times) {
+                    is_fail = true;
                     break;
                 } else {
                     continue;
@@ -279,6 +289,7 @@ fn download(index: u32, mut obj: DownloadObj) {
         if let Err(err) = result {
             obj.item.add_error();
             if is_need_err(err, &mut times) {
+                is_fail = true;
                 break;
             } else {
                 continue;
@@ -291,6 +302,15 @@ fn download(index: u32, mut obj: DownloadObj) {
     // ============================================================
     // 第四步：移动到最终路径
     // ============================================================
+    if is_fail {
+        // 下载失败：不移动残缺的临时文件，删除后按失败计入任务
+        let _ = path_helper::delete(&temp_file);
+        obj.item.set_state(DownloadItemState::Error);
+        crate::update(index, &obj.item);
+        obj.task.fail();
+        return;
+    }
+
     path_helper::move_file(&temp_file, &obj.item.base.file).unwrap();
 
     // ============================================================

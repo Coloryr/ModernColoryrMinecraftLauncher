@@ -459,10 +459,15 @@ async fn archive<P: AsRef<Path>>(
         .filter(|s| !s.is_empty())
         .map(|s| s.trim_end_matches(['/', '\\']).to_string());
 
+    // 包内的 game.json 是导出时的旧元数据（旧 uuid），create_instance 已保存
+    // 新实例的 game.json，不能被解压覆盖
+    let mut unselect = unselect.unwrap_or_default();
+    unselect.push(game_entry.name.clone());
+
     extract_pack(
         &archive,
         game.read().unwrap().get_base_path(),
-        unselect.unwrap_or_default(),
+        unselect,
         strip_dir,
         archive_gui,
     )?;
