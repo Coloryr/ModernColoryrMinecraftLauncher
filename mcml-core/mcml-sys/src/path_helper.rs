@@ -228,30 +228,35 @@ fn move_to_trash_windows<P: AsRef<Path>>(dir: P) -> CoreResult<()> {
     use windows::core::BOOL;
     use windows::core::PCWSTR;
 
-    // pFrom 要求双 \0 结尾的路径列表；直接用 HSTRING 只有一个 \0，
-    // 结尾字节取决于堆内存内容，导致 SHFileOperationW 间歇性返回 0x2。
-    // 这里手动构建缓冲区并补足双 \0。
-    let mut buf: Vec<u16> = dir
-        .as_ref()
-        .as_os_str()
-        .encode_wide()
-        .collect();
-    buf.push(0);
-    buf.push(0);
-    let pcwstr = PCWSTR(buf.as_ptr());
+    // SHFileOperationW 是 shell 操作，要求调用线程能处理窗口消息；
+    // 在 GUI 主线程（STA，命令处理期间不泵消息）上直接调用会死锁。
+    // 放到独立工作线程执行，与普通线程环境（已验证正常）一致。
+    let dir: std::path::PathBuf = dir.as_ref().to_path_buf();
+    let err_path = dir.clone();
+    let result = std::thread::spawn(move || -> i32 {
+        // pFrom 要求双 \0 结尾的路径列表；直接用 HSTRING 只有一个 \0，
+        // 结尾字节取决于堆内存内容，导致 SHFileOperationW 间歇性返回 0x2。
+        // 这里手动构建缓冲区并补足双 \0。
+        let mut buf: Vec<u16> = dir.as_os_str().encode_wide().collect();
+        buf.push(0);
+        buf.push(0);
+        let pcwstr = PCWSTR(buf.as_ptr());
 
-    let mut operation = SHFILEOPSTRUCTW {
-        hwnd: HWND::default(),
-        wFunc: FO_DELETE,
-        pFrom: pcwstr,
-        pTo: PCWSTR::null(),
-        fFlags: (FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_SILENT | FOF_NOERRORUI).0 as u16,
-        fAnyOperationsAborted: BOOL::from(false),
-        hNameMappings: std::ptr::null_mut(),
-        lpszProgressTitle: PCWSTR::null(),
-    };
+        let mut operation = SHFILEOPSTRUCTW {
+            hwnd: HWND::default(),
+            wFunc: FO_DELETE,
+            pFrom: pcwstr,
+            pTo: PCWSTR::null(),
+            fFlags: (FOF_ALLOWUNDO | FOF_NOCONFIRMATION | FOF_SILENT | FOF_NOERRORUI).0 as u16,
+            fAnyOperationsAborted: BOOL::from(false),
+            hNameMappings: std::ptr::null_mut(),
+            lpszProgressTitle: PCWSTR::null(),
+        };
 
-    let result = unsafe { SHFileOperationW(&mut operation) };
+        unsafe { SHFileOperationW(&mut operation) }
+    })
+    .join()
+    .unwrap_or(-1);
 
     // 返回码说明：
     // 0 = 成功
@@ -261,7 +266,7 @@ fn move_to_trash_windows<P: AsRef<Path>>(dir: P) -> CoreResult<()> {
         0 => Ok(()),
         0x71 => Err(ErrorType::TaskCancel), // 用户已取消
         _ => Err(ErrorType::FileSystemError(FileSystemErrorData {
-            path: dir.as_ref().to_path_buf(),
+            path: err_path,
             error: format!("SHFileOperationW failed with error code: 0x{:X}", result),
         })),
     }
