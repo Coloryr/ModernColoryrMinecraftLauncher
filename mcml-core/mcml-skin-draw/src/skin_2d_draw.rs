@@ -378,3 +378,129 @@ pub fn skin_2d_draw_typeb(image: &mut Bitmap, skin_type: Option<SkinType>) -> Op
 
     scale(&mut image1, SCALE_TYPEB)
 }
+
+/// 注意：draw_mix 按 BGRA 字节序解释像素内存，且整个管线（mix -> scale -> PNG 存取）
+/// 都保持同一套字节语义，所以本测试直接在字节层面做断言，不比较语义上的 R/G/B。
+#[cfg(test)]
+mod tests {
+    use skia_safe::{AlphaType, ColorType, ImageInfo};
+
+    use super::*;
+
+    /// 创建 RGBA8888 位图并对每个像素调用填充函数写入 4 字节
+    fn make_bitmap(w: i32, h: i32, fill: impl Fn(i32, i32) -> [u8; 4]) -> Bitmap {
+        let info = ImageInfo::new((w, h), ColorType::RGBA8888, AlphaType::Premul, None);
+        let mut bm = Bitmap::new();
+        assert!(bm.set_info(&info, None), "set_info 失败");
+        bm.alloc_pixels();
+        let row = bm.row_bytes() as usize;
+        let bpp = bm.bytes_per_pixel() as usize;
+        let ptr = bm.pixels() as *mut u8;
+        assert!(!ptr.is_null());
+        unsafe {
+            for y in 0..h {
+                for x in 0..w {
+                    let off = y as usize * row + x as usize * bpp;
+                    std::slice::from_raw_parts_mut(ptr.add(off), bpp)
+                        .copy_from_slice(&fill(x, y));
+                }
+            }
+        }
+        bm
+    }
+
+    /// 读取位图某像素的原始 4 字节
+    fn get_bytes(bm: &mut Bitmap, x: i32, y: i32) -> [u8; 4] {
+        let row = bm.row_bytes() as usize;
+        let bpp = bm.bytes_per_pixel() as usize;
+        let ptr = bm.pixels() as *const u8;
+        assert!(!ptr.is_null());
+        unsafe {
+            let off = y as usize * row + x as usize * bpp;
+            let p = std::slice::from_raw_parts(ptr.add(off), bpp);
+            [p[0], p[1], p[2], p[3]]
+        }
+    }
+
+    /// 新版 (1.8+) 皮肤的 2D 展开：各部件应落在 16x32 中间画布的对应区域，
+    /// 缩放 8 倍后为 128x256。透明 overlay 不应破坏底层的颜色。
+    #[test]
+    fn test_skin_2d_draw_typea_new_layout() {
+        // 构造 64x64 新版皮肤：每个部件用唯一的字节模式标记，overlay 区域全透明
+        let image = make_bitmap(64, 64, |x, y| {
+            let in_area = |ax: i32, ay: i32, aw: i32, ah: i32| {
+                x >= ax && x < ax + aw && y >= ay && y < ay + ah
+            };
+            // 底层部件
+            if in_area(8, 8, 8, 8) {
+                [10, 0, 0, 255] // 头部正面 (8,8,8,8)
+            } else if in_area(20, 20, 8, 12) {
+                [20, 0, 0, 255] // 身体 (20,20,8,12)
+            } else if in_area(44, 20, 4, 12) {
+                [30, 0, 0, 255] // 右手 (44,20,4,12)
+            } else if in_area(36, 52, 4, 12) {
+                [40, 0, 0, 255] // 左手 (36,52,4,12)
+            } else if in_area(4, 20, 4, 12) {
+                [50, 0, 0, 255] // 右腿 (4,20,4,12)
+            } else if in_area(20, 52, 4, 12) {
+                [60, 0, 0, 255] // 左腿 (20,52,4,12)
+            } else {
+                [0, 0, 0, 0] // 其余（含所有 overlay 区域）透明
+            }
+        });
+        let mut image = image;
+
+        let result = skin_2d_draw_typea(&mut image, Some(SkinType::New));
+        let mut out = result.expect("typea 2D 展开应成功");
+        assert_eq!(out.width(), 128, "typea 输出宽度应为 16 * 8");
+        assert_eq!(out.height(), 256, "typea 输出高度应为 32 * 8");
+
+        // 16x32 中间画布上的目标区域 -> 缩放 8 倍后的输出区域取中心点校验
+        // 头部 (4,0,8,8) -> 输出中心 (64, 32)
+        assert_eq!(get_bytes(&mut out, 64, 32), [10, 0, 0, 255], "头部");
+        // 身体 (4,8,8,12) -> 输出中心 (64, 128)
+        assert_eq!(get_bytes(&mut out, 64, 128), [20, 0, 0, 255], "身体");
+        // 右手 (0,8,4,12) -> 输出中心 (16, 128)
+        assert_eq!(get_bytes(&mut out, 16, 128), [30, 0, 0, 255], "右手");
+        // 左手 (12,8,4,12) -> 输出中心 (112, 128)
+        assert_eq!(get_bytes(&mut out, 112, 128), [40, 0, 0, 255], "左手");
+        // 右腿 (4,20,4,12) -> 输出中心 (48, 208)
+        assert_eq!(get_bytes(&mut out, 48, 208), [50, 0, 0, 255], "右腿");
+        // 左腿 (8,20,4,12) -> 输出中心 (80, 208)
+        assert_eq!(get_bytes(&mut out, 80, 208), [60, 0, 0, 255], "左腿");
+
+        // 部件之间的空隙应保持透明（例如 16x32 画布的 (0,0) -> 输出 (0,0)）
+        assert_eq!(get_bytes(&mut out, 0, 0), [0, 0, 0, 0], "空隙应透明");
+    }
+
+    /// 纤细 (slim) 皮肤的右手只有 3 像素宽，左手位置与普通皮肤一致
+    #[test]
+    fn test_skin_2d_draw_typea_slim_layout() {
+        let image = make_bitmap(64, 64, |x, y| {
+            let in_area = |ax: i32, ay: i32, aw: i32, ah: i32| {
+                x >= ax && x < ax + aw && y >= ay && y < ay + ah
+            };
+            if in_area(8, 8, 8, 8) {
+                [10, 0, 0, 255] // 头部正面
+            } else if in_area(44, 20, 3, 12) {
+                [30, 0, 0, 255] // 纤细右手 (44,20,3,12)
+            } else if in_area(36, 52, 3, 12) {
+                [40, 0, 0, 255] // 纤细左手 (36,52,3,12)
+            } else {
+                [0, 0, 0, 0]
+            }
+        });
+        let mut image = image;
+
+        let mut out = skin_2d_draw_typea(&mut image, Some(SkinType::NewSlim))
+            .expect("纤细皮肤 typea 展开应成功");
+        assert_eq!(out.width(), 128);
+        assert_eq!(out.height(), 256);
+
+        assert_eq!(get_bytes(&mut out, 64, 32), [10, 0, 0, 255], "头部");
+        // 纤细右手放在 (1,8,3,12) -> 输出中心 (20, 128)
+        assert_eq!(get_bytes(&mut out, 20, 128), [30, 0, 0, 255], "纤细右手");
+        // 纤细左手放在 (12,8,3,12) -> 输出中心 (112, 128)
+        assert_eq!(get_bytes(&mut out, 112, 128), [40, 0, 0, 255], "纤细左手");
+    }
+}

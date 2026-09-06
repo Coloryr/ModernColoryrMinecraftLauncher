@@ -18,8 +18,8 @@ use std::sync::{
 
 use bytes::Buf;
 use mcml_ipc::{
-    ServerInfo, add_server, clear_servers, get_run_arg, init, notify_existing,
-    register_ipc_event, remove_ipc_event, set_title,
+    ServerInfo, add_server, clear_servers, get_mouse_state, get_run_arg, get_window_size, init,
+    notify_existing, register_ipc_event, remove_ipc_event, set_title,
 };
 use uuid::Uuid;
 
@@ -218,4 +218,58 @@ fn test_init_with_port() {
     // 本进程已启动服务，无论传入什么端口都返回第一次绑定的端口
     assert_eq!(init(Some(port)).unwrap(), Some(port));
     assert_eq!(init(None).unwrap(), Some(port));
+}
+
+/// 游戏上报的鼠标状态(1)与窗口大小(11)应存入全局状态并可通过 getter 读取
+#[test]
+fn test_game_state_report() {
+    ensure_log();
+    let port = ipc_port();
+    let uuid = Uuid::new_v4();
+
+    let mut stream = connect(port);
+
+    // MOUSE_STATE(1): uuid + 状态(bool)
+    let mut content = Vec::new();
+    content.extend_from_slice(&1i32.to_be_bytes());
+    let uuid_str = uuid.to_string();
+    content.extend_from_slice(&(uuid_str.len() as i32).to_be_bytes());
+    content.extend_from_slice(uuid_str.as_bytes());
+    content.push(1);
+    write_frame(&mut stream, &content);
+
+    // WINDOW_SIZE(11): uuid + 宽(i32) + 高(i32)
+    let mut content = Vec::new();
+    content.extend_from_slice(&11i32.to_be_bytes());
+    content.extend_from_slice(&(uuid_str.len() as i32).to_be_bytes());
+    content.extend_from_slice(uuid_str.as_bytes());
+    content.extend_from_slice(&1920i32.to_be_bytes());
+    content.extend_from_slice(&1080i32.to_be_bytes());
+    write_frame(&mut stream, &content);
+
+    // 等待服务端处理消息
+    let mut mouse_ok = false;
+    let mut size_ok = false;
+    for _ in 0..100 {
+        if get_mouse_state(uuid) == Some(true) {
+            mouse_ok = true;
+        }
+        if get_window_size(uuid) == Some((1920, 1080)) {
+            size_ok = true;
+        }
+        if mouse_ok && size_ok {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    assert!(mouse_ok, "mouse state not recorded");
+    assert!(size_ok, "window size not recorded");
+}
+
+/// 向未注册通道的游戏发送标题应返回 false（不依赖网络返回）
+#[test]
+fn test_set_title_unknown_uuid() {
+    ensure_log();
+    ipc_port();
+    assert!(!set_title(Uuid::new_v4(), "nobody"));
 }

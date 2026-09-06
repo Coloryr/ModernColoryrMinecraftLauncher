@@ -3,7 +3,7 @@ import type { InstanceInfo } from "../../lib/types";
 
 export type ViewMode = "group" | "grid" | "list";
 
-export type FeatureId = "settings" | "stats" | "skin" | "help";
+export type FeatureId = "settings" | "stats" | "skin" | "help" | "download";
 
 export interface GroupView {
   name: string;

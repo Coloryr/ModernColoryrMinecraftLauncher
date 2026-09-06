@@ -60,3 +60,83 @@ pub fn unpack_native<R: Read + Seek>(native: &Path, read: R) -> CoreResult<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::io::{Cursor, Write};
+
+    use zip::write::{SimpleFileOptions, ZipWriter};
+
+    use super::*;
+
+    /// 在内存中构造一个包含 native 库结构的 zip 包
+    fn make_test_zip() -> Vec<u8> {
+        let buf = Cursor::new(Vec::new());
+        let mut writer = ZipWriter::new(buf);
+        let options = SimpleFileOptions::default();
+
+        // META-INF 下的 native 库（应被提取）
+        writer.start_file("META-INF/lwjgl.dll", options).unwrap();
+        writer.write_all(b"native-data").unwrap();
+
+        // META-INF 子目录中的 native 库（应被提取并展平到目标目录）
+        writer.add_directory("META-INF/sub", options).unwrap();
+        writer
+            .start_file("META-INF/sub/liblwjgl.so", options)
+            .unwrap();
+        writer.write_all(b"so-data").unwrap();
+
+        // 普通 class 文件（不应被提取）
+        writer
+            .start_file("net/minecraft/Main.class", options)
+            .unwrap();
+        writer.write_all(b"class-data").unwrap();
+
+        writer.finish().unwrap().into_inner()
+    }
+
+    /// 只提取 META-INF 下的文件，并展平目录结构
+    #[test]
+    fn unpack_native_extracts_meta_inf_only() {
+        let dir = crate::test_util::make_temp_dir("native");
+        let native = dir.join("native");
+
+        unpack_native(&native, Cursor::new(make_test_zip())).unwrap();
+
+        // META-INF 根下的文件被提取
+        assert_eq!(fs::read(native.join("lwjgl.dll")).unwrap(), b"native-data");
+        // 子目录文件被展平提取（只保留文件名）
+        assert_eq!(
+            fs::read(native.join("liblwjgl.so")).unwrap(),
+            b"so-data"
+        );
+        // 非 META-INF 文件不提取
+        assert!(!native.join("Main.class").exists());
+        assert!(!native.join("net").exists());
+    }
+
+    /// 非法 zip 数据返回错误
+    #[test]
+    fn unpack_native_invalid_zip_errors() {
+        let dir = crate::test_util::make_temp_dir("native-bad");
+        let native = dir.join("native");
+
+        let result = unpack_native(&native, Cursor::new(b"not a zip file".to_vec()));
+        assert!(result.is_err(), "非法 zip 应返回错误");
+    }
+
+    /// 空 zip（无任何条目）应成功返回
+    #[test]
+    fn unpack_native_empty_zip_ok() {
+        let dir = crate::test_util::make_temp_dir("native-empty");
+        let native = dir.join("native");
+
+        let writer = ZipWriter::new(Cursor::new(Vec::new()));
+
+        // finish 消费 writer 并返回底层缓冲区，直接作为输入流
+        let data = writer.finish().unwrap();
+
+        unpack_native(&native, data).unwrap();
+    }
+}

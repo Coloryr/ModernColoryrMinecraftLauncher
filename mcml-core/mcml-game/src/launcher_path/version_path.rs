@@ -469,11 +469,16 @@ pub async fn check_update(mc: &str) -> CoreResult<Arc<GameArgObj>> {
         ))),
         Some(item) => {
             let local = BASE_DIR.get().unwrap().join(format!("{}.json", mc));
-            let sha1 = hash_helper::gen_hash_from_file_async(HashType::Sha1, &local).await?;
-            if sha1 != item.sha1 {
+            // 本地没有版本 json（如首次安装整合包）直接在线下载
+            if !local.exists() {
                 Ok(add_game(item).await?)
             } else {
-                Ok(get_version(mc)?)
+                let sha1 = hash_helper::gen_hash_from_file_async(HashType::Sha1, &local).await?;
+                if sha1 != item.sha1 {
+                    Ok(add_game(item).await?)
+                } else {
+                    Ok(get_version(mc)?)
+                }
             }
         }
     }

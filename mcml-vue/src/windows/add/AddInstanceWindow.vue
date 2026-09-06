@@ -9,24 +9,26 @@ import NewMode from "./modes/NewMode.vue";
 import ArchiveMode from "./modes/ArchiveMode.vue";
 import FolderMode from "./modes/FolderMode.vue";
 import OnlineMode from "./modes/OnlineMode.vue";
-import { buildTree, collectDirKeys, collectFileKeys, type FileNode } from "../../lib/fileTree";
-import { api, onCloseBlocked, onAddLoaderProgress, onAddNameConflict, answerNameConflict } from "../../lib/api";
+import ModpackMode from "./modes/ModpackMode.vue";
+import { buildTree, collectFileKeys, type FileNode } from "../../lib/fileTree";
+import { api, onCloseBlocked, onAddLoaderProgress, onAddNameConflict, onAddPackProgress, answerNameConflict } from "../../lib/api";
 import { showToast } from "../../lib/toast";
 import { t } from "../../lib/i18n";
 import { isTauri } from "../windowManager";
 import { invoke } from "@tauri-apps/api/core";
-import { AddListDir } from "../../lib/invokes";
-import type { VersionInfo } from "../../lib/types";
+import { AddListDir, AddListArchive } from "../../lib/invokes";
+import type { PackProgress, VersionInfo } from "../../lib/types";
 
 const emit = defineEmits<{ (e: "close"): void }>();
 
 // ================= 模式 =================
 
-type AddMode = "new" | "archive" | "folder" | "online";
+type AddMode = "new" | "archive" | "folder" | "online" | "modpack";
 const ADD_MODES: Array<{ id: AddMode; labelKey: string; icon: string }> = [
   { id: "new", labelKey: "add.modeNew", icon: "cube" },
   { id: "archive", labelKey: "add.modeArchive", icon: "box" },
   { id: "folder", labelKey: "add.modeFolder", icon: "folder" },
+  { id: "modpack", labelKey: "add.modeModpack", icon: "modpack" },
   { id: "online", labelKey: "add.modeOnline", icon: "globe" },
 ];
 const addMode = ref<AddMode>("new");
@@ -64,9 +66,8 @@ const verTypes = ref<string[]>(["release"]);
 
 const filteredVersions = computed(() => {
   const sel = verTypes.value;
-  return versions.value
-    .filter((v) => sel.length === 0 || sel.includes(v.versionType))
-    .sort((a, b) => compareVersion(b.id, a.id));
+  // 后端已按类型分组、组内新旧排序，这里只过滤，不重排（重排会打乱分组顺序）
+  return versions.value.filter((v) => sel.length === 0 || sel.includes(v.versionType));
 });
 
 /** 加载器 ID 列表（选中版本后按支持情况从 mcml-core 查询，显示名走 i18n） */
@@ -98,6 +99,7 @@ async function refreshVersions() {
   verLoading.value = true;
   try {
     versions.value = await api.refreshVersions();
+    showToast(t("tip.refreshed"));
   } catch {
     // 保留旧列表
   } finally {
@@ -150,6 +152,7 @@ async function fetchSupportLoaders() {
     if (newVersion.value === mc) {
       loaders.value = list;
       ensureLoaderSupported();
+      showToast(t("tip.refreshed"));
     }
   } catch {
     // 查询失败不缓存：保留原版 + 自定义兜底，可用刷新按钮重试
@@ -237,6 +240,7 @@ async function fetchLoaderVersions() {
     if (addLoader.value === loader && newVersion.value === mc) {
       loaderVersions.value = list;
       addLoaderVer.value = list[0] ?? "";
+      showToast(t("tip.refreshed"));
     }
   } catch {
     // 拉取失败（如数据源不可达）时清空并提示，可用刷新按钮重试
@@ -303,12 +307,50 @@ function onArchivePick(e: Event) {
   applyArchivePath(`C:\\Users\\demo\\Downloads\\${file.name}`);
 }
 
-/** 应用压缩包路径并生成文件树（默认全部选中、全部展开） */
-function applyArchivePath(path: string) {
+/** 应用压缩包路径并生成内容树（默认全部选中、不展开目录） */
+async function applyArchivePath(path: string) {
   addArchivePath.value = path;
-  archiveTree.value = buildTree(MOCK_ARCHIVE_FILES);
-  archiveChecked.value = new Set(collectFileKeys(archiveTree.value));
-  archiveExpanded.value = new Set(collectDirKeys(archiveTree.value));
+  // 浏览器回退（无后端）：mock 内容树 + 按文件名识别
+  if (!isTauri()) {
+    archiveTree.value = buildTree(MOCK_ARCHIVE_FILES);
+    archiveChecked.value = new Set(collectFileKeys(archiveTree.value));
+    archiveExpanded.value = new Set();
+    detectMockPack(path);
+    return;
+  }
+  // 读取压缩包真实条目（目录以 / 结尾，buildTree 直接解析）
+  try {
+    const list = await invoke<string[]>(AddListArchive, { path });
+    archiveTree.value = buildTree(list);
+    archiveChecked.value = new Set(collectFileKeys(archiveTree.value));
+    archiveExpanded.value = new Set();
+  } catch {
+    archiveTree.value = [];
+    archiveChecked.value = new Set();
+    archiveExpanded.value = new Set();
+    addError.value = t("add.archiveReadFail");
+    return;
+  }
+  // 识别整合包类型，自动填入类型和实例名（用户改过名字则不动）
+  try {
+    const detected = await api.addDetectArchive(path);
+    addPackType.value = detected.packType;
+    if (!nameEdited && detected.name) {
+      newName.value = detected.name;
+    }
+  } catch {
+    // 识别失败保持手动选择
+  }
+}
+
+/** 浏览器回退的压缩包识别：mock 树里有 manifest.json 视为 CurseForge，名字取文件名 */
+function detectMockPack(path: string) {
+  if (!MOCK_ARCHIVE_FILES.includes("manifest.json")) return;
+  addPackType.value = "curseforge";
+  const stem = path.split(/[\\/]/).pop()?.replace(/\.[^.]+$/, "") ?? "";
+  if (!nameEdited && stem) {
+    newName.value = stem;
+  }
 }
 
 /** 选择压缩包：Tauri 用系统文件对话框，浏览器回退到文件输入 */
@@ -346,10 +388,10 @@ function onFolderPick(e: Event) {
   if (!file) return;
   const folder = file.webkitRelativePath.split("/")[0];
   addFolderPath.value = `C:\\Users\\demo\\.minecraft\\versions\\${folder}`;
-  // 浏览器回退：用 mock 内容树（全部展开、默认不勾选）
+  // 浏览器回退：用 mock 内容树（默认不勾选、不展开）
   folderTree.value = buildTree(MOCK_FOLDER_FILES);
   folderChecked.value = new Set();
-  folderExpanded.value = new Set(collectDirKeys(folderTree.value));
+  folderExpanded.value = new Set();
 }
 
 /** 选择文件夹：Tauri 用系统目录对话框，选中后列出文件夹内容树 */
@@ -388,8 +430,8 @@ async function loadFolderTree(rootPath: string) {
   try {
     const nodes = await listDirNodes(rootPath, "");
     folderTree.value = nodes;
-    // 默认展开顶层目录，展示两层内容；默认不勾选
-    folderExpanded.value = new Set(nodes.filter((n) => n.isDir).map((n) => n.key));
+    // 默认不展开目录（懒加载，展开时才读子层）；默认不勾选
+    folderExpanded.value = new Set();
     folderChecked.value = new Set();
   } catch {
     folderTree.value = [];
@@ -497,19 +539,6 @@ const MOCK_FOLDER_FILES = [
   "logs/",
 ];
 
-// ================= 版本排序 =================
-
-function compareVersion(a: string, b: string): number {
-  const pa = a.split(".").map((n) => parseInt(n, 10) || 0);
-  const pb = b.split(".").map((n) => parseInt(n, 10) || 0);
-  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-    const x = pa[i] ?? 0;
-    const y = pb[i] ?? 0;
-    if (x !== y) return x - y;
-  }
-  return 0;
-}
-
 // ================= 创建 =================
 
 async function create() {
@@ -542,7 +571,15 @@ async function create() {
         creating.value = false;
         return;
       }
-      uuid = await api.addImportArchive(addArchivePath.value.trim(), addPackType.value, name, group);
+      // 文件树未勾选的文件按压缩包内条目名排除（全选时传 null）
+      const unselected = collectFileKeys(archiveTree.value).filter((k) => !archiveChecked.value.has(k));
+      uuid = await api.addImportArchive(
+        addArchivePath.value.trim(),
+        addPackType.value,
+        name,
+        group,
+        unselected.length ? unselected : null,
+      );
     } else if (addMode.value === "folder") {
       if (!addFolderPath.value.trim()) {
         addError.value = t("add.folderEmpty");
@@ -558,14 +595,71 @@ async function create() {
       }
       uuid = await api.addImportUrl(addUrl.value.trim(), name, group);
     }
-    // 通知主窗口选中新实例（后端已发 instance-change 刷新列表），然后关闭本窗口
+    // 通知主窗口选中新实例（后端已发 instance-change 刷新列表），然后询问是否继续添加
     localStorage.setItem("mcml.addedInstance", uuid);
-    emit("close");
+    addedName.value = name;
+    askContinue.value = true;
   } catch (e) {
+    packProgress.value = null;
     addError.value = t("add.createFail", { msg: String(e) });
   } finally {
     creating.value = false;
   }
+}
+
+// ================= 整合包安装（在线搜索选版本） =================
+
+/** 安装进度（add-pack-progress 事件驱动，null = 未在安装） */
+const packProgress = ref<PackProgress | null>(null);
+
+/** 安装在线整合包：实例名取自整合包元数据，分组用窗口顶部的输入 */
+async function installModpack(p: { source: string; projectId: string; fileId: string; fileName: string }) {
+  const group = addGroup.value.trim() === "" ? null : addGroup.value.trim();
+  creating.value = true;
+  addError.value = "";
+  try {
+    const uuid = await api.installModpack(p.source, p.projectId, p.fileId, group);
+    localStorage.setItem("mcml.addedInstance", uuid);
+    addedName.value = p.fileName;
+    askContinue.value = true;
+  } catch (e) {
+    packProgress.value = null;
+    addError.value = t("add.createFail", { msg: String(e) });
+  } finally {
+    creating.value = false;
+  }
+}
+
+// ================= 创建成功后的继续添加询问 =================
+
+/** 刚创建成功的实例名（弹窗显示用） */
+const addedName = ref("");
+/** 创建成功后弹出"是否继续添加"询问 */
+const askContinue = ref(false);
+
+/** 继续添加：清空一次性表单（保留模式 / 版本列表等数据源），回到干净表单 */
+function continueAdding() {
+  askContinue.value = false;
+  addError.value = "";
+  newName.value = "";
+  nameEdited = false;
+  loaderPath.value = "";
+  addLoaderVer.value = "";
+  addArchivePath.value = "";
+  archiveTree.value = [];
+  archiveChecked.value = new Set();
+  archiveExpanded.value = new Set();
+  addFolderPath.value = "";
+  folderTree.value = [];
+  folderChecked.value = new Set();
+  folderExpanded.value = new Set();
+  addUrl.value = "";
+}
+
+/** 不继续：关闭窗口 */
+function finishAdding() {
+  askContinue.value = false;
+  emit("close");
 }
 
 // ================= 实例重名确认 =================
@@ -616,6 +710,16 @@ onMounted(async () => {
     nameConflict.value = e;
   });
   onUnmounted(unlistenConflict);
+  // 整合包安装进度（压缩包 / 网址 / 在线整合包安装共用）
+  const unlistenPack = await onAddPackProgress((e) => {
+    packProgress.value = e;
+    if (e.state === "done") {
+      setTimeout(() => {
+        packProgress.value = null;
+      }, 600);
+    }
+  });
+  onUnmounted(unlistenPack);
   try {
     // 默认分组（空白键）不进下拉：输入框留空即默认分组
     groups.value = (await api.getGroups()).filter((g) => g.trim());
@@ -658,6 +762,12 @@ onMounted(async () => {
         </svg>
         <svg v-else-if="m.icon === 'folder'" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />
+        </svg>
+        <svg v-else-if="m.icon === 'modpack'" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 8v13H3V8" />
+          <path d="M1 3h22v5H1z" />
+          <path d="M10 12h4" />
+          <path d="M12 12v9" />
         </svg>
         <svg v-else viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="9" />
@@ -760,14 +870,16 @@ onMounted(async () => {
         @lazy-load="onFolderLazyLoad"
         @set-all="setAllFolder"
       />
-      <OnlineMode v-else :url="addUrl" @update:url="addUrl = $event" />
+      <OnlineMode v-else-if="addMode === 'online'" :url="addUrl" @update:url="addUrl = $event" />
+      <ModpackMode v-else :versions="versions" @install="installModpack" />
     </div>
 
     <p v-if="addError" class="error-text">{{ addError }}</p>
 
     <div class="modal-actions">
       <BaseButton @click="$emit('close')">{{ t("add.cancel") }}</BaseButton>
-      <BaseButton variant="primary" :disabled="creating" @click="create">
+      <!-- 整合包模式在列表内直接安装，不显示底部创建按钮 -->
+      <BaseButton v-if="addMode !== 'modpack'" variant="primary" :disabled="creating" @click="create">
         {{
           creating
             ? t("add.creating")
@@ -799,19 +911,61 @@ onMounted(async () => {
       </div>
     </BaseModal>
 
-    <!-- 右上角浮动进度提示（不阻挡操作，每查完一种加载器推进一步） -->
+    <!-- 创建成功：询问是否继续添加 -->
+    <BaseModal
+      v-if="askContinue"
+      :title="t('add.addedTitle')"
+      @close="finishAdding"
+    >
+      <p class="conflict-text">{{ t("add.askContinue", { name: addedName }) }}</p>
+      <div class="modal-actions">
+        <BaseButton @click="finishAdding">{{ t("add.no") }}</BaseButton>
+        <BaseButton variant="primary" @click="continueAdding">{{ t("add.yes") }}</BaseButton>
+      </div>
+    </BaseModal>
+
+    <!-- 整合包安装进度（压缩包 / 网址 / 在线整合包安装共用） -->
+    <BaseModal
+      v-if="packProgress"
+      :title="t('add.installing')"
+      :closable="false"
+    >
+      <div class="install-progress">
+        <div class="install-state">{{ t(`add.packState.${packProgress.state}`) }}</div>
+        <div class="progress-track">
+          <div
+            class="progress-fill"
+            :style="{ width: packProgress.total ? (packProgress.now / packProgress.total) * 100 + '%' : '0%' }"
+          />
+        </div>
+        <div class="install-num" v-if="packProgress.total">{{ packProgress.now }} / {{ packProgress.total }}</div>
+        <template v-if="packProgress.subText || packProgress.subTotal">
+          <div class="install-sub">{{ packProgress.subText || "" }}</div>
+          <div class="progress-track sub">
+            <div
+              class="progress-fill"
+              :style="{ width: packProgress.subTotal ? (packProgress.subNow / packProgress.subTotal) * 100 + '%' : '0%' }"
+            />
+          </div>
+        </template>
+      </div>
+    </BaseModal>
+
+    <!-- 窗口正上方浮动进度提示：支持列表为步进进度条，加载器版本为滚动条 -->
     <Teleport to="body">
       <Transition name="load-pop">
-        <div v-if="showLoaderProgress" class="load-float">
+        <div v-if="showLoaderProgress || loaderVerLoading" class="load-float">
           <span class="load-float-spinner"></span>
-          <span class="load-float-label">{{ t("add.loaderQuerying") }}</span>
+          <span class="load-float-label">{{ showLoaderProgress ? t("add.loaderQuerying") : t("add.loaderVerLoading") }}</span>
           <div class="load-float-bar">
             <div
+              v-if="showLoaderProgress"
               class="load-float-fill"
               :style="{ width: loaderProgressTotal ? (loaderProgressStep / loaderProgressTotal) * 100 + '%' : '0%' }"
             ></div>
+            <div v-else class="load-float-indet"></div>
           </div>
-          <span class="load-float-text">{{ loaderProgressStep }} / {{ loaderProgressTotal }}</span>
+          <span v-if="showLoaderProgress" class="load-float-text">{{ loaderProgressStep }} / {{ loaderProgressTotal }}</span>
         </div>
       </Transition>
     </Teleport>
@@ -825,11 +979,58 @@ onMounted(async () => {
   color: var(--text);
 }
 
-/* 右上角浮动进度提示：不阻挡窗口操作 */
+/* 整合包安装进度弹窗 */
+.install-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.install-state {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.progress-track {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--bg-hover);
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 4px;
+  background: var(--accent-grad);
+  transition: width 0.3s;
+}
+
+.progress-track.sub {
+  height: 6px;
+}
+
+.install-num {
+  font-size: 12px;
+  color: var(--text-dim);
+  text-align: right;
+}
+
+.install-sub {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-top: 4px;
+  word-break: break-all;
+}
+
+/* 窗口正上方浮动进度提示：不阻挡窗口操作（水平居中用 margin，避免和动画的 transform 冲突） */
 .load-float {
   position: fixed;
   top: 14px;
-  right: 16px;
+  left: 0;
+  right: 0;
+  margin: 0 auto;
+  width: fit-content;
   z-index: 500;
   display: flex;
   align-items: center;
@@ -880,6 +1081,24 @@ onMounted(async () => {
   transition: width 0.2s;
 }
 
+/* 不确定进度：小色块来回滚动（无步数可报的任务，如加载器版本拉取） */
+.load-float-indet {
+  height: 100%;
+  width: 40%;
+  border-radius: 3px;
+  background: var(--accent);
+  animation: load-float-slide 1.1s ease-in-out infinite;
+}
+
+@keyframes load-float-slide {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(300%);
+  }
+}
+
 .load-float-text {
   color: var(--text-dim);
   min-width: 30px;
@@ -900,7 +1119,7 @@ onMounted(async () => {
 /* 模式切换：图标 + 渐变激活态 */
 .add-modes {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 8px;
   margin-bottom: 14px;
 }

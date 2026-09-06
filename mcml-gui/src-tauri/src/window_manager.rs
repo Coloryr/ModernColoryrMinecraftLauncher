@@ -55,34 +55,52 @@ const ACCOUNT_WINDOW_UUID: Uuid = uuid!("00000000-0000-0000-0000-000000000002");
 /// 添加实例窗口固定 uuid
 const ADD_WINDOW_UUID: Uuid = uuid!("00000000-0000-0000-0000-000000000008");
 
-/// 窗口注册表：uuid → 窗口标签
-///
-/// 标签去掉 `mcml-` 前缀即为前端 `registry.ts` 的窗口 kind。
-const WINDOWS_INFO: LazyLock<HashMap<Uuid, String>> = LazyLock::new(|| {
+/// 窗口注册表条目
+struct WindowEntry {
+    label: &'static str,
+    min_width: f64,
+    min_height: f64,
+}
+
+/// 窗口注册表：uuid → 窗口信息
+const WINDOWS_INFO: LazyLock<HashMap<Uuid, WindowEntry>> = LazyLock::new(|| {
     HashMap::from([
-        (MAIN_WINDOW_UUID, String::from("mcml-main")),
-        (ACCOUNT_WINDOW_UUID, String::from("mcml-account")),
+        (
+            MAIN_WINDOW_UUID,
+            WindowEntry { label: "mcml-main", min_width: 1080.0, min_height: 680.0 },
+        ),
+        (
+            ACCOUNT_WINDOW_UUID,
+            WindowEntry { label: "mcml-account", min_width: 720.0, min_height: 540.0 },
+        ),
         (
             uuid!("00000000-0000-0000-0000-000000000003"),
-            String::from("mcml-settings"),
+            WindowEntry { label: "mcml-settings", min_width: 640.0, min_height: 520.0 },
         ),
         (
             uuid!("00000000-0000-0000-0000-000000000004"),
-            String::from("mcml-stats"),
+            WindowEntry { label: "mcml-stats", min_width: 640.0, min_height: 520.0 },
         ),
         (
             uuid!("00000000-0000-0000-0000-000000000005"),
-            String::from("mcml-skin"),
+            WindowEntry { label: "mcml-skin", min_width: 640.0, min_height: 520.0 },
         ),
         (
             uuid!("00000000-0000-0000-0000-000000000006"),
-            String::from("mcml-help"),
+            WindowEntry { label: "mcml-help", min_width: 560.0, min_height: 440.0 },
         ),
         (
             uuid!("00000000-0000-0000-0000-000000000007"),
-            String::from("mcml-resource"),
+            WindowEntry { label: "mcml-resource", min_width: 760.0, min_height: 540.0 },
         ),
-        (ADD_WINDOW_UUID, String::from("mcml-add")),
+        (
+            ADD_WINDOW_UUID,
+            WindowEntry { label: "mcml-add", min_width: 720.0, min_height: 560.0 },
+        ),
+        (
+            uuid!("00000000-0000-0000-0000-000000000009"),
+            WindowEntry { label: "mcml-download", min_width: 640.0, min_height: 520.0 },
+        ),
     ])
 });
 
@@ -90,12 +108,10 @@ const WINDOWS_INFO: LazyLock<HashMap<Uuid, String>> = LazyLock::new(|| {
 fn uuid_for_kind(kind: &str) -> Option<Uuid> {
     WINDOWS_INFO
         .iter()
-        .find(|(_, label)| label.strip_prefix("mcml-") == Some(kind))
+        .find(|(_, e)| e.label.strip_prefix("mcml-") == Some(kind))
         .map(|(uuid, _)| *uuid)
 }
 
-const WINDOW_MIN_WIDTH: f64 = 900.0;
-const WINDOW_MIN_HEIGHT: f64 = 600.0;
 const WINDOW_DEFAULT_WIDTH: f64 = 1100.0;
 const WINDOW_DEFAULT_HEIGHT: f64 = 720.0;
 
@@ -126,7 +142,7 @@ fn ensure_window_model(app: &AppHandle, uuid: &Uuid) {
     let mut models = WINDOW_MODELS.write().unwrap();
     if *uuid == MAIN_WINDOW_UUID {
         models.entry(uuid.clone()).or_insert_with(|| {
-            Arc::new(Mutex::new(crate::windows::main::MainWindowModel::init(app)))
+            Arc::new(Mutex::new(crate::windows::main::MainWindowModel::new()))
         });
     } else if *uuid == ADD_WINDOW_UUID {
         models
@@ -228,9 +244,18 @@ fn create_window(app: &AppHandle, label: &str, uuid: &Uuid) -> Result<WebviewWin
 
     let geom = window_state_for(uuid);
 
+    // 最小尺寸随注册表条目走（各窗口内容布局不同，可压缩程度不同）
+    let binding = WINDOWS_INFO;
+    let (min_w, min_h) = binding
+        .get(uuid)
+        .map(|e| (e.min_width, e.min_height))
+        .unwrap_or((600.0, 400.0));
+
     let builder = WebviewWindowBuilder::new(app, label, WebviewUrl::App("index.html".into()))
         .title(names::MCML)
-        .min_inner_size(WINDOW_MIN_WIDTH, WINDOW_MIN_HEIGHT);
+        .min_inner_size(min_w, min_h)
+        // 原生窗口背景铺暗色底，避免 webview 加载首帧白屏（与暗色主题 --bg 一致）
+        .background_color(tauri::window::Color(0x14, 0x16, 0x1a, 0xff));
     let win = match geom {
         Some(g) => builder
             .inner_size(g.width as f64, g.height as f64)
@@ -277,9 +302,10 @@ fn save_window_state(uuid: &Uuid, window: &WebviewWindow) -> Result<(), String> 
 /// 关闭指定 uuid 的窗口：先保存几何，再真正关闭窗口
 pub fn close_window_from_uuid(app: &AppHandle, uuid: &Uuid) -> Result<(), String> {
     let binding = WINDOWS_INFO;
-    let Some(label) = binding.get(uuid) else {
+    let Some(entry) = binding.get(uuid) else {
         return Err(WindowNotFound.to_string());
     };
+    let label = entry.label;
 
     // 句柄优先取句柄表，缺失时按标签现查（覆盖外部创建的窗口）
     let window = match OPEN_WINDOWS.write().unwrap().remove(uuid) {
@@ -304,9 +330,10 @@ pub fn close_window_from_uuid(app: &AppHandle, uuid: &Uuid) -> Result<(), String
 /// 打开（或聚焦）指定 uuid 的窗口
 pub fn open_window_from_uuid(app: &AppHandle, uuid: &Uuid) -> Result<(), String> {
     let binding = WINDOWS_INFO;
-    let Some(label) = binding.get(uuid) else {
+    let Some(entry) = binding.get(uuid) else {
         return Err(WindowNotFound.to_string());
     };
+    let label = entry.label;
 
     create_window(app, label, uuid)?;
     Ok(())
@@ -325,7 +352,7 @@ pub fn show_main_window(app: &AppHandle) -> Result<(), String> {
 pub fn on_window_event(window: &tauri::Window<tauri::Wry>, event: &tauri::WindowEvent) {
     let label = window.label().to_string();
     let binding = WINDOWS_INFO;
-    let Some((uuid, _)) = binding.iter().find(|(_, l)| l.as_str() == label) else {
+    let Some((uuid, _)) = binding.iter().find(|(_, e)| e.label == label) else {
         return;
     };
     match event {

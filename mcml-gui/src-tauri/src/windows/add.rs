@@ -10,16 +10,23 @@ use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
 use mcml_game::add_game::{self, PackType};
-use mcml_game::gui_hook::{AddInstanceGui, IAddInstanceGui, IProgressGui, ProgressGui};
+use mcml_game::gui_hook::{
+    AddInstanceGui, AddModPackGui, AddModPackState, IAddInstanceGui, IAddModPackGui, IProgressGui,
+    ProgressGui,
+};
 use mcml_game::launcher::instance_setting_obj::InstanceSettingObj;
 use mcml_game::loader::LoaderType;
 use mcml_game::GameInstance;
+use mcml_net::{curseforge_api, modrinth_api};
 use tauri::{AppHandle, Emitter, WebviewWindow};
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-use crate::dtos::{DirEntry, LoaderProgressDto, NameConflictDto};
+use crate::dtos::{
+    DetectedPackDto, DirEntry, LoaderProgressDto, ModpackFileDto, ModpackItemDto, ModpackSearchDto,
+    NameConflictDto, PackProgressDto,
+};
 use crate::listens;
 
 /// 添加实例窗口模型：只存运行态，不落盘
@@ -138,6 +145,78 @@ fn instance_gui(window: &WebviewWindow) -> AddInstanceGui {
     }) as Arc<dyn IAddInstanceGui>)
 }
 
+/// 整合包安装进度事件（跟随添加实例窗口）
+#[gui_macros::emit]
+pub fn emit_add_pack_progress(window: &WebviewWindow, dto: PackProgressDto) {
+    let _ = window.emit_to(window.label(), listens::ADD_PACK_PROGRESS, dto);
+}
+
+/// 整合包安装进度回调：把安装状态 / 进度转发为前端事件（弹窗显示）
+struct PackProgressGui {
+    window: WebviewWindow,
+    /// 当前进度快照（各回调分别更新字段后整体发出）
+    dto: Mutex<PackProgressDto>,
+}
+
+impl PackProgressGui {
+    fn update(&self, f: impl FnOnce(&mut PackProgressDto)) {
+        let mut dto = self.dto.lock().unwrap();
+        f(&mut dto);
+        emit_add_pack_progress(&self.window, dto.clone());
+    }
+}
+
+impl IAddModPackGui for PackProgressGui {
+    fn set_state(&self, state: AddModPackState) {
+        self.update(|dto| dto.state = pack_state_id(state).into());
+    }
+
+    fn set_now(&self, value: usize, all: Option<usize>) {
+        self.update(|dto| {
+            dto.now = value as u32;
+            dto.total = all.unwrap_or(0) as u32;
+        });
+    }
+
+    fn set_sub_text(&self, text: Option<String>) {
+        self.update(|dto| dto.sub_text = text);
+    }
+
+    fn set_sub_now(&self, value: usize, all: Option<usize>) {
+        self.update(|dto| {
+            dto.sub_now = value as u32;
+            dto.sub_total = all.unwrap_or(0) as u32;
+        });
+    }
+}
+
+/// 安装阶段 ID（与前端 i18n 键对应）
+fn pack_state_id(state: AddModPackState) -> &'static str {
+    match state {
+        AddModPackState::DownloadPack => "downloadPack",
+        AddModPackState::ReadInfo => "readInfo",
+        AddModPackState::GetInfo => "getInfo",
+        AddModPackState::DownloadFile => "downloadFile",
+        AddModPackState::Extract => "extract",
+        AddModPackState::Done => "done",
+    }
+}
+
+/// 构建安装进度回调（跟随添加实例窗口）
+fn pack_gui(window: &WebviewWindow) -> AddModPackGui {
+    Some(Arc::new(PackProgressGui {
+        window: window.clone(),
+        dto: Mutex::new(PackProgressDto {
+            state: "downloadPack".into(),
+            now: 0,
+            total: 0,
+            sub_text: None,
+            sub_now: 0,
+            sub_total: 0,
+        }),
+    }) as Arc<dyn IAddModPackGui>)
+}
+
 /// 用户对重名确认对话框的答复（唤醒等待中的创建流程）
 #[tauri::command]
 pub fn add_answer_name_conflict(window: WebviewWindow, id: u32, answer: bool) {
@@ -178,6 +257,23 @@ pub fn add_list_dir(path: String) -> Result<Vec<DirEntry>, String> {
             .then_with(|| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
     });
     Ok(entries)
+}
+
+/// 列出压缩包内的条目路径（目录以 `/` 结尾，添加实例窗口预览内容树用）
+#[tauri::command]
+pub fn add_list_archive(path: String) -> Result<Vec<String>, String> {
+    let archive = mcml_base::archives::BaseArchive::open(&path).map_err(|e| e.to_string())?;
+    Ok(archive.entries().iter().map(|e| e.name.clone()).collect())
+}
+
+/// 检测压缩包的整合包类型与推荐实例名（选择压缩包后自动填表用）
+#[tauri::command]
+pub fn add_detect_archive(path: String) -> Result<DetectedPackDto, String> {
+    let pack = mcml_game::add_game::detect_pack(&path).map_err(|e| e.to_string())?;
+    Ok(DetectedPackDto {
+        pack_type: pack.pack_type.id().to_string(),
+        name: pack.name,
+    })
 }
 
 /// 从头新建实例（版本 + 加载器）
@@ -240,7 +336,8 @@ pub async fn add_import_folder(
     Ok(uuid)
 }
 
-/// 导入整合包压缩包为实例（packType：CurseForge / Modrinth / McMod / 本地）
+/// 导入整合包压缩包为实例（packType：CurseForge / Modrinth / McMod / 本地；
+/// unselect：按压缩包内完整条目名排除的文件，来自前端文件树未勾选项）
 #[tauri::command]
 pub async fn add_import_archive(
     window: WebviewWindow,
@@ -249,14 +346,16 @@ pub async fn add_import_archive(
     pack_type: String,
     name: Option<String>,
     group: Option<String>,
+    unselect: Option<Vec<String>>,
 ) -> Result<String, String> {
     let (_store, token) = prepare(&window)?;
     let pack = parse_pack_type(&pack_type)?;
     let gui = instance_gui(&window);
+    let progress = pack_gui(&window);
     let uuid = tauri::async_runtime::spawn_blocking(move || {
         tauri::async_runtime::block_on(async {
             add_game::install_archive_from_file(
-                &path, name, group, None, gui, None, None, pack, token,
+                &path, name, group, unselect, gui, progress, None, pack, token,
             )
             .await
         })
@@ -279,10 +378,11 @@ pub async fn add_import_url(
 ) -> Result<String, String> {
     let (_store, token) = prepare(&window)?;
     let gui = instance_gui(&window);
+    let progress = pack_gui(&window);
     let uuid = tauri::async_runtime::spawn_blocking(move || {
         tauri::async_runtime::block_on(async {
             add_game::install_archive_from_url(
-                &url, name, group, None, gui, None, None, PackType::ArchivePack, token,
+                &url, name, group, None, gui, progress, None, PackType::ArchivePack, token,
             )
             .await
         })
@@ -342,17 +442,38 @@ impl IProgressGui for SupportLoadersProgressGui {
 
 /// 查询指定游戏版本支持的加载器 ID 列表（选中版本后调用）
 ///
-/// 每查完一个加载器向本窗口发一次进度事件（前端显示进度条）。
+/// 全局查询：结果按版本号缓存（主窗口 / 添加实例窗口共用），
+/// 同版本并发查询单飞共享，每查完一个加载器发一次进度事件（前端显示进度条）。
 #[tauri::command]
 pub async fn add_get_support_loaders(app: AppHandle, mc: String) -> Result<Vec<String>, String> {
+    use std::sync::LazyLock;
+    use tokio::sync::{Mutex, OnceCell};
+
+    /// 支持列表查询结果缓存（版本号 -> 查询单飞单元）
+    static SUPPORT_LOADERS_CACHE: LazyLock<Mutex<HashMap<String, Arc<OnceCell<Vec<String>>>>>> =
+        LazyLock::new(|| Mutex::new(HashMap::new()));
+
     if !mcml_net::is_init() {
         return Ok(Vec::new());
     }
-    let gui: ProgressGui =
-        Some(Arc::new(SupportLoadersProgressGui { app }) as Arc<dyn IProgressGui>);
-    mcml_game::loader::loader_versions::get_support_loaders(&mc, gui)
-        .await
-        .map_err(|e| e.to_string())
+    // 取/建该版本的查询单元：并发请求共享同一次查询
+    let cell = {
+        let mut cache = SUPPORT_LOADERS_CACHE.lock().await;
+        cache.entry(mc.clone()).or_default().clone()
+    };
+    let gui_app = app.clone();
+    let mc_clone = mc.clone();
+    let result = cell
+        .get_or_try_init(|| async move {
+            let gui: ProgressGui = Some(Arc::new(SupportLoadersProgressGui { app: gui_app }) as Arc<dyn IProgressGui>);
+            mcml_game::loader::loader_versions::get_support_loaders(&mc_clone, gui).await
+        })
+        .await;
+    // 失败不缓存：单元留空，下次查询重试
+    match result {
+        Ok(list) => Ok(list.clone()),
+        Err(e) => Err(e.to_string()),
+    }
 }
 
 /// 获取压缩包类型 ID 列表（添加实例窗口的整合包类型下拉）
@@ -388,5 +509,226 @@ pub fn add_set_close_guard(window: WebviewWindow, enabled: bool) {
     if let Ok(store) = model(&window) {
         store.lock().unwrap().set_close_guard(enabled);
     }
+}
+
+/// 前端排序 ID -> CurseForge 排序方式（未知 ID 按流行度）
+fn cf_sort(id: &str) -> curseforge_api::CurseForgeSortType {
+    match id {
+        "featured" => curseforge_api::CurseForgeSortType::Featured,
+        "downloads" => curseforge_api::CurseForgeSortType::TotalDownloads,
+        "updated" => curseforge_api::CurseForgeSortType::LastUpdated,
+        "name" => curseforge_api::CurseForgeSortType::Name,
+        _ => curseforge_api::CurseForgeSortType::Popularity,
+    }
+}
+
+/// 前端排序 ID -> Modrinth 排序方式（CurseForge 独有的排序回退到推荐）
+fn mr_sort(id: &str) -> modrinth_api::ModrinthSortType {
+    match id {
+        "downloads" => modrinth_api::ModrinthSortType::Downloads,
+        "updated" => modrinth_api::ModrinthSortType::Updated,
+        _ => modrinth_api::ModrinthSortType::Relevance,
+    }
+}
+
+/// 搜索在线整合包（source：curseforge / modrinth；page 从 0 开始，一页 20 条）
+#[tauri::command]
+pub async fn add_search_modpacks(
+    source: String,
+    query: Option<String>,
+    version: Option<String>,
+    sort: Option<String>,
+    page: u32,
+) -> Result<ModpackSearchDto, String> {
+    if !mcml_net::is_init() {
+        return Err("核心尚未加载完成，请稍后再试".to_string());
+    }
+    const PAGE_SIZE: u32 = 20;
+
+    match source.as_str() {
+        "curseforge" => {
+            let arg = curseforge_api::CurseFogreArg {
+                version,
+                page: Some(page),
+                sort: cf_sort(sort.as_deref().unwrap_or("popularity")),
+                filter: query,
+                page_size: Some(PAGE_SIZE),
+                ..Default::default()
+            };
+            let res = curseforge_api::get_modpack_list(arg)
+                .await
+                .map_err(|e| e.to_string())?;
+            Ok(ModpackSearchDto {
+                page,
+                total: res.pagination.total_count,
+                items: res
+                    .data
+                    .iter()
+                    .map(|d| ModpackItemDto {
+                        id: d.id.to_string(),
+                        name: d.name.clone(),
+                        desc: d.summary.clone(),
+                        icon: d.logo.url.clone(),
+                        author: d
+                            .authors
+                            .first()
+                            .map(|a| a.name.clone())
+                            .unwrap_or_default(),
+                        downloads: d.download_count,
+                    })
+                    .collect(),
+            })
+        }
+        "modrinth" => {
+            let arg = modrinth_api::ModrinthSearchArg {
+                verions: version,
+                query,
+                sort: mr_sort(sort.as_deref().unwrap_or("popularity")),
+                page: Some(page),
+                page_size: Some(PAGE_SIZE),
+                category: None,
+                loader: None,
+            };
+            let res = modrinth_api::get_modpack_list(arg)
+                .await
+                .map_err(|e| e.to_string())?;
+            Ok(ModpackSearchDto {
+                page,
+                total: res.total_hits as u64,
+                items: res
+                    .hits
+                    .iter()
+                    .map(|h| ModpackItemDto {
+                        id: h.project_id.clone(),
+                        name: h.title.clone(),
+                        desc: h.description.clone(),
+                        icon: h.icon_url.clone(),
+                        author: h.author.clone(),
+                        downloads: h.downloads,
+                    })
+                    .collect(),
+            })
+        }
+        _ => Err(format!("未知的整合包来源: {source}")),
+    }
+}
+
+/// 获取整合包的可安装版本列表（按游戏版本过滤，version 传 None 取全部）
+#[tauri::command]
+pub async fn add_get_modpack_files(
+    source: String,
+    project_id: String,
+    version: Option<String>,
+) -> Result<Vec<ModpackFileDto>, String> {
+    if !mcml_net::is_init() {
+        return Err("核心尚未加载完成，请稍后再试".to_string());
+    }
+
+    match source.as_str() {
+        "curseforge" => {
+            let arg = curseforge_api::CurseFogreArg {
+                id: Some(project_id),
+                version,
+                ..Default::default()
+            };
+            let res = curseforge_api::get_files_page(arg)
+                .await
+                .map_err(|e| e.to_string())?;
+            Ok(res
+                .data
+                .iter()
+                .map(|f| ModpackFileDto {
+                    id: f.id.to_string(),
+                    name: f.display_name.clone(),
+                    file_name: f.file_name.clone(),
+                    date: f.file_date.clone(),
+                    size: f.file_length,
+                })
+                .collect())
+        }
+        "modrinth" => {
+            let res = modrinth_api::get_file_versions(&project_id, version.as_deref(), None)
+                .await
+                .map_err(|e| e.to_string())?;
+            Ok(res
+                .iter()
+                .map(|v| {
+                    // 主文件优先（.mrpack），没有主文件取第一个
+                    let file = v
+                        .files
+                        .iter()
+                        .find(|f| f.primary)
+                        .or_else(|| v.files.first());
+                    ModpackFileDto {
+                        id: v.id.clone(),
+                        name: if v.name.is_empty() {
+                            v.version_number.clone()
+                        } else {
+                            v.name.clone()
+                        },
+                        file_name: file
+                            .map(|f| f.filename.clone())
+                            .unwrap_or_else(|| v.version_number.clone()),
+                        date: v.date_published.clone(),
+                        size: file.map(|f| f.size).unwrap_or(0),
+                    }
+                })
+                .collect())
+        }
+        _ => Err(format!("未知的整合包来源: {source}")),
+    }
+}
+
+/// 安装在线整合包（下载压缩包后走对应类型的安装流程；name 取自整合包元数据）
+#[tauri::command]
+pub async fn add_install_modpack(
+    window: WebviewWindow,
+    app: AppHandle,
+    source: String,
+    project_id: String,
+    file_id: String,
+    group: Option<String>,
+) -> Result<String, String> {
+    let (_store, token) = prepare(&window)?;
+    let gui = instance_gui(&window);
+    let progress = pack_gui(&window);
+
+    let uuid = tauri::async_runtime::spawn_blocking(move || {
+        tauri::async_runtime::block_on(async {
+            let res = match source.as_str() {
+                "curseforge" => {
+                    let fid: u64 = file_id
+                        .parse()
+                        .map_err(|_| format!("无效的文件编号: {file_id}"))?;
+                    let mut list = curseforge_api::get_files(vec![fid])
+                        .await
+                        .map_err(|e| e.to_string())?;
+                    let mut data = list
+                        .into_iter()
+                        .next()
+                        .ok_or_else(|| "未找到该版本的文件".to_string())?;
+                    add_game::install_curseforge(&mut data, group, None, gui, progress, None, token)
+                        .await
+                        .map_err(|e| e.to_string())
+                }
+                "modrinth" => {
+                    let data = modrinth_api::get_version(&project_id, &file_id)
+                        .await
+                        .map_err(|e| e.to_string())?;
+                    add_game::install_modrinth(&data, group, None, gui, progress, None, token)
+                        .await
+                        .map_err(|e| e.to_string())
+                }
+                _ => Err(format!("未知的整合包来源: {source}")),
+            };
+            res
+        })
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string())?;
+
+    crate::windows::main::emit_instance_change(&app, "add");
+    Ok(uuid.to_string())
 }
 

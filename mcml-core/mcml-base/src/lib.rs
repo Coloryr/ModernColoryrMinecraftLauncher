@@ -57,3 +57,29 @@ pub fn init<P: AsRef<Path>>(dir: P) {
 pub fn get_base_dir() -> PathBuf {
     BASE_DIR.get().unwrap().clone()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// init / get_base_dir 全局根目录
+    ///
+    /// 注意：BASE_DIR 为进程级全局单例（OnceLock + get_or_init），
+    /// 首次调用的参数生效，重复 init 不会 panic 也不会覆盖。
+    #[test]
+    fn test_init_and_get_base_dir() {
+        let dir = std::env::temp_dir().join(format!(
+            "mcml_base_init_test_{}_{}",
+            std::process::id(),
+            uuid::Uuid::new_v4().simple()
+        ));
+        init(&dir);
+        assert_eq!(get_base_dir(), dir);
+
+        // 重复调用不应 panic，且保留第一次的值
+        init("/mcml_base_should_not_override");
+        assert_eq!(get_base_dir(), dir);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}

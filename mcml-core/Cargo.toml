@@ -12,6 +12,7 @@ mcml-auth = { path = "mcml-auth" }
 mcml-base = { path = "mcml-base" }
 mcml-net = { path = "mcml-net" }
 mcml-game = { path = "mcml-game" }
+mcml-jvms = { path = "mcml-jvms" }
 crossbeam-queue.workspace = true
 tokio.workspace = true
 tokio-util.workspace = true

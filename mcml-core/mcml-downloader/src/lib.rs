@@ -265,6 +265,49 @@ pub fn stop() {
     }
 }
 
+/// 下载任务快照（GUI 查询用）
+#[derive(Debug, Clone)]
+pub struct TaskSnapshot {
+    /// 任务编号
+    pub id: u64,
+    /// 文件总数
+    pub total: usize,
+    /// 已完成数
+    pub completed: usize,
+    /// 失败数
+    pub failed: usize,
+}
+
+/// 获取当前进行中任务的快照列表（下载窗口查询用）
+pub fn get_tasks() -> Vec<TaskSnapshot> {
+    let read = TASKS.read().unwrap();
+    read.iter()
+        .map(|t| TaskSnapshot {
+            id: t.id,
+            total: t.total_size,
+            completed: t.completed_count.load(Ordering::SeqCst),
+            failed: t.failed_count.load(Ordering::SeqCst),
+        })
+        .collect()
+}
+
+/// 取消指定任务：移出队列并唤醒完成等待（在途文件自然结束，剩余文件不再下载）
+///
+/// 取消成功返回 `true`，任务不存在（已完成 / 已取消）返回 `false`
+pub fn cancel_task(id: u64) -> bool {
+    let task = {
+        let mut tasks = TASKS.write().unwrap();
+        let pos = match tasks.iter().position(|t| t.id == id) {
+            Some(pos) => pos,
+            None => return false,
+        };
+        tasks.remove(pos)
+    };
+    task.cancel();
+    task_done(&task);
+    true
+}
+
 /// 创建新下载任务并开始下载
 ///
 /// # 参数
@@ -294,4 +337,195 @@ pub async fn start_download_task(items: Vec<FileItemObj>) -> bool {
     }
 
     task_handel.wait_done().await
+}
+
+// ============================================================================
+// 测试支持与单元测试
+// ============================================================================
+
+#[cfg(test)]
+pub(crate) mod test_util {
+    //! 测试公共辅助：全局状态（日志/配置/基础目录/GUI 回调）在同一个测试
+    //! 二进制中只能初始化一次，这里用 `OnceLock` + `Once` 保证幂等。
+
+    use std::fs;
+    use std::path::PathBuf;
+    use std::sync::{Mutex, Once, OnceLock};
+
+    /// GUI 回调记录到的事件列表
+    pub static GUI_EVENTS: OnceLock<Mutex<Vec<String>>> = OnceLock::new();
+
+    /// 测试运行根目录（临时目录下的唯一子目录）
+    static RUN_DIR: OnceLock<PathBuf> = OnceLock::new();
+    /// 保证初始化流程只执行一次
+    static INIT: Once = Once::new();
+
+    /// 测试专用的 GUI 回调，把所有通知记录为字符串
+    struct TestGui;
+
+    impl super::IDownloadGui for TestGui {
+        fn update(
+            &self,
+            thread: u32,
+            file: &std::sync::Arc<super::download_item::DownloadItem>,
+        ) {
+            let mut events = GUI_EVENTS.get().unwrap().lock().unwrap();
+            events.push(format!(
+                "file:{}:{}:{:.1}",
+                thread,
+                file.base.name,
+                file.progress()
+            ));
+        }
+
+        fn update_task(&self, state: super::DownloadTaskState) {
+            let mut events = GUI_EVENTS.get().unwrap().lock().unwrap();
+            match state {
+                super::DownloadTaskState::AddTask(id) => events.push(format!("AddTask:{id}")),
+                super::DownloadTaskState::RemoveTask(id) => events.push(format!("RemoveTask:{id}")),
+                super::DownloadTaskState::UpdateTask(obj) => {
+                    events.push(format!("UpdateTask:{}:{:.0}", obj.id, obj.progress))
+                }
+            }
+        }
+    }
+
+    /// 在临时目录下创建唯一的子目录（测试用）
+    pub fn make_temp_dir(name: &str) -> PathBuf {
+        static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let dir = std::env::temp_dir().join(format!(
+            "mcml-downloader-unit-{}-{}-{}",
+            name,
+            std::process::id(),
+            COUNTER.fetch_add(1, std::sync::atomic::Ordering::SeqCst)
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    /// 初始化测试环境（进程内只执行一次），返回测试运行根目录
+    pub fn ensure_env() -> PathBuf {
+        INIT.call_once(|| {
+            let dir = make_temp_dir("run");
+
+            GUI_EVENTS
+                .set(Mutex::new(Vec::new()))
+                .ok()
+                .unwrap_or_else(|| panic!("GUI_EVENTS 初始化失败"));
+
+            // 日志系统（下载线程内部记录错误时依赖信号量已初始化）
+            mcml_log::start(&dir).unwrap();
+            // 基础目录
+            mcml_base::init(&dir);
+            // 配置系统
+            mcml_config::init(&dir).unwrap();
+            // GUI 回调（全局单例）
+            super::set_gui_handel(Box::new(TestGui));
+
+            RUN_DIR.set(dir).unwrap();
+        });
+
+        RUN_DIR.get().unwrap().clone()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::atomic::Ordering;
+
+    use mcml_base::file_item::FileItemObj;
+
+    use crate::download_task::DownloadTask;
+
+    use super::test_util::{GUI_EVENTS, ensure_env};
+
+    /// 构造一个简单的下载文件项
+    fn file_item(name: &str) -> FileItemObj {
+        FileItemObj {
+            name: name.to_string(),
+            ..Default::default()
+        }
+    }
+
+    /// 任务队列：FIFO 出队 + 计数
+    #[test]
+    fn task_queue_fifo_and_counts() {
+        ensure_env();
+
+        let task = DownloadTask::new(vec![file_item("a"), file_item("b")]);
+        assert_eq!(task.total_size, 2);
+        assert_eq!(task.completed_count.load(Ordering::SeqCst), 0);
+        assert_eq!(task.failed_count.load(Ordering::SeqCst), 0);
+
+        // SegQueue 是先进先出
+        let first = task.get_item().unwrap();
+        assert_eq!(first.base.name, "a");
+        let second = task.get_item().unwrap();
+        assert_eq!(second.base.name, "b");
+        // 队列取空后返回 None
+        assert!(task.get_item().is_none());
+    }
+
+    /// 成功完成的任务：wait_done 返回 true，并从全局任务队列移除
+    #[test]
+    fn task_done_waits_and_completes() {
+        ensure_env();
+
+        let task = DownloadTask::new(vec![file_item("a")]);
+        let id = task.id;
+
+        // 队列非空时任务未完成，wait_done 不会被提前唤醒
+        // （这里先取走唯一文件再标记完成，保证不会阻塞）
+        let _item = task.get_item().unwrap();
+        task.done();
+        assert_eq!(task.completed_count.load(Ordering::SeqCst), 1);
+
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .unwrap();
+        let ok = rt.block_on(task.wait_done());
+        assert!(ok);
+
+        // 完成后任务已从全局队列移除（任务原本也不在队列中，此处确认无副作用）
+        assert!(super::get_tasks().iter().all(|t| t.id != id));
+    }
+
+    /// 存在失败文件的任务：wait_done 返回 false
+    #[test]
+    fn task_failed_reports_false() {
+        ensure_env();
+
+        let task = DownloadTask::new(vec![file_item("a")]);
+        let _item = task.get_item().unwrap();
+        task.fail();
+        assert_eq!(task.failed_count.load(Ordering::SeqCst), 1);
+
+        let rt = tokio::runtime::Builder::new_current_thread()
+            .build()
+            .unwrap();
+        let ok = rt.block_on(task.wait_done());
+        assert!(!ok);
+    }
+
+    /// 任务进度通过 GUI 回调上报（1/2 完成 = 50%）
+    #[test]
+    fn task_progress_notifies_gui() {
+        ensure_env();
+
+        let task = DownloadTask::new(vec![file_item("a"), file_item("b")]);
+        let id = task.id;
+
+        let _item = task.get_item().unwrap();
+        task.done();
+
+        let events = GUI_EVENTS.get().unwrap().lock().unwrap();
+        assert!(
+            events
+                .iter()
+                .any(|e| e == &format!("UpdateTask:{id}:50")),
+            "应收到 50% 进度事件，实际事件: {:?}",
+            *events
+        );
+    }
 }

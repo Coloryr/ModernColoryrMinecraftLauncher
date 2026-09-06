@@ -1,0 +1,228 @@
+//! 实例配置与 game_options 配置文件的磁盘读写测试。
+//!
+//! 需要全局初始化（实例目录 / 运行库目录 / 配置后台保存线程），
+//! 全部测试共用同一个临时运行目录，通过 `OnceLock` 保证初始化只执行一次。
+//! 临时目录位于系统临时目录下，进程结束由操作系统回收，运行前先清理旧目录。
+
+use std::path::PathBuf;
+use std::sync::OnceLock;
+use std::time::{Duration, Instant};
+
+use mcml_game::game_options::read_options_from_file;
+use mcml_game::launcher::instance_setting_obj::{InstanceSettingObj, ProxyHostObj, ServerObj};
+use mcml_game::launcher::{LogEncoding, ModPackType};
+use mcml_game::loader::LoaderType;
+use mcml_game::{get_instance_by_name, init as game_init, load as game_load};
+use uuid::Uuid;
+
+/// 临时运行目录（每次运行前先删除旧目录）
+fn init_all() -> PathBuf {
+    static INIT: OnceLock<PathBuf> = OnceLock::new();
+    INIT.get_or_init(|| {
+        let run_dir = std::env::temp_dir().join("mcml-instance-config-test");
+        let _ = std::fs::remove_dir_all(&run_dir);
+        std::fs::create_dir_all(&run_dir).expect("创建测试运行目录失败");
+
+        // 与 mcml_core::init 相同的初始化链
+        mcml_base::init(&run_dir);
+        mcml_names::init(mcml_base::get_base_dir()).unwrap();
+        mcml_log::start(mcml_base::get_base_dir()).unwrap();
+        mcml_config::init(mcml_base::get_base_dir()).unwrap();
+        // 实例保存走 config_save 后台线程，需要先启动
+        mcml_config::config_save::start();
+        game_init(mcml_base::get_base_dir()).unwrap();
+        run_dir
+    })
+    .clone()
+}
+
+/// 等待条件成立（后台保存线程异步写盘，需要轮询）
+fn wait_for<F: Fn() -> bool>(timeout: Duration, cond: F) -> bool {
+    let start = Instant::now();
+    while start.elapsed() < timeout {
+        if cond() {
+            return true;
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    cond()
+}
+
+/// 构造一个测试实例配置
+fn make_instance(dir: &str) -> InstanceSettingObj {
+    InstanceSettingObj {
+        uuid: Uuid::new_v4(),
+        name: format!("inst-{dir}"),
+        group: Some("test-group".to_string()),
+        dir: dir.to_string(),
+        version: "1.20.4".to_string(),
+        loader: LoaderType::Fabric,
+        loader_version: Some("0.16.9".to_string()),
+        start_server: Some(ServerObj {
+            enable: true,
+            ip: Some("mc.example.com".to_string()),
+            port: Some(25565),
+        }),
+        proxy_host: Some(ProxyHostObj {
+            ip: Some("127.0.0.1".to_string()),
+            port: Some(7890),
+            user: None,
+            password: None,
+        }),
+        is_modpack: true,
+        modpack_type: ModPackType::Modrinth,
+        encoding: LogEncoding::GBK,
+        ..Default::default()
+    }
+}
+
+/// 实例配置保存到磁盘：写入 `{实例目录}/game.json`，字段为 PascalCase。
+#[test]
+fn instance_save_to_disk() {
+    init_all();
+
+    let dir = format!("save-test-{}", Uuid::new_v4().simple());
+    let instance = make_instance(&dir);
+    instance.save();
+
+    let json_file = instance.get_json_file();
+    assert!(
+        wait_for(Duration::from_secs(10), || json_file.exists()),
+        "game.json 未在限时内落盘: {}",
+        json_file.display()
+    );
+
+    let text = std::fs::read_to_string(&json_file).unwrap();
+    let value: serde_json::Value = serde_json::from_str(&text).unwrap();
+
+    // 文件名与字段命名规范
+    assert_eq!(json_file.file_name().unwrap().to_string_lossy(), "game.json");
+    assert_eq!(value["Name"], format!("inst-{dir}"));
+    assert_eq!(value["Version"], "1.20.4");
+    assert_eq!(value["DirName"], dir);
+    assert_eq!(value["Loader"], 2); // LoaderType::Fabric
+    assert_eq!(value["ModPackType"], 1); // ModPackType::Modrinth
+    assert_eq!(value["Encoding"], 1); // LogEncoding::GBK
+    assert_eq!(value["GroupName"], "test-group");
+
+    // 从磁盘还原
+    let restored: InstanceSettingObj = serde_json::from_value(value).unwrap();
+    assert_eq!(restored.uuid, instance.uuid);
+    assert_eq!(restored.loader_version.as_deref(), Some("0.16.9"));
+    assert_eq!(restored.start_server.as_ref().unwrap().port, Some(25565));
+    assert_eq!(
+        restored.proxy_host.as_ref().unwrap().ip.as_deref(),
+        Some("127.0.0.1")
+    );
+}
+
+/// 实例配置写入磁盘后能被启动器加载回来（load → get_instance_by_name）。
+#[test]
+fn instance_load_round_trip() {
+    init_all();
+
+    let dir = format!("load-test-{}", Uuid::new_v4().simple());
+    let instance = make_instance(&dir);
+    instance.save();
+
+    let json_file = instance.get_json_file();
+    assert!(
+        wait_for(Duration::from_secs(10), || json_file.exists()),
+        "game.json 未在限时内落盘"
+    );
+
+    game_load().expect("加载实例失败");
+
+    let loaded = get_instance_by_name(&format!("inst-{dir}")).expect("加载后应能按名字找到实例");
+    let loaded = loaded.read().unwrap();
+    assert_eq!(loaded.uuid, instance.uuid);
+    assert_eq!(loaded.version, "1.20.4");
+    assert_eq!(loaded.loader, LoaderType::Fabric);
+    assert_eq!(loaded.encoding, LogEncoding::GBK);
+    // 目录名与 DirName 不一致时以目录名为准（本测试两者一致）
+    assert_eq!(loaded.dir, dir);
+}
+
+/// game_options：save_options 写盘 → read_options_from_file 读回，往返一致。
+#[test]
+fn game_options_save_and_read_round_trip() {
+    init_all();
+
+    let mut instance = make_instance(&format!("options-test-{}", Uuid::new_v4().simple()));
+    // options.txt 是 OptiFine 配置，用 OptiFine 加载器拿到独立的配置路径
+    instance.loader = LoaderType::OptiFine;
+    instance.loader_version = Some(format!("9.9.{}", Uuid::new_v4().simple()));
+
+    let options: std::collections::HashMap<String, String> = [
+        ("fov".to_string(), "0.5".to_string()),
+        ("renderDistance".to_string(), "12".to_string()),
+        ("music".to_string(), "0.0".to_string()),
+    ]
+    .into_iter()
+    .collect();
+
+    instance.save_options(&options, None).expect("写 options 失败");
+
+    let file = instance.get_optifine_file();
+    assert!(file.exists(), "options 文件应已写盘: {}", file.display());
+
+    let data = read_options_from_file(&file, None).expect("读 options 失败");
+    assert_eq!(data.len(), 3);
+    for (key, value) in &options {
+        assert_eq!(data.get(key), Some(value), "key {key} 值不一致");
+    }
+
+    // 实例上的读取入口（get_options）应读到同样内容
+    let data = instance.get_options().unwrap();
+    assert_eq!(data.get("fov").map(String::as_str), Some("0.5"));
+    assert_eq!(data.get("renderDistance").map(String::as_str), Some("12"));
+}
+
+/// game_options：换行符不敏感（CRLF / LF 均可解析）。
+#[test]
+fn game_options_line_endings() {
+    init_all();
+
+    let mut instance = make_instance(&format!("line-test-{}", Uuid::new_v4().simple()));
+    instance.loader = LoaderType::OptiFine;
+    instance.loader_version = Some(format!("9.8.{}", Uuid::new_v4().simple()));
+
+    // Windows 写 CRLF，Unix 写 LF
+    let mut options: std::collections::HashMap<String, String> =
+        [("fov".to_string(), "1.0".to_string())].into_iter().collect();
+    instance.save_options(&options, None).unwrap();
+
+    // 手工用另一种换行符写盘再读（键值分隔符仍是 :）
+    let file = instance.get_optifine_file();
+    let sep = if cfg!(windows) { "\n" } else { "\r\n" };
+    std::fs::write(&file, format!("gamma:0.8{sep}fov:1.0{sep}")).unwrap();
+
+    let data = read_options_from_file(&file, None).unwrap();
+    assert_eq!(data.get("gamma").map(String::as_str), Some("0.8"));
+    assert_eq!(data.get("fov").map(String::as_str), Some("1.0"));
+
+    // 自定义分隔符写入与读回
+    options.insert("lang".to_string(), "zh_cn".to_string());
+    instance.save_options(&options, Some('=')).unwrap();
+    let data = read_options_from_file(&file, Some('=')).unwrap();
+    assert_eq!(data.get("lang").map(String::as_str), Some("zh_cn"));
+    assert_eq!(data.get("fov").map(String::as_str), Some("1.0"));
+}
+
+/// game_options：配置文件不存在时 get_options 返回空表。
+#[test]
+fn game_options_missing_file_returns_empty() {
+    init_all();
+
+    // 用唯一的版本号保证对应的 OptiFine 配置文件一定不存在
+    let instance = InstanceSettingObj {
+        version: format!("9.9.{}", Uuid::new_v4().simple()),
+        loader: LoaderType::OptiFine,
+        loader_version: Some(format!("opt-{}", Uuid::new_v4().simple())),
+        ..Default::default()
+    };
+
+    // 不预先写盘，get_options 应返回空表
+    let data = instance.get_options().unwrap();
+    assert!(data.is_empty());
+}

@@ -37,6 +37,9 @@ impl IDownloadGui for GuiRun {
     }
 }
 
+/// 真实网络下载测试：需要访问外网（Apache 镜像），仅在显式运行时执行
+/// （`cargo test -- --ignored`），默认 `cargo test` 下跳过。
+#[ignore = "需要访问外网"]
 #[tokio::test]
 async fn test_download() {
     let exe_path = env::current_exe().expect("Failed to get exe path");

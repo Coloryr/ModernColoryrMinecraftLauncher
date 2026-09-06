@@ -7,17 +7,20 @@ use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, LazyLock, Mutex, RwLock};
 use std::time::Duration;
 
-use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, WebviewWindow};
 
 use crate::dtos::main_dto::{LoadState, NewsItem};
 use crate::dtos::{ErrorEvent, ExitEvent, InstanceChangeEvent, InstancePatch, LogEvent, StateEvent};
 use crate::listens;
-use crate::models::{InstanceArgs, InstanceInfo, JavaInfo, VersionInfo};
-use mcml_game::launcher::instance_setting_obj::InstanceSettingObj;
+use crate::models::{EnvVarLine, InstanceArgs, InstanceInfo, JavaInfo, VersionInfo};
+use mcml_config::config_obj::{GCType, RunArgObj, WindowSettingObj};
+use mcml_game::GameInstance;
 use mcml_game::loader::LoaderType;
 use mcml_game::mojang::VersionType;
 use mcml_game::launcher::{LogEncoding, ModPackType};
+use mcml_game::launcher::instance_setting_obj::{
+    AdvanceJvmObj, InstanceSettingObj, ProxyHostObj, ServerObj,
+};
 use uuid::Uuid;
 
 /// 核心加载完成事件（ok：加载成功；error：失败信息，前端据此显示错误页）
@@ -37,11 +40,10 @@ pub struct MainWindowModel {
     pub group_order: Vec<String>,
     pub running: HashSet<String>,
     pub logs: HashMap<String, Vec<String>>,
-    pub javas: Vec<JavaInfo>,
 }
 
 impl MainWindowModel {
-    pub fn init(app: &AppHandle) -> Self {
+    pub fn new() -> Self {
         Self {
             instances: Vec::new(),
             args: HashMap::new(),
@@ -49,7 +51,6 @@ impl MainWindowModel {
             group_order: Vec::new(),
             running: HashSet::new(),
             logs: HashMap::new(),
-            javas: detect_javas(),
         }
     }
 
@@ -83,60 +84,20 @@ impl MainWindowModel {
     }
 }
 
-/// 持久化数据（JSON）
-#[derive(Serialize, Deserialize)]
-struct PersistedData {
-    instances: Vec<InstanceInfo>,
-    args: HashMap<String, InstanceArgs>,
-    extra_groups: Vec<String>,
-    group_order: Vec<String>,
-}
-
-/// 检测系统 Java（扫描常见安装目录 + JAVA_HOME）
-fn detect_javas() -> Vec<JavaInfo> {
-    let mut list = Vec::new();
-    // JAVA_HOME 单独处理（避免闭包借用冲突）
-    if let Ok(home) = std::env::var("JAVA_HOME") {
-        let exe = std::path::Path::new(&home).join("bin").join("java.exe");
-        if exe.exists() {
-            list.push(JavaInfo {
-                name: "JAVA_HOME".to_string(),
-                path: exe.to_string_lossy().to_string(),
-                version: String::new(),
-                major: 0,
-                java_type: String::new(),
-                arch: String::new(),
-            });
-        }
-    }
-    let mut push_dir = |dir: &str| {
-        let base = std::path::Path::new(dir);
-        if let Ok(entries) = std::fs::read_dir(base) {
-            for entry in entries.flatten() {
-                let exe = entry.path().join("bin").join("java.exe");
-                if exe.exists() {
-                    list.push(JavaInfo {
-                        name: entry.file_name().to_string_lossy().to_string(),
-                        path: exe.to_string_lossy().to_string(),
-                        version: String::new(),
-                        major: 0,
-                        java_type: String::new(),
-                        arch: String::new(),
-                    });
-                }
-            }
-        }
-    };
-    for dir in [
-        "C:\\Program Files\\Java",
-        "C:\\Program Files\\Eclipse Adoptium",
-        "C:\\Program Files\\Microsoft",
-        "C:\\Program Files\\Zulu",
-        "C:\\Program Files (x86)\\Java",
-    ] {
-        push_dir(dir);
-    }
-    list
+/// 从 mcml_jvms 读取 Java 列表（配置加载 / 扫描异步进行，未完成时为空）
+fn java_list() -> Vec<JavaInfo> {
+    mcml_jvms::get_all_java()
+        .iter()
+        .map(|j| JavaInfo {
+            name: j.name.clone(),
+            path: j.path.to_string_lossy().to_string(),
+            version: j.version.clone(),
+            // 遗留占位条目（Java 失效）主版本号为 -1，前端用 0 表示未知
+            major: j.major_version.max(0) as u32,
+            java_type: j.java_type.clone(),
+            arch: j.arch.to_string(),
+        })
+        .collect()
 }
 
 fn now_time() -> String {
@@ -177,14 +138,17 @@ pub fn main_get_instances() -> Vec<InstanceInfo> {
                 name: inst.name.clone(),
                 group: inst.group.clone(),
                 version: inst.version.clone(),
-                version_type: Some(version_type_name(inst.game_type).to_string()),
-                loader: loader_name(inst.loader).to_string(),
+                version_type: Some(inst.game_type.id().to_string()),
+                loader: inst.loader.id().to_string(),
                 loader_version: inst.loader_version.clone(),
                 dir: inst.dir.clone(),
                 running: mcml_game::is_running(&inst.uuid),
-                modpack_type: modpack_type_name(&inst),
+                modpack_type: inst
+                    .is_modpack
+                    .then(|| inst.modpack_type.id().to_string()),
                 pid: inst.pid.clone(),
                 fid: inst.fid.clone(),
+                server_url: inst.server_url.clone(),
                 lang: None,
                 log_encoding: Some(
                     if matches!(inst.encoding, LogEncoding::GBK) { "gbk" } else { "utf8" }.to_string(),
@@ -195,60 +159,212 @@ pub fn main_get_instances() -> Vec<InstanceInfo> {
         .collect()
 }
 
-/// VersionType -> 前端版本类型名
-fn version_type_name(t: VersionType) -> &'static str {
-    match t {
-        VersionType::Release => "release",
-        VersionType::Snapshot => "snapshot",
-        _ => "other",
-    }
-}
-
-/// LoaderType -> 前端加载器名（与 InstanceMetaPanel 的 LOADERS 一致）
-fn loader_name(loader: LoaderType) -> &'static str {
-    match loader {
-        LoaderType::Normal => "原版",
-        LoaderType::Forge => "Forge",
-        LoaderType::Fabric => "Fabric",
-        LoaderType::Quilt => "Quilt",
-        LoaderType::NeoForge => "NeoForge",
-        LoaderType::OptiFine => "OptiFine",
-        LoaderType::LiteLoader => "LiteLoader",
-        LoaderType::Custom => "自定义",
-    }
-}
-
-/// 整合包平台名（非整合包返回 None）
-fn modpack_type_name(inst: &InstanceSettingObj) -> Option<String> {
-    if !inst.is_modpack {
-        return None;
-    }
-    Some(
-        match inst.modpack_type {
-            ModPackType::CurseForge => "CurseForge",
-            ModPackType::Modrinth => "Modrinth",
-            ModPackType::McMod => "McMod",
-            ModPackType::ServerPack => "ServerPack",
-            ModPackType::None => "本地",
-        }
-        .to_string(),
-    )
-}
-
 /// 获取分组列表（mcml-game::get_group_keys 对接）
 #[tauri::command]
 pub fn main_get_groups() -> Vec<String> {
     mcml_game::get_group_keys()
 }
 
-/// 获取 Java 列表（系统检测）
+/// 获取实例的游戏内语言列表（从资源索引查 minecraft/lang/*.json，资源未下载时为空）
 #[tauri::command]
-pub fn main_get_java_list(window: WebviewWindow) -> Vec<JavaInfo> {
-    let Ok(store) = model(&window) else {
-        eprintln!("[main_get_java_list] 主窗口模型未初始化");
+pub fn main_get_instance_langs(uuid: String) -> Vec<String> {
+    let Ok(id) = Uuid::parse_str(&uuid) else {
         return Vec::new();
     };
-    store.lock().unwrap().javas.clone()
+    mcml_game::get_instance_langs(&id)
+}
+
+/// 解析核心实例配置 -> 前端启动参数 DTO
+fn args_from_core(inst: &InstanceSettingObj) -> InstanceArgs {
+    let mut a = InstanceArgs::default();
+    if let Some(jvm) = &inst.jvm_arg {
+        if let Some(v) = jvm.max_memory {
+            a.memory = v as i64;
+        }
+        if let Some(v) = jvm.min_memory {
+            a.min_memory = v as i64;
+        }
+        a.gc = match jvm.gc_mode {
+            Some(GCType::G1GC) => "g1gc",
+            Some(GCType::ZGC) => "zgc",
+            Some(GCType::None) => "none",
+            _ => "auto",
+        }
+        .into();
+        if let Some(s) = &jvm.jvm_args {
+            a.jvm_args = s.lines().map(String::from).collect();
+        }
+        if let Some(s) = &jvm.game_args {
+            a.game_args = s.lines().map(String::from).collect();
+        }
+        if let Some(s) = &jvm.jvm_env {
+            a.env_vars = s.lines().filter_map(|l| l.split_once('=').map(|(k, v)| EnvVarLine {
+                key: k.to_string(),
+                value: v.to_string(),
+            })).collect();
+        }
+        if let Some(v) = jvm.launch_pre_run {
+            a.pre_enabled = v;
+        }
+        if let Some(s) = &jvm.pre_run_arg {
+            a.pre_cmd = s.clone();
+        }
+        if let Some(v) = jvm.launch_post_run {
+            a.post_enabled = v;
+        }
+        if let Some(s) = &jvm.post_run_arg {
+            a.post_cmd = s.clone();
+        }
+    }
+    if let Some(w) = &inst.window {
+        if let Some(v) = w.full_screen {
+            a.fullscreen = v;
+        }
+        if let Some(v) = w.width {
+            a.width = v as i64;
+        }
+        if let Some(v) = w.height {
+            a.height = v as i64;
+        }
+    }
+    a.java_name = inst.jvm_name.clone().unwrap_or_default();
+    a.java_path = inst.jvm_local.clone().unwrap_or_default();
+    if let Some(adv) = &inst.advance_jvm {
+        a.main_class = adv.main_class.clone().unwrap_or_default();
+        if let Some(s) = &adv.class_path {
+            a.class_path = s.split(';').map(str::trim).filter(|s| !s.is_empty()).map(String::from).collect();
+        }
+    }
+    if let Some(p) = &inst.proxy_host {
+        a.proxy_ip = p.ip.clone().unwrap_or_default();
+        a.proxy_port = p.port.unwrap_or(0) as i64;
+        a.proxy_user = p.user.clone().unwrap_or_default();
+        a.proxy_pass = p.password.clone().unwrap_or_default();
+    }
+    if let Some(s) = &inst.start_server {
+        a.join_server = s.enable;
+        a.server_ip = s.ip.clone().unwrap_or_default();
+        a.server_port = s.port.unwrap_or(0) as i64;
+    }
+    a
+}
+
+/// 前端启动参数 DTO -> 写入核心实例配置（不保存，由调用方 save）
+fn apply_args_to_core(inst: &mut InstanceSettingObj, a: &InstanceArgs) {
+    let jvm = inst.jvm_arg.get_or_insert_with(RunArgObj::default);
+    jvm.max_memory = Some(a.memory.max(0) as u32);
+    jvm.min_memory = Some(a.min_memory.max(0) as u32);
+    jvm.gc_mode = Some(match a.gc.as_str() {
+        "g1gc" => GCType::G1GC,
+        "zgc" => GCType::ZGC,
+        "none" => GCType::None,
+        _ => GCType::Auto,
+    });
+    // 自定义 GC 参数没有独立字段：并入附加 JVM 参数一起下发
+    let mut jvm_lines: Vec<String> = a.jvm_args.clone();
+    if a.gc == "custom" && !a.gc_custom.trim().is_empty() {
+        jvm_lines.extend(a.gc_custom.lines().map(String::from));
+    }
+    jvm.jvm_args = Some(jvm_lines.join("\n"));
+    jvm.game_args = Some(a.game_args.join("\n"));
+    jvm.jvm_env = Some(
+        a.env_vars
+            .iter()
+            .map(|v| format!("{}={}", v.key, v.value))
+            .collect::<Vec<_>>()
+            .join("\n"),
+    );
+    jvm.launch_pre_run = Some(a.pre_enabled);
+    jvm.pre_run_arg = Some(a.pre_cmd.clone());
+    jvm.launch_post_run = Some(a.post_enabled);
+    jvm.post_run_arg = Some(a.post_cmd.clone());
+
+    let win = inst.window.get_or_insert_with(WindowSettingObj::default);
+    win.full_screen = Some(a.fullscreen);
+    win.width = Some(a.width.clamp(0, u16::MAX as i64) as u16);
+    win.height = Some(a.height.clamp(0, u16::MAX as i64) as u16);
+
+    inst.jvm_name = (!a.java_name.is_empty()).then(|| a.java_name.clone());
+    inst.jvm_local = (!a.java_path.is_empty()).then(|| a.java_path.clone());
+
+    let adv = inst.advance_jvm.get_or_insert_with(AdvanceJvmObj::default);
+    adv.main_class = (!a.main_class.is_empty()).then(|| a.main_class.clone());
+    adv.class_path = (!a.class_path.is_empty()).then(|| a.class_path.join(";"));
+
+    let proxy = inst.proxy_host.get_or_insert_with(ProxyHostObj::default);
+    proxy.ip = (!a.proxy_ip.is_empty()).then(|| a.proxy_ip.clone());
+    proxy.port = (a.proxy_port > 0).then(|| a.proxy_port as u16);
+    proxy.user = (!a.proxy_user.is_empty()).then(|| a.proxy_user.clone());
+    proxy.password = (!a.proxy_pass.is_empty()).then(|| a.proxy_pass.clone());
+
+    let server = inst.start_server.get_or_insert_with(ServerObj::default);
+    server.enable = a.join_server && !a.server_ip.trim().is_empty();
+    server.ip = (!a.server_ip.is_empty()).then(|| a.server_ip.clone());
+    server.port = (a.server_port > 0).then(|| a.server_port as u16);
+}
+
+/// 取核心实例（uuid 解析 + 存在性检查）
+fn core_instance(uuid: &str) -> Option<(Uuid, GameInstance)> {
+    Uuid::parse_str(uuid)
+        .ok()
+        .and_then(|id| mcml_game::get_instance(&id).map(|inst| (id, inst)))
+}
+
+/// 获取实例启动参数（核心实例读配置；遗留数据读内存缓存）
+#[tauri::command]
+pub fn main_get_instance_args(window: WebviewWindow, uuid: String) -> InstanceArgs {
+    if let Some((_, instance)) = core_instance(&uuid) {
+        let obj = instance.read().unwrap();
+        return args_from_core(&obj);
+    }
+    if let Ok(store) = model(&window) {
+        if let Some(a) = store.lock().unwrap().args.get(&uuid) {
+            return a.clone();
+        }
+    }
+    InstanceArgs::default()
+}
+
+/// 更新实例启动参数（核心实例写配置并保存；遗留数据只更新内存缓存）
+#[tauri::command]
+pub fn main_update_instance_args(app: AppHandle, window: WebviewWindow, uuid: String, args: InstanceArgs) -> Result<bool, String> {
+    if let Some((_, instance)) = core_instance(&uuid) {
+        {
+            let mut obj = instance.write().unwrap();
+            apply_args_to_core(&mut obj, &args);
+            obj.save();
+        }
+        emit_instance_change(&app, "edit");
+        return Ok(true);
+    }
+    let store = model(&window)?;
+    store.lock().unwrap().args.insert(uuid, args);
+    Ok(true)
+}
+
+/// 获取 Java 列表（来自 mcml_jvms，配置加载 / 扫描异步进行）
+#[tauri::command]
+pub fn main_get_java_list() -> Vec<JavaInfo> {
+    java_list()
+}
+
+/// 添加 Java（mcml_jvms 校验有效后加入列表并保存配置）
+#[tauri::command]
+pub fn main_add_java(name: String, path: String) -> bool {
+    mcml_jvms::add_item(name, path).is_some()
+}
+
+/// 删除指定名称的 Java
+#[tauri::command]
+pub fn main_remove_java(name: String) {
+    mcml_jvms::remove(&name);
+}
+
+/// 扫描系统已安装的 Java（注册表 / 常见路径，耗时查询放线程池）并返回最新列表
+#[tauri::command]
+pub async fn main_scan_java() -> Vec<JavaInfo> {
+    let _ = tauri::async_runtime::spawn_blocking(mcml_jvms::scan_java).await;
+    java_list()
 }
 
 /// 版本列表缓存（进程级：主窗口 / 添加实例窗口共用，不挂在窗口模型上）
@@ -323,7 +439,8 @@ pub fn main_open_url(url: String) {
 }
 
 /// 从 mcml-core 拉取版本清单（按配置源：官方 / BMCLAPI），
-/// release 优先、版本号降序；失败返回空
+/// 按类型分组排序（正式版 > 快照 > 旧版 Beta > 旧版 Alpha），
+/// 组内保持清单顺序（清单本身按新旧排列）；失败返回空
 async fn fetch_versions() -> Vec<VersionInfo> {
     #[derive(serde::Deserialize)]
     struct Manifest {
@@ -346,35 +463,17 @@ async fn fetch_versions() -> Vec<VersionInfo> {
         .into_iter()
         .map(|v| VersionInfo { id: v.id, version_type: v.version_type })
         .collect();
-    list.sort_by(|a, b| {
-        let ra = (a.version_type == "release") as i32;
-        let rb = (b.version_type == "release") as i32;
-        rb.cmp(&ra).then_with(|| compare_version(&b.id, &a.id))
+    // 只按类型分组排序，组内不动：清单本身即最新在前，
+    // 按版本号数值重排会把快照（25w14a）排到 1.21.x 之上、打乱 rc / 旧版顺序
+    list.sort_by_key(|v| match v.version_type.as_str() {
+        "release" => 0,
+        "snapshot" => 1,
+        "old_beta" => 2,
+        "old_alpha" => 3,
+        _ => 4,
     });
     // 不截断：快照 / 旧版类型也要有数据，否则切换版本类型后过滤结果为空
     list
-}
-
-/// 语义版本比较（"1.21.1" vs "1.20.4"）
-fn compare_version(a: &str, b: &str) -> std::cmp::Ordering {
-    let pa: Vec<u64> = a
-        .trim_start_matches(|c: char| !c.is_ascii_digit())
-        .split('.')
-        .filter_map(|n| n.parse::<u64>().ok())
-        .collect();
-    let pb: Vec<u64> = b
-        .trim_start_matches(|c: char| !c.is_ascii_digit())
-        .split('.')
-        .filter_map(|n| n.parse::<u64>().ok())
-        .collect();
-    for i in 0..pa.len().max(pb.len()) {
-        let x = pa.get(i).copied().unwrap_or(0);
-        let y = pb.get(i).copied().unwrap_or(0);
-        if x != y {
-            return x.cmp(&y);
-        }
-    }
-    std::cmp::Ordering::Equal
 }
 
 /// 实例数据变更事件（type：add / edit / remove / group）
@@ -384,6 +483,12 @@ pub fn emit_instance_change(app: &AppHandle, r#type: &str) {
         listens::INSTANCE_CHANGE,
         InstanceChangeEvent { r#type: r#type.into() },
     );
+}
+
+/// Java 列表变更事件（mcml_jvms 回调触发：添加 / 删除 / 配置加载完成）
+#[gui_macros::emit]
+pub fn emit_java_change(app: &AppHandle) {
+    let _ = app.emit(listens::JAVA_CHANGE, ());
 }
 
 /// 启动状态事件
@@ -489,13 +594,14 @@ pub fn main_create_instance(
         group,
         version,
         version_type: Some("release".into()),
-        loader: loader.unwrap_or_else(|| "原版".into()),
+        loader: loader.unwrap_or_else(|| "normal".into()),
         loader_version,
         dir,
         running: false,
         modpack_type,
         pid: None,
         fid: None,
+        server_url: None,
         lang: None,
         log_encoding: None,
         source,
@@ -536,32 +642,6 @@ pub fn main_rename_instance(app: AppHandle, window: WebviewWindow, uuid: String,
     Ok(true)
 }
 
-/// 前端加载器显示名 -> LoaderType（[`loader_name`] 的逆映射）
-fn loader_from_name(name: &str) -> Option<LoaderType> {
-    match name {
-        "原版" => Some(LoaderType::Normal),
-        "Forge" => Some(LoaderType::Forge),
-        "Fabric" => Some(LoaderType::Fabric),
-        "Quilt" => Some(LoaderType::Quilt),
-        "NeoForge" => Some(LoaderType::NeoForge),
-        "OptiFine" => Some(LoaderType::OptiFine),
-        "LiteLoader" => Some(LoaderType::LiteLoader),
-        "自定义" => Some(LoaderType::Custom),
-        _ => None,
-    }
-}
-
-/// 前端整合包平台名 -> ModPackType（None / 空 = 非整合包）
-fn modpack_type_from_name(name: Option<&str>) -> ModPackType {
-    match name {
-        Some("CurseForge") => ModPackType::CurseForge,
-        Some("Modrinth") => ModPackType::Modrinth,
-        Some("McMod") => ModPackType::McMod,
-        Some("ServerPack") => ModPackType::ServerPack,
-        _ => ModPackType::None,
-    }
-}
-
 /// 更新实例元信息（补丁式；核心实例直接写配置并保存，遗留数据只改本地存储）
 #[tauri::command]
 pub fn main_update_instance(app: AppHandle, window: WebviewWindow, uuid: String, patch: InstancePatch) -> Result<bool, String> {
@@ -592,22 +672,18 @@ pub fn main_update_instance(app: AppHandle, window: WebviewWindow, uuid: String,
                 obj.version = v.clone();
             }
             if let Some(v) = &patch.version_type {
-                obj.game_type = match v.as_str() {
-                    "release" => VersionType::Release,
-                    "snapshot" => VersionType::Snapshot,
-                    _ => obj.game_type,
-                };
+                obj.game_type = VersionType::from_id(v);
             }
             if let Some(v) = &patch.loader {
-                if let Some(l) = loader_from_name(v) {
+                if let Some(l) = LoaderType::from_id(v) {
                     obj.loader = l;
                 }
             }
-            if let Some(v) = &patch.loader_version {
-                obj.loader_version = Some(v.clone());
+            if let Some(v) = patch.loader_version.clone() {
+                obj.loader_version = v;
             }
             if let Some(v) = patch.modpack_type.clone() {
-                obj.modpack_type = modpack_type_from_name(v.as_deref());
+                obj.modpack_type = ModPackType::from_id(v.as_deref().unwrap_or("none"));
                 obj.is_modpack = obj.modpack_type != ModPackType::None;
             }
             if let Some(v) = patch.pid.clone() {
@@ -615,6 +691,9 @@ pub fn main_update_instance(app: AppHandle, window: WebviewWindow, uuid: String,
             }
             if let Some(v) = patch.fid.clone() {
                 obj.fid = v;
+            }
+            if let Some(v) = patch.server_url.clone() {
+                obj.server_url = v;
             }
             if let Some(v) = &patch.log_encoding {
                 obj.encoding = match v.as_str() {
@@ -645,7 +724,7 @@ pub fn main_update_instance(app: AppHandle, window: WebviewWindow, uuid: String,
             inst.loader = v;
         }
         if let Some(v) = patch.loader_version {
-            inst.loader_version = Some(v);
+            inst.loader_version = v;
         }
         if let Some(v) = patch.modpack_type {
             inst.modpack_type = v;
@@ -655,6 +734,9 @@ pub fn main_update_instance(app: AppHandle, window: WebviewWindow, uuid: String,
         }
         if let Some(v) = patch.fid {
             inst.fid = v;
+        }
+        if let Some(v) = patch.server_url {
+            inst.server_url = v;
         }
         if let Some(v) = patch.lang {
             inst.lang = Some(v);

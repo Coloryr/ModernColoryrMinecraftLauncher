@@ -141,7 +141,7 @@ function onSearchInput(e: Event) {
               >
                 <span v-if="multiSelect" class="row-check" :class="{ on: selectedIds.has(inst.uuid) }">✓</span>
                 <InstanceIcon :name="inst.name" :uuid="inst.uuid" :size="38" />
-                <span v-if="inst.loader !== '原版'" class="loader-text">{{ inst.loader }}</span>
+                <span v-if="inst.loader !== 'normal'" class="loader-text">{{ t(`add.loader.${inst.loader}`) }}</span>
                 <span class="inst-name">{{ inst.name }}</span>
                 <span v-if="inst.running" class="run-dot" title="running"></span>
               </div>
@@ -193,9 +193,9 @@ function onSearchInput(e: Event) {
         <span v-if="multiSelect" class="row-check" :class="{ on: selectedIds.has(inst.uuid) }">✓</span>
         <InstanceIcon :name="inst.name" :uuid="inst.uuid" :size="44" />
         <span
-          v-if="inst.loader !== '原版'"
+          v-if="inst.loader !== 'normal'"
           class="loader-corner loader-text"
-        >{{ inst.loader }}</span>
+        >{{ t(`add.loader.${inst.loader}`) }}</span>
         <span class="tile-name">{{ inst.name }}</span>
         <span v-if="inst.running" class="run-dot" title="running"></span>
       </div>

@@ -498,3 +498,312 @@ impl Drop for BaseSkinRender {
         self.skin_animation.close();
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use skia_safe::{AlphaType, ColorType, ImageInfo};
+    use std::sync::Mutex;
+
+    /// 创建指定位图的辅助函数（RGBA8888，纯色填充）
+    fn make_bitmap(w: i32, h: i32, r: u8, g: u8, b: u8) -> Bitmap {
+        let info = ImageInfo::new((w, h), ColorType::RGBA8888, AlphaType::Premul, None);
+        let mut bm = Bitmap::new();
+        assert!(bm.set_info(&info, None));
+        bm.alloc_pixels();
+        let row = bm.row_bytes() as usize;
+        let bpp = bm.bytes_per_pixel() as usize;
+        let ptr = bm.pixels() as *mut u8;
+        assert!(!ptr.is_null());
+        unsafe {
+            for y in 0..h {
+                for x in 0..w {
+                    let off = y as usize * row + x as usize * bpp;
+                    let p = std::slice::from_raw_parts_mut(ptr.add(off), bpp);
+                    p.copy_from_slice(&[r, g, b, 255]);
+                }
+            }
+        }
+        bm
+    }
+
+    /// new() 的默认值
+    #[test]
+    fn test_default_state() {
+        let render = BaseSkinRender::new();
+        assert_eq!(render.width, 800);
+        assert_eq!(render.height, 600);
+        assert_eq!(render.distance, 1.0);
+        assert_eq!(render.skin_type, SkinType::Unknown);
+        assert!(!render.have_skin);
+        assert!(!render.have_cape);
+        assert!(!render.animation);
+        assert_eq!(render.back_color, Vec4::new(0.0, 0.0, 0.0, 1.0));
+    }
+
+    /// 左键拖拽旋转：rot_xy = (当前点 - 按下点) * 2，y 轴取反
+    #[test]
+    fn test_pointer_left_drag_rotation() {
+        let mut render = BaseSkinRender::new();
+        render.pointer_pressed(KeyType::Left, Vec2::new(10.0, 20.0));
+        // 按下时 diff_xy = (10, -20)
+        assert_eq!(render.diff_xy, Vec2::new(10.0, -20.0));
+
+        render.pointer_moved(KeyType::Left, Vec2::new(15.0, 25.0));
+        // rot_xy.y = (15-10)*2 = 10；rot_xy.x = (25 + (-20))*2 = 10
+        // （按下时 diff_xy.y = -20，相当于以按下点 y 为基准计算增量）
+        assert_eq!(render.rot_xy, Vec2::new(10.0, 10.0));
+        // diff_xy 更新为当前点
+        assert_eq!(render.diff_xy, Vec2::new(15.0, -25.0));
+    }
+
+    /// 右键拖拽平移 + 松开保存位置
+    #[test]
+    fn test_pointer_right_drag_pan() {
+        let mut render = BaseSkinRender::new();
+        render.pointer_pressed(KeyType::Right, Vec2::new(5.0, 5.0));
+        assert_eq!(render.last_xy, Vec2::new(5.0, 5.0));
+
+        render.pointer_moved(KeyType::Right, Vec2::new(105.0, 5.0));
+        // xy.x = -(5-105)/100 = 1.0
+        assert_eq!(render.xy.x, 1.0);
+        assert_eq!(render.xy.y, 0.0);
+
+        render.pointer_released(KeyType::Right, Vec2::new(105.0, 5.0));
+        assert_eq!(render.save_xy, render.xy);
+    }
+
+    /// 滚轮缩放与位置重置
+    #[test]
+    fn test_wheel_and_reset_position() {
+        let mut render = BaseSkinRender::new();
+        render.pointer_wheel_changed(true);
+        assert_eq!(render.distance, 1.1);
+        render.pointer_wheel_changed(false);
+        render.pointer_wheel_changed(false);
+        assert_eq!(render.distance, 0.9);
+
+        render.position(0.5, -0.5);
+        assert_eq!(render.xy, Vec2::new(0.5, -0.5));
+
+        render.reset_position();
+        assert_eq!(render.distance, 1.0);
+        assert_eq!(render.xy, Vec2::ZERO);
+        assert_eq!(render.diff_xy, Vec2::ZERO);
+    }
+
+    /// add_distance 与 rotate 的增量语义
+    #[test]
+    fn test_add_distance_and_rotate() {
+        let mut render = BaseSkinRender::new();
+        render.add_distance(0.5);
+        assert_eq!(render.distance, 1.5);
+        render.rotate(10.0, 20.0);
+        assert_eq!(render.rot_xy, Vec2::new(10.0, 20.0));
+    }
+
+    /// 皮肤/披风贴图设置与状态回调
+    #[test]
+    fn test_set_skin_tex_and_callbacks() {
+        let mut render = BaseSkinRender::new();
+
+        // 记录状态回调
+        let states = Arc::new(Mutex::new(Vec::new()));
+        let sink = states.clone();
+        render.state_callback = Some(Arc::new(Mutex::new(move |s: StateType| {
+            sink.lock().unwrap().push(s);
+        })));
+
+        // 非 64 宽度的皮肤应被拒绝
+        let bad = make_bitmap(32, 32, 255, 0, 0);
+        assert_eq!(render.set_skin_tex(Some(bad)), Err(ErrorType::InvalidSkin));
+        assert!(!render.have_skin);
+
+        // None 表示清除皮肤
+        render.set_skin_tex(None).unwrap();
+        assert!(!render.have_skin);
+
+        // 64x64 皮肤应成功加载并触发 SkinLoaded 回调
+        let good = make_bitmap(64, 64, 0, 255, 0);
+        render.set_skin_tex(Some(good)).unwrap();
+        assert!(render.have_skin);
+        assert!(render.switch_skin);
+
+        // 披风
+        let cape = make_bitmap(64, 32, 0, 0, 255);
+        render.set_cape_tex(Some(cape)).unwrap();
+        assert!(render.have_cape);
+        assert!(render.switch_skin);
+
+        let recorded = states.lock().unwrap();
+        assert!(recorded.contains(&StateType::SkinLoaded));
+        assert!(recorded.contains(&StateType::CapeLoaded));
+    }
+
+    /// 错误回调
+    #[test]
+    fn test_error_callback() {
+        let mut render = BaseSkinRender::new();
+        let errors = Arc::new(Mutex::new(Vec::new()));
+        let sink = errors.clone();
+        render.error_callback = Some(Arc::new(Mutex::new(move |e: ErrorType| {
+            sink.lock().unwrap().push(e);
+        })));
+        render.on_error(ErrorType::TextureError);
+        assert_eq!(*errors.lock().unwrap(), vec![ErrorType::TextureError]);
+    }
+
+    /// set_skin_type 只在类型变化时置位 switch_model
+    #[test]
+    fn test_set_skin_type() {
+        let mut render = BaseSkinRender::new();
+        assert!(!render.switch_model);
+        render.set_skin_type(SkinType::NewSlim);
+        assert_eq!(render.get_skin_type(), SkinType::NewSlim);
+        assert!(render.switch_model);
+        // 相同类型不再置位（先复位标志再设置一次）
+        render.switch_model = false;
+        render.set_skin_type(SkinType::NewSlim);
+        assert!(!render.switch_model);
+    }
+
+    /// tick 应把 rot_xy 累积到 last 矩阵并清零 rot_xy
+    #[test]
+    fn test_tick_accumulates_rotation() {
+        let mut render = BaseSkinRender::new();
+        render.rotate(360.0, 720.0);
+        render.tick(0.016);
+        assert_eq!(render.rot_xy, Vec2::ZERO);
+        assert_ne!(render.last, Mat4::IDENTITY, "last 应记录了旋转");
+        // 再次 tick：rot_xy 已为 0，last 不变
+        let last = render.last;
+        render.tick(0.016);
+        assert_eq!(render.last, last);
+    }
+
+    /// tick 的 FPS 统计：每累计 1 秒触发一次 fps 回调并清零计数
+    #[test]
+    fn test_tick_fps_callback() {
+        let mut render = BaseSkinRender::new();
+        let fps_values = Arc::new(Mutex::new(Vec::new()));
+        let sink = fps_values.clone();
+        render.fps_callback = Some(Arc::new(Mutex::new(move |f: i32| {
+            sink.lock().unwrap().push(f);
+        })));
+
+        // 0.016 * 63 = 1.008 >= 1.0，第 63 次 tick 触发回调
+        for _ in 0..63 {
+            render.tick(0.016);
+        }
+        assert_eq!(*fps_values.lock().unwrap(), vec![63]);
+        assert_eq!(render.fps, 0, "触发后 fps 计数应清零");
+        assert!(render.time < 1.0, "剩余时间应小于 1 秒");
+    }
+
+    /// 部件矩阵：头部矩阵在零旋转下等价于平移 (0, VALUE + 1.5*VALUE, 0)
+    #[test]
+    fn test_get_matrix_head() {
+        let render = BaseSkinRender::new();
+        let m = render.get_matrix(ModelPartType::Head);
+        let w = m.w_axis;
+        assert!((w.x - 0.0).abs() < 1e-5);
+        assert!((w.y - (cube::VALUE + 1.5 * cube::VALUE)).abs() < 1e-5);
+        assert!((w.z - 0.0).abs() < 1e-5);
+    }
+
+    /// 手臂矩阵在零旋转下的落点：肩部枢轴 x = arm_width * VALUE
+    /// （get_matrix 中宽臂 arm_width = 1.5，纤细 = 1.375）
+    #[test]
+    fn test_get_matrix_arms_width() {
+        let mut render = BaseSkinRender::new();
+        render.set_skin_type(SkinType::New);
+        let wide = render.get_matrix(ModelPartType::LeftArm);
+        assert!((wide.w_axis.x - 1.5 * cube::VALUE).abs() < 1e-5);
+        assert!((wide.w_axis.y - 0.0).abs() < 1e-5);
+
+        render.set_skin_type(SkinType::NewSlim);
+        let slim = render.get_matrix(ModelPartType::LeftArm);
+        assert!((slim.w_axis.x - 1.375 * cube::VALUE).abs() < 1e-5);
+    }
+
+    /// Model 矩阵应包含平移与等比缩放
+    #[test]
+    fn test_get_matrix_model() {
+        let mut render = BaseSkinRender::new();
+        render.position(0.3, -0.2);
+        render.distance = 2.0;
+        let m = render.get_matrix(ModelPartType::Model);
+        assert!((m.w_axis.x - 0.3).abs() < 1e-5, "平移不应被缩放");
+        assert!((m.w_axis.y - -0.2).abs() < 1e-5);
+        assert!((m.x_axis.x - 2.0).abs() < 1e-5, "x 基向量应缩放 2 倍");
+    }
+
+    /// Proj / View / Cape 矩阵应全部为有限值
+    #[test]
+    fn test_get_matrix_finite() {
+        let mut render = BaseSkinRender::new();
+        render.skin_animation.cape = 1.5;
+        render.set_animation(true);
+        for part in [
+            ModelPartType::Proj,
+            ModelPartType::View,
+            ModelPartType::Cape,
+            ModelPartType::Body,
+            ModelPartType::Head,
+            ModelPartType::LeftArm,
+            ModelPartType::RightArm,
+            ModelPartType::LeftLeg,
+            ModelPartType::RightLeg,
+        ] {
+            let m = render.get_matrix(part);
+            for v in m.to_cols_array() {
+                assert!(v.is_finite(), "{part:?} 矩阵含非有限值 {v}");
+            }
+        }
+    }
+
+    /// set_animation / getter 一致性；动画开启时 tick 会同步动画角度到部件旋转
+    #[test]
+    fn test_animation_sync_on_tick() {
+        let mut render = BaseSkinRender::new();
+        render.set_animation(true);
+        assert!(render.get_animation());
+        assert!(render.skin_animation.run);
+
+        render.skin_animation.set_frame(30);
+        render.skin_animation.run = true;
+        render.skin_animation.tick(0.02); // frame 31
+        render.tick(0.0);
+        assert!(
+            (render.head_rotate.z - (31.0 - 30.0)).abs() < 1e-5,
+            "动画 head 角度应同步到 head_rotate"
+        );
+
+        render.set_animation(false);
+        assert!(!render.get_animation());
+    }
+
+    /// 各 setter/getter 往返
+    #[test]
+    fn test_setters_getters() {
+        let mut render = BaseSkinRender::new();
+
+        render.set_back_color(Vec4::new(0.2, 0.4, 0.6, 1.0));
+        assert_eq!(render.get_back_color(), Vec4::new(0.2, 0.4, 0.6, 1.0));
+        assert!(render.switch_back);
+
+        render.set_enable_cape(true);
+        assert!(render.get_enable_cape());
+        assert!(render.switch_type);
+        render.set_enable_top(true);
+        assert!(render.get_enable_top());
+
+        let rot = Vec3::new(1.0, 2.0, 3.0);
+        render.set_arm_rotate(rot);
+        assert_eq!(render.get_arm_rotate(), rot);
+        render.set_leg_rotate(rot);
+        assert_eq!(render.get_leg_rotate(), rot);
+        render.set_head_rotate(rot);
+        assert_eq!(render.get_head_rotate(), rot);
+    }
+}
