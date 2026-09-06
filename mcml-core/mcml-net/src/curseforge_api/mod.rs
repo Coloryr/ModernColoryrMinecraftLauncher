@@ -42,6 +42,10 @@ pub mod version_obj;
 
 /// CurseForge 游戏 ID（Minecraft = 432）
 pub const GAME_ID: u32 = 432;
+/// 模组加载器类型：Fabric（modLoaderType 查询参数）
+pub const MODLOADER_FABRIC: u32 = 4;
+/// 模组加载器类型：NeoForge（modLoaderType 查询参数）
+pub const MODLOADER_NEOFORGE: u32 = 6;
 /// 分类 ID：整合包
 pub const CLASS_MODPACK: u32 = 4471;
 /// 分类 ID：模组
@@ -202,7 +206,7 @@ pub async fn get_modpack_list(arg: CurseFogreArg) -> CoreResult<CurseForgeListPa
         arg.page_size.unwrap_or(20),
         arg.sort.get_order_index(),
         &arg.category.unwrap_or_default(),
-        0,
+        arg.loader.unwrap_or(0),
     )
     .await
 }
@@ -397,12 +401,16 @@ pub async fn get_mods_info(ids: Vec<u64>) -> CoreResult<CurseForgeListPageObj> {
 }
 
 /// 获取文件列表
+///
+/// 该接口只接受 GET（POST 会被 CloudFront 以 403 拒绝）。
 pub async fn get_files_page(arg: CurseFogreArg) -> CoreResult<CurseFogreFilePageObj> {
+    let page_size = arg.page_size.unwrap_or(50);
+
     let mut url = format!(
-        "{}mods/{}/files?index={}&pageSize=50&gameVersion={}",
+        "{}mods/{}/files?index={}&pageSize={page_size}&gameVersion={}",
         urls::CURSEFORGE,
         arg.id.unwrap_or_default(),
-        arg.page.unwrap_or(0) * 50,
+        arg.page.unwrap_or(0) * page_size,
         arg.version.unwrap_or_default()
     );
 
@@ -410,7 +418,7 @@ pub async fn get_files_page(arg: CurseFogreArg) -> CoreResult<CurseFogreFilePage
         url.push_str(&format!("&modLoaderType={loader}"));
     }
 
-    let req = reqwest::Request::new(Method::POST, Url::parse(&url).unwrap());
+    let req = reqwest::Request::new(Method::GET, Url::parse(&url).unwrap());
 
     send(req).await
 }
