@@ -1,6 +1,6 @@
-use std::{collections::HashMap, sync::LazyLock};
+use std::{collections::HashMap, f32::consts::PI, sync::LazyLock};
 
-use glam::{Mat4, Vec4};
+use glam::{Mat4, Vec3, Vec4};
 use skia_safe::{
     Bitmap, BlendMode, Canvas, ISize, Image, Matrix, Paint, Point, Point3, SamplingOptions, Shader,
     Size, Surface, TileMode, Vertices, canvas, surfaces, svg::Canvas,
@@ -94,8 +94,10 @@ static UV: [Point; 24] = [
 ];
 
 static MATRIX: LazyLock<HashMap<usize, Vertices>> = LazyLock::new(|| {
-    let base = Mat4::IDENTITY;
-    let tran = Mat4::from_translation(translation);
+    let base = Mat4::IDENTITY
+        .transform_point3(Vec3::new(-50.0, -50.0, 0.0))
+        .rotate_x(30.0 * PI / 180.0)
+        .rotate_y(45.0 * PI / 180.0);
     // let base = base * Matrix::translate(d)
 
     todo!()
