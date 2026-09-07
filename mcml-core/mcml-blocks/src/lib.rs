@@ -3,6 +3,7 @@ use std::{
     sync::{LazyLock, OnceLock, RwLock},
 };
 
+use mcml_base::serialize_tools;
 use mcml_names::{i18_items::error_type::CoreResult, names};
 use mcml_sys::path_helper;
 
@@ -24,6 +25,14 @@ pub fn init<P: AsRef<Path>>(path: P) -> CoreResult<()> {
     if !dir.exists() {
         path_helper::create_dir_all(dir)?;
     }
+
+    Ok(())
+}
+
+/// 加载数据
+pub fn load() -> CoreResult<()> {
+    let obj = serialize_tools::json_from_file::<BlocksObj>(BLOCK_FILE.get().unwrap())?;
+    *BLOCKS.write().unwrap() = obj;
 
     Ok(())
 }

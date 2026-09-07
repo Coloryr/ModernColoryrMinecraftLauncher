@@ -1466,6 +1466,7 @@ name = "mcml-blocks"
 version = "0.1.0"
 dependencies = [
  "glam",
+ "mcml-base",
  "mcml-game",
  "mcml-names",
  "mcml-sys",
@@ -1497,6 +1498,7 @@ dependencies = [
  "crossbeam-queue",
  "mcml-auth",
  "mcml-base",
+ "mcml-blocks",
  "mcml-config",
  "mcml-downloader",
  "mcml-game",
