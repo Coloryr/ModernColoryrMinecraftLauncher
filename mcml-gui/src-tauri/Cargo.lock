@@ -2726,6 +2726,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "mcml-blocks"
+version = "0.1.0"
+dependencies = [
+ "glam",
+ "mcml-base",
+ "mcml-game",
+ "mcml-names",
+ "mcml-sys",
+ "serde",
+ "serde_json",
+ "skia-safe",
+]
+
+[[package]]
 name = "mcml-config"
 version = "0.1.0"
 dependencies = [
@@ -2748,6 +2762,7 @@ dependencies = [
  "crossbeam-queue",
  "mcml-auth",
  "mcml-base",
+ "mcml-blocks",
  "mcml-config",
  "mcml-downloader",
  "mcml-game",
