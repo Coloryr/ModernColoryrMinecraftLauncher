@@ -1466,8 +1466,11 @@ name = "mcml-blocks"
 version = "0.1.0"
 dependencies = [
  "glam",
+ "mcml-game",
  "mcml-names",
  "mcml-sys",
+ "serde",
+ "serde_json",
  "skia-safe",
 ]
 
