@@ -429,24 +429,27 @@ pub fn add_liteloader(obj: LiteloaderMetaObj) {
 /// 获取版本信息
 /// - `version`: 游戏版本
 pub fn get_version(version: &str) -> CoreResult<Arc<GameArgObj>> {
-    let list = GAME_ARGS.read().unwrap();
-    let data = list.get(version);
-
-    match data {
-        None => {
-            let local = BASE_DIR
-                .get()
-                .unwrap()
-                .join(format!("{}{}", version, names::JSON_DOT_EXT));
-            let json = serialize_tools::json_from_file::<GameArgObj>(&local)?;
-            let mut list = GAME_ARGS.write().unwrap();
-            let data = Arc::new(json);
-            list.insert(String::from(version), data.clone());
-
-            Ok(data)
-        }
-        Some(data) => Ok(data.clone()),
+    // 先查缓存。读锁必须在块内释放：同线程读锁未放再取写锁会自死锁
+    // （std RwLock 不可升级），缓存未命中时正是这个顺序导致主线程永久卡死。
+    let cached = {
+        let list = GAME_ARGS.read().unwrap();
+        list.get(version).cloned()
+    };
+    if let Some(data) = cached {
+        return Ok(data);
     }
+
+    let local = BASE_DIR
+        .get()
+        .unwrap()
+        .join(format!("{}{}", version, names::JSON_DOT_EXT));
+    let json = serialize_tools::json_from_file::<GameArgObj>(&local)?;
+    let mut list = GAME_ARGS.write().unwrap();
+    // 双检：并发重复解析时以先入者为准
+    Ok(list
+        .entry(String::from(version))
+        .or_insert_with(|| Arc::new(json))
+        .clone())
 }
 
 /// 检查游戏版本更新
@@ -469,11 +472,16 @@ pub async fn check_update(mc: &str) -> CoreResult<Arc<GameArgObj>> {
         ))),
         Some(item) => {
             let local = BASE_DIR.get().unwrap().join(format!("{}.json", mc));
-            let sha1 = hash_helper::gen_hash_from_file_async(HashType::Sha1, &local).await?;
-            if sha1 != item.sha1 {
+            // 本地没有版本 json（如首次安装整合包）直接在线下载
+            if !local.exists() {
                 Ok(add_game(item).await?)
             } else {
-                Ok(get_version(mc)?)
+                let sha1 = hash_helper::gen_hash_from_file_async(HashType::Sha1, &local).await?;
+                if sha1 != item.sha1 {
+                    Ok(add_game(item).await?)
+                } else {
+                    Ok(get_version(mc)?)
+                }
             }
         }
     }
@@ -537,35 +545,28 @@ pub fn get_forge_json_name(mc: &str, version: &str, neo: bool, install: bool) ->
 pub fn get_neoforge_install_obj(mc: &str, version: &str) -> Option<Arc<ForgeInstallObj>> {
     let key = LoaderKey::new(mc, version);
 
-    let list = NEOFORGE_INSTALLS.read().unwrap();
-    let item = list.get(&key);
-    match item {
-        Some(item) => Some(item.clone()),
-        None => {
-            let local = NEOFORGE_DIR
-                .get()
-                .unwrap()
-                .join(get_forge_json_name(mc, version, true, true));
-            let json = serialize_tools::json_from_file::<ForgeInstallObj>(&local);
+    // 读锁先释放：读锁未放再取写锁会自死锁（std RwLock 不可升级）
+    let hit = NEOFORGE_INSTALLS.read().unwrap().get(&key).cloned();
+    if let Some(item) = hit {
+        return Some(item);
+    }
 
-            match json {
-                Ok(json) => {
-                    let temp = Arc::new(json);
-                    let temp1 = temp.clone();
+    let local = NEOFORGE_DIR
+        .get()
+        .unwrap()
+        .join(get_forge_json_name(mc, version, true, true));
+    match serialize_tools::json_from_file::<ForgeInstallObj>(&local) {
+        Ok(json) => {
+            let temp = Arc::new(json);
+            let mut list = NEOFORGE_INSTALLS.write().unwrap();
+            Some(list.entry(key).or_insert_with(|| temp.clone()).clone())
+        }
+        Err(err) => {
+            mcml_log::error_type(ErrorType::SerializerError(ErrorData {
+                error: err.to_string(),
+            }));
 
-                    let mut list = NEOFORGE_INSTALLS.write().unwrap();
-                    list.insert(key, temp);
-
-                    Some(temp1)
-                }
-                Err(err) => {
-                    mcml_log::error_type(ErrorType::SerializerError(ErrorData {
-                        error: err.to_string(),
-                    }));
-
-                    None
-                }
-            }
+            None
         }
     }
 }
@@ -576,35 +577,28 @@ pub fn get_neoforge_install_obj(mc: &str, version: &str) -> Option<Arc<ForgeInst
 pub fn get_neoforge(mc: &str, version: &str) -> Option<Arc<ForgeLaunchObj>> {
     let key = LoaderKey::new(mc, version);
 
-    let list = NEOFORGE_LAUNCHS.read().unwrap();
-    let item = list.get(&key);
-    match item {
-        Some(item) => Some(item.clone()),
-        None => {
-            let local = NEOFORGE_DIR
-                .get()
-                .unwrap()
-                .join(get_forge_json_name(mc, version, true, false));
-            let json = serialize_tools::json_from_file::<ForgeLaunchObj>(&local);
+    // 读锁先释放：读锁未放再取写锁会自死锁（std RwLock 不可升级）
+    let hit = NEOFORGE_LAUNCHS.read().unwrap().get(&key).cloned();
+    if let Some(item) = hit {
+        return Some(item);
+    }
 
-            match json {
-                Ok(json) => {
-                    let temp = Arc::new(json);
-                    let temp1 = temp.clone();
+    let local = NEOFORGE_DIR
+        .get()
+        .unwrap()
+        .join(get_forge_json_name(mc, version, true, false));
+    match serialize_tools::json_from_file::<ForgeLaunchObj>(&local) {
+        Ok(json) => {
+            let temp = Arc::new(json);
+            let mut list = NEOFORGE_LAUNCHS.write().unwrap();
+            Some(list.entry(key).or_insert_with(|| temp.clone()).clone())
+        }
+        Err(err) => {
+            mcml_log::error_type(ErrorType::SerializerError(ErrorData {
+                error: err.to_string(),
+            }));
 
-                    let mut list = NEOFORGE_LAUNCHS.write().unwrap();
-                    list.insert(key, temp);
-
-                    Some(temp1)
-                }
-                Err(err) => {
-                    mcml_log::error_type(ErrorType::SerializerError(ErrorData {
-                        error: err.to_string(),
-                    }));
-
-                    None
-                }
-            }
+            None
         }
     }
 }
@@ -615,35 +609,28 @@ pub fn get_neoforge(mc: &str, version: &str) -> Option<Arc<ForgeLaunchObj>> {
 pub fn get_forge_install_obj(mc: &str, version: &str) -> Option<Arc<ForgeInstallObj>> {
     let key = LoaderKey::new(mc, version);
 
-    let list = FORGE_INSTALLS.read().unwrap();
-    let item = list.get(&key);
-    match item {
-        Some(item) => Some(item.clone()),
-        None => {
-            let local = FORGE_DIR
-                .get()
-                .unwrap()
-                .join(get_forge_json_name(mc, version, false, true));
-            let json = serialize_tools::json_from_file::<ForgeInstallObj>(&local);
+    // 读锁先释放：读锁未放再取写锁会自死锁（std RwLock 不可升级）
+    let hit = FORGE_INSTALLS.read().unwrap().get(&key).cloned();
+    if let Some(item) = hit {
+        return Some(item);
+    }
 
-            match json {
-                Ok(json) => {
-                    let temp = Arc::new(json);
-                    let temp1 = temp.clone();
+    let local = FORGE_DIR
+        .get()
+        .unwrap()
+        .join(get_forge_json_name(mc, version, false, true));
+    match serialize_tools::json_from_file::<ForgeInstallObj>(&local) {
+        Ok(json) => {
+            let temp = Arc::new(json);
+            let mut list = FORGE_INSTALLS.write().unwrap();
+            Some(list.entry(key).or_insert_with(|| temp.clone()).clone())
+        }
+        Err(err) => {
+            mcml_log::error_type(ErrorType::SerializerError(ErrorData {
+                error: err.to_string(),
+            }));
 
-                    let mut list = FORGE_INSTALLS.write().unwrap();
-                    list.insert(key, temp);
-
-                    Some(temp1)
-                }
-                Err(err) => {
-                    mcml_log::error_type(ErrorType::SerializerError(ErrorData {
-                        error: err.to_string(),
-                    }));
-
-                    None
-                }
-            }
+            None
         }
     }
 }
@@ -654,35 +641,28 @@ pub fn get_forge_install_obj(mc: &str, version: &str) -> Option<Arc<ForgeInstall
 pub fn get_forge(mc: &str, version: &str) -> Option<Arc<ForgeLaunchObj>> {
     let key = LoaderKey::new(mc, version);
 
-    let list = FORGE_LAUNCHS.read().unwrap();
-    let item = list.get(&key);
-    match item {
-        Some(item) => Some(item.clone()),
-        None => {
-            let local = FORGE_DIR
-                .get()
-                .unwrap()
-                .join(get_forge_json_name(mc, version, false, false));
-            let json = serialize_tools::json_from_file::<ForgeLaunchObj>(&local);
+    // 读锁先释放：读锁未放再取写锁会自死锁（std RwLock 不可升级）
+    let hit = FORGE_LAUNCHS.read().unwrap().get(&key).cloned();
+    if let Some(item) = hit {
+        return Some(item);
+    }
 
-            match json {
-                Ok(json) => {
-                    let temp = Arc::new(json);
-                    let temp1 = temp.clone();
+    let local = FORGE_DIR
+        .get()
+        .unwrap()
+        .join(get_forge_json_name(mc, version, false, false));
+    match serialize_tools::json_from_file::<ForgeLaunchObj>(&local) {
+        Ok(json) => {
+            let temp = Arc::new(json);
+            let mut list = FORGE_LAUNCHS.write().unwrap();
+            Some(list.entry(key).or_insert_with(|| temp.clone()).clone())
+        }
+        Err(err) => {
+            mcml_log::error_type(ErrorType::SerializerError(ErrorData {
+                error: err.to_string(),
+            }));
 
-                    let mut list = FORGE_LAUNCHS.write().unwrap();
-                    list.insert(key, temp);
-
-                    Some(temp1)
-                }
-                Err(err) => {
-                    mcml_log::error_type(ErrorType::SerializerError(ErrorData {
-                        error: err.to_string(),
-                    }));
-
-                    None
-                }
-            }
+            None
         }
     }
 }
@@ -692,37 +672,31 @@ pub fn get_forge(mc: &str, version: &str) -> Option<Arc<ForgeLaunchObj>> {
 /// - `version`: 加载器版本
 pub fn get_fabric(mc: &str, version: &str) -> Option<Arc<FabricLoaderObj>> {
     let key = LoaderKey::new(mc, version);
-    let list = FABRIC_LOADERS.read().unwrap();
-    match list.get(&key) {
-        None => {
-            let local = FABRIC_DIR.get().unwrap().join(format!(
-                "{}-{}-{}{}",
-                names::FABRIC_LOADER_KEY,
-                version,
-                mc,
-                names::JSON_DOT_EXT
-            ));
-            let json = serialize_tools::json_from_file::<FabricLoaderObj>(&local);
-            match json {
-                Ok(json) => {
-                    let temp = Arc::new(json);
-                    let temp1 = temp.clone();
-
-                    let mut list = FABRIC_LOADERS.write().unwrap();
-                    list.insert(key, temp);
-
-                    Some(temp1)
-                }
-                Err(err) => {
-                    mcml_log::error_type(ErrorType::SerializerError(ErrorData {
-                        error: err.to_string(),
-                    }));
-
-                    None
-                }
-            }
+    // 读锁先释放：读锁未放再取写锁会自死锁（std RwLock 不可升级）
+    let hit = FABRIC_LOADERS.read().unwrap().get(&key).cloned();
+    if let Some(data) = hit {
+        return Some(data);
+    }
+    let local = FABRIC_DIR.get().unwrap().join(format!(
+        "{}-{}-{}{}",
+        names::FABRIC_LOADER_KEY,
+        version,
+        mc,
+        names::JSON_DOT_EXT
+    ));
+    match serialize_tools::json_from_file::<FabricLoaderObj>(&local) {
+        Ok(json) => {
+            let temp = Arc::new(json);
+            let mut list = FABRIC_LOADERS.write().unwrap();
+            Some(list.entry(key).or_insert_with(|| temp.clone()).clone())
         }
-        Some(data) => Some(data.clone()),
+        Err(err) => {
+            mcml_log::error_type(ErrorType::SerializerError(ErrorData {
+                error: err.to_string(),
+            }));
+
+            None
+        }
     }
 }
 
@@ -731,37 +705,31 @@ pub fn get_fabric(mc: &str, version: &str) -> Option<Arc<FabricLoaderObj>> {
 /// - `version`: 加载器版本
 pub fn get_quilt(mc: &str, version: &str) -> Option<Arc<QuiltLoaderObj>> {
     let key = LoaderKey::new(mc, version);
-    let list = QUILT_LOADERS.read().unwrap();
-    match list.get(&key) {
-        None => {
-            let local = FABRIC_DIR.get().unwrap().join(format!(
-                "{}-{}-{}{}",
-                names::FABRIC_LOADER_KEY,
-                version,
-                mc,
-                names::JSON_DOT_EXT
-            ));
-            let json = serialize_tools::json_from_file::<QuiltLoaderObj>(&local);
-            match json {
-                Ok(json) => {
-                    let temp = Arc::new(json);
-                    let temp1 = temp.clone();
-
-                    let mut list = QUILT_LOADERS.write().unwrap();
-                    list.insert(key, temp);
-
-                    Some(temp1)
-                }
-                Err(err) => {
-                    mcml_log::error_type(ErrorType::SerializerError(ErrorData {
-                        error: err.to_string(),
-                    }));
-
-                    None
-                }
-            }
+    // 读锁先释放：读锁未放再取写锁会自死锁（std RwLock 不可升级）
+    let hit = QUILT_LOADERS.read().unwrap().get(&key).cloned();
+    if let Some(data) = hit {
+        return Some(data);
+    }
+    let local = FABRIC_DIR.get().unwrap().join(format!(
+        "{}-{}-{}{}",
+        names::FABRIC_LOADER_KEY,
+        version,
+        mc,
+        names::JSON_DOT_EXT
+    ));
+    match serialize_tools::json_from_file::<QuiltLoaderObj>(&local) {
+        Ok(json) => {
+            let temp = Arc::new(json);
+            let mut list = QUILT_LOADERS.write().unwrap();
+            Some(list.entry(key).or_insert_with(|| temp.clone()).clone())
         }
-        Some(data) => Some(data.clone()),
+        Err(err) => {
+            mcml_log::error_type(ErrorType::SerializerError(ErrorData {
+                error: err.to_string(),
+            }));
+
+            None
+        }
     }
 }
 

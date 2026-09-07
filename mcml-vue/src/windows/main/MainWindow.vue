@@ -5,13 +5,13 @@ import {
   onGameExit,
   onGameLog,
   onInstanceChange,
+  onJavaChange,
   onLaunchError,
   onLaunchState,
-} from "../../lib/api-ipc";
+} from "../../lib/api";
 import { t } from "../../lib/i18n";
 import { showToast } from "../../lib/toast";
 import { theme, toggleTheme } from "../../lib/theme";
-import { newsImage } from "../../lib/newsBanner";
 import { openWindow } from "../windowManager";
 import {
   sidebarCollapsed,
@@ -46,15 +46,16 @@ import BaseModal from "../../components/ui/BaseModal.vue";
 import SegmentedTabs from "../../components/ui/SegmentedTabs.vue";
 import NumberStepper from "../../components/ui/NumberStepper.vue";
 
-await getCurrentWindow().setTitle(t("winTitle.main"));
+// 注意：不能用顶层 await —— 会让 <script setup> 变成 async setup，
+// App.vue 没有 <Suspense> 包裹，Vue 将不渲染该组件（窗口白屏）
+getCurrentWindow().setTitle(t("winTitle.main")).catch(() => { /* 忽略 */ });
 
 // ================= 基础状态 =================
 
-/** 初始化是否失败（失败则显示引导页） */
 const bootFailed = ref(false);
 const initError = ref("");
 const initLoading = ref(false);
-import { closeSplash, splashVisible } from "../../lib/splash";
+import { closeSplash, openSplash, splashError, splashVisible } from "../../lib/splash";
 const localDir = ref(localStorage.getItem("mcml.localDir") ?? "");
 const playerName = ref(localStorage.getItem("mcml.playerName") ?? "Player");
 
@@ -104,7 +105,7 @@ function select(inst: InstanceInfo) {
   newsActive.value = false;
   // 分组模式下展开所在分组
   if (mode.value === "group") {
-    const key = inst.group || t("group.default");
+    const key = groupKeyOf(inst.group);
     if (collapsedGroups.value[key]) {
       collapsedGroups.value = { ...collapsedGroups.value, [key]: false };
     }
@@ -123,23 +124,30 @@ const MODE_OPTIONS = computed(() => [
 // 手动添加的空分组（来自 api.getGroups）
 const extraGroups = ref<string[]>([]);
 
+/** 空白分组名（后端默认分组的 key 是空格）统一视为默认分组 */
+function groupKeyOf(group?: string | null): string {
+  return group && group.trim() ? group : t("group.default");
+}
+
 const groups = computed(() => {
   const defaultKey = t("group.default");
   const map = new Map<string, InstanceInfo[]>();
   for (const inst of instances.value) {
-    const key = inst.group || defaultKey;
+    const key = groupKeyOf(inst.group);
     if (!map.has(key)) map.set(key, []);
     map.get(key)!.push(inst);
   }
   for (const g of extraGroups.value) {
-    if (!map.has(g)) map.set(g, []);
+    // 空白分组就是默认分组，不重复展示
+    if (!g.trim() || map.has(g)) continue;
+    map.set(g, []);
   }
   // 默认分组永远存在且置顶
   if (!map.has(defaultKey)) map.set(defaultKey, []);
-  // 分组顺序：默认分组 → extraGroups（持久顺序）→ 其余按首次出现顺序
+  // 分组顺序：默认分组 → extraGroups（持久顺序，空白跳过）→ 其余按首次出现顺序
   const order = [
     defaultKey,
-    ...extraGroups.value.filter((k) => k !== defaultKey),
+    ...extraGroups.value.filter((k) => k.trim() && k !== defaultKey),
     ...[...map.keys()].filter(
       (k) => k !== defaultKey && !extraGroups.value.includes(k),
     ),
@@ -160,7 +168,7 @@ function toggleGroup(name: string) {
 
 /** 默认只展开选中实例所在的分组 */
 function collapseToSelected() {
-  const selGroup = selected.value?.group || t("group.default");
+  const selGroup = groupKeyOf(selected.value?.group);
   const map: Record<string, boolean> = {};
   for (const g of groups.value) {
     map[g.name] = g.name !== selGroup;
@@ -177,7 +185,7 @@ function initSelection() {
 
   if (lastInst) {
     selected.value = lastInst;
-    const key = lastInst.group || t("group.default");
+    const key = groupKeyOf(lastInst.group);
     const map: Record<string, boolean> = {};
     for (const g of groups.value) {
       map[g.name] = g.name !== key;
@@ -191,6 +199,7 @@ function initSelection() {
 // ================= 启动器主页（默认打开） =================
 
 const newsActive = ref(true);
+const newsLoading = ref(false);
 
 /** 打开 / 关闭启动器主页（保留选中实例） */
 function toggleNews() {
@@ -221,29 +230,51 @@ function quickLaunch() {
   }
 }
 
-const news = ref<NewsItem[]>([
-  {
-    id: 1,
-    title: "Minecraft 1.21.5 正式版发布，全新装饰方块上线",
-    date: "2026-04-15",
-    tag: "更新",
-    image: newsImage(1, "#3f8cff", "#7c5cff"),
-  },
-  {
-    id: 2,
-    title: "夏季更新预览：新增生物群系与结构",
-    date: "2026-04-08",
-    tag: "预览",
-    image: newsImage(2, "#34d399", "#22d3ee"),
-  },
-  {
-    id: 3,
-    title: "年度建筑大赛开始报名，奖品丰厚",
-    date: "2026-03-30",
-    tag: "活动",
-    image: newsImage(3, "#f59e0b", "#ef4444"),
-  },
-]);
+const news = ref<NewsItem[]>([]);
+const newsPage = ref(1);
+const newsHasMore = ref(true);
+let newsLoadedPage = 0; // 已成功加载的页码（0 = 未加载）
+
+/** 拉取指定页的新闻（页码从 1 开始；翻页翻到空页时回退并禁用下一页） */
+async function fetchNews(page: number) {
+  if (newsLoading.value) return;
+  newsLoading.value = true;
+  try {
+    const list = await api.getNews(page);
+    if (list.length === 0 && page > 1) {
+      newsHasMore.value = false;
+      return;
+    }
+    newsHasMore.value = true;
+    newsPage.value = page;
+    news.value = list;
+    newsLoadedPage = page;
+  } catch (e) {
+    console.warn("[news] 加载失败", e);
+  } finally {
+    newsLoading.value = false;
+  }
+}
+
+/** 启动 / 核心加载完成后加载首页新闻（已加载则跳过） */
+function loadNews() {
+  if (newsLoadedPage) return;
+  fetchNews(1);
+}
+
+function nextNewsPage() {
+  if (!newsHasMore.value) return;
+  fetchNews(newsPage.value + 1);
+}
+
+/** 打开新闻原文（系统浏览器） */
+function openNews(url: string) {
+  api.openUrl(url);
+}
+
+function prevNewsPage() {
+  if (newsPage.value > 1) fetchNews(newsPage.value - 1);
+}
 
 // ================= 账户 =================
 
@@ -254,6 +285,9 @@ import {
   setCurrentAccount,
 } from "../../lib/accountStore";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { listen } from "@tauri-apps/api/event";
+import { LoadDone } from "../../lib/listens.ts";
+import { LoadState } from "../../lib/dtos/main.ts";
 const accounts = storeAccounts;
 const currentAccount = storeCurrentAccount;
 
@@ -279,14 +313,16 @@ function appendLog(line: string) {
   if (logs.value.length > 3000) logs.value.splice(0, logs.value.length - 3000);
 }
 
-// ================= 启动参数（模拟） =================
+// ================= 启动参数（经 IPC 读写核心实例配置） =================
 
 const argsOpen = ref(false);
 const execOpen = ref(false);
 const serverOpen = ref(false);
 const proxyOpen = ref(false);
 const argsMap = ref<Record<string, InstanceArgs>>({});
+const argsLoaded = ref<Record<string, boolean>>({});
 
+// 加载完成前先用骨架默认值占位（真实值随后端返回覆盖）
 function argsOf(uuid: string): InstanceArgs {
   if (!argsMap.value[uuid]) {
     argsMap.value[uuid] = {
@@ -322,17 +358,42 @@ function argsOf(uuid: string): InstanceArgs {
   return argsMap.value[uuid];
 }
 
+async function loadArgs(uuid: string) {
+  try {
+    argsMap.value[uuid] = await api.getInstanceArgs(uuid);
+    argsLoaded.value[uuid] = true;
+  } catch {
+    showToast(t("args.loadFailed"));
+  }
+}
+
+// 切换选中实例后拉取该实例的启动参数
+watch(
+  () => selected.value?.uuid,
+  (uuid) => {
+    if (uuid && !argsLoaded.value[uuid]) loadArgs(uuid);
+  },
+  { immediate: true },
+);
+
+// 修改后防抖写回后端（每个按键都保存会产生大量写盘）
+let argsSaveTimer: ReturnType<typeof setTimeout> | null = null;
+
 /** 自动加入服务器信息（按实例存储） */
+function patchArgs(patch: Partial<InstanceArgs>) {
+  if (selected.value) updateArgs({ ...argsOf(selected.value.uuid), ...patch });
+}
+
 function onServerIp(value: string) {
-  if (selected.value) argsMap.value[selected.value.uuid] = { ...argsOf(selected.value.uuid), serverIp: value };
+  patchArgs({ serverIp: value });
 }
 
 function onServerPort(v: number) {
-  if (selected.value) argsMap.value[selected.value.uuid] = { ...argsOf(selected.value.uuid), serverPort: v };
+  patchArgs({ serverPort: v });
 }
 
 function onServerJoin(checked: boolean) {
-  if (selected.value) argsMap.value[selected.value.uuid] = { ...argsOf(selected.value.uuid), joinServer: checked };
+  patchArgs({ joinServer: checked });
 }
 
 // 累计游戏时间（模拟数据）
@@ -349,7 +410,13 @@ function playHoursOf(uuid: string): number {
 }
 
 function updateArgs(v: InstanceArgs) {
-  if (selected.value) argsMap.value[selected.value.uuid] = v;
+  const uuid = selected.value?.uuid;
+  if (!uuid) return;
+  argsMap.value[uuid] = v;
+  if (argsSaveTimer) clearTimeout(argsSaveTimer);
+  argsSaveTimer = setTimeout(() => {
+    api.updateInstanceArgs(uuid, argsMap.value[uuid]).catch((e) => showToast(String(e)));
+  }, 600);
 }
 
 // ================= 实例操作 =================
@@ -426,12 +493,19 @@ function onMenuPick(opt: { labelKey: string }) {
 
 // ================= 元信息（版本 / 加载器 / 整合包 / 语言，合并进实例设置） =================
 
-const LOADERS = ["原版", "Forge", "Fabric", "Quilt", "NeoForge", "OptiFine", "LiteLoader", "自定义"];
-
 async function onMetaUpdate(patch: Partial<InstanceInfo>) {
   if (!selected.value) return;
-  await api.updateInstance(selected.value.uuid, patch);
-  await loadInstances();
+  try {
+    await api.updateInstance(selected.value.uuid, patch);
+    await loadInstances();
+  } catch (e) {
+    showToast(String(e));
+  }
+}
+
+/** 实例设置面板刷新版本列表（清空后端缓存重新拉取） */
+function onVersionsRefreshed(list: VersionInfo[]) {
+  versions.value = list;
 }
 
 // ================= 分组拖拽移动 =================
@@ -550,7 +624,8 @@ async function moveGroupTo(sourceName: string, targetName: string | null) {
   closeCtxMenu();
   if (!g || g.items.length === 0 || target === sourceName) return;
   for (const inst of g.items) {
-    if (inst.group !== target) {
+    // 空白分组名与默认分组（null）等价
+    if (groupKeyOf(inst.group) !== groupKeyOf(target)) {
       await api.updateInstance(inst.uuid, { group: target });
     }
   }
@@ -584,8 +659,7 @@ async function doDeleteGroup() {
   deleteGroupBusy.value = true;
   const name = deleteGroupName.value;
   for (const inst of instances.value) {
-    const key = inst.group || t("group.default");
-    if (key === name) {
+    if (groupKeyOf(inst.group) === name) {
       await api.updateInstance(inst.uuid, { group: null });
     }
   }
@@ -643,13 +717,14 @@ async function moveSelectedToGroup(groupName: string | null) {
   const target = groupName === t("group.default") ? null : groupName;
   for (const uuid of ids) {
     const inst = instances.value.find((i) => i.uuid === uuid);
-    if (inst && inst.group !== target) {
+    // 空白分组名与默认分组（null）等价
+    if (inst && groupKeyOf(inst.group) !== groupKeyOf(target)) {
       await api.updateInstance(uuid, { group: target });
     }
   }
   closeCtxMenu();
   await loadInstances();
-  const key = target || t("group.default");
+  const key = groupKeyOf(target);
   collapsedGroups.value = { ...collapsedGroups.value, [key]: false };
   showToast(t("multi.moved", { count: ids.length }));
 }
@@ -742,24 +817,34 @@ function onAction(id: ActionId) {
 async function doRename() {
   if (!selected.value) return;
   renameBusy.value = true;
-  const ok = await api.renameInstance(selected.value.uuid, renameName.value);
-  renameBusy.value = false;
-  if (ok) {
-    showRename.value = false;
-    await loadInstances();
-    showToast(t("actions.rename"));
+  try {
+    const ok = await api.renameInstance(selected.value.uuid, renameName.value);
+    if (ok) {
+      showRename.value = false;
+      await loadInstances();
+      showToast(t("actions.rename"));
+    }
+  } catch (e) {
+    // 重名等核心错误直接提示
+    showToast(String(e));
+  } finally {
+    renameBusy.value = false;
   }
 }
 
 async function doDelete() {
   if (!selected.value) return;
   deleteBusy.value = true;
-  const ok = await api.deleteInstance(selected.value.uuid);
-  deleteBusy.value = false;
-  showDelete.value = false;
-  if (ok) {
+  try {
+    await api.deleteInstance(selected.value.uuid);
+    showDelete.value = false;
     selected.value = null;
     await Promise.all([loadInstances(), loadGroups()]);
+  } catch (e) {
+    // 删除失败（如文件被占用）直接提示
+    showToast(String(e));
+  } finally {
+    deleteBusy.value = false;
   }
 }
 
@@ -769,6 +854,7 @@ const features: Array<{ id: FeatureId; icon: string }> = [
   { id: "settings", icon: "gear" },
   { id: "stats", icon: "chart" },
   { id: "skin", icon: "user" },
+  { id: "download", icon: "download" },
   { id: "help", icon: "book" },
 ];
 
@@ -847,6 +933,10 @@ async function subscribeEvents() {
       loadInstances();
       loadGroups();
     }),
+    // Java 列表变更（添加 / 删除 / 配置加载完成）→ 重新拉取
+    onJavaChange(() => {
+      loadJava();
+    }),
   ]);
   unlistens.push(...fns);
 }
@@ -857,20 +947,26 @@ async function doInit() {
   initLoading.value = true;
   initError.value = "";
   try {
-    await api.initCore(localDir.value.trim() || null, playerName.value);
     localStorage.setItem("mcml.localDir", localDir.value);
     localStorage.setItem("mcml.playerName", playerName.value);
     bootFailed.value = false;
     await Promise.all([loadInstances(), loadGroups(), loadJava()]);
-    // 版本列表走网络（Mojang 清单），不阻塞启动
     loadVersions();
-    // 初始化完成，关闭启动画面
     closeSplash();
+    loadNews();
   } catch (e) {
     initError.value = String(e);
+    // 初始化失败：关闭启动页并显示错误页
+    closeSplash(String(e));
   } finally {
     initLoading.value = false;
   }
+}
+
+// 错误页重试：重新显示启动页并再次初始化
+function retryBoot() {
+  openSplash();
+  doInit();
 }
 
 // ================= 数据加载 =================
@@ -975,19 +1071,21 @@ onMounted(async () => {
   document.addEventListener("keydown", onDocKeyDown);
   window.addEventListener("storage", onAddedInstanceStorage);
   initLoading.value = true;
+  // 加载页最短显示时长：初始化太快时也保留一会儿，避免一闪而过
   try {
-    await api.initCore(localDir.value.trim() || null, playerName.value);
     bootFailed.value = false;
     await Promise.all([loadInstances(), loadGroups(), loadJava()]);
     // 版本列表走网络（Mojang 清单），不阻塞启动
     loadVersions();
     // 启动时选中上次启动的实例并展开其分组
     initSelection();
-    // 初始化完成，关闭启动画面
     closeSplash();
-  } catch {
+    loadNews();
+  } catch (e) {
+    initError.value = String(e);
     bootFailed.value = true;
-    closeSplash();
+    // 加载完成但出错：关闭启动页并显示错误页
+    closeSplash(String(e));
   } finally {
     initLoading.value = false;
   }
@@ -999,20 +1097,40 @@ onUnmounted(() => {
   document.removeEventListener("keydown", onDocKeyDown);
   window.removeEventListener("storage", onAddedInstanceStorage);
 });
+
+// 后端核心加载完成事件：决定关闭启动页（进入主界面）还是显示错误页
+listen<LoadState>(LoadDone, (data) => {
+  const state = data.payload;
+  if (state.ok) {
+    bootFailed.value = false;
+    closeSplash();
+    // 核心加载完成后实例 / 分组表才填充，重拉一次
+    loadInstances();
+    loadGroups();
+    loadNews();
+  } else {
+    const msg = state.error || t("init.failed");
+    initError.value = msg;
+    bootFailed.value = true;
+    closeSplash(msg);
+  }
+});
 </script>
 
 <template>
   <div class="main-window">
     <!-- ===== 启动画面 / 初始化引导（SplashScreen 组件） ===== -->
     <SplashScreen
-      v-if="splashVisible || bootFailed"
+      v-if="splashVisible || bootFailed || splashError"
       :splash-visible="splashVisible"
       :boot-failed="bootFailed"
+      :splash-error="splashError"
       :init-loading="initLoading"
       :init-error="initError"
       v-model:local-dir="localDir"
       v-model:player-name="playerName"
       @retry="doInit"
+      @retry-boot="retryBoot"
     />
 
     <!-- ===== 主界面 ===== -->
@@ -1047,6 +1165,13 @@ onUnmounted(() => {
           <section class="news-page">
             <HomePage
               :items="news"
+              :loading="newsLoading"
+              @refresh="fetchNews(newsPage)"
+              :page="newsPage"
+              :has-more="newsHasMore"
+              @prev="prevNewsPage"
+              @next="nextNewsPage"
+              @open="openNews"
               :last-instance="null"
               :empty="true"
               @add-instance="openAdd"
@@ -1061,6 +1186,13 @@ onUnmounted(() => {
           <section class="news-page">
             <HomePage
               :items="news"
+              :loading="newsLoading"
+              @refresh="fetchNews(newsPage)"
+              :page="newsPage"
+              :has-more="newsHasMore"
+              @prev="prevNewsPage"
+              @next="nextNewsPage"
+              @open="openNews"
               :last-instance="lastInstance"
               @select="(inst: InstanceInfo) => select(inst)"
               @quick-launch="quickLaunch"
@@ -1116,6 +1248,13 @@ onUnmounted(() => {
             <template v-if="newsActive">
               <HomePage
                 :items="news"
+                :loading="newsLoading"
+                @refresh="fetchNews(newsPage)"
+              :page="newsPage"
+              :has-more="newsHasMore"
+              @prev="prevNewsPage"
+              @next="nextNewsPage"
+              @open="openNews"
                 :last-instance="lastInstance"
                 @select="(inst: InstanceInfo) => select(inst)"
                 @quick-launch="quickLaunch"
@@ -1220,8 +1359,8 @@ onUnmounted(() => {
                   <InstanceMetaPanel
                     :instance="selected"
                     :versions="versions"
-                    :loaders="LOADERS"
                     @update="onMetaUpdate"
+                    @refreshed="onVersionsRefreshed"
                   />
                   <LaunchArgsPanel
                     :args="argsOf(selected.uuid)"

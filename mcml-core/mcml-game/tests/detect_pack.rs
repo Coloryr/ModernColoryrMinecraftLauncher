@@ -1,0 +1,258 @@
+//! 整合包类型检测测试：在临时目录动态构造 zip，验证 `detect_pack` 的类型判定与名字提取。
+//!
+//! 纯离线测试，不依赖全局初始化；压缩包放在系统临时目录下，测完删除。
+
+use std::io::Write;
+use std::path::PathBuf;
+
+use mcml_game::add_game::{PackType, detect_pack};
+use uuid::Uuid;
+use zip::ZipWriter;
+use zip::write::SimpleFileOptions;
+
+/// 测试压缩包输出目录（系统临时目录 + 唯一子目录）
+fn work_dir() -> PathBuf {
+    let dir = std::env::temp_dir()
+        .join("mcml-detect-pack-test")
+        .join(Uuid::new_v4().to_string());
+    std::fs::create_dir_all(&dir).expect("创建测试临时目录失败");
+    dir
+}
+
+/// 程序化生成一个 zip 压缩包
+fn make_zip(dir: &PathBuf, stem: &str, files: &[(&str, &[u8])]) -> PathBuf {
+    let zip_path = dir.join(format!("{stem}.zip"));
+    let file = std::fs::File::create(&zip_path).expect("创建测试压缩包失败");
+    let mut writer = ZipWriter::new(file);
+    let options = SimpleFileOptions::default();
+    for (name, content) in files {
+        writer.start_file(*name, options).unwrap();
+        writer.write_all(content).unwrap();
+    }
+    writer.finish().unwrap();
+    zip_path
+}
+
+/// CurseForge：根目录 `manifest.json`，名字取 `name` 字段。
+#[test]
+fn detect_curseforge() {
+    let dir = work_dir();
+    let manifest = br#"{"manifestType":"minecraftModpack","name":"Stone Block","version":"1.0.0"}"#;
+    let zip = make_zip(&dir, "some-pack", &[("manifest.json", manifest)]);
+
+    let detected = detect_pack(&zip).expect("检测失败");
+    assert!(matches!(detected.pack_type, PackType::CurseForge));
+    assert_eq!(detected.name, "Stone Block");
+
+    let _ = std::fs::remove_file(&zip);
+    let _ = std::fs::remove_dir(&dir);
+}
+
+/// CurseForge：`manifest.json` 位于子目录（overrides 层级）时也能命中。
+#[test]
+fn detect_curseforge_nested() {
+    let dir = work_dir();
+    let manifest = br#"{"name":"Nested Pack"}"#;
+    let zip = make_zip(&dir, "nested", &[("pack/manifest.json", manifest)]);
+
+    let detected = detect_pack(&zip).expect("检测失败");
+    assert!(matches!(detected.pack_type, PackType::CurseForge));
+    assert_eq!(detected.name, "Nested Pack");
+
+    let _ = std::fs::remove_file(&zip);
+    let _ = std::fs::remove_dir(&dir);
+}
+
+/// Modrinth：`modrinth.index.json`，名字取 `name` 字段。
+#[test]
+fn detect_modrinth() {
+    let dir = work_dir();
+    let index = br#"{"formatVersion":1,"name":"Fabulously Optimized","versionId":"1.0"}"#;
+    let zip = make_zip(&dir, "fo-pack", &[("modrinth.index.json", index)]);
+
+    let detected = detect_pack(&zip).expect("检测失败");
+    assert!(matches!(detected.pack_type, PackType::Modrinth));
+    assert_eq!(detected.name, "Fabulously Optimized");
+
+    let _ = std::fs::remove_file(&zip);
+    let _ = std::fs::remove_dir(&dir);
+}
+
+/// HMCL：`mcbbs.packmeta`，名字取 `name` 字段。
+#[test]
+fn detect_hmcl() {
+    let dir = work_dir();
+    let meta = br#"{"name":"HMCL Pack","version":"1.20.1"}"#;
+    let zip = make_zip(&dir, "hmcl-pack", &[("mcbbs.packmeta", meta)]);
+
+    let detected = detect_pack(&zip).expect("检测失败");
+    assert!(matches!(detected.pack_type, PackType::HMCL));
+    assert_eq!(detected.name, "HMCL Pack");
+
+    let _ = std::fs::remove_file(&zip);
+    let _ = std::fs::remove_dir(&dir);
+}
+
+/// HMCL 优先级高于 CurseForge：HMCL 导出包可能同时带两种元数据。
+#[test]
+fn detect_hmcl_wins_over_curseforge() {
+    let dir = work_dir();
+    let zip = make_zip(
+        &dir,
+        "mixed",
+        &[
+            ("mcbbs.packmeta", br#"{"name":"HMCL Wins"}"#),
+            ("manifest.json", br#"{"name":"CF Name"}"#),
+        ],
+    );
+
+    let detected = detect_pack(&zip).expect("检测失败");
+    assert!(matches!(detected.pack_type, PackType::HMCL));
+    assert_eq!(detected.name, "HMCL Wins");
+
+    let _ = std::fs::remove_file(&zip);
+    let _ = std::fs::remove_dir(&dir);
+}
+
+/// MMC：`mmc-pack.json` 无 `name` 字段时，从 `instance.cfg` 读 `name=`。
+#[test]
+fn detect_mmc_name_from_instance_cfg() {
+    let dir = work_dir();
+    let zip = make_zip(
+        &dir,
+        "mmc-pack",
+        &[
+            ("mmc-pack.json", br#"{"formatVersion":1,"components":[]}"#),
+            ("mmc-root/instance.cfg", b"InstanceType=OneSix\nname=My MMC Inst\n"),
+        ],
+    );
+
+    let detected = detect_pack(&zip).expect("检测失败");
+    assert!(matches!(detected.pack_type, PackType::MMC));
+    assert_eq!(detected.name, "My MMC Inst");
+
+    let _ = std::fs::remove_file(&zip);
+    let _ = std::fs::remove_dir(&dir);
+}
+
+/// MMC：`mmc-pack.json` 自带 `name` 字段时直接使用。
+#[test]
+fn detect_mmc_name_from_json() {
+    let dir = work_dir();
+    let zip = make_zip(
+        &dir,
+        "mmc-json",
+        &[("mmc-pack.json", br#"{"name":"Json Name"}"#)],
+    );
+
+    let detected = detect_pack(&zip).expect("检测失败");
+    assert!(matches!(detected.pack_type, PackType::MMC));
+    assert_eq!(detected.name, "Json Name");
+
+    let _ = std::fs::remove_file(&zip);
+    let _ = std::fs::remove_dir(&dir);
+}
+
+/// HMCL 服务器包：`server-manifest.json`。
+#[test]
+fn detect_hmcl_server() {
+    let dir = work_dir();
+    let manifest = br#"{"name":"Server Pack","version":"1.0"}"#;
+    let zip = make_zip(&dir, "server", &[("server-manifest.json", manifest)]);
+
+    let detected = detect_pack(&zip).expect("检测失败");
+    assert!(matches!(detected.pack_type, PackType::HMCLServer));
+    assert_eq!(detected.name, "Server Pack");
+
+    let _ = std::fs::remove_file(&zip);
+    let _ = std::fs::remove_dir(&dir);
+}
+
+/// 带 `.minecraft` 目录的无元数据压缩包 → 其他启动器导出包，名字用文件名。
+#[test]
+fn detect_launcher_pack() {
+    let dir = work_dir();
+    let zip = make_zip(
+        &dir,
+        "launcher-export",
+        &[(".minecraft/mods/some-mod.jar", b"jar"), (".minecraft/options.txt", b"fov:0")],
+    );
+
+    let detected = detect_pack(&zip).expect("检测失败");
+    assert!(matches!(detected.pack_type, PackType::LauncherPack));
+    assert_eq!(detected.name, "launcher-export");
+
+    let _ = std::fs::remove_file(&zip);
+    let _ = std::fs::remove_dir(&dir);
+}
+
+/// `.minecraft` 包在子目录下（双层包装）也能识别。
+#[test]
+fn detect_launcher_pack_wrapped() {
+    let dir = work_dir();
+    let zip = make_zip(&dir, "wrapped", &[("game/.minecraft/versions/1.20.1/1.20.1.jar", b"j")]);
+
+    let detected = detect_pack(&zip).expect("检测失败");
+    assert!(matches!(detected.pack_type, PackType::LauncherPack));
+
+    let _ = std::fs::remove_file(&zip);
+    let _ = std::fs::remove_dir(&dir);
+}
+
+/// 无元数据、无 `.minecraft` 的压缩包 → 直接解压，名字取 `game.json` 的 `name` 字段。
+#[test]
+fn detect_archive_pack_with_game_json() {
+    let dir = work_dir();
+    let zip = make_zip(
+        &dir,
+        "plain",
+        &[("game.json", br#"{"name":"Plain Name"}"#), ("mods/a.jar", b"a")],
+    );
+
+    let detected = detect_pack(&zip).expect("检测失败");
+    assert!(matches!(detected.pack_type, PackType::ArchivePack));
+    assert_eq!(detected.name, "Plain Name");
+
+    let _ = std::fs::remove_file(&zip);
+    let _ = std::fs::remove_dir(&dir);
+}
+
+/// 完全没有可识别元数据的压缩包 → 直接解压，名字用文件名去扩展名。
+#[test]
+fn detect_archive_pack_fallback_name() {
+    let dir = work_dir();
+    let zip = make_zip(&dir, "my-cool-pack", &[("mods/a.jar", b"a"), ("config/a.toml", b"c")]);
+
+    let detected = detect_pack(&zip).expect("检测失败");
+    assert!(matches!(detected.pack_type, PackType::ArchivePack));
+    assert_eq!(detected.name, "my-cool-pack");
+
+    let _ = std::fs::remove_file(&zip);
+    let _ = std::fs::remove_dir(&dir);
+}
+
+/// 名字字段为空的元数据 → 回退到文件名去扩展名。
+#[test]
+fn detect_empty_name_falls_back_to_stem() {
+    let dir = work_dir();
+    let zip = make_zip(&dir, "no-name", &[("modrinth.index.json", br#"{"name":""}"#)]);
+
+    let detected = detect_pack(&zip).expect("检测失败");
+    assert!(matches!(detected.pack_type, PackType::Modrinth));
+    assert_eq!(detected.name, "no-name");
+
+    let _ = std::fs::remove_file(&zip);
+    let _ = std::fs::remove_dir(&dir);
+}
+
+/// 不是压缩包的文件 → 返回错误而不是 panic。
+#[test]
+fn detect_rejects_non_archive() {
+    let dir = work_dir();
+    let txt = dir.join("not-a-zip.txt");
+    std::fs::write(&txt, b"plain text").unwrap();
+
+    assert!(detect_pack(&txt).is_err());
+
+    let _ = std::fs::remove_file(&txt);
+}

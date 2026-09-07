@@ -30,6 +30,28 @@ impl Default for VersionType {
     }
 }
 
+impl VersionType {
+    /// 独立 ID（跨进程传输用，显示名由前端 i18n 翻译）
+    pub fn id(&self) -> &'static str {
+        match self {
+            VersionType::Release => "release",
+            VersionType::Snapshot => "snapshot",
+            VersionType::Other => "other",
+            VersionType::All => "all",
+        }
+    }
+
+    /// 按 ID 解析版本类型
+    pub fn from_id(id: &str) -> Self {
+        match id {
+            "snapshot" => VersionType::Snapshot,
+            "other" => VersionType::Other,
+            "all" => VersionType::All,
+            _ => VersionType::Release,
+        }
+    }
+}
+
 /// 检查规则是否适用
 /// - `list`: 规则列表
 pub fn check_allow(list: &Vec<GameRulesObj>) -> bool {

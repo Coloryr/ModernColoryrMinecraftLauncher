@@ -1,398 +1,325 @@
-// MCML 前端 API（界面开发阶段的模拟实现）
+// MCML 前端 API（真实 IPC 实现）
 //
-// 当前不依赖任何后端命令，可在纯浏览器（npm run dev）中运行，
-// 方便先做界面。gui 与 core 已解耦，旧的真实实现 `./api-real` 已注释掉。
+// 数据全部从 Rust 侧获取（命令见 mcml-gui/src-tauri/src/windows/），
+// 按钮执行的操作也通过 IPC 调用。仅在 Tauri 环境可用（纯浏览器会报错）。
+import { invoke } from "@tauri-apps/api/core";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
+  DetectedPackInfo,
+  DownloadItemEvent,
+  DownloadTaskEvent,
+  DownloadTaskInfo,
   ErrorEvent,
   ExitEvent,
+  InstanceArgs,
   InstanceInfo,
   JavaInfo,
   LogEvent,
+  ModpackFile,
+  ModpackSearchResult,
+  NewsItem,
+  PackProgress,
   StateEvent,
   VersionInfo,
 } from "./types";
+import { MainGetInstances, MainGetGroups, MainGetInstanceArgs, MainGetInstanceLangs, MainGetJavaList, MainGetVersions, MainGetNews, MainOpenUrl, MainAddGroup, MainRemoveGroup, MainMoveGroup, MainCreateInstance, MainRenameInstance, MainUpdateInstance, MainUpdateInstanceArgs, MainDeleteInstance, MainMoveInstance, MainLaunchGame, MainStopGame, MainGetGameLog, MainGetRunning, MainRefreshVersions, MainAddJava, MainRemoveJava, MainScanJava } from "./invokes";
+import { AddCreateNew, AddImportFolder, AddImportArchive, AddImportUrl, AddCancel, AddDetectArchive, AddGetModpackFiles, AddSearchModpacks, AddInstallModpack, AddGetLoaderVersions, AddGetLoaders, AddGetPackTypes, AddGetVersionTypes, AddGetSupportLoaders, AddSetCloseGuard, AddAnswerNameConflict } from "./invokes";
+import { DownloadCancelTask, DownloadGetTasks } from "./invokes";
+import { GameLog, LaunchState, GameExit, LaunchError, InstanceChange, CloseBlocked, AddLoaderProgress, AddNameConflict, AddPackProgress, JavaChange, DownloadItem, DownloadTask } from "./listens";
 
-// ---------- 模拟数据 ----------
-
-const MOCK_INSTANCES: InstanceInfo[] = [
-  {
-    uuid: "11111111-1111-4111-8111-111111111111",
-    name: "我的世界 1.21.1",
-    group: "原版",
-    version: "1.21.1",
-    versionType: "release",
-    loader: "原版",
-    loaderVersion: null,
-    dir: "我的世界 1.21.1",
-    running: false,
-  },
-  {
-    uuid: "22222222-2222-4222-8222-222222222222",
-    name: "Fabric 光影测试",
-    group: "原版",
-    version: "1.19.4",
-    versionType: "release",
-    loader: "Fabric",
-    loaderVersion: "0.16.9",
-    dir: "Fabric 光影测试",
-    running: false,
-  },
-  {
-    uuid: "33333333-3333-4333-8333-333333333333",
-    name: "生存服务器整合包",
-    group: "整合包",
-    version: "1.20.1",
-    versionType: "release",
-    loader: "Forge",
-    loaderVersion: "47.3.0",
-    dir: "生存服务器整合包",
-    running: false,
-    modpackType: "CurseForge",
-    pid: "123456",
-    fid: "654321",
-    lang: "zh_cn",
-    logEncoding: "gbk",
-  },
-  {
-    uuid: "44444444-4444-4444-8444-444444444444",
-    name: "科技空岛整合包",
-    group: "整合包",
-    version: "1.18.2",
-    versionType: "release",
-    loader: "NeoForge",
-    loaderVersion: "21.1.0",
-    dir: "科技空岛整合包",
-    running: false,
-  },
-  {
-    uuid: "55555555-5555-4555-8555-555555555555",
-    name: "Quilt 测试实例",
-    group: "测试",
-    version: "1.21",
-    versionType: "snapshot",
-    loader: "Quilt",
-    loaderVersion: "0.27.1",
-    dir: "Quilt 测试实例",
-    running: false,
-  },
-];
-
-const MOCK_VERSIONS: VersionInfo[] = [
-  { id: "1.21.1", versionType: "release" },
-  { id: "1.21", versionType: "release" },
-  { id: "1.20.6", versionType: "release" },
-  { id: "1.20.4", versionType: "release" },
-  { id: "1.20.1", versionType: "release" },
-  { id: "1.19.4", versionType: "release" },
-  { id: "1.18.2", versionType: "release" },
-  { id: "1.16.5", versionType: "release" },
-  { id: "1.12.2", versionType: "release" },
-  { id: "1.8.9", versionType: "release" },
-  { id: "1.21.2-pre1", versionType: "snapshot" },
-  { id: "24w40a", versionType: "snapshot" },
-];
-
-const MOCK_JAVAS: JavaInfo[] = [
-  {
-    name: "Temurin 21",
-    path: "C:\\Program Files\\Eclipse Adoptium\\jdk-21.0.3.9-hotspot\\bin\\java.exe",
-    version: "21.0.3",
-    major: 21,
-    javaType: "Temurin",
-    arch: "X86_64",
-  },
-  {
-    name: "OpenJDK 17",
-    path: "C:\\Program Files\\Microsoft\\jdk-17.0.11.9-hotspot\\bin\\java.exe",
-    version: "17.0.11",
-    major: 17,
-    javaType: "OpenJDK",
-    arch: "X86_64",
-  },
-  {
-    name: "Zulu 8",
-    path: "C:\\Program Files\\Zulu\\zulu-8\\bin\\java.exe",
-    version: "1.8.0_422",
-    major: 8,
-    javaType: "Zulu",
-    arch: "X86_64",
-  },
-];
-
-let nextMockId = 1000;
-const runningUuids = new Set<string>();
-const runtimeLogs: Record<string, string[]> = {};
-const extraGroups = new Set<string>();
-/** 分组显示顺序（getGroups 返回的顺序），可被 moveGroup 调整 */
-let groupOrder: string[] = [];
-
-// ---------- 简易事件总线（模拟 Tauri 事件） ----------
-
-type Handler = (payload: unknown) => void;
-const listeners = new Map<string, Set<Handler>>();
-
-function emit(event: string, payload: unknown) {
-  listeners.get(event)?.forEach((fn) => fn(payload));
+export interface CreateInstanceOpts {
+  loader?: string;
+  loaderVersion?: string | null;
+  group?: string | null;
+  modpackType?: string;
+  source?: string;
 }
-
-function on<T>(event: string, fn: (payload: T) => void): () => void {
-  if (!listeners.has(event)) listeners.set(event, new Set());
-  listeners.get(event)!.add(fn as Handler);
-  return () => {
-    listeners.get(event)?.delete(fn as Handler);
-  };
-}
-
-function now(): string {
-  const d = new Date();
-  const ms = String(d.getMilliseconds()).padStart(3, "0");
-  return `${d.toTimeString().slice(0, 8)}.${ms}`;
-}
-
-const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-// ---------- 模拟 API ----------
 
 export const api = {
-  async initCore(localDir: string | null, _userName: string): Promise<string> {
-    await delay(400);
-    return localDir ?? "C:\\Users\\demo\\AppData\\Roaming\\com.coloryr.mcml";
+  async getInstances(): Promise<InstanceInfo[]> {
+    return invoke<InstanceInfo[]>(MainGetInstances);
   },
 
-  async getInstances(): Promise<InstanceInfo[]> {
-    await delay(150);
-    return MOCK_INSTANCES.map((i) => ({ ...i, running: runningUuids.has(i.uuid) }));
+  async getGroups(): Promise<string[]> {
+    return invoke<string[]>(MainGetGroups);
+  },
+
+  /** 获取实例的游戏内语言列表（从资源索引查 minecraft/lang/*.json，资源未下载时为空） */
+  async getInstanceLangs(uuid: string): Promise<string[]> {
+    return invoke<string[]>(MainGetInstanceLangs, { uuid });
   },
 
   async getJavaList(): Promise<JavaInfo[]> {
-    await delay(120);
-    return [...MOCK_JAVAS];
+    return invoke<JavaInfo[]>(MainGetJavaList);
+  },
+
+  /** 添加 Java（后端校验有效后入列表；无效返回 false） */
+  async addJava(name: string, path: string): Promise<boolean> {
+    return invoke<boolean>(MainAddJava, { name, path });
+  },
+
+  /** 删除指定名称的 Java */
+  async removeJava(name: string): Promise<void> {
+    return invoke<void>(MainRemoveJava, { name });
+  },
+
+  /** 扫描系统已安装的 Java（耗时查询）并返回最新列表 */
+  async scanJava(): Promise<JavaInfo[]> {
+    return invoke<JavaInfo[]>(MainScanJava);
   },
 
   async getVersions(): Promise<VersionInfo[]> {
-    await delay(300);
-    return [...MOCK_VERSIONS];
+    return invoke<VersionInfo[]>(MainGetVersions);
   },
 
-  /** 获取全部分组名（实例自带分组 + 手动添加的空分组，按持久顺序） */
-  async getGroups(): Promise<string[]> {
-    await delay(80);
-    const names = new Set<string>();
-    for (const inst of MOCK_INSTANCES) {
-      if (inst.group) names.add(inst.group);
-    }
-    for (const g of extraGroups) names.add(g);
-    // 保持历史顺序，新出现的分组追加在末尾
-    const ordered = [
-      ...groupOrder.filter((n) => names.has(n)),
-      ...[...names].filter((n) => !groupOrder.includes(n)),
-    ];
-    groupOrder = ordered;
-    return [...ordered];
+  /** 强制刷新版本列表（清空后端缓存重新拉取） */
+  async refreshVersions(): Promise<VersionInfo[]> {
+    return invoke<VersionInfo[]>(MainRefreshVersions);
   },
 
-  /** 添加空分组，成功返回 true */
+  /** 获取 Minecraft 官方新闻（第 page 页，默认 1） */
+  async getNews(page = 1): Promise<NewsItem[]> {
+    return invoke<NewsItem[]>(MainGetNews, { page });
+  },
+
+  /** 用系统浏览器打开网址 */
+  async openUrl(url: string): Promise<void> {
+    return invoke<void>(MainOpenUrl, { url });
+  },
+
+  /** 从头新建实例（版本 + 加载器），返回新实例 uuid */
+  async addCreateNew(
+    name: string,
+    version: string,
+    loader: string,
+    loaderVersion: string | null,
+    group: string | null,
+  ): Promise<string> {
+    return invoke<string>(AddCreateNew, { name, version, loader, loaderVersion, group });
+  },
+
+  /** 导入文件夹为实例 */
+  async addImportFolder(path: string, name: string, group: string | null): Promise<string> {
+    return invoke<string>(AddImportFolder, { path, name, group });
+  },
+
+  /** 导入整合包压缩包（packType：CurseForge / Modrinth / McMod / 本地） */
+  async addImportArchive(
+    path: string,
+    packType: string,
+    name: string,
+    group: string | null,
+    unselect: string[] | null,
+  ): Promise<string> {
+    return invoke<string>(AddImportArchive, { path, packType, name, group, unselect });
+  },
+
+  /** 从网址安装实例 */
+  async addImportUrl(url: string, name: string, group: string | null): Promise<string> {
+    return invoke<string>(AddImportUrl, { url, name, group });
+  },
+
+  /** 检测压缩包的整合包类型与推荐实例名（识别失败抛错） */
+  async addDetectArchive(path: string): Promise<DetectedPackInfo> {
+    return invoke<DetectedPackInfo>(AddDetectArchive, { path });
+  },
+
+  /** 搜索在线整合包（source：curseforge / modrinth，page 从 0 开始） */
+  async searchModpacks(
+    source: string,
+    query: string | null,
+    version: string | null,
+    sort: string,
+    page: number,
+  ): Promise<ModpackSearchResult> {
+    return invoke<ModpackSearchResult>(AddSearchModpacks, { source, query, version, sort, page });
+  },
+
+  /** 获取整合包的可安装版本列表（version 传 null 取全部） */
+  async getModpackFiles(source: string, projectId: string, version: string | null): Promise<ModpackFile[]> {
+    return invoke<ModpackFile[]>(AddGetModpackFiles, { source, projectId, version });
+  },
+
+  /** 安装在线整合包（实例名取自整合包元数据，返回新实例 uuid） */
+  async installModpack(
+    source: string,
+    projectId: string,
+    fileId: string,
+    group: string | null,
+  ): Promise<string> {
+    return invoke<string>(AddInstallModpack, { source, projectId, fileId, group });
+  },
+
+  /** 取消进行中的安装任务 */
+  async addCancel(): Promise<boolean> {
+    return invoke<boolean>(AddCancel);
+  },
+
+  /** 获取加载器的可用版本列表（loader：加载器 ID，mc：游戏版本号） */
+  async addLoaderVersions(loader: string, mc: string): Promise<string[]> {
+    return invoke<string[]>(AddGetLoaderVersions, { loader, mc });
+  },
+
+  /** 获取加载器 ID 列表 */
+  async addGetLoaders(): Promise<string[]> {
+    return invoke<string[]>(AddGetLoaders);
+  },
+
+  /** 查询指定游戏版本支持的加载器 ID 列表 */
+  async addGetSupportLoaders(mc: string): Promise<string[]> {
+    return invoke<string[]>(AddGetSupportLoaders, { mc });
+  },
+
+  /** 设置添加实例窗口关闭保护（enabled = true 期间拒绝关闭请求） */
+  async setCloseGuard(enabled: boolean): Promise<void> {
+    await invoke(AddSetCloseGuard, { enabled });
+  },
+
+  /** 获取压缩包类型 ID 列表 */
+  async addGetPackTypes(): Promise<string[]> {
+    return invoke<string[]>(AddGetPackTypes);
+  },
+
+  /** 获取游戏版本类型 ID 列表（release / snapshot / old_beta / old_alpha） */
+  async addGetVersionTypes(): Promise<string[]> {
+    return invoke<string[]>(AddGetVersionTypes);
+  },
+
   async addGroup(name: string): Promise<boolean> {
-    await delay(200);
-    const n = name.trim();
-    if (!n) return false;
-    const exists =
-      extraGroups.has(n) || MOCK_INSTANCES.some((i) => i.group === n);
-    if (exists) return false;
-    extraGroups.add(n);
-    emit("instance-change", { type: "group" });
-    return true;
+    return invoke<boolean>(MainAddGroup, { name });
   },
 
-  /** 删除分组（仅移除空分组；组内实例由调用方先处理） */
   async removeGroup(name: string): Promise<boolean> {
-    await delay(120);
-    const ok = extraGroups.delete(name.trim());
-    if (ok) emit("instance-change", { type: "group" });
-    return ok;
+    return invoke<boolean>(MainRemoveGroup, { name });
   },
 
-  /** 调整分组显示顺序（index 为分组列表中的目标下标） */
   async moveGroup(name: string, index: number): Promise<boolean> {
-    await delay(80);
-    const list = await this.getGroups();
-    const from = list.indexOf(name);
-    if (from < 0) return false;
-    list.splice(from, 1);
-    list.splice(Math.max(0, Math.min(index, list.length)), 0, name);
-    groupOrder = list;
-    emit("instance-change", { type: "group" });
-    return true;
+    return invoke<boolean>(MainMoveGroup, { name, index });
   },
 
   async createInstance(
     name: string,
     version: string,
-    opts?: {
-      loader?: string;
-      loaderVersion?: string | null;
-      group?: string | null;
-      modpackType?: string;
-      source?: string;
-    },
+    opts?: CreateInstanceOpts,
   ): Promise<InstanceInfo> {
-    await delay(600);
-    const inst: InstanceInfo = {
-      uuid: `mock-${nextMockId++}`,
+    return invoke<InstanceInfo>(MainCreateInstance, {
       name,
-      group: opts?.group ?? null,
       version,
-      versionType: "release",
-      loader: opts?.loader ?? "原版",
-      loaderVersion: opts?.loaderVersion ?? null,
-      dir: name,
-      running: false,
-    };
-    if (opts?.modpackType) inst.modpackType = opts.modpackType;
-    if (opts?.source) inst.source = opts.source;
-    MOCK_INSTANCES.unshift(inst);
-    emit("instance-change", { type: "add" });
-    return inst;
+      loader: opts?.loader,
+      loaderVersion: opts?.loaderVersion,
+      group: opts?.group ?? null,
+      modpackType: opts?.modpackType,
+      source: opts?.source,
+    });
   },
 
-  /** 重命名实例 */
   async renameInstance(uuid: string, name: string): Promise<boolean> {
-    await delay(200);
-    const inst = MOCK_INSTANCES.find((i) => i.uuid === uuid);
-    if (!inst) return false;
-    const n = name.trim();
-    if (!n) return false;
-    inst.name = n;
-    inst.dir = n;
-    emit("instance-change", { type: "edit" });
-    return true;
+    return invoke<boolean>(MainRenameInstance, { uuid, name });
   },
 
-  /** 更新实例元信息（版本 / 加载器 / 分组 / 整合包 / 语言等） */
+  /** 更新实例元信息（补丁式，Partial<InstanceInfo>） */
   async updateInstance(uuid: string, patch: Partial<InstanceInfo>): Promise<boolean> {
-    await delay(120);
-    const inst = MOCK_INSTANCES.find((i) => i.uuid === uuid);
-    if (!inst) return false;
-    Object.assign(inst, patch);
-    emit("instance-change", { type: "edit" });
-    return true;
+    return invoke<boolean>(MainUpdateInstance, { uuid, patch });
   },
 
-  /** 移动实例到 (分组, 组内位置)：支持组内排序与跨组移动 */
-  async moveInstance(uuid: string, group: string | null, index: number): Promise<boolean> {
-    await delay(100);
-    const inst = MOCK_INSTANCES.find((i) => i.uuid === uuid);
-    if (!inst) return false;
-    MOCK_INSTANCES.splice(MOCK_INSTANCES.indexOf(inst), 1);
-    inst.group = group;
-    const key = (i: InstanceInfo) => i.group ?? null;
-    const others = MOCK_INSTANCES.filter((i) => key(i) === group);
-    const anchor = others[Math.max(0, Math.min(index, others.length))];
-    const at = anchor ? MOCK_INSTANCES.indexOf(anchor) : MOCK_INSTANCES.length;
-    MOCK_INSTANCES.splice(at, 0, inst);
-    emit("instance-change", { type: "edit" });
-    return true;
+  /** 获取实例启动参数（核心实例读配置，遗留数据读内存缓存） */
+  async getInstanceArgs(uuid: string): Promise<InstanceArgs> {
+    return invoke<InstanceArgs>(MainGetInstanceArgs, { uuid });
   },
 
-  /** 删除实例 */
+  /** 更新实例启动参数（核心实例写配置并保存） */
+  async updateInstanceArgs(uuid: string, args: InstanceArgs): Promise<boolean> {
+    return invoke<boolean>(MainUpdateInstanceArgs, { uuid, args });
+  },
+
   async deleteInstance(uuid: string): Promise<boolean> {
-    await delay(200);
-    const idx = MOCK_INSTANCES.findIndex((i) => i.uuid === uuid);
-    if (idx < 0) return false;
-    MOCK_INSTANCES.splice(idx, 1);
-    runningUuids.delete(uuid);
-    emit("instance-change", { type: "remove" });
-    return true;
+    return invoke<boolean>(MainDeleteInstance, { uuid });
   },
 
-  async launchGame(uuid: string, _userName: string): Promise<void> {
-    runningUuids.add(uuid);
-    simulateLaunch(uuid);
+  async moveInstance(uuid: string, group: string | null, index: number): Promise<boolean> {
+    return invoke<boolean>(MainMoveInstance, { uuid, group, index });
+  },
+
+  async launchGame(uuid: string, userName: string): Promise<void> {
+    return invoke<void>(MainLaunchGame, { uuid, userName });
   },
 
   async stopGame(uuid: string): Promise<void> {
-    runningUuids.delete(uuid);
-    emit("game-exit", { uuid, code: 0 } as ExitEvent);
+    return invoke<void>(MainStopGame, { uuid });
   },
 
   async getGameLog(uuid: string): Promise<string[]> {
-    return [...(runtimeLogs[uuid] ?? [])];
+    return invoke<string[]>(MainGetGameLog, { uuid });
   },
 
   async getRunning(): Promise<string[]> {
-    return [...runningUuids];
+    return invoke<string[]>(MainGetRunning);
+  },
+
+  /** 获取进行中的下载任务快照（下载管理窗口） */
+  async getDownloadTasks(): Promise<DownloadTaskInfo[]> {
+    return invoke<DownloadTaskInfo[]>(DownloadGetTasks);
+  },
+
+  /** 取消一个下载任务（任务不存在返回 false） */
+  async cancelDownloadTask(id: number): Promise<boolean> {
+    return invoke<boolean>(DownloadCancelTask, { id });
   },
 };
 
-// ---------- 模拟启动流程 ----------
+// ---------------- 事件订阅（Rust emit → 前端 listen） ----------------
 
-function pushLog(uuid: string, text: string) {
-  (runtimeLogs[uuid] ??= []).push(text);
-  emit("game-log", { uuid, time: now(), text, clear: false } as LogEvent);
+export function onGameLog(cb: (e: LogEvent) => void): Promise<UnlistenFn> {
+  return listen<LogEvent>(GameLog, (e) => cb(e.payload));
+}
+export function onLaunchState(cb: (e: StateEvent) => void): Promise<UnlistenFn> {
+  return listen<StateEvent>(LaunchState, (e) => cb(e.payload));
+}
+export function onGameExit(cb: (e: ExitEvent) => void): Promise<UnlistenFn> {
+  return listen<ExitEvent>(GameExit, (e) => cb(e.payload));
+}
+export function onLaunchError(cb: (e: ErrorEvent) => void): Promise<UnlistenFn> {
+  return listen<ErrorEvent>(LaunchError, (e) => cb(e.payload));
+}
+export function onInstanceChange(cb: () => void): Promise<UnlistenFn> {
+  return listen(InstanceChange, () => cb());
+}
+export function onJavaChange(cb: () => void): Promise<UnlistenFn> {
+  return listen(JavaChange, () => cb());
 }
 
-function simulateLaunch(uuid: string) {
-  runtimeLogs[uuid] = [];
-  emit("game-log", { uuid, time: now(), text: "", clear: true } as LogEvent);
-
-  const setState = (state: string, text: string) => {
-    emit("launch-state", { uuid, state } as StateEvent);
-    pushLog(uuid, `[状态] ${text}`);
-  };
-
-  setState("login", "登录账户");
-  setTimeout(() => pushLog(uuid, "[登录] 用时 0.34 秒"), 200);
-
-  setState("readinfo", "读取版本信息");
-  setState("check", "检查游戏文件");
-  setTimeout(() => pushLog(uuid, "[检查游戏文件] 用时 1.02 秒"), 600);
-
-  setState("jvm", "准备启动参数");
-  setTimeout(
-    () => pushLog(uuid, "[Java] C:\\Program Files\\Eclipse Adoptium\\jdk-21.0.3.9-hotspot\\bin\\java.exe"),
-    800,
-  );
-  setTimeout(() => pushLog(uuid, "[启动参数] -Xmx4096m -Xms512m --add-opens java.base/java.lang=ALL-UNNAMED ..."), 900);
-
-  setState("end", "启动完成");
-  setTimeout(() => pushLog(uuid, "[启动] 用时 3.12 秒"), 1100);
-  setTimeout(() => pushLog(uuid, "游戏进程已启动"), 1200);
-  setTimeout(() => pushLog(uuid, "[Render thread/INFO]: Backend library version: 0.0.0"), 1600);
-  setTimeout(() => pushLog(uuid, "[Render thread/INFO]: Environment: Environment[authSession=..., accounts=1]"), 1900);
-
-  // 持续输出模拟游戏日志，直到停止
-  const fakeLines = [
-    "[Render thread/INFO]: Reloading ResourceManager: Default",
-    "[Render thread/INFO]: Loaded 1247 recipes",
-    "[Render thread/INFO]: Preparing start region for dimension minecraft:overworld",
-    "[Server thread/INFO]: Done (5.238s)! For help, type \"help\"",
-    "[Render thread/INFO]: Time elapsed: 1234 ms",
-  ];
-  let line = 0;
-  const timer = setInterval(() => {
-    if (!runningUuids.has(uuid)) {
-      clearInterval(timer);
-      return;
-    }
-    pushLog(uuid, fakeLines[line % fakeLines.length]);
-    line++;
-  }, 2500);
+/** 下载任务状态事件（type：add / remove / update） */
+export function onDownloadTask(cb: (e: DownloadTaskEvent) => void): Promise<UnlistenFn> {
+  return listen<DownloadTaskEvent>(DownloadTask, (e) => cb(e.payload));
 }
 
-// ---------- 事件订阅（模拟） ----------
+/** 下载线程当前文件状态事件 */
+export function onDownloadItem(cb: (e: DownloadItemEvent) => void): Promise<UnlistenFn> {
+  return listen<DownloadItemEvent>(DownloadItem, (e) => cb(e.payload));
+}
 
-export function onGameLog(cb: (e: LogEvent) => void): () => void {
-  return on<LogEvent>("game-log", cb);
+/** 关闭被拒绝（窗口处于关闭保护时，前端弹提示说明原因） */
+export function onCloseBlocked(cb: () => void): Promise<UnlistenFn> {
+  return listen(CloseBlocked, () => cb());
 }
-export function onLaunchState(cb: (e: StateEvent) => void): () => void {
-  return on<StateEvent>("launch-state", cb);
+
+/** 加载器支持列表查询进度（step / total） */
+export function onAddLoaderProgress(cb: (e: { step: number; total: number }) => void): Promise<UnlistenFn> {
+  return listen<{ step: number; total: number }>(AddLoaderProgress, (e) => cb(e.payload));
 }
-export function onGameExit(cb: (e: ExitEvent) => void): () => void {
-  return on<ExitEvent>("game-exit", cb);
+
+/** 实例重名确认（kind：overwrite 覆盖 / rename 自动改名） */
+export function onAddNameConflict(
+  cb: (e: { id: number; kind: string; name: string }) => void,
+): Promise<UnlistenFn> {
+  return listen<{ id: number; kind: string; name: string }>(AddNameConflict, (e) => cb(e.payload));
 }
-export function onLaunchError(cb: (e: ErrorEvent) => void): () => void {
-  return on<ErrorEvent>("launch-error", cb);
+
+/** 整合包安装进度（本地压缩包 / 在线整合包安装共用） */
+export function onAddPackProgress(cb: (e: PackProgress) => void): Promise<UnlistenFn> {
+  return listen<PackProgress>(AddPackProgress, (e) => cb(e.payload));
 }
-export function onInstanceChange(cb: () => void): () => void {
-  return on("instance-change", cb);
+
+export function answerNameConflict(id: number, answer: boolean): Promise<void> {
+  return invoke(AddAnswerNameConflict, { id, answer });
 }

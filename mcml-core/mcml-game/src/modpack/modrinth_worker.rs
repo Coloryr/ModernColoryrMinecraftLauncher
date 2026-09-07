@@ -76,11 +76,12 @@ impl ModPackWorker for ModrinthPackWorker {
             self.base.game_version = version.clone();
         }
 
+        // mrpack 规范的依赖键：minecraft / forge / neoforge / fabric-loader / quilt-loader
         if let Some(version) = info.dependencies.get(names::FORGE_KEY) {
             self.base.loader = LoaderType::Forge;
             self.base.loader_version = version.clone();
         }
-        if let Some(version) = info.dependencies.get(names::FABRIC_KEY) {
+        if let Some(version) = info.dependencies.get(names::FABRIC_LOADER_KEY) {
             self.base.loader = LoaderType::Fabric;
             self.base.loader_version = version.clone();
         }
@@ -88,7 +89,7 @@ impl ModPackWorker for ModrinthPackWorker {
             self.base.loader = LoaderType::NeoForge;
             self.base.loader_version = version.clone();
         }
-        if let Some(version) = info.dependencies.get(names::QUILT_KEY) {
+        if let Some(version) = info.dependencies.get(names::QUILT_LOADER_KEY) {
             self.base.loader = LoaderType::Quilt;
             self.base.loader_version = version.clone();
         }

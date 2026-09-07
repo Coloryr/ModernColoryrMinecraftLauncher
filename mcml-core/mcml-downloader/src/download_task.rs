@@ -60,9 +60,14 @@ impl DownloadTask {
     }
 
     /// 检查任务是否完成，完成时发送信号
+    ///
+    /// 按“已完成 + 已失败 == 总数”判定：队列取空只说明文件都被线程取走，
+    /// 不能说明都下载完了（在途文件会被误判为任务完成，导致提前返回）。
     fn check_done(&self) {
         crate::update_task(self.id, self.progress());
-        if self.items.is_empty() {
+        let completed = self.completed_count.load(Ordering::SeqCst);
+        let failed = self.failed_count.load(Ordering::SeqCst);
+        if completed + failed >= self.total_size {
             crate::task_done(self);
             self.sem.add_permits(1);
         }

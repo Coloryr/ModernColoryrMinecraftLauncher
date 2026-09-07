@@ -21,6 +21,8 @@ pub struct InstanceInfo {
     pub pid: Option<String>,
     /// 整合包文件 ID
     pub fid: Option<String>,
+    /// 在线网络整合包地址（ServerPack）
+    pub server_url: Option<String>,
     /// 游戏内语言
     pub lang: Option<String>,
     /// 日志编码：utf8 / gbk

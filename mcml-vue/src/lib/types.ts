@@ -5,18 +5,21 @@ export interface InstanceInfo {
   name: string;
   group: string | null;
   version: string;
-  /** 游戏版本类型：release / snapshot / other */
+  /** 游戏版本类型 ID：release / snapshot / other / all */
   versionType?: string;
+  /** 加载器 ID：normal / forge / fabric / quilt / neoforge / optifine / liteloader / custom */
   loader: string;
   loaderVersion: string | null;
   dir: string;
   running: boolean;
-  /** 整合包平台：CurseForge / Modrinth / McMod / 无 */
-  modpackType?: string;
+  /** 整合包类型 ID：curseforge / modrinth / mcmod / serverpack / none（null = 无） */
+  modpackType?: string | null;
   /** 整合包项目 ID */
-  pid?: string;
+  pid?: string | null;
   /** 整合包文件 ID */
-  fid?: string;
+  fid?: string | null;
+  /** 在线网络整合包地址（ServerPack） */
+  serverUrl?: string | null;
   /** 游戏内语言 */
   lang?: string;
   /** 日志编码：utf8 / gbk */
@@ -90,6 +93,8 @@ export interface NewsItem {
   tag: string;
   /** 新闻配图（URL 或 data URI） */
   image: string;
+  /** 原文链接（系统浏览器打开） */
+  url: string;
 }
 
 /** 启动设置（模拟） */
@@ -151,4 +156,71 @@ export interface InstanceArgs {
   serverIp: string;
   serverPort: number;
   joinServer: boolean;
+}
+
+// ---------- 下载管理（mcml_downloader） ----------
+
+/** 下载任务快照（download_get_tasks 查询） */
+export interface DownloadTaskInfo {
+  id: number;
+  total: number;
+  completed: number;
+  failed: number;
+}
+
+/** 下载任务状态事件（type：add / remove / update） */
+export interface DownloadTaskEvent {
+  type: string;
+  id: number;
+  progress: number;
+}
+
+/** 下载线程当前文件事件 */
+export interface DownloadItemEvent {
+  thread: number;
+  name: string;
+  /** 状态 ID：wait / getinfo / download / pause / init / action / done / error */
+  state: string;
+}
+
+/** 压缩包检测结果（packType 为压缩包类型 ID，name 为推荐实例名） */
+export interface DetectedPackInfo {
+  packType: string;
+  name: string;
+}
+
+/** 在线整合包搜索结果条目（id 为项目 ID，来源内唯一） */
+export interface ModpackItem {
+  id: string;
+  name: string;
+  desc: string;
+  icon: string;
+  author: string;
+  downloads: number;
+}
+
+/** 在线整合包搜索结果分页 */
+export interface ModpackSearchResult {
+  items: ModpackItem[];
+  page: number;
+  total: number;
+}
+
+/** 整合包可安装版本（id 为文件/版本 ID，安装时回传） */
+export interface ModpackFile {
+  id: string;
+  name: string;
+  fileName: string;
+  date: string;
+  size: number;
+}
+
+/** 整合包安装进度（state：downloadPack / readInfo / getInfo / downloadFile / extract / done） */
+export interface PackProgress {
+  state: string;
+  now: number;
+  total: number;
+  subText: string | null;
+  subNow: number;
+  subTotal: number;
 }

@@ -5,6 +5,26 @@
 
 use serde::{Deserialize, Serialize};
 
+/// 双层 Option 反序列化：JSON `null` -> `Some(None)`（区分“没传”和“清空”）
+///
+/// 配合 `#[serde(default)]`：字段缺失 -> `None`（不改），
+/// `null` -> `Some(None)`（清空），有值 -> `Some(Some(v))`（更新）。
+fn double_option<'de, T, D>(de: D) -> Result<Option<T>, D::Error>
+where
+    T: Deserialize<'de>,
+    D: serde::Deserializer<'de>,
+{
+    Deserialize::deserialize(de).map(Some)
+}
+
+/// Minecraft 新闻条目
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LoadState {
+    pub ok: bool,
+    pub error: Option<String>,
+}
+
 /// Minecraft 新闻条目
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -14,6 +34,8 @@ pub struct NewsItem {
     pub date: String,
     pub tag: String,
     pub image: String,
+    /// 原文链接（点击卡片用系统浏览器打开）
+    pub url: String,
 }
 
 /// 游戏日志事件
@@ -66,10 +88,16 @@ pub struct InstancePatch {
     pub version: Option<String>,
     pub version_type: Option<String>,
     pub loader: Option<String>,
-    pub loader_version: Option<String>,
+    #[serde(default, deserialize_with = "double_option")]
+    pub loader_version: Option<Option<String>>,
+    #[serde(default, deserialize_with = "double_option")]
     pub modpack_type: Option<Option<String>>,
+    #[serde(default, deserialize_with = "double_option")]
     pub pid: Option<Option<String>>,
+    #[serde(default, deserialize_with = "double_option")]
     pub fid: Option<Option<String>>,
+    #[serde(default, deserialize_with = "double_option")]
+    pub server_url: Option<Option<String>>,
     pub lang: Option<String>,
     pub log_encoding: Option<String>,
 }

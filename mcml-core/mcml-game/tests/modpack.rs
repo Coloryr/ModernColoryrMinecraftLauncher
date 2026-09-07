@@ -1,226 +1,145 @@
-//! 整合包格式测试：下载真实的 mrpack 并验证字段与下载项构建。
+//! 整合包安装流程手动测试：用本机真实压缩包跑完整安装链，打印进度与错误。
 //!
-//! 样本不提交进 git，测试运行时通过 Modrinth API 解析并下载
-//! Fabulously Optimized 14.0.0-beta.3（断言依赖该版本的具体字段）。
-//! 网络不可用时跳过（打印提示，不 fail）。
+//! 真实联网 + 依赖本机压缩包，默认跳过；手动运行：
+//! `cargo test -p mcml-game --test modpack -- --ignored --nocapture`
+//! （压缩包路径改源码里的 `PACK_FILE`，CurseForge key 由 GUI 正常注入，测试内为空）
 
-mod common;
+use std::{env, path::Path, path::PathBuf, sync::Arc};
 
-use std::io::Write;
-use std::sync::{Arc, RwLock};
-
-use mcml_base::archives::BaseArchive;
-use mcml_game::{GameInstance, modrinth};
-use mcml_game::launcher::instance_setting_obj::InstanceSettingObj;
-use mcml_game::modpack::BaseModPackWorker;
-use mcml_game::modrinth::pack_obj::{ModrinthPackFileObj, ModrinthPackObj};
-use mcml_names::names;
+use mcml_game::add_game::{self, PackType};
+use mcml_game::gui_hook::{AddInstanceGui, AddModPackGui, AddModPackState, IAddInstanceGui, IAddModPackGui};
+use mcml_game::GameInstance;
 use tokio_util::sync::CancellationToken;
-use zip::ZipWriter;
-use zip::write::SimpleFileOptions;
 
-/// mrpack 内的整合包清单文件名
-const MODRINTH_INDEX: &str = "modrinth.index.json";
+/// 测试压缩包路径
+const PACK_FILE: &str = r"H:\ftb-stoneblock-4-1.14.2.zip";
 
-/// 打开测试整合包（mrpack 本质是 zip，但 `BaseArchive` 按后缀识别格式，
-/// GUI 侧导入前会改名 .zip，测试时复制为唯一命名的 .zip 再打开）。
-fn open_mrpack() -> Option<BaseArchive> {
-    let mrpack = common::download_mrpack()?;
-    let zip_path =
-        std::env::temp_dir().join(format!("mcml-modpack-test-{}.zip", uuid::Uuid::new_v4()));
-    std::fs::copy(mrpack, &zip_path).ok()?;
-    BaseArchive::open(&zip_path).ok()
-}
+struct TestGui;
 
-fn read_pack_obj() -> Option<ModrinthPackObj> {
-    let archive = open_mrpack()?;
-    let entry = archive
-        .entries()
-        .iter()
-        .find(|item| item.name == MODRINTH_INDEX)?;
-    let data = archive.read(&entry.name).ok()?;
-    mcml_base::serialize_tools::json_from_bytes(&data).ok()
-}
+#[async_trait::async_trait]
+impl IAddInstanceGui for TestGui {
+    async fn name_replace(&self, _name: &str) -> bool {
+        true
+    }
 
-/// 解析真实 mrpack 的 `modrinth.index.json`。
-#[test]
-fn parse_real_mrpack_index() {
-    let Some(obj) = read_pack_obj() else {
-        eprintln!("跳过：无法下载测试整合包（需要网络）");
-        return;
-    };
-
-    assert_eq!(obj.format_version, 1);
-    assert_eq!(obj.version_id, "14.0.0-beta.3");
-    assert_eq!(obj.name, "Fabulously Optimized");
-    // 真实 mrpack 没有 summary 字段，缺失时使用默认空字符串
-    assert!(obj.summary.is_empty());
-
-    // 依赖：fabric-loader + minecraft
-    assert_eq!(
-        obj.dependencies.get("minecraft").map(String::as_str),
-        Some("26.2")
-    );
-    assert_eq!(
-        obj.dependencies.get("fabric-loader").map(String::as_str),
-        Some("0.19.3")
-    );
-
-    // 48 个模组文件
-    assert_eq!(obj.files.len(), 48);
-}
-
-/// 每个文件条目都应带 SHA1 校验和以及至少一个下载地址。
-#[test]
-fn mrpack_files_have_hash_and_download() {
-    let Some(obj) = read_pack_obj() else {
-        eprintln!("跳过：无法下载测试整合包（需要网络）");
-        return;
-    };
-
-    for file in &obj.files {
-        assert_eq!(file.hashes.sha1.len(), 40, "路径 {} 缺少 SHA1", file.path);
-        assert_eq!(
-            file.hashes.sha512.len(),
-            128,
-            "路径 {} 缺少 SHA512",
-            file.path
-        );
-        assert!(
-            !file.downloads.is_empty(),
-            "路径 {} 缺少下载地址",
-            file.path
-        );
-        assert!(file.file_size > 0, "路径 {} 的文件大小应为正数", file.path);
+    async fn overwrite(&self, _obj: GameInstance) -> bool {
+        false
     }
 }
 
-/// 压缩包内条目：`modrinth.index.json` 应存在于根目录，其余为 `overrides/` 下的文件。
-#[test]
-fn mrpack_entries_layout() {
-    let Some(archive) = open_mrpack() else {
-        eprintln!("跳过：无法下载测试整合包（需要网络）");
-        return;
-    };
-    let names: Vec<&str> = archive.entries().iter().map(|e| e.name.as_str()).collect();
-
-    assert!(
-        names.contains(&MODRINTH_INDEX),
-        "应包含 modrinth.index.json"
-    );
-    // 除 index.json 外全部在 overrides/ 下
-    let others: Vec<&&str> = names.iter().filter(|n| **n != MODRINTH_INDEX).collect();
-    assert!(!others.is_empty());
-    for name in others {
-        assert!(
-            name.starts_with("overrides/"),
-            "非 index.json 条目 {} 应位于 overrides/ 下",
-            name
-        );
+fn state_id(state: &AddModPackState) -> &'static str {
+    match state {
+        AddModPackState::DownloadPack => "downloadPack",
+        AddModPackState::ReadInfo => "readInfo",
+        AddModPackState::GetInfo => "getInfo",
+        AddModPackState::DownloadFile => "downloadFile",
+        AddModPackState::Extract => "extract",
+        AddModPackState::Done => "done",
     }
 }
 
-/// 用真实文件构建下载项：目标路径为游戏目录 + 包内路径，哈希为 SHA1+SHA512。
-#[test]
-fn build_download_from_real_file() {
-    let Some(obj) = read_pack_obj() else {
-        eprintln!("跳过：无法下载测试整合包（需要网络）");
+struct PackGui;
+
+impl IAddModPackGui for PackGui {
+    fn set_state(&self, state: AddModPackState) {
+        println!("[安装] 阶段: {}", state_id(&state));
+    }
+
+    fn set_now(&self, value: usize, all: Option<usize>) {
+        println!("[安装] 进度 {}/{}", value, all.map(|v| v.to_string()).unwrap_or_else(|| "?".into()));
+    }
+
+    fn set_sub_text(&self, text: Option<String>) {
+        println!("[安装] 子进度文字: {}", text.unwrap_or_default());
+    }
+
+    fn set_sub_now(&self, value: usize, all: Option<usize>) {
+        println!("[安装] 子进度 {}/{}", value, all.map(|v| v.to_string()).unwrap_or_else(|| "?".into()));
+    }
+}
+
+fn start(run_dir: &Path) {
+    // 与 mcml_core::init 相同的初始化链（不含 jvms / config_save）
+    mcml_base::init(run_dir.to_path_buf());
+    // 不设置 CurseForge key：仅测试 API 之前的阶段（检测/读信息/建实例/解压）
+    mcml_names::init(mcml_base::get_base_dir()).unwrap();
+    mcml_log::start(mcml_base::get_base_dir()).unwrap();
+    mcml_config::init(mcml_base::get_base_dir()).unwrap();
+    mcml_config::config_save::start();
+    mcml_game::init(mcml_base::get_base_dir()).unwrap();
+    mcml_net::init();
+
+    mcml_downloader::init(run_dir).unwrap();
+    mcml_downloader::set_gui_handel(Box::new(TestDownloader));
+    mcml_downloader::start();
+}
+
+struct TestDownloader;
+
+impl mcml_downloader::IDownloadGui for TestDownloader {
+    fn update(&self, thread: u32, file: &Arc<mcml_downloader::download_item::DownloadItem>) {
+        let pro = file.progress() as u64;
+        if pro > 0 && pro % 25 == 0 {
+            println!(
+                "[下载] 线程 {thread} {} {}%",
+                file.base.name,
+                pro
+            );
+        }
+    }
+
+    fn update_task(&self, state: mcml_downloader::DownloadTaskState) {
+        match state {
+            mcml_downloader::DownloadTaskState::AddTask(id) => println!("[下载] 新任务 {id}"),
+            mcml_downloader::DownloadTaskState::RemoveTask(id) => println!("[下载] 任务结束 {id}"),
+            mcml_downloader::DownloadTaskState::UpdateTask(obj) => {
+                println!("[下载] 任务 {} 进度 {:.1}%", obj.id, obj.progress)
+            }
+        }
+    }
+}
+
+#[tokio::test]
+#[ignore]
+async fn install_curseforge_pack() {
+    let run_dir = env::temp_dir().join("mcml-modpack-test");
+    std::fs::create_dir_all(&run_dir).unwrap();
+    start(&run_dir);
+
+    let file = PathBuf::from(PACK_FILE);
+    if !file.exists() {
+        // 本机没有测试压缩包时跳过（保证全平台可跑）
+        eprintln!("跳过: 测试压缩包不存在: {}", file.display());
         return;
-    };
-    let file: &ModrinthPackFileObj = &obj.files[0];
+    }
 
-    let item = modrinth::make_pack_download_obj(file, "game");
-    assert_eq!(item.url, file.downloads[0]);
-    assert_eq!(item.name, file.path);
-    assert_eq!(item.file, std::path::PathBuf::from("game").join(&file.path));
-}
-
-/// 生成一个最小的 mrpack（zip）：根目录的 `modrinth.index.json` +
-/// `overrides/` 下的覆盖文件。
-///
-/// 二进制样本不提交进 git；这里直接程序化生成，无需网络。
-fn make_mini_mrpack() -> std::path::PathBuf {
-    let zip_path =
-        std::env::temp_dir().join(format!("mcml-modpack-mini-{}.zip", uuid::Uuid::new_v4()));
-    let file = std::fs::File::create(&zip_path).expect("创建测试 mrpack 失败");
-    let mut writer = ZipWriter::new(file);
-    let options = SimpleFileOptions::default();
-
-    let index =
-        br#"{"formatVersion":1,"game":"minecraft","versionId":"1","name":"mini","files":[]}"#;
-    writer.start_file(names::MODRINTH_FILE, options).unwrap();
-    writer.write_all(index).unwrap();
-    writer
-        .start_file(
-            &format!("{}/config/example.txt", names::OVERRIDE_DIR),
-            options,
-        )
-        .unwrap();
-    writer.write_all(b"hello").unwrap();
-    writer
-        .start_file(
-            &format!(
-                "{}/config/modpack_defaults/config/bettergrass.json",
-                names::OVERRIDE_DIR
-            ),
-            options,
-        )
-        .unwrap();
-    writer.write_all(b"{}").unwrap();
-    writer.finish().unwrap();
-
-    zip_path
-}
-
-/// 验证 `extract_pack_files` 的路径路由：
-/// - `overrides/` 前缀去除后写入游戏根目录（.minecraft）
-/// - 其余文件（如 `modrinth.index.json`）直接写入游戏基础目录
-/// - `unselect` 指定的条目被跳过
-#[test]
-fn extract_pack_files_routing() {
-    let temp = std::env::temp_dir().join(format!("mcml-modpack-test-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&temp);
-    mcml_game::init(&temp).expect("初始化运行路径失败");
-
-    let instance = InstanceSettingObj {
-        name: "routing-test".to_string(),
-        dir: "routing-test".to_string(),
-        version: "26.2".to_string(),
-        ..Default::default()
-    };
-    let base_path = instance.get_base_path();
-    let game_path = instance.get_game_path();
-    let game: GameInstance = Arc::new(RwLock::new(instance));
-
-    let archive = BaseArchive::open(&make_mini_mrpack()).expect("打开测试 mrpack 失败");
-    let mut worker = BaseModPackWorker::new(archive, None, None, None, CancellationToken::new());
-    worker.game = Some(game.clone());
-
-    // 第一次解压：跳过 modrinth.index.json
-    worker
-        .extract_pack_files(
-            names::OVERRIDE_DIR,
-            Some(vec![names::MODRINTH_FILE.to_string()]),
-        )
-        .expect("解压失败");
-
-    // 被跳过的根文件不写入基础目录
-    assert!(
-        !base_path.join(names::MODRINTH_FILE).exists(),
-        "unselect 的 modrinth.index.json 不应被解压"
-    );
-    // overrides/ 文件去掉前缀写入游戏目录
-    let override_file = game_path.join("config/modpack_defaults/config/bettergrass.json");
-    assert!(override_file.exists(), "overrides 文件应解压到游戏目录");
-
-    // 第二次全量解压：根文件写入基础目录
-    worker
-        .extract_pack_files(names::OVERRIDE_DIR, None)
-        .expect("全量解压失败");
-    assert!(
-        base_path.join(names::MODRINTH_FILE).exists(),
-        "modrinth.index.json 应写入基础目录"
+    // 类型检测 + 名字识别
+    let detected = add_game::detect_pack(&file).expect("类型检测失败");
+    println!(
+        "检测: type={} name={}",
+        detected.pack_type.id(),
+        detected.name
     );
 
-    let _ = std::fs::remove_dir_all(&temp);
+    let token = CancellationToken::new();
+    let gui: AddInstanceGui = Some(Arc::new(TestGui));
+    let pack_gui: AddModPackGui = Some(Arc::new(PackGui));
+
+    let res = add_game::install_archive_from_file(
+        &file,
+        Some(detected.name),
+        None,
+        None,
+        gui,
+        pack_gui,
+        None,
+        PackType::CurseForge,
+        token,
+    )
+    .await;
+
+    match res {
+        Ok(uuid) => println!("安装成功: {uuid}"),
+        Err(e) => panic!("安装失败: {} ({:?})", mcml_names::i18::get_error(e.clone()), e),
+    }
 }

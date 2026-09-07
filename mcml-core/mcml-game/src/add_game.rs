@@ -65,6 +65,147 @@ pub enum PackType {
     LauncherPack,
 }
 
+impl PackType {
+    /// 压缩包独立 ID（与前端 i18n 键对应，不随语言变化）
+    pub fn id(&self) -> &'static str {
+        match self {
+            PackType::CurseForge => "curseforge",
+            PackType::Modrinth => "modrinth",
+            PackType::MMC => "mmc",
+            PackType::HMCL => "hmcl",
+            PackType::HMCLServer => "hmcl_server",
+            PackType::ArchivePack => "archive",
+            PackType::LauncherPack => "launcher_pack",
+        }
+    }
+
+    /// 按 ID 解析压缩包类型
+    pub fn from_id(id: &str) -> Option<Self> {
+        match id {
+            "curseforge" => Some(PackType::CurseForge),
+            "modrinth" => Some(PackType::Modrinth),
+            "mmc" => Some(PackType::MMC),
+            "hmcl" => Some(PackType::HMCL),
+            "hmcl_server" => Some(PackType::HMCLServer),
+            "archive" => Some(PackType::ArchivePack),
+            "launcher_pack" => Some(PackType::LauncherPack),
+            _ => None,
+        }
+    }
+
+    /// 全部压缩包 ID（下拉列表数据源）
+    pub fn ids() -> Vec<&'static str> {
+        vec![
+            "curseforge",
+            "modrinth",
+            "mmc",
+            "hmcl",
+            "hmcl_server",
+            "archive",
+            "launcher_pack",
+        ]
+    }
+}
+
+/// Modrinth 整合包索引文件名
+const MODRINTH_INDEX_FILE: &str = "modrinth.index.json";
+
+/// 压缩包检测结果（添加实例窗口选好压缩包后自动填表用）
+pub struct DetectedPack {
+    /// 检测出的压缩包类型
+    pub pack_type: PackType,
+    /// 推荐实例名（元数据里的名字，取不到用文件名去扩展名）
+    pub name: String,
+}
+
+/// 读取压缩包内 JSON 条目的 `name` 字段（读不到返回空串）
+fn archive_json_name(archive: &BaseArchive, entry: &str) -> String {
+    archive
+        .read(entry)
+        .ok()
+        .and_then(|data| MiniJsonObj::from_stream(data.as_slice()).ok())
+        .and_then(|json| json.as_object())
+        .map(|map| map.get_string("name"))
+        .unwrap_or_default()
+}
+
+/// 读取压缩包内 `instance.cfg` 的 `name=xxx`（MMC 包的实例名）
+fn archive_cfg_name(archive: &BaseArchive) -> String {
+    let entry = match archive
+        .entries()
+        .iter()
+        .find(|e| !e.is_dir && e.name.replace('\\', "/").ends_with(names::MMCCFG_FILE))
+    {
+        Some(entry) => entry.name.clone(),
+        None => return String::new(),
+    };
+    let Ok(data) = archive.read(&entry) else {
+        return String::new();
+    };
+    let text = String::from_utf8_lossy(&data);
+    for line in text.lines() {
+        if let Some(value) = line.strip_prefix("name=") {
+            return value.trim().to_string();
+        }
+    }
+    String::new()
+}
+
+/// 检测压缩包的整合包类型，并取推荐实例名
+///
+/// 按元数据文件判定类型（HMCL 包内可能同时带 `mcbbs.packmeta` 与
+/// `manifest.json`，所以 CurseForge 的判定放在 HMCL 之后）；无元数据时按
+/// `.minecraft` 目录判启动器包，否则视为直接解压。名字取元数据里的
+/// `name`（MMC 读 `instance.cfg`），取不到用文件名去扩展名。
+pub fn detect_pack<P: AsRef<Path>>(file: P) -> CoreResult<DetectedPack> {
+    let file = file.as_ref();
+    let archive = BaseArchive::open(file)?;
+
+    let find_entry = |suffix: &str| -> Option<String> {
+        archive
+            .entries()
+            .iter()
+            .find(|e| !e.is_dir && e.name.replace('\\', "/").ends_with(suffix))
+            .map(|e| e.name.clone())
+    };
+
+    // 文件名去扩展名兜底
+    let fallback = || {
+        file.file_stem()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_default()
+    };
+
+    let mut detected: Option<(PackType, String)> = None;
+    for (suffix, pack_type) in [
+        (names::HMCLFILE, PackType::HMCL),
+        (names::SERVER_MANIFEST_FILE, PackType::HMCLServer),
+        (names::MMCJSON_FILE, PackType::MMC),
+        (MODRINTH_INDEX_FILE, PackType::Modrinth),
+        (names::MANIFEST_FILE, PackType::CurseForge),
+        (names::GAME_FILE, PackType::ArchivePack),
+    ] {
+        if let Some(entry) = find_entry(suffix) {
+            detected = Some((pack_type, archive_json_name(&archive, &entry)));
+            break;
+        }
+    }
+
+    let (pack_type, name) = match detected {
+        Some((PackType::MMC, json_name)) if json_name.is_empty() => {
+            (PackType::MMC, archive_cfg_name(&archive))
+        }
+        Some((pack_type, name)) => (pack_type, name),
+        None if find_minecraft_prefix(archive.entries()).is_some() => {
+            (PackType::LauncherPack, String::new())
+        }
+        None => (PackType::ArchivePack, String::new()),
+    };
+
+    let name = if name.is_empty() { fallback() } else { name };
+    Ok(DetectedPack { pack_type, name })
+}
+
 /// 导入文件夹
 pub async fn add_game_folder<P: AsRef<Path>>(
     dir: P,
@@ -192,6 +333,12 @@ async fn modpack<P: AsRef<Path>>(
 
     let uuid = work.create_instance(name, group).await?;
 
+    // 把新实例交给 worker（extract / get_info 都依赖 worker 里的 game）
+    let game = crate::get_instance(&uuid).ok_or_else(|| {
+        ErrorType::DataNotFound(DataNotFoundData::GameInstance)
+    })?;
+    work.update_game(&game);
+
     if let Some(pack_gui) = &pack_gui {
         pack_gui.set_state(AddModPackState::Extract);
         pack_gui.set_now(2, Some(5));
@@ -312,10 +459,15 @@ async fn archive<P: AsRef<Path>>(
         .filter(|s| !s.is_empty())
         .map(|s| s.trim_end_matches(['/', '\\']).to_string());
 
+    // 包内的 game.json 是导出时的旧元数据（旧 uuid），create_instance 已保存
+    // 新实例的 game.json，不能被解压覆盖
+    let mut unselect = unselect.unwrap_or_default();
+    unselect.push(game_entry.name.clone());
+
     extract_pack(
         &archive,
         game.read().unwrap().get_base_path(),
-        unselect.unwrap_or_default(),
+        unselect,
         strip_dir,
         archive_gui,
     )?;
@@ -478,7 +630,7 @@ async fn hmcl_archive<P: AsRef<Path>>(
         if item.is_dir {
             continue;
         } else if hmcl.is_none() && item.name.ends_with(names::HMCLFILE) {
-            path = item.name.replace(names::MMCJSON_FILE, "");
+            path = item.name.replace(names::HMCLFILE, "");
             let data = archive.read(&item.name)?;
             let obj = serialize_tools::json_from_bytes::<HMCLObj>(&data)?;
             hmcl = Some(obj);

@@ -8,7 +8,7 @@ use std::{
 
 use mcml_base::events::EventArgHandler;
 use mcml_names::{
-    i18_items::error_type::{ArgEmptyData, CoreResult, ErrorType, FileSystemErrorData},
+    i18_items::error_type::{ArgEmptyData, CoreResult, ErrorData, ErrorType, FileSystemErrorData},
     names,
 };
 
@@ -22,6 +22,7 @@ use crate::{
     gui_hook::{AddInstanceGui, ProgressGui},
     launcher::{LogEncoding, game_time_obj::GameTimeObj, instance_setting_obj::InstanceSettingObj},
     launcher_path::{
+        assets_path,
         instance_path::{self},
         version_path,
     },
@@ -234,6 +235,36 @@ pub fn get_instance(uuid: &Uuid) -> Option<GameInstance> {
     Some(list.get(uuid)?.clone())
 }
 
+/// 获取实例的游戏内语言列表（从资源索引文件里查 minecraft/lang/*.json）
+///
+/// 资源索引未下载 / 版本数据缺失时返回空列表，由前端回退默认语言（中文 / 英文）。
+pub fn get_instance_langs(uuid: &Uuid) -> Vec<String> {
+    let Some(instance) = get_instance(uuid) else {
+        return Vec::new();
+    };
+    let version = instance.read().unwrap().version.clone();
+    let Ok(obj) = version_path::get_version(&version) else {
+        return Vec::new();
+    };
+    let Some(index) = &obj.asset_index else {
+        return Vec::new();
+    };
+    let Ok(assets) = assets_path::get_index(index) else {
+        return Vec::new();
+    };
+    let mut langs: Vec<String> = assets
+        .objects
+        .keys()
+        .filter_map(|key| {
+            key.strip_prefix("minecraft/lang/")?
+                .strip_suffix(".json")
+                .map(String::from)
+        })
+        .collect();
+    langs.sort();
+    langs
+}
+
 /// 获取所有分组名字
 pub fn get_group_keys() -> Vec<String> {
     let mut list = Vec::new();
@@ -243,6 +274,14 @@ pub fn get_group_keys() -> Vec<String> {
     }
 
     list
+}
+
+/// 获取游戏版本类型列表（Mojang 版本清单的 type 字段取值）
+///
+/// 返回独立 ID：release / snapshot / old_beta / old_alpha，
+/// 显示名由前端 i18n 翻译。
+pub fn get_version_types() -> Vec<&'static str> {
+    vec!["release", "snapshot", "old_beta", "old_alpha"]
 }
 
 /// 从分组名字获取对应的实例
@@ -412,7 +451,12 @@ fn add_to_group(mut obj: InstanceSettingObj) -> GameInstance {
 
 /// 删除实例
 pub fn delete_instance(uuid: &Uuid) -> CoreResult<()> {
-    let instance_opt = {
+    let instance = get_instance(uuid).ok_or(ErrorType::ArgEmpty(ArgEmptyData::UUID))?;
+
+    // 先删实例文件（回收站），失败则保留实例数据，避免 UI 消失但文件还在
+    instance.read().unwrap().delete_files()?;
+
+    {
         let mut groups = GROUPS.write().unwrap();
         let mut instances = INSTANCES.write().unwrap();
 
@@ -421,16 +465,57 @@ pub fn delete_instance(uuid: &Uuid) -> CoreResult<()> {
             list.retain(|&u| u != *uuid);
         }
         groups.retain(|_, list| !list.is_empty());
-        instances.remove(uuid)
-    };
-
-    if let Some(instance) = instance_opt {
-        invoke_change(InstanceChange::RemoveInstance(*uuid));
-        instance.read().unwrap().delete_files()?;
-        Ok(())
-    } else {
-        Err(ErrorType::ArgEmpty(ArgEmptyData::UUID))
+        instances.remove(uuid);
     }
+
+    invoke_change(InstanceChange::RemoveInstance(*uuid));
+    Ok(())
+}
+
+/// 重命名实例（名字与实例目录一起改）
+///
+/// 新名字与其他实例重复时拒绝；成功后发 `MoveGroup` 事件刷新前端列表。
+pub fn rename_instance(uuid: &Uuid, name: &str) -> CoreResult<()> {
+    let name = name.trim();
+    if name.is_empty() {
+        return Err(ErrorType::ArgEmpty(ArgEmptyData::Name));
+    }
+
+    let instance = get_instance(uuid).ok_or(ErrorType::ArgEmpty(ArgEmptyData::UUID))?;
+
+    // 新名字与别的实例重复（自己保持原名除外）则拒绝
+    if have_instance_name(name) && instance.read().unwrap().name != name {
+        return Err(ErrorType::TaskError(mcml_names::i18_items::error_type::ErrorData {
+            error: format!("实例名字 {name} 已存在"),
+        }));
+    }
+
+    let old_base = instance.read().unwrap().get_base_path();
+
+    // 实例目录跟着改名（目录名由名字派生），改名成功后再更新名字并保存
+    let new_dir = path_helper::replace_path_name(name);
+    let new_base = old_base
+        .parent()
+        .map(|p| p.join(&new_dir))
+        .unwrap_or_else(|| old_base.clone());
+    if old_base != new_base && old_base.exists() {
+        std::fs::rename(&old_base, &new_base).map_err(|e| {
+            ErrorType::FileSystemError(FileSystemErrorData {
+                path: old_base,
+                error: e.to_string(),
+            })
+        })?;
+    }
+
+    {
+        let mut obj = instance.write().unwrap();
+        obj.name = name.to_string();
+        obj.dir = new_dir;
+        obj.save();
+    }
+
+    invoke_change(InstanceChange::MoveGroup(*uuid, instance.read().unwrap().group.clone()));
+    Ok(())
 }
 
 /// 添加运行日志
@@ -504,35 +589,42 @@ impl InstanceSettingObj {
         path_watch::stop_watch();
 
         let old = get_instance_by_name(&self.name);
+        // 是否覆盖重名实例（无界面 / 用户拒绝覆盖时改为自动改名，保留原实例）
+        let mut overwrite = false;
         if let Some(instance) = &old {
             if let Some(gui) = &gui {
-                let over = gui.overwrite(instance.clone()).await;
-                if !over && !gui.name_replace(&self.name).await {
+                overwrite = gui.overwrite(instance.clone()).await;
+                if !overwrite && !gui.name_replace(&self.name).await {
                     return Err(ErrorType::TaskCancel);
                 }
             }
 
-            let mut a = 1;
-            let mut name = format!("{}{a}", self.name);
-            while have_instance_name(&name) {
-                a += 1;
-                name = format!("{}{a}", self.name);
-            }
+            if !overwrite {
+                let mut a = 1;
+                let mut name = format!("{}{a}", self.name);
+                while have_instance_name(&name) {
+                    a += 1;
+                    name = format!("{}{a}", self.name);
+                }
 
-            self.name = name;
+                self.name = name;
+            }
         }
 
         if self.name.is_empty() {
             return Err(ErrorType::ArgEmpty(ArgEmptyData::Name));
         }
 
-        if let Some(instance) = old {
-            let uuid = {
-                let r = instance.read().unwrap();
-                r.uuid
-            };
+        // 只在用户选择覆盖时才删除重名的原实例
+        if overwrite {
+            if let Some(instance) = old {
+                let uuid = {
+                    let r = instance.read().unwrap();
+                    r.uuid
+                };
 
-            delete_instance(&uuid)?;
+                delete_instance(&uuid)?;
+            }
         }
 
         self.dir = path_helper::replace_path_name(&self.name);

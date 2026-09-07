@@ -25,6 +25,30 @@ impl Default for ModPackType {
     }
 }
 
+impl ModPackType {
+    /// 独立 ID（跨进程传输用，显示名由前端 i18n 翻译）
+    pub fn id(&self) -> &'static str {
+        match self {
+            ModPackType::CurseForge => "curseforge",
+            ModPackType::Modrinth => "modrinth",
+            ModPackType::McMod => "mcmod",
+            ModPackType::ServerPack => "serverpack",
+            ModPackType::None => "none",
+        }
+    }
+
+    /// 按 ID 解析整合包类型
+    pub fn from_id(id: &str) -> Self {
+        match id {
+            "curseforge" => ModPackType::CurseForge,
+            "modrinth" => ModPackType::Modrinth,
+            "mcmod" => ModPackType::McMod,
+            "serverpack" => ModPackType::ServerPack,
+            _ => ModPackType::None,
+        }
+    }
+}
+
 /// 编码模式
 #[derive(Serialize_repr, Deserialize_repr, Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]

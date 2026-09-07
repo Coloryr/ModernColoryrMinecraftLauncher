@@ -4,6 +4,7 @@
 // 磁盘 gui_config.json 使用 Rust 命名（snake_case），前端不直接接触。
 // 枚举值即 Rust 变体名：theme/windowMode/sidebarSide 为 PascalCase，locale 为 zh_cn/en_us。
 import { invoke } from "@tauri-apps/api/core";
+import { WindowGetGuiConfig, WindowSaveGuiConfig } from "./invokes";
 
 export type Theme = "Dark" | "Light";
 /** 与 core Lang 变体同名：zh_cn / en_us */
