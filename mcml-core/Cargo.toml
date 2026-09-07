@@ -11,6 +11,7 @@ mcml-downloader = { path = "mcml-downloader" }
 mcml-auth = { path = "mcml-auth" }
 mcml-base = { path = "mcml-base" }
 mcml-net = { path = "mcml-net" }
+mcml-blocks = { path = "mcml-blocks" }
 mcml-game = { path = "mcml-game" }
 mcml-jvms = { path = "mcml-jvms" }
 crossbeam-queue.workspace = true

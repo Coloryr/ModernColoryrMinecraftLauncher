@@ -71,6 +71,7 @@ pub fn init(arg: CoreInitObj) -> CoreResult<()> {
     mcml_names::init(mcml_base::get_base_dir())?;
     mcml_log::start(mcml_base::get_base_dir())?;
     mcml_log::info_type(InfoType::CoreStart);
+    mcml_blocks::init(mcml_base::get_base_dir())?;
     mcml_config::init(mcml_base::get_base_dir())?;
     mcml_game::init(mcml_base::get_base_dir())?;
     mcml_jvms::init(mcml_base::get_base_dir())?;
@@ -84,9 +85,10 @@ pub fn init(arg: CoreInitObj) -> CoreResult<()> {
 pub fn load() -> CoreResult<()> {
     mcml_net::init();
     auths::init();
+    mcml_jvms::load();
 
     mcml_game::load()?;
-    mcml_jvms::load();
+    mcml_blocks::load()?;
 
     CORE_STOP_EVENT.add_handler(config_save::stop);
     CORE_STOP_EVENT.add_handler(mcml_downloader::stop);
