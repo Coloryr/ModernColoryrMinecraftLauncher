@@ -9,6 +9,7 @@ pub mod forge;
 pub mod forge_install_obj;
 pub mod forge_launch_obj;
 pub mod liteloader;
+pub mod loader_versions;
 pub mod liteloader_meta_obj;
 pub mod optifine;
 pub mod optifine_obj;
@@ -78,6 +79,11 @@ impl Default for LoaderType {
 impl LoaderType {
     /// 获取加载器版本名前缀
     pub fn prefix(&self) -> &'static str {
+        self.id()
+    }
+
+    /// 加载器独立 ID（与前端 i18n 键对应，不随语言变化）
+    pub fn id(&self) -> &'static str {
         match self {
             LoaderType::Normal => "normal",
             LoaderType::Forge => "forge",
@@ -88,5 +94,34 @@ impl LoaderType {
             LoaderType::LiteLoader => "liteloader",
             LoaderType::Custom => "custom",
         }
+    }
+
+    /// 按 ID 解析加载器类型
+    pub fn from_id(id: &str) -> Option<Self> {
+        match id {
+            "normal" => Some(LoaderType::Normal),
+            "forge" => Some(LoaderType::Forge),
+            "fabric" => Some(LoaderType::Fabric),
+            "quilt" => Some(LoaderType::Quilt),
+            "neoforge" => Some(LoaderType::NeoForge),
+            "optifine" => Some(LoaderType::OptiFine),
+            "liteloader" => Some(LoaderType::LiteLoader),
+            "custom" => Some(LoaderType::Custom),
+            _ => None,
+        }
+    }
+
+    /// 全部加载器 ID（下拉列表数据源）
+    pub fn ids() -> Vec<&'static str> {
+        vec![
+            "normal",
+            "forge",
+            "fabric",
+            "quilt",
+            "neoforge",
+            "optifine",
+            "liteloader",
+            "custom",
+        ]
     }
 }

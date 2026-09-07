@@ -1,13 +1,22 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" style="background: #14161a">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>MCML 启动器</title>
+    <!-- 首帧背景：Vue 挂载前先铺暗色底，避免窗口打开时白屏闪烁（与暗色主题 --bg 一致） -->
+    <style>
+      html {
+        background: #14161a;
+      }
+      html[data-theme="Light"] {
+        background: #eef1f5;
+      }
+    </style>
   </head>
 
-  <body>
+  <body style="margin: 0">
     <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>

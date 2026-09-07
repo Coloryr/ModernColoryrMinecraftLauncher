@@ -71,3 +71,10 @@
   text-align: center;
 }
 
+/* 字段下方的一行提示文字（如"请先选择游戏版本"） */
+.field-hint {
+  color: var(--text-dim);
+  font-size: 12px;
+  margin-top: 6px;
+}
+

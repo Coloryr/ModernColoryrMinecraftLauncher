@@ -164,3 +164,32 @@ fn get_memory_free_inner() -> u64 {
         u64::MAX
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// 获取内存大小：结果应为有效数值（单位 MiB）
+    ///
+    /// 注意：各平台实现失败时返回 u64::MAX 作为哨兵值，
+    /// 因此仅当非哨兵值时才做进一步断言。
+    #[test]
+    fn test_get_memory_size() {
+        let total = get_memory_size();
+        assert!(total != 0, "内存总量不应为 0");
+        if total != u64::MAX {
+            // 现代机器至少 256 MiB 内存
+            assert!(total >= 256, "内存总量过小: {total} MiB");
+        }
+    }
+
+    /// 剩余内存不应超过总内存
+    #[test]
+    fn test_get_memory_free() {
+        let total = get_memory_size();
+        let free = get_memory_free();
+        if free != u64::MAX && total != u64::MAX {
+            assert!(free <= total, "剩余内存 {free} 不应大于总量 {total}");
+        }
+    }
+}

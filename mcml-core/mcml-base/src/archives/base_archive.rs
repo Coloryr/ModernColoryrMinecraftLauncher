@@ -42,7 +42,10 @@ impl ArchiveType {
     pub fn try_from_path(path: &Path) -> Option<Self> {
         let file_name = path.file_name()?.to_string_lossy().to_lowercase();
 
-        if file_name.ends_with(names::ZIP_DOT_EXT) {
+        if file_name.ends_with(names::ZIP_DOT_EXT)
+            || file_name.ends_with(names::MRPACK_DOT_EXT)
+        {
+            // Modrinth 整合包（.mrpack）本质是 zip
             Some(ArchiveType::Zip)
         } else if file_name.ends_with(names::R7Z_DOT_EXT) {
             Some(ArchiveType::R7Z)

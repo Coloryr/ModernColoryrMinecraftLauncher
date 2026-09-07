@@ -335,18 +335,26 @@ impl Client {
         self.inner.execute(build).await.map_err(map_err)
     }
 
+    /// 发送 GET 请求，失败时自动重试一次
+    ///
+    /// 连接池中的空闲连接可能已被服务端/代理关闭，复用时会立即报
+    /// "error sending request"，此时换新连接重试一次即可。
+    async fn get_with_retry(&self, url: &str) -> CoreResult<Response> {
+        match self.inner.get(url).send().await {
+            Ok(resp) => Ok(resp),
+            Err(_) => self.inner.get(url).send().await.map_err(map_err),
+        }
+    }
+
     /// 发送 GET 请求，返回原始响应
     pub async fn get(&self, url: &str) -> CoreResult<Response> {
-        self.inner.get(url).send().await.map_err(map_err)
+        self.get_with_retry(url).await
     }
 
     /// 发送 GET 请求，返回响应体文本
     pub async fn get_text(&self, url: &str) -> CoreResult<String> {
-        self.inner
-            .get(url)
-            .send()
-            .await
-            .map_err(map_err)?
+        self.get_with_retry(url)
+            .await?
             .text()
             .await
             .map_err(map_err)
@@ -354,11 +362,8 @@ impl Client {
 
     /// 发送 GET 请求，返回响应体字节
     pub async fn get_bytes(&self, url: &str) -> CoreResult<Vec<u8>> {
-        self.inner
-            .get(url)
-            .send()
-            .await
-            .map_err(map_err)?
+        self.get_with_retry(url)
+            .await?
             .bytes()
             .await
             .map_err(map_err)
@@ -367,7 +372,7 @@ impl Client {
 
     /// 发送 GET 请求，返回反序列化的 JSON
     pub async fn get_json<T: DeserializeOwned>(&self, url: &str) -> CoreResult<T> {
-        let resp = self.inner.get(url).send().await.map_err(map_err)?;
+        let resp = self.get_with_retry(url).await?;
         handle_response(resp).await
     }
 
@@ -547,6 +552,12 @@ pub fn init() {
     };
 
     LOGIN_CLIENT.get_or_init(|| Arc::new(client));
+}
+
+/// HTTP 客户端是否已初始化（[`init`] 之后为 true；
+/// 供调用方判断能否安全使用 [`get_work_client`]，避免 unwrap panic）
+pub fn is_init() -> bool {
+    WORK_CLIENT.get().is_some()
 }
 
 /// 获取全局通用 HTTP 客户端（用于资源下载和一般 API 请求）

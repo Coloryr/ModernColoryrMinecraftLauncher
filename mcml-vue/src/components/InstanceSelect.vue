@@ -39,8 +39,8 @@ function pick(inst: InstanceInfo) {
         <span v-else class="sel-placeholder">{{ t("launch.selectInstance") }}</span>
         <span v-if="selected" class="sel-sub">
           {{ selected.version }}
-          <template v-if="selected.loader !== '原版'">
-            <span class="loader-text">{{ selected.loader }}</span>
+          <template v-if="selected.loader !== 'normal'">
+            <span class="loader-text">{{ t(`add.loader.${selected.loader}`) }}</span>
           </template>
         </span>
       </span>
@@ -71,8 +71,8 @@ function pick(inst: InstanceInfo) {
           <span class="option-name">{{ inst.name }}</span>
           <span class="option-sub">
             {{ inst.version }}
-            <template v-if="inst.loader !== '原版'">
-              <span class="loader-text">{{ inst.loader }}</span>
+            <template v-if="inst.loader !== 'normal'">
+              <span class="loader-text">{{ t(`add.loader.${inst.loader}`) }}</span>
             </template>
           </span>
         </span>

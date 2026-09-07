@@ -11,6 +11,7 @@ import { ref } from "vue";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { invoke } from "@tauri-apps/api/core";
+import { WindowOpenWindow, WindowCloseWindow } from "../lib/invokes";
 import { saveGuiConfig } from "../lib/guiConfig";
 import { isWindowKind, type WindowKind, WINDOW_REGISTRY } from "./registry";
 
@@ -76,7 +77,7 @@ export function openWindow(kind: WindowKind) {
     // 统一走 Rust 窗口管理器：创建 / 聚焦在 window_manager.rs 处理。
     // open_window 是 async 命令（不在 Windows 主线程创建窗口，避免冻结）。
     // 命令失败（例如窗口创建被拒）时回退到官方 JS API。
-    invoke("window_open_window", { kind }).catch((e) => {
+    invoke(WindowOpenWindow, { kind }).catch((e) => {
       console.error("[windowManager] Rust 打开窗口失败，回退 JS API", kind, e);
       createViaJs(kind);
     });
@@ -123,11 +124,11 @@ function createViaJs(kind: WindowKind) {
 
 /** 关闭当前窗口（单窗口模式的返回按钮触发：切回主页面） */
 export function closeWindow() {
-  if (isTauri()) {
-    // 统一走 Rust 窗口管理器关闭当前窗口（kind → 标签映射在 window_manager.rs）。
+  if (isTauri() && multiWindow.value) {
+    // 多窗口：走 Rust 窗口管理器关闭当前真实窗口（kind → 标签映射在 window_manager.rs）。
     // 命令失败时回退到官方 JS API 关闭当前窗口。
     const kind = currentKind.value;
-    invoke("window_close_window", { kind }).catch((e) => {
+    invoke(WindowCloseWindow, { kind }).catch((e) => {
       console.error("[windowManager] Rust 关闭窗口失败，回退 JS API", kind, e);
       getCurrentWindow().close();
     });

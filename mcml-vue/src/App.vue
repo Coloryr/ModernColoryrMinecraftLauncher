@@ -1,30 +1,25 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, defineAsyncComponent, type Component } from "vue";
 import { applyTheme } from "./lib/theme";
 import { applyLocale } from "./lib/i18n";
 import { closeWindow, currentKind } from "./windows/windowManager";
-import MainWindow from "./windows/main/MainWindow.vue";
-import SettingsWindow from "./windows/settings/SettingsWindow.vue";
-import StatsWindow from "./windows/stats/StatsWindow.vue";
-import SkinWindow from "./windows/skin/SkinWindow.vue";
-import HelpWindow from "./windows/help/HelpWindow.vue";
-import ResourceWindow from "./windows/resource/ResourceWindow.vue";
-import AccountWindow from "./windows/account/AccountWindow.vue";
-import AddInstanceWindow from "./windows/add/AddInstanceWindow.vue";
+import type { WindowKind } from "./windows/registry";
 import AppToast from "./components/ui/AppToast.vue";
 
 applyTheme();
 applyLocale();
 
-const windowMap = {
-  main: MainWindow,
-  settings: SettingsWindow,
-  stats: StatsWindow,
-  skin: SkinWindow,
-  help: HelpWindow,
-  resource: ResourceWindow,
-  account: AccountWindow,
-  add: AddInstanceWindow,
+// 各窗口按需加载：每个窗口编译为独立 chunk，打开时才拉取对应 JS
+const windowMap: Record<WindowKind, Component> = {
+  main: defineAsyncComponent(() => import("./windows/main/MainWindow.vue")),
+  settings: defineAsyncComponent(() => import("./windows/settings/SettingsWindow.vue")),
+  stats: defineAsyncComponent(() => import("./windows/stats/StatsWindow.vue")),
+  skin: defineAsyncComponent(() => import("./windows/skin/SkinWindow.vue")),
+  help: defineAsyncComponent(() => import("./windows/help/HelpWindow.vue")),
+  resource: defineAsyncComponent(() => import("./windows/resource/ResourceWindow.vue")),
+  account: defineAsyncComponent(() => import("./windows/account/AccountWindow.vue")),
+  add: defineAsyncComponent(() => import("./windows/add/AddInstanceWindow.vue")),
+  download: defineAsyncComponent(() => import("./windows/download/DownloadWindow.vue")),
 };
 
 const currentWindow = computed(() => windowMap[currentKind.value]);
