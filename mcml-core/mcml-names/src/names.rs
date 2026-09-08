@@ -31,6 +31,8 @@ pub const NATIVE_DIR: &str = "native";
 pub const MCML_DIR: &str = "mcml";
 pub const MCML_INNER_DIR: &str = ".mcml";
 pub const BLOCK_DIR: &str = "block";
+pub const BLOCK_LANGS_DIR: &str = "langs";
+pub const ITEM_DIR: &str = "items";
 pub const MINECRAFT_DIR: &str = "minecraft";
 
 pub const LOG_FILE: &str = "logs.log";
@@ -76,6 +78,7 @@ pub const SAVE_BACKUP_FILE: &str = "save_backups.json";
 pub const COUNT_DATA_FILE: &str = "count.dat";
 pub const WINDOW_SAVE_FILE: &str = "window_save.json";
 pub const BLOCK_FILE: &str = "block.json";
+pub const ITEM_FILE: &str = "items.json";
 pub const GUI_CONFIG_FILE: &str = "gui_config.json";
 
 pub const MINECRAFT_KEY: &str = "minecraft";
@@ -239,6 +242,7 @@ mod tests {
             MCML_DIR,
             MCML_INNER_DIR,
             BLOCK_DIR,
+            ITEM_DIR,
             MINECRAFT_DIR,
         ] {
             assert!(!name.is_empty(), "目录常量不应为空: {name:?}");
@@ -292,6 +296,7 @@ mod tests {
             COUNT_DATA_FILE,
             WINDOW_SAVE_FILE,
             BLOCK_FILE,
+            ITEM_FILE,
             GUI_CONFIG_FILE,
         ] {
             assert!(!name.is_empty(), "文件常量不应为空: {name:?}");

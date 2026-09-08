@@ -11,7 +11,7 @@ mcml-downloader = { path = "mcml-downloader" }
 mcml-auth = { path = "mcml-auth" }
 mcml-base = { path = "mcml-base" }
 mcml-net = { path = "mcml-net" }
-mcml-blocks = { path = "mcml-blocks" }
+mcml-tex-draw = { path = "mcml-tex-draw" }
 mcml-game = { path = "mcml-game" }
 mcml-jvms = { path = "mcml-jvms" }
 crossbeam-queue.workspace = true
@@ -28,7 +28,7 @@ chrono.workspace = true
 members = [
     "mcml-auth",
     "mcml-base",
-    "mcml-blocks",
+    "mcml-tex-draw",
     "mcml-config",
     "mcml-downloader",
     "mcml-game",
@@ -108,3 +108,5 @@ ico = "~0.5.0"
 clipboard-rs = "~0.3.5"
 dbus = "~0.9.12"
 bytes = "~1.12.1"
+png = "~0.18.1"
+webp = "~0.3.0"

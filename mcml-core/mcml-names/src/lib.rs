@@ -27,7 +27,7 @@ pub const DATE: &str = "20260831";
 pub const VERSION: LazyLock<String> = LazyLock::new(|| format!("1.{}.{DATE}", VERSION_NUM));
 
 #[allow(non_camel_case_types)]
-#[derive(Clone, Copy, Serialize, Deserialize, Debug)]
+#[derive(Clone, Copy, Serialize, Deserialize, Debug, PartialEq, Eq, Hash)]
 pub enum Lang {
     zh_cn,
     en_us,
