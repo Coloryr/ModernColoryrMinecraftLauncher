@@ -3,8 +3,7 @@ use std::{f32::consts::PI, slice};
 use glam::{Mat4, Vec3, Vec4};
 use skia_safe::{
     AlphaType, Bitmap, BlendMode, Canvas, Color, ColorType, IRect, ImageInfo, Paint, Point, Point3,
-    Rect, SamplingOptions, TileMode,
-    canvas::SrcRectConstraint,
+    SamplingOptions, TileMode,
     image::CachingHint,
     surfaces,
     vertices::{BuilderFlags, VertexMode},
@@ -154,71 +153,51 @@ fn project(tran: &Mat4, point: Point3, enable_z: bool) -> Point {
     Point::new(res.x, res.y)
 }
 
-fn draw_texture_face(
-    canvas: &Canvas,
-    texture: &mut Bitmap,
-    tran: &Mat4,
-    index: usize,
-    enable_z: bool,
-) {
-    let face = FACE_POS[index];
-
-    let info = ImageInfo::new((8, 8), ColorType::RGBA8888, AlphaType::Premul, None);
-    let mut source_image = Bitmap::new();
-
-    source_image.alloc_pixels_info(&info, None);
-
-    let img_canvas = Canvas::from_bitmap(&source_image, None).unwrap();
-    img_canvas.draw_image_rect(
-        texture.as_image(),
-        Some((
-            &Rect::new(
-                face.left as f32,
-                face.top as f32,
-                face.right as f32,
-                face.bottom as f32,
-            ),
-            SrcRectConstraint::Strict,
-        )),
-        Rect::new(0.0, 0.0, 8.0, 8.0),
-        &Paint::default(),
-    );
-
-    let base_index = index * 4;
+fn draw_texture_faces(canvas: &Canvas, texture: &Bitmap, tran: &Mat4, enable_z: bool) {
+    let face_count = CUBE_INDICES.len() / 4;
 
     let mut builder = skia_safe::vertices::Builder::new(
-        VertexMode::TriangleFan,
-        4,
+        VertexMode::Triangles,
+        face_count * 6,
         0,
         BuilderFlags::HAS_TEX_COORDS,
     );
-    let pos = builder.positions();
-    pos[0] = project(&tran, CUBE_VERTICES[CUBE_INDICES[base_index]], enable_z);
-    pos[1] = project(&tran, CUBE_VERTICES[CUBE_INDICES[base_index + 1]], enable_z);
-    pos[2] = project(&tran, CUBE_VERTICES[CUBE_INDICES[base_index + 2]], enable_z);
-    pos[3] = project(&tran, CUBE_VERTICES[CUBE_INDICES[base_index + 3]], enable_z);
 
-    let tex = builder.tex_coords().unwrap();
-    tex[0] = Point::new(
-        SOURCE_VERTICES[base_index].x * 8.0,
-        SOURCE_VERTICES[base_index].y * 8.0,
-    );
-    tex[1] = Point::new(
-        SOURCE_VERTICES[base_index + 1].x * 8.0,
-        SOURCE_VERTICES[base_index + 1].y * 8.0,
-    );
-    tex[2] = Point::new(
-        SOURCE_VERTICES[base_index + 2].x * 8.0,
-        SOURCE_VERTICES[base_index + 2].y * 8.0,
-    );
-    tex[3] = Point::new(
-        SOURCE_VERTICES[base_index + 3].x * 8.0,
-        SOURCE_VERTICES[base_index + 3].y * 8.0,
-    );
+    // 每个面的四边形按 (0,1,2) (0,2,3) 展开为两个三角形
+    const TRI_ORDER: [usize; 6] = [0, 1, 2, 0, 2, 3];
+
+    {
+        let positions = builder.positions();
+        for (face_index, chunk) in positions.chunks_mut(6).enumerate() {
+            let base_index = face_index * 4;
+            for (i, pos) in chunk.iter_mut().enumerate() {
+                *pos = project(
+                    tran,
+                    CUBE_VERTICES[CUBE_INDICES[base_index + TRI_ORDER[i]]],
+                    enable_z,
+                );
+            }
+        }
+    }
+
+    {
+        let tex_coords = builder.tex_coords().unwrap();
+        for (face_index, chunk) in tex_coords.chunks_mut(6).enumerate() {
+            let face = FACE_POS[face_index];
+            let base_index = face_index * 4;
+            for (i, tex) in chunk.iter_mut().enumerate() {
+                let src = SOURCE_VERTICES[base_index + TRI_ORDER[i]];
+                *tex = Point::new(
+                    face.left as f32 + src.x * 8.0,
+                    face.top as f32 + src.y * 8.0,
+                );
+            }
+        }
+    }
 
     let vertices = builder.detach();
 
-    let shader = source_image.to_shader(
+    let shader = texture.to_shader(
         Some((TileMode::Clamp, TileMode::Clamp)),
         SamplingOptions::default(),
         None,
@@ -229,11 +208,6 @@ fn draw_texture_face(
     let paint = paint.set_shader(shader);
 
     canvas.draw_vertices(&vertices, BlendMode::SrcOver, &paint);
-
-    // mcml_skin::skin::save_image(
-    //     &canvas.surface().unwrap().image_snapshot(),
-    //     std::path::Path::new("tests").join("temp.png").as_path(),
-    // );
 }
 
 pub fn draw_head_3d_typea(image: &mut Bitmap) -> Option<Bitmap> {
@@ -253,10 +227,7 @@ pub fn draw_head_3d_typea(image: &mut Bitmap) -> Option<Bitmap> {
 
     let tran = create_tran();
 
-    let face_count = CUBE_INDICES.len() / 4;
-    for index in 0..face_count {
-        draw_texture_face(canvas, image, &tran, index, false);
-    }
+    draw_texture_faces(canvas, image, &tran, false);
 
     let image = draw.image_snapshot();
 
@@ -296,10 +267,7 @@ pub fn draw_head_3d_typeb(image: &mut Bitmap, x: f32, y: f32) -> Option<Bitmap> 
 
     let tran = create_tran_rotate(x, y);
 
-    let face_count = CUBE_INDICES.len() / 4;
-    for index in 0..face_count {
-        draw_texture_face(canvas, image, &tran, index, true);
-    }
+    draw_texture_faces(canvas, image, &tran, true);
 
     let image = draw.image_snapshot();
 

@@ -1,0 +1,24 @@
+[package]
+name = "mcml-tex-draw"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+mcml-names = { path = "../mcml-names" }
+mcml-sys = { path = "../mcml-sys" }
+mcml-game = { path = "../mcml-game" }
+mcml-base = { path = "../mcml-base" }
+mcml-net = { path = "../mcml-net" }
+mcml-downloader = { path = "../mcml-downloader" }
+mcml-config = { path = "../mcml-config" }
+mcml-log = { path = "../mcml-log" }
+tokio.workspace = true
+skia-safe.workspace = true
+glam.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+png.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+mcml-log = { path = "../mcml-log" }

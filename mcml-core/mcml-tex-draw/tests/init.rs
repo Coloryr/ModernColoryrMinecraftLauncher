@@ -1,4 +1,4 @@
-//! mcml-blocks 集成测试
+//! mcml-tex-draw 集成测试
 //!
 //! 验证公开 API `init` 的行为：
 //! - 在指定根路径下创建方块数据目录（目录名来自 `mcml_names::names::BLOCK_DIR`）；
@@ -15,7 +15,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use mcml_blocks::init;
+use mcml_tex_draw::init;
 use mcml_names::names;
 
 /// 生成测试用的唯一临时目录路径（不自动创建）
@@ -27,7 +27,7 @@ fn unique_temp_dir(tag: &str) -> PathBuf {
         .unwrap()
         .as_nanos();
     std::env::temp_dir().join(format!(
-        "mcml-blocks-it-{}-{}-{}",
+        "mcml-tex-draw-it-{}-{}-{}",
         tag,
         std::process::id(),
         nanos

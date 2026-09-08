@@ -44,6 +44,8 @@ impl ArchiveType {
 
         if file_name.ends_with(names::ZIP_DOT_EXT)
             || file_name.ends_with(names::MRPACK_DOT_EXT)
+            // jar本质是zip（客户端jar、mod jar等）
+            || file_name.ends_with(names::JAR_DOT_EXT)
         {
             // Modrinth 整合包（.mrpack）本质是 zip
             Some(ArchiveType::Zip)
