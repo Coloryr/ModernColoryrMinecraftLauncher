@@ -2953,6 +2953,7 @@ dependencies = [
  "mcml-net",
  "mcml-sys",
  "png 0.18.1",
+ "rayon",
  "serde",
  "serde_json",
  "skia-safe",

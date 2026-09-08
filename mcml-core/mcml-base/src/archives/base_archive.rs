@@ -127,6 +127,31 @@ impl BaseArchive {
         })
     }
 
+    /// 以只读方式打开压缩包，不支持后续的就地写入。
+    ///
+    /// 与[`open`](Self::open)等价，但句柄不带写权限：
+    /// 并发打开同一文件时不受写模式打开的杀软扫描影响，适合多线程各自持有一份句柄的场景。
+    pub fn open_readonly<P: AsRef<Path>>(path: P) -> CoreResult<Self> {
+        let path = path.as_ref().to_path_buf();
+        let archive_type = ArchiveType::try_from_path(&path).ok_or_else(|| {
+            ErrorType::ArchiveOpenError(FileSystemErrorData {
+                path: path.clone(),
+                error: String::new(),
+            })
+        })?;
+
+        let file = path_helper::open_read(&path)?;
+        let mut handle = Self::make_handle(archive_type, &path, file)?;
+        let entries = handle.read_entries()?;
+
+        Ok(Self {
+            path,
+            archive_type,
+            entries,
+            handle: Mutex::new(handle),
+        })
+    }
+
     /// 从目录创建新的压缩包并返回已打开的状态。
     ///
     /// 创建成功后可通过 [`add_files`](Self::add_files) /

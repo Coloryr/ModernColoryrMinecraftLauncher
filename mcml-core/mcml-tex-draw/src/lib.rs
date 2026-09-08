@@ -9,7 +9,7 @@ use mcml_base::{
     file_item::{FileHash, FileItemObj, LaterRun},
     serialize_tools,
 };
-use mcml_game::launcher_path::{libraries_path, version_path};
+use mcml_game::{gui_hook, launcher_path::{libraries_path, version_path}};
 use mcml_names::{
     Lang,
     i18_items::error_type::{CoreResult, DataNotFoundData, ErrorType, PathNotExistsData},
@@ -23,7 +23,9 @@ pub mod block_obj;
 pub mod block_render;
 
 /// 下载并渲染方块贴图（版本清单 → 客户端jar → 解包渲染 cube_all 方块）
-pub async fn load_blocks() -> CoreResult<()> {
+///
+/// `gui`可选，渲染期间按已处理的候选模型数上报进度
+pub async fn load_blocks(gui: gui_hook::ProgressGui) -> CoreResult<()> {
     // 版本清单（本地缓存，缺了才在线拉）
     let versions = version_path::get_version_obj_online().await?;
     let last = versions.latest.release.clone();
@@ -55,7 +57,7 @@ pub async fn load_blocks() -> CoreResult<()> {
 
     // 打开jar并渲染全部方块
     let archive = BaseArchive::open(&item.file)?;
-    block_render::render_blocks(&archive)?;
+    block_render::render_blocks(&archive, gui)?;
 
     blocks_write().id = last;
     save()?;
@@ -128,7 +130,7 @@ pub fn load() -> CoreResult<()> {
 /// 后台执行load_blocks，不阻塞调用方，错误只记日志
 fn spawn_load_task() {
     let task = async {
-        if let Err(err) = load_blocks().await {
+        if let Err(err) = load_blocks(None).await {
             mcml_log::error_type(err);
         }
     };

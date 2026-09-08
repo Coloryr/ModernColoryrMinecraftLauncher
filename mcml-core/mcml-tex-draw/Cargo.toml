@@ -15,6 +15,7 @@ mcml-log = { path = "../mcml-log" }
 tokio.workspace = true
 skia-safe.workspace = true
 glam.workspace = true
+rayon.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 png.workspace = true
