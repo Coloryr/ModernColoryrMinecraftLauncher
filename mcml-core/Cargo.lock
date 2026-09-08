@@ -1680,6 +1680,7 @@ dependencies = [
  "mcml-net",
  "mcml-sys",
  "png",
+ "rayon",
  "serde",
  "serde_json",
  "skia-safe",

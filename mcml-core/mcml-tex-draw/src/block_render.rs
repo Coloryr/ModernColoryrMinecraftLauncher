@@ -1,13 +1,16 @@
 use std::{
+    cell::RefCell,
     collections::HashMap,
     f32::consts::PI,
     io::Cursor,
     slice,
-    sync::LazyLock,
+    sync::{LazyLock, atomic::{AtomicU64, AtomicUsize, Ordering}},
 };
 
 use glam::{Mat4, Vec3, Vec4};
 use mcml_base::{archives::BaseArchive, serialize_tools};
+use mcml_game::gui_hook::ProgressGui;
+use rayon::prelude::*;
 use mcml_names::i18_items::error_type::{CoreResult, ErrorType};
 use mcml_sys::path_helper;
 use serde::{Deserialize, Serialize};
@@ -71,31 +74,9 @@ static INDICES: [usize; 24] = [
     1, 5, 6, 2, // Front face
 ];
 
-/// 三个可见面（顶、北、东）的基准uv角，角序与INDICES的展开顺序一致
-/// （顶面u沿世界z，已与wiki木板顶面纹理走向比对确认）
-static BASE_UV: [[Point; 4]; 3] = [
-    // 顶面
-    [
-        Point { x: 0.0, y: 1.0 },
-        Point { x: 1.0, y: 1.0 },
-        Point { x: 1.0, y: 0.0 },
-        Point { x: 0.0, y: 0.0 },
-    ],
-    // 北面
-    [
-        Point { x: 0.0, y: 1.0 },
-        Point { x: 1.0, y: 1.0 },
-        Point { x: 1.0, y: 0.0 },
-        Point { x: 0.0, y: 0.0 },
-    ],
-    // 东面
-    [
-        Point { x: 1.0, y: 1.0 },
-        Point { x: 0.0, y: 1.0 },
-        Point { x: 0.0, y: 0.0 },
-        Point { x: 1.0, y: 0.0 },
-    ],
-];
+/// 三个可见面（顶、北、东）的基准uv角，角序与INDICES的展开顺序一致（取自FACE_DEFS）
+static BASE_UV: LazyLock<[[Point; 4]; 3]> =
+    LazyLock::new(|| [FACE_DEFS[3].2, FACE_DEFS[4].2, FACE_DEFS[5].2]);
 
 /// 等轴测旋转矩阵（先翻转y，再绕y轴45°、x轴30°）
 static MAT: LazyLock<Mat4> = LazyLock::new(|| {
@@ -151,6 +132,29 @@ static MATRIX: LazyLock<[Point; 24]> = LazyLock::new(|| {
     ver.try_into().unwrap()
 });
 
+/// 完整方块投影的fit参数（min_x, min_y, scale, dx, dy）。
+/// 半砖等矮模型按完整方块的比例绘制（不放大铺满画布），与游戏图标一致
+static FULL_FIT: LazyLock<(f32, f32, f32, f32, f32)> = LazyLock::new(|| {
+    // 画布四周留边距
+    const MARGIN: f32 = 2.0;
+    let mut min_x = f32::INFINITY;
+    let mut min_y = f32::INFINITY;
+    let mut max_x = f32::NEG_INFINITY;
+    let mut max_y = f32::NEG_INFINITY;
+    for p in &VERTICES {
+        let res = project(&MAT, p);
+        min_x = min_x.min(res.x);
+        min_y = min_y.min(res.y);
+        max_x = max_x.max(res.x);
+        max_y = max_y.max(res.y);
+    }
+    let inner = BLOCK_SIZE as f32 - MARGIN * 2.0;
+    let scale = inner / (max_x - min_x).max(max_y - min_y);
+    let dx = (BLOCK_SIZE as f32 - (max_x - min_x) * scale) / 2.0;
+    let dy = (BLOCK_SIZE as f32 - (max_y - min_y) * scale) / 2.0;
+    (min_x, min_y, scale, dx, dy)
+});
+
 /// 每个面的四边形按 (0,1,2) (0,2,3) 展开为两个三角形
 const TRI_ORDER: [usize; 6] = [0, 1, 2, 0, 2, 3];
 
@@ -163,6 +167,9 @@ const FRAME_RATE: u16 = 20;
 /// 平原群系颜色（与wiki物品图标一致）：草/树叶等灰度贴图按此染色（tintindex）
 const GRASS_TINT: [u8; 3] = [145, 189, 89]; // #91BD59
 const FOLIAGE_TINT: [u8; 3] = [119, 171, 47]; // #77AB2F
+/// 固定色树叶（游戏内不随群系变化）
+const BIRCH_TINT: [u8; 3] = [128, 167, 85]; // #80A755
+const SPRUCE_TINT: [u8; 3] = [97, 153, 97]; // #619961
 
 fn project(mat: &Mat4, point: &Point3) -> Vec4 {
     let vec = Vec4::new(point.x, point.y, point.z, 1.0);
@@ -309,17 +316,48 @@ pub fn decode_png(data: &[u8]) -> Option<Bitmap> {
 }
 
 /// 按游戏规则换算面的4个uv角：基准角 → rotation顺时针旋转 → uv矩形映射（0-16 → 0-1）
-fn face_uv(base: &[Point; 4], face: &BlockFaceObj) -> [Point; 4] {
+///
+/// 面未显式写uv时，按游戏规则从元素盒子的from/to投影到该面自动生成
+/// （楼梯等元素模型依赖此规则，缺省不能当全幅处理）
+fn face_uv(
+    base: &[Point; 4],
+    face: &BlockFaceObj,
+    face_name: &str,
+    from: &[f32],
+    to: &[f32],
+) -> [Point; 4] {
     let steps = (face.rotation.unwrap_or(0) / 90) % 4;
-    let uv = face.uv.as_deref().unwrap_or(&[0.0, 0.0, 16.0, 16.0]);
-    let (x1, y1, x2, y2) = (uv[0], uv[1], uv[2], uv[3]);
+    let default_uv = match face_name {
+        // 与游戏 FaceBakery 的自动uv规则一致
+        "down" => [from[0], 16.0 - to[2], to[0], 16.0 - from[2]],
+        "up" => [from[0], from[2], to[0], to[2]],
+        "north" => [16.0 - to[0], 16.0 - to[1], 16.0 - from[0], 16.0 - from[1]],
+        "south" => [from[0], 16.0 - to[1], to[0], 16.0 - from[1]],
+        "west" => [from[2], 16.0 - to[1], to[2], 16.0 - from[1]],
+        "east" => [16.0 - to[2], 16.0 - to[1], 16.0 - from[2], 16.0 - from[1]],
+        _ => [0.0, 0.0, 16.0, 16.0],
+    };
+    let [x1, y1, x2, y2] = face
+        .uv
+        .as_deref()
+        .and_then(|uv| <[f32; 4]>::try_from(uv).ok())
+        .unwrap_or(default_uv);
+    // 顶/底面的基准u沿世界z、v沿x：相对矩形分量是(u取y范围, v取16-x)的90°旋转，
+    // 局部uv（楼梯上半块顶面[8,0,16,16]等）才能与面的两边尺寸1:1对应，
+    // 否则半张会被拉伸到长边上（表现为整张贴图铺满）；
+    // 整块矩形[0,16,0,16]经过该变换不变，已验证的整块顶/底面外观不受影响
+    let (u1, v1, u2, v2) = if face_name == "up" || face_name == "down" {
+        (y1, 16.0 - x2, y2, 16.0 - x1)
+    } else {
+        (x1, y1, x2, y2)
+    };
     base.map(|p| {
         let (mut u, mut v) = (p.x, p.y);
         for _ in 0..steps {
             // 游戏rotation为贴图顺时针旋转，对应uv角变换 (u,v)->(v,1-u)
             (u, v) = (v, 1.0 - u);
         }
-        Point::new((x1 + u * (x2 - x1)) / 16.0, (y1 + v * (y2 - y1)) / 16.0)
+        Point::new((u1 + u * (u2 - u1)) / 16.0, (v1 + v * (v2 - v1)) / 16.0)
     })
 }
 
@@ -363,6 +401,12 @@ fn render_geoms(faces: &[FaceGeom]) -> Option<Image> {
     Some(surface.image_snapshot())
 }
 
+/// 可见面slot（0顶/1北/2东）在屏幕上的4角（来自MATRIX展开）
+fn slot_pos(slot: usize) -> [Point; 4] {
+    let base = (slot + 3) * 4;
+    [MATRIX[base], MATRIX[base + 1], MATRIX[base + 2], MATRIX[base + 3]]
+}
+
 /// 渲染成单张图片（完整方块三面快捷方式，屏幕坐标来自MATRIX）
 fn render_block(faces: &[FaceDraw; 3]) -> Option<Image> {
     let geoms: Vec<FaceGeom> = faces
@@ -370,12 +414,7 @@ fn render_block(faces: &[FaceDraw; 3]) -> Option<Image> {
         .enumerate()
         .map(|(slot, &(tex, uv))| FaceGeom {
             tex,
-            pos: [
-                MATRIX[(slot + 3) * 4],
-                MATRIX[(slot + 3) * 4 + 1],
-                MATRIX[(slot + 3) * 4 + 2],
-                MATRIX[(slot + 3) * 4 + 3],
-            ],
+            pos: slot_pos(slot),
             uv,
             shade: FACE_SHADE[slot],
         })
@@ -452,67 +491,96 @@ pub struct FaceTexture {
 
 /// 多贴图方块：按各面动画配置展开成逐刻帧序列，逐帧渲染合成APNG
 ///
-/// 静态面每帧复用同一贴图；有动画的面各自按mcmeta的frametime/interpolate展开
+/// 静态面每帧复用同一贴图；有动画的面各自按mcmeta的frametime/interpolate展开。
+/// 逐刻全渲染可达上千帧（如prismarine frametime=300），按最多[MAX_APNG_FRAMES]帧
+/// 对逐刻时间线等距采样，采样步长代表的持续刻数并入APNG帧延迟；
+/// 渲染结果相同的相邻帧合并延迟（无插值动画采样后多为同帧）
 pub fn make_faces_apng(faces: &[FaceTexture; 3]) -> Option<Vec<u8>> {
-    // 每个面展开成逐刻帧序列
-    let face_frames: Vec<Vec<Bitmap>> = faces
+    // 每个面展开成动画时间线（按刻惰性取帧，不预先物化全部帧位图）
+    let timelines: Vec<AnimTimeline> = faces
         .iter()
-        .map(|f| build_face_frames(&f.tex, f.anim))
+        .map(|f| AnimTimeline::build(&f.tex, &f.anim))
         .collect::<Option<Vec<_>>>()?;
-    let total = face_frames.iter().map(|f| f.len()).max()?;
+    let totals: Vec<u32> = timelines.iter().map(|t| t.total_ticks()).collect();
+    let total = totals.iter().copied().max()?;
 
-    let mut frames = Vec::with_capacity(total);
-    for k in 0..total {
-        let draw = [
-            (
-                &face_frames[0][k % face_frames[0].len()],
-                faces[0].uv,
-            ),
-            (
-                &face_frames[1][k % face_frames[1].len()],
-                faces[1].uv,
-            ),
-            (
-                &face_frames[2][k % face_frames[2].len()],
-                faces[2].uv,
-            ),
-        ];
-        frames.push(render_frame(&draw)?);
+    // 最多渲染MAX_APNG_FRAMES帧，等距采样逐刻时间线
+    const MAX_APNG_FRAMES: usize = 64;
+    let stride = total.div_ceil(MAX_APNG_FRAMES as u32);
+
+    let mut frames: Vec<(Vec<u8>, u16)> = Vec::with_capacity((total / stride + 1) as usize);
+    let mut k: u32 = 0;
+    while k < total {
+        let owned: Vec<(Bitmap, [Point; 4])> = timelines
+            .iter()
+            .zip(faces.iter())
+            .enumerate()
+            .map(|(j, (tl, f))| tl.frame_at(k % totals[j]).map(|bm| (bm, f.uv)))
+            .collect::<Option<Vec<_>>>()?;
+        let draw: [FaceDraw; 3] = std::array::from_fn(|j| (&owned[j].0, owned[j].1));
+        let img = render_frame(&draw)?;
+        // 该帧在逐刻时间线上代表的刻数，即APNG显示时长
+        let ticks = stride.min(total - k) as u16;
+        match frames.last_mut() {
+            // 渲染结果与上一帧相同：并入其显示时长，不重复存帧
+            Some((last_img, last_ticks)) if *last_img == img => *last_ticks += ticks,
+            _ => frames.push((img, ticks)),
+        }
+        k += stride;
     }
     encode_apng(frames)
 }
 
-/// 把一个面的动画展开成逐刻帧序列（interpolate时在相邻帧之间生成过渡帧）
-fn build_face_frames(tex: &Bitmap, meta: AnimMeta) -> Option<Vec<Bitmap>> {
-    let count = (tex.height() / tex.width()).max(1) as usize;
-    if count == 1 {
-        return Some(vec![tex.clone()]);
+/// 动画时间线：源帧 + 展开后的帧序列，按刻惰性取帧。
+/// 取帧时才做克隆/插值混合，避免物化整条逐刻帧序列（frametime大时可达上千帧位图）
+struct AnimTimeline {
+    src: Vec<Bitmap>,
+    entries: Vec<(u32, u32)>,
+    interpolate: bool,
+}
+
+impl AnimTimeline {
+    fn build(tex: &Bitmap, meta: &AnimMeta) -> Option<Self> {
+        let count = (tex.height() / tex.width()).max(1) as usize;
+        let src: Vec<Bitmap> = (0..count)
+            .map(|i| extract_frame(tex, i))
+            .collect::<Option<Vec<_>>>()?;
+        let frametime = meta.frametime.max(1);
+        // frames列表优先（帧号越界取模兼容）；缺省按0..n顺序、每帧frametime刻
+        let entries = meta.frames.as_ref().map(|list| {
+            list.iter()
+                .map(|f| (f.index % src.len() as u32, f.time.max(1)))
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_else(|| (0..src.len() as u32).map(|i| (i, frametime)).collect());
+        Some(Self {
+            src,
+            entries,
+            interpolate: meta.interpolate,
+        })
     }
 
-    let src: Vec<Bitmap> = (0..count)
-        .map(|i| extract_frame(tex, i))
-        .collect::<Option<Vec<_>>>()?;
-    let steps = meta.frametime.max(1) as usize;
+    fn total_ticks(&self) -> u32 {
+        self.entries.iter().map(|&(_, time)| time).sum()
+    }
 
-    if !meta.interpolate {
-        // 无插值：每帧停留frametime刻
-        let mut out = Vec::with_capacity(count * steps);
-        for frame in &src {
-            for _ in 0..steps {
-                out.push(frame.clone());
+    /// 取逐刻时间线上第tick刻的帧；interpolate时向序列下一帧线性过渡
+    fn frame_at(&self, tick: u32) -> Option<Bitmap> {
+        let mut acc = 0u32;
+        for (i, &(idx, time)) in self.entries.iter().enumerate() {
+            if tick < acc + time {
+                let frame = &self.src[idx as usize];
+                if !self.interpolate {
+                    return Some(frame.clone());
+                }
+                // 向序列下一帧线性过渡（与游戏内平滑动画一致）
+                let next = self.entries[(i + 1) % self.entries.len()].0 as usize;
+                let f = (tick - acc) as f32 / time as f32;
+                return blend_bitmap(frame, &self.src[next], f);
             }
+            acc += time;
         }
-        Some(out)
-    } else {
-        // 有插值：相邻帧间按1刻步长线性过渡（与游戏内平滑动画一致）
-        let mut out = Vec::with_capacity(count * steps);
-        for (i, a) in src.iter().enumerate() {
-            let b = &src[(i + 1) % count];
-            for k in 0..steps {
-                out.push(blend_bitmap(a, b, k as f32 / steps as f32)?);
-            }
-        }
-        Some(out)
+        None
     }
 }
 
@@ -560,8 +628,8 @@ fn blend_bitmap(a: &Bitmap, b: &Bitmap, f: f32) -> Option<Bitmap> {
     Some(out)
 }
 
-/// 合并成APNG（逐刻帧：1刻 = FRAME_RATE分之一秒）
-fn encode_apng(frames: Vec<Vec<u8>>) -> Option<Vec<u8>> {
+/// 合并成APNG（每帧附带显示时长，单位：刻，1刻 = FRAME_RATE分之一秒）
+fn encode_apng(frames: Vec<(Vec<u8>, u16)>) -> Option<Vec<u8>> {
     let size = BLOCK_SIZE as u32;
 
     let mut cursor = Cursor::new(Vec::new());
@@ -573,10 +641,6 @@ fn encode_apng(frames: Vec<Vec<u8>>) -> Option<Vec<u8>> {
             eprintln!("set_animated失败: {e}");
             return None;
         }
-        if let Err(e) = encoder.set_frame_delay(1, FRAME_RATE) {
-            eprintln!("set_frame_delay失败: {e}");
-            return None;
-        }
         let mut writer = match encoder.write_header() {
             Ok(writer) => writer,
             Err(e) => {
@@ -584,7 +648,12 @@ fn encode_apng(frames: Vec<Vec<u8>>) -> Option<Vec<u8>> {
                 return None;
             }
         };
-        for frame in &frames {
+        for (frame, ticks) in &frames {
+            // 帧显示时长 = 持续刻数 / FRAME_RATE 秒（采样跨过的刻数一并计入）
+            if let Err(e) = writer.set_frame_delay(*ticks, FRAME_RATE) {
+                eprintln!("set_frame_delay失败: {e}");
+                return None;
+            }
             if let Err(e) = writer.write_image_data(frame) {
                 eprintln!("write_image_data失败: {e}");
                 return None;
@@ -620,9 +689,10 @@ struct GuiRotateObj {
 }
 
 /// textures表的值：老版为字符串，新版可为对象（如glass的force_translucent）
+/// （公开供手动测试调试单个方块用）
 #[derive(Serialize, Deserialize)]
 #[serde(untagged)]
-enum TextureRefObj {
+pub enum TextureRefObj {
     Plain(String),
     Object { sprite: String },
 }
@@ -637,14 +707,36 @@ impl TextureRefObj {
 }
 
 /// 模型元素（轴对齐盒子，from/to为0-16坐标）
+/// （公开供手动测试调试单个方块用）
 #[derive(Clone, Serialize, Deserialize, Default)]
-struct BlockElementObj {
+pub struct BlockElementObj {
     /// 缺省即完整立方体边界（与游戏规则一致）
     #[serde(default = "default_origin")]
     from: Vec<f32>,
     #[serde(default = "default_size")]
     to: Vec<f32>,
     faces: Option<HashMap<String, BlockFaceObj>>,
+    /// 元素旋转（十字植物为绕y轴45°薄平面，营火原木/吊灯/紫水晶等也用到）
+    rotation: Option<ElementRotationObj>,
+    /// 面朝向着色开关（十字等设为false，游戏内全亮）
+    shade: Option<bool>,
+}
+
+/// 元素旋转参数（绕origin绕轴旋转angle度，rescale时垂直轴放大1/cos(angle)）
+#[derive(Clone, Serialize, Deserialize, Default)]
+struct ElementRotationObj {
+    #[serde(default = "default_rot_origin")]
+    origin: Vec<f32>,
+    #[serde(default)]
+    axis: Option<String>,
+    #[serde(default)]
+    angle: Option<f32>,
+    #[serde(default)]
+    rescale: Option<bool>,
+}
+
+fn default_rot_origin() -> Vec<f32> {
+    vec![8.0, 8.0, 8.0]
 }
 
 fn default_origin() -> Vec<f32> {
@@ -659,7 +751,7 @@ fn default_size() -> Vec<f32> {
 #[derive(Clone, Serialize, Deserialize, Default)]
 struct BlockFaceObj {
     texture: Option<String>,
-    /// 默认[0,0,16,16]，格式[u1,v1,u2,v2]
+    /// 未写uv时按元素盒子from/to自动生成（全幅元素即[0,0,16,16]），格式[u1,v1,u2,v2]
     uv: Option<Vec<f32>>,
     /// 贴图顺时针旋转（0/90/180/270，down面为逆时针）
     rotation: Option<u32>,
@@ -667,31 +759,46 @@ struct BlockFaceObj {
     tintindex: Option<u32>,
 }
 
-/// 完整方块模板：模型沿parent链向上，第一个带elements的祖先必须是这些。
-/// 半砖/楼梯/十字/栏杆等非完整方块模板不在此列，直接跳过。
-/// 模板外的自带elements模型（observer/釉陶/grass_block等）由几何判定兜底
-const FULL_CUBE_TEMPLATES: &[&str] = &[
-    "block/cube",
-    "block/cube_all_inner_faces",
-    "block/cube_bottom_top_inner_faces",
-    "block/cube_column_horizontal",
-    "block/cube_column_uv_locked_x",
-    "block/cube_column_uv_locked_y",
-    "block/cube_column_uv_locked_z",
-    "block/cube_directional",
-    "block/cube_mirrored",
-    "block/cube_north_west_mirrored",
-    "block/leaves",
-];
-
 /// 几何判定完整方块：所有元素都占满0,0,0→16,16,16
-/// （如grass_block的侧面overlay元素，取第一个元素的六面渲染，overlay忽略）
+/// （第一个元素为基准六面，其余元素由render_full_cube作为overlay叠绘，如grass_block）
 fn is_full_cube(elements: &[BlockElementObj]) -> bool {
     elements.iter().all(|e| e.from == [0.0, 0.0, 0.0] && e.to == [16.0, 16.0, 16.0])
 }
 
-/// 楼梯模板（多元素盒子模型）
-const STAIRS_TEMPLATES: &[&str] = &["block/stairs", "block/inner_stairs", "block/outer_stairs"];
+/// 分阶段耗时统计（纳秒累计），设置 MCML_RENDER_PROFILE=1 时在渲染结束后打印
+/// （用于定位并发渲染的性能瓶颈，正常路径零开销仅两次fetch_add）
+static PROFILE: LazyLock<RenderProfile> = LazyLock::new(|| RenderProfile {
+    enabled: std::env::var("MCML_RENDER_PROFILE").is_ok(),
+    ..Default::default()
+});
+
+#[derive(Default)]
+struct RenderProfile {
+    enabled: bool,
+    resolve: AtomicU64,
+    draw: AtomicU64,
+    write: AtomicU64,
+}
+
+impl RenderProfile {
+    fn print(&self, total: std::time::Duration) {
+        if !self.enabled {
+            return;
+        }
+        let f = |nanos: u64| nanos as f64 / 1e9;
+        println!(
+            "[性能] 总计{:.1}s | resolve {:.1}s | draw {:.1}s | write {:.1}s | 其他 {:.1}s",
+            total.as_secs_f64(),
+            f(self.resolve.load(Ordering::Relaxed)),
+            f(self.draw.load(Ordering::Relaxed)),
+            f(self.write.load(Ordering::Relaxed)),
+            total.as_secs_f64()
+                - f(self.resolve.load(Ordering::Relaxed))
+                - f(self.draw.load(Ordering::Relaxed))
+                - f(self.write.load(Ordering::Relaxed)),
+        );
+    }
+}
 
 /// 全部6个面的定义：面名、INDICES行号（角点取自VERTICES，角序即uv展开序）、基准uv角、面法线
 /// （顶/北/东的uv角与BASE_UV一致，其余三面按游戏规则镜像推导）
@@ -732,7 +839,7 @@ static FACE_DEFS: [(&str, usize, [Point; 4], Point3); 6] = [
         ],
         Point3::new(0.0, 0.0, 1.0),
     ),
-    // 顶面：u沿世界z（已与wiki木板顶面纹理走向比对确认）
+    // 顶面：u沿世界z，v沿x（已与wiki木板顶面纹理走向比对确认）
     (
         "up",
         3,
@@ -784,6 +891,32 @@ fn element_face_points(from: &[f32], to: &[f32], row: usize) -> [Point3; 4] {
         .unwrap()
 }
 
+/// 元素rotation的变换矩阵（模型0-16空间）：绕origin旋转angle度，
+/// rescale时垂直轴先放大1/cos(angle)（与游戏FaceBakery一致，十字平面借此铺满对角线）
+fn element_rotation_matrix(rot: &ElementRotationObj) -> Mat4 {
+    let origin = Vec3::from_slice(&rot.origin);
+    let axis = match rot.axis.as_deref() {
+        Some("x") => Vec3::X,
+        Some("z") => Vec3::Z,
+        _ => Vec3::Y,
+    };
+    let angle = rot.angle.unwrap_or(0.0).to_radians();
+    let s = if rot.rescale.unwrap_or(false) && angle.cos() != 0.0 {
+        1.0 / angle.cos()
+    } else {
+        1.0
+    };
+    let scale = match axis {
+        v if v == Vec3::X => Vec3::new(1.0, s, s),
+        v if v == Vec3::Y => Vec3::new(s, 1.0, s),
+        _ => Vec3::new(s, s, 1.0),
+    };
+    Mat4::from_translation(origin)
+        * Mat4::from_axis_angle(axis, angle)
+        * Mat4::from_scale(scale)
+        * Mat4::from_translation(-origin)
+}
+
 /// 绕y轴旋转一个模型空间点（gui旋转与完整方块[30,225,0]的yaw差）
 fn rot_point_y(p: Point3, sin: f32, cos: f32) -> Point3 {
     Point3 {
@@ -795,17 +928,16 @@ fn rot_point_y(p: Point3, sin: f32, cos: f32) -> Point3 {
 
 /// 渲染楼梯类多元素盒子模型：按gui旋转角刚体旋转所有元素面，
 /// 投影后剔除背向观察者的面，按深度排序绘制（painter's algorithm）
-fn render_model_png(
+/// 渲染单个模型（公开供手动测试调试单个方块用）
+pub fn render_model_png(
     archive: &BaseArchive,
     tex_cache: &mut HashMap<String, Bitmap>,
     textures: &HashMap<String, TextureRefObj>,
     elements: &[BlockElementObj],
     rot_y: f32,
 ) -> Option<Vec<u8>> {
-    // 画布四周留边距
-    const MARGIN: f32 = 2.0;
-    let mat = *MAT;
     // 模型gui旋转与完整方块[30,225,0]的yaw差，绕y轴刚体旋转
+    let mat = *MAT;
     let angle = (rot_y - 225.0) * PI / 180.0;
     let (sin, cos) = angle.sin_cos();
 
@@ -816,16 +948,34 @@ fn render_model_png(
     let mut corner_sets: Vec<[Point3; 4]> = Vec::new();
     for element in elements {
         let faces = element.faces.as_ref()?;
+        // 元素rotation（十字植物/营火原木/吊灯笼等）：角点与法线一并旋转
+        let rot_m = element.rotation.as_ref().map(element_rotation_matrix);
         for (name, row, base_uv, normal) in FACE_DEFS {
             let Some(obj) = faces.get(name) else {
                 continue;
             };
-            // 旋转后的面法线：投影z<0说明面朝向观察者
+            // 元素rotation只取线性部分作用到法线，再叠加gui旋转；投影z<0说明面朝向观察者
+            let normal = match rot_m {
+                Some(m) => {
+                    let r = m.transform_vector3(Vec3::new(normal.x, normal.y, normal.z));
+                    Point3::new(r.x, r.y, r.z)
+                }
+                None => normal,
+            };
             let n = rot_point_y(normal, sin, cos);
             if project(&mat, &n).z >= 0.0 {
                 continue;
             }
-            let ft = load_face(archive, tex_cache, textures, obj, &base_uv)?;
+            let ft = load_face(
+                archive,
+                tex_cache,
+                textures,
+                obj,
+                &base_uv,
+                name,
+                &element.from,
+                &element.to,
+            )?;
             #[cfg(debug_assertions)]
             if std::env::var("MCML_UV_DEBUG").is_ok() {
                 eprintln!("[uv] element {:?} face {name}: obj.uv={:?} -> ft.uv={:?}", element.from, obj.uv, ft.uv);
@@ -833,8 +983,11 @@ fn render_model_png(
             // 楼梯贴图均为静态，动画贴图兜底取第一帧
             texs.push(static_frame(&ft.tex));
             uvs.push(ft.uv);
-            // 面亮度按旋转后的朝向：顶面全亮、南北向0.8、东西向0.6（与游戏一致）
-            shades.push(if n.y > 0.5 {
+            // 面亮度按旋转后的朝向：顶面全亮、南北向0.8、东西向0.6（与游戏一致）；
+            // 元素shade:false（十字等）不着一向着色
+            shades.push(if element.shade == Some(false) {
+                255
+            } else if n.y > 0.5 {
                 255
             } else if n.y < -0.5 {
                 128
@@ -843,7 +996,15 @@ fn render_model_png(
             } else {
                 153
             });
+            // 角点经元素rotation（0-16模型空间）后再叠加gui旋转
             let corners = element_face_points(&element.from, &element.to, row);
+            let corners = match rot_m {
+                Some(m) => corners.map(|c| {
+                    let p = m.transform_point3(Vec3::new((c.x + 1.0) * 8.0, (c.y + 1.0) * 8.0, (c.z + 1.0) * 8.0));
+                    Point3::new(p.x / 8.0 - 1.0, p.y / 8.0 - 1.0, p.z / 8.0 - 1.0)
+                }),
+                None => corners,
+            };
             corner_sets.push(corners.map(|c| rot_point_y(c, sin, cos)));
         }
     }
@@ -851,44 +1012,35 @@ fn render_model_png(
         return None;
     }
 
-    // 投影全部角点，计算全模型包围盒fit（与完整方块同尺度）
+    // 投影全部角点，按完整方块的fit参数绘制（与完整方块同尺度，矮模型不放大铺满）
+    let (fmin_x, fmin_y, fscale, fdx, fdy) = *FULL_FIT;
+    let fit =
+        |p: Point| Point::new((p.x - fmin_x) * fscale + fdx, (p.y - fmin_y) * fscale + fdy);
     let mut pos_sets: Vec<[Point; 4]> = Vec::with_capacity(corner_sets.len());
     let mut depth_sets: Vec<[f32; 4]> = Vec::with_capacity(corner_sets.len());
-    let (mut min_x, mut min_y) = (f32::INFINITY, f32::INFINITY);
-    let (mut max_x, mut max_y) = (f32::NEG_INFINITY, f32::NEG_INFINITY);
     for cs in &corner_sets {
         let mut ps = [Point::default(); 4];
         let mut ds = [0.0f32; 4];
         for (i, c) in cs.iter().enumerate() {
             let res = project(&mat, c);
-            ps[i] = Point { x: res.x, y: res.y };
+            ps[i] = fit(Point { x: res.x, y: res.y });
             ds[i] = res.z;
-            min_x = min_x.min(ps[i].x);
-            min_y = min_y.min(ps[i].y);
-            max_x = max_x.max(ps[i].x);
-            max_y = max_y.max(ps[i].y);
         }
         pos_sets.push(ps);
         depth_sets.push(ds);
     }
-    let inner = BLOCK_SIZE as f32 - MARGIN * 2.0;
-    let scale = inner / (max_x - min_x).max(max_y - min_y);
-    let dx = (BLOCK_SIZE as f32 - (max_x - min_x) * scale) / 2.0;
-    let dy = (BLOCK_SIZE as f32 - (max_y - min_y) * scale) / 2.0;
 
     // 组装面并按深度排序（远的先画）
     let mut geoms: Vec<(f32, FaceGeom)> = texs
         .iter()
         .enumerate()
         .map(|(i, tex)| {
-            let fit =
-                |p: Point| Point::new((p.x - min_x) * scale + dx, (p.y - min_y) * scale + dy);
             let depth = depth_sets[i].iter().sum::<f32>();
             (
                 depth,
                 FaceGeom {
                     tex,
-                    pos: pos_sets[i].map(fit),
+                    pos: pos_sets[i],
                     uv: uvs[i],
                     shade: shades[i],
                 },
@@ -904,10 +1056,10 @@ fn render_model_png(
     Some(data.as_bytes().to_vec())
 }
 
-/// 沿parent链解析模型：合并textures（子覆盖父），返回
+/// 沿parent链解析模型（公开供手动测试调试单个方块用）：合并textures（子覆盖父），返回
 /// （合并后的textures，第一个带elements祖先的全部元素，该祖先的模型相对名，
 /// 是否完整方块，gui旋转y分量）
-fn resolve_model(
+pub fn resolve_model(
     archive: &BaseArchive,
     rel: &str,
 ) -> Option<(
@@ -981,12 +1133,17 @@ fn texture_path(value: &str) -> Option<String> {
 }
 
 /// 载入一个面的渲染输入（贴图缓存复用，uv按模型换算）
+///
+/// `from`/`to`为该面所属元素盒子的边界，面未写uv时按其自动生成uv
 fn load_face(
     archive: &BaseArchive,
     tex_cache: &mut HashMap<String, Bitmap>,
     textures: &HashMap<String, TextureRefObj>,
     face_obj: &BlockFaceObj,
     base_uv: &[Point; 4],
+    face_name: &str,
+    from: &[f32],
+    to: &[f32],
 ) -> Option<FaceTexture> {
     let value = resolve_ref(textures, face_obj.texture.as_deref()?)?;
     let path = texture_path(&value)?;
@@ -999,10 +1156,14 @@ fn load_face(
         tex
     };
 
-    // 灰度贴图按群系色染色：树叶用植被色，其余（草顶/草侧overlay）用草色，
-    // 取平原群系（与wiki物品图标一致）
+    // 灰度贴图按群系色染色：白桦/云杉树叶固定色，其余树叶用植被色，
+    // 草类（草顶/草侧overlay）用草色，取平原群系（与wiki物品图标一致）
     let tex = if face_obj.tintindex.is_some() {
-        let tint = if path.contains("leaves") {
+        let tint = if path.contains("birch_leaves") {
+            BIRCH_TINT
+        } else if path.contains("spruce_leaves") {
+            SPRUCE_TINT
+        } else if path.contains("leaves") {
             FOLIAGE_TINT
         } else {
             GRASS_TINT
@@ -1013,27 +1174,39 @@ fn load_face(
     };
     Some(FaceTexture {
         tex,
-        uv: face_uv(base_uv, face_obj),
+        uv: face_uv(base_uv, face_obj, face_name, from, to),
         anim: read_anim_meta(archive, &path),
     })
 }
 
-/// 完整方块：取第一个元素的六面定义，载入三个可见面渲染（动画贴图存APNG）
-fn render_full_cube(
+/// 完整方块：取第一个元素的六面定义，载入三个可见面渲染（动画贴图存APNG）。
+/// 其余元素（is_full_cube已保证同为完整立方体）作为overlay面叠绘在基准面之后，
+/// 如grass_block的侧面草皮overlay（与游戏分层绘制一致）
+pub fn render_full_cube(
     archive: &BaseArchive,
     tex_cache: &mut HashMap<String, Bitmap>,
     textures: &HashMap<String, TextureRefObj>,
     elements: &[BlockElementObj],
 ) -> Option<Vec<u8>> {
     let face_objs = elements.first()?.faces.as_ref()?;
+    // 完整方块元素边界恒为0-16，自动uv即全幅
+    let (from, to) = (&elements[0].from, &elements[0].to);
 
     // 载入三个可见面（顶、北、东），任一面解析失败则跳过该方块
     let mut slots: [Option<FaceTexture>; 3] = [None, None, None];
     for (slot, face_name) in ["up", "north", "east"].iter().enumerate() {
-        match face_objs
-            .get(*face_name)
-            .and_then(|obj| load_face(archive, tex_cache, textures, obj, &BASE_UV[slot]))
-        {
+        match face_objs.get(*face_name).and_then(|obj| {
+            load_face(
+                archive,
+                tex_cache,
+                textures,
+                obj,
+                &BASE_UV[slot],
+                face_name,
+                from,
+                to,
+            )
+        }) {
             Some(face) => slots[slot] = Some(face),
             None => return None,
         }
@@ -1043,19 +1216,63 @@ fn render_full_cube(
     };
     let faces = [top, north, east];
 
-    // 动画贴图存成APNG，静态贴图存成PNG
-    if faces.iter().any(|f| f.tex.height() > f.tex.width()) {
-        make_faces_apng(&faces)
-    } else {
-        #[allow(deprecated)]
-        render_block(&[
-            (&faces[0].tex, faces[0].uv),
-            (&faces[1].tex, faces[1].uv),
-            (&faces[2].tex, faces[2].uv),
-        ])
-        .and_then(|img| img.encode_to_data(EncodedImageFormat::PNG))
-        .map(|d| d.as_bytes().to_vec())
+    // overlay元素只取可见三面，记录其slot用于叠绘
+    let mut overlays: Vec<(usize, FaceTexture)> = Vec::new();
+    for element in &elements[1..] {
+        let Some(objs) = element.faces.as_ref() else {
+            continue;
+        };
+        for (slot, face_name) in ["up", "north", "east"].iter().enumerate() {
+            if let Some(obj) = objs.get(*face_name)
+                && let Some(ft) = load_face(
+                    archive,
+                    tex_cache,
+                    textures,
+                    obj,
+                    &BASE_UV[slot],
+                    face_name,
+                    &element.from,
+                    &element.to,
+                )
+            {
+                overlays.push((slot, ft));
+            }
+        }
     }
+
+    // 动画贴图存成APNG（带overlay时统一走静态路径，取动画首帧）
+    if overlays.is_empty() && faces.iter().any(|f| f.tex.height() > f.tex.width()) {
+        return make_faces_apng(&faces);
+    }
+    // 先持有帧位图，再组装引用
+    let mut draw: Vec<(Bitmap, usize, [Point; 4], u8)> = faces
+        .iter()
+        .enumerate()
+        .map(|(slot, f)| (static_frame(&f.tex), slot, f.uv, FACE_SHADE[slot]))
+        .collect();
+    draw.extend(overlays.iter().map(|(slot, ft)| {
+        (
+            static_frame(&ft.tex),
+            *slot,
+            ft.uv,
+            FACE_SHADE[*slot],
+        )
+    }));
+    let geoms: Vec<FaceGeom> = draw
+        .iter()
+        .map(|(tex, slot, uv, shade)| FaceGeom {
+            tex,
+            pos: slot_pos(*slot),
+            uv: *uv,
+            shade: *shade,
+        })
+        .collect();
+    render_geoms(&geoms)
+        .and_then(|img| {
+            #[allow(deprecated)]
+            img.encode_to_data(EncodedImageFormat::PNG)
+        })
+        .map(|d| d.as_bytes().to_vec())
 }
 
 /// 从客户端jar提取所有完整方块贴图并渲染保存
@@ -1064,60 +1281,142 @@ fn render_full_cube(
 /// 支持多贴图方块（cube_bottom_top/cube_column/orientable等）：
 /// 沿parent链合并textures，取第一个带elements祖先的面定义，
 /// 只画当前视角可见的三个面（顶、北、东）
-pub fn render_blocks(archive: &BaseArchive) -> CoreResult<()> {
+///
+/// 渲染按CPU核数并发（rayon）：各工作线程经thread_local持有一份只读jar句柄
+/// 与跨方块复用的贴图缓存，完成后单线程汇总写入方块状态
+///
+/// `gui`可选：按已处理的候选模型数上报进度（约每1%一次）
+pub fn render_blocks(archive: &BaseArchive, gui: ProgressGui) -> CoreResult<()> {
+    let render_start = std::time::Instant::now();
     let dir = crate::get_block_dir().ok_or(ErrorType::DownloadFileFail)?;
 
     // 提取语言文件并构建 ID->语言键 映射
     let names = extract_langs(archive);
 
-    // 贴图解码缓存（同一贴图常被多个方块/多个面共用）
-    let mut tex_cache: HashMap<String, Bitmap> = HashMap::new();
+    // 预收集候选模型条目（entries是不可变切片，可跨线程共享）
+    let entries: Vec<&str> = archive
+        .entries()
+        .iter()
+        .map(|entry| entry.name.as_str())
+        .filter(|name| {
+            name.starts_with("assets/minecraft/models/block/") && name.ends_with(".json")
+        })
+        .collect();
 
-    for entry in archive.entries() {
-        let name = entry.name.as_str();
-        if !name.starts_with("assets/minecraft/models/block/") || !name.ends_with(".json") {
-            continue;
-        }
+    let total = entries.len();
+    let done = AtomicUsize::new(0);
+    // 每1%左右上报一次，避免高频回调刷爆GUI
+    let step = (total / 100).max(1);
 
-        // 模型相对名与方块ID："block/stone" -> "minecraft:stone"
-        let rel = name
-            .trim_start_matches("assets/minecraft/models/")
-            .trim_end_matches(".json");
-        let id_rel = name
-            .trim_start_matches("assets/minecraft/models/block/")
-            .trim_end_matches(".json");
-        let id = format!("minecraft:{id_rel}");
+    // 每个工作线程的独立资源，随线程存活跨job复用：
+    // - jar只读句柄：共享archive的read在锁内只有一个句柄，会把JSON/贴图读取全部串行化；
+    //   但map_init的init在工作被偷取时会按job重新执行（实测2000+次），不能在那里打开，
+    //   故用thread_local保证每线程只开一次。只读打开避开写模式打开的杀软扫描开销，
+    //   打开失败时置Some(None)记为已尝试，后续回退共享实例
+    // - 贴图解码缓存：同一贴图常被多个方块/多个面共用，按线程缓存避免反复解码
+    thread_local! {
+        static LOCAL_ARCHIVE: RefCell<Option<Option<BaseArchive>>> = const { RefCell::new(None) };
+        static TEX_CACHE: RefCell<HashMap<String, Bitmap>> = RefCell::new(HashMap::new());
+    }
 
-        // 完整方块或楼梯才渲染，半砖/玻璃板等跳过
-        let Some((textures, elements, template, full, rot_y)) = resolve_model(archive, rel) else {
-            continue;
-        };
-        let is_stairs = !full && STAIRS_TEMPLATES.contains(&template.as_str());
-        if !full && !is_stairs && !FULL_CUBE_TEMPLATES.contains(&template.as_str()) {
-            continue;
-        }
-        // gui旋转与完整方块[30,225,0]的yaw差为0时走完整方块快捷路径
-        let rot_steps = ((225.0 - rot_y) / 90.0).rem_euclid(4.0) as usize;
+    // 并发渲染
+    let rendered: Vec<Option<(String, String, Option<String>)>> = entries
+        .par_iter()
+        .map(|name| {
+            LOCAL_ARCHIVE.with(|local_archive| {
+                TEX_CACHE.with(|tex_cache| {
+                    let mut tex_cache = tex_cache.borrow_mut();
+                    let mut local_archive = local_archive.borrow_mut();
+                    let archive = local_archive
+                        .get_or_insert_with(|| BaseArchive::open_readonly(archive.path()).ok())
+                        .as_ref()
+                        .unwrap_or(archive);
+                    // 单个候选模型的处理（进度计数对跳过的条目也要生效）
+                    let item_start = std::time::Instant::now();
+                    let mut render = || -> Option<(String, String, Option<String>)> {
+                    // 模型相对名与方块ID："block/stone" -> "minecraft:stone"
+                    let rel = name
+                        .trim_start_matches("assets/minecraft/models/")
+                        .trim_end_matches(".json");
+                    let id_rel = name
+                        .trim_start_matches("assets/minecraft/models/block/")
+                        .trim_end_matches(".json");
+                    let id = format!("minecraft:{id_rel}");
 
-        let data = if !full || rot_steps != 0 {
-            // 多元素/带旋转的模型：按gui旋转角渲染全部可见面
-            render_model_png(archive, &mut tex_cache, &textures, &elements, rot_y)
-        } else {
-            render_full_cube(archive, &mut tex_cache, &textures, &elements)
-        };
-        let Some(data) = data else {
-            continue;
-        };
+                    // 完整方块/楼梯/半砖/首元素完整（信标等内嵌模型）才渲染，玻璃板等跳过
+                    let t = std::time::Instant::now();
+                    let resolved = resolve_model(archive, rel);
+                    PROFILE.resolve.fetch_add(
+                        t.elapsed().as_nanos() as u64,
+                        Ordering::Relaxed,
+                    );
+                    let Some((textures, elements, _template, full, rot_y)) = resolved else {
+                        return None;
+                    };
+                    // gui旋转与完整方块[30,225,0]的yaw差为0时走完整方块快捷路径
+                    let rot_steps = ((225.0 - rot_y) / 90.0).rem_euclid(4.0) as usize;
 
-        let out_name = format!("minecraft_{id_rel}.png");
-        if path_helper::write_bytes(&dir.join(&out_name), &data).is_err() {
-            continue;
-        }
+                    let t = std::time::Instant::now();
+                    let data = if !full || rot_steps != 0 {
+                        // 多元素/带旋转的模型：按gui旋转角渲染全部可见面
+                        render_model_png(archive, &mut tex_cache, &textures, &elements, rot_y)
+                    } else {
+                        render_full_cube(archive, &mut tex_cache, &textures, &elements)
+                    };
+                    PROFILE.draw.fetch_add(
+                        t.elapsed().as_nanos() as u64,
+                        Ordering::Relaxed,
+                    );
+                    let data = data?;
 
-        let mut blocks = crate::blocks_write();
+                    let out_name = format!("minecraft_{id_rel}.png");
+                    let t = std::time::Instant::now();
+                    path_helper::write_bytes(&dir.join(&out_name), &data).ok()?;
+                    PROFILE.write.fetch_add(
+                        t.elapsed().as_nanos() as u64,
+                        Ordering::Relaxed,
+                    );
+                    let lang_key = names.get(&id).cloned();
+                    Some((id, out_name, lang_key))
+                };
+                let out = render();
+
+                // 定位异常慢的单方块（如超大动画贴图）
+                if PROFILE.enabled {
+                    let secs = item_start.elapsed().as_secs_f64();
+                    if secs > 1.0 {
+                        println!("[性能] 慢方块 {name}：{secs:.1}s");
+                    }
+                }
+
+                // 候选模型处理完一个计一个（含跳过的），每跨过step阈值上报一次
+                let now = done.fetch_add(1, Ordering::Relaxed) + 1;
+                if now % step == 0
+                    && let Some(gui) = &gui
+                {
+                    gui.set_progress_now(now, Some(total));
+                }
+
+                out
+                    })
+            })
+        })
+        .collect();
+
+    // 分阶段耗时统计（MCML_RENDER_PROFILE=1 时打印）
+    PROFILE.print(render_start.elapsed());
+
+    // 完成时补一次100%，避免进度停在最后一个step前
+    if let Some(gui) = &gui {
+        gui.set_progress_now(total, Some(total));
+    }
+
+    // 单线程汇总写入方块状态
+    let mut blocks = crate::blocks_write();
+    for (id, out_name, lang_key) in rendered.into_iter().flatten() {
         blocks.tex.insert(id.clone(), out_name);
-        if let Some(lang_key) = names.get(&id) {
-            blocks.name.insert(id, lang_key.clone());
+        if let Some(lang_key) = lang_key {
+            blocks.name.insert(id, lang_key);
         }
     }
 
@@ -1157,12 +1456,21 @@ fn extract_langs(archive: &BaseArchive) -> std::collections::HashMap<String, Str
 }
 
 /// 动画贴图配置
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct AnimMeta {
     /// 帧间隔（单位：游戏刻，1刻 = 50ms）
     pub frametime: u32,
     /// 帧之间是否平滑插值
     pub interpolate: bool,
+    /// mcmeta的frames自定义帧序列（缺省按0..n顺序展开）
+    pub frames: Option<Vec<AnimFrame>>,
+}
+
+/// 帧序列的一项（帧号 + 该帧持续刻数，缺省时长为frametime）
+#[derive(Clone, Copy)]
+pub struct AnimFrame {
+    pub index: u32,
+    pub time: u32,
 }
 
 /// 动画贴图配置
@@ -1175,13 +1483,16 @@ struct TextureMetaObj {
 struct TextureAnimationObj {
     frametime: Option<u32>,
     interpolate: Option<bool>,
+    /// 自定义帧序列：数字项为帧号，对象项为{index, time}
+    frames: Option<Vec<serde_json::Value>>,
 }
 
-/// 读取动画贴图配置（帧间隔、是否插值）
+/// 读取动画贴图配置（帧间隔、是否插值、自定义帧序列）
 pub fn read_anim_meta(archive: &BaseArchive, tex_path: &str) -> AnimMeta {
     let fallback = AnimMeta {
         frametime: 1,
         interpolate: false,
+        frames: None,
     };
     let Ok(data) = archive.read(&format!("{tex_path}.mcmeta")) else {
         return fallback;
@@ -1195,9 +1506,31 @@ pub fn read_anim_meta(archive: &BaseArchive, tex_path: &str) -> AnimMeta {
     let Some(animation) = meta.animation else {
         return fallback;
     };
+    let frametime = animation.frametime.filter(|t| *t > 0).unwrap_or(1);
+    let frames = animation.frames.map(|list| {
+        list.into_iter()
+            .filter_map(|f| match f {
+                serde_json::Value::Number(n) => n.as_u64().map(|i| AnimFrame {
+                    index: i as u32,
+                    time: frametime,
+                }),
+                serde_json::Value::Object(o) => {
+                    let index = o.get("index").and_then(|v| v.as_u64())? as u32;
+                    let time = o
+                        .get("time")
+                        .and_then(|v| v.as_u64())
+                        .filter(|t| *t > 0)
+                        .unwrap_or(frametime as u64) as u32;
+                    Some(AnimFrame { index, time })
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    });
     AnimMeta {
-        frametime: animation.frametime.filter(|t| *t > 0).unwrap_or(1),
+        frametime,
         interpolate: animation.interpolate.unwrap_or(false),
+        frames: frames.filter(|f| !f.is_empty()),
     }
 }
 

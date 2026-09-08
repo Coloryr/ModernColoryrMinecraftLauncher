@@ -60,8 +60,6 @@ fn ensure_init() {
 
         // 方块数据放到tests/out（block/与langs/），方便直接查看生成的图片
         mcml_tex_draw::init(out_dir()).unwrap();
-        // 读回上次的结果，load_blocks 才能命中版本短路，跳过重复下载/渲染
-        let _ = mcml_tex_draw::load();
     });
 }
 
@@ -112,7 +110,7 @@ async fn render_compare() {
     }
 
     // 走完整链：下载jar → 提取贴图 → 渲染保存
-    mcml_tex_draw::load_blocks()
+    mcml_tex_draw::load_blocks(None)
         .await
         .expect("load_blocks 应成功");
 
@@ -160,7 +158,7 @@ async fn render_static_block() {
     }
 
     // 走完整链：下载jar → 提取贴图 → 渲染保存
-    mcml_tex_draw::load_blocks()
+    mcml_tex_draw::load_blocks(None)
         .await
         .expect("load_blocks 应成功");
 
@@ -186,6 +184,93 @@ async fn render_static_block() {
     println!("静态方块：{}（{} KB）", out_file.display(), data.len() / 1024);
 }
 
+/// 手动测试：只渲染一个橡木楼梯（不走全量渲染，快速看效果）
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "手动测试：只渲染橡木楼梯单块"]
+async fn render_single_stairs() {
+    let _lock = CHAIN_LOCK.lock().await;
+    ensure_init();
+
+    if !network_available().await {
+        println!("无外网，跳过");
+        return;
+    }
+
+    // 只保证jar在本地（版本json短路径），不触发全量渲染
+    let data = mcml_net::get_work_client()
+        .get_bytes("https://piston-meta.mojang.com/mc/game/version_manifest_v2.json")
+        .await
+        .expect("应能取到版本清单");
+    let versions: mcml_game::mojang::version_obj::VersionObj =
+        mcml_base::serialize_tools::json_from_bytes(&data).expect("版本清单应能解析");
+    let last = versions.latest.release;
+    let ver = versions.versions.iter().find(|v| v.id == last).unwrap();
+
+    let obj = mcml_game::launcher_path::version_path::add_game(ver)
+        .await
+        .expect("版本json应能下载");
+
+    // 渲染单个楼梯模型
+    let jar = mcml_game::launcher_path::libraries_path::get_game_file(&last);
+    let item = mcml_base::file_item::FileItemObj {
+        name: format!("{last}.jar"),
+        file: jar.clone(),
+        url: mcml_net::url_helper::get_minecraft_client(&obj.downloads.client.url, &last),
+        hash: mcml_base::file_item::FileHash::Sha1(obj.downloads.client.sha1.clone()),
+        later: mcml_base::file_item::LaterRun::None,
+    };
+    if !item.check_hash() {
+        assert!(
+            mcml_downloader::start_download_task(vec![item]).await,
+            "客户端jar应能下载"
+        );
+    }
+
+    let archive = mcml_base::archives::BaseArchive::open(&jar).expect("jar应能打开");
+    let (textures, elements, _template, _full, rot_y) =
+        mcml_tex_draw::block_render::resolve_model(&archive, "block/oak_stairs")
+            .expect("应能解析oak_stairs模型");
+    let mut tex_cache = std::collections::HashMap::new();
+    let data = mcml_tex_draw::block_render::render_model_png(
+        &archive,
+        &mut tex_cache,
+        &textures,
+        &elements,
+        rot_y,
+    )
+    .expect("楼梯应能渲染");
+
+    let dir = out_dir();
+    std::fs::create_dir_all(&dir).unwrap();
+    let out_file = dir.join("oak_stairs.png");
+    std::fs::write(&out_file, &data).unwrap();
+    println!("楼梯：{}（{} KB）", out_file.display(), data.len() / 1024);
+}
+
+/// 带计时的进度回调：每次上报打印百分比、累计耗时、距上次上报的间隔
+/// （间隔突增处即变慢的位置）
+struct TimedProgress {
+    start: std::time::Instant,
+    last: std::sync::Mutex<std::time::Instant>,
+}
+
+impl mcml_game::gui_hook::IProgressGui for TimedProgress {
+    fn set_progress_text(&self, _text: Option<String>) {}
+
+    fn set_progress_now(&self, value: usize, all: Option<usize>) {
+        let now = std::time::Instant::now();
+        let total = all.unwrap_or(100).max(1);
+        let mut last = self.last.lock().unwrap();
+        println!(
+            "[渲染] {value}/{total}（{:.1}%） 累计{:.1}s 本段{:.2}s",
+            value as f64 / total as f64 * 100.0,
+            (now - self.start).as_secs_f64(),
+            (now - *last).as_secs_f64(),
+        );
+        *last = now;
+    }
+}
+
 /// 手动测试：渲染楼梯（走全量渲染后从输出取，对比wiki图标）
 #[tokio::test(flavor = "multi_thread")]
 #[ignore = "手动测试：渲染楼梯并复制到tests/out"]
@@ -198,13 +283,25 @@ async fn render_stairs_sample() {
         return;
     }
 
-    mcml_tex_draw::load_blocks()
-        .await
-        .expect("load_blocks 应成功");
+    let start = std::time::Instant::now();
+    mcml_tex_draw::load_blocks(Some(std::sync::Arc::new(TimedProgress {
+        start,
+        last: std::sync::Mutex::new(start),
+    })))
+    .await
+    .expect("load_blocks 应成功");
+    println!(
+        "[渲染] load_blocks 总耗时 {:.1}s",
+        start.elapsed().as_secs_f64()
+    );
 
     // 从渲染输出里复制楼梯
     let src = out_dir().join("block").join("minecraft_oak_stairs.png");
-    assert!(src.exists(), "应已渲染 minecraft_oak_stairs.png：{}", src.display());
+    assert!(
+        src.exists(),
+        "应已渲染 minecraft_oak_stairs.png：{}",
+        src.display()
+    );
     let dst = out_dir().join("oak_stairs.png");
     std::fs::copy(&src, &dst).unwrap();
     println!("楼梯：{}", dst.display());
