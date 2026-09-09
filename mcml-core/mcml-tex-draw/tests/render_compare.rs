@@ -98,155 +98,6 @@ async fn get_client_jar() -> Option<PathBuf> {
     if jar.exists() { Some(jar) } else { None }
 }
 
-#[tokio::test(flavor = "multi_thread")]
-#[ignore = "手动测试：下载最新客户端jar并生成APNG对比图"]
-async fn render_compare() {
-    let _lock = CHAIN_LOCK.lock().await;
-    ensure_init();
-
-    if !network_available().await {
-        println!("无外网，跳过");
-        return;
-    }
-
-    // 走完整链：下载jar → 提取贴图 → 渲染保存
-    mcml_tex_draw::load_blocks(None)
-        .await
-        .expect("load_blocks 应成功");
-
-    // 打开jar，取岩浆块的动画贴图做对比
-    let jar = get_client_jar().await.expect("客户端jar应已下载");
-    let archive = mcml_base::archives::BaseArchive::open(&jar).expect("jar应能打开");
-    let tex_path = "assets/minecraft/textures/block/magma.png";
-    let bytes = archive.read(tex_path).expect("jar内应有magma.png");
-
-    let tex = mcml_tex_draw::block_render::decode_png(&bytes).expect("贴图应能解码");
-    let frames = tex.height() / tex.width();
-    println!("magma.png {}x{}，共 {frames} 帧", tex.width(), tex.height());
-
-    // 动画配置按游戏内的mcmeta来（帧间隔 + 插值）
-    let meta = mcml_tex_draw::block_render::read_anim_meta(&archive, tex_path);
-    println!(
-        "mcmeta frametime = {} 刻（{}ms/帧），interpolate = {}",
-        meta.frametime,
-        meta.frametime * 50,
-        meta.interpolate
-    );
-
-    let dir = out_dir();
-    std::fs::create_dir_all(&dir).unwrap();
-
-    // APNG
-    let apng = mcml_tex_draw::block_render::make_block_apng(&tex, meta).expect("APNG应能编码");
-    let apng_file = dir.join("magma_apng.png");
-    std::fs::write(&apng_file, &apng).unwrap();
-    println!("APNG：{}（{} KB）", apng_file.display(), apng.len() / 1024);
-
-    println!("用浏览器分别打开两个文件对比画质");
-}
-
-/// 手动测试：渲染一个静态方块图片（石头）
-#[tokio::test(flavor = "multi_thread")]
-#[ignore = "手动测试：下载最新客户端jar并生成静态方块图"]
-async fn render_static_block() {
-    let _lock = CHAIN_LOCK.lock().await;
-    ensure_init();
-
-    if !network_available().await {
-        println!("无外网，跳过");
-        return;
-    }
-
-    // 走完整链：下载jar → 提取贴图 → 渲染保存
-    mcml_tex_draw::load_blocks(None)
-        .await
-        .expect("load_blocks 应成功");
-
-    // 打开jar，取石头的静态贴图
-    let jar = get_client_jar().await.expect("客户端jar应已下载");
-    let archive = mcml_base::archives::BaseArchive::open(&jar).expect("jar应能打开");
-    let bytes = archive
-        .read("assets/minecraft/textures/block/stone.png")
-        .expect("jar内应有stone.png");
-
-    let tex = mcml_tex_draw::block_render::decode_png(&bytes).expect("贴图应能解码");
-
-    // 渲染静态方块并保存
-    let img = mcml_tex_draw::block_render::make_block_png(&tex).expect("静态方块应能渲染");
-    #[allow(deprecated)]
-    let data = img
-        .encode_to_data(skia_safe::EncodedImageFormat::PNG)
-        .expect("PNG应能编码");
-    let dir = out_dir();
-    std::fs::create_dir_all(&dir).unwrap();
-    let out_file = dir.join("stone.png");
-    std::fs::write(&out_file, data.as_bytes()).unwrap();
-    println!("静态方块：{}（{} KB）", out_file.display(), data.len() / 1024);
-}
-
-/// 手动测试：只渲染一个橡木楼梯（不走全量渲染，快速看效果）
-#[tokio::test(flavor = "multi_thread")]
-#[ignore = "手动测试：只渲染橡木楼梯单块"]
-async fn render_single_stairs() {
-    let _lock = CHAIN_LOCK.lock().await;
-    ensure_init();
-
-    if !network_available().await {
-        println!("无外网，跳过");
-        return;
-    }
-
-    // 只保证jar在本地（版本json短路径），不触发全量渲染
-    let data = mcml_net::get_work_client()
-        .get_bytes("https://piston-meta.mojang.com/mc/game/version_manifest_v2.json")
-        .await
-        .expect("应能取到版本清单");
-    let versions: mcml_game::mojang::version_obj::VersionObj =
-        mcml_base::serialize_tools::json_from_bytes(&data).expect("版本清单应能解析");
-    let last = versions.latest.release;
-    let ver = versions.versions.iter().find(|v| v.id == last).unwrap();
-
-    let obj = mcml_game::launcher_path::version_path::add_game(ver)
-        .await
-        .expect("版本json应能下载");
-
-    // 渲染单个楼梯模型
-    let jar = mcml_game::launcher_path::libraries_path::get_game_file(&last);
-    let item = mcml_base::file_item::FileItemObj {
-        name: format!("{last}.jar"),
-        file: jar.clone(),
-        url: mcml_net::url_helper::get_minecraft_client(&obj.downloads.client.url, &last),
-        hash: mcml_base::file_item::FileHash::Sha1(obj.downloads.client.sha1.clone()),
-        later: mcml_base::file_item::LaterRun::None,
-    };
-    if !item.check_hash() {
-        assert!(
-            mcml_downloader::start_download_task(vec![item]).await,
-            "客户端jar应能下载"
-        );
-    }
-
-    let archive = mcml_base::archives::BaseArchive::open(&jar).expect("jar应能打开");
-    let (textures, elements, _template, _full, rot_y) =
-        mcml_tex_draw::block_render::resolve_model(&archive, "block/oak_stairs")
-            .expect("应能解析oak_stairs模型");
-    let mut tex_cache = std::collections::HashMap::new();
-    let data = mcml_tex_draw::block_render::render_model_png(
-        &archive,
-        &mut tex_cache,
-        &textures,
-        &elements,
-        rot_y,
-    )
-    .expect("楼梯应能渲染");
-
-    let dir = out_dir();
-    std::fs::create_dir_all(&dir).unwrap();
-    let out_file = dir.join("oak_stairs.png");
-    std::fs::write(&out_file, &data).unwrap();
-    println!("楼梯：{}（{} KB）", out_file.display(), data.len() / 1024);
-}
-
 /// 带计时的进度回调：每次上报打印百分比、累计耗时、距上次上报的间隔
 /// （间隔突增处即变慢的位置）
 struct TimedProgress {
@@ -272,8 +123,7 @@ impl mcml_game::gui_hook::IProgressGui for TimedProgress {
 }
 
 /// 手动测试：渲染楼梯（走全量渲染后从输出取，对比wiki图标）
-#[tokio::test(flavor = "multi_thread")]
-#[ignore = "手动测试：渲染楼梯并复制到tests/out"]
+#[tokio::test]
 async fn render_stairs_sample() {
     let _lock = CHAIN_LOCK.lock().await;
     ensure_init();
@@ -306,3 +156,77 @@ async fn render_stairs_sample() {
     std::fs::copy(&src, &dst).unwrap();
     println!("楼梯：{}", dst.display());
 }
+
+/// 手动测试：验证多图方块合并渲染（门/床/活板门各出一张基础ID图标）
+#[tokio::test]
+async fn render_merged_samples() {
+    let _lock = CHAIN_LOCK.lock().await;
+    ensure_init();
+
+    if !network_available().await {
+        println!("无外网，跳过");
+        return;
+    }
+
+    mcml_tex_draw::load_blocks(None)
+        .await
+        .expect("load_blocks 应成功");
+
+    // 合并图标应按基础ID输出：门、床（此前完全不渲染）、活板门
+    let dir = out_dir().join("block");
+    for name in [
+        "minecraft_acacia_door.png",
+        "minecraft_white_bed.png",
+        "minecraft_acacia_trapdoor.png",
+    ] {
+        let path = dir.join(name);
+        assert!(path.exists(), "应已渲染合并图标：{}", path.display());
+        println!("合并图标：{}", path.display());
+    }
+
+    // 状态变体不单独出图：铁轨/栅栏门只保留基础ID；
+    // fence/wall/木牌锚模型注册到真实方块ID
+    let ids = mcml_tex_draw::blocks();
+    assert!(ids.iter().any(|id| id == "minecraft:rail"), "应包含 minecraft:rail");
+    assert!(ids.iter().any(|id| id == "minecraft:oak_fence_gate"));
+    for present in [
+        "minecraft:oak_fence",        // fence_inventory锚
+        "minecraft:andesite_wall",    // wall_inventory锚
+        "minecraft:oak_sign",         // rot_0锚
+        "minecraft:oak_hanging_sign",
+        "minecraft:oak_wall_sign",    // 墙牌是独立方块
+        "minecraft:oak_wall_hanging_sign",
+    ] {
+        assert!(ids.iter().any(|id| id == present), "应包含 {present}");
+    }
+    for absent in [
+        "minecraft:rail_raised_ne",
+        "minecraft:rail_raised_sw",
+        "minecraft:rail_corner",
+        "minecraft:oak_fence_gate_open",
+        "minecraft:oak_fence_gate_wall_open",
+        "minecraft:furnace_on",
+        // 零件/模板/旋转状态/冗余inventory
+        "minecraft:oak_fence_post",
+        "minecraft:oak_fence_side",
+        "minecraft:oak_fence_inventory",
+        "minecraft:andesite_wall_post",
+        "minecraft:oak_sign_rot_0",
+        "minecraft:oak_sign_rot_1",
+        "minecraft:oak_hanging_sign_attached_rot_0",
+        "minecraft:glass_pane_post",
+        "minecraft:iron_bars_post",
+        "minecraft:oak_button_inventory",
+        "minecraft:template_four_turtle_eggs",
+    ] {
+        assert!(
+            !ids.iter().any(|id| id == absent),
+            "零件/状态不应出现在方块表：{absent}"
+        );
+    }
+    println!(
+        "过滤：{} 个方块ID（rail/fence_gate保留，状态/零件剔除，锚模型重命名）",
+        ids.len()
+    );
+}
+

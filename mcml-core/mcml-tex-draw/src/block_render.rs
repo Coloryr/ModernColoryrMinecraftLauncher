@@ -1,6 +1,6 @@
 use std::{
     cell::RefCell,
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     f32::consts::PI,
     io::Cursor,
     slice,
@@ -926,6 +926,14 @@ fn rot_point_y(p: Point3, sin: f32, cos: f32) -> Point3 {
     }
 }
 
+/// 渲染缩放基准：Full按完整方块尺度（半砖等矮模型不放大铺满），
+/// Own按模型自身包围盒铺满画布（两格高的整门/整床等多格合并模型）
+#[derive(Clone, Copy)]
+enum FitMode {
+    Full,
+    Own,
+}
+
 /// 渲染楼梯类多元素盒子模型：按gui旋转角刚体旋转所有元素面，
 /// 投影后剔除背向观察者的面，按深度排序绘制（painter's algorithm）
 /// 渲染单个模型（公开供手动测试调试单个方块用）
@@ -936,12 +944,25 @@ pub fn render_model_png(
     elements: &[BlockElementObj],
     rot_y: f32,
 ) -> Option<Vec<u8>> {
+    let (texs, uvs, shades, corner_sets) =
+        load_model_faces(archive, tex_cache, textures, elements, rot_y)?;
+    render_faces_png(&texs, &uvs, &shades, &corner_sets, FitMode::Full)
+}
+
+/// 载入模型朝向观察者的面：按gui旋转角刚体旋转面法线与角点，
+/// 剔除背向观察者的面，返回（贴图、uv、亮度、旋转后角点集）
+fn load_model_faces(
+    archive: &BaseArchive,
+    tex_cache: &mut HashMap<String, Bitmap>,
+    textures: &HashMap<String, TextureRefObj>,
+    elements: &[BlockElementObj],
+    rot_y: f32,
+) -> Option<(Vec<Bitmap>, Vec<[Point; 4]>, Vec<u8>, Vec<[Point3; 4]>)> {
     // 模型gui旋转与完整方块[30,225,0]的yaw差，绕y轴刚体旋转
     let mat = *MAT;
     let angle = (rot_y - 225.0) * PI / 180.0;
     let (sin, cos) = angle.sin_cos();
 
-    // 载入朝向观察者的面并旋转角点
     let mut texs: Vec<Bitmap> = Vec::new();
     let mut uvs: Vec<[Point; 4]> = Vec::new();
     let mut shades: Vec<u8> = Vec::new();
@@ -1011,24 +1032,67 @@ pub fn render_model_png(
     if texs.is_empty() {
         return None;
     }
+    Some((texs, uvs, shades, corner_sets))
+}
 
-    // 投影全部角点，按完整方块的fit参数绘制（与完整方块同尺度，矮模型不放大铺满）
-    let (fmin_x, fmin_y, fscale, fdx, fdy) = *FULL_FIT;
-    let fit =
-        |p: Point| Point::new((p.x - fmin_x) * fscale + fdx, (p.y - fmin_y) * fscale + fdy);
-    let mut pos_sets: Vec<[Point; 4]> = Vec::with_capacity(corner_sets.len());
+/// 绘制已载入的面集：等轴测投影后按fit模式缩放（Full=完整方块尺度，
+/// Own=模型自身包围盒铺满画布），按深度排序绘制（painter's algorithm）
+fn render_faces_png(
+    texs: &[Bitmap],
+    uvs: &[[Point; 4]],
+    shades: &[u8],
+    corner_sets: &[[Point3; 4]],
+    mode: FitMode,
+) -> Option<Vec<u8>> {
+    let mat = *MAT;
+
+    // 先投影全部角点（屏幕坐标 + 深度），再按fit模式确定缩放
+    let mut raw_sets: Vec<[Point; 4]> = Vec::with_capacity(corner_sets.len());
     let mut depth_sets: Vec<[f32; 4]> = Vec::with_capacity(corner_sets.len());
-    for cs in &corner_sets {
+    for cs in corner_sets {
         let mut ps = [Point::default(); 4];
         let mut ds = [0.0f32; 4];
         for (i, c) in cs.iter().enumerate() {
             let res = project(&mat, c);
-            ps[i] = fit(Point { x: res.x, y: res.y });
+            ps[i] = Point { x: res.x, y: res.y };
             ds[i] = res.z;
         }
-        pos_sets.push(ps);
+        raw_sets.push(ps);
         depth_sets.push(ds);
     }
+
+    // 画布四周留边距
+    const MARGIN: f32 = 2.0;
+    let inner = BLOCK_SIZE as f32 - MARGIN * 2.0;
+    let (fmin_x, fmin_y, fscale, fdx, fdy) = match mode {
+        // 与完整方块同尺度，矮模型不放大铺满
+        FitMode::Full => *FULL_FIT,
+        // 多格合并模型按自身投影包围盒等比缩放居中
+        FitMode::Own => {
+            let mut min_x = f32::INFINITY;
+            let mut min_y = f32::INFINITY;
+            let mut max_x = f32::NEG_INFINITY;
+            let mut max_y = f32::NEG_INFINITY;
+            for ps in &raw_sets {
+                for p in ps {
+                    min_x = min_x.min(p.x);
+                    min_y = min_y.min(p.y);
+                    max_x = max_x.max(p.x);
+                    max_y = max_y.max(p.y);
+                }
+            }
+            let scale = inner / (max_x - min_x).max(max_y - min_y);
+            let dx = (BLOCK_SIZE as f32 - (max_x - min_x) * scale) / 2.0;
+            let dy = (BLOCK_SIZE as f32 - (max_y - min_y) * scale) / 2.0;
+            (min_x, min_y, scale, dx, dy)
+        }
+    };
+    let fit =
+        |p: Point| Point::new((p.x - fmin_x) * fscale + fdx, (p.y - fmin_y) * fscale + fdy);
+    let pos_sets: Vec<[Point; 4]> = raw_sets
+        .iter()
+        .map(|ps| ps.map(|p| fit(p)))
+        .collect();
 
     // 组装面并按深度排序（远的先画）
     let mut geoms: Vec<(f32, FaceGeom)> = texs
@@ -1078,10 +1142,11 @@ pub fn resolve_model(
             .ok()?;
         let model = serialize_tools::json_from_bytes::<BlockModelObj>(&data).ok()?;
 
-        // 子模型的textures/display覆盖父模型
+        // 子模型的textures/display覆盖父模型（同名键子值优先，
+        // 父模板的"#up"等占位引用不能挡住子模型的实际贴图）
         let mut merged = model.textures.unwrap_or_default();
         for (k, v) in textures {
-            merged.entry(k).or_insert(v);
+            merged.insert(k, v);
         }
         textures = merged;
         if let Some(rot) = model
@@ -1275,6 +1340,241 @@ pub fn render_full_cube(
         .map(|d| d.as_bytes().to_vec())
 }
 
+/// 多图方块种类：门（2格高）、床（2格宽）、活板门（单格多状态）
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum MergedKind {
+    Door,
+    Bed,
+    Trapdoor,
+}
+
+/// 多图方块合并组：变体模型共享一张基础ID图标，reps为渲染用的代表模型
+/// （门/活板门只用reps[0]，床用reps[0]=foot、reps[1]=head）
+struct MergedGroup<'a> {
+    base: String,
+    kind: MergedKind,
+    reps: [Option<&'a str>; 2],
+}
+
+/// 按模型名识别多图方块的变体，返回（方块基础ID, 种类）
+///
+/// 门覆盖老版命名（oak_door_bottom/top）与新版8变体（oak_door_bottom_left等），
+/// 合并后只出一张 minecraft_<wood>_door.png，不再按变体出图
+fn classify_merged(id_rel: &str) -> Option<(String, MergedKind)> {
+    // 模板模型（template_trapdoor_bottom等）不是方块状态，不参与合并
+    if id_rel.starts_with("template_") {
+        return None;
+    }
+    for suffix in [
+        "_bottom_left_open",
+        "_bottom_right_open",
+        "_top_left_open",
+        "_top_right_open",
+        "_bottom_left",
+        "_bottom_right",
+        "_top_left",
+        "_top_right",
+        "_bottom",
+        "_top",
+    ] {
+        if let Some(base) = id_rel.strip_suffix(suffix)
+            && base.ends_with("_door")
+        {
+            return Some((base.to_string(), MergedKind::Door));
+        }
+    }
+    for (suffix, kind) in [("_foot", MergedKind::Bed), ("_head", MergedKind::Bed)] {
+        if let Some(base) = id_rel.strip_suffix(suffix)
+            && base.ends_with("_bed")
+        {
+            return Some((base.to_string(), kind));
+        }
+    }
+    for suffix in ["_bottom", "_top", "_open"] {
+        if let Some(base) = id_rel.strip_suffix(suffix)
+            && base.ends_with("_trapdoor")
+        {
+            return Some((base.to_string(), MergedKind::Trapdoor));
+        }
+    }
+    None
+}
+
+/// 状态后缀：模型名带这些后缀且对应基础模型也存在时，视为同一方块的其他状态
+/// （铁轨的_raised_ne、栅栏门的_open、熔炉的_on、吊灯的_hanging等），不单独出图。
+/// 后缀可叠加（repeater_1tick_on），故逐层剥离；"fence_gate_wall"为墙上栅栏门的整体后缀
+const STATE_SUFFIXES: &[&str] = &[
+    "open", "closed", "on", "off", "lit", "unlit", "powered", "unpowered",
+    "locked", "extended", "triggered", "hanging", "snow", "moist", "corner",
+    "empty", "left", "right", "active", "inactive", "short", "tall", "sticky",
+    "attached", "raised_ne", "raised_nw", "raised_se", "raised_sw",
+    "fence_gate_wall", "1tick", "2tick", "3tick", "4tick",
+];
+
+/// 状态变体判定：模型名能逐层剥出状态后缀、且剥出的基础模型确实存在时返回true
+///
+/// 后缀必须在下划线边界后匹配（"button"不会被"on"误剥），且每层剥出的基础模型
+/// 都要存在，避免误杀oak_stairs这类名字本身就是完整方块的模型
+fn is_state_variant(id_rel: &str, all: &HashSet<&str>) -> bool {
+    let mut cur = id_rel;
+    loop {
+        let mut stripped = false;
+        for suffix in STATE_SUFFIXES {
+            if let Some(rest) = cur.strip_suffix(suffix)
+                && let Some(base) = rest.strip_suffix('_')
+                && !base.is_empty()
+                && all.contains(base)
+            {
+                cur = base;
+                stripped = true;
+                break;
+            }
+        }
+        if !stripped {
+            return cur != id_rel;
+        }
+    }
+}
+
+/// 部件后缀：blockstate拼装用的零件模型，不是独立方块
+/// （栅栏的post/side、墙的post/side、玻璃板/栏杆的cap/noside、火焰/红石粉的贴片面等）
+const PART_SUFFIXES: &[&str] = &["post", "side", "cap", "noside", "dot", "up", "floor"];
+
+/// 通用模板模型的物品外观（fence/wall/button栅栏等没有vanilla方块对应，
+/// 且基础模型不存在，其余规则剔除不到，这里显式删掉）
+const GENERIC_TEMPLATES: &[&str] = &["fence_inventory", "wall_inventory", "custom_fence_inventory"];
+
+/// 剥掉数字/alt/方向等修饰（fire_up_alt0 -> fire_up，bamboo_fence_side_east ->
+/// bamboo_fence_side），便于识别零件本体
+fn part_stem(id_rel: &str) -> &str {
+    let mut cur = id_rel;
+    while cur.chars().next_back().is_some_and(|c| c.is_ascii_digit()) {
+        cur = &cur[..cur.len() - 1];
+    }
+    for deco in ["_alt", "_east", "_north", "_south", "_west", "_small", "_tall"] {
+        if let Some(stem) = cur.strip_suffix(deco) {
+            cur = stem;
+            break;
+        }
+    }
+    cur
+}
+
+/// 零件/模板模型判定：模板模型、blockstate拼装零件、木牌/挂牌的旋转状态都不是独立方块
+///
+/// 零件后缀须在下划线边界后匹配（part_stem剥修饰），避免误杀button这类同尾名模型
+fn is_part_model(id_rel: &str) -> bool {
+    // 模板模型与通用物品外观，根本没有对应方块
+    if id_rel.starts_with("template_") || GENERIC_TEMPLATES.contains(&id_rel) {
+        return true;
+    }
+    // 挂牌的挂墙状态（attached_rot_0..3）；rot_1..3只是rot_0的旋转
+    if id_rel.contains("_attached_rot_") {
+        return true;
+    }
+    if !id_rel.ends_with("_rot_0")
+        && id_rel.rsplit_once("_rot_").is_some_and(|(_, tail)| {
+            !tail.is_empty() && tail.bytes().all(|c| c.is_ascii_digit())
+        })
+    {
+        return true;
+    }
+    let stem = part_stem(id_rel);
+    PART_SUFFIXES.iter().any(|suffix| {
+        stem.len() > suffix.len() + 1
+            && stem.ends_with(suffix)
+            && stem.as_bytes()[stem.len() - suffix.len() - 1] == b'_'
+    })
+}
+
+/// 冗余物品外观判定：基础模型存在时，_inventory只是同一方块的物品展示复制品
+/// （oak_button_inventory、piston_inventory、各shelf_inventory等）
+fn is_redundant_inventory(id_rel: &str, all: &HashSet<&str>) -> bool {
+    id_rel
+        .strip_suffix("_inventory")
+        .is_some_and(|base| all.contains(base))
+}
+
+/// 锚模型到方块本体ID的映射：fence/wall没有完整模型（inventory即物品外观），
+/// 木牌/挂牌以rot_0为默认状态，图标注册到真实方块ID下
+///
+/// 返回None表示模型名即方块ID（含已是真实ID的墙牌X_wall_sign等）
+fn anchor_base(id_rel: &str) -> Option<&str> {
+    if let Some(base) = id_rel.strip_suffix("_rot_0") {
+        return Some(base);
+    }
+    id_rel.strip_suffix("_inventory")
+}
+
+/// 合并组代表模型的优先级（越小越优先）：取关闭状态的下半块
+fn merged_rep_priority(kind: MergedKind, id_rel: &str) -> u8 {
+    match kind {
+        MergedKind::Door if id_rel.ends_with("_bottom_left") => 0,
+        MergedKind::Door if id_rel.ends_with("_bottom") => 1,
+        MergedKind::Door => 2,
+        MergedKind::Trapdoor if id_rel.ends_with("_bottom") => 0,
+        MergedKind::Trapdoor if id_rel.ends_with("_top") => 1,
+        MergedKind::Trapdoor => 2,
+        // 床按foot/head各取一个，无优先级
+        MergedKind::Bed => 0,
+    }
+}
+
+/// 平移元素盒子（多格合并：上半门y+16、床头z+16）；
+/// 面的uv均显式给出，不随from/to平移变化
+fn shift_element(e: &BlockElementObj, dx: f32, dy: f32, dz: f32) -> BlockElementObj {
+    let mut e = e.clone();
+    e.from = e.from.iter().zip([dx, dy, dz]).map(|(v, d)| v + d).collect();
+    e.to = e.to.iter().zip([dx, dy, dz]).map(|(v, d)| v + d).collect();
+    e
+}
+
+/// 渲染多图方块的合并图标（门/床/活板门：变体模型拼为一张基础ID等距图）
+fn render_merged_block(
+    archive: &BaseArchive,
+    tex_cache: &mut HashMap<String, Bitmap>,
+    group: &MergedGroup,
+) -> Option<Vec<u8>> {
+    match group.kind {
+        // 活板门：三个状态同贴图同几何（只是贴在方块不同位置），按下一半块等距渲染
+        MergedKind::Trapdoor => {
+            let (textures, elements, _, _, rot_y) = resolve_model(archive, group.reps[0]?)?;
+            render_model_png(archive, tex_cache, &textures, &elements, rot_y)
+        }
+        // 门：bottom/top两半模型拼成2格高的整门，按自身包围盒等距渲染
+        MergedKind::Door => {
+            let rep = group.reps[0]?;
+            let (textures, bottom, _, _, rot_y) = resolve_model(archive, rep)?;
+            // 上半模型与下半同族："..._bottom_left" -> "..._top_left"
+            let (_, top, ..) = resolve_model(archive, rep.replacen("_bottom", "_top", 1).as_str())?;
+            let mut elements = bottom;
+            elements.extend(top.iter().map(|e| shift_element(e, 0.0, 16.0, 0.0)));
+            let (texs, uvs, shades, corner_sets) =
+                load_model_faces(archive, tex_cache, &textures, &elements, rot_y)?;
+            render_faces_png(&texs, &uvs, &shades, &corner_sets, FitMode::Own)
+        }
+        // 床：foot/head两半模型沿床头方向拼成2格长的整床（foot贴图与head贴图不同，
+        // 两半各自带textures解析），床头在后，按自身包围盒等距渲染
+        MergedKind::Bed => {
+            let (foot_tex, foot_el, _, _, rot_y) = resolve_model(archive, group.reps[0]?)?;
+            let (head_tex, head_el, ..) = resolve_model(archive, group.reps[1]?)?;
+            let head_el: Vec<BlockElementObj> = head_el
+                .iter()
+                .map(|e| shift_element(e, 0.0, 0.0, 16.0))
+                .collect();
+            let (mut texs, mut uvs, mut shades, mut corner_sets) =
+                load_model_faces(archive, tex_cache, &foot_tex, &foot_el, rot_y)?;
+            let (t2, u2, s2, c2) =
+                load_model_faces(archive, tex_cache, &head_tex, &head_el, rot_y)?;
+            texs.extend(t2);
+            uvs.extend(u2);
+            shades.extend(s2);
+            corner_sets.extend(c2);
+            render_faces_png(&texs, &uvs, &shades, &corner_sets, FitMode::Own)
+        }
+    }
+}
+
 /// 从客户端jar提取所有完整方块贴图并渲染保存
 ///
 /// 下载流程（版本清单 → 客户端jar）见lib的load_blocks，这里只做解包渲染。
@@ -1303,7 +1603,70 @@ pub fn render_blocks(archive: &BaseArchive, gui: ProgressGui) -> CoreResult<()> 
         })
         .collect();
 
-    let total = entries.len();
+    // 多图方块分组：门/床/活板门的变体模型合并为一张基础ID图标，其余走常规渲染；
+    // 模板/blockstate零件不渲染；状态变体（铁轨_raised_ne、栅栏门_open、熔炉_on等）
+    // 已有基础模型时不单独出图；fence/wall的inventory与木牌rot_0重命名到真实方块ID
+    let model_rels: HashSet<&str> = entries
+        .iter()
+        .map(|name| {
+            name.trim_start_matches("assets/minecraft/models/block/")
+                .trim_end_matches(".json")
+        })
+        .collect();
+    let mut normal: Vec<&str> = Vec::new();
+    let mut merged: Vec<MergedGroup> = Vec::new();
+    let mut merged_rels: Vec<Vec<&str>> = Vec::new();
+    let mut group_index: HashMap<String, usize> = HashMap::new();
+    for &name in &entries {
+        let rel = name.trim_start_matches("assets/minecraft/models/").trim_end_matches(".json");
+        let id_rel = rel.trim_start_matches("block/");
+        if is_part_model(id_rel) {
+            continue;
+        }
+        let Some((base, kind)) = classify_merged(id_rel) else {
+            if is_state_variant(id_rel, &model_rels)
+                || is_redundant_inventory(id_rel, &model_rels)
+            {
+                continue;
+            }
+            normal.push(name);
+            continue;
+        };
+        let idx = *group_index.entry(base.clone()).or_insert_with(|| {
+            merged.push(MergedGroup {
+                base,
+                kind,
+                reps: [None, None],
+            });
+            merged_rels.push(Vec::new());
+            merged.len() - 1
+        });
+        merged_rels[idx].push(rel);
+    }
+    // 选代表模型：床取foot与head各一，门/活板门取最接近关闭状态的变体
+    for (group, rels) in merged.iter_mut().zip(&merged_rels) {
+        match group.kind {
+            MergedKind::Bed => {
+                group.reps[0] = rels.iter().find(|rel| rel.ends_with("_foot")).copied();
+                group.reps[1] = rels.iter().find(|rel| rel.ends_with("_head")).copied();
+            }
+            _ => {
+                group.reps[0] = rels
+                    .iter()
+                    .min_by_key(|rel| merged_rep_priority(group.kind, rel))
+                    .copied();
+            }
+        }
+    }
+
+    enum Job<'a> {
+        Normal(&'a str),
+        Merged(MergedGroup<'a>),
+    }
+    let mut jobs: Vec<Job> = normal.into_iter().map(Job::Normal).collect();
+    jobs.extend(merged.into_iter().map(Job::Merged));
+
+    let total = jobs.len();
     let done = AtomicUsize::new(0);
     // 每1%左右上报一次，避免高频回调刷爆GUI
     let step = (total / 100).max(1);
@@ -1320,9 +1683,9 @@ pub fn render_blocks(archive: &BaseArchive, gui: ProgressGui) -> CoreResult<()> 
     }
 
     // 并发渲染
-    let rendered: Vec<Option<(String, String, Option<String>)>> = entries
+    let rendered: Vec<Option<(String, String, Option<String>)>> = jobs
         .par_iter()
-        .map(|name| {
+        .map(|job| {
             LOCAL_ARCHIVE.with(|local_archive| {
                 TEX_CACHE.with(|tex_cache| {
                     let mut tex_cache = tex_cache.borrow_mut();
@@ -1334,13 +1697,17 @@ pub fn render_blocks(archive: &BaseArchive, gui: ProgressGui) -> CoreResult<()> 
                     // 单个候选模型的处理（进度计数对跳过的条目也要生效）
                     let item_start = std::time::Instant::now();
                     let mut render = || -> Option<(String, String, Option<String>)> {
+                    match job {
+                        Job::Normal(name) => {
                     // 模型相对名与方块ID："block/stone" -> "minecraft:stone"
+                    // 锚模型（fence/wall的inventory、木牌rot_0）注册到真实方块ID
                     let rel = name
                         .trim_start_matches("assets/minecraft/models/")
                         .trim_end_matches(".json");
                     let id_rel = name
                         .trim_start_matches("assets/minecraft/models/block/")
                         .trim_end_matches(".json");
+                    let id_rel = anchor_base(id_rel).unwrap_or(id_rel);
                     let id = format!("minecraft:{id_rel}");
 
                     // 完整方块/楼梯/半砖/首元素完整（信标等内嵌模型）才渲染，玻璃板等跳过
@@ -1378,14 +1745,39 @@ pub fn render_blocks(archive: &BaseArchive, gui: ProgressGui) -> CoreResult<()> 
                     );
                     let lang_key = names.get(&id).cloned();
                     Some((id, out_name, lang_key))
+                        }
+                        Job::Merged(group) => {
+                        // 合并图标：按基础ID出一张图并注册到方块表（带语言键）
+                        let t = std::time::Instant::now();
+                        let data = render_merged_block(archive, &mut tex_cache, group)?;
+                        PROFILE.draw.fetch_add(
+                            t.elapsed().as_nanos() as u64,
+                            Ordering::Relaxed,
+                        );
+                        let out_name = format!("minecraft_{}.png", group.base);
+                        let t = std::time::Instant::now();
+                        path_helper::write_bytes(&dir.join(&out_name), &data).ok()?;
+                        PROFILE.write.fetch_add(
+                            t.elapsed().as_nanos() as u64,
+                            Ordering::Relaxed,
+                        );
+                        let id = format!("minecraft:{}", group.base);
+                        let lang_key = names.get(&id).cloned();
+                        Some((id, out_name, lang_key))
+                        }
+                    }
                 };
                 let out = render();
 
                 // 定位异常慢的单方块（如超大动画贴图）
                 if PROFILE.enabled {
                     let secs = item_start.elapsed().as_secs_f64();
+                    let job_name = match job {
+                        Job::Normal(name) => name,
+                        Job::Merged(group) => group.base.as_str(),
+                    };
                     if secs > 1.0 {
-                        println!("[性能] 慢方块 {name}：{secs:.1}s");
+                        println!("[性能] 慢方块 {job_name}：{secs:.1}s");
                     }
                 }
 
@@ -1537,4 +1929,181 @@ pub fn read_anim_meta(archive: &BaseArchive, tex_path: &str) -> AnimMeta {
 /// 当前已渲染的游戏版本
 pub(crate) fn mcml_tex_draw_id() -> String {
     crate::blocks_read().id.clone()
+}
+
+#[cfg(test)]
+mod merged_tests {
+    use super::*;
+
+    /// 多图方块变体应归类到基础ID，普通方块与模板模型不归类
+    #[test]
+    fn classify_merged_kinds() {
+        // 门：老版与新版命名
+        assert_eq!(
+            classify_merged("acacia_door_bottom_left"),
+            Some(("acacia_door".to_string(), MergedKind::Door))
+        );
+        assert_eq!(
+            classify_merged("oak_door_top"),
+            Some(("oak_door".to_string(), MergedKind::Door))
+        );
+        // 床：foot/head两半
+        assert_eq!(
+            classify_merged("white_bed_foot"),
+            Some(("white_bed".to_string(), MergedKind::Bed))
+        );
+        // 活板门：三种状态
+        assert_eq!(
+            classify_merged("acacia_trapdoor_open"),
+            Some(("acacia_trapdoor".to_string(), MergedKind::Trapdoor))
+        );
+        // 普通方块与模板模型不归类
+        assert_eq!(classify_merged("stone"), None);
+        assert_eq!(classify_merged("sandstone_bottom"), None);
+        assert_eq!(classify_merged("template_bed_foot"), None);
+        assert_eq!(classify_merged("door_bottom_left"), None);
+    }
+
+    /// 模型集合：基础模型与其状态变体（对齐26.2 jar中的真实模型名）
+    fn variant_names() -> HashSet<&'static str> {
+        HashSet::from([
+            "rail",
+            "rail_corner",
+            "rail_raised_ne",
+            "rail_raised_sw",
+            "activator_rail",
+            "activator_rail_on",
+            "activator_rail_on_raised_ne",
+            "oak_fence_gate",
+            "oak_fence_gate_wall",
+            "oak_fence_gate_wall_open",
+            "furnace",
+            "furnace_on",
+            "lantern",
+            "lantern_hanging",
+            "repeater",
+            "repeater_1tick",
+            "repeater_1tick_on",
+            "repeater_1tick_on_locked",
+            "grass_block",
+            "grass_block_snow",
+            "farmland",
+            "farmland_moist",
+            "sculk_sensor",
+            "sculk_sensor_active",
+            // 与状态后缀同名结尾但非下划线边界/基础不存在的对照项
+            "button",
+            "sandstone_bottom",
+            "oak_stairs",
+            "red_sandstone",
+            "red_sandstone_wall",
+        ])
+    }
+
+    /// 状态变体应识别为true：铁轨的抬升/转角、栅栏门开启、熔炉点燃等，可逐层叠加
+    #[test]
+    fn state_variants_detected() {
+        let all = variant_names();
+        assert!(is_state_variant("rail_raised_ne", &all));
+        assert!(is_state_variant("rail_corner", &all));
+        assert!(is_state_variant("activator_rail_on_raised_ne", &all));
+        assert!(is_state_variant("oak_fence_gate_open", &all));
+        assert!(is_state_variant("oak_fence_gate_wall_open", &all));
+        assert!(is_state_variant("furnace_on", &all));
+        assert!(is_state_variant("lantern_hanging", &all));
+        assert!(is_state_variant("repeater_1tick_on", &all));
+        assert!(is_state_variant("repeater_1tick_on_locked", &all));
+        assert!(is_state_variant("grass_block_snow", &all));
+        assert!(is_state_variant("farmland_moist", &all));
+        assert!(is_state_variant("sculk_sensor_active", &all));
+    }
+
+    /// 基础模型、无下划线边界的同尾名、基础不存在的变体都不是状态变体
+    #[test]
+    fn state_variants_reject_normal() {
+        let all = variant_names();
+        assert!(!is_state_variant("rail", &all));
+        assert!(!is_state_variant("furnace", &all));
+        // "button"不能被"on"误剥（非下划线边界）
+        assert!(!is_state_variant("button", &all));
+        // 基础模型不存在时保留：oak_stairs无oak模型，red_sandstone_wall无red_sandstone后缀边界
+        assert!(!is_state_variant("oak_stairs", &all));
+        assert!(!is_state_variant("red_sandstone_wall", &all));
+        assert!(!is_state_variant("sandstone_bottom", &all));
+    }
+
+    /// 模板与blockstate零件应判定为true：栅栏/墙的post/side、玻璃板/栏杆零件、
+    /// 火焰/红石粉贴片面（带数字/alt/方向修饰）、挂牌挂墙状态、rot_1..3旋转状态
+    #[test]
+    fn part_models_detected() {
+        assert!(is_part_model("template_fence_gate"));
+        assert!(is_part_model("template_four_turtle_eggs"));
+        assert!(is_part_model("fence_inventory"));
+        assert!(is_part_model("wall_inventory"));
+        assert!(is_part_model("custom_fence_inventory"));
+        assert!(is_part_model("acacia_fence_post"));
+        assert!(is_part_model("acacia_fence_side"));
+        assert!(is_part_model("bamboo_fence_side_east"));
+        assert!(is_part_model("andesite_wall_post"));
+        assert!(is_part_model("andesite_wall_side"));
+        assert!(is_part_model("andesite_wall_side_tall"));
+        assert!(is_part_model("pale_moss_carpet_side_small"));
+        assert!(is_part_model("glass_pane_post"));
+        assert!(is_part_model("glass_pane_noside"));
+        assert!(is_part_model("iron_bars_cap"));
+        assert!(is_part_model("hopper_side"));
+        assert!(is_part_model("chorus_plant_side"));
+        assert!(is_part_model("mossy_carpet_side"));
+        assert!(is_part_model("fire_side0"));
+        assert!(is_part_model("fire_up_alt1"));
+        assert!(is_part_model("soul_fire_floor1"));
+        assert!(is_part_model("redstone_dust_dot"));
+        assert!(is_part_model("redstone_dust_side_alt0"));
+        assert!(is_part_model("redstone_dust_up"));
+        assert!(is_part_model("oak_hanging_sign_attached_rot_0"));
+        assert!(is_part_model("oak_sign_rot_1"));
+    }
+
+    /// 锚模型与正常方块不应被零件规则误杀
+    #[test]
+    fn part_models_reject_normal() {
+        // 木牌rot_0是保留的默认状态，inventory是fence/wall的锚
+        assert!(!is_part_model("oak_sign_rot_0"));
+        assert!(!is_part_model("oak_hanging_sign_rot_0"));
+        assert!(!is_part_model("oak_fence_inventory"));
+        assert!(!is_part_model("andesite_wall_inventory"));
+        // 非下划线边界/正常方块
+        assert!(!is_part_model("button"));
+        assert!(!is_part_model("grass_block"));
+        assert!(!is_part_model("furnace"));
+        assert!(!is_part_model("sea_pickle"));
+        assert!(!is_part_model("oak_wall_sign"));
+    }
+
+    /// 冗余物品外观：基础模型存在时_inventory不单独出图
+    #[test]
+    fn redundant_inventory_detected() {
+        let all: HashSet<&str> = HashSet::from(["oak_button", "piston", "acacia_shelf"]);
+        assert!(is_redundant_inventory("oak_button_inventory", &all));
+        assert!(is_redundant_inventory("piston_inventory", &all));
+        assert!(is_redundant_inventory("acacia_shelf_inventory", &all));
+        // 基础模型不存在的是锚，保留
+        assert!(!is_redundant_inventory("oak_fence_inventory", &all));
+        assert!(!is_redundant_inventory("andesite_wall_inventory", &all));
+    }
+
+    /// 锚模型应映射到真实方块ID，普通模型与墙牌（已是真实ID）不变
+    #[test]
+    fn anchor_bases() {
+        assert_eq!(anchor_base("oak_fence_inventory"), Some("oak_fence"));
+        assert_eq!(anchor_base("andesite_wall_inventory"), Some("andesite_wall"));
+        assert_eq!(anchor_base("oak_sign_rot_0"), Some("oak_sign"));
+        assert_eq!(
+            anchor_base("oak_hanging_sign_rot_0"),
+            Some("oak_hanging_sign")
+        );
+        assert_eq!(anchor_base("oak_wall_sign"), None);
+        assert_eq!(anchor_base("stone"), None);
+        assert_eq!(anchor_base("oak_sign_rot_1"), None);
+    }
 }
