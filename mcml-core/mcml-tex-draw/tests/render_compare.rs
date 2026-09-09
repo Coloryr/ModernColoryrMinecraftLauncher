@@ -84,20 +84,6 @@ impl mcml_downloader::IDownloadGui for TestDownloader {
     fn update_task(&self, _state: mcml_downloader::DownloadTaskState) {}
 }
 
-/// 获取客户端jar路径（load_blocks经libraries_path下载，与游戏库共用）
-async fn get_client_jar() -> Option<PathBuf> {
-    let data = mcml_net::get_work_client()
-        .get_bytes("https://piston-meta.mojang.com/mc/game/version_manifest_v2.json")
-        .await
-        .ok()?;
-    let versions: mcml_game::mojang::version_obj::VersionObj =
-        mcml_base::serialize_tools::json_from_bytes(&data).ok()?;
-    let last = versions.latest.release;
-
-    let jar = mcml_game::launcher_path::libraries_path::get_game_file(&last);
-    if jar.exists() { Some(jar) } else { None }
-}
-
 /// 带计时的进度回调：每次上报打印百分比、累计耗时、距上次上报的间隔
 /// （间隔突增处即变慢的位置）
 struct TimedProgress {
@@ -157,7 +143,7 @@ async fn render_stairs_sample() {
     println!("楼梯：{}", dst.display());
 }
 
-/// 手动测试：验证多图方块合并渲染（门/床/活板门各出一张基础ID图标）
+/// 手动测试：验证创造栏图标表渲染（精灵/组合模型/分类写入）
 #[tokio::test]
 async fn render_merged_samples() {
     let _lock = CHAIN_LOCK.lock().await;
@@ -172,61 +158,27 @@ async fn render_merged_samples() {
         .await
         .expect("load_blocks 应成功");
 
-    // 合并图标应按基础ID输出：门、床（此前完全不渲染）、活板门
+    // 平面精灵（门/木牌/花草）按新表设计不进表、留给item渲染；
+    // 床是composite拼合3D模型，fence用inventory外观
     let dir = out_dir().join("block");
     for name in [
-        "minecraft_acacia_door.png",
         "minecraft_white_bed.png",
-        "minecraft_acacia_trapdoor.png",
+        "minecraft_oak_fence.png",
+        "minecraft_oak_stairs.png",
+        "minecraft_furnace.png",
     ] {
         let path = dir.join(name);
-        assert!(path.exists(), "应已渲染合并图标：{}", path.display());
-        println!("合并图标：{}", path.display());
+        assert!(path.exists(), "应已渲染图标：{}", path.display());
+        println!("图标：{}", path.display());
     }
 
-    // 状态变体不单独出图：铁轨/栅栏门只保留基础ID；
-    // fence/wall/木牌锚模型注册到真实方块ID
+    // 注册表：数量与固定表非Skip行数一致，分类全部写入
     let ids = mcml_tex_draw::blocks();
-    assert!(ids.iter().any(|id| id == "minecraft:rail"), "应包含 minecraft:rail");
-    assert!(ids.iter().any(|id| id == "minecraft:oak_fence_gate"));
-    for present in [
-        "minecraft:oak_fence",        // fence_inventory锚
-        "minecraft:andesite_wall",    // wall_inventory锚
-        "minecraft:oak_sign",         // rot_0锚
-        "minecraft:oak_hanging_sign",
-        "minecraft:oak_wall_sign",    // 墙牌是独立方块
-        "minecraft:oak_wall_hanging_sign",
-    ] {
-        assert!(ids.iter().any(|id| id == present), "应包含 {present}");
-    }
-    for absent in [
-        "minecraft:rail_raised_ne",
-        "minecraft:rail_raised_sw",
-        "minecraft:rail_corner",
-        "minecraft:oak_fence_gate_open",
-        "minecraft:oak_fence_gate_wall_open",
-        "minecraft:furnace_on",
-        // 零件/模板/旋转状态/冗余inventory
-        "minecraft:oak_fence_post",
-        "minecraft:oak_fence_side",
-        "minecraft:oak_fence_inventory",
-        "minecraft:andesite_wall_post",
-        "minecraft:oak_sign_rot_0",
-        "minecraft:oak_sign_rot_1",
-        "minecraft:oak_hanging_sign_attached_rot_0",
-        "minecraft:glass_pane_post",
-        "minecraft:iron_bars_post",
-        "minecraft:oak_button_inventory",
-        "minecraft:template_four_turtle_eggs",
-    ] {
-        assert!(
-            !ids.iter().any(|id| id == absent),
-            "零件/状态不应出现在方块表：{absent}"
-        );
-    }
-    println!(
-        "过滤：{} 个方块ID（rail/fence_gate保留，状态/零件剔除，锚模型重命名）",
-        ids.len()
-    );
+    let expected = mcml_tex_draw::block::icons::BLOCK_ICONS
+        .iter()
+        .filter(|(_, _, spec)| !matches!(spec, mcml_tex_draw::block::icons::IconSpec::Skip))
+        .count();
+    assert_eq!(ids.len(), expected, "注册数应等于表中非Skip条目数");
+    println!("注册：{} 个方块图标", ids.len());
 }
 

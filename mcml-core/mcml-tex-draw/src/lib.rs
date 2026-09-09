@@ -17,10 +17,12 @@ use mcml_names::{
 };
 use mcml_sys::path_helper;
 
-use crate::block_obj::BlocksObj;
+use crate::block::obj::BlocksObj;
 
-pub mod block_obj;
-pub mod block_render;
+pub mod block;
+pub mod cpu;
+pub mod gpu;
+pub mod model;
 
 /// 下载并渲染方块贴图（版本清单 → 客户端jar → 解包渲染 cube_all 方块）
 ///
@@ -30,7 +32,7 @@ pub async fn load_blocks(gui: gui_hook::ProgressGui) -> CoreResult<()> {
     let versions = version_path::get_version_obj_online().await?;
     let last = versions.latest.release.clone();
 
-    if block_render::mcml_tex_draw_id() == last {
+    if block::mcml_tex_draw_id() == last {
         return Ok(());
     }
 
@@ -57,7 +59,7 @@ pub async fn load_blocks(gui: gui_hook::ProgressGui) -> CoreResult<()> {
 
     // 打开jar并渲染全部方块
     let archive = BaseArchive::open(&item.file)?;
-    block_render::render_blocks(&archive, gui)?;
+    block::render_blocks(&archive, gui)?;
 
     blocks_write().id = last;
     save()?;
