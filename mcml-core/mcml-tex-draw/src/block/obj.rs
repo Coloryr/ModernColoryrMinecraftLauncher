@@ -12,6 +12,9 @@ pub struct BlocksObj {
     pub tex: HashMap<String, String>,
     #[serde(rename = "Name")]
     pub name: HashMap<String, String>,
+    /// 创造模式分类（itemGroup lang键尾段，如 buildingBlocks/natural）
+    #[serde(rename = "Cat")]
+    pub cat: HashMap<String, String>,
 }
 
 impl Default for BlocksObj {
@@ -20,6 +23,7 @@ impl Default for BlocksObj {
             id: Default::default(),
             tex: Default::default(),
             name: Default::default(),
+            cat: Default::default(),
         }
     }
 }

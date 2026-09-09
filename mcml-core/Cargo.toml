@@ -110,3 +110,6 @@ dbus = "~0.9.12"
 bytes = "~1.12.1"
 png = "~0.18.1"
 webp = "~0.3.0"
+wgpu = "~30.0"
+pollster = "~0.4.0"
+bytemuck = { version = "~1.24.0", features = ["derive"] }
