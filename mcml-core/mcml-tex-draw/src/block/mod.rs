@@ -298,7 +298,7 @@ fn render_icon(
         IconSpec::Model(rel) => {
             // 烘焙失败（无elements的父模板、贴图引用无值）即跳过
             let (model, textures) = bake_model(archive, rel, tex_cache)?;
-            render_baked(gpu, archive, model, textures)?
+            render_baked(gpu, archive, model, textures, None)?
         }
         IconSpec::Composite(parts) => {
             // 各part独立烘焙，quad按transformation平移后拼合（0..1空间，1.0 = 1方块），
@@ -321,7 +321,7 @@ fn render_icon(
             }
             // 多格拼合模型超出单格gui变换范围，按自身投影包围盒适配画布
             fit_composite(&mut model);
-            render_baked(gpu, archive, model, textures)?
+            render_baked(gpu, archive, model, textures, None)?
         }
     };
 
@@ -332,11 +332,16 @@ fn render_icon(
 
 /// 渲染烘焙模型出图：贴图带动画（h>w竖排条带）时按时间线逐帧渲染合成APNG，
 /// 静态模型单帧出图。动画帧的APNG延迟规则同前（等距采样，相同帧合并延迟）
-fn render_baked(
+/// 渲染烘焙模型出图：贴图带动画（h>w竖排条带）时按时间线逐帧渲染合成APNG，
+/// 静态模型单帧出图。动画帧的APNG延迟规则同前（等距采样，相同帧合并延迟）
+///
+/// `glint`：Some(贴图)时叠加附魔光效（仅GPU路径，CPU回退忽略）
+pub(crate) fn render_baked(
     gpu: Option<&GpuCtx>,
     archive: &BaseArchive,
     model: BakedModel,
     mut textures: HashMap<String, Bitmap>,
+    glint: Option<&Bitmap>,
 ) -> Option<Vec<u8>> {
     // 动画贴图：quad的uv是单帧空间，时间线从条带展开；先把条带换成首帧供渲染上传
     let mut timelines: Vec<(String, AnimTimeline)> = Vec::new();
@@ -352,7 +357,7 @@ fn render_baked(
     }
     if timelines.is_empty() {
         // 静态模型：渲染出的RGBA像素编码为PNG
-        return encode_png(BLOCK_SIZE as u32, &render_once(gpu, &model, &textures)?);
+        return encode_png(BLOCK_SIZE as u32, &render_once(gpu, &model, &textures, glint)?);
     }
 
     // 最多渲染MAX_APNG_FRAMES帧，对逐刻时间线等距采样，
@@ -369,7 +374,7 @@ fn render_baked(
             let frame = tl.frame_at(k % totals[j])?;
             textures.insert(path.clone(), frame);
         }
-        let img = render_once(gpu, &model, &textures)?;
+        let img = render_once(gpu, &model, &textures, None)?;
         // 该帧在逐刻时间线上代表的刻数，即APNG显示时长
         let ticks = stride.min(total - k) as u16;
         match frames.last_mut() {
@@ -384,7 +389,7 @@ fn render_baked(
 
 /// 多格拼合模型（床等）适配画布：按合并后quad的投影包围盒等比缩放居中（等效旧FitMode::Own）。
 /// 单格模型不改gui变换（游戏图标按完整方块尺度渲染，半砖等矮模型不放大）
-fn fit_composite(model: &mut BakedModel) {
+pub(crate) fn fit_composite(model: &mut BakedModel) {
     const MARGIN: f32 = 2.0;
     let slot = BLOCK_SIZE as f32;
     let inner = slot - MARGIN * 2.0;
@@ -422,8 +427,9 @@ fn render_once(
     gpu: Option<&GpuCtx>,
     model: &BakedModel,
     textures: &HashMap<String, Bitmap>,
+    glint: Option<&Bitmap>,
 ) -> Option<Vec<u8>> {
-    gpu.and_then(|ctx| ctx.render(model, textures, BLOCK_SIZE as u32))
+    gpu.and_then(|ctx| ctx.render(model, textures, glint, BLOCK_SIZE as u32))
         .or_else(|| crate::cpu::render_cpu(model, textures, BLOCK_SIZE as u32))
 }
 
@@ -447,7 +453,7 @@ pub fn render_blocks(archive: &BaseArchive, gui: ProgressGui) -> CoreResult<()> 
     let gpu = GpuCtx::try_new();
 
     // 提取语言文件并构建 ID->语言键 映射
-    let names = extract_langs(archive);
+    let (names, _) = crate::extract_langs(archive);
 
     let total = BLOCK_ICONS.len();
     let done = AtomicUsize::new(0);
@@ -523,38 +529,6 @@ pub fn render_blocks(archive: &BaseArchive, gui: ProgressGui) -> CoreResult<()> 
     }
 
     Ok(())
-}
-
-/// 提取语言文件到blocks/langs目录，并构建方块ID→语言键映射（zh_cn优先，en_us兜底；新版jar可能只有en_us）
-fn extract_langs(archive: &BaseArchive) -> std::collections::HashMap<String, String> {
-    for name in ["zh_cn", "en_us"] {
-        let Ok(data) = archive.read(&format!("assets/minecraft/lang/{name}.json")) else {
-            continue;
-        };
-        // 复制到langs目录，供get_lang查询翻译
-        if let Some(dir) = crate::get_lang_dir() {
-            let _ = path_helper::write_bytes(dir.join(format!("{name}.json")), &data);
-        }
-        let Ok(buf) = String::from_utf8(data) else {
-            continue;
-        };
-        let Ok(lang) = serialize_tools::json_from_str::<
-            std::collections::HashMap<String, String>,
-        >(&buf) else {
-            continue;
-        };
-        // 方块ID → 语言键：block.minecraft.stone → minecraft:stone: block.minecraft.stone
-        //（Name只存语言键，由GUI按当前语言经get_lang翻译）
-        let mut map = std::collections::HashMap::new();
-        for lang_key in lang.into_keys() {
-            let keys: Vec<&str> = lang_key.split('.').collect();
-            if keys.len() == 3 && keys[0] == "block" {
-                map.insert(format!("{}:{}", keys[1], keys[2]), lang_key);
-            }
-        }
-        return map;
-    }
-    std::collections::HashMap::new()
 }
 
 /// 动画贴图配置

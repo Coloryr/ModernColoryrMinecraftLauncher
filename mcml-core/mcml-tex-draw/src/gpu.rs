@@ -69,6 +69,10 @@ pub struct GpuCtx {
     queue: wgpu::Queue,
     pipeline_cutout: wgpu::RenderPipeline,
     pipeline_translucent: wgpu::RenderPipeline,
+    /// glint（附魔光效）管线：depth EQUAL、加色混合、无背面剔除
+    pipeline_glint: wgpu::RenderPipeline,
+    /// glint 贴图 REPEAT 采样器（光纹平铺）
+    sampler_repeat: wgpu::Sampler,
     bind_layout: wgpu::BindGroupLayout,
     sampler: wgpu::Sampler,
 }
@@ -119,33 +123,32 @@ impl GpuCtx {
             let mut desc = wgpu::InstanceDescriptor::new_without_display_handle();
             desc.backends = *backends;
             let instance = wgpu::Instance::new(desc);
-            let Ok(adapter) = instance
-                .request_adapter(&wgpu::RequestAdapterOptions {
-                    power_preference: wgpu::PowerPreference::LowPower,
-                    compatible_surface: None,
-                    force_fallback_adapter: false,
-                    apply_limit_buckets: false,
-                })
-                .await
-            else {
-                continue;
-            };
-            let info = adapter.get_info();
-            let Ok((device, queue)) = adapter
-                .request_device(&wgpu::DeviceDescriptor {
-                    label: Some("mcml-tex-draw"),
-                    required_features: wgpu::Features::empty(),
-                    required_limits: wgpu::Limits::default(),
-                    experimental_features: wgpu::ExperimentalFeatures::default(),
-                    memory_hints: wgpu::MemoryHints::default(),
-                    trace: wgpu::Trace::Off,
-                })
-                .await
-            else {
-                continue;
-            };
-            println!("[渲染] GPU后端 {name}：{}（{:?}）", info.name, info.device_type);
-            return Some(Self::build(device, queue));
+
+            // 独显优先：枚举适配器按 独显→其余 排序（离屏渲染无需管是否主显卡），
+            // 逐个尝试建设备，建不成再退下一个适配器/后端
+            let mut adapters = instance.enumerate_adapters(*backends).await;
+            adapters.sort_by_key(|a| match a.get_info().device_type {
+                wgpu::DeviceType::DiscreteGpu => 0,
+                _ => 1,
+            });
+            for adapter in adapters {
+                let info = adapter.get_info();
+                let Ok((device, queue)) = adapter
+                    .request_device(&wgpu::DeviceDescriptor {
+                        label: Some("mcml-tex-draw"),
+                        required_features: wgpu::Features::empty(),
+                        required_limits: wgpu::Limits::default(),
+                        experimental_features: wgpu::ExperimentalFeatures::default(),
+                        memory_hints: wgpu::MemoryHints::default(),
+                        trace: wgpu::Trace::Off,
+                    })
+                    .await
+                else {
+                    continue;
+                };
+                println!("[渲染] GPU后端 {name}：{}（{:?}）", info.name, info.device_type);
+                return Some(Self::build(device, queue));
+            }
         }
         None
     }
@@ -201,6 +204,14 @@ impl GpuCtx {
             stencil: wgpu::StencilState::default(),
             bias: wgpu::DepthBiasState::default(),
         };
+        // glint 用 depth EQUAL（只画物品已写像素）、不写深度
+        let depth_eq = wgpu::DepthStencilState {
+            format: wgpu::TextureFormat::Depth32Float,
+            depth_write_enabled: Some(false),
+            depth_compare: Some(wgpu::CompareFunction::Equal),
+            stencil: wgpu::StencilState::default(),
+            bias: wgpu::DepthBiasState::default(),
+        };
         let target = wgpu::ColorTargetState {
             format: wgpu::TextureFormat::Rgba8Unorm,
             blend: None,
@@ -208,7 +219,8 @@ impl GpuCtx {
         };
 
         let mk_pipeline = |blend: Option<wgpu::BlendState>,
-                           depth_write: bool,
+                           depth: wgpu::DepthStencilState,
+                           cull: Option<wgpu::Face>,
                            entry: &str| {
             device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some("mcml-tex-draw"),
@@ -231,20 +243,21 @@ impl GpuCtx {
                 primitive: wgpu::PrimitiveState {
                     topology: wgpu::PrimitiveTopology::TriangleList,
                     front_face: wgpu::FrontFace::Ccw,
-                    cull_mode: Some(wgpu::Face::Back),
+                    cull_mode: cull,
                     ..Default::default()
                 },
-                depth_stencil: Some(wgpu::DepthStencilState {
-                    depth_write_enabled: Some(depth_write),
-                    ..depth.clone()
-                }),
+                depth_stencil: Some(depth),
                 multisample: wgpu::MultisampleState::default(),
                 multiview_mask: None,
                 cache: None,
             })
         };
 
-        let pipeline_cutout = mk_pipeline(None, true, "fs_cutout");
+        let depth_ro = wgpu::DepthStencilState {
+            depth_write_enabled: Some(false),
+            ..depth.clone()
+        };
+        let pipeline_cutout = mk_pipeline(None, depth.clone(), Some(wgpu::Face::Back), "fs_cutout");
         // 半透明：Straight-alpha 混合（color SrcAlpha/1-SrcAlpha，alpha One/1-One），
         // 读回后按 premultiplied 语义反除回 straight（与 skia 离屏结果一致）
         let pipeline_translucent = mk_pipeline(
@@ -260,12 +273,32 @@ impl GpuCtx {
                     operation: wgpu::BlendOperation::Add,
                 },
             }),
-            false,
+            depth_ro,
+            Some(wgpu::Face::Back),
             "fs_translucent",
         );
 
+        // glint：depth EQUAL 限定物品已写像素、无剔除、加色混合（alpha通道保持目标值）
+        let pipeline_glint = mk_pipeline(
+            Some(wgpu::BlendState {
+                color: wgpu::BlendComponent {
+                    src_factor: wgpu::BlendFactor::Src,
+                    dst_factor: wgpu::BlendFactor::One,
+                    operation: wgpu::BlendOperation::Add,
+                },
+                alpha: wgpu::BlendComponent {
+                    src_factor: wgpu::BlendFactor::Zero,
+                    dst_factor: wgpu::BlendFactor::One,
+                    operation: wgpu::BlendOperation::Add,
+                },
+            }),
+            depth_eq,
+            None,
+            "fs_glint",
+        );
+
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some("mcml-tex-draw"),
+            label: Some("mcml-tetx-draw"),
             mag_filter: wgpu::FilterMode::Nearest,
             min_filter: wgpu::FilterMode::Nearest,
             mipmap_filter: wgpu::MipmapFilterMode::Nearest,
@@ -275,13 +308,27 @@ impl GpuCtx {
             ..Default::default()
         });
 
+        // glint 光纹平铺需要 REPEAT 采样（uv×8旋转后越界）
+        let sampler_repeat = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("mcml-tex-draw-repeat"),
+            mag_filter: wgpu::FilterMode::Nearest,
+            min_filter: wgpu::FilterMode::Nearest,
+            mipmap_filter: wgpu::MipmapFilterMode::Nearest,
+            address_mode_u: wgpu::AddressMode::Repeat,
+            address_mode_v: wgpu::AddressMode::Repeat,
+            address_mode_w: wgpu::AddressMode::Repeat,
+            ..Default::default()
+        });
+
         GpuCtx {
             device,
             queue,
             pipeline_cutout,
             pipeline_translucent,
+            pipeline_glint,
             bind_layout,
             sampler,
+            sampler_repeat,
         }
     }
 }
@@ -323,10 +370,12 @@ pub fn light_dirs(item3d: bool) -> ([f32; 4], [f32; 4]) {
 
 impl GpuCtx {
     /// 渲染一个烘焙模型到 size×size RGBA，返回 straight-alpha 像素（未成功返回 None）
+    /// `glint`：Some(贴图)时在物品像素上叠加附魔光效（REPEAT采样、加色混合）
     pub fn render(
         &self,
         model: &BakedModel,
         textures: &HashMap<String, Bitmap>,
+        glint: Option<&Bitmap>,
         size: u32,
     ) -> Option<Vec<u8>> {
         use wgpu::util::DeviceExt;
@@ -487,6 +536,59 @@ impl GpuCtx {
             binds.insert(tex_path.clone(), bind);
         }
 
+        // glint 贴图上传 + 绑定组（REPEAT 采样）；无glint时为None并继续正常渲染
+        let glint_bind = glint.map_or(None, |glint_tex| {
+            let Some((rgba, stride, w, h)) = crate::model::bitmap_rgba(glint_tex) else {
+                return None;
+            };
+            let (w, h) = (w as u32, h as u32);
+            let texture = self.device.create_texture(&wgpu::TextureDescriptor {
+                label: Some("glint"),
+                size: wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Rgba8Unorm,
+                usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+                view_formats: &[],
+            });
+            self.queue.write_texture(
+                wgpu::TexelCopyTextureInfo {
+                    texture: &texture,
+                    mip_level: 0,
+                    origin: wgpu::Origin3d::ZERO,
+                    aspect: wgpu::TextureAspect::All,
+                },
+                &rgba,
+                wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(stride as u32),
+                    rows_per_image: Some(h),
+                },
+                wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 },
+            );
+            let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+            let bind = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("glint"),
+                layout: &self.bind_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: uniform_buf.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::Sampler(&self.sampler_repeat),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: wgpu::BindingResource::TextureView(&view),
+                    },
+                ],
+            });
+            Some(bind)
+        });
+
         // 离屏目标 + 深度
         let color_tex = self.device.create_texture(&wgpu::TextureDescriptor {
             label: Some("target"),
@@ -552,6 +654,16 @@ impl GpuCtx {
                 });
                 pass.set_vertex_buffer(0, vbuf.slice(..));
                 pass.draw(0..*count, 0..1);
+            }
+
+            // glint：整模型quad按depth EQUAL加色重画（物品像素上叠加光纹）
+            if let Some(bind) = &glint_bind {
+                pass.set_pipeline(&self.pipeline_glint);
+                pass.set_bind_group(0, bind, &[]);
+                for (_, vbuf, count, _) in &pass_groups {
+                    pass.set_vertex_buffer(0, vbuf.slice(..));
+                    pass.draw(0..*count, 0..1);
+                }
             }
         }
 

@@ -17,6 +17,8 @@ struct VsOut {
     @location(0) uv: vec2<f32>,
     @location(1) normal: vec3<f32>,
     @location(2) color: vec4<f32>,
+    // glint（附魔光效）采样坐标：RotZ(π/18)·S(8)·uv（t=0帧无平移偏移）
+    @location(3) glint_uv: vec2<f32>,
 };
 
 @vertex
@@ -31,6 +33,10 @@ fn vs(
     out.uv = uv;
     out.normal = normalize((u.normal_mat * vec4<f32>(normal, 0.0)).xyz);
     out.color = color;
+    // glint 坐标：先放大8倍再绕z转10°（静态图标取t=0，无平移偏移）
+    let g = uv * 8.0;
+    let a = 0.17453292519943295; // π/18
+    out.glint_uv = vec2<f32>(g.x * cos(a) - g.y * sin(a), g.x * sin(a) + g.y * cos(a));
     return out;
 }
 
@@ -59,4 +65,15 @@ fn fs_cutout(in: VsOut) -> @location(0) vec4<f32> {
 fn fs_translucent(in: VsOut) -> @location(0) vec4<f32> {
     let c = textureSample(tex, samp, in.uv);
     return c * light_acc(in.normal, in.color);
+}
+
+// GLINT（附魔光效）：加色混合在物品像素上叠加光纹；
+// 采样坐标用 glint_uv（REPEAT 采样），depth EQUAL 只画物品已写像素
+@fragment
+fn fs_glint(in: VsOut) -> @location(0) vec4<f32> {
+    let c = textureSample(tex, samp, in.glint_uv);
+    if (c.a < 0.1) {
+        discard;
+    }
+    return vec4<f32>(c.rgb, c.a);
 }

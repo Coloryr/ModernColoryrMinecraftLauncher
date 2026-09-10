@@ -31,7 +31,8 @@ pub const NATIVE_DIR: &str = "native";
 pub const MCML_DIR: &str = "mcml";
 pub const MCML_INNER_DIR: &str = ".mcml";
 pub const BLOCK_DIR: &str = "block";
-pub const BLOCK_LANGS_DIR: &str = "langs";
+/// 方块/物品共用的语言文件目录（zh_cn/en_us，随渲染从客户端jar提取）
+pub const LANG_DIR: &str = "langs";
 pub const ITEM_DIR: &str = "items";
 pub const MINECRAFT_DIR: &str = "minecraft";
 
