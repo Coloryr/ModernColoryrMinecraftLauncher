@@ -17,22 +17,24 @@ use mcml_names::{
 };
 use mcml_sys::path_helper;
 
-use crate::block::obj::BlocksObj;
+use crate::block::obj::{BlocksObj, ItemsObj};
 
 pub mod block;
 pub mod cpu;
 pub mod gpu;
+pub mod item;
 pub mod model;
 
-/// 下载并渲染方块贴图（版本清单 → 客户端jar → 解包渲染 cube_all 方块）
+/// 下载并渲染方块/物品贴图（版本清单 → 客户端jar → 解包渲染）
 ///
-/// `gui`可选，渲染期间按已处理的候选模型数上报进度
+/// `gui`可选，渲染期间按已处理的模型数上报进度
 pub async fn load_blocks(gui: gui_hook::ProgressGui) -> CoreResult<()> {
-    // 版本清单（本地缓存，缺了才在线拉）
+    // 版本清单（本地缓存，缺了才在线拉）；方块与物品分开短路，只补渲染缺的那部分
     let versions = version_path::get_version_obj_online().await?;
     let last = versions.latest.release.clone();
-
-    if block::mcml_tex_draw_id() == last {
+    let block_done = block::mcml_tex_draw_id() == last;
+    let item_done = item::items_id() == last;
+    if block_done && item_done {
         return Ok(());
     }
 
@@ -57,11 +59,16 @@ pub async fn load_blocks(gui: gui_hook::ProgressGui) -> CoreResult<()> {
         return Err(ErrorType::DownloadFileFail);
     }
 
-    // 打开jar并渲染全部方块
+    // 打开jar并渲染
     let archive = BaseArchive::open(&item.file)?;
-    block::render_blocks(&archive, gui)?;
-
-    blocks_write().id = last;
+    if !block_done {
+        block::render_blocks(&archive, gui.clone())?;
+        blocks_write().id = last.clone();
+    }
+    if !item_done {
+        item::render_items(&archive, gui.clone())?;
+        items_write().id = last.clone();
+    }
     save()?;
 
     Ok(())
@@ -95,19 +102,29 @@ pub fn get_lang(lang: Lang, key: &str) -> Option<String> {
 static BLOCK_FILE: OnceLock<PathBuf> = OnceLock::new();
 static BLOCK_DIR: OnceLock<PathBuf> = OnceLock::new();
 static LANG_DIR: OnceLock<PathBuf> = OnceLock::new();
+static ITEM_FILE: OnceLock<PathBuf> = OnceLock::new();
+static ITEM_DIR: OnceLock<PathBuf> = OnceLock::new();
 
 static BLOCKS: LazyLock<RwLock<BlocksObj>> = LazyLock::new(|| RwLock::new(BlocksObj::default()));
+static ITEMS: LazyLock<RwLock<ItemsObj>> = LazyLock::new(|| RwLock::new(ItemsObj::default()));
 
 /// 初始化
 pub fn init<P: AsRef<Path>>(path: P) -> CoreResult<()> {
     BLOCK_FILE.get_or_init(|| path.as_ref().join(names::BLOCK_FILE));
+    ITEM_FILE.get_or_init(|| path.as_ref().join(names::ITEM_FILE));
 
     let dir = BLOCK_DIR.get_or_init(|| path.as_ref().join(names::BLOCK_DIR));
     if !dir.exists() {
         path_helper::create_dir_all(dir)?;
     }
 
-    let dir = LANG_DIR.get_or_init(|| dir.join(names::BLOCK_LANGS_DIR));
+    // 语言文件目录与block平级（方块/物品共用，随渲染从客户端jar提取）
+    let dir = LANG_DIR.get_or_init(|| path.as_ref().join(names::LANG_DIR));
+    if !dir.exists() {
+        path_helper::create_dir_all(dir)?;
+    }
+
+    let dir = ITEM_DIR.get_or_init(|| path.as_ref().join(names::ITEM_DIR));
     if !dir.exists() {
         path_helper::create_dir_all(dir)?;
     }
@@ -122,6 +139,11 @@ pub fn init<P: AsRef<Path>>(path: P) -> CoreResult<()> {
 pub fn load() -> CoreResult<()> {
     if let Ok(obj) = serialize_tools::json_from_file::<BlocksObj>(BLOCK_FILE.get().unwrap()) {
         *BLOCKS.write().unwrap() = obj;
+    }
+    if let Some(file) = ITEM_FILE.get()
+        && let Ok(obj) = serialize_tools::json_from_file::<ItemsObj>(file)
+    {
+        *ITEMS.write().unwrap() = obj;
     }
 
     spawn_load_task();
@@ -164,6 +186,11 @@ pub fn save() -> CoreResult<()> {
     let obj = BLOCKS.read().unwrap().clone();
     serialize_tools::json_to_file(&obj, file)?;
 
+    if let Some(file) = ITEM_FILE.get() {
+        let obj = ITEMS.read().unwrap().clone();
+        serialize_tools::json_to_file(&obj, file)?;
+    }
+
     Ok(())
 }
 
@@ -186,6 +213,47 @@ pub(crate) fn get_lang_dir() -> Option<PathBuf> {
     LANG_DIR.get().cloned()
 }
 
+/// 提取语言文件到langs目录，返回（方块ID→语言键, 物品ID→语言键）映射
+/// （zh_cn优先，en_us兜底；新版jar可能只有en_us）
+pub(crate) fn extract_langs(
+    archive: &BaseArchive,
+) -> (
+    std::collections::HashMap<String, String>,
+    std::collections::HashMap<String, String>,
+) {
+    for name in ["zh_cn", "en_us"] {
+        let Ok(data) = archive.read(&format!("assets/minecraft/lang/{name}.json")) else {
+            continue;
+        };
+        // 复制到langs目录，供get_lang查询翻译
+        if let Some(dir) = get_lang_dir() {
+            let _ = path_helper::write_bytes(dir.join(format!("{name}.json")), &data);
+        }
+        let Ok(buf) = String::from_utf8(data) else {
+            continue;
+        };
+        let Ok(lang) = serialize_tools::json_from_str::<
+            std::collections::HashMap<String, String>,
+        >(&buf) else {
+            continue;
+        };
+        // 方块/物品ID → 语言键：block.minecraft.stone / item.minecraft.apple → minecraft:stone / minecraft:apple
+        //（Name只存语言键，由GUI按当前语言经get_lang翻译）
+        let mut block_map = std::collections::HashMap::new();
+        let mut item_map = std::collections::HashMap::new();
+        for lang_key in lang.into_keys() {
+            let keys: Vec<&str> = lang_key.split('.').collect();
+            if keys.len() == 3 && keys[0] == "block" {
+                block_map.insert(format!("{}:{}", keys[1], keys[2]), lang_key.clone());
+            } else if keys.len() == 3 && keys[0] == "item" {
+                item_map.insert(format!("{}:{}", keys[1], keys[2]), lang_key);
+            }
+        }
+        return (block_map, item_map);
+    }
+    (std::collections::HashMap::new(), std::collections::HashMap::new())
+}
+
 /// 获取方块数据
 pub fn blocks() -> Vec<String> {
     BLOCKS
@@ -205,6 +273,41 @@ pub(crate) fn blocks_write() -> std::sync::RwLockWriteGuard<'static, BlocksObj> 
 /// 锁定方块数据表（内部读取用）
 pub(crate) fn blocks_read() -> std::sync::RwLockReadGuard<'static, BlocksObj> {
     BLOCKS.read().unwrap()
+}
+
+/// 获取物品图片路径
+pub fn get_item_path(id: &str) -> Option<PathBuf> {
+    let dir = ITEM_DIR.get().unwrap();
+    let binding = ITEMS.read().unwrap();
+    let file = binding.tex.get(id)?;
+
+    Some(dir.join(file))
+}
+
+/// 获取物品数据目录
+pub(crate) fn get_item_dir() -> Option<PathBuf> {
+    ITEM_DIR.get().cloned()
+}
+
+/// 获取物品数据
+pub fn items() -> Vec<String> {
+    ITEMS
+        .read()
+        .unwrap()
+        .tex
+        .keys()
+        .map(|item| item.clone())
+        .collect()
+}
+
+/// 锁定物品数据表（内部写入用）
+pub(crate) fn items_write() -> std::sync::RwLockWriteGuard<'static, ItemsObj> {
+    ITEMS.write().unwrap()
+}
+
+/// 锁定物品数据表（内部读取用）
+pub(crate) fn items_read() -> std::sync::RwLockReadGuard<'static, ItemsObj> {
+    ITEMS.read().unwrap()
 }
 
 /// 生成测试用的唯一临时目录（不自动创建，由调用方决定）

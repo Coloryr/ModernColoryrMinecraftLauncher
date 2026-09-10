@@ -1,9 +1,11 @@
-//! 单张样例渲染：GPU 管道冒烟测试（直接用本地jar，不走下载链）
+//! 单方块 / 单物品对照渲染：GPU管道冒烟与遮挡/透明诊断（直接用本地jar，不走下载链）
 //!
-//! 环境变量 MCML_TEST_JAR 指定客户端jar路径，缺省用反编译参考jar：
-//! C:\Users\40206\AppData\Local\Temp\mcml-262-ref\client.jar
-//!
-//! 运行：cargo test -p mcml-tex-draw --test render_one -- --ignored --nocapture
+//! 运行：cargo test -p mcml-tex-draw --test render_single -- --ignored --nocapture
+//! 环境变量：
+//! - MCML_TEST_JAR 指定客户端jar，缺省用反编译参考jar
+//! - MCML_TEST_BLOCK 指定方块模型（如 block/big_dripleaf），缺省 block/oak_stairs
+//! - MCML_TEST_ITEM 指定物品ID（如 enchanted_book），缺省 apple
+//! GPU/CPU 各出一张图到 tests/out/
 
 use std::{collections::HashMap, path::PathBuf};
 
@@ -36,7 +38,6 @@ fn write_png(path: &PathBuf, size: u32, rgba: &[u8]) {
 }
 
 /// 渲染单个方块模型并出图（GPU与CPU各出一张，诊断遮挡/透明问题）
-/// 环境变量 MCML_TEST_BLOCK 指定模型路径，缺省 block/oak_stairs
 #[test]
 #[ignore]
 fn render_one_block() {
@@ -109,7 +110,7 @@ fn render_one_block() {
 
     let ctx = mcml_tex_draw::gpu::GpuCtx::try_new();
     if let Some(ctx) = ctx.as_ref() {
-        let Some(pixels) = ctx.render(&model, &textures, 256) else {
+        let Some(pixels) = ctx.render(&model, &textures, None, 256) else {
             panic!("GPU渲染失败");
         };
         write_png(&out_path(&format!("{name}_gpu.png")), 256, &pixels);
@@ -121,4 +122,32 @@ fn render_one_block() {
     if let Some(pixels) = mcml_tex_draw::cpu::render_cpu(&model, &textures, 256) {
         write_png(&out_path(&format!("{name}_cpu.png")), 256, &pixels);
     }
+}
+
+/// 渲染单个物品图标（items/*.json → extrude/元素烘焙 → GPU/CPU各出一张）
+/// 样例：diamond_sword（挤出）、enchanted_book（glint）、compass（condition→range_dispatch）、
+/// spyglass（select）、leather_chestplate（tint）、white_bed（composite拼合）
+#[test]
+#[ignore]
+fn render_one_item() {
+    let jar = ref_jar();
+    assert!(jar.exists(), "参考jar不存在：{}", jar.display());
+    let archive = BaseArchive::open(&jar).unwrap();
+
+    let id = std::env::var("MCML_TEST_ITEM").unwrap_or_else(|_| "apple".into());
+    let name = id.rsplit('/').next().unwrap_or(&id).to_string();
+
+    // 物品输出目录初始化到独立子目录（渲染结果再拷到tests/out查看）
+    let dir = out_path("item-render");
+    mcml_tex_draw::init(&dir).unwrap();
+
+    let mut cache = HashMap::new();
+    let gpu = mcml_tex_draw::gpu::GpuCtx::try_new();
+    let out = mcml_tex_draw::item::render_item(gpu.as_ref(), &archive, &mut cache, &id)
+        .unwrap_or_else(|| panic!("render_item GPU失败：{id}"));
+    std::fs::copy(dir.join("items").join(&out.1), out_path(&format!("{name}_gpu.png"))).unwrap();
+
+    let out = mcml_tex_draw::item::render_item(None, &archive, &mut cache, &id)
+        .unwrap_or_else(|| panic!("render_item CPU失败：{id}"));
+    std::fs::copy(dir.join("items").join(&out.1), out_path(&format!("{name}_cpu.png"))).unwrap();
 }

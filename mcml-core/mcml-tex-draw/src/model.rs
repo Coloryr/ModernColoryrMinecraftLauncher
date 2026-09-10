@@ -63,7 +63,7 @@ impl Default for GuiTransform {
 /// FaceInfo：六个面的 4 个顶点角（extent 枚举：0..5 = MIN_X..MAX_Z）
 /// FaceInfo：六个面的 4 个顶点角，坐标选择器 0=MIN_X 1=MIN_Y 2=MIN_Z 3=MAX_X 4=MAX_Y 5=MAX_Z
 /// （照抄 net.minecraft.client.renderer.FaceInfo 的六个枚举常量）
-const FACE_INFO: [[(u8, u8, u8); 4]; 6] = [
+pub(crate) const FACE_INFO: [[(u8, u8, u8); 4]; 6] = [
     // down: (MIN_X,MIN_Y,MAX_Z) (MIN_X,MIN_Y,MIN_Z) (MAX_X,MIN_Y,MIN_Z) (MAX_X,MIN_Y,MAX_Z)
     [(0, 1, 5), (0, 1, 2), (3, 1, 2), (3, 1, 5)],
     // up: (MIN_X,MAX_Y,MIN_Z) (MIN_X,MAX_Y,MAX_Z) (MAX_X,MAX_Y,MAX_Z) (MAX_X,MAX_Y,MIN_Z)
@@ -191,7 +191,7 @@ impl TransformJson {
 }
 
 #[derive(Clone, Deserialize)]
-struct ElementJson {
+pub(crate) struct ElementJson {
     #[serde(default = "d_from")]
     from: Vec<f32>,
     #[serde(default = "d_to")]
@@ -243,23 +243,31 @@ struct FaceJson {
 /// ===== 模型解析与 quad 烘焙（照 FaceBakery/ResolvedModel.findTop 语义） =====
 
 /// 父链解析产物：合并后的贴图表、元素集、gui display、gui_light
-struct Resolved {
-    textures: HashMap<String, TextureRefObj>,
-    elements: Vec<ElementJson>,
-    transform: GuiTransform,
-    gui_light_3d: bool,
+pub(crate) struct Resolved {
+    pub(crate) textures: HashMap<String, TextureRefObj>,
+    pub(crate) elements: Vec<ElementJson>,
+    pub(crate) transform: GuiTransform,
+    pub(crate) gui_light_3d: bool,
+    /// 链终止于 builtin/generated（平面物品，无模型文件，走extrude挤出）
+    pub(crate) generated: bool,
 }
 
 /// 沿 parent 链向上收集：textures 逐层合并（子优先）、elements 取第一个带定义的祖先、
 /// display.gui 与 gui_light 取离当前模型最近的祖先
 /// （findTop 走完整条链：block/block 的 gui 旋转在 cube 找到 elements 之后仍在更上层）
-fn resolve(archive: &BaseArchive, rel: &str) -> Option<Resolved> {
+pub(crate) fn resolve(archive: &BaseArchive, rel: &str) -> Option<Resolved> {
     let mut textures: HashMap<String, TextureRefObj> = HashMap::new();
     let mut transform: Option<GuiTransform> = None;
     let mut gui_light: Option<bool> = None;
     let mut elements: Option<Vec<ElementJson>> = None;
+    let mut generated = false;
     let mut current = rel.to_string();
     for _ in 0..16 {
+        // builtin/generated 是物品生成器标记（extrude几何），无模型文件，到此为止
+        if current == "builtin/generated" {
+            generated = true;
+            break;
+        }
         let data = archive
             .read(&format!("assets/minecraft/models/{current}.json"))
             .ok()?;
@@ -293,9 +301,12 @@ fn resolve(archive: &BaseArchive, rel: &str) -> Option<Resolved> {
     }
     Some(Resolved {
         textures,
-        elements: elements?,
+        // generated链（builtin/generated）无elements也有效（extrude路径）；
+        // 普通链缺elements视为无效（父模板）
+        elements: elements.filter(|e| !e.is_empty() || generated).unwrap_or_default(),
         transform: transform.unwrap_or_default(),
         gui_light_3d: !gui_light.unwrap_or(false),
+        generated,
     })
 }
 
@@ -314,7 +325,7 @@ fn resolve_ref(textures: &HashMap<String, TextureRefObj>, r: &str) -> Option<Str
 }
 
 /// 贴图引用值 -> jar内路径
-fn texture_path(value: &str) -> Option<String> {
+pub(crate) fn texture_path(value: &str) -> Option<String> {
     let (ns, path) = value.split_once(':').unwrap_or(("minecraft", value));
     if ns != "minecraft" {
         return None;
@@ -324,7 +335,7 @@ fn texture_path(value: &str) -> Option<String> {
 
 
 /// 加载贴图（带缓存），返回 RGBA 位图
-fn load_texture(
+pub(crate) fn load_texture(
     archive: &BaseArchive,
     cache: &mut HashMap<String, Bitmap>,
     path: &str,
@@ -362,7 +373,7 @@ pub(crate) fn bitmap_rgba(tex: &Bitmap) -> Option<(Vec<u8>, usize, usize, usize)
 /// 按 NativeImage.computeTransparency 扫 uv 矩形：仅当含 1..254 之间的 alpha
 /// 才算 translucent（alpha==0 只是镂空，仍走cutout管线）；
 /// x0=floor(u0·w) y0=floor(v0·h) x1=ceil(u1·w) y1=ceil(v1·h)，动画贴图所有唯一帧合并判定
-fn rect_translucent(tex: &Bitmap, anim: Option<&AnimMeta>, uv: &[f32; 4]) -> bool {
+pub(crate) fn rect_translucent(tex: &Bitmap, anim: Option<&AnimMeta>, uv: &[f32; 4]) -> bool {
     let Some((base, stride, w, h_total)) = bitmap_rgba(tex) else {
         return false;
     };
@@ -437,7 +448,7 @@ fn tint_for_path(path: &str) -> [u8; 3] {
 /// ===== bake：照 FaceBakery.bakeQuad 逐条对应 =====
 
 /// 取盒子边界分量（extent 枚举 -> from/to 的分量）
-fn select_extent(extent: u8, from: &[f32], to: &[f32]) -> f32 {
+pub(crate) fn select_extent(extent: u8, from: &[f32], to: &[f32]) -> f32 {
     match extent {
         0 => from[0],
         1 => from[1],
@@ -449,7 +460,7 @@ fn select_extent(extent: u8, from: &[f32], to: &[f32]) -> f32 {
 }
 
 /// 面索引 -> 法线轴（与 FACE_INDEX 一致：down=0..east=5）
-fn face_normal(i: usize) -> Vec3 {
+pub(crate) fn face_normal(i: usize) -> Vec3 {
     match i {
         0 => Vec3::NEG_Y,
         1 => Vec3::Y,
@@ -461,13 +472,13 @@ fn face_normal(i: usize) -> Vec3 {
 }
 
 /// 法线 -> 面索引（点积最接近1的轴）
-fn face_index_of(dir: Vec3) -> Option<usize> {
+pub(crate) fn face_index_of(dir: Vec3) -> Option<usize> {
     (0..6).find(|&i| dir.dot(face_normal(i)) > 0.999)
 }
 
 /// calculateFacing：由前三顶点叉积求几何法线，量化到点积最大的正向坐标轴；
 /// 退化面返回 None（游戏回退 Direction.UP，等价零法线）
-fn calculate_facing(pos: &[[f32; 3]; 4]) -> Option<[f32; 3]> {
+pub(crate) fn calculate_facing(pos: &[[f32; 3]; 4]) -> Option<[f32; 3]> {
     let p0 = Vec3::from(pos[0]);
     let p1 = Vec3::from(pos[1]);
     let p2 = Vec3::from(pos[2]);
@@ -488,7 +499,7 @@ fn calculate_facing(pos: &[[f32; 3]; 4]) -> Option<[f32; 3]> {
 }
 
 /// recalculateWinding：把顶点顺序换成该朝向 FaceInfo 的规范角序（uv随之同步交换）
-fn recalculate_winding(pos: &mut [[f32; 3]; 4], uv: &mut [[f32; 2]; 4], facing: usize) {
+pub(crate) fn recalculate_winding(pos: &mut [[f32; 3]; 4], uv: &mut [[f32; 2]; 4], facing: usize) {
     let mut min = [999.0f32; 3];
     let mut max = [-999.0f32; 3];
     for p in pos.iter() {
@@ -517,11 +528,15 @@ fn recalculate_winding(pos: &mut [[f32; 3]; 4], uv: &mut [[f32; 2]; 4], facing: 
 }
 
 /// 烘焙一个元素的全部面 -> quad 列表
-fn bake_element(
+///
+/// `item_tints`：None=方块路径（tintindex按贴图路径取群系常量色）；
+/// Some=物品路径（tintindex索引items/*.json的tint表，越界/无tintindex为白色，与游戏一致）
+pub(crate) fn bake_element(
     element: &ElementJson,
     textures: &HashMap<String, TextureRefObj>,
     archive: &BaseArchive,
     tex_cache: &mut HashMap<String, Bitmap>,
+    item_tints: Option<&[[u8; 3]]>,
 ) -> Vec<Quad> {
     let mut quads = Vec::new();
     let Some(faces) = &element.faces else {
@@ -600,11 +615,12 @@ fn bake_element(
         };
         let anim = read_anim_meta(archive, &path);
 
-        // tint：quad色乘群系常量色（无tintindex为白色）
-        let tint = face
-            .tintindex
-            .map(|_| tint_for_path(&path))
-            .unwrap_or([255, 255, 255]);
+        // tint：方块路径按贴图路径取群系常量色，物品路径索引items/*.json的tint表
+        let tint = match item_tints {
+            None => face.tintindex.map(|_| tint_for_path(&path)),
+            Some(list) => face.tintindex.and_then(|i| list.get(i as usize).copied()),
+        }
+        .unwrap_or([255, 255, 255]);
         let color = [
             tint[0] as f32 / 255.0,
             tint[1] as f32 / 255.0,
@@ -640,7 +656,7 @@ pub fn bake_model(
     let resolved = resolve(archive, rel)?;
     let mut quads = Vec::new();
     for element in &resolved.elements {
-        quads.extend(bake_element(element, &resolved.textures, archive, tex_cache));
+        quads.extend(bake_element(element, &resolved.textures, archive, tex_cache, None));
     }
     if quads.is_empty() {
         return None;
