@@ -203,6 +203,33 @@ pub fn get_block_path(id: &str) -> Option<PathBuf> {
     Some(dir.join(file))
 }
 
+pub use block::icons::SpecialForm;
+
+/// 判断方块ID是否有特殊形态图标，返回对应的形态
+///
+/// ID带不带"minecraft:"前缀均可
+pub fn block_special_form(id: &str) -> Option<SpecialForm> {
+    let base = id.strip_prefix("minecraft:").unwrap_or(id);
+    block::icons::special_form(&format!("minecraft:{base}"))
+}
+
+/// 获取方块特殊形态的图片路径（形态图标ID = 基础ID + "_" + 形态后缀，如 oak_door_open）
+///
+/// 与`block_special_form`配合使用：该方块无此形态时返回None。
+/// 形态条目不注册进方块列表（blocks()查不到），文件名按规则直接拼出
+pub fn get_block_path_form(id: &str, form: SpecialForm) -> Option<PathBuf> {
+    if block_special_form(id) != Some(form) {
+        return None;
+    }
+    let base = id.strip_prefix("minecraft:").unwrap_or(id);
+    Some(
+        BLOCK_DIR.get()?.join(format!(
+            "minecraft_{base}_{}.png",
+            form.suffix()
+        )),
+    )
+}
+
 /// 获取方块数据目录
 pub(crate) fn get_block_dir() -> Option<PathBuf> {
     BLOCK_DIR.get().cloned()
@@ -282,6 +309,16 @@ pub fn get_item_path(id: &str) -> Option<PathBuf> {
     let file = binding.tex.get(id)?;
 
     Some(dir.join(file))
+}
+
+/// 获取方块创造分组（itemGroup lang键尾段，Name字段为语言键，翻译经get_lang）
+pub fn block_cat(id: &str) -> Option<String> {
+    BLOCKS.read().unwrap().cat.get(id).cloned()
+}
+
+/// 获取物品创造分组（itemGroup lang键尾段，与block_cat同一套）
+pub fn item_cat(id: &str) -> Option<String> {
+    ITEMS.read().unwrap().cat.get(id).cloned()
 }
 
 /// 获取物品数据目录

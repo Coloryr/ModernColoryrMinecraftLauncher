@@ -231,9 +231,6 @@ pub fn add_answer_name_conflict(window: WebviewWindow, id: u32, answer: bool) {
 fn prepare(
     window: &WebviewWindow,
 ) -> Result<(Arc<Mutex<AddWindowModel>>, CancellationToken), String> {
-    if !mcml_net::is_init() {
-        return Err("核心尚未加载完成，请稍后再试".to_string());
-    }
     let store = model(window)?;
     let token = CancellationToken::new();
     store.lock().unwrap().set_cancel(token.clone());
@@ -400,9 +397,6 @@ pub async fn add_import_url(
 /// - `mc`: 游戏版本号（Forge 的 BMCLAPI 源、OptiFine / LiteLoader 需要按版本过滤）
 #[tauri::command]
 pub async fn add_get_loader_versions(loader: String, mc: String) -> Result<Vec<String>, String> {
-    if !mcml_net::is_init() {
-        return Ok(Vec::new());
-    }
     let loader = parse_loader(&loader)?;
     mcml_game::loader::loader_versions::get_loader_versions(&loader, &mc)
         .await
@@ -453,9 +447,6 @@ pub async fn add_get_support_loaders(app: AppHandle, mc: String) -> Result<Vec<S
     static SUPPORT_LOADERS_CACHE: LazyLock<Mutex<HashMap<String, Arc<OnceCell<Vec<String>>>>>> =
         LazyLock::new(|| Mutex::new(HashMap::new()));
 
-    if !mcml_net::is_init() {
-        return Ok(Vec::new());
-    }
     // 取/建该版本的查询单元：并发请求共享同一次查询
     let cell = {
         let mut cache = SUPPORT_LOADERS_CACHE.lock().await;
@@ -540,9 +531,6 @@ pub async fn add_search_modpacks(
     sort: Option<String>,
     page: u32,
 ) -> Result<ModpackSearchDto, String> {
-    if !mcml_net::is_init() {
-        return Err("核心尚未加载完成，请稍后再试".to_string());
-    }
     const PAGE_SIZE: u32 = 20;
 
     match source.as_str() {
@@ -620,10 +608,6 @@ pub async fn add_get_modpack_files(
     project_id: String,
     version: Option<String>,
 ) -> Result<Vec<ModpackFileDto>, String> {
-    if !mcml_net::is_init() {
-        return Err("核心尚未加载完成，请稍后再试".to_string());
-    }
-
     match source.as_str() {
         "curseforge" => {
             let arg = curseforge_api::CurseFogreArg {

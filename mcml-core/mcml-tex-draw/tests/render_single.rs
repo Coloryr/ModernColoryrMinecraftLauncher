@@ -13,9 +13,15 @@ use mcml_base::archives::BaseArchive;
 
 fn ref_jar() -> PathBuf {
     std::env::var("MCML_TEST_JAR").map(PathBuf::from).unwrap_or_else(|_| {
-        PathBuf::from(std::env::var("TEMP").unwrap_or_default())
-            .join("mcml-262-ref")
-            .join("client.jar")
+        // 优先用渲染测试已下载的客户端jar（tests/out/run），其次H盘Temp的反编译参考jar
+        let run_jar = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(
+            "tests/out/run/minecraft/libraries/net/minecraft/client/26.2/client-26.2.jar",
+        );
+        if run_jar.exists() {
+            run_jar
+        } else {
+            PathBuf::from("H:/Temp/mcml-262-ref/client.jar")
+        }
     })
 }
 
@@ -126,7 +132,7 @@ fn render_one_block() {
 
 /// 渲染单个物品图标（items/*.json → extrude/元素烘焙 → GPU/CPU各出一张）
 /// 样例：diamond_sword（挤出）、enchanted_book（glint）、compass（condition→range_dispatch）、
-/// spyglass（select）、leather_chestplate（tint）、white_bed（composite拼合）
+/// spyglass（select）、leather_chestplate（tint）、trident（select gui分支）
 #[test]
 #[ignore]
 fn render_one_item() {

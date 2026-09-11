@@ -281,7 +281,9 @@ impl RenderProfile {
 /// 渲染一个方块图标（block_icons表的一行）
 ///
 /// - Model：等轴测渲染3D模型（GPU优先，逐图标回退CPU）
-/// - Composite：多模型按transformation拼合（床）
+/// - IsoModel：无display的模型强制标准gui旋转等轴测渲染
+/// - Composite：多模型按transformation拼合（床/门）
+/// - Form：特殊形态，按内层规格渲染（ID非真实方块名，注册由render_blocks跳过）
 /// - Skip：实体渲染（箱子/头颅/旗帜等），跳过
 ///
 /// 返回（方块ID, 输出文件名）
@@ -292,32 +294,46 @@ fn render_icon(
     id_rel: &str,
     spec: &IconSpec,
 ) -> Option<(String, String)> {
-    let id = format!("minecraft:{id_rel}");
+    // 表ID带命名空间（minecraft:xx，为mod支持预留），输出文件名把':'换成'_'
+    let id = id_rel;
+    let out_name = format!("{}.png", id_rel.replace(':', "_"));
     let data = match spec {
         IconSpec::Skip => return None,
+        IconSpec::Form(_, inner) => return render_icon(gpu, archive, tex_cache, id_rel, inner),
         IconSpec::Model(rel) => {
             // 烘焙失败（无elements的父模板、贴图引用无值）即跳过
             let (model, textures) = bake_model(archive, rel, tex_cache)?;
             render_baked(gpu, archive, model, textures, None)?
         }
+        IconSpec::IsoModel(rel) => {
+            // 模型无display变换（游戏创造栏对这些走平面贴图），
+            // 按需求强制标准方块gui旋转（block/block的gui display）出等轴测3D观感
+            let (mut model, textures) = bake_model(archive, rel, tex_cache)?;
+            model.transform = crate::model::GuiTransform {
+                rotation: [30.0, 225.0, 0.0],
+                translation: [0.0; 3],
+                scale: [0.625; 3],
+            };
+            render_baked(gpu, archive, model, textures, None)?
+        }
         IconSpec::Composite(parts) => {
-            // 各part独立烘焙，quad按transformation平移后拼合（0..1空间，1.0 = 1方块），
-            // gui变换与光照取首个part（床的各part相同）
+            // 各part独立烘焙，quad按transformation（先绕Y轴旋转再平移）后拼合
+            // （0..1空间，1.0 = 1方块），gui变换与光照取首个part（床/门的各part相同）
             let Some((first, rest)) = parts.split_first() else {
                 return None;
             };
             let (mut model, mut textures) = bake_model(archive, first.0, tex_cache)?;
-            for (rel, tr) in rest {
-                let (part, texs) = bake_model(archive, rel, tex_cache)?;
+            transform_composite_part(&mut model, first.1, first.2);
+            for (rel, tr, yaw) in rest {
+                let (mut part, texs) = bake_model(archive, rel, tex_cache)?;
                 textures.extend(texs);
-                for mut quad in part.quads {
-                    for p in &mut quad.pos {
-                        p[0] += tr[0];
-                        p[1] += tr[1];
-                        p[2] += tr[2];
-                    }
-                    model.quads.push(quad);
-                }
+                transform_composite_part(&mut part, *tr, *yaw);
+                model.quads.extend(part.quads);
+            }
+            // 无display变换的拼合模型（门等）强制标准方块gui旋转，出等轴测3D观感；
+            // 有display的（床）保持原变换
+            if model.transform.rotation == [0.0, 0.0, 0.0] {
+                model.transform.rotation = [30.0, 225.0, 0.0];
             }
             // 多格拼合模型超出单格gui变换范围，按自身投影包围盒适配画布
             fit_composite(&mut model);
@@ -325,9 +341,8 @@ fn render_icon(
         }
     };
 
-    let out_name = format!("minecraft_{id_rel}.png");
     path_helper::write_bytes(&crate::get_block_dir()?.join(&out_name), &data).ok()?;
-    Some((id, out_name))
+    Some((id.to_string(), out_name))
 }
 
 /// 渲染烘焙模型出图：贴图带动画（h>w竖排条带）时按时间线逐帧渲染合成APNG，
@@ -389,6 +404,22 @@ pub(crate) fn render_baked(
 
 /// 多格拼合模型（床等）适配画布：按合并后quad的投影包围盒等比缩放居中（等效旧FitMode::Own）。
 /// 单格模型不改gui变换（游戏图标按完整方块尺度渲染，半砖等矮模型不放大）
+/// composite part 变换：绕Y轴旋转（门板朝向镜头）后平移；法线同角旋转
+fn transform_composite_part(model: &mut BakedModel, tr: [f32; 3], yaw_deg: f32) {
+    let (s, c) = yaw_deg.to_radians().sin_cos();
+    for quad in &mut model.quads {
+        for p in &mut quad.pos {
+            let (x, z) = (p[0], p[2]);
+            p[0] = x * c + z * s + tr[0];
+            p[1] += tr[1];
+            p[2] = -x * s + z * c + tr[2];
+        }
+        let (nx, nz) = (quad.normal[0], quad.normal[2]);
+        quad.normal[0] = nx * c + nz * s;
+        quad.normal[2] = -nx * s + nz * c;
+    }
+}
+
 pub(crate) fn fit_composite(model: &mut BakedModel) {
     const MARGIN: f32 = 2.0;
     let slot = BLOCK_SIZE as f32;
@@ -504,7 +535,9 @@ pub fn render_blocks(archive: &BaseArchive, gui: ProgressGui) -> CoreResult<()> 
                         gui.set_progress_now(now, Some(total));
                     }
 
-                    out.map(|(id, out_name)| (id, out_name, *cat))
+                    // Form形态：只出图不注册（ID非真实方块名，不进blocks()列表）
+                    out.filter(|_| !matches!(spec, IconSpec::Form(..)))
+                        .map(|(id, out_name)| (id, out_name, *cat))
                         })
             })
         })
@@ -621,6 +654,8 @@ mod icon_table_tests {
     use super::*;
     use std::collections::HashSet;
 
+    use crate::block::icons::{SpecialForm, special_form};
+
     /// 固定表完整性：方块ID唯一、分类非空、各规格内容非空
     #[test]
     fn icon_table_consistent() {
@@ -630,8 +665,24 @@ mod icon_table_tests {
             assert!(seen.insert(*id), "重复方块ID：{id}");
             assert!(!cat.is_empty(), "{id} 分类为空");
             match spec {
-                IconSpec::Model(rel) => assert!(!rel.is_empty(), "{id} 模型名为空"),
+                IconSpec::Model(rel) | IconSpec::IsoModel(rel) => {
+                    assert!(!rel.is_empty(), "{id} 模型名为空")
+                }
                 IconSpec::Composite(parts) => assert!(!parts.is_empty(), "{id} composite无part"),
+                // Form形态：ID必须以形态后缀结尾，内层规格不能是Skip/Form
+                IconSpec::Form(form, inner) => {
+                    assert!(
+                        id.ends_with(&format!("_{}", form.suffix())),
+                        "{id} 形态后缀与SpecialForm不符"
+                    );
+                    assert!(
+                        matches!(
+                            inner,
+                            IconSpec::Model(_) | IconSpec::IsoModel(_) | IconSpec::Composite(_)
+                        ),
+                        "{id} Form内层规格非法"
+                    );
+                }
                 IconSpec::Skip => {}
             }
         }
@@ -642,15 +693,42 @@ mod icon_table_tests {
     fn icon_table_spot_checks() {
         let table: HashMap<&str, (&str, &IconSpec)> =
             BLOCK_ICONS.iter().map(|(id, cat, spec)| (*id, (*cat, spec))).collect();
-        assert!(matches!(table["stone"].1, IconSpec::Model("block/stone")));
-        assert_eq!(table["stone"].0, "buildingBlocks");
-        assert!(matches!(table["white_bed"].1, IconSpec::Composite(_)));
+        assert!(matches!(table["minecraft:stone"].1, IconSpec::Model("block/stone")));
+        assert_eq!(table["minecraft:stone"].0, "buildingBlocks");
+        assert!(matches!(table["minecraft:white_bed"].1, IconSpec::Composite(_)));
         // special实体渲染跳过
-        assert!(matches!(table["chest"].1, IconSpec::Skip));
-        assert!(matches!(table["skeleton_skull"].1, IconSpec::Skip));
+        assert!(matches!(table["minecraft:chest"].1, IconSpec::Skip));
+        assert!(matches!(table["minecraft:skeleton_skull"].1, IconSpec::Skip));
         // 原木在游戏的建筑方块栏
-        assert_eq!(table["oak_log"].0, "buildingBlocks");
-        assert_eq!(table["grass_block"].0, "natural");
+        assert_eq!(table["minecraft:oak_log"].0, "buildingBlocks");
+        assert_eq!(table["minecraft:grass_block"].0, "natural");
+    }
+
+    /// 特殊形态：基础ID应能查到形态，且对应"基础ID_后缀"图标确实在表里
+    #[test]
+    fn special_form_lookup() {
+        assert_eq!(special_form("minecraft:furnace"), Some(SpecialForm::Lit));
+        assert_eq!(special_form("minecraft:redstone_lamp"), Some(SpecialForm::Lit));
+        assert_eq!(special_form("minecraft:oak_button"), Some(SpecialForm::Pressed));
+        assert_eq!(special_form("minecraft:oak_pressure_plate"), Some(SpecialForm::Down));
+        assert_eq!(special_form("minecraft:oak_door"), Some(SpecialForm::Open));
+        assert_eq!(special_form("minecraft:piston"), Some(SpecialForm::Extended));
+        assert_eq!(special_form("minecraft:vault"), Some(SpecialForm::Active));
+        assert_eq!(special_form("minecraft:campfire"), Some(SpecialForm::Off));
+        // 无特殊形态的方块
+        assert_eq!(special_form("minecraft:stone"), None);
+        assert_eq!(special_form("minecraft:oak_stairs"), None);
+
+        // 每个查到的形态都应有对应后缀图标，且图标ID后缀与形态匹配
+        for (id, cat, _) in BLOCK_ICONS {
+            if let Some(form) = special_form(id) {
+                let alt = format!("{id}_{}", form.suffix());
+                let hit = BLOCK_ICONS
+                    .iter()
+                    .any(|(name, c, spec)| *name == alt && matches!(spec, IconSpec::Form(..)));
+                assert!(hit, "形态图标缺失：{alt}（{cat}）");
+            }
+        }
     }
 }
 

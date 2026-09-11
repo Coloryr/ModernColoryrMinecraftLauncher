@@ -85,7 +85,12 @@ pub fn render_cpu(
         }
         let d = Vec3::from_slice(&light0[..3]).dot(n).max(0.0)
             + Vec3::from_slice(&light1[..3]).dot(n).max(0.0);
-        let accum = (d * 0.6 + 0.4).min(1.0);
+        // 自发光（火焰）不做方向光衰减
+        let accum = if quad.fullbright {
+            1.0
+        } else {
+            (d * 0.6 + 0.4).min(1.0)
+        };
         // 按quad亮度+染色预乘RGB（alpha通道由贴图原始值决定）
         let t = quad.color[0];
         quads.push(CpuQuad {

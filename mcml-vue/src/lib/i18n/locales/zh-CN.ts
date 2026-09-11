@@ -49,6 +49,7 @@ export default {
   "multi.back": "返回",
   "multi.deleteTitle": "删除选中实例",
   "multi.deleteConfirm": "确定删除选中的 {count} 个实例？",
+  "multi.deleting": "正在删除 {done}/{total}…",
   "multi.deleted": "已删除 {count} 个实例",
   "multi.moved": "已移动 {count} 个实例",
   "multi.launched": "已启动 {count} 个实例",
@@ -189,6 +190,7 @@ export default {
   "actions.genInfoText": "复制信息为文本",
   "actions.rename": "重命名",
   "actions.delete": "删除实例",
+  "actions.deleting": "正在删除…",
   "actions.wip": "「{name}」功能开发中",
   "actions.renameTitle": "重命名实例",
   "actions.deleteTitle": "删除实例",
@@ -425,17 +427,9 @@ export default {
   "features.download": "下载管理",
 
   // 初始化
-  "init.title": "首次使用，请设置数据目录与离线玩家名",
-  "init.dataDir": "数据目录（留空使用默认）",
-  "init.dataDirPlaceholder": "例如 D:\\MCML",
-  "init.playerName": "玩家名",
-  "init.playerNamePlaceholder": "Player",
-  "init.button": "初始化",
-  "init.initializing": "初始化中…",
   "init.splash": "正在初始化…",
   "init.failed": "初始化失败",
-  "init.retry": "重试",
-  "init.skip": "跳过",
+  "init.feedback": "问题反馈",
 
   // 设置窗口
   "winSettings.windowMode": "窗口模式",

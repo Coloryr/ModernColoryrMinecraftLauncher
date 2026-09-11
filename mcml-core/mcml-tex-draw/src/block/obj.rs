@@ -38,6 +38,9 @@ pub struct ItemsObj {
     pub tex: HashMap<String, String>,
     #[serde(rename = "Name")]
     pub name: HashMap<String, String>,
+    /// 创造模式分类（itemGroup lang键尾段，与BlocksObj.cat同一套）
+    #[serde(rename = "Cat")]
+    pub cat: HashMap<String, String>,
 }
 
 impl Default for ItemsObj {
@@ -46,6 +49,7 @@ impl Default for ItemsObj {
             id: Default::default(),
             tex: Default::default(),
             name: Default::default(),
+            cat: Default::default(),
         }
     }
 }

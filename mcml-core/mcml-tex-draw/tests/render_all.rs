@@ -16,9 +16,9 @@ use mcml_game::launcher_path::{libraries_path, version_path};
 /// 串行锁：多个测试共用同一运行目录，避免并发下载/渲染冲突
 static CHAIN_LOCK: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
-/// 测试运行目录（系统临时目录下固定目录，跨进程复用已下载的jar）
+/// 测试运行目录（tests/out/run，跨进程复用已下载的jar）
 fn run_dir() -> PathBuf {
-    std::env::temp_dir().join("mcml-block-render-test")
+    out_dir().join("run")
 }
 
 /// 渲染输出目录（tests 文件夹下的 out 子目录）
@@ -149,13 +149,31 @@ async fn render_all_blocks() {
         start.elapsed().as_secs_f64()
     );
 
-    // 注册表：数量与固定表非Skip行数一致，分类全部写入
+    // 注册表：数量与固定表非Skip、非Form行数一致（Form形态只出图不注册）
     let ids = mcml_tex_draw::blocks();
     let expected = mcml_tex_draw::block::icons::BLOCK_ICONS
         .iter()
-        .filter(|(_, _, spec)| !matches!(spec, mcml_tex_draw::block::icons::IconSpec::Skip))
+        .filter(|(_, _, spec)| {
+            !matches!(
+                spec,
+                mcml_tex_draw::block::icons::IconSpec::Skip
+                    | mcml_tex_draw::block::icons::IconSpec::Form(..)
+            )
+        })
         .count();
-    assert_eq!(ids.len(), expected, "注册数应等于表中非Skip条目数");
+    assert_eq!(ids.len(), expected, "注册数应等于表中非Skip、非Form条目数");
+    assert!(
+        !ids.contains(&"minecraft:furnace_lit".to_string()),
+        "Form形态ID不应出现在方块列表"
+    );
+    // Form形态只出图不注册：每个形态条目的PNG都必须落盘（烘焙失败会静默跳过，这里兜底）
+    let block_dir = out_dir().join("block");
+    for (id, _, spec) in mcml_tex_draw::block::icons::BLOCK_ICONS {
+        if matches!(spec, mcml_tex_draw::block::icons::IconSpec::Form(..)) {
+            let path = block_dir.join(format!("{}.png", id.replace(':', "_")));
+            assert!(path.exists(), "形态图标应已写盘：{}", path.display());
+        }
+    }
 
     // 平面精灵（门/木牌/花草）按新表设计不进表、留给item渲染；
     // 床是composite拼合3D模型，fence用inventory外观
@@ -169,6 +187,41 @@ async fn render_all_blocks() {
         let path = dir.join(name);
         assert!(path.exists(), "应已渲染图标：{}", path.display());
     }
+    // 创造分组（itemGroup lang键尾段，与物品同一套）
+    assert_eq!(
+        mcml_tex_draw::block_cat("minecraft:oak_stairs").as_deref(),
+        Some("buildingBlocks"),
+        "方块oak_stairs应归入buildingBlocks"
+    );
+
+    // 特殊形态API：有形态的方块能查到形态并取到对应图片，无形态的返回None
+    use mcml_tex_draw::SpecialForm;
+    assert_eq!(
+        mcml_tex_draw::block_special_form("minecraft:furnace"),
+        Some(SpecialForm::Lit),
+        "熔炉应有燃烧形态"
+    );
+    assert_eq!(
+        mcml_tex_draw::block_special_form("minecraft:oak_door"),
+        Some(SpecialForm::Open),
+        "门应有打开形态"
+    );
+    assert_eq!(
+        mcml_tex_draw::block_special_form("minecraft:stone"),
+        None,
+        "stone无特殊形态"
+    );
+    let lit = mcml_tex_draw::get_block_path_form("minecraft:furnace", SpecialForm::Lit)
+        .expect("furnace_lit应已注册");
+    assert!(lit.exists(), "furnace_lit图标应已写盘：{}", lit.display());
+    assert_eq!(
+        lit.file_name().unwrap().to_string_lossy(),
+        "minecraft_furnace_lit.png"
+    );
+    assert!(
+        mcml_tex_draw::get_block_path_form("minecraft:stone", SpecialForm::Lit).is_none(),
+        "stone无特殊形态图标"
+    );
     println!("注册：{} 个方块图标", ids.len());
 }
 
@@ -197,7 +250,8 @@ async fn render_all_items() {
         start.elapsed().as_secs_f64()
     );
 
-    // extrude平面物品（apple）、分派模型（compass）、special跳过后仍应有足量图标
+    // extrude平面物品（apple）、分派模型（compass）、select gui分支（trident）应保留；
+    // 引用3D模型的物品形态（stone/oak_stairs等）不进物品表，由方块表渲染
     let items = mcml_tex_draw::items();
     assert!(
         items.contains(&"minecraft:apple".to_string()),
@@ -207,7 +261,43 @@ async fn render_all_items() {
         items.contains(&"minecraft:compass".to_string()),
         "物品表应包含compass"
     );
-    assert!(items.len() > 1000, "物品数量异常：{}", items.len());
+    assert!(
+        items.contains(&"minecraft:trident".to_string()),
+        "物品表应包含trident"
+    );
+    assert!(
+        !items.contains(&"minecraft:stone".to_string()),
+        "3D方块物品stone不应出现在物品表"
+    );
+    assert!(
+        !items.contains(&"minecraft:oak_stairs".to_string()),
+        "3D方块物品oak_stairs不应出现在物品表"
+    );
+    assert!(
+        !items.contains(&"minecraft:oak_door".to_string()),
+        "门已改为3D方块渲染，不应出现在物品表"
+    );
+    // 玻璃板/铃铛3D观感差（纯竖直平面/铃身是实体模型），保留游戏原本的平面贴图渲染
+    assert!(
+        items.contains(&"minecraft:glass_pane".to_string()),
+        "玻璃板应走物品表平面贴图渲染"
+    );
+    assert!(
+        (600..700).contains(&items.len()),
+        "物品数量异常：{}",
+        items.len()
+    );
+    // 创造分组与方块同一套（itemGroup lang键尾段）
+    assert_eq!(
+        mcml_tex_draw::item_cat("minecraft:apple").as_deref(),
+        Some("foodAndDrink"),
+        "apple应归入foodAndDrink"
+    );
+    assert_eq!(
+        mcml_tex_draw::item_cat("minecraft:compass").as_deref(),
+        Some("tools"),
+        "compass应归入tools"
+    );
     let apple = mcml_tex_draw::get_item_path("minecraft:apple").expect("apple应已注册");
     assert!(apple.exists(), "apple图标应已写盘：{}", apple.display());
     println!("注册：{} 个物品图标", items.len());

@@ -68,13 +68,15 @@ pub fn init(arg: CoreInitObj) -> CoreResult<()> {
     oauth::set_key(&arg.oauth_key);
     curseforge_api::set_key(&arg.curseforge_key);
 
-    mcml_names::init(mcml_base::get_base_dir())?;
-    mcml_log::start(mcml_base::get_base_dir())?;
+    let path = mcml_base::get_base_dir();
+    mcml_names::init(&path)?;
+    mcml_log::start(&path)?;
     mcml_log::info_type(InfoType::CoreStart);
-    mcml_tex_draw::init(mcml_base::get_base_dir())?;
-    mcml_config::init(mcml_base::get_base_dir())?;
-    mcml_game::init(mcml_base::get_base_dir())?;
-    mcml_jvms::init(mcml_base::get_base_dir())?;
+    mcml_tex_draw::init(&path)?;
+    mcml_config::init(&path)?;
+    mcml_game::init(&path)?;
+    mcml_jvms::init(&path)?;
+    mcml_downloader::init(&path)?;
 
     config_save::start();
 
