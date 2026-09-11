@@ -30,6 +30,8 @@ pub struct Quad {
     pub tex: String,
     /// uv 矩形内含半透明像素 → translucent pass
     pub translucent: bool,
+    /// 自发光（火焰等）：不参与方向光照，全亮渲染
+    pub fullbright: bool,
 }
 
 /// 一个完整模型的烘焙产物
@@ -635,12 +637,14 @@ pub(crate) fn bake_element(
                 .map(|f| face_normal(f).to_array())
                 .unwrap_or([0.0, 1.0, 0.0]),
             color: [color; 4],
-            tex: path,
+            tex: path.clone(),
             translucent: rect_translucent(
                 &tex,
                 Some(&anim),
                 &[uvs[0] / 16.0, uvs[1] / 16.0, uvs[2] / 16.0, uvs[3] / 16.0],
             ),
+            // 火焰贴图自发光（篝火火焰在游戏里不受方向光变暗）
+            fullbright: is_fullbright_tex(&path),
         });
     }
     quads
@@ -648,6 +652,12 @@ pub(crate) fn bake_element(
 
 
 /// 烘焙一个模型为 quad 列表（含贴图缓存），供 GPU/CPU 两种后端共用
+/// 自发光贴图：篝火/灵魂篝火的火焰，渲染时不做方向光衰减
+fn is_fullbright_tex(path: &str) -> bool {
+    // 路径带.png后缀；soul_campfire_fire 也包含 campfire_fire
+    path.contains("campfire_fire")
+}
+
 pub fn bake_model(
     archive: &BaseArchive,
     rel: &str,

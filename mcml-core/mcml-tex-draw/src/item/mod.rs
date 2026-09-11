@@ -2,11 +2,16 @@
 //!
 //! 与方块共用烘焙与渲染管线（model.rs/block::render_baked），差异在：
 //! - items/*.json 的 model 节点为类型分派（model/composite/condition/select/range_dispatch），
-//!   special（实体渲染：箱子/头颅/旗帜等）与 empty 跳过
+//!   special（实体渲染：箱子/头颅/旗帜等）与 empty 跳过；
+//!   引用3D模型的物品形态（items/stone.json → block/stone）也跳过——只输出2D平面图标，
+//!   3D外观由方块表渲染；block表已有的ID（icons.rs非Skip条目）同样不重复渲染
 //! - builtin/generated 链（无 elements）按反编译 ItemModelGenerator 挤出：
 //!   front/back 全幅面 + 不透明像素边界裙边，gui_light=front
 //! - tintindex 索引 items/*.json 的 tint 表（extrude 按层号索引）
 //! - glint（附魔光效）：vanilla 默认注册带 ENCHANTMENT_GLINT_OVERRIDE 的物品
+//! - 创造分组（icons.rs，与方块表同一套 itemGroup 分类）随渲染写入 Cat 字段
+
+pub mod icons;
 
 use std::{
     cell::RefCell,
@@ -26,8 +31,8 @@ use crate::{
     block::{fit_composite, read_anim_meta, render_baked, GRASS_TINT},
     gpu::GpuCtx,
     model::{
-        bake_element, calculate_facing, face_index_of, face_normal, load_texture,
-        rect_translucent, recalculate_winding, resolve, texture_path, BakedModel, GuiTransform,
+        calculate_facing, face_index_of, face_normal, load_texture, rect_translucent,
+        recalculate_winding, resolve, texture_path, BakedModel, GuiTransform,
         Quad, FACE_INFO, Resolved, select_extent,
     },
 };
@@ -56,7 +61,7 @@ struct ItemModelJson {
     kind: Option<String>,
     /// minecraft:model：models/ 下的模型名（如 minecraft:item/apple）
     #[serde(default)]
-    model: Option<String>,
+    model: Option<ModelRef>,
     /// minecraft:model：tint 表（模型面 tintindex 索引）
     #[serde(default)]
     tints: Option<Vec<TintJson>>,
@@ -151,7 +156,11 @@ struct ChildModel {
 fn resolve_item_models(node: &ItemModelJson) -> Option<Vec<ChildModel>> {
     match node.kind.as_deref() {
         None | Some("minecraft:model") => {
-            let model = strip_ns(node.model.as_ref()?);
+            let model = match node.model.as_ref()? {
+                ModelRef::Name(name) => strip_ns(name),
+                // special 的对象形式不会走到这里（kind 已分派）
+                ModelRef::Object(_) => return None,
+            };
             Some(vec![ChildModel {
                 model,
                 tints: node
@@ -203,6 +212,19 @@ fn resolve_item_models(node: &ItemModelJson) -> Option<Vec<ChildModel>> {
 /// 去掉 "minecraft:" 命名空间前缀
 fn strip_ns(name: &str) -> String {
     name.strip_prefix("minecraft:").unwrap_or(name).to_string()
+}
+
+/// minecraft:model 引用的模型名。special 节点的 model 是对象
+/// （如 {"type":"minecraft:trident"}），仅作占位让整文件能反序列化
+///（special 在解析期已被跳过，用不到该字段）
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum ModelRef {
+    /// models/ 下的相对名（可带命名空间前缀）
+    Name(String),
+    /// 对象形式（special 的 model.type 等）
+    #[allow(dead_code)]
+    Object(serde_json::Map<String, serde_json::Value>),
 }
 
 /// tint 节点 → RGB（grass 类型按平原群系常量色，其余取 ARGB int）
@@ -360,6 +382,7 @@ fn bake_generated(
                 color: [color; 4],
                 tex: path.clone(),
                 translucent: rect_translucent(&tex, Some(&anim), &[0.0, 0.0, 1.0, 1.0]),
+                fullbright: false,
             });
         }
 
@@ -440,6 +463,7 @@ fn bake_generated(
                             Some(&anim),
                             &[u0 / 16.0, v0 / 16.0, u1 / 16.0, v1 / 16.0],
                         ),
+                        fullbright: false,
                     });
                 }
             }
@@ -449,7 +473,8 @@ fn bake_generated(
 }
 
 /// 物品模型烘焙：items/*.json 的 model 引用（models/ 相对名）。
-/// generated 链（builtin/generated，无 elements）→ extrude；普通模型 → 元素烘焙。
+/// 只走2D平面物品（generated 链 → extrude）；引用3D模型的物品形态
+/// （items/stone.json → block/stone 等）由方块表渲染，这里跳过。
 /// `extra`：节点 transformation（composite 子模型拼合用），烘焙期直接作用于顶点
 pub(crate) fn bake_item_model(
     archive: &BaseArchive,
@@ -460,21 +485,17 @@ pub(crate) fn bake_item_model(
 ) -> Option<(BakedModel, HashMap<String, Bitmap>)> {
     let Resolved {
         textures,
-        elements,
         transform,
         gui_light_3d,
         generated,
+        ..
     } = resolve(archive, rel)?;
 
-    let mut quads = if generated && elements.is_empty() {
-        bake_generated(archive, &textures, tex_cache, tints)?
-    } else {
-        let mut quads = Vec::new();
-        for element in &elements {
-            quads.extend(bake_element(element, &textures, archive, tex_cache, Some(tints)));
-        }
-        quads
-    };
+    // 仅2D平面物品（builtin/generated 链）；3D模型留给方块渲染
+    if !generated {
+        return None;
+    }
+    let mut quads = bake_generated(archive, &textures, tex_cache, tints)?;
     if quads.is_empty() {
         return None;
     }
@@ -531,7 +552,7 @@ pub fn render_items(archive: &BaseArchive, gui: ProgressGui) -> CoreResult<()> {
     let gpu = GpuCtx::try_new();
     let (block_names, item_names) = crate::extract_langs(archive);
 
-    // 枚举jar内全部物品定义
+    // 枚举jar内全部物品定义；block表已有的ID不重复渲染（图标由方块表负责）
     let defs: Vec<String> = archive
         .entries()
         .iter()
@@ -540,6 +561,7 @@ pub fn render_items(archive: &BaseArchive, gui: ProgressGui) -> CoreResult<()> {
             let name = rest.strip_suffix(".json")?;
             (!e.is_dir && !name.contains('/')).then(|| name.to_string())
         })
+        .filter(|name| !crate::block::icons::has_icon(name))
         .collect();
 
     let total = defs.len();
@@ -589,6 +611,10 @@ pub fn render_items(archive: &BaseArchive, gui: ProgressGui) -> CoreResult<()> {
     for (id, out_name) in rendered.into_iter().flatten() {
         let key = format!("minecraft:{id}");
         items.tex.insert(key.clone(), out_name);
+        // 创造分组（与方块表同一套itemGroup分类）
+        if let Some(cat) = icons::item_cat(&id) {
+            items.cat.insert(key.clone(), cat.to_string());
+        }
         // 物品语言键优先，方块物品（stone等）回落block.minecraft.*
         if let Some(name) = item_names.get(&key).or_else(|| block_names.get(&key)) {
             items.name.insert(key, name.clone());

@@ -26,7 +26,7 @@ struct Uniforms {
     light1: [f32; 4],
 }
 
-/// 顶点布局（pos/uv/normal/color，48字节）
+/// 顶点布局（pos/uv/normal/color/fullbright，52字节）
 #[repr(C)]
 #[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 struct GpuVertex {
@@ -34,6 +34,8 @@ struct GpuVertex {
     uv: [f32; 2],
     normal: [f32; 3],
     color: [f32; 4],
+    /// 1.0=自发光（火焰），不做方向光衰减
+    fullbright: f32,
 }
 
 const VERTEX_LAYOUT: wgpu::VertexBufferLayout<'static> = wgpu::VertexBufferLayout {
@@ -59,6 +61,11 @@ const VERTEX_LAYOUT: wgpu::VertexBufferLayout<'static> = wgpu::VertexBufferLayou
             format: wgpu::VertexFormat::Float32x4,
             offset: 32,
             shader_location: 3,
+        },
+        wgpu::VertexAttribute {
+            format: wgpu::VertexFormat::Float32,
+            offset: 48,
+            shader_location: 4,
         },
     ],
 };
@@ -438,6 +445,7 @@ impl GpuCtx {
                     uv: quad.uv[i],
                     normal: quad.normal,
                     color: quad.color[i],
+                    fullbright: if quad.fullbright { 1.0 } else { 0.0 },
                 });
             }
         }

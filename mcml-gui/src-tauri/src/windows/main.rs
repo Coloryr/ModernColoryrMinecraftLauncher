@@ -10,26 +10,31 @@ use std::time::Duration;
 use tauri::{AppHandle, Emitter, WebviewWindow};
 
 use crate::dtos::main_dto::{LoadState, NewsItem};
-use crate::dtos::{ErrorEvent, ExitEvent, InstanceChangeEvent, InstancePatch, LogEvent, StateEvent};
+use crate::dtos::{
+    ErrorEvent, ExitEvent, InstanceChangeEvent, InstancePatch, LogEvent, StateEvent,
+};
 use crate::listens;
 use crate::models::{EnvVarLine, InstanceArgs, InstanceInfo, JavaInfo, VersionInfo};
 use mcml_config::config_obj::{GCType, RunArgObj, WindowSettingObj};
 use mcml_game::GameInstance;
-use mcml_game::loader::LoaderType;
-use mcml_game::mojang::VersionType;
-use mcml_game::launcher::{LogEncoding, ModPackType};
 use mcml_game::launcher::instance_setting_obj::{
     AdvanceJvmObj, InstanceSettingObj, ProxyHostObj, ServerObj,
 };
+use mcml_game::launcher::{LogEncoding, ModPackType};
+use mcml_game::loader::LoaderType;
+use mcml_game::mojang::VersionType;
 use uuid::Uuid;
 
 /// 核心加载完成事件（ok：加载成功；error：失败信息，前端据此显示错误页）
 #[gui_macros::emit]
 pub fn emit_load_done(app: &AppHandle, data: Option<String>) {
-    let _ = app.emit(listens::LOAD_DONE, LoadState {
-        ok: data.is_none(),
-        error: data
-    });
+    let _ = app.emit(
+        listens::LOAD_DONE,
+        LoadState {
+            ok: data.is_none(),
+            error: data,
+        },
+    );
 }
 
 /// 主窗口数据存储：实例 / 启动参数 / 分组 / 运行状态 / 日志
@@ -76,10 +81,7 @@ impl MainWindowModel {
             .filter(|n| names.contains(n))
             .cloned()
             .collect();
-        let rest: Vec<String> = names
-            .into_iter()
-            .filter(|n| !ordered.contains(n))
-            .collect();
+        let rest: Vec<String> = names.into_iter().filter(|n| !ordered.contains(n)).collect();
         [ordered, rest].concat()
     }
 }
@@ -122,8 +124,7 @@ fn now_time() -> String {
 /// 这些命令只会由主窗口 webview 调用；模型缺失属异常情形（主窗口未创建），
 /// 返回 Err / 空列表由调用方降级，不 panic。
 fn model(window: &WebviewWindow) -> Result<Arc<Mutex<MainWindowModel>>, String> {
-    crate::window_manager::window_model(window)
-        .ok_or_else(|| "主窗口模型未初始化".to_string())
+    crate::window_manager::window_model(window).ok_or_else(|| "主窗口模型未初始化".to_string())
 }
 
 /// 获取实例列表（mcml-game::get_instances 对接，合并运行状态）
@@ -143,15 +144,18 @@ pub fn main_get_instances() -> Vec<InstanceInfo> {
                 loader_version: inst.loader_version.clone(),
                 dir: inst.dir.clone(),
                 running: mcml_game::is_running(&inst.uuid),
-                modpack_type: inst
-                    .is_modpack
-                    .then(|| inst.modpack_type.id().to_string()),
+                modpack_type: inst.is_modpack.then(|| inst.modpack_type.id().to_string()),
                 pid: inst.pid.clone(),
                 fid: inst.fid.clone(),
                 server_url: inst.server_url.clone(),
                 lang: None,
                 log_encoding: Some(
-                    if matches!(inst.encoding, LogEncoding::GBK) { "gbk" } else { "utf8" }.to_string(),
+                    if matches!(inst.encoding, LogEncoding::GBK) {
+                        "gbk"
+                    } else {
+                        "utf8"
+                    }
+                    .to_string(),
                 ),
                 source: None,
             }
@@ -198,10 +202,15 @@ fn args_from_core(inst: &InstanceSettingObj) -> InstanceArgs {
             a.game_args = s.lines().map(String::from).collect();
         }
         if let Some(s) = &jvm.jvm_env {
-            a.env_vars = s.lines().filter_map(|l| l.split_once('=').map(|(k, v)| EnvVarLine {
-                key: k.to_string(),
-                value: v.to_string(),
-            })).collect();
+            a.env_vars = s
+                .lines()
+                .filter_map(|l| {
+                    l.split_once('=').map(|(k, v)| EnvVarLine {
+                        key: k.to_string(),
+                        value: v.to_string(),
+                    })
+                })
+                .collect();
         }
         if let Some(v) = jvm.launch_pre_run {
             a.pre_enabled = v;
@@ -232,7 +241,12 @@ fn args_from_core(inst: &InstanceSettingObj) -> InstanceArgs {
     if let Some(adv) = &inst.advance_jvm {
         a.main_class = adv.main_class.clone().unwrap_or_default();
         if let Some(s) = &adv.class_path {
-            a.class_path = s.split(';').map(str::trim).filter(|s| !s.is_empty()).map(String::from).collect();
+            a.class_path = s
+                .split(';')
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(String::from)
+                .collect();
         }
     }
     if let Some(p) = &inst.proxy_host {
@@ -327,7 +341,12 @@ pub fn main_get_instance_args(window: WebviewWindow, uuid: String) -> InstanceAr
 
 /// 更新实例启动参数（核心实例写配置并保存；遗留数据只更新内存缓存）
 #[tauri::command]
-pub fn main_update_instance_args(app: AppHandle, window: WebviewWindow, uuid: String, args: InstanceArgs) -> Result<bool, String> {
+pub fn main_update_instance_args(
+    app: AppHandle,
+    window: WebviewWindow,
+    uuid: String,
+    args: InstanceArgs,
+) -> Result<bool, String> {
     if let Some((_, instance)) = core_instance(&uuid) {
         {
             let mut obj = instance.write().unwrap();
@@ -380,10 +399,6 @@ pub async fn main_get_versions() -> Result<Vec<VersionInfo>, String> {
             return Ok(cache.clone());
         }
     }
-    // 核心加载未完成（mcml_net::init 未跑）时 HTTP 客户端不可用，返回空列表
-    if !mcml_net::is_init() {
-        return Ok(Vec::new());
-    }
     let fetched = fetch_versions().await;
     *VERSIONS_CACHE.write().unwrap() = fetched.clone();
     Ok(fetched)
@@ -399,10 +414,6 @@ pub async fn main_refresh_versions() -> Result<Vec<VersionInfo>, String> {
 /// 获取 Minecraft 官方新闻（Mojang 新闻接口，按页拉取；核心加载完成后可调用）
 #[tauri::command]
 pub async fn main_get_news(page: Option<u32>) -> Result<Vec<NewsItem>, String> {
-    // 核心加载未完成（mcml_net::init 未跑）时返回空列表，前端稍后会重新拉取
-    if !mcml_net::is_init() {
-        return Ok(Vec::new());
-    }
     let page = page.unwrap_or(1);
     let news = mcml_net::mojang_api::get_minecraft_news(page)
         .await
@@ -461,7 +472,10 @@ async fn fetch_versions() -> Vec<VersionInfo> {
     let mut list: Vec<VersionInfo> = manifest
         .versions
         .into_iter()
-        .map(|v| VersionInfo { id: v.id, version_type: v.version_type })
+        .map(|v| VersionInfo {
+            id: v.id,
+            version_type: v.version_type,
+        })
         .collect();
     // 只按类型分组排序，组内不动：清单本身即最新在前，
     // 按版本号数值重排会把快照（25w14a）排到 1.21.x 之上、打乱 rc / 旧版顺序
@@ -481,7 +495,9 @@ async fn fetch_versions() -> Vec<VersionInfo> {
 pub fn emit_instance_change(app: &AppHandle, r#type: &str) {
     let _ = app.emit(
         listens::INSTANCE_CHANGE,
-        InstanceChangeEvent { r#type: r#type.into() },
+        InstanceChangeEvent {
+            r#type: r#type.into(),
+        },
     );
 }
 
@@ -538,7 +554,11 @@ pub fn main_add_group(app: AppHandle, window: WebviewWindow, name: String) -> Re
 
 /// 删除空分组
 #[tauri::command]
-pub fn main_remove_group(app: AppHandle, window: WebviewWindow, name: String) -> Result<bool, String> {
+pub fn main_remove_group(
+    app: AppHandle,
+    window: WebviewWindow,
+    name: String,
+) -> Result<bool, String> {
     if name.trim().is_empty() {
         // 空白分组即默认分组，不允许删除
         return Ok(false);
@@ -559,11 +579,19 @@ pub fn main_remove_group(app: AppHandle, window: WebviewWindow, name: String) ->
 
 /// 调整分组显示顺序
 #[tauri::command]
-pub fn main_move_group(app: AppHandle, window: WebviewWindow, name: String, index: i64) -> Result<bool, String> {
+pub fn main_move_group(
+    app: AppHandle,
+    window: WebviewWindow,
+    name: String,
+    index: i64,
+) -> Result<bool, String> {
     let store = model(&window)?;
     let mut store = store.lock().unwrap();
     let mut list = store.all_groups();
-    let from = list.iter().position(|g| g == &name).ok_or_else(|| "分组不存在".to_string())?;
+    let from = list
+        .iter()
+        .position(|g| g == &name)
+        .ok_or_else(|| "分组不存在".to_string())?;
     list.remove(from);
     let at = (index as usize).min(list.len());
     list.insert(at, name.clone());
@@ -617,7 +645,12 @@ pub fn main_create_instance(
 
 /// 重命名实例（核心实例走 mcml-game：重名报错、实例目录跟随改名）
 #[tauri::command]
-pub fn main_rename_instance(app: AppHandle, window: WebviewWindow, uuid: String, name: String) -> Result<bool, String> {
+pub fn main_rename_instance(
+    app: AppHandle,
+    window: WebviewWindow,
+    uuid: String,
+    name: String,
+) -> Result<bool, String> {
     let n = name.trim().to_string();
     if n.is_empty() {
         return Ok(false);
@@ -644,7 +677,12 @@ pub fn main_rename_instance(app: AppHandle, window: WebviewWindow, uuid: String,
 
 /// 更新实例元信息（补丁式；核心实例直接写配置并保存，遗留数据只改本地存储）
 #[tauri::command]
-pub fn main_update_instance(app: AppHandle, window: WebviewWindow, uuid: String, patch: InstancePatch) -> Result<bool, String> {
+pub fn main_update_instance(
+    app: AppHandle,
+    window: WebviewWindow,
+    uuid: String,
+    patch: InstancePatch,
+) -> Result<bool, String> {
     // 核心实例：写真实配置
     let core = Uuid::parse_str(&uuid)
         .ok()
@@ -750,29 +788,40 @@ pub fn main_update_instance(app: AppHandle, window: WebviewWindow, uuid: String,
     Ok(true)
 }
 
-/// 删除实例（核心实例走 mcml-game：删除实例与文件；同时清理本地运行态缓存）
+/// 删除实例：挪回收站较慢，放后台线程执行避免卡住 UI（前端显示滚动进度条）
+/// （核心实例走 mcml-game：删除实例与文件；同时清理本地运行态缓存）
 #[tauri::command]
-pub fn main_delete_instance(app: AppHandle, window: WebviewWindow, uuid: String) -> Result<bool, String> {
-    // 核心实例：删除实例数据与文件
-    let mut ok = false;
-    if let Ok(id) = Uuid::parse_str(&uuid) {
-        if mcml_game::get_instance(&id).is_some() {
-            mcml_game::delete_instance(&id).map_err(|e| e.to_string())?;
+pub async fn main_delete_instance(
+    app: AppHandle,
+    window: WebviewWindow,
+    uuid: String,
+) -> Result<bool, String> {
+    let ok = tauri::async_runtime::spawn_blocking(move || -> Result<bool, String> {
+        // 核心实例：删除实例数据与文件
+        let mut ok = false;
+        if let Ok(id) = Uuid::parse_str(&uuid) {
+            if mcml_game::get_instance(&id).is_some() {
+                mcml_game::delete_instance(&id).map_err(|e| e.to_string())?;
+                ok = true;
+            }
+        }
+        // 本地存储：清理遗留实例项与运行态缓存（运行状态 / 日志 / 启动参数）
+        let store = model(&window)?;
+        let mut store = store.lock().unwrap();
+        let before = store.instances.len();
+        store.instances.retain(|i| i.uuid != uuid);
+        store.args.remove(&uuid);
+        store.running.remove(&uuid);
+        store.logs.remove(&uuid);
+        if store.instances.len() < before {
             ok = true;
         }
-    }
-    // 本地存储：清理遗留实例项与运行态缓存（运行状态 / 日志 / 启动参数）
-    let store = model(&window)?;
-    let mut store = store.lock().unwrap();
-    let before = store.instances.len();
-    store.instances.retain(|i| i.uuid != uuid);
-    store.args.remove(&uuid);
-    store.running.remove(&uuid);
-    store.logs.remove(&uuid);
-    if store.instances.len() < before {
-        ok = true;
-    }
-    drop(store);
+        drop(store);
+        Ok(ok)
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+
     if ok {
         emit_instance_change(&app, "remove");
     }
@@ -781,7 +830,13 @@ pub fn main_delete_instance(app: AppHandle, window: WebviewWindow, uuid: String)
 
 /// 移动实例到 (分组, 组内位置)：支持同组排序与跨组移动
 #[tauri::command]
-pub fn main_move_instance(app: AppHandle, window: WebviewWindow, uuid: String, group: Option<String>, index: i64) -> Result<bool, String> {
+pub fn main_move_instance(
+    app: AppHandle,
+    window: WebviewWindow,
+    uuid: String,
+    group: Option<String>,
+    index: i64,
+) -> Result<bool, String> {
     // 核心实例：分组切换走 mcml-game（自动建组 + 保存实例 + 发事件）
     if let Ok(id) = Uuid::parse_str(&uuid) {
         if mcml_game::get_instance(&id).is_some() {
@@ -809,7 +864,11 @@ pub fn main_move_instance(app: AppHandle, window: WebviewWindow, uuid: String, g
         .collect();
     let anchor = others.get((index as usize).min(others.len())).cloned();
     let at = match &anchor {
-        Some(a) => store.instances.iter().position(|i| &i.uuid == a).unwrap_or(store.instances.len()),
+        Some(a) => store
+            .instances
+            .iter()
+            .position(|i| &i.uuid == a)
+            .unwrap_or(store.instances.len()),
         None => store.instances.len(),
     };
     store.instances.insert(at, inst);
@@ -819,7 +878,12 @@ pub fn main_move_instance(app: AppHandle, window: WebviewWindow, uuid: String, g
 
 /// 启动游戏（占位：标记运行 + 发事件；接入核心后替换为真实启动）
 #[tauri::command]
-pub fn main_launch_game(app: AppHandle, window: WebviewWindow, uuid: String, user_name: String) -> Result<(), String> {
+pub fn main_launch_game(
+    app: AppHandle,
+    window: WebviewWindow,
+    uuid: String,
+    user_name: String,
+) -> Result<(), String> {
     println!("[launch_game] uuid={uuid} user={user_name}");
     let store = model(&window)?;
     {
@@ -829,8 +893,22 @@ pub fn main_launch_game(app: AppHandle, window: WebviewWindow, uuid: String, use
         }
         store.running.insert(uuid.clone());
     }
-    emit_launch_state(&app, StateEvent { uuid: uuid.clone(), state: "launching".into() });
-    emit_game_log(&app, LogEvent { uuid: uuid.clone(), time: now_time(), text: "游戏启动中…".into(), clear: true });
+    emit_launch_state(
+        &app,
+        StateEvent {
+            uuid: uuid.clone(),
+            state: "launching".into(),
+        },
+    );
+    emit_game_log(
+        &app,
+        LogEvent {
+            uuid: uuid.clone(),
+            time: now_time(),
+            text: "游戏启动中…".into(),
+            clear: true,
+        },
+    );
 
     // 占位：3 秒后发出退出事件（真实启动需接入 mcml-core）
     // 直接持有模型的 Arc：模型跟随主窗口，销毁后后台线程仍能安全收尾
@@ -838,8 +916,22 @@ pub fn main_launch_game(app: AppHandle, window: WebviewWindow, uuid: String, use
     let uuid2 = uuid.clone();
     std::thread::spawn(move || {
         std::thread::sleep(Duration::from_secs(3));
-        emit_game_log(&app, LogEvent { uuid: uuid2.clone(), time: now_time(), text: "游戏进程已退出".into(), clear: false });
-        emit_game_exit(&app, ExitEvent { uuid: uuid2.clone(), code: 0 });
+        emit_game_log(
+            &app,
+            LogEvent {
+                uuid: uuid2.clone(),
+                time: now_time(),
+                text: "游戏进程已退出".into(),
+                clear: false,
+            },
+        );
+        emit_game_exit(
+            &app,
+            ExitEvent {
+                uuid: uuid2.clone(),
+                code: 0,
+            },
+        );
         let mut s = store2.lock().unwrap();
         s.running.remove(&uuid2);
     });
@@ -863,7 +955,13 @@ pub fn main_get_game_log(window: WebviewWindow, uuid: String) -> Vec<String> {
         eprintln!("[main_get_game_log] 主窗口模型未初始化");
         return Vec::new();
     };
-    store.lock().unwrap().logs.get(&uuid).cloned().unwrap_or_default()
+    store
+        .lock()
+        .unwrap()
+        .logs
+        .get(&uuid)
+        .cloned()
+        .unwrap_or_default()
 }
 
 /// 获取运行中实例
@@ -886,4 +984,3 @@ fn uuid_short() -> String {
         ^ (std::process::id() as u64) << 32;
     format!("{:016x}", n)
 }
-

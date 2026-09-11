@@ -49,6 +49,7 @@ export default {
   "multi.back": "Back",
   "multi.deleteTitle": "Delete selected instances",
   "multi.deleteConfirm": "Delete the {count} selected instances?",
+  "multi.deleting": "Deleting {done}/{total}…",
   "multi.deleted": "Deleted {count} instances",
   "multi.moved": "Moved {count} instances",
   "multi.launched": "Launched {count} instances",
@@ -189,6 +190,7 @@ export default {
   "actions.genInfoText": "Copy Info as Text",
   "actions.rename": "Rename",
   "actions.delete": "Delete Instance",
+  "actions.deleting": "Deleting…",
   "actions.wip": "“{name}” is under development",
   "actions.renameTitle": "Rename Instance",
   "actions.deleteTitle": "Delete Instance",
@@ -425,17 +427,9 @@ export default {
   "features.download": "Downloads",
 
   // Setup
-  "init.title": "First run: set data directory and offline player name",
-  "init.dataDir": "Data directory (empty = default)",
-  "init.dataDirPlaceholder": "e.g. D:\\MCML",
-  "init.playerName": "Player name",
-  "init.playerNamePlaceholder": "Player",
-  "init.button": "Initialize",
-  "init.initializing": "Initializing…",
   "init.splash": "Initializing…",
   "init.failed": "Initialization failed",
-  "init.retry": "Retry",
-  "init.skip": "Skip",
+  "init.feedback": "Feedback",
 
   // Settings window
   "winSettings.windowMode": "Window Mode",

@@ -52,11 +52,7 @@ getCurrentWindow().setTitle(t("winTitle.main")).catch(() => { /* 忽略 */ });
 
 // ================= 基础状态 =================
 
-const bootFailed = ref(false);
-const initError = ref("");
-const initLoading = ref(false);
-import { closeSplash, openSplash, splashError, splashVisible } from "../../lib/splash";
-const localDir = ref(localStorage.getItem("mcml.localDir") ?? "");
+import { closeSplash, splashError, splashVisible } from "../../lib/splash";
 const playerName = ref(localStorage.getItem("mcml.playerName") ?? "Player");
 
 // ================= 数据 =================
@@ -164,36 +160,6 @@ function isCollapsed(name: string): boolean {
 
 function toggleGroup(name: string) {
   collapsedGroups.value = { ...collapsedGroups.value, [name]: !isCollapsed(name) };
-}
-
-/** 默认只展开选中实例所在的分组 */
-function collapseToSelected() {
-  const selGroup = groupKeyOf(selected.value?.group);
-  const map: Record<string, boolean> = {};
-  for (const g of groups.value) {
-    map[g.name] = g.name !== selGroup;
-  }
-  collapsedGroups.value = map;
-}
-
-/** 启动时：选中上次启动的实例并展开其分组（无记录则展开默认分组） */
-function initSelection() {
-  const lastUuid = localStorage.getItem("mcml.lastInstance");
-  const lastInst = lastUuid
-    ? instances.value.find((i) => i.uuid === lastUuid)
-    : undefined;
-
-  if (lastInst) {
-    selected.value = lastInst;
-    const key = groupKeyOf(lastInst.group);
-    const map: Record<string, boolean> = {};
-    for (const g of groups.value) {
-      map[g.name] = g.name !== key;
-    }
-    collapsedGroups.value = map;
-  } else {
-    collapseToSelected();
-  }
 }
 
 // ================= 启动器主页（默认打开） =================
@@ -733,6 +699,16 @@ async function moveSelectedToGroup(groupName: string | null) {
 const showMultiDelete = ref(false);
 const multiDeleteBusy = ref(false);
 
+// 多选删除进度：整体进度可知（已完成 / 总数），单实例内部不可知
+const multiDone = ref(0);
+const multiTotal = ref(0);
+
+/** 多选删除总进度百分比（0-100） */
+const multiPct = computed(() => {
+  if (!multiTotal.value) return 0;
+  return Math.min(100, Math.round((multiDone.value / multiTotal.value) * 100));
+});
+
 function onMultiDelete() {
   closeCtxMenu();
   showMultiDelete.value = true;
@@ -741,10 +717,17 @@ function onMultiDelete() {
 async function doMultiDelete() {
   multiDeleteBusy.value = true;
   const ids = [...selectedIds.value];
-  for (const uuid of ids) {
-    await api.deleteInstance(uuid);
+  multiDone.value = 0;
+  multiTotal.value = ids.length;
+  try {
+    for (const uuid of ids) {
+      await api.deleteInstance(uuid);
+      multiDone.value += 1;
+    }
+  } finally {
+    multiDeleteBusy.value = false;
+    multiTotal.value = 0;
   }
-  multiDeleteBusy.value = false;
   showMultiDelete.value = false;
   exitMultiSelect();
   await Promise.all([loadInstances(), loadGroups()]);
@@ -944,29 +927,20 @@ async function subscribeEvents() {
 // ================= 初始化 =================
 
 async function doInit() {
-  initLoading.value = true;
-  initError.value = "";
   try {
-    localStorage.setItem("mcml.localDir", localDir.value);
-    localStorage.setItem("mcml.playerName", playerName.value);
-    bootFailed.value = false;
     await Promise.all([loadInstances(), loadGroups(), loadJava()]);
-    loadVersions();
     closeSplash();
+    loadVersions();
     loadNews();
   } catch (e) {
-    initError.value = String(e);
     // 初始化失败：关闭启动页并显示错误页
     closeSplash(String(e));
-  } finally {
-    initLoading.value = false;
   }
 }
 
-// 错误页重试：重新显示启动页并再次初始化
-function retryBoot() {
-  openSplash();
-  doInit();
+/** 初始化失败反馈：打开 GitHub Issues */
+function openFeedback() {
+  api.openUrl("https://github.com/Coloryr/ModernColoryrMinecraftLauncher/issues");
 }
 
 // ================= 数据加载 =================
@@ -1070,25 +1044,6 @@ onMounted(async () => {
   document.addEventListener("click", onDocClick);
   document.addEventListener("keydown", onDocKeyDown);
   window.addEventListener("storage", onAddedInstanceStorage);
-  initLoading.value = true;
-  // 加载页最短显示时长：初始化太快时也保留一会儿，避免一闪而过
-  try {
-    bootFailed.value = false;
-    await Promise.all([loadInstances(), loadGroups(), loadJava()]);
-    // 版本列表走网络（Mojang 清单），不阻塞启动
-    loadVersions();
-    // 启动时选中上次启动的实例并展开其分组
-    initSelection();
-    closeSplash();
-    loadNews();
-  } catch (e) {
-    initError.value = String(e);
-    bootFailed.value = true;
-    // 加载完成但出错：关闭启动页并显示错误页
-    closeSplash(String(e));
-  } finally {
-    initLoading.value = false;
-  }
 });
 
 onUnmounted(() => {
@@ -1099,38 +1054,24 @@ onUnmounted(() => {
 });
 
 // 后端核心加载完成事件：决定关闭启动页（进入主界面）还是显示错误页
-listen<LoadState>(LoadDone, (data) => {
+listen<LoadState>(LoadDone, async (data) => {
   const state = data.payload;
   if (state.ok) {
-    bootFailed.value = false;
-    closeSplash();
-    // 核心加载完成后实例 / 分组表才填充，重拉一次
-    loadInstances();
-    loadGroups();
-    loadNews();
+    doInit();
   } else {
-    const msg = state.error || t("init.failed");
-    initError.value = msg;
-    bootFailed.value = true;
-    closeSplash(msg);
+    closeSplash(state.error || t("init.failed"));
   }
 });
 </script>
 
 <template>
   <div class="main-window">
-    <!-- ===== 启动画面 / 初始化引导（SplashScreen 组件） ===== -->
+    <!-- ===== 启动画面 / 初始化失败错误页（SplashScreen 组件） ===== -->
     <SplashScreen
-      v-if="splashVisible || bootFailed || splashError"
+      v-if="splashVisible || splashError"
       :splash-visible="splashVisible"
-      :boot-failed="bootFailed"
       :splash-error="splashError"
-      :init-loading="initLoading"
-      :init-error="initError"
-      v-model:local-dir="localDir"
-      v-model:player-name="playerName"
-      @retry="doInit"
-      @retry-boot="retryBoot"
+      @feedback="openFeedback"
     />
 
     <!-- ===== 主界面 ===== -->
@@ -1610,25 +1551,39 @@ listen<LoadState>(LoadDone, (data) => {
     </BaseModal>
 
     <!-- ===== 删除实例确认 ===== -->
-    <BaseModal v-if="showDelete && selected" :title="t('actions.deleteTitle')" @close="showDelete = false">
+    <BaseModal v-if="showDelete && selected" :title="t('actions.deleteTitle')" @close="!deleteBusy && (showDelete = false)">
       <p class="delete-tip">{{ t("actions.deleteConfirm", { name: selected.name }) }}</p>
 
+      <!-- 删除进度（整目录挪回收站无法取得真实进度，显示滚动动画条） -->
+      <div v-if="deleteBusy" class="delete-progress">
+        <div class="delete-progress-bar rolling"></div>
+      </div>
+      <p v-if="deleteBusy" class="delete-progress-text">{{ t("actions.deleting") }}</p>
+
       <div class="modal-actions">
-        <BaseButton @click="showDelete = false">{{ t("add.cancel") }}</BaseButton>
+        <BaseButton :disabled="deleteBusy" @click="showDelete = false">{{ t("add.cancel") }}</BaseButton>
         <BaseButton variant="danger" :disabled="deleteBusy" @click="doDelete">
-          {{ t("actions.delete") }}
+          {{ deleteBusy ? t("actions.deleting") : t("actions.delete") }}
         </BaseButton>
       </div>
     </BaseModal>
 
     <!-- ===== 多选删除确认 ===== -->
-    <BaseModal v-if="showMultiDelete" :title="t('multi.deleteTitle')" @close="showMultiDelete = false">
+    <BaseModal v-if="showMultiDelete" :title="t('multi.deleteTitle')" @close="!multiDeleteBusy && (showMultiDelete = false)">
       <p class="delete-tip">{{ t("multi.deleteConfirm", { count: selectedIds.size }) }}</p>
 
+      <!-- 删除进度（真实进度：已完成实例数 / 总数） -->
+      <div v-if="multiDeleteBusy" class="delete-progress">
+        <div class="delete-progress-bar" :style="{ width: multiPct + '%' }"></div>
+      </div>
+      <p v-if="multiDeleteBusy" class="delete-progress-text">
+        {{ t("multi.deleting", { done: multiDone, total: multiTotal }) }}
+      </p>
+
       <div class="modal-actions">
-        <BaseButton @click="showMultiDelete = false">{{ t("add.cancel") }}</BaseButton>
+        <BaseButton :disabled="multiDeleteBusy" @click="showMultiDelete = false">{{ t("add.cancel") }}</BaseButton>
         <BaseButton variant="danger" :disabled="multiDeleteBusy" @click="doMultiDelete">
-          {{ t("multi.delete") }}
+          {{ multiDeleteBusy ? t("actions.deleting") : t("multi.delete") }}
         </BaseButton>
       </div>
     </BaseModal>
@@ -1680,6 +1635,45 @@ listen<LoadState>(LoadDone, (data) => {
   display: flex;
   flex-direction: column;
   height: 100vh;
+}
+
+/* 删除实例进度条（删除弹窗内） */
+.delete-progress {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg-side);
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+
+/* 真实进度条（多选删除：宽度由已完成实例数决定） */
+.delete-progress-bar {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--accent);
+  transition: width 0.25s ease;
+}
+
+/* 滚动动画条（单实例删除：整目录挪回收站拿不到真实进度） */
+.delete-progress-bar.rolling {
+  width: 40%;
+  animation: delete-slide 1.1s ease-in-out infinite;
+}
+
+@keyframes delete-slide {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(350%);
+  }
+}
+
+.delete-progress-text {
+  font-size: 12px;
+  color: var(--text-dim);
+  text-align: center;
+  margin-bottom: 14px;
 }
 
 /* ================= 主体 ================= */
