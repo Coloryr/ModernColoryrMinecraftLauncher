@@ -22,6 +22,8 @@ withDefaults(
 const emit = defineEmits<{
   (e: "select", inst: InstanceInfo): void;
   (e: "quick-launch"): void;
+  /** 无上次启动记录时点击卡片：返回实例列表（关闭启动器主页） */
+  (e: "back"): void;
   (e: "add-instance"): void;
   (e: "add-account"): void;
   (e: "add-java"): void;
@@ -63,7 +65,7 @@ function entry(name: string) {
       </div>
     </div>
 
-    <!-- 上次启动实例（有记录才显示，无记录则整块隐藏） -->
+    <!-- 上次启动实例（常驻显示）：有记录显示该实例；无记录时作为返回实例列表的入口 -->
     <div v-if="lastInstance" class="last-card">
       <InstanceIcon :name="lastInstance.name" :uuid="lastInstance.uuid" :size="52" />
       <div class="last-info">
@@ -76,6 +78,14 @@ function entry(name: string) {
       </button>
       <button class="last-open" @click="emit('select', lastInstance)">›</button>
     </div>
+    <button v-else class="last-card last-back" @click="emit('back')">
+      <span class="last-icon-placeholder">☰</span>
+      <span class="last-info">
+        <span class="last-title">{{ t("home.backToList") }}</span>
+        <span class="last-name">{{ t("home.backToListDesc") }}</span>
+      </span>
+      <span class="last-open">›</span>
+    </button>
 
     <div class="entry-cards">
       <!-- 联机大厅 -->
@@ -233,6 +243,33 @@ function entry(name: string) {
   border-radius: 14px;
   border: 1px solid var(--accent-border);
   background: var(--accent-soft);
+}
+
+/* 无上次启动记录时的"返回实例列表"入口：同为卡片外观，但整体可点击 */
+.last-back {
+  width: 100%;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.last-back:hover {
+  border-color: var(--accent);
+  filter: brightness(1.04);
+}
+
+.last-icon-placeholder {
+  width: 52px;
+  height: 52px;
+  border-radius: 12px;
+  background: var(--bg-hover);
+  color: var(--text-dim);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
 }
 
 .last-info {
