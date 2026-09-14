@@ -80,7 +80,7 @@ function defaultConfig(): GuiConfig {
     windowMode: localStorage.getItem("mcml.windowMode") === "Single" ? "Single" : "Multi",
     mainWindow: {
       sidebarSide: localStorage.getItem("mcml.sidebarSide") === "Right" ? "Right" : "Left",
-      sidebarCollapsed: localStorage.getItem("mcml.sidebarCollapsed") === "1",
+      sidebarCollapsed: localStorage.getItem("mcml.sidebarCollapsed") !== "0",
     },
   };
 }

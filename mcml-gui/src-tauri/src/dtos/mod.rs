@@ -15,7 +15,9 @@ pub use add_dto::{
     DetectedPackDto, DirEntry, LoaderProgressDto, ModpackFileDto, ModpackItemDto, ModpackSearchDto,
     NameConflictDto, PackProgressDto,
 };
-pub use download_dto::{DownloadItemEvent, DownloadTaskDto, DownloadTaskEvent};
+pub use download_dto::{
+    DownloadItemEvent, DownloadStatusDto, DownloadTaskDto, DownloadTaskEvent, DownloadThreadDto,
+};
 pub use gui_config_dto::{GuiConfigDto, MainWindowConfigDto};
 pub use main_dto::{
     ErrorEvent, ExitEvent, InstanceChangeEvent, InstancePatch, LogEvent, NewsItem, StateEvent,

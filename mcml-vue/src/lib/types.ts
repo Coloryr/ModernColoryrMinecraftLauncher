@@ -160,12 +160,45 @@ export interface InstanceArgs {
 
 // ---------- 下载管理（mcml_downloader） ----------
 
-/** 下载任务快照（download_get_tasks 查询） */
+/** 下载任务快照（download_get_status 查询） */
 export interface DownloadTaskInfo {
   id: number;
+  /** 文件总数 */
   total: number;
   completed: number;
   failed: number;
+  /** 总大小（字节，元信息未知为 0） */
+  allBytes: number;
+  /** 已下载字节 */
+  nowBytes: number;
+  /** 已进行时间（毫秒） */
+  elapsedMs: number;
+  /** 是否暂停 */
+  paused: boolean;
+}
+
+/** 下载线程当前状态（含当前文件进度与速度） */
+export interface DownloadThreadInfo {
+  thread: number;
+  name: string;
+  /** 状态 ID：wait / getinfo / download / pause / init / action / done / error */
+  state: string;
+  /** 当前文件进度百分比 */
+  progress: number;
+  nowBytes: number;
+  allBytes: number;
+  /** 下载速度（字节/秒） */
+  speed: number;
+}
+
+/** 下载状态快照（任务 + 线程 + 总体速度） */
+export interface DownloadStatus {
+  tasks: DownloadTaskInfo[];
+  threads: DownloadThreadInfo[];
+  /** 总体下载速度（字节/秒） */
+  speed: number;
+  /** 是否处于全局暂停 */
+  paused: boolean;
 }
 
 /** 下载任务状态事件（type：add / remove / update） */

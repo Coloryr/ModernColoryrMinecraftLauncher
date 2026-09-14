@@ -7,8 +7,8 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import type {
   DetectedPackInfo,
   DownloadItemEvent,
+  DownloadStatus,
   DownloadTaskEvent,
-  DownloadTaskInfo,
   ErrorEvent,
   ExitEvent,
   InstanceArgs,
@@ -24,7 +24,7 @@ import type {
 } from "./types";
 import { MainGetInstances, MainGetGroups, MainGetInstanceArgs, MainGetInstanceLangs, MainGetJavaList, MainGetVersions, MainGetNews, MainOpenUrl, MainAddGroup, MainRemoveGroup, MainMoveGroup, MainCreateInstance, MainRenameInstance, MainUpdateInstance, MainUpdateInstanceArgs, MainDeleteInstance, MainMoveInstance, MainLaunchGame, MainStopGame, MainGetGameLog, MainGetRunning, MainRefreshVersions, MainAddJava, MainRemoveJava, MainScanJava } from "./invokes";
 import { AddCreateNew, AddImportFolder, AddImportArchive, AddImportUrl, AddCancel, AddDetectArchive, AddGetModpackFiles, AddSearchModpacks, AddInstallModpack, AddGetLoaderVersions, AddGetLoaders, AddGetPackTypes, AddGetVersionTypes, AddGetSupportLoaders, AddSetCloseGuard, AddAnswerNameConflict } from "./invokes";
-import { DownloadCancelTask, DownloadGetTasks } from "./invokes";
+import { DownloadCancelAll, DownloadGetStatus, DownloadPauseAll, DownloadResumeAll } from "./invokes";
 import { GameLog, LaunchState, GameExit, LaunchError, InstanceChange, CloseBlocked, AddLoaderProgress, AddNameConflict, AddPackProgress, JavaChange, DownloadItem, DownloadTask } from "./listens";
 
 export interface CreateInstanceOpts {
@@ -256,14 +256,24 @@ export const api = {
     return invoke<string[]>(MainGetRunning);
   },
 
-  /** 获取进行中的下载任务快照（下载管理窗口） */
-  async getDownloadTasks(): Promise<DownloadTaskInfo[]> {
-    return invoke<DownloadTaskInfo[]>(DownloadGetTasks);
+  /** 获取下载状态快照（任务 + 线程 + 总体速度，下载管理窗口轮询） */
+  async getDownloadStatus(): Promise<DownloadStatus> {
+    return invoke<DownloadStatus>(DownloadGetStatus);
   },
 
-  /** 取消一个下载任务（任务不存在返回 false） */
-  async cancelDownloadTask(id: number): Promise<boolean> {
-    return invoke<boolean>(DownloadCancelTask, { id });
+  /** 全局暂停所有下载（期间新增任务同样暂停），返回被暂停的任务数 */
+  async pauseAllDownloads(): Promise<number> {
+    return invoke<number>(DownloadPauseAll);
+  },
+
+  /** 全局恢复所有下载，返回被恢复的任务数 */
+  async resumeAllDownloads(): Promise<number> {
+    return invoke<number>(DownloadResumeAll);
+  },
+
+  /** 全局停止（取消）所有下载，返回被停止的任务数 */
+  async stopAllDownloads(): Promise<number> {
+    return invoke<number>(DownloadCancelAll);
   },
 };
 

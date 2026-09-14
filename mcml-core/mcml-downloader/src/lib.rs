@@ -118,6 +118,9 @@ static DOWNLOAD_GUI: OnceLock<Box<dyn IDownloadGui + Sync + Send>> = OnceLock::n
 /// 下载器停止标志
 static STOP: AtomicBool = AtomicBool::new(false);
 
+/// 全局暂停标志（暂停期间不分配任何文件，后续新增任务同样暂停）
+static PAUSED: AtomicBool = AtomicBool::new(false);
+
 /// 自增任务编号
 static NEXT_TASK_ID: AtomicU64 = AtomicU64::new(1);
 
@@ -203,19 +206,20 @@ pub(crate) fn gen_task_id() -> u64 {
 /// 从任务队列中获取一个待下载的文件项
 ///
 /// 遍历所有未完成任务，返回第一个有可用下载项的任务。
+/// 暂停中的任务不分配新文件（在途文件由下载线程阻塞等待恢复）。
 pub(crate) fn get_item() -> Option<DownloadObj> {
-    let read = TASKS.read().unwrap();
-    if read.is_empty() {
+    if PAUSED.load(Ordering::SeqCst) {
         return None;
     }
+    let read = TASKS.read().unwrap();
     for task in read.iter() {
-        let item = task.get_item();
-        if item.is_none() {
+        if task.is_paused() {
             continue;
-        } else {
+        }
+        if let Some(item) = task.get_item() {
             return Some(DownloadObj {
                 task: task.clone(),
-                item: Arc::new(item.unwrap()),
+                item,
             });
         }
     }
@@ -276,19 +280,120 @@ pub struct TaskSnapshot {
     pub completed: usize,
     /// 失败数
     pub failed: usize,
+    /// 总大小（字节；元信息未知的文件按 0 计）
+    pub all_bytes: u64,
+    /// 已下载大小（字节）
+    pub now_bytes: u64,
+    /// 已进行时间（毫秒）
+    pub elapsed_ms: u64,
+    /// 是否暂停
+    pub paused: bool,
 }
 
 /// 获取当前进行中任务的快照列表（下载窗口查询用）
 pub fn get_tasks() -> Vec<TaskSnapshot> {
     let read = TASKS.read().unwrap();
     read.iter()
-        .map(|t| TaskSnapshot {
-            id: t.id,
-            total: t.total_size,
-            completed: t.completed_count.load(Ordering::SeqCst),
-            failed: t.failed_count.load(Ordering::SeqCst),
+        .map(|t| {
+            let (all_bytes, now_bytes) = t.bytes();
+            TaskSnapshot {
+                id: t.id,
+                total: t.total_size,
+                completed: t.completed_count.load(Ordering::SeqCst),
+                failed: t.failed_count.load(Ordering::SeqCst),
+                all_bytes,
+                now_bytes,
+                elapsed_ms: t.elapsed_ms(),
+                paused: t.is_paused(),
+            }
         })
         .collect()
+}
+
+/// 暂停指定任务：不再分配新文件，在途文件阻塞等待恢复
+///
+/// 成功返回 `true`，任务不存在（已完成 / 已取消）返回 `false`
+pub fn pause_task(id: u64) -> bool {
+    let read = TASKS.read().unwrap();
+    match read.iter().find(|t| t.id == id) {
+        Some(task) => {
+            task.pause();
+            true
+        }
+        None => false,
+    }
+}
+
+/// 恢复指定任务并唤醒下载线程
+///
+/// 成功返回 `true`，任务不存在（已完成 / 已取消）返回 `false`
+pub fn resume_task(id: u64) -> bool {
+    {
+        let read = TASKS.read().unwrap();
+        match read.iter().find(|t| t.id == id) {
+            Some(task) => task.resume(),
+            None => return false,
+        }
+    }
+
+    // 暂停期间线程可能已空闲，恢复后需要重新唤醒
+    for item in THREADS.read().unwrap().iter() {
+        item.run();
+    }
+    true
+}
+
+/// 当前是否处于全局暂停
+pub fn is_paused_all() -> bool {
+    PAUSED.load(Ordering::SeqCst)
+}
+
+/// 全局暂停：暂停所有任务，期间新增的任务也保持暂停
+///
+/// 返回被暂停的任务数
+pub fn pause_all() -> usize {
+    PAUSED.store(true, Ordering::SeqCst);
+    let read = TASKS.read().unwrap();
+    for task in read.iter() {
+        task.pause();
+    }
+    read.len()
+}
+
+/// 全局恢复：恢复所有任务并唤醒下载线程
+///
+/// 返回被恢复的任务数
+pub fn resume_all() -> usize {
+    PAUSED.store(false, Ordering::SeqCst);
+    let count = {
+        let read = TASKS.read().unwrap();
+        for task in read.iter() {
+            task.resume();
+        }
+        read.len()
+    };
+
+    for item in THREADS.read().unwrap().iter() {
+        item.run();
+    }
+    count
+}
+
+/// 全局停止：取消所有任务并清空任务队列
+///
+/// 返回被停止的任务数
+pub fn cancel_all() -> usize {
+    let tasks: Vec<Arc<DownloadTask>> = {
+        let mut list = TASKS.write().unwrap();
+        std::mem::take(&mut *list)
+    };
+
+    let count = tasks.len();
+    for task in &tasks {
+        task.cancel();
+        task_done(task);
+    }
+    count
 }
 
 /// 取消指定任务：移出队列并唤醒完成等待（在途文件自然结束，剩余文件不再下载）
@@ -323,6 +428,10 @@ pub async fn start_download_task(items: Vec<FileItemObj>) -> bool {
         return false;
     }
     let task = DownloadTask::new(items);
+    // 全局暂停期间新增的任务同样保持暂停
+    if PAUSED.load(Ordering::SeqCst) {
+        task.pause();
+    }
     let task = Arc::new(task);
     let task_handel = task.clone();
     let id = task.id;
