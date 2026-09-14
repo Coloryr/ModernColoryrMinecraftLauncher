@@ -20,6 +20,9 @@
 
 ## 3. 构建与运行
 
+- **改动代码前的固定流程：先停掉正在运行的 `tauri dev`（连同应用进程），改完并通过验证
+  （`cargo check` / `cargo build` + `npm run build`）后再重启。** 运行中的 dev 监听会在文件保存
+  中途触发重建 / 热更新，容易出现半成品编译错误、窗口反复重启或行为异常。
 - 桌面壳：`cd mcml-gui && npm run tauri dev`（会先起 mcml-vue 的 vite，**端口 1420 必须空闲**）。
 - 只跑前端：根目录 `dev-frontend.bat`（vite，1420）；
   浏览器可访问 `http://localhost:1420/?window=<kind>` 预览某个窗口（无 IPC 数据）。

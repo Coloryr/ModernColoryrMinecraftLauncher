@@ -11,6 +11,13 @@ export type Theme = "Dark" | "Light";
 export type Locale = "zh_cn" | "en_us";
 export type WindowMode = "Multi" | "Single";
 export type SidebarSide = "Left" | "Right";
+/** 实例列表显示模式（默认 list，用户改过后用用户的值） */
+export type ViewMode = "list" | "group" | "grid";
+
+/** 把任意值规范成合法的显示模式（非法 / 缺省 → list） */
+export function normalizeViewMode(value: string | null | undefined): ViewMode {
+  return value === "group" || value === "grid" ? value : "list";
+}
 
 /** 主窗口配置（对应 Rust MainWindowConfig，wire 为 mainWindow） */
 export interface MainWindowConfig {
@@ -18,6 +25,8 @@ export interface MainWindowConfig {
   sidebarSide: SidebarSide;
   /** 是否收起侧栏 */
   sidebarCollapsed: boolean;
+  /** list / group / grid */
+  viewMode: ViewMode;
 }
 
 export interface GuiConfig {
@@ -81,6 +90,7 @@ function defaultConfig(): GuiConfig {
     mainWindow: {
       sidebarSide: localStorage.getItem("mcml.sidebarSide") === "Right" ? "Right" : "Left",
       sidebarCollapsed: localStorage.getItem("mcml.sidebarCollapsed") !== "0",
+      viewMode: normalizeViewMode(localStorage.getItem("mcml.viewMode")),
     },
   };
 }

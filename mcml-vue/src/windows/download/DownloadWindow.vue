@@ -9,7 +9,7 @@ import BaseModal from "../../components/ui/BaseModal.vue";
 import BaseButton from "../../components/ui/BaseButton.vue";
 import { api, onCloseBlocked, onDownloadItem, onDownloadTask } from "../../lib/api";
 import { t } from "../../lib/i18n";
-import type { DownloadStatus, DownloadTaskInfo, DownloadThreadInfo } from "../../lib/types";
+import type { DownloadStatus, DownloadTaskInfo } from "../../lib/types";
 
 const emit = defineEmits<{ (e: "close"): void }>();
 
@@ -138,33 +138,16 @@ const allPaused = computed(() => status.value.paused);
 const hasTasks = computed(() => tasks.value.length > 0);
 
 async function pauseAll() {
-  if (usingFake) {
-    fakePaused = true;
-    status.value = fakeStatus();
-    return;
-  }
   await api.pauseAllDownloads();
   await refresh();
 }
 
 async function resumeAll() {
-  if (usingFake) {
-    fakePaused = false;
-    fakeStopped = false;
-    status.value = fakeStatus();
-    return;
-  }
   await api.resumeAllDownloads();
   await refresh();
 }
 
 async function stopAll() {
-  if (usingFake) {
-    fakeStopped = true;
-    fakePaused = false;
-    status.value = fakeStatus();
-    return;
-  }
   await api.stopAllDownloads();
   await refresh();
 }
@@ -219,143 +202,6 @@ onUnmounted(() => {
   unsubs = [];
 });
 
-// ================= TEMP-假数据（看完删除） =================
-// 说明：真实下载任务为空时用一组会随时间推进的假任务演示界面
-// （进度会走、速度会变、时间是活的；暂停 / 继续 / 停止按钮在假数据下操作本地演示状态）
-let fakeTick = 0;
-let fakePaused = false;
-let fakeStopped = false;
-
-function fakeStatus(): DownloadStatus {
-  if (fakeStopped) {
-    return { tasks: [], threads: [], speed: 0, paused: false };
-  }
-
-  if (!fakePaused) {
-    fakeTick += 1;
-  }
-  const MB = 1024 * 1024;
-  const wave = (base: number, amp: number, phase: number) =>
-    Math.max(0, Math.round(base + Math.sin(fakeTick / 3 + phase) * amp));
-
-  const task1Now = Math.min(861 * MB, 361 * MB + fakeTick * 4 * MB);
-  const thread0Speed = fakePaused ? 0 : wave(1.8 * MB, 0.6 * MB, 0);
-  const thread1Speed = fakePaused ? 0 : wave(0.9 * MB, 0.3 * MB, 1.2);
-  const thread2Speed = fakePaused || fakeTick % 4 !== 0 ? 0 : wave(0.5 * MB, 0.2 * MB, 2.4);
-
-  const threads: DownloadThreadInfo[] = [
-    {
-      thread: 0,
-      name: "assets/objects/1a/1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b",
-      state: "download",
-      progress: Math.min(100, 10 + fakeTick * 1.5),
-      nowBytes: 12 * MB,
-      allBytes: 34 * MB,
-      speed: thread0Speed,
-    },
-    {
-      thread: 1,
-      name: "libraries/net/fabricmc/fabric-loader/0.16.9/fabric-loader-0.16.9.jar",
-      state: "download",
-      progress: Math.min(100, 40 + fakeTick * 2.2),
-      nowBytes: 2 * MB,
-      allBytes: 5 * MB,
-      speed: thread1Speed,
-    },
-    {
-      thread: 2,
-      name: "assets/indexes/19.json",
-      state: "getinfo",
-      progress: 0,
-      nowBytes: 0,
-      allBytes: 0,
-      speed: thread2Speed,
-    },
-    {
-      thread: 3,
-      name: "versions/1.21.4/1.21.4.jar",
-      state: "error",
-      progress: 63.2,
-      nowBytes: 15 * MB,
-      allBytes: 24 * MB,
-      speed: 0,
-    },
-    {
-      thread: 4,
-      name: "resourcepacks/Faithful-64x.zip",
-      state: "pause",
-      progress: 28.4,
-      nowBytes: 18 * MB,
-      allBytes: 64 * MB,
-      speed: 0,
-    },
-    {
-      thread: 5,
-      name: "mods/sodium-fabric-0.6.5.jar",
-      state: "action",
-      progress: 100,
-      nowBytes: 1 * MB,
-      allBytes: 1 * MB,
-      speed: 0,
-    },
-    {
-      thread: 6,
-      name: "logs/latest.log",
-      state: "wait",
-      progress: 0,
-      nowBytes: 0,
-      allBytes: 0,
-      speed: 0,
-    },
-  ];
-
-  // 暂停时线程状态同步显示为已暂停（与后端行为一致）
-  const finalThreads = fakePaused
-    ? threads.map((x) =>
-        x.state === "download" || x.state === "getinfo"
-          ? { ...x, state: "pause", speed: 0 }
-          : x,
-      )
-    : threads;
-
-  return {
-    speed: thread0Speed + thread1Speed + thread2Speed,
-    paused: fakePaused,
-    tasks: [
-      {
-        id: 1,
-        total: 356,
-        completed: Math.min(356, 44 + Math.floor(fakeTick / 3)),
-        failed: 0,
-        allBytes: 861 * MB,
-        nowBytes: task1Now,
-        elapsedMs: fakeTick * REFRESH_MS + 42_000,
-        paused: fakePaused,
-      },
-      {
-        id: 2,
-        total: 128,
-        completed: 82,
-        failed: 2,
-        allBytes: 132 * MB,
-        nowBytes: 84 * MB,
-        elapsedMs: 254_000,
-        paused: true,
-      },
-      {
-        id: 3,
-        total: 6,
-        completed: 6,
-        failed: 0,
-        allBytes: 24 * MB,
-        nowBytes: 24 * MB,
-        elapsedMs: 31_000,
-        paused: false,
-      },
-    ],
-    threads: finalThreads,
-  };
-}
 </script>
 
 <template>

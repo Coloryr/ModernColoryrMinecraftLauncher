@@ -34,9 +34,6 @@ pub fn run() {
                 err_box::fatal_error_text(&e);
             }
 
-            // TEMP-调试：启动时把账户 / 添加实例 / 下载窗口一并打开（调尺寸用，调试完删除本行）
-            window_manager::open_debug_windows(app.handle());
-
             // Java 列表变更（mcml_jvms 添加 / 删除 / 配置加载完成）→ 通知前端刷新
             let handle = app.handle().clone();
             mcml_jvms::add_jvm_change(move || {

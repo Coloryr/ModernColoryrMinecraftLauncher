@@ -82,6 +82,7 @@ export default {
 
   // 实例详情
   "detail.selectHint": "从左侧选择一个游戏实例",
+  "detail.settings": "实例设置",
   "detail.group": "分组：{name}",
   "detail.launchCount": "启动 {count} 次",
   "detail.lastPlay": "上次游玩：{last}",
@@ -97,6 +98,8 @@ export default {
   "home.lastInstance": "上次启动实例",
   "home.lastInstanceDesc": "快速回到上次游玩的实例",
   "home.lastPlay": "继续启动",
+  "home.backToList": "返回实例列表",
+  "home.backToListDesc": "查看全部游戏实例",
 
   // 自定义服务器
   "server.title": "自定义服务器",
@@ -198,7 +201,6 @@ export default {
   "actions.confirm": "确定",
 
   // 启动参数
-  "args.title": "启动参数",
   "args.memory": "内存大小",
   "args.minMemory": "最小",
   "args.maxMemory": "最大",

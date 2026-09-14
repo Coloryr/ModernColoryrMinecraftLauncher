@@ -38,6 +38,19 @@ pub enum SidebarSide {
     Right,
 }
 
+/// 主窗口实例列表显示模式（wire 名小写，与前端一致）
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum ViewMode {
+    /// 列表（默认）
+    #[default]
+    List,
+    /// 分组
+    Group,
+    /// 平铺
+    Grid,
+}
+
 /// 主窗口配置（字段名即 wire 名，与前端同名）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -46,6 +59,8 @@ pub struct MainWindowConfig {
     pub sidebar_side: SidebarSide,
     /// 侧栏是否收起
     pub sidebar_collapsed: bool,
+    /// 实例列表显示模式：list（默认）/ group / grid
+    pub view_mode: ViewMode,
 }
 
 impl Default for MainWindowConfig {
@@ -54,6 +69,8 @@ impl Default for MainWindowConfig {
             sidebar_side: Default::default(),
             // 默认收起侧栏（首次启动 / 无配置时）
             sidebar_collapsed: true,
+            // 默认列表模式（用户改过后用用户的值）
+            view_mode: ViewMode::default(),
         }
     }
 }

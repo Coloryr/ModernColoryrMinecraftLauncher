@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 
 use mcml_names::Lang;
 
-use crate::gui_config::{GuiConfig, MainWindowConfig, SidebarSide, Theme, WindowMode};
+use crate::gui_config::{GuiConfig, MainWindowConfig, SidebarSide, Theme, ViewMode, WindowMode};
 
 /// 主窗口配置（前端 wire：camelCase，字段即 `mainWindow`）
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -20,6 +20,8 @@ pub struct MainWindowConfigDto {
     pub sidebar_side: SidebarSide,
     /// 侧栏是否收起
     pub sidebar_collapsed: bool,
+    /// 实例列表显示模式：list（默认）/ group / grid
+    pub view_mode: ViewMode,
 }
 
 /// GUI 配置（前端 wire：camelCase，即 `window_get_gui_config` 返回值）
@@ -45,6 +47,7 @@ impl From<GuiConfig> for GuiConfigDto {
             main_window: MainWindowConfigDto {
                 sidebar_side: c.main_window.sidebar_side,
                 sidebar_collapsed: c.main_window.sidebar_collapsed,
+                view_mode: c.main_window.view_mode,
             },
         }
     }
@@ -59,6 +62,7 @@ impl From<GuiConfigDto> for GuiConfig {
             main_window: MainWindowConfig {
                 sidebar_side: d.main_window.sidebar_side,
                 sidebar_collapsed: d.main_window.sidebar_collapsed,
+                view_mode: d.main_window.view_mode,
             },
         }
     }

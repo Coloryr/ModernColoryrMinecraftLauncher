@@ -17,6 +17,8 @@ import {
   sidebarCollapsed,
   sidebarSide,
   setSidebarCollapsed,
+  setViewMode,
+  viewMode,
 } from "../../lib/settings";
 import type {
   Account,
@@ -110,7 +112,8 @@ function select(inst: InstanceInfo) {
 
 // ================= 游戏列表模式 =================
 
-const mode = ref<ViewMode>("group");
+// 显示模式：共享状态（默认「列表」，用户改过后持久化到 gui_config.json）
+const mode = viewMode;
 const MODE_OPTIONS = computed(() => [
   { value: "group", label: t("mode.group"), icon: "folder" },
   { value: "grid", label: t("mode.grid"), icon: "grid" },
@@ -281,10 +284,15 @@ function appendLog(line: string) {
 
 // ================= 启动参数（经 IPC 读写核心实例配置） =================
 
-const argsOpen = ref(false);
+/** 列表模式下的实例设置面板（版本/加载器/内存/Java + 启动参数，与分组模式一致） */
+const settingsOpen = ref(false);
 const execOpen = ref(false);
 const serverOpen = ref(false);
 const proxyOpen = ref(false);
+
+function toggleSettings() {
+  settingsOpen.value = !settingsOpen.value;
+}
 const argsMap = ref<Record<string, InstanceArgs>>({});
 const argsLoaded = ref<Record<string, boolean>>({});
 
@@ -1137,19 +1145,21 @@ listen<LoadState>(LoadDone, async (data) => {
               :last-instance="lastInstance"
               @select="(inst: InstanceInfo) => select(inst)"
               @quick-launch="quickLaunch"
+              @back="newsActive = false"
             />
           </section>
         </template>
 
         <!-- 模式：游戏分组 / 平铺 -->
         <template v-else-if="mode === 'group' || mode === 'grid'">
-          <!-- 侧栏收起时的展开把手 -->
+          <!-- 侧栏收起时的展开把手；展开时用同宽占位条顶住，避免内容左右跳动 -->
           <button
             v-if="sidebarCollapsed"
             class="sidebar-expand"
             :title="t('sidebar.expand')"
             @click="setSidebarCollapsed(false)"
           >›</button>
+          <span v-else class="sidebar-rail"></span>
 
           <div v-if="!sidebarCollapsed" class="sidebar-backdrop" @click="setSidebarCollapsed(true)"></div>
 
@@ -1177,7 +1187,7 @@ listen<LoadState>(LoadDone, async (data) => {
             :is-inst-insert="isInstInsert"
             :is-inst-insert-end="isInstInsertEnd"
             :is-group-insert="isGroupInsert"
-            @update:mode="mode = $event"
+            @update:mode="setViewMode($event)"
             @update:search-text="searchText = $event"
             @add-instance="openAdd"
             @add-group="showAddGroup = true"
@@ -1199,6 +1209,7 @@ listen<LoadState>(LoadDone, async (data) => {
                 :last-instance="lastInstance"
                 @select="(inst: InstanceInfo) => select(inst)"
                 @quick-launch="quickLaunch"
+                @back="newsActive = false"
               />
             </template>
 
@@ -1441,7 +1452,7 @@ listen<LoadState>(LoadDone, async (data) => {
               <SegmentedTabs
                 :model-value="mode"
                 :options="MODE_OPTIONS"
-                @update:model-value="mode = $event as ViewMode"
+                @update:model-value="setViewMode($event as ViewMode)"
               />
             </div>
 
@@ -1469,11 +1480,18 @@ listen<LoadState>(LoadDone, async (data) => {
                 <span v-if="selected?.running" class="btn-spinner"></span>
                 <span v-else>▶</span> {{ t("launch.play") }}
               </BaseButton>
-              <BaseButton :disabled="!selected" @click="argsOpen = !argsOpen">
-                ⚙ {{ t("args.title") }}
+              <!-- 实例设置：含启动参数（与分组模式下的设置面板一致） -->
+              <BaseButton :disabled="!selected" @click="toggleSettings">
+                ⚙ {{ t("detail.settings") }}
               </BaseButton>
             </div>
-            <div v-if="argsOpen && selected" class="list-args">
+            <div v-if="settingsOpen && selected" class="list-args list-settings">
+              <InstanceMetaPanel
+                :instance="selected"
+                :versions="versions"
+                @update="onMetaUpdate"
+                @refreshed="onVersionsRefreshed"
+              />
               <LaunchArgsPanel :args="argsOf(selected.uuid)" :javas="javas" @update:args="updateArgs" />
             </div>
           </section>
@@ -1709,6 +1727,21 @@ listen<LoadState>(LoadDone, async (data) => {
 .sidebar-expand:hover {
   background: var(--bg-hover);
   color: var(--accent);
+}
+
+/* 侧栏展开时的占位条：只在浮层模式（≤880px，与 MainSidebar 的媒体查询一致）
+   保留，避免内容区左边界跳动；停靠模式（>880px）侧栏本身占位，不需要它 */
+.sidebar-rail {
+  display: none;
+}
+
+@media (max-width: 880px) {
+  .sidebar-rail {
+    display: block;
+    width: 24px;
+    flex-shrink: 0;
+    background: var(--bg-side);
+  }
 }
 
 .sidebar-backdrop {
@@ -2242,6 +2275,13 @@ listen<LoadState>(LoadDone, async (data) => {
 .list-args {
   width: 100%;
   max-width: 560px;
+}
+
+/* 列表模式的实例设置面板：与分组模式的 .inline-settings 同款排列 */
+.list-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 /* ----- 弹窗 / 轻提示：统一使用全局样式（theme.css） ----- */

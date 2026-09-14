@@ -387,15 +387,6 @@ pub fn show_main_window(app: &AppHandle) -> Result<(), String> {
     open_window_from_uuid(app, &MAIN_WINDOW_UUID)
 }
 
-/// TEMP-调试：启动时额外打开这些窗口（调窗口尺寸用，调试完删除本段）
-pub fn open_debug_windows(app: &AppHandle) {
-    for uuid in [ACCOUNT_WINDOW_UUID, ADD_WINDOW_UUID, DOWNLOAD_WINDOW_UUID] {
-        if let Err(e) = open_window_from_uuid(app, &uuid) {
-            eprintln!("TEMP 打开窗口失败 ({uuid}): {e}");
-        }
-    }
-}
-
 /// 窗口事件处理（注册于 `Builder::on_window_event`）
 ///
 /// 原生标题栏 X、JS API 直接 `close()` 都不经过 `window_close_window` 命令，
@@ -458,8 +449,6 @@ pub fn on_window_event(window: &tauri::Window<tauri::Wry>, event: &tauri::Window
 /// 等待主线程，导致整个应用冻结（新窗口白屏、无法点击）。
 #[tauri::command]
 pub async fn window_open_window(app: AppHandle, kind: String) -> Result<(), String> {
-    // TEMP-调试日志：确认开窗调用是否到达后端（调试完删除本行）
-    println!("[window_manager] open window kind={kind}");
     let Some(uuid) = uuid_for_kind(&kind) else {
         return Err(format!("unknown window kind: {kind}"));
     };

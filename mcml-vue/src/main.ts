@@ -1,13 +1,12 @@
 import { createApp } from "vue";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import "./styles/index.css";
 import App from "./App.vue";
 import { loadGuiConfig } from "./lib/guiConfig";
 import { applyTheme, theme } from "./lib/theme";
 import { applyLocale, locale } from "./lib/i18n";
 import { loadAccounts } from "./lib/accountStore";
-import { sidebarCollapsed, sidebarSide } from "./lib/settings";
-import { isTauri, openWindow, setMultiWindow } from "./windows/windowManager";
+import { sidebarCollapsed, sidebarSide, viewMode } from "./lib/settings";
+import { setMultiWindow } from "./windows/windowManager";
 
 // 禁用右键默认菜单（WebView2 / 浏览器自带的“刷新、返回、打印”等）。
 // 文本输入框（input / textarea / contenteditable）保留原生菜单，方便复制粘贴。
@@ -32,17 +31,13 @@ async function bootstrap() {
     locale.value = cfg.locale;
     sidebarSide.value = cfg.mainWindow.sidebarSide;
     sidebarCollapsed.value = cfg.mainWindow.sidebarCollapsed;
+    viewMode.value = cfg.mainWindow.viewMode;
     setMultiWindow(cfg.windowMode !== "Single");
   }
   applyTheme();
   applyLocale();
   loadAccounts(); // 账户列表由 Rust 提供（浏览器环境静默跳过）
   createApp(App).mount("#app");
-
-  // TEMP-调试：主窗口启动后自动打开下载窗口（看效果用，看完删除本段）
-  if (isTauri() && getCurrentWindow().label === "mcml-main") {
-    setTimeout(() => openWindow("download"), 600);
-  }
 }
 
 bootstrap();

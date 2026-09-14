@@ -82,6 +82,7 @@ export default {
 
   // Instance detail
   "detail.selectHint": "Select an instance from the left",
+  "detail.settings": "Instance Settings",
   "detail.group": "Group: {name}",
   "detail.launchCount": "Launched {count} times",
   "detail.lastPlay": "Last played: {last}",
@@ -97,6 +98,8 @@ export default {
   "home.lastInstance": "Last Launched Instance",
   "home.lastInstanceDesc": "Quickly return to your last played instance",
   "home.lastPlay": "Play Again",
+  "home.backToList": "Back to instance list",
+  "home.backToListDesc": "Browse all game instances",
 
   // Custom server
   "server.title": "Custom Server",
@@ -198,7 +201,6 @@ export default {
   "actions.confirm": "Confirm",
 
   // Launch args
-  "args.title": "Launch Args",
   "args.memory": "Memory",
   "args.minMemory": "Min",
   "args.maxMemory": "Max",
