@@ -55,6 +55,9 @@ const ACCOUNT_WINDOW_UUID: Uuid = uuid!("00000000-0000-0000-0000-000000000002");
 /// 添加实例窗口固定 uuid
 const ADD_WINDOW_UUID: Uuid = uuid!("00000000-0000-0000-0000-000000000008");
 
+/// 下载窗口固定 uuid
+pub const DOWNLOAD_WINDOW_UUID: Uuid = uuid!("00000000-0000-0000-0000-000000000009");
+
 /// 窗口注册表条目
 struct WindowEntry {
     label: &'static str,
@@ -62,44 +65,80 @@ struct WindowEntry {
     min_height: f64,
 }
 
+/// 通用窗口最小尺寸（= 无历史几何时的默认尺寸）
+const MIN_WIDTH: f64 = 640.0;
+const MIN_HEIGHT: f64 = 480.0;
+
+/// 主窗口最小尺寸
+const MAIN_MIN_WIDTH: f64 = 790.0;
+const MAIN_MIN_HEIGHT: f64 = 600.0;
+
+/// 账户窗口最小尺寸
+const ACCOUNT_MIN_WIDTH: f64 = 770.0;
+const ACCOUNT_MIN_HEIGHT: f64 = 480.0;
+
+/// 添加实例窗口最小尺寸
+const ADD_MIN_WIDTH: f64 = 700.0;
+const ADD_MIN_HEIGHT: f64 = 535.0;
+
+/// 下载窗口最小尺寸
+const DOWNLOAD_MIN_WIDTH: f64 = 670.0;
+const DOWNLOAD_MIN_HEIGHT: f64 = 470.0;
+
 /// 窗口注册表：uuid → 窗口信息
 const WINDOWS_INFO: LazyLock<HashMap<Uuid, WindowEntry>> = LazyLock::new(|| {
     HashMap::from([
         (
             MAIN_WINDOW_UUID,
-            WindowEntry { label: "mcml-main", min_width: 1080.0, min_height: 680.0 },
+            WindowEntry {
+                label: "mcml-main",
+                min_width: MAIN_MIN_WIDTH,
+                min_height: MAIN_MIN_HEIGHT,
+            },
         ),
         (
             ACCOUNT_WINDOW_UUID,
-            WindowEntry { label: "mcml-account", min_width: 720.0, min_height: 540.0 },
+            WindowEntry {
+                label: "mcml-account",
+                min_width: ACCOUNT_MIN_WIDTH,
+                min_height: ACCOUNT_MIN_HEIGHT,
+            },
         ),
         (
             uuid!("00000000-0000-0000-0000-000000000003"),
-            WindowEntry { label: "mcml-settings", min_width: 640.0, min_height: 520.0 },
+            WindowEntry { label: "mcml-settings", min_width: MIN_WIDTH, min_height: MIN_HEIGHT },
         ),
         (
             uuid!("00000000-0000-0000-0000-000000000004"),
-            WindowEntry { label: "mcml-stats", min_width: 640.0, min_height: 520.0 },
+            WindowEntry { label: "mcml-stats", min_width: MIN_WIDTH, min_height: MIN_HEIGHT },
         ),
         (
             uuid!("00000000-0000-0000-0000-000000000005"),
-            WindowEntry { label: "mcml-skin", min_width: 640.0, min_height: 520.0 },
+            WindowEntry { label: "mcml-skin", min_width: MIN_WIDTH, min_height: MIN_HEIGHT },
         ),
         (
             uuid!("00000000-0000-0000-0000-000000000006"),
-            WindowEntry { label: "mcml-help", min_width: 560.0, min_height: 440.0 },
+            WindowEntry { label: "mcml-help", min_width: MIN_WIDTH, min_height: MIN_HEIGHT },
         ),
         (
             uuid!("00000000-0000-0000-0000-000000000007"),
-            WindowEntry { label: "mcml-resource", min_width: 760.0, min_height: 540.0 },
+            WindowEntry { label: "mcml-resource", min_width: MIN_WIDTH, min_height: MIN_HEIGHT },
         ),
         (
             ADD_WINDOW_UUID,
-            WindowEntry { label: "mcml-add", min_width: 720.0, min_height: 560.0 },
+            WindowEntry {
+                label: "mcml-add",
+                min_width: ADD_MIN_WIDTH,
+                min_height: ADD_MIN_HEIGHT,
+            },
         ),
         (
-            uuid!("00000000-0000-0000-0000-000000000009"),
-            WindowEntry { label: "mcml-download", min_width: 640.0, min_height: 520.0 },
+            DOWNLOAD_WINDOW_UUID,
+            WindowEntry {
+                label: "mcml-download",
+                min_width: DOWNLOAD_MIN_WIDTH,
+                min_height: DOWNLOAD_MIN_HEIGHT,
+            },
         ),
     ])
 });
@@ -111,9 +150,6 @@ fn uuid_for_kind(kind: &str) -> Option<Uuid> {
         .find(|(_, e)| e.label.strip_prefix("mcml-") == Some(kind))
         .map(|(uuid, _)| *uuid)
 }
-
-const WINDOW_DEFAULT_WIDTH: f64 = 1100.0;
-const WINDOW_DEFAULT_HEIGHT: f64 = 720.0;
 
 /// 窗口几何状态（uuid → 几何），内存中的唯一数据源
 static WINDOWS_STATE: LazyLock<RwLock<HashMap<Uuid, WindowState>>> =
@@ -173,10 +209,17 @@ fn remove_window_model(uuid: &Uuid) {
     WINDOW_MODELS.write().unwrap().remove(uuid);
 }
 
-/// 窗口是否开启了关闭保护（模型侧状态，如添加实例窗口查询数据期间）
+/// 窗口是否拒绝本次关闭
 ///
-/// 无模型或模型非添加实例窗口时不保护。
+/// - 下载窗口：仍有下载任务时拒绝（前端弹确认框，确认后停止下载再关窗）
+/// - 添加实例窗口：模型侧关闭保护（查询数据期间）
+/// 其余窗口不保护。
 fn close_guarded(uuid: &Uuid) -> bool {
+    // 下载窗口：任务未清空时不让直接关，避免后台下载被静默中断
+    if *uuid == DOWNLOAD_WINDOW_UUID {
+        return !mcml_downloader::get_tasks().is_empty();
+    }
+
     let binding = WINDOW_MODELS.read().unwrap();
     let Some(model) = binding.get(uuid) else {
         return false;
@@ -244,7 +287,8 @@ fn create_window(app: &AppHandle, label: &str, uuid: &Uuid) -> Result<WebviewWin
 
     let geom = window_state_for(uuid);
 
-    // 最小尺寸随注册表条目走（各窗口内容布局不同，可压缩程度不同）
+    // 最小尺寸随注册表条目走（各窗口内容布局不同，可压缩程度不同）；
+    // 无历史几何时直接以最小尺寸居中打开（注册表即窗口尺寸的唯一来源）
     let binding = WINDOWS_INFO;
     let (min_w, min_h) = binding
         .get(uuid)
@@ -261,10 +305,7 @@ fn create_window(app: &AppHandle, label: &str, uuid: &Uuid) -> Result<WebviewWin
             .inner_size(g.width as f64, g.height as f64)
             .position(g.x as f64, g.y as f64)
             .build(),
-        None => builder
-            .inner_size(WINDOW_DEFAULT_WIDTH, WINDOW_DEFAULT_HEIGHT)
-            .center()
-            .build(),
+        None => builder.inner_size(min_w, min_h).center().build(),
     };
     let win = win.map_err(|e| e.to_string())?;
     OPEN_WINDOWS
@@ -272,6 +313,8 @@ fn create_window(app: &AppHandle, label: &str, uuid: &Uuid) -> Result<WebviewWin
         .unwrap()
         .insert(uuid.clone(), win.clone());
     ensure_window_model(app, uuid);
+    // 开窗即记录初始几何（文件始终反映当前所有窗口；后续缩放/移动会持续更新）
+    let _ = save_window_state(uuid, &win);
     Ok(win)
 }
 
@@ -344,6 +387,15 @@ pub fn show_main_window(app: &AppHandle) -> Result<(), String> {
     open_window_from_uuid(app, &MAIN_WINDOW_UUID)
 }
 
+/// TEMP-调试：启动时额外打开这些窗口（调窗口尺寸用，调试完删除本段）
+pub fn open_debug_windows(app: &AppHandle) {
+    for uuid in [ACCOUNT_WINDOW_UUID, ADD_WINDOW_UUID, DOWNLOAD_WINDOW_UUID] {
+        if let Err(e) = open_window_from_uuid(app, &uuid) {
+            eprintln!("TEMP 打开窗口失败 ({uuid}): {e}");
+        }
+    }
+}
+
 /// 窗口事件处理（注册于 `Builder::on_window_event`）
 ///
 /// 原生标题栏 X、JS API 直接 `close()` 都不经过 `window_close_window` 命令，
@@ -386,6 +438,16 @@ pub fn on_window_event(window: &tauri::Window<tauri::Wry>, event: &tauri::Window
             OPEN_WINDOWS.write().unwrap().remove(uuid);
             remove_window_model(uuid);
         }
+        // 缩放 / 移动：实时记录几何（不必等关窗，配置保存按文件去重合并写入）
+        // 最大化 / 全屏时不记（否则还原后会以最大化尺寸打开）
+        tauri::WindowEvent::Resized(_) | tauri::WindowEvent::Moved(_) => {
+            if let Some(win) = window.app_handle().get_webview_window(&label) {
+                if win.is_maximized().unwrap_or(false) || win.is_fullscreen().unwrap_or(false) {
+                    return;
+                }
+                let _ = save_window_state(uuid, &win);
+            }
+        }
         _ => {}
     }
 }
@@ -396,6 +458,8 @@ pub fn on_window_event(window: &tauri::Window<tauri::Wry>, event: &tauri::Window
 /// 等待主线程，导致整个应用冻结（新窗口白屏、无法点击）。
 #[tauri::command]
 pub async fn window_open_window(app: AppHandle, kind: String) -> Result<(), String> {
+    // TEMP-调试日志：确认开窗调用是否到达后端（调试完删除本行）
+    println!("[window_manager] open window kind={kind}");
     let Some(uuid) = uuid_for_kind(&kind) else {
         return Err(format!("unknown window kind: {kind}"));
     };

@@ -351,6 +351,16 @@ async fn write_file(
     file: &mut File,
 ) -> CoreResult<()> {
     loop {
+        // 任务暂停：原地等待恢复（期间同时响应取消，避免暂停期间无法取消）
+        while obj.task.is_paused() {
+            if obj.task.is_cancelled() {
+                obj.item.set_state(DownloadItemState::Error);
+                crate::update(index, &obj.item);
+                return Err(ErrorType::TaskCancel);
+            }
+            thread::sleep(std::time::Duration::from_millis(50));
+        }
+
         match resp.chunk().await {
             Ok(None) => break,
             Ok(Some(data)) => {

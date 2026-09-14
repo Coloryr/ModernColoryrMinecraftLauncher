@@ -10,7 +10,8 @@ export const sidebarSide = ref<SidebarSide>(
   localStorage.getItem(SIDE_KEY) === "Right" ? "Right" : "Left",
 );
 
-export const sidebarCollapsed = ref(localStorage.getItem(COLLAPSE_KEY) === "1");
+// 侧栏是否收起：默认收起（只有显式存过 "0" 才是展开）
+export const sidebarCollapsed = ref(localStorage.getItem(COLLAPSE_KEY) !== "0");
 
 export function setSidebarSide(side: SidebarSide) {
   sidebarSide.value = side;

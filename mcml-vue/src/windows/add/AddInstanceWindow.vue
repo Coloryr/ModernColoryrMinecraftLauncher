@@ -23,12 +23,11 @@ const emit = defineEmits<{ (e: "close"): void }>();
 
 // ================= 模式 =================
 
-type AddMode = "new" | "archive" | "folder" | "online" | "modpack";
+type AddMode = "new" | "archive" | "folder" | "online";
 const ADD_MODES: Array<{ id: AddMode; labelKey: string; icon: string }> = [
   { id: "new", labelKey: "add.modeNew", icon: "cube" },
   { id: "archive", labelKey: "add.modeArchive", icon: "box" },
   { id: "folder", labelKey: "add.modeFolder", icon: "folder" },
-  { id: "modpack", labelKey: "add.modeModpack", icon: "modpack" },
   { id: "online", labelKey: "add.modeOnline", icon: "globe" },
 ];
 const addMode = ref<AddMode>("new");
@@ -607,12 +606,15 @@ async function create() {
   }
 }
 
-// ================= 整合包安装（在线搜索选版本） =================
+// ================= 整合包下载（弹窗入口，不进模式 tab） =================
+
+/** 是否显示"下载整合包"弹窗 */
+const showModpack = ref(false);
 
 /** 安装进度（add-pack-progress 事件驱动，null = 未在安装） */
 const packProgress = ref<PackProgress | null>(null);
 
-/** 安装在线整合包：实例名取自整合包元数据，分组用窗口顶部的输入 */
+/** 安装在线整合包：实例名取自整合包元数据，分组用窗口顶部的输入框 */
 async function installModpack(p: { source: string; projectId: string; fileId: string; fileName: string }) {
   const group = addGroup.value.trim() === "" ? null : addGroup.value.trim();
   creating.value = true;
@@ -620,6 +622,7 @@ async function installModpack(p: { source: string; projectId: string; fileId: st
   try {
     const uuid = await api.installModpack(p.source, p.projectId, p.fileId, group);
     localStorage.setItem("mcml.addedInstance", uuid);
+    showModpack.value = false;
     addedName.value = p.fileName;
     askContinue.value = true;
   } catch (e) {
@@ -741,156 +744,165 @@ onMounted(async () => {
 
 <template>
   <WindowFrame :title="t('add.title')" @close="$emit('close')">
-    <!-- 模式切换 -->
-    <div class="add-modes">
-      <button
-        v-for="m in ADD_MODES"
-        :key="m.id"
-        class="add-mode-btn"
-        :class="{ active: addMode === m.id }"
-        @click="addMode = m.id"
-      >
-        <svg v-if="m.icon === 'cube'" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 3 4.5 7.5v9L12 21l7.5-4.5v-9L12 3z" />
-          <path d="M4.5 7.5 12 12l7.5-4.5" />
-          <path d="M12 12v9" />
-        </svg>
-        <svg v-else-if="m.icon === 'box'" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21 8v13H3V8" />
-          <path d="M1 3h22v5H1z" />
-          <path d="M10 12h4" />
-        </svg>
-        <svg v-else-if="m.icon === 'folder'" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />
-        </svg>
-        <svg v-else-if="m.icon === 'modpack'" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21 8v13H3V8" />
-          <path d="M1 3h22v5H1z" />
-          <path d="M10 12h4" />
-          <path d="M12 12v9" />
-        </svg>
-        <svg v-else viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="9" />
-          <path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18" />
-        </svg>
-        <span>{{ t(m.labelKey) }}</span>
-      </button>
-    </div>
+    <!-- 内容区：撑满窗口，底部按钮靠 margin-top:auto 钉在右下角 -->
+    <div class="add-body">
+      <!-- 模式切换 -->
+      <div class="add-modes">
+        <button
+          v-for="m in ADD_MODES"
+          :key="m.id"
+          class="add-mode-btn"
+          :class="{ active: addMode === m.id }"
+          @click="addMode = m.id"
+        >
+          <svg v-if="m.icon === 'cube'" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3 4.5 7.5v9L12 21l7.5-4.5v-9L12 3z" />
+            <path d="M4.5 7.5 12 12l7.5-4.5" />
+            <path d="M12 12v9" />
+          </svg>
+          <svg v-else-if="m.icon === 'box'" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 8v13H3V8" />
+            <path d="M1 3h22v5H1z" />
+            <path d="M10 12h4" />
+          </svg>
+          <svg v-else-if="m.icon === 'folder'" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />
+          </svg>
+          <svg v-else viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="9" />
+            <path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18" />
+          </svg>
+          <span>{{ t(m.labelKey) }}</span>
+        </button>
+      </div>
 
-    <!-- 实例名称 + 分组 -->
-    <div class="add-card">
-      <div class="add-row2">
-        <div class="add-field">
-          <label class="field-label">{{ t("add.name") }} <span class="req">*</span></label>
-          <input :value="newName" class="field-input" :placeholder="t('add.namePlaceholder')" spellcheck="false" @input="onNameInput" />
-        </div>
-        <div class="add-field">
-          <label class="field-label">{{ t("add.group") }}</label>
-          <div class="group-combo">
-            <input
-              v-model="addGroup"
-              class="field-input"
-              :placeholder="t('add.groupPlaceholder')"
-              spellcheck="false"
-              @focus="groupOpen = true"
-              @input="groupOpen = true"
-              @blur="groupOpen = false"
-            />
-            <div v-if="groupOpen" class="group-drop">
-              <button
-                v-for="g in groupQuery"
-                :key="g"
-                class="group-opt"
-                @mousedown.prevent
-                @click="pickGroup(g)"
-              >
-                {{ g }}
-              </button>
-              <div v-if="!groupQuery.length" class="empty-tip">{{ t("add.groupNone") }}</div>
+      <!-- 实例名称 + 分组 -->
+      <div class="add-card">
+        <div class="add-row2">
+          <div class="add-field">
+            <label class="field-label">{{ t("add.name") }} <span class="req">*</span></label>
+            <input :value="newName" class="field-input" :placeholder="t('add.namePlaceholder')" spellcheck="false" @input="onNameInput" />
+          </div>
+          <div class="add-field">
+            <label class="field-label">{{ t("add.group") }}</label>
+            <div class="group-combo">
+              <input
+                v-model="addGroup"
+                class="field-input"
+                :placeholder="t('add.groupPlaceholder')"
+                spellcheck="false"
+                @focus="groupOpen = true"
+                @input="groupOpen = true"
+                @blur="groupOpen = false"
+              />
+              <div v-if="groupOpen" class="group-drop">
+                <button
+                  v-for="g in groupQuery"
+                  :key="g"
+                  class="group-opt"
+                  @mousedown.prevent
+                  @click="pickGroup(g)"
+                >
+                  {{ g }}
+                </button>
+                <div v-if="!groupQuery.length" class="empty-tip">{{ t("add.groupNone") }}</div>
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- 模式内容（各模式组件见 modes/ 目录） -->
-    <div class="add-card add-card-content">
-      <NewMode
-        v-if="addMode === 'new'"
-        :versions="filteredVersions"
-        :versions-loaded="versions.length > 0"
-        :ver-loading="verLoading"
-        :ver-types="verTypes"
-        :version-types="versionTypes"
-        :new-version="newVersion"
-        :loader="addLoader"
-        :loaders="loaders"
-        :loader-loading="loaderLoading"
-        :loader-version="addLoaderVer"
-        :loader-versions="loaderVersions"
-        :loader-ver-loading="loaderVerLoading"
-        :no-loader-version="NO_VERSION_LOADERS.includes(addLoader)"
-        :loader-path="loaderPath"
-        @refresh-versions="refreshVersions"
-        @refresh-loaders="refreshSupportLoaders"
-        @refresh-loader-versions="refreshLoaderVersions"
-        @update:ver-types="verTypes = $event"
-        @update:new-version="newVersion = $event"
-        @update:loader="onLoaderChange"
-        @update:loader-version="addLoaderVer = $event"
-        @update:loader-path="loaderPath = $event"
-      />
-      <ArchiveMode
-        v-else-if="addMode === 'archive'"
-        :path="addArchivePath"
-        :tree="archiveTree"
-        :checked="archiveChecked"
-        :expanded="archiveExpanded"
-        :pack-types="packTypes"
-        :pack-type="addPackType"
-        @update:path="addArchivePath = $event"
-        @pick="pickArchive"
-        @toggle-file="onArchiveToggleFile"
-        @toggle-dir="onArchiveToggleDir"
-        @toggle-expand="onArchiveToggleExpand"
-        @set-all="setAllArchive"
-        @update:pack-type="addPackType = $event"
-      />
-      <FolderMode
-        v-else-if="addMode === 'folder'"
-        :path="addFolderPath"
-        :tree="folderTree"
-        :checked="folderChecked"
-        :expanded="folderExpanded"
-        @update:path="addFolderPath = $event"
-        @pick="pickFolder"
-        @toggle-file="onFolderToggleFile"
-        @toggle-dir="onFolderToggleDir"
-        @toggle-expand="onFolderToggleExpand"
-        @lazy-load="onFolderLazyLoad"
-        @set-all="setAllFolder"
-      />
-      <OnlineMode v-else-if="addMode === 'online'" :url="addUrl" @update:url="addUrl = $event" />
-      <ModpackMode v-else :versions="versions" @install="installModpack" />
-    </div>
+      <!-- 模式内容（各模式组件见 modes/ 目录） -->
+      <div class="add-card add-card-content">
+        <NewMode
+          v-if="addMode === 'new'"
+          :versions="filteredVersions"
+          :versions-loaded="versions.length > 0"
+          :ver-loading="verLoading"
+          :ver-types="verTypes"
+          :version-types="versionTypes"
+          :new-version="newVersion"
+          :loader="addLoader"
+          :loaders="loaders"
+          :loader-loading="loaderLoading"
+          :loader-version="addLoaderVer"
+          :loader-versions="loaderVersions"
+          :loader-ver-loading="loaderVerLoading"
+          :no-loader-version="NO_VERSION_LOADERS.includes(addLoader)"
+          :loader-path="loaderPath"
+          @refresh-versions="refreshVersions"
+          @refresh-loaders="refreshSupportLoaders"
+          @refresh-loader-versions="refreshLoaderVersions"
+          @update:ver-types="verTypes = $event"
+          @update:new-version="newVersion = $event"
+          @update:loader="onLoaderChange"
+          @update:loader-version="addLoaderVer = $event"
+          @update:loader-path="loaderPath = $event"
+        />
+        <ArchiveMode
+          v-else-if="addMode === 'archive'"
+          :path="addArchivePath"
+          :tree="archiveTree"
+          :checked="archiveChecked"
+          :expanded="archiveExpanded"
+          :pack-types="packTypes"
+          :pack-type="addPackType"
+          @update:path="addArchivePath = $event"
+          @pick="pickArchive"
+          @toggle-file="onArchiveToggleFile"
+          @toggle-dir="onArchiveToggleDir"
+          @toggle-expand="onArchiveToggleExpand"
+          @set-all="setAllArchive"
+          @update:pack-type="addPackType = $event"
+        />
+        <FolderMode
+          v-else-if="addMode === 'folder'"
+          :path="addFolderPath"
+          :tree="folderTree"
+          :checked="folderChecked"
+          :expanded="folderExpanded"
+          @update:path="addFolderPath = $event"
+          @pick="pickFolder"
+          @toggle-file="onFolderToggleFile"
+          @toggle-dir="onFolderToggleDir"
+          @toggle-expand="onFolderToggleExpand"
+          @lazy-load="onFolderLazyLoad"
+          @set-all="setAllFolder"
+        />
+        <OnlineMode v-else-if="addMode === 'online'" :url="addUrl" @update:url="addUrl = $event" />
+      </div>
 
-    <p v-if="addError" class="error-text">{{ addError }}</p>
+      <p v-if="addError" class="error-text">{{ addError }}</p>
 
-    <div class="modal-actions">
-      <BaseButton @click="$emit('close')">{{ t("add.cancel") }}</BaseButton>
-      <!-- 整合包模式在列表内直接安装，不显示底部创建按钮 -->
-      <BaseButton v-if="addMode !== 'modpack'" variant="primary" :disabled="creating" @click="create">
-        {{
-          creating
-            ? t("add.creating")
-            : t(addMode === "new" ? "add.btnNew" : addMode === "archive" ? "add.btnArchive" : addMode === "folder" ? "add.btnFolder" : "add.btnOnline")
-        }}
-      </BaseButton>
+      <div class="modal-actions">
+        <!-- 整合包入口：走弹窗浏览 / 安装，不占模式 tab -->
+        <BaseButton class="modpack-entry" @click="showModpack = true">
+          {{ t("add.downloadModpack") }}
+        </BaseButton>
+        <BaseButton @click="$emit('close')">{{ t("add.cancel") }}</BaseButton>
+        <BaseButton variant="primary" :disabled="creating" @click="create">
+          {{
+            creating
+              ? t("add.creating")
+              : t(addMode === "new" ? "add.btnNew" : addMode === "archive" ? "add.btnArchive" : addMode === "folder" ? "add.btnFolder" : "add.btnOnline")
+          }}
+        </BaseButton>
+      </div>
     </div>
 
     <!-- 浏览器回退的文件 / 文件夹选择器（Tauri 下走系统对话框，不使用） -->
     <input ref="archiveInput" type="file" accept=".zip,.mrpack" class="hidden-input" @change="onArchivePick" />
     <input ref="folderInput" type="file" webkitdirectory class="hidden-input" @change="onFolderPick" />
+
+    <!-- 下载整合包弹窗（CurseForge / Modrinth 搜索 + 选版本安装） -->
+    <BaseModal
+      v-if="showModpack"
+      :title="t('add.downloadModpack')"
+      :width="760"
+      @close="showModpack = false"
+    >
+      <ModpackMode :versions="versions" @install="installModpack" />
+    </BaseModal>
 
     <!-- 实例重名确认弹窗（后端创建流程暂停等待答复，关闭视为拒绝） -->
     <BaseModal
@@ -1116,10 +1128,27 @@ onMounted(async () => {
   transform: translateY(-8px);
 }
 
-/* 模式切换：图标 + 渐变激活态 */
+/* 内容区撑满窗口高度，底部按钮靠 margin-top:auto 钉在右下角（跟随窗口大小） */
+.add-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.add-body > .modal-actions {
+  margin-top: auto;
+}
+
+/* 整合包入口靠左，与右侧的取消 / 创建分开 */
+.modpack-entry {
+  margin-right: auto;
+}
+
+/* 模式切换：图标 + 渐变激活态（按 tab 数量等分填满整行） */
 .add-modes {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
   gap: 8px;
   margin-bottom: 14px;
 }
@@ -1129,6 +1158,7 @@ onMounted(async () => {
   align-items: center;
   justify-content: center;
   gap: 7px;
+  min-width: 0;
   padding: 11px 6px;
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -1139,6 +1169,12 @@ onMounted(async () => {
   cursor: pointer;
   transition: all 0.15s;
   white-space: nowrap;
+}
+
+/* 窗口很窄时标签省略，不撑破按钮 */
+.add-mode-btn > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .add-mode-btn:hover {

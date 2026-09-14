@@ -52,7 +52,8 @@ impl Default for MainWindowConfig {
     fn default() -> Self {
         Self {
             sidebar_side: Default::default(),
-            sidebar_collapsed: Default::default(),
+            // 默认收起侧栏（首次启动 / 无配置时）
+            sidebar_collapsed: true,
         }
     }
 }
