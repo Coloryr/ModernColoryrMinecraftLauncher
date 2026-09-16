@@ -22,6 +22,8 @@ pub struct MainWindowConfigDto {
     pub sidebar_collapsed: bool,
     /// 实例列表显示模式：list（默认）/ group / grid
     pub view_mode: ViewMode,
+    /// 当前选中实例 uuid（空串 = 未选中）
+    pub selected_instance: String,
 }
 
 /// GUI 配置（前端 wire：camelCase，即 `window_get_gui_config` 返回值）
@@ -48,6 +50,7 @@ impl From<GuiConfig> for GuiConfigDto {
                 sidebar_side: c.main_window.sidebar_side,
                 sidebar_collapsed: c.main_window.sidebar_collapsed,
                 view_mode: c.main_window.view_mode,
+                selected_instance: c.main_window.selected_instance,
             },
         }
     }
@@ -63,6 +66,7 @@ impl From<GuiConfigDto> for GuiConfig {
                 sidebar_side: d.main_window.sidebar_side,
                 sidebar_collapsed: d.main_window.sidebar_collapsed,
                 view_mode: d.main_window.view_mode,
+                selected_instance: d.main_window.selected_instance,
             },
         }
     }

@@ -8,6 +8,7 @@ import { t } from "../lib/i18n";
 import type { InstanceArgs, JavaInfo } from "../lib/types";
 import BaseButton from "./ui/BaseButton.vue";
 import NumberStepper from "./ui/NumberStepper.vue";
+import CollapsePanel from "./ui/CollapsePanel.vue";
 
 const props = defineProps<{
   args: InstanceArgs;
@@ -183,100 +184,102 @@ const gcOptions = [
         </svg>
       </button>
 
-      <div v-show="advancedOpen" class="advanced-body">
-        <div class="args-row">
-          <span class="args-label">{{ t("args.gc") }}</span>
-          <select class="field-select grow" :value="args.gc" @change="update({ gc: ($event.target as HTMLSelectElement).value })">
-            <option v-for="g in gcOptions" :key="g.value" :value="g.value">{{ g.label }}</option>
-          </select>
-        </div>
+      <CollapsePanel :open="advancedOpen">
+        <div class="advanced-body">
+          <div class="args-row">
+            <span class="args-label">{{ t("args.gc") }}</span>
+            <select class="field-select grow" :value="args.gc" @change="update({ gc: ($event.target as HTMLSelectElement).value })">
+              <option v-for="g in gcOptions" :key="g.value" :value="g.value">{{ g.label }}</option>
+            </select>
+          </div>
 
-        <!-- 自定义 GC 参数 -->
-        <div v-if="args.gc === 'custom'" class="args-row">
-          <span class="args-label">{{ t("args.gcCustom") }}</span>
-          <input
-            class="field-input grow"
-            :value="args.gcCustom"
-            placeholder="-XX:+UseZGC -XX:ZCollectionInterval=30"
-            spellcheck="false"
-            @input="update({ gcCustom: ($event.target as HTMLInputElement).value })"
-          />
-        </div>
+          <!-- 自定义 GC 参数 -->
+          <div v-if="args.gc === 'custom'" class="args-row">
+            <span class="args-label">{{ t("args.gcCustom") }}</span>
+            <input
+              class="field-input grow"
+              :value="args.gcCustom"
+              placeholder="-XX:+UseZGC -XX:ZCollectionInterval=30"
+              spellcheck="false"
+              @input="update({ gcCustom: ($event.target as HTMLInputElement).value })"
+            />
+          </div>
 
-        <div class="args-row">
-          <span class="args-label">{{ t("args.mainClass") }}</span>
-          <input
-            class="field-input grow"
-            :value="args.mainClass"
-            placeholder="net.minecraft.client.main.Main"
-            spellcheck="false"
-            @input="update({ mainClass: ($event.target as HTMLInputElement).value })"
-          />
-        </div>
+          <div class="args-row">
+            <span class="args-label">{{ t("args.mainClass") }}</span>
+            <input
+              class="field-input grow"
+              :value="args.mainClass"
+              placeholder="net.minecraft.client.main.Main"
+              spellcheck="false"
+              @input="update({ mainClass: ($event.target as HTMLInputElement).value })"
+            />
+          </div>
 
-        <!-- 附加 JVM 参数 -->
-        <label class="args-label">{{ t("args.jvmExtra") }}</label>
-        <div v-for="(line, i) in args.jvmArgs" :key="i" class="line-row">
-          <input
-            class="field-input grow"
-            :value="line"
-            placeholder="-XX:+UseG1GC"
-            spellcheck="false"
-            @input="setLine('jvmArgs', i, ($event.target as HTMLInputElement).value)"
-          />
-          <button class="line-del" title="✕" @click="removeLine('jvmArgs', i)">✕</button>
-        </div>
-        <button class="line-add" @click="addLine('jvmArgs')">＋ {{ t("args.addLine") }}</button>
+          <!-- 附加 JVM 参数 -->
+          <label class="args-label">{{ t("args.jvmExtra") }}</label>
+          <div v-for="(line, i) in args.jvmArgs" :key="i" class="line-row">
+            <input
+              class="field-input grow"
+              :value="line"
+              placeholder="-XX:+UseG1GC"
+              spellcheck="false"
+              @input="setLine('jvmArgs', i, ($event.target as HTMLInputElement).value)"
+            />
+            <button class="line-del" title="✕" @click="removeLine('jvmArgs', i)">✕</button>
+          </div>
+          <button class="line-add" @click="addLine('jvmArgs')">＋ {{ t("args.addLine") }}</button>
 
-        <!-- 附加游戏参数 -->
-        <label class="args-label">{{ t("args.gameExtra") }}</label>
-        <div v-for="(line, i) in args.gameArgs" :key="i" class="line-row">
-          <input
-            class="field-input grow"
-            :value="line"
-            placeholder="--server 127.0.0.1:25565"
-            spellcheck="false"
-            @input="setLine('gameArgs', i, ($event.target as HTMLInputElement).value)"
-          />
-          <button class="line-del" title="✕" @click="removeLine('gameArgs', i)">✕</button>
-        </div>
-        <button class="line-add" @click="addLine('gameArgs')">＋ {{ t("args.addLine") }}</button>
+          <!-- 附加游戏参数 -->
+          <label class="args-label">{{ t("args.gameExtra") }}</label>
+          <div v-for="(line, i) in args.gameArgs" :key="i" class="line-row">
+            <input
+              class="field-input grow"
+              :value="line"
+              placeholder="--server 127.0.0.1:25565"
+              spellcheck="false"
+              @input="setLine('gameArgs', i, ($event.target as HTMLInputElement).value)"
+            />
+            <button class="line-del" title="✕" @click="removeLine('gameArgs', i)">✕</button>
+          </div>
+          <button class="line-add" @click="addLine('gameArgs')">＋ {{ t("args.addLine") }}</button>
 
-        <!-- 附加 classpath -->
-        <label class="args-label">{{ t("args.classPath") }}</label>
-        <div v-for="(line, i) in args.classPath" :key="i" class="line-row">
-          <input
-            class="field-input grow"
-            :value="line"
-            placeholder="libraries/xxx.jar"
-            spellcheck="false"
-            @input="setLine('classPath', i, ($event.target as HTMLInputElement).value)"
-          />
-          <button class="line-del" title="✕" @click="removeLine('classPath', i)">✕</button>
-        </div>
-        <button class="line-add" @click="addLine('classPath')">＋ {{ t("args.addLine") }}</button>
+          <!-- 附加 classpath -->
+          <label class="args-label">{{ t("args.classPath") }}</label>
+          <div v-for="(line, i) in args.classPath" :key="i" class="line-row">
+            <input
+              class="field-input grow"
+              :value="line"
+              placeholder="libraries/xxx.jar"
+              spellcheck="false"
+              @input="setLine('classPath', i, ($event.target as HTMLInputElement).value)"
+            />
+            <button class="line-del" title="✕" @click="removeLine('classPath', i)">✕</button>
+          </div>
+          <button class="line-add" @click="addLine('classPath')">＋ {{ t("args.addLine") }}</button>
 
-        <!-- 附加环境变量（键值对） -->
-        <label class="args-label">{{ t("args.env") }}</label>
-        <div v-for="(line, i) in args.envVars" :key="i" class="line-row">
-          <input
-            class="field-input env-key"
-            :value="line.key"
-            :placeholder="t('args.envKey')"
-            spellcheck="false"
-            @input="setEnvKey(i, ($event.target as HTMLInputElement).value)"
-          />
-          <input
-            class="field-input grow"
-            :value="line.value"
-            :placeholder="t('args.envValue')"
-            spellcheck="false"
-            @input="setEnvValue(i, ($event.target as HTMLInputElement).value)"
-          />
-          <button class="line-del" title="✕" @click="removeEnv(i)">✕</button>
+          <!-- 附加环境变量（键值对） -->
+          <label class="args-label">{{ t("args.env") }}</label>
+          <div v-for="(line, i) in args.envVars" :key="i" class="line-row">
+            <input
+              class="field-input env-key"
+              :value="line.key"
+              :placeholder="t('args.envKey')"
+              spellcheck="false"
+              @input="setEnvKey(i, ($event.target as HTMLInputElement).value)"
+            />
+            <input
+              class="field-input grow"
+              :value="line.value"
+              :placeholder="t('args.envValue')"
+              spellcheck="false"
+              @input="setEnvValue(i, ($event.target as HTMLInputElement).value)"
+            />
+            <button class="line-del" title="✕" @click="removeEnv(i)">✕</button>
+          </div>
+          <button class="line-add" @click="addEnv">＋ {{ t("args.addLine") }}</button>
         </div>
-        <button class="line-add" @click="addEnv">＋ {{ t("args.addLine") }}</button>
-      </div>
+      </CollapsePanel>
     </div>
   </div>
 </template>

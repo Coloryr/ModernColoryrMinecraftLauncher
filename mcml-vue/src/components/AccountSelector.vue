@@ -66,29 +66,31 @@ function pick(account: Account) {
 
     <div v-if="open" class="menu-backdrop" @click="open = false"></div>
 
-    <div v-if="open" class="account-menu">
-      <div class="menu-title">{{ t("account.switch") }}</div>
-      <div v-if="accounts.length === 0" class="empty-tip">{{ t("account.noAccount") }}</div>
-      <button
-        v-for="acc in accounts"
-        :key="acc.uuid"
-        class="menu-item"
-        :class="{ active: acc.uuid === account?.uuid }"
-        @click="pick(acc)"
-      >
-        <span class="avatar small" :style="{ background: acc.avatarColor }">
-          {{ acc.userName.charAt(0).toUpperCase() }}
-        </span>
-        <span class="menu-meta">
-          <span class="menu-name">{{ acc.userName }}</span>
-          <span class="menu-type">{{ acc.authType === "microsoft" ? t("account.microsoft") : t("account.offline") }}</span>
-        </span>
-      </button>
-      <div
-        class="menu-footer"
-        @click="open = false; openWindow('account')"
-      >{{ t("account.manage") }}</div>
-    </div>
+    <Transition name="drop">
+      <div v-if="open" class="account-menu">
+        <div class="menu-title">{{ t("account.switch") }}</div>
+        <div v-if="accounts.length === 0" class="empty-tip">{{ t("account.noAccount") }}</div>
+        <button
+          v-for="acc in accounts"
+          :key="acc.uuid"
+          class="menu-item"
+          :class="{ active: acc.uuid === account?.uuid }"
+          @click="pick(acc)"
+        >
+          <span class="avatar small" :style="{ background: acc.avatarColor }">
+            {{ acc.userName.charAt(0).toUpperCase() }}
+          </span>
+          <span class="menu-meta">
+            <span class="menu-name">{{ acc.userName }}</span>
+            <span class="menu-type">{{ acc.authType === "microsoft" ? t("account.microsoft") : t("account.offline") }}</span>
+          </span>
+        </button>
+        <div
+          class="menu-footer"
+          @click="open = false; openWindow('account')"
+        >{{ t("account.manage") }}</div>
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -192,6 +194,8 @@ function pick(account: Account) {
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.22);
   padding: 8px;
   z-index: 200;
+  /* 菜单贴右缘，展开时以右上角为原点，避免向左"甩" */
+  transform-origin: top right;
 }
 
 .menu-title {

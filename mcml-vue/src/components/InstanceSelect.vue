@@ -58,27 +58,29 @@ function pick(inst: InstanceInfo) {
       </svg>
     </button>
 
-    <div v-if="open" class="select-menu">
-      <button
-        v-for="inst in instances"
-        :key="inst.uuid"
-        class="option"
-        :class="{ active: inst.uuid === modelValue }"
-        @click="pick(inst)"
-      >
-        <InstanceIcon :name="inst.name" :uuid="inst.uuid" :size="30" />
-        <span class="option-text">
-          <span class="option-name">{{ inst.name }}</span>
-          <span class="option-sub">
-            {{ inst.version }}
-            <template v-if="inst.loader !== 'normal'">
-              <span class="loader-text">{{ t(`add.loader.${inst.loader}`) }}</span>
-            </template>
+    <Transition name="drop">
+      <div v-if="open" class="select-menu">
+        <button
+          v-for="inst in instances"
+          :key="inst.uuid"
+          class="option"
+          :class="{ active: inst.uuid === modelValue }"
+          @click="pick(inst)"
+        >
+          <InstanceIcon :name="inst.name" :uuid="inst.uuid" :size="30" />
+          <span class="option-text">
+            <span class="option-name">{{ inst.name }}</span>
+            <span class="option-sub">
+              {{ inst.version }}
+              <template v-if="inst.loader !== 'normal'">
+                <span class="loader-text">{{ t(`add.loader.${inst.loader}`) }}</span>
+              </template>
+            </span>
           </span>
-        </span>
-        <span v-if="inst.running" class="run-dot" :title="t('launch.running')"></span>
-      </button>
-    </div>
+          <span v-if="inst.running" class="run-dot" :title="t('launch.running')"></span>
+        </button>
+      </div>
+    </Transition>
   </div>
 </template>
 

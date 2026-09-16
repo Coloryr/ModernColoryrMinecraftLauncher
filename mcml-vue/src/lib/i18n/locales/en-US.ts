@@ -95,9 +95,7 @@ export default {
   "home.lobbyDesc": "Quickly join friend rooms and popular servers",
   "home.lottery": "Daily Lottery",
   "home.lotteryDesc": "Claim daily rewards after login",
-  "home.lastInstance": "Last Launched Instance",
-  "home.lastInstanceDesc": "Quickly return to your last played instance",
-  "home.lastPlay": "Play Again",
+  "home.lastPlay": "Launch",
   "home.backToList": "Back to instance list",
   "home.backToListDesc": "Browse all game instances",
 

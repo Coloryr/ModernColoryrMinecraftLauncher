@@ -14,6 +14,8 @@ import { showToast } from "../../lib/toast";
 import { theme, toggleTheme } from "../../lib/theme";
 import { openWindow } from "../windowManager";
 import {
+  selectedInstance,
+  setSelectedInstance,
   sidebarCollapsed,
   sidebarSide,
   setSidebarCollapsed,
@@ -47,6 +49,7 @@ import BaseButton from "../../components/ui/BaseButton.vue";
 import BaseModal from "../../components/ui/BaseModal.vue";
 import SegmentedTabs from "../../components/ui/SegmentedTabs.vue";
 import NumberStepper from "../../components/ui/NumberStepper.vue";
+import CollapsePanel from "../../components/ui/CollapsePanel.vue";
 
 // 注意：不能用顶层 await —— 会让 <script setup> 变成 async setup，
 // App.vue 没有 <Suspense> 包裹，Vue 将不渲染该组件（窗口白屏）
@@ -100,6 +103,8 @@ const filteredGroups = computed(() => {
 
 function select(inst: InstanceInfo) {
   selected.value = inst;
+  // 持久化当前选中实例到 gui_config.json（uuid 未变时内部跳过，不会重复写盘）
+  setSelectedInstance(inst.uuid);
   newsActive.value = false;
   // 分组模式下展开所在分组
   if (mode.value === "group") {
@@ -184,15 +189,9 @@ watch(selected, () => {
   });
 });
 
-// 上次启动的实例
-const lastInstance = computed<InstanceInfo | null>(() => {
-  const uuid = localStorage.getItem("mcml.lastInstance");
-  if (!uuid) return null;
-  return instances.value.find((i) => i.uuid === uuid) ?? null;
-});
-
+/** 主页卡片显示的就是当前选中实例（持久化在 gui_config.json） */
 function quickLaunch() {
-  const inst = lastInstance.value;
+  const inst = selected.value;
   if (inst) {
     select(inst);
     launch();
@@ -796,8 +795,7 @@ function onAction(id: ActionId) {
       showDelete.value = true;
       break;
     case "manageResource":
-      // 跳转到资源管理窗口（记录当前实例）
-      localStorage.setItem("mcml.activeInstance", selected.value.uuid);
+      // 跳转到资源管理窗口（当前实例已持久化在 gui_config.json，窗口自己读）
       openWindow("resource");
       break;
     default:
@@ -937,6 +935,7 @@ async function subscribeEvents() {
 async function doInit() {
   try {
     await Promise.all([loadInstances(), loadGroups(), loadJava()]);
+    restoreSelection();
     closeSplash();
     loadVersions();
     loadNews();
@@ -961,6 +960,14 @@ async function loadInstances() {
     if (now) selected.value = now;
     else selected.value = null;
   }
+}
+
+/** 启动时按 gui_config 恢复上次选中的实例。
+ *  故意不走 select()：那会置 newsActive=false 关掉启动器主页，而默认应停在主页。 */
+function restoreSelection() {
+  const uuid = selectedInstance.value;
+  if (!uuid) return;
+  selected.value = instances.value.find((i) => i.uuid === uuid) ?? null;
 }
 
 async function loadGroups() {
@@ -1000,7 +1007,6 @@ async function loadVersions() {
 async function launch() {
   if (!selected.value || selected.value.running) return;
   const uuid = selected.value.uuid;
-  localStorage.setItem("mcml.lastInstance", uuid);
   selected.value.running = true;
   statusText.value = t("launch.launching");
   logs.value = [];
@@ -1121,7 +1127,7 @@ listen<LoadState>(LoadDone, async (data) => {
               @prev="prevNewsPage"
               @next="nextNewsPage"
               @open="openNews"
-              :last-instance="null"
+              :current-instance="null"
               :empty="true"
               @add-instance="openAdd"
               @add-account="openWindow('account')"
@@ -1142,7 +1148,7 @@ listen<LoadState>(LoadDone, async (data) => {
               @prev="prevNewsPage"
               @next="nextNewsPage"
               @open="openNews"
-              :last-instance="lastInstance"
+              :current-instance="selected"
               @select="(inst: InstanceInfo) => select(inst)"
               @quick-launch="quickLaunch"
               @back="newsActive = false"
@@ -1152,47 +1158,50 @@ listen<LoadState>(LoadDone, async (data) => {
 
         <!-- 模式：游戏分组 / 平铺 -->
         <template v-else-if="mode === 'group' || mode === 'grid'">
-          <!-- 侧栏收起时的展开把手；展开时用同宽占位条顶住，避免内容左右跳动 -->
-          <button
-            v-if="sidebarCollapsed"
-            class="sidebar-expand"
-            :title="t('sidebar.expand')"
-            @click="setSidebarCollapsed(false)"
-          >›</button>
-          <span v-else class="sidebar-rail"></span>
+          <!-- 侧栏槽位：宽度在展开(320px) / 收起(24px) 之间过渡，动画期间内容被裁掉而不被压扁 -->
+          <div class="sidebar-slot" :class="{ collapsed: sidebarCollapsed }">
+            <MainSidebar
+              :collapsed="sidebarCollapsed"
+              :mode="mode"
+              :mode-options="MODE_OPTIONS"
+              :search-text="searchText"
+              :groups="groups"
+              :filtered-groups="filteredGroups"
+              :filtered-instances="filteredInstances"
+              :searching="searching"
+              :selected="selected"
+              :multi-select="multiSelect"
+              :selected-ids="selectedIds"
+              :collapsed-groups="collapsedGroups"
+              :drag-active="dragActive"
+              :dragging-uuid="draggingUuid"
+              :is-collapsed="isCollapsed"
+              :on-drag-pointer-down="onDragPointerDown"
+              :on-inst-click="onInstClick"
+              :on-inst-context="onInstContext"
+              :on-group-context="onGroupContext"
+              :on-group-title-click="onGroupTitleClick"
+              :is-inst-insert="isInstInsert"
+              :is-inst-insert-end="isInstInsertEnd"
+              :is-group-insert="isGroupInsert"
+              @update:mode="setViewMode($event)"
+              @update:search-text="searchText = $event"
+              @add-instance="openAdd"
+              @add-group="showAddGroup = true"
+              @collapse="setSidebarCollapsed(true)"
+            />
 
-          <div v-if="!sidebarCollapsed" class="sidebar-backdrop" @click="setSidebarCollapsed(true)"></div>
+            <!-- 展开把手：绝对定位在槽位外缘，收起时淡入（不占位，避免展开瞬间内容跳动） -->
+            <button
+              class="sidebar-expand"
+              :title="t('sidebar.expand')"
+              @click="setSidebarCollapsed(false)"
+            >›</button>
+          </div>
 
-          <MainSidebar
-            v-if="!sidebarCollapsed"
-            :mode="mode"
-            :mode-options="MODE_OPTIONS"
-            :search-text="searchText"
-            :groups="groups"
-            :filtered-groups="filteredGroups"
-            :filtered-instances="filteredInstances"
-            :searching="searching"
-            :selected="selected"
-            :multi-select="multiSelect"
-            :selected-ids="selectedIds"
-            :collapsed-groups="collapsedGroups"
-            :drag-active="dragActive"
-            :dragging-uuid="draggingUuid"
-            :is-collapsed="isCollapsed"
-            :on-drag-pointer-down="onDragPointerDown"
-            :on-inst-click="onInstClick"
-            :on-inst-context="onInstContext"
-            :on-group-context="onGroupContext"
-            :on-group-title-click="onGroupTitleClick"
-            :is-inst-insert="isInstInsert"
-            :is-inst-insert-end="isInstInsertEnd"
-            :is-group-insert="isGroupInsert"
-            @update:mode="setViewMode($event)"
-            @update:search-text="searchText = $event"
-            @add-instance="openAdd"
-            @add-group="showAddGroup = true"
-            @collapse="setSidebarCollapsed(true)"
-          />
+          <Transition name="sidebar-fade">
+            <div v-if="!sidebarCollapsed" class="sidebar-backdrop" @click="setSidebarCollapsed(true)"></div>
+          </Transition>
 
           <!-- 右侧内容区：实例详情 / 启动器主页 -->
           <section ref="detailEl" class="detail">
@@ -1201,12 +1210,12 @@ listen<LoadState>(LoadDone, async (data) => {
                 :items="news"
                 :loading="newsLoading"
                 @refresh="fetchNews(newsPage)"
-              :page="newsPage"
-              :has-more="newsHasMore"
-              @prev="prevNewsPage"
-              @next="nextNewsPage"
-              @open="openNews"
-                :last-instance="lastInstance"
+                :page="newsPage"
+                :has-more="newsHasMore"
+                @prev="prevNewsPage"
+                @next="nextNewsPage"
+                @open="openNews"
+                :current-instance="selected"
                 @select="(inst: InstanceInfo) => select(inst)"
                 @quick-launch="quickLaunch"
                 @back="newsActive = false"
@@ -1293,16 +1302,18 @@ listen<LoadState>(LoadDone, async (data) => {
                         <path d="m6 9 6 6 6-6" />
                       </svg>
                     </button>
-                    <div v-if="openMenu === m.id" class="menu-drop">
-                      <button
-                        v-for="opt in m.options"
-                        :key="opt.id"
-                        class="menu-item"
-                        @click="onMenuPick(opt)"
-                      >
-                        {{ t(opt.labelKey) }}
-                      </button>
-                    </div>
+                    <Transition name="drop">
+                      <div v-if="openMenu === m.id" class="menu-drop">
+                        <button
+                          v-for="opt in m.options"
+                          :key="opt.id"
+                          class="menu-item"
+                          @click="onMenuPick(opt)"
+                        >
+                          {{ t(opt.labelKey) }}
+                        </button>
+                      </div>
+                    </Transition>
                   </div>
                 </div>
 
@@ -1338,11 +1349,9 @@ listen<LoadState>(LoadDone, async (data) => {
                       <path d="m6 9 6 6 6-6" />
                     </svg>
                   </button>
-                  <CustomExecPanel
-                    v-if="execOpen"
-                    :args="argsOf(selected.uuid)"
-                    @update:args="updateArgs"
-                  />
+                  <CollapsePanel :open="execOpen">
+                    <CustomExecPanel :args="argsOf(selected.uuid)" @update:args="updateArgs" />
+                  </CollapsePanel>
                 </div>
 
                 <!-- 自定义服务器（自动加入 + MOTD 展示） -->
@@ -1362,51 +1371,55 @@ listen<LoadState>(LoadDone, async (data) => {
                       <path d="m6 9 6 6 6-6" />
                     </svg>
                   </button>
-                  <div v-if="serverOpen" class="server-config">
-                    <!-- 自动加入服务器设置：地址 + 端口 + 启动时加入（一行） -->
-                    <div class="server-row">
-                      <span class="server-label">{{ t("server.ip") }}</span>
-                      <input
-                        class="field-input grow"
-                        :value="argsOf(selected.uuid).serverIp"
-                        placeholder="127.0.0.1"
-                        spellcheck="false"
-                        @input="onServerIp(($event.target as HTMLInputElement).value)"
-                      />
-                      <span class="server-label small">{{ t("server.port") }}</span>
-                      <NumberStepper
-                        :model-value="argsOf(selected.uuid).serverPort"
-                        :min="1"
-                        :max="65535"
-                        :step="1"
-                        @update:model-value="onServerPort"
-                      />
-                      <label class="chk">
+                  <CollapsePanel :open="serverOpen">
+                    <div class="server-config">
+                      <!-- 自动加入服务器设置：地址 + 端口 + 启动时加入（一行） -->
+                      <div class="server-row">
+                        <span class="server-label">{{ t("server.ip") }}</span>
                         <input
-                          type="checkbox"
-                          :checked="argsOf(selected.uuid).joinServer"
-                          @change="onServerJoin(($event.target as HTMLInputElement).checked)"
+                          class="field-input grow"
+                          :value="argsOf(selected.uuid).serverIp"
+                          placeholder="127.0.0.1"
+                          spellcheck="false"
+                          @input="onServerIp(($event.target as HTMLInputElement).value)"
                         />
-                        {{ t("server.join") }}
-                      </label>
-                    </div>
+                        <span class="server-label small">{{ t("server.port") }}</span>
+                        <NumberStepper
+                          :model-value="argsOf(selected.uuid).serverPort"
+                          :min="1"
+                          :max="65535"
+                          :step="1"
+                          @update:model-value="onServerPort"
+                        />
+                        <label class="chk">
+                          <input
+                            type="checkbox"
+                            :checked="argsOf(selected.uuid).joinServer"
+                            @change="onServerJoin(($event.target as HTMLInputElement).checked)"
+                          />
+                          {{ t("server.join") }}
+                        </label>
+                      </div>
 
-                    <!-- MOTD 展示：两行服务器信息 + 一行状态 -->
-                    <div class="motd-card">
-                      <div class="motd-icon">MC</div>
-                      <div class="motd-info">
-                        <div class="motd-name">{{ t("server.name") }}</div>
-                        <div class="motd-text">{{ t("server.motd") }}</div>
-                        <div class="motd-meta">
-                          <span class="motd-online">{{ t("server.players", { now: motdNow, max: 200 }) }}</span>
-                          <span class="sep">·</span>
-                          <span>{{ t("server.version", { v: "1.21.1" }) }}</span>
-                          <span class="sep">·</span>
-                          <span>{{ t("server.ping", { ms: motdPing }) }}</span>
+                      <!-- MOTD 展示：两行服务器信息 + 一行状态 -->
+                      <div class="motd-card">
+                        <div class="motd-icon">MC</div>
+                        <div class="motd-info">
+                          <div class="motd-name">{{ t("server.name") }}</div>
+                          <div class="motd-text">{{ t("server.motd") }}</div>
+                          <div class="motd-meta">
+                            <span class="motd-online">{{
+                              t("server.players", { now: motdNow, max: 200 })
+                            }}</span>
+                            <span class="sep">·</span>
+                            <span>{{ t("server.version", { v: "1.21.1" }) }}</span>
+                            <span class="sep">·</span>
+                            <span>{{ t("server.ping", { ms: motdPing }) }}</span>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
+                  </CollapsePanel>
                 </div>
 
                 <!-- 游戏内代理 -->
@@ -1426,11 +1439,9 @@ listen<LoadState>(LoadDone, async (data) => {
                       <path d="m6 9 6 6 6-6" />
                     </svg>
                   </button>
-                  <ProxyPanel
-                    v-if="proxyOpen"
-                    :args="argsOf(selected.uuid)"
-                    @update:args="updateArgs"
-                  />
+                  <CollapsePanel :open="proxyOpen">
+                    <ProxyPanel :args="argsOf(selected.uuid)" @update:args="updateArgs" />
+                  </CollapsePanel>
                 </div>
               </template>
               <template v-else-if="multiSelect">
@@ -1485,15 +1496,18 @@ listen<LoadState>(LoadDone, async (data) => {
                 ⚙ {{ t("detail.settings") }}
               </BaseButton>
             </div>
-            <div v-if="settingsOpen && selected" class="list-args list-settings">
-              <InstanceMetaPanel
-                :instance="selected"
-                :versions="versions"
-                @update="onMetaUpdate"
-                @refreshed="onVersionsRefreshed"
-              />
-              <LaunchArgsPanel :args="argsOf(selected.uuid)" :javas="javas" @update:args="updateArgs" />
-            </div>
+            <!-- 设置面板整体展开/收起；宽度与居中由外层槽位承担，与原 .list-args 的占位一致 -->
+            <CollapsePanel :open="settingsOpen && !!selected" class="list-settings-wrap">
+              <div v-if="selected" class="list-args list-settings">
+                <InstanceMetaPanel
+                  :instance="selected"
+                  :versions="versions"
+                  @update="onMetaUpdate"
+                  @refreshed="onVersionsRefreshed"
+                />
+                <LaunchArgsPanel :args="argsOf(selected.uuid)" :javas="javas" @update:args="updateArgs" />
+              </div>
+            </CollapsePanel>
           </section>
         </template>
       </main>
@@ -1706,8 +1720,32 @@ listen<LoadState>(LoadDone, async (data) => {
   flex-direction: row-reverse;
 }
 
-/* 侧栏收起后的展开把手 / 遮罩（侧栏本体样式见 MainSidebar.vue） */
+/* 侧栏槽位：展开 320px ↔ 收起 24px 宽度过渡。
+   收窄时用 overflow 裁掉侧栏内容（而非把内容压扁），停靠模式下内容区因此平滑跟随。 */
+.sidebar-slot {
+  position: relative;
+  display: flex;
+  flex-shrink: 0;
+  width: 320px; /* 与 MainSidebar 的 .sidebar 同宽 */
+  overflow: hidden;
+  transition: width 0.22s ease;
+}
+
+.sidebar-slot.collapsed {
+  width: 24px;
+}
+
+/* 侧栏贴右时，让侧栏钉在槽位右缘，收窄时从左侧裁掉（视觉上向右滑出） */
+.main.side-right .sidebar-slot {
+  justify-content: flex-end;
+}
+
+/* 展开把手：绝对定位挂在槽位外缘，不参与占位，收起时淡入 */
 .sidebar-expand {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
   width: 24px;
   border: none;
   background: var(--bg-side);
@@ -1715,13 +1753,22 @@ listen<LoadState>(LoadDone, async (data) => {
   font-size: 18px;
   line-height: 1;
   cursor: pointer;
-  flex-shrink: 0;
   border-right: 1px solid var(--border);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
 }
 
 .main.side-right .sidebar-expand {
+  left: auto;
+  right: 0;
   border-right: none;
   border-left: 1px solid var(--border);
+}
+
+.sidebar-slot.collapsed .sidebar-expand {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .sidebar-expand:hover {
@@ -1729,23 +1776,28 @@ listen<LoadState>(LoadDone, async (data) => {
   color: var(--accent);
 }
 
-/* 侧栏展开时的占位条：只在浮层模式（≤880px，与 MainSidebar 的媒体查询一致）
-   保留，避免内容区左边界跳动；停靠模式（>880px）侧栏本身占位，不需要它 */
-.sidebar-rail {
-  display: none;
-}
-
+/* 浮层模式（≤880px，与 MainSidebar 的媒体查询一致）：侧栏 position: fixed 脱离文档流，
+   槽位只负责 24px 占位，展开/收起由侧栏自身的位移完成 */
 @media (max-width: 880px) {
-  .sidebar-rail {
-    display: block;
+  .sidebar-slot {
     width: 24px;
-    flex-shrink: 0;
-    background: var(--bg-side);
+    overflow: visible;
+    transition: none;
   }
 }
 
 .sidebar-backdrop {
   display: none;
+}
+
+.sidebar-fade-enter-active,
+.sidebar-fade-leave-active {
+  transition: opacity 0.22s;
+}
+
+.sidebar-fade-enter-from,
+.sidebar-fade-leave-to {
+  opacity: 0;
 }
 
 @media (max-width: 880px) {
@@ -2156,6 +2208,8 @@ listen<LoadState>(LoadDone, async (data) => {
   box-shadow: var(--shadow-lg);
   padding: 5px;
   z-index: 120;
+  /* 菜单贴按钮左缘，展开时以左上角为原点 */
+  transform-origin: top left;
 }
 
 .menu-item {
@@ -2274,7 +2328,14 @@ listen<LoadState>(LoadDone, async (data) => {
 
 .list-args {
   width: 100%;
-  max-width: 560px;
+  max-width: 640px;
+}
+
+/* 列表模式下设置面板的折叠槽位：.list-mode 是 align-items: center 的 flex 列，
+   折叠容器接管了原 .list-args 的 flex 子项身份，宽度上限与居中需由它承担 */
+.list-settings-wrap {
+  width: 100%;
+  max-width: 640px;
 }
 
 /* 列表模式的实例设置面板：与分组模式的 .inline-settings 同款排列 */
