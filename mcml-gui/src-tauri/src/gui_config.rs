@@ -61,6 +61,8 @@ pub struct MainWindowConfig {
     pub sidebar_collapsed: bool,
     /// 实例列表显示模式：list（默认）/ group / grid
     pub view_mode: ViewMode,
+    /// 当前选中实例 uuid（空串 = 未选中）
+    pub selected_instance: String,
 }
 
 impl Default for MainWindowConfig {
@@ -71,6 +73,8 @@ impl Default for MainWindowConfig {
             sidebar_collapsed: true,
             // 默认列表模式（用户改过后用用户的值）
             view_mode: ViewMode::default(),
+            // 默认未选中
+            selected_instance: String::new(),
         }
     }
 }

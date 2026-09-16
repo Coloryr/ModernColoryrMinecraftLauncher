@@ -5,7 +5,12 @@ import { loadGuiConfig } from "./lib/guiConfig";
 import { applyTheme, theme } from "./lib/theme";
 import { applyLocale, locale } from "./lib/i18n";
 import { loadAccounts } from "./lib/accountStore";
-import { sidebarCollapsed, sidebarSide, viewMode } from "./lib/settings";
+import {
+  restoreSelectedInstance,
+  sidebarCollapsed,
+  sidebarSide,
+  viewMode,
+} from "./lib/settings";
 import { setMultiWindow } from "./windows/windowManager";
 
 // 禁用右键默认菜单（WebView2 / 浏览器自带的“刷新、返回、打印”等）。
@@ -32,6 +37,7 @@ async function bootstrap() {
     sidebarSide.value = cfg.mainWindow.sidebarSide;
     sidebarCollapsed.value = cfg.mainWindow.sidebarCollapsed;
     viewMode.value = cfg.mainWindow.viewMode;
+    restoreSelectedInstance(cfg.mainWindow.selectedInstance);
     setMultiWindow(cfg.windowMode !== "Single");
   }
   applyTheme();

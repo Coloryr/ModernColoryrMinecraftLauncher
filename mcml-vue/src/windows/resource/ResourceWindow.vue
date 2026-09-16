@@ -7,6 +7,7 @@ import SegmentedTabs from "../../components/ui/SegmentedTabs.vue";
 import { t } from "../../lib/i18n";
 import { showToast } from "../../lib/toast";
 import { api } from "../../lib/api";
+import { loadGuiConfig } from "../../lib/guiConfig";
 import type { InstanceInfo } from "../../lib/types";
 
 type CategoryId =
@@ -57,8 +58,9 @@ function act(name: string) {
 
 onMounted(async () => {
   try {
-    const list = await api.getInstances();
-    const uuid = localStorage.getItem("mcml.activeInstance");
+    // 当前实例取自 gui_config.json（主窗口选中时写入），本窗口是独立 webview，需自己读一次
+    const [list, cfg] = await Promise.all([api.getInstances(), loadGuiConfig()]);
+    const uuid = cfg?.mainWindow.selectedInstance ?? "";
     instance.value = list.find((i) => i.uuid === uuid) ?? list[0] ?? null;
   } catch {
     instance.value = null;

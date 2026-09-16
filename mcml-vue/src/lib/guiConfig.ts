@@ -27,6 +27,8 @@ export interface MainWindowConfig {
   sidebarCollapsed: boolean;
   /** list / group / grid */
   viewMode: ViewMode;
+  /** 当前选中实例 uuid（空串 = 未选中） */
+  selectedInstance: string;
 }
 
 export interface GuiConfig {
@@ -91,6 +93,7 @@ function defaultConfig(): GuiConfig {
       sidebarSide: localStorage.getItem("mcml.sidebarSide") === "Right" ? "Right" : "Left",
       sidebarCollapsed: localStorage.getItem("mcml.sidebarCollapsed") !== "0",
       viewMode: normalizeViewMode(localStorage.getItem("mcml.viewMode")),
+      selectedInstance: localStorage.getItem("mcml.selectedInstance") ?? "",
     },
   };
 }

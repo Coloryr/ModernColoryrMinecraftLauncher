@@ -95,9 +95,7 @@ export default {
   "home.lobbyDesc": "快速加入好友房间与热门服务器",
   "home.lottery": "每日抽奖",
   "home.lotteryDesc": "每天登录领取奖励与道具",
-  "home.lastInstance": "上次启动实例",
-  "home.lastInstanceDesc": "快速回到上次游玩的实例",
-  "home.lastPlay": "继续启动",
+  "home.lastPlay": "启动",
   "home.backToList": "返回实例列表",
   "home.backToListDesc": "查看全部游戏实例",
 

@@ -65,3 +65,8 @@
   [System.IO.File]::WriteAllText($path, $json, $utf8)
   ```
 
+## 8. 网页获取
+
+- 获取网页内容一律使用 `python`（`urllib` / `requests`）或 `curl`，
+  不使用其他网页抓取工具（含内置的 WebFetch 等）。
+

@@ -10,7 +10,7 @@ import InstanceIcon from "./InstanceIcon.vue";
 withDefaults(
   defineProps<{
     items: NewsItem[];
-    lastInstance: InstanceInfo | null;
+    currentInstance: InstanceInfo | null;
     empty?: boolean;
     loading?: boolean;
     page?: number;
@@ -22,7 +22,7 @@ withDefaults(
 const emit = defineEmits<{
   (e: "select", inst: InstanceInfo): void;
   (e: "quick-launch"): void;
-  /** 无上次启动记录时点击卡片：返回实例列表（关闭启动器主页） */
+  /** 点击页头返回按钮：返回实例列表（关闭启动器主页） */
   (e: "back"): void;
   (e: "add-instance"): void;
   (e: "add-account"): void;
@@ -40,6 +40,15 @@ function entry(name: string) {
 
 <template>
   <div class="home-page">
+    <!-- 页头：主页标题 + 返回实例列表（主页自己的页面级控件，不占卡片槽位） -->
+    <div v-if="!empty" class="page-head">
+      <h2 class="page-title">{{ t("home.entry") }}</h2>
+      <button class="page-back" @click="emit('back')">
+        <span class="page-back-arrow">‹</span>
+        {{ t("home.backToList") }}
+      </button>
+    </div>
+
     <!-- 无实例：空实例引导块（融合空状态设计） -->
     <div v-if="empty" class="empty-block">
       <div class="empty-block-icon">
@@ -65,27 +74,15 @@ function entry(name: string) {
       </div>
     </div>
 
-    <!-- 上次启动实例（常驻显示）：有记录显示该实例；无记录时作为返回实例列表的入口 -->
-    <div v-if="lastInstance" class="last-card">
-      <InstanceIcon :name="lastInstance.name" :uuid="lastInstance.uuid" :size="52" />
-      <div class="last-info">
-        <span class="last-title">{{ t("home.lastInstance") }}</span>
-        <span class="last-name">{{ lastInstance.name }}</span>
-        <span class="last-desc">{{ t("home.lastInstanceDesc") }}</span>
-      </div>
+    <!-- 当前选中实例：仅在选中时显示（未选中时该槽位留空），点一下即可快捷启动 -->
+    <div v-if="currentInstance" class="last-card">
+      <InstanceIcon :name="currentInstance.name" :uuid="currentInstance.uuid" :size="52" />
+      <span class="last-name">{{ currentInstance.name }}</span>
       <button class="last-play" @click="emit('quick-launch')">
         ▶ {{ t("home.lastPlay") }}
       </button>
-      <button class="last-open" @click="emit('select', lastInstance)">›</button>
+      <button class="last-open" @click="emit('select', currentInstance)">›</button>
     </div>
-    <button v-else class="last-card last-back" @click="emit('back')">
-      <span class="last-icon-placeholder">☰</span>
-      <span class="last-info">
-        <span class="last-title">{{ t("home.backToList") }}</span>
-        <span class="last-name">{{ t("home.backToListDesc") }}</span>
-      </span>
-      <span class="last-open">›</span>
-    </button>
 
     <div class="entry-cards">
       <!-- 联机大厅 -->
@@ -138,6 +135,47 @@ function entry(name: string) {
   display: flex;
   flex-direction: column;
   gap: 18px;
+}
+
+/* 页头：主页标题 + 返回实例列表 */
+.page-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.page-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.page-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 6px 13px 6px 10px;
+  border: 1px solid var(--accent-border);
+  border-radius: 9px;
+  background: var(--bg-card);
+  color: var(--accent);
+  font-size: 12.5px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.page-back:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.page-back-arrow {
+  font-size: 16px;
+  line-height: 1;
 }
 
 /* 空实例引导块 */
@@ -245,60 +283,15 @@ function entry(name: string) {
   background: var(--accent-soft);
 }
 
-/* 无上次启动记录时的"返回实例列表"入口：同为卡片外观，但整体可点击 */
-.last-back {
-  width: 100%;
-  font-family: inherit;
-  text-align: left;
-  cursor: pointer;
-  transition: all 0.15s;
-}
-
-.last-back:hover {
-  border-color: var(--accent);
-  filter: brightness(1.04);
-}
-
-.last-icon-placeholder {
-  width: 52px;
-  height: 52px;
-  border-radius: 12px;
-  background: var(--bg-hover);
-  color: var(--text-dim);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 20px;
-  flex-shrink: 0;
-}
-
-.last-info {
+.last-name {
   flex: 1;
   min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.last-title {
-  font-size: 11px;
-  color: var(--accent);
-  font-weight: 600;
-  letter-spacing: 0.5px;
-}
-
-.last-name {
   font-size: 15px;
   font-weight: 700;
   color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.last-desc {
-  font-size: 11.5px;
-  color: var(--text-dim);
 }
 
 .last-play {

@@ -21,3 +21,18 @@ body {
   transition: background 0.2s, color 0.2s;
 }
 
+/* ---------------- 下拉浮层动效：<Transition name="drop"> ----------------
+   锚在触发按钮下方、向下"展开"：以顶边为原点纵向拉伸 + 轻微下移。
+   各浮层按自身对齐方向在组件内覆盖 transform-origin（如 top right / top left）。 */
+.drop-enter-active,
+.drop-leave-active {
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  transform-origin: top;
+}
+
+.drop-enter-from,
+.drop-leave-to {
+  opacity: 0;
+  transform: translateY(-4px) scaleY(0.94);
+}
+

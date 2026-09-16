@@ -8,6 +8,8 @@ import type { InstanceInfo } from "../../../lib/types";
 import type { DragCandidate, GroupView, ViewMode } from "../types";
 
 const props = defineProps<{
+  /** 收起中：仅浮层模式（≤880px）需要，用于把侧栏移出屏幕 */
+  collapsed: boolean;
   mode: ViewMode;
   modeOptions: Array<{ value: string; label: string; icon: string }>;
   searchText: string;
@@ -46,7 +48,7 @@ function onSearchInput(e: Event) {
 </script>
 
 <template>
-  <aside class="sidebar">
+  <aside class="sidebar" :class="{ collapsed }">
     <div class="sidebar-head">
       <SegmentedTabs
         :model-value="mode"
@@ -290,11 +292,22 @@ function onSearchInput(e: Event) {
     left: 0;
     z-index: 160;
     box-shadow: var(--shadow-lg);
+    /* 浮层模式：展开/收起靠位移（visibility 延迟到动画结束，避免收起后仍可被 Tab 聚焦） */
+    transition: transform 0.22s ease, visibility 0.22s;
   }
 
   .main.side-right .sidebar {
     left: auto;
     right: 0;
+  }
+
+  .sidebar.collapsed {
+    transform: translateX(-100%);
+    visibility: hidden;
+  }
+
+  .main.side-right .sidebar.collapsed {
+    transform: translateX(100%);
   }
 }
 

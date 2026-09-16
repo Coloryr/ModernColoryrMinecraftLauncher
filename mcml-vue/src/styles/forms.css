@@ -32,6 +32,78 @@
   background-size: 12px;
 }
 
+/* 原生下拉的自定义渲染（Chromium 135+）：弹层由系统原生弹窗变为页面内元素，
+   于是可以跟随主题配色、并加上与其它浮层一致的展开动效。
+   关闭态外观刻意保持不变：仍用上面的 data-URI 箭头，隐藏 base-select 自带的 ::picker-icon。
+   @supports 兜底——不支持该值的浏览器整块跳过，退回原生外观。 */
+@supports (appearance: base-select) {
+  /* 限定 select.：.field-select 也被 <button> 借去做样式类（见 NewMode.vue 的 .type-trigger） */
+  select.field-select,
+  select.field-select::picker(select) {
+    -webkit-appearance: base-select;
+    appearance: base-select;
+  }
+
+  select.field-select {
+    text-align: left;
+  }
+
+  select.field-select::picker-icon {
+    display: none;
+  }
+
+  /* 弹层：观感对齐 .menu-drop / .account-menu */
+  select.field-select::picker(select) {
+    margin-top: 4px;
+    padding: 5px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    box-shadow: var(--shadow-lg);
+    transform-origin: top;
+    /* display / overlay 是离散属性，必须 allow-discrete，
+       否则隐藏瞬间生效、退场动画放不出来 */
+    transition:
+      opacity 0.18s ease,
+      transform 0.18s ease,
+      display 0.18s allow-discrete,
+      overlay 0.18s allow-discrete;
+    opacity: 1;
+    transform: none;
+  }
+
+  select.field-select:not(:open)::picker(select) {
+    opacity: 0;
+    transform: translateY(-4px) scaleY(0.94);
+  }
+
+  /* 入场动画的起始帧 */
+  @starting-style {
+    select.field-select:open::picker(select) {
+      opacity: 0;
+      transform: translateY(-4px) scaleY(0.94);
+    }
+  }
+
+  /* 候选项：观感对齐 .menu-drop 里的 .menu-item */
+  select.field-select option {
+    padding: 8px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    color: var(--text);
+  }
+
+  select.field-select option:is(:hover, :focus) {
+    background: var(--bg-hover);
+  }
+
+  select.field-select option:checked {
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-weight: 600;
+  }
+}
+
 .field-input:focus,
 .field-select:focus {
   border-color: var(--accent);
