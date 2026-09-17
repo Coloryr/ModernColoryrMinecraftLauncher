@@ -65,6 +65,7 @@ pub const CATEGORYID_DATAPACKS: u32 = 5193;
 static API_KEY: OnceLock<String> = OnceLock::new();
 
 /// 搜索排序方式
+#[derive(Debug, Clone, Copy)]
 pub enum CurseForgeSortType {
     /// 流行度
     Popularity,
@@ -80,7 +81,7 @@ pub enum CurseForgeSortType {
 
 impl CurseForgeSortType {
     /// 获取排序方式对应编号
-    pub fn get_index(&self) -> u32 {
+    fn to_id(&self) -> u32 {
         match self {
             CurseForgeSortType::Featured => 1,
             CurseForgeSortType::Popularity => 2,
@@ -91,13 +92,34 @@ impl CurseForgeSortType {
     }
 
     /// 根据排序方式获取排序方向编号
-    pub fn get_order_index(&self) -> u32 {
+    fn to_order_index(&self) -> u32 {
         match self {
             CurseForgeSortType::Featured
             | CurseForgeSortType::Popularity
             | CurseForgeSortType::LastUpdated
             | CurseForgeSortType::TotalDownloads => 1,
             CurseForgeSortType::Name => 0,
+        }
+    }
+
+    pub fn to_string(&self) -> String {
+        String::from(match self {
+            CurseForgeSortType::Popularity => "popularity",
+            CurseForgeSortType::Featured => "featured",
+            CurseForgeSortType::LastUpdated => "last_updated",
+            CurseForgeSortType::Name => "name",
+            CurseForgeSortType::TotalDownloads => "total_downloads",
+        })
+    }
+
+    pub fn from_string(id: &str) -> Option<CurseForgeSortType> {
+        match id {
+            "popularity" => Some(CurseForgeSortType::Popularity),
+            "featured" => Some(CurseForgeSortType::Featured),
+            "last_updated" => Some(CurseForgeSortType::LastUpdated),
+            "name" => Some(CurseForgeSortType::Name),
+            "total_downloads" => Some(CurseForgeSortType::TotalDownloads),
+            _ => None,
         }
     }
 }
@@ -117,7 +139,7 @@ pub struct CurseFogreArg {
     /// 页数
     pub page: Option<u32>,
     /// 过滤
-    pub sort: CurseForgeSortType,
+    pub sort: Option<CurseForgeSortType>,
     /// 过滤名
     pub filter: Option<String>,
     /// 页大小
@@ -201,10 +223,10 @@ pub async fn get_modpack_list(arg: CurseFogreArg) -> CoreResult<CurseForgeListPa
         CLASS_MODPACK,
         &arg.version.unwrap_or_default(),
         arg.page.unwrap_or(0),
-        arg.sort.get_index(),
+        arg.sort.unwrap_or_default().to_id(),
         &arg.filter.unwrap_or_default(),
         arg.page_size.unwrap_or(20),
-        arg.sort.get_order_index(),
+        arg.sort.unwrap_or_default().to_order_index(),
         &arg.category.unwrap_or_default(),
         arg.loader.unwrap_or(0),
     )
@@ -217,10 +239,10 @@ pub async fn get_mod_list(arg: CurseFogreArg) -> CoreResult<CurseForgeListPageOb
         CLASS_MOD,
         &arg.version.unwrap_or_default(),
         arg.page.unwrap_or(0),
-        arg.sort.get_index(),
+        arg.sort.unwrap_or_default().to_id(),
         &arg.filter.unwrap_or_default(),
         arg.page_size.unwrap_or(20),
-        arg.sort.get_order_index(),
+        arg.sort.unwrap_or_default().to_order_index(),
         &arg.category.unwrap_or_default(),
         arg.loader.unwrap_or(0),
     )
@@ -233,10 +255,10 @@ pub async fn get_save_list(arg: CurseFogreArg) -> CoreResult<CurseForgeListPageO
         CLASS_SAVES,
         &arg.version.unwrap_or_default(),
         arg.page.unwrap_or(0),
-        arg.sort.get_index(),
+        arg.sort.unwrap_or_default().to_id(),
         &arg.filter.unwrap_or_default(),
         arg.page_size.unwrap_or(20),
-        arg.sort.get_order_index(),
+        arg.sort.unwrap_or_default().to_order_index(),
         &arg.category.unwrap_or_default(),
         0,
     )
@@ -249,10 +271,10 @@ pub async fn get_resourcepack_list(arg: CurseFogreArg) -> CoreResult<CurseForgeL
         CLASS_RESOURCEPACKS,
         &arg.version.unwrap_or_default(),
         arg.page.unwrap_or(0),
-        arg.sort.get_index(),
+        arg.sort.unwrap_or_default().to_id(),
         &arg.filter.unwrap_or_default(),
         arg.page_size.unwrap_or(20),
-        arg.sort.get_order_index(),
+        arg.sort.unwrap_or_default().to_order_index(),
         &arg.category.unwrap_or_default(),
         0,
     )
@@ -265,10 +287,10 @@ pub async fn get_datapacks_list(arg: CurseFogreArg) -> CoreResult<CurseForgeList
         CLASS_RESOURCEPACKS,
         &arg.version.unwrap_or_default(),
         arg.page.unwrap_or(0),
-        arg.sort.get_index(),
+        arg.sort.unwrap_or_default().to_id(),
         &arg.filter.unwrap_or_default(),
         arg.page_size.unwrap_or(20),
-        arg.sort.get_order_index(),
+        arg.sort.unwrap_or_default().to_order_index(),
         &CATEGORYID_DATAPACKS.to_string(),
         0,
     )
@@ -281,10 +303,10 @@ pub async fn get_shaders_list(arg: CurseFogreArg) -> CoreResult<CurseForgeListPa
         CLASS_SHADERPACKS,
         &arg.version.unwrap_or_default(),
         arg.page.unwrap_or(0),
-        arg.sort.get_index(),
+        arg.sort.unwrap_or_default().to_id(),
         &arg.filter.unwrap_or_default(),
         arg.page_size.unwrap_or(20),
-        arg.sort.get_order_index(),
+        arg.sort.unwrap_or_default().to_order_index(),
         "",
         0,
     )
@@ -402,7 +424,7 @@ pub async fn get_mods_info(ids: Vec<u64>) -> CoreResult<CurseForgeListPageObj> {
 
 /// 获取文件列表
 ///
-/// 该接口只接受 GET（POST 会被 CloudFront 以 403 拒绝）。
+/// 使用参数 page_size id page version loader
 pub async fn get_files_page(arg: CurseFogreArg) -> CoreResult<CurseFogreFilePageObj> {
     let page_size = arg.page_size.unwrap_or(50);
 
@@ -457,21 +479,21 @@ mod tests {
     /// （Featured=1, Popularity=2, LastUpdated=3, Name=4, TotalDownloads=6）
     #[test]
     fn sort_type_index() {
-        assert_eq!(CurseForgeSortType::Featured.get_index(), 1);
-        assert_eq!(CurseForgeSortType::Popularity.get_index(), 2);
-        assert_eq!(CurseForgeSortType::LastUpdated.get_index(), 3);
-        assert_eq!(CurseForgeSortType::Name.get_index(), 4);
-        assert_eq!(CurseForgeSortType::TotalDownloads.get_index(), 6);
+        assert_eq!(CurseForgeSortType::Featured.to_id(), 1);
+        assert_eq!(CurseForgeSortType::Popularity.to_id(), 2);
+        assert_eq!(CurseForgeSortType::LastUpdated.to_id(), 3);
+        assert_eq!(CurseForgeSortType::Name.to_id(), 4);
+        assert_eq!(CurseForgeSortType::TotalDownloads.to_id(), 6);
     }
 
     /// 排序方向编号：除 Name 外均为 1（升序），Name 为 0（字母序）
     #[test]
     fn sort_type_order_index() {
-        assert_eq!(CurseForgeSortType::Featured.get_order_index(), 1);
-        assert_eq!(CurseForgeSortType::Popularity.get_order_index(), 1);
-        assert_eq!(CurseForgeSortType::LastUpdated.get_order_index(), 1);
-        assert_eq!(CurseForgeSortType::TotalDownloads.get_order_index(), 1);
-        assert_eq!(CurseForgeSortType::Name.get_order_index(), 0);
+        assert_eq!(CurseForgeSortType::Featured.to_order_index(), 1);
+        assert_eq!(CurseForgeSortType::Popularity.to_order_index(), 1);
+        assert_eq!(CurseForgeSortType::LastUpdated.to_order_index(), 1);
+        assert_eq!(CurseForgeSortType::TotalDownloads.to_order_index(), 1);
+        assert_eq!(CurseForgeSortType::Name.to_order_index(), 0);
     }
 
     /// 默认排序方式应为流行度
@@ -522,7 +544,10 @@ mod tests {
 
         obj.fix_download_url();
 
-        assert_eq!(obj.download_url.as_deref(), Some("https://example.com/a.jar"));
+        assert_eq!(
+            obj.download_url.as_deref(),
+            Some("https://example.com/a.jar")
+        );
     }
 
     /// sha1_hash：algo == 1 的哈希即 SHA1

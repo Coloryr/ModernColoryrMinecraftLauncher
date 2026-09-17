@@ -9,6 +9,7 @@ pub mod add_dto;
 pub mod download_dto;
 pub mod gui_config_dto;
 pub mod main_dto;
+pub mod add_modpack;
 
 pub use account_dto::{AccountStoreDto, AccountStoreViewDto};
 pub use add_dto::{

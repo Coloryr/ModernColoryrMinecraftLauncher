@@ -306,7 +306,7 @@ fn get_mod_dependencies_inner(
                         {
                             None
                         } else {
-                            Some(loader.prefix())
+                            Some(loader.to_string())
                         };
                         let data1 = modrinth_api::get_file_versions(
                             project_id,

@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 /// 分类数据
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(default)]
 pub struct CurseForgeCategoriesObj {
     pub data: Vec<CurseForgeCategoriesDataObj>,
@@ -15,7 +15,7 @@ impl Default for CurseForgeCategoriesObj {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(default)]
 pub struct CurseForgeCategoriesDataObj {
     pub id: u64,

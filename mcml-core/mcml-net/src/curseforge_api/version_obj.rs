@@ -48,7 +48,7 @@ impl Default for CurseForgeVersionTypeObj {
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct CurseForgeVersionTypeDataObj {
-    pub id: String,
+    pub id: u32,
     pub name: String,
 }
 

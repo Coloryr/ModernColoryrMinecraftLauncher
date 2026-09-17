@@ -152,7 +152,7 @@ fn curseforge(game: &InstanceSettingObj, data: ExportArg) -> CoreResult<()> {
         obj.minecraft.mod_loaders.push(ModLoadersObj {
             id: format!(
                 "{}-{}",
-                game.loader.prefix(),
+                game.loader.to_string(),
                 game.loader_version.clone().unwrap_or_default()
             ),
             primary: true,

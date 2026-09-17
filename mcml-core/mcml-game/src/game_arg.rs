@@ -549,7 +549,7 @@ impl InstanceSettingObj {
             LoaderType::Custom => "custom".to_string(),
             _ => format!(
                 "{}-{}-{}",
-                self.loader.prefix(),
+                self.loader.to_string(),
                 self.version,
                 self.loader_version.as_ref().unwrap()
             ),

@@ -175,10 +175,11 @@ const VERSIONS_JSON: &str = r#"{
 }"#;
 
 /// CurseForge 版本类型接口（`/games/{id}/version-types`）的响应
+/// （`id` 为整数，见 API 文档的 GameVersionType）
 const VERSION_TYPES_JSON: &str = r#"{
     "data": [
-        { "id": "628", "name": "Java 17" },
-        { "id": "627", "name": "Java 16" }
+        { "id": 628, "name": "Minecraft 1.20.4" },
+        { "id": 17, "name": "Minecraft 1.7.10" }
     ]
 }"#;
 
@@ -289,14 +290,15 @@ fn deserialize_versions() {
     assert_eq!(obj.data[0].versions, vec!["1.20.4", "1.20.3"]);
 }
 
-/// 版本类型响应反序列化（结构体要求 id 为字符串形式）
+/// 版本类型响应反序列化
 #[test]
 fn deserialize_version_types() {
     let obj: CurseForgeVersionTypeObj = serde_json::from_str(VERSION_TYPES_JSON).unwrap();
 
     assert_eq!(obj.data.len(), 2);
-    assert_eq!(obj.data[0].id, "628");
-    assert_eq!(obj.data[0].name, "Java 17");
+    assert_eq!(obj.data[0].id, 628);
+    assert_eq!(obj.data[0].name, "Minecraft 1.20.4");
+    assert_eq!(obj.data[1].id, 17);
 }
 
 /// 项目详情响应反序列化

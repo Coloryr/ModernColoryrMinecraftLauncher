@@ -1,4 +1,5 @@
 use std::{
+    cmp::Reverse,
     collections::{HashMap, HashSet},
     path::Path,
     sync::{
@@ -33,12 +34,13 @@ use mcml_net::curseforge_api::{
     self, CurseFogreArg,
     categories_obj::CurseForgeCategoriesObj,
     file_obj::{CurseForgeFileDataObj, CurseForgeFileObj, DependenciesObj},
+    version_obj::{CurseForgeVersionDataObj, CurseForgeVersionTypeDataObj},
 };
 
 pub mod pack_obj;
 
 static CATEGORIES: OnceLock<CurseForgeCategoriesObj> = OnceLock::new();
-static VERSIONS: OnceLock<Vec<String>> = OnceLock::new();
+static GAME_VERSION: OnceLock<Vec<String>> = OnceLock::new();
 
 /// 排序编号
 pub enum CurseForgeSortField {
@@ -67,15 +69,13 @@ impl CurseForgeSortField {
     }
 }
 
-impl LoaderType {
-    fn get_id(&self) -> u32 {
-        match self {
-            LoaderType::Forge => 1,
-            LoaderType::Fabric => 4,
-            LoaderType::Quilt => 5,
-            LoaderType::NeoForge => 6,
-            _ => 0,
-        }
+pub fn to_loader_id(loader: &LoaderType) -> Option<u32> {
+    match self {
+        LoaderType::Forge => Some(1),
+        LoaderType::Fabric => Some(4),
+        LoaderType::Quilt => Some(5),
+        LoaderType::NeoForge => Some(6),
+        _ => None,
     }
 }
 
@@ -218,81 +218,84 @@ fn get_mod_dependencies_inner(
     list.into_inner().unwrap()
 }
 
-impl FileType {
-    fn get_classid(&self) -> u32 {
-        match self {
-            FileType::Mod => curseforge_api::CLASS_MOD,
-            FileType::Save => curseforge_api::CLASS_SAVES,
-            FileType::Shaderpack => curseforge_api::CLASS_SHADERPACKS,
-            FileType::Resourcepack => curseforge_api::CLASS_RESOURCEPACKS,
-            _ => 0,
+/// 版本类型排序：id > 17 按 id 倒序在前，id < 18 按 id 正序在后
+fn sort_version_types(
+    data: Vec<&CurseForgeVersionTypeDataObj>,
+) -> Vec<&CurseForgeVersionTypeDataObj> {
+    let mut new_list: Vec<_> = data.iter().copied().filter(|item| item.id > 17).collect();
+    new_list.sort_by_key(|item| Reverse(item.id));
+
+    let mut old_list: Vec<_> = data.iter().copied().filter(|item| item.id < 18).collect();
+    old_list.sort_by_key(|item| item.id);
+
+    new_list.extend(old_list);
+    new_list
+}
+
+fn get_classid(file_type: FileType) -> u32 {
+    match file_type {
+        FileType::Mod => curseforge_api::CLASS_MOD,
+        FileType::Save => curseforge_api::CLASS_SAVES,
+        FileType::Shaderpack => curseforge_api::CLASS_SHADERPACKS,
+        FileType::Resourcepack => curseforge_api::CLASS_RESOURCEPACKS,
+        _ => 0,
+    }
+}
+
+/// 获取分组数据
+pub async fn get_categories(file_type: FileType) -> CoreResult<HashMap<String, String>> {
+    let temp = match CATEGORIES.get() {
+        Some(data) => data,
+        None => {
+            let list = curseforge_api::get_categories().await?;
+            CATEGORIES.get_or_init(|| list)
+        }
+    };
+
+    let classid = get_classid(file_type);
+
+    let mut list: Vec<_> = temp
+        .data
+        .iter()
+        .filter(|item| item.class_id == classid)
+        .collect();
+
+    list.sort_by(|a, b| a.name.cmp(&b.name));
+
+    Ok(list
+        .into_iter()
+        .map(|item| (item.id.to_string(), item.name.clone()))
+        .collect())
+}
+
+/// 获取支持的游戏版本
+pub async fn get_game_versions() -> CoreResult<Vec<String>> {
+    if let Some(data) = GAME_VERSION.get() {
+        return Ok(data.clone());
+    }
+
+    let types = curseforge_api::get_version_type().await?;
+    let type_list: Vec<&CurseForgeVersionTypeDataObj> = types
+        .data
+        .iter()
+        .filter(|item| item.name.starts_with("Minecraft "))
+        .collect();
+
+    let versions = curseforge_api::get_version().await?;
+    let version_map: HashMap<u32, &CurseForgeVersionDataObj> = versions
+        .data
+        .iter()
+        .map(|item| (item.verion_type, item))
+        .collect();
+
+    let mut list = vec![String::new()];
+    for item in sort_version_types(type_list) {
+        if let Some(data) = version_map.get(&item.id) {
+            list.extend_from_slice(&data.versions);
         }
     }
 
-    /// 获取分组数据
-    pub async fn get_categories(&self) -> CoreResult<HashMap<String, String>> {
-        let temp = match CATEGORIES.get() {
-            Some(data) => data,
-            None => {
-                let list = curseforge_api::get_categories().await?;
-                CATEGORIES.get_or_init(|| list)
-            }
-        };
-
-        let mut list: Vec<_> = temp
-            .data
-            .iter()
-            .filter(|item| item.class_id == self.get_classid())
-            .collect();
-
-        list.sort_by(|a, b| a.name.cmp(&b.name));
-
-        Ok(list
-            .into_iter()
-            .map(|item| (item.id.to_string(), item.name.clone()))
-            .collect())
-    }
-
-    /// 获取支持的游戏版本
-    pub async fn get_game_version() -> CoreResult<Vec<String>> {
-        match VERSIONS.get() {
-            Some(version) => Ok(version.clone()),
-            None => {
-                let mut list = curseforge_api::get_version_type().await?;
-
-                list.data.retain(|item| item.name.starts_with("Minecraft "));
-
-                // 排序：ID > 17 的新版本在前，ID < 18 的旧版本在后
-                // 使用缓存键，每个 id 只解析一次
-                list.data.sort_by_cached_key(|item| {
-                    let id: i32 = item.id.parse().unwrap_or(0);
-                    // 主要排序：新版本（id > 17）排在旧版本之前
-                    // 次要排序：新版本按 id 降序，旧版本按 id 升序
-                    (id <= 17, if id > 17 { -id } else { id })
-                });
-
-                let version_list = curseforge_api::get_version().await?;
-
-                // 构建查找表，实现 O(1) 的版本类型匹配
-                let version_map: HashMap<u32, &_> = version_list
-                    .data
-                    .iter()
-                    .map(|v| (v.verion_type, v))
-                    .collect();
-
-                let mut result = vec![String::new()];
-                for vtype in &list.data {
-                    let vtype_id: u32 = vtype.id.parse().unwrap_or(0);
-                    if let Some(version_data) = version_map.get(&vtype_id) {
-                        result.extend(version_data.versions.clone());
-                    }
-                }
-
-                VERSIONS.get_or_init(|| result.clone());
-                Ok(result)
-            }
-        }
-    }
+    Ok(GAME_VERSION.get_or_init(|| list).clone())
 }
 
 /// 构建下载结果（串行处理）。

@@ -19,3 +19,5 @@ pub mod resource;
 pub mod settings;
 pub mod skin;
 pub mod stats;
+pub mod add_modpack;
+pub mod add_resource;

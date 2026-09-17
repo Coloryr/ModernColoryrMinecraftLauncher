@@ -63,7 +63,7 @@ pub async fn get_loader_versions(loader: &LoaderType, mc: &str) -> CoreResult<Ve
 pub async fn get_support_loaders(mc: &str, gui: ProgressGui) -> CoreResult<Vec<String>> {
     use std::sync::atomic::{AtomicUsize, Ordering};
 
-    let mut list = vec![LoaderType::Normal.id().to_string()];
+    let mut list = vec![LoaderType::Normal.to_string().to_string()];
 
     let done = AtomicUsize::new(0);
 
@@ -117,25 +117,25 @@ pub async fn get_support_loaders(mc: &str, gui: ProgressGui) -> CoreResult<Vec<S
         tokio::join!(forge, fabric, quilt, neoforge, optifine, liteloader);
 
     if forge_ok {
-        list.push(LoaderType::Forge.id().to_string());
+        list.push(LoaderType::Forge.to_string().to_string());
     }
     if fabric_ok {
-        list.push(LoaderType::Fabric.id().to_string());
+        list.push(LoaderType::Fabric.to_string().to_string());
     }
     if quilt_ok {
-        list.push(LoaderType::Quilt.id().to_string());
+        list.push(LoaderType::Quilt.to_string().to_string());
     }
     if neoforge_ok {
-        list.push(LoaderType::NeoForge.id().to_string());
+        list.push(LoaderType::NeoForge.to_string().to_string());
     }
     if optifine_ok {
-        list.push(LoaderType::OptiFine.id().to_string());
+        list.push(LoaderType::OptiFine.to_string().to_string());
     }
     if liteloader_ok {
-        list.push(LoaderType::LiteLoader.id().to_string());
+        list.push(LoaderType::LiteLoader.to_string().to_string());
     }
 
-    list.push(LoaderType::Custom.id().to_string());
+    list.push(LoaderType::Custom.to_string().to_string());
     Ok(list)
 }
 

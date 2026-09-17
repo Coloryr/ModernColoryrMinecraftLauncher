@@ -14,13 +14,13 @@ fn loader_type_id_round_trip() {
     assert_eq!(ids.len(), 8);
 
     for id in ids {
-        let loader = LoaderType::from_id(id).expect("ids() 里的 ID 必须能解析");
-        assert_eq!(loader.id(), id, "{id} 应与解析结果一致");
+        let loader = LoaderType::from_string(id).expect("ids() 里的 ID 必须能解析");
+        assert_eq!(loader.to_string(), id, "{id} 应与解析结果一致");
     }
 
     // 未知 ID 返回 None
-    assert!(LoaderType::from_id("unknown").is_none());
-    assert!(LoaderType::from_id("").is_none());
+    assert!(LoaderType::from_string("unknown").is_none());
+    assert!(LoaderType::from_string("").is_none());
 }
 
 /// 加载器类型前缀（用于拼接版本目录名）。
@@ -28,7 +28,7 @@ fn loader_type_id_round_trip() {
 fn loader_type_prefixes() {
     // 前缀 = id，保持与版本文件夹命名一致
     for id in LoaderType::ids() {
-        let loader = LoaderType::from_id(id).unwrap();
+        let loader = LoaderType::from_string(id).unwrap();
         assert_eq!(loader.prefix(), id);
     }
 }
@@ -37,12 +37,12 @@ fn loader_type_prefixes() {
 #[test]
 fn mod_pack_type_id_round_trip() {
     for id in ["curseforge", "modrinth", "mcmod", "serverpack", "none"] {
-        let t = ModPackType::from_id(id);
-        assert_eq!(t.id(), id, "{id} 应与解析结果一致");
+        let t = ModPackType::from_string(id);
+        assert_eq!(t.to_string(), id, "{id} 应与解析结果一致");
     }
 
     // 未知 ID 回退 None
-    assert_eq!(ModPackType::from_id("unknown"), ModPackType::None);
+    assert_eq!(ModPackType::from_string("unknown"), ModPackType::None);
 
     // 整数序列化顺序（serde_repr）
     assert_eq!(serde_json::to_value(ModPackType::CurseForge).unwrap(), 0);
