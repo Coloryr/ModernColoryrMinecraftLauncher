@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::OnceLock};
 
 use mcml_names::{
     i18_items::error_type::{CoreResult, ErrorData, ErrorType},
@@ -49,13 +49,24 @@ pub enum ModrinthSortType {
 
 impl ModrinthSortType {
     /// 获取排序方式名称
-    pub fn get_index(&self) -> &'static str {
-        match self {
+    pub fn to_string(&self) -> String {
+        String::from(match self {
             ModrinthSortType::Relevance => "relevance",
             ModrinthSortType::Downloads => "downloads",
             ModrinthSortType::Follows => "follows",
             ModrinthSortType::Newest => "newest",
             ModrinthSortType::Updated => "updated",
+        })
+    }
+
+    pub fn from_string(id: &str) -> Option<ModrinthSortType> {
+        match id {
+            "relevance" => Some(ModrinthSortType::Relevance),
+            "downloads" => Some(ModrinthSortType::Downloads),
+            "follows" => Some(ModrinthSortType::Follows),
+            "newest" => Some(ModrinthSortType::Newest),
+            "updated" => Some(ModrinthSortType::Updated),
+            _ => None,
         }
     }
 }
@@ -133,7 +144,7 @@ async fn search(
     let mut url = reqwest::Url::parse(&format!("{}search", urls::MODRINTH)).unwrap();
     url.query_pairs_mut()
         .append_pair("query", query)
-        .append_pair("index", index.get_index())
+        .append_pair("index", &index.to_string())
         .append_pair("offset", &offset.to_string())
         .append_pair("limit", &limit.to_string())
         .append_pair("facets", &build_facets(facets));
@@ -395,7 +406,7 @@ pub async fn get_game_versions() -> CoreResult<Vec<ModrinthGameVersionObj>> {
         .await
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(default)]
 pub struct ModrinthCategoriesObj {
     pub icon: String,
@@ -530,10 +541,10 @@ mod tests {
     /// ModrinthSortType 的排序参数名
     #[test]
     fn sort_type_index() {
-        assert_eq!(ModrinthSortType::Relevance.get_index(), "relevance");
-        assert_eq!(ModrinthSortType::Downloads.get_index(), "downloads");
-        assert_eq!(ModrinthSortType::Follows.get_index(), "follows");
-        assert_eq!(ModrinthSortType::Newest.get_index(), "newest");
-        assert_eq!(ModrinthSortType::Updated.get_index(), "updated");
+        assert_eq!(ModrinthSortType::Relevance.to_string(), "relevance");
+        assert_eq!(ModrinthSortType::Downloads.to_string(), "downloads");
+        assert_eq!(ModrinthSortType::Follows.to_string(), "follows");
+        assert_eq!(ModrinthSortType::Newest.to_string(), "newest");
+        assert_eq!(ModrinthSortType::Updated.to_string(), "updated");
     }
 }

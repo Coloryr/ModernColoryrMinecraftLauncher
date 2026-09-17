@@ -23,6 +23,11 @@
 - **改动代码前的固定流程：先停掉正在运行的 `tauri dev`（连同应用进程），改完并通过验证
   （`cargo check` / `cargo build` + `npm run build`）后再重启。** 运行中的 dev 监听会在文件保存
   中途触发重建 / 热更新，容易出现半成品编译错误、窗口反复重启或行为异常。
+- **禁止过度检查 / 过度编译测试**：只跑与本次改动直接相关的最小验证——改动所在 crate 的
+  `cargo check -p <crate>`、相关的那几个测试（`cargo test -p <crate> --lib`、
+  `... --test <name>`，必要时加 `单个用例名` 过滤）。不要动辄
+  `cargo check --workspace --all-targets` / `cargo test --workspace` / 整仓全量测试；
+  同一结论不要重复跑第二遍（改了代码再验一次除外）。
 - 桌面壳：`cd mcml-gui && npm run tauri dev`（会先起 mcml-vue 的 vite，**端口 1420 必须空闲**）。
 - 只跑前端：根目录 `dev-frontend.bat`（vite，1420）；
   浏览器可访问 `http://localhost:1420/?window=<kind>` 预览某个窗口（无 IPC 数据）。
@@ -69,4 +74,10 @@
 
 - 获取网页内容一律使用 `python`（`urllib` / `requests`）或 `curl`，
   不使用其他网页抓取工具（含内置的 WebFetch 等）。
+
+## 9. 读取文件的范围
+
+- 只读本次任务直接相关的文件：用户在指令里点名的文件，以及为完成改动所必需的那些。
+- 非必要不要扩大范围去翻别的 `.rs` 文件。确有必要时，**先说明要读哪个文件、为什么**，
+  得到用户同意再读；不要静默地顺藤摸瓜。
 

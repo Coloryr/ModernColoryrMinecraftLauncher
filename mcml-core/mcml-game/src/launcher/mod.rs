@@ -27,18 +27,18 @@ impl Default for ModPackType {
 
 impl ModPackType {
     /// 独立 ID（跨进程传输用，显示名由前端 i18n 翻译）
-    pub fn id(&self) -> &'static str {
-        match self {
+    pub fn to_string(&self) -> String {
+        String::from(match self {
             ModPackType::CurseForge => "curseforge",
             ModPackType::Modrinth => "modrinth",
             ModPackType::McMod => "mcmod",
             ModPackType::ServerPack => "serverpack",
             ModPackType::None => "none",
-        }
+        })
     }
 
     /// 按 ID 解析整合包类型
-    pub fn from_id(id: &str) -> Self {
+    pub fn from_string(id: &str) -> Self {
         match id {
             "curseforge" => ModPackType::CurseForge,
             "modrinth" => ModPackType::Modrinth,
@@ -95,7 +95,14 @@ pub enum FileType {
     Lang,
 }
 
-impl FileType {}
+impl FileType {
+    pub fn from_string(id: &str) -> Option<FileType> {
+        match id {
+            "modpack" => Some(FileType::Modpack),
+            _ => None,
+        }
+    }
+}
 
 /// 检测下载源
 /// - `pid`: 项目号

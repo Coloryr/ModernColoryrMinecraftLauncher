@@ -8,7 +8,7 @@ use std::{
 
 use mcml_base::events::EventArgHandler;
 use mcml_names::{
-    i18_items::error_type::{ArgEmptyData, CoreResult, ErrorData, ErrorType, FileSystemErrorData},
+    i18_items::error_type::{ArgEmptyData, CoreResult, ErrorType, FileSystemErrorData},
     names,
 };
 

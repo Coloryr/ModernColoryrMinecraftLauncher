@@ -77,13 +77,8 @@ impl Default for LoaderType {
 }
 
 impl LoaderType {
-    /// 获取加载器版本名前缀
-    pub fn prefix(&self) -> &'static str {
-        self.id()
-    }
-
     /// 加载器独立 ID（与前端 i18n 键对应，不随语言变化）
-    pub fn id(&self) -> &'static str {
+    pub fn to_string(&self) -> &'static str {
         match self {
             LoaderType::Normal => "normal",
             LoaderType::Forge => "forge",
@@ -97,7 +92,7 @@ impl LoaderType {
     }
 
     /// 按 ID 解析加载器类型
-    pub fn from_id(id: &str) -> Option<Self> {
+    pub fn from_string(id: &str) -> Option<Self> {
         match id {
             "normal" => Some(LoaderType::Normal),
             "forge" => Some(LoaderType::Forge),
