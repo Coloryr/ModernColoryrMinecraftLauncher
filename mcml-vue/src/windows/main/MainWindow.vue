@@ -180,53 +180,6 @@ function toggleNews() {
   newsActive.value = !newsActive.value;
 }
 
-// ================= 侧栏展开把手：点按展开，也可以往展开方向拖出来 =================
-
-/** 往展开方向拖多远算「拖出来」 */
-const EXPAND_DRAG_THRESHOLD = 24;
-/** 判定为拖动（而非点按）的最小位移 */
-const DRAG_SLOP = 4;
-
-/** 拖拽起点 X（null = 未在拖） */
-const handleDragX = ref<number | null>(null);
-/** 本次按下是否发生过拖动（拖动过就不再当成点击，否则反向拖也会展开） */
-const handleDragged = ref(false);
-
-function onExpandPointerDown(e: PointerEvent) {
-  handleDragX.value = e.clientX;
-  handleDragged.value = false;
-  (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-}
-
-function onExpandPointerMove(e: PointerEvent) {
-  if (handleDragX.value === null) {
-    return;
-  }
-  const dx = e.clientX - handleDragX.value;
-  if (Math.abs(dx) >= DRAG_SLOP) {
-    handleDragged.value = true;
-  }
-  // 展开方向：侧栏在左 → 往右拖；在右 → 往左拖
-  const toward = sidebarSide.value === "Right" ? -dx : dx;
-  if (toward >= EXPAND_DRAG_THRESHOLD) {
-    handleDragX.value = null;
-    setSidebarCollapsed(false);
-  }
-}
-
-function onExpandPointerUp(e: PointerEvent) {
-  (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
-  handleDragX.value = null;
-}
-
-function onExpandClick() {
-  if (handleDragged.value) {
-    handleDragged.value = false;
-    return;
-  }
-  setSidebarCollapsed(false);
-}
-
 // 切换选中实例后自动滚动到详情顶部
 const detailEl = ref<HTMLElement | null>(null);
 
@@ -1294,16 +1247,11 @@ listen<LoadState>(LoadDone, async (data) => {
               @collapse="setSidebarCollapsed(true)"
             />
 
-            <!-- 展开把手：绝对定位在槽位外缘，收起时淡入（不占位，避免展开瞬间内容跳动）。
-                 点按展开，也可以往展开方向拖出来 -->
+            <!-- 展开把手：绝对定位在槽位外缘，收起时淡入（不占位，避免展开瞬间内容跳动） -->
             <button
               class="sidebar-expand"
               :title="t('sidebar.expand')"
-              @click="onExpandClick"
-              @pointerdown="onExpandPointerDown"
-              @pointermove="onExpandPointerMove"
-              @pointerup="onExpandPointerUp"
-              @pointercancel="onExpandPointerUp"
+              @click="setSidebarCollapsed(false)"
             >›</button>
           </div>
 
@@ -1813,9 +1761,6 @@ listen<LoadState>(LoadDone, async (data) => {
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.15s;
-  /* 拖拽展开时不让浏览器把它当成滚动 / 选中文本 */
-  touch-action: none;
-  user-select: none;
 }
 
 .main.side-right .sidebar-expand {
