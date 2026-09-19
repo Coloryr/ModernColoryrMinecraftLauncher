@@ -6,7 +6,7 @@ import { t, tErr } from "../lib/i18n";
 import { api, onAddLoaderProgress } from "../lib/api";
 import { showToast } from "../lib/toast";
 import BaseButton from "./ui/BaseButton.vue";
-import type { InstanceInfo, VersionInfo } from "../lib/types";
+import type { InstanceInfo, VersionInfo } from "../lib/bindings";
 
 const props = defineProps<{
   instance: InstanceInfo;

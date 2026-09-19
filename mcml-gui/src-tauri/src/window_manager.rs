@@ -79,7 +79,7 @@ const MIN_WIDTH: f64 = 640.0;
 const MIN_HEIGHT: f64 = 480.0;
 
 /// 主窗口最小尺寸
-const MAIN_MIN_WIDTH: f64 = 790.0;
+const MAIN_MIN_WIDTH: f64 = 920.0;
 const MAIN_MIN_HEIGHT: f64 = 600.0;
 
 /// 账户窗口最小尺寸
@@ -331,6 +331,8 @@ fn create_window(app: &AppHandle, label: &str, uuid: &Uuid) -> Result<WebviewWin
     let builder = WebviewWindowBuilder::new(app, label, WebviewUrl::App("index.html".into()))
         .title(names::MCML)
         .min_inner_size(min_w, min_h)
+        // 自绘标题栏：关掉系统装饰，最小化 / 最大化 / 关闭由前端 WindowControls 调下面的命令实现
+        .decorations(false)
         // 原生窗口背景铺暗色底，避免 webview 加载首帧白屏（与暗色主题 --bg 一致）
         .background_color(tauri::window::Color(0x14, 0x16, 0x1a, 0xff));
     let win = match geom {
@@ -495,6 +497,42 @@ pub fn window_close_window(app: AppHandle, kind: String) -> Result<(), String> {
         return Err(format!("unknown window kind: {kind}"));
     };
     close_window_from_uuid(&app, &uuid)
+}
+
+// ---------------- 自绘标题栏的窗口控制 ----------------
+//
+// 关掉系统装饰后，这三个动作由前端标题栏调用。写在应用自己的命令里（而非 JS 侧
+// `getCurrentWindow()`），这样不必往 capabilities/default.json 加窗口权限。
+// 关闭不走这里——见 `window_close_window`，那条链路才会跑关闭保护与几何保存。
+
+/// 开始拖动窗口（标题栏按下时调用，之后由系统接管）
+#[tauri::command]
+pub fn window_start_dragging(window: WebviewWindow) -> Result<(), String> {
+    window.start_dragging().map_err(|err| err.to_string())
+}
+
+/// 最小化窗口
+#[tauri::command]
+pub fn window_minimize(window: WebviewWindow) -> Result<(), String> {
+    window.minimize().map_err(|err| err.to_string())
+}
+
+/// 最大化 / 还原（取反），返回切换后的状态
+#[tauri::command]
+pub fn window_toggle_maximize(window: WebviewWindow) -> Result<bool, String> {
+    let maximized = window.is_maximized().map_err(|err| err.to_string())?;
+    if maximized {
+        window.unmaximize().map_err(|err| err.to_string())?;
+    } else {
+        window.maximize().map_err(|err| err.to_string())?;
+    }
+    Ok(!maximized)
+}
+
+/// 当前是否最大化（标题栏换图标用；`Win+↑`、系统贴靠等外部操作也会改它）
+#[tauri::command]
+pub fn window_is_maximized(window: WebviewWindow) -> bool {
+    window.is_maximized().unwrap_or(false)
 }
 
 /// 获取 GUI 状态（无文件时返回默认值；前端 wire 为 DTO，TS 命名 camelCase）

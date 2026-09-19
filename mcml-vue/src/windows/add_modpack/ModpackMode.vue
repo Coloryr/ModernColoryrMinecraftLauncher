@@ -5,7 +5,7 @@ import { computed, ref, watch } from "vue";
 import SegmentedTabs from "../../components/ui/SegmentedTabs.vue";
 import { api } from "../../lib/api";
 import { t } from "../../lib/i18n";
-import type { ModpackFile, ModpackItem, VersionInfo } from "../../lib/types";
+import type { ModpackFileDto, ModpackItemDto, VersionInfo } from "../../lib/bindings";
 
 const props = defineProps<{
   /** 游戏版本列表（主窗口共享的版本数据，用于过滤搜索结果） */
@@ -24,13 +24,13 @@ const selVersion = ref("");
 const sort = ref("popularity");
 const page = ref(0);
 const total = ref(0);
-const items = ref<ModpackItem[]>([]);
+const items = ref<ModpackItemDto[]>([]);
 const searching = ref(false);
 const searchError = ref("");
 
 /** 当前展开版本列表的整合包项目 ID */
 const expandedId = ref("");
-const files = ref<ModpackFile[]>([]);
+const files = ref<ModpackFileDto[]>([]);
 const filesLoading = ref(false);
 
 /** 排序方式：两种源的集合不同，取值就是后端枚举的线串（`CurseForgeSortType` / `ModrinthSortType`） */
@@ -98,7 +98,7 @@ function turnPage(delta: number) {
 }
 
 /** 展开某整合包的版本列表（再次点击收起） */
-async function toggleFiles(item: ModpackItem) {
+async function toggleFiles(item: ModpackItemDto) {
   if (expandedId.value === item.id) {
     expandedId.value = "";
     files.value = [];
@@ -116,7 +116,7 @@ async function toggleFiles(item: ModpackItem) {
   }
 }
 
-function install(item: ModpackItem, file: ModpackFile) {
+function install(item: ModpackItemDto, file: ModpackFileDto) {
   emit("install", {
     source: source.value,
     projectId: item.id,

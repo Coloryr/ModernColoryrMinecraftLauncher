@@ -1,7 +1,22 @@
 <script setup lang="ts">
 // 启动画面：初始化中显示 splash，初始化失败显示错误页（splashError）+ 问题反馈入口
+//
+// 初始化期间主窗口已关掉系统装饰、又还没渲染自己的顶栏，所以要单独给一个关闭按钮
+// （只给关闭，不放整条标题栏——这段界面保持干净）
 import { t } from "../../lib/i18n";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import BaseButton from "./BaseButton.vue";
+import { closeWindow, isTauri } from "../../windows/windowManager";
+
+/** 关闭窗口：走真实关闭（主窗口关闭 = 退出应用）。
+ *  不走 closeWindow()——它在单窗口模式下是「切回主页」，对启动画面不适用 */
+function onClose() {
+  if (isTauri()) {
+    getCurrentWindow().close().catch(() => {});
+    return;
+  }
+  closeWindow();
+}
 
 withDefaults(
   defineProps<{
@@ -20,6 +35,13 @@ const emit = defineEmits<{
 </script>
 
 <template>
+  <!-- 初始化期间只给一个关闭按钮，不铺整条标题栏 -->
+  <button class="splash-close" :title="t('titlebar.close')" @click="onClose">
+    <svg viewBox="0 0 12 12" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round">
+      <path d="m3 3 6 6M9 3l-6 6" />
+    </svg>
+  </button>
+
   <!-- 启动画面（初始化中，由 closeSplash() 关闭） -->
   <div v-if="splashVisible" class="splash">
     <div class="splash-logo">MC</div>
@@ -42,6 +64,29 @@ const emit = defineEmits<{
 </template>
 
 <style scoped>
+/* 初始化期间的关闭按钮：浮在右上角，不占布局 */
+.splash-close {
+  position: fixed;
+  top: 10px;
+  right: 10px;
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: default;
+  transition: background 0.12s, color 0.12s;
+}
+
+.splash-close:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
 .splash {
   flex: 1;
   display: flex;

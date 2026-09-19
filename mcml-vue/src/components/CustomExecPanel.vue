@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 自定义执行：启动前 / 启动后命令（可开关）
 import { t } from "../lib/i18n";
-import type { InstanceArgs } from "../lib/types";
+import type { InstanceArgs } from "../lib/bindings";
 
 const props = defineProps<{ args: InstanceArgs }>();
 

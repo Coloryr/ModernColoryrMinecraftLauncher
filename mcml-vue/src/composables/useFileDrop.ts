@@ -3,7 +3,7 @@ import { onMounted, onUnmounted, ref, type Ref } from "vue";
 import { api } from "../lib/api";
 import { t, tErr } from "../lib/i18n";
 import { showToast } from "../lib/toast";
-import type { VersionInfo } from "../lib/types";
+import type { VersionInfo } from "../lib/bindings";
 
 interface FileDropDeps {
   versions: Ref<VersionInfo[]>;

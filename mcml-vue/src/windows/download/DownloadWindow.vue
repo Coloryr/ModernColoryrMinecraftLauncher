@@ -9,14 +9,14 @@ import BaseModal from "../../components/ui/BaseModal.vue";
 import BaseButton from "../../components/ui/BaseButton.vue";
 import { api, onCloseBlocked, onDownloadItem, onDownloadTask } from "../../lib/api";
 import { t } from "../../lib/i18n";
-import type { DownloadStatus, DownloadTaskInfo } from "../../lib/types";
+import type { DownloadStatusDto, DownloadTaskDto } from "../../lib/bindings";
 
 const emit = defineEmits<{ (e: "close"): void }>();
 
 /** 轮询间隔（毫秒） */
 const REFRESH_MS = 700;
 
-const status = ref<DownloadStatus>({ tasks: [], threads: [], speed: 0, paused: false });
+const status = ref<DownloadStatusDto>({ tasks: [], threads: [], speed: 0, paused: false });
 const loading = ref(true);
 
 /** 停止下载确认弹窗 */
@@ -34,7 +34,7 @@ const threads = computed(() => status.value.threads.filter((x) => x.state !== "d
 // ================= 进度计算 =================
 
 /** 单任务进度：优先按字节，元信息未知时退回文件数 */
-function taskProgress(task: DownloadTaskInfo): number {
+function taskProgress(task: DownloadTaskDto): number {
   if (task.allBytes > 0) {
     return Math.min(100, (task.nowBytes / task.allBytes) * 100);
   }
@@ -73,7 +73,7 @@ const overallFiles = computed(() => ({
 
 type TaskState = "running" | "paused" | "failed" | "done";
 
-function taskState(task: DownloadTaskInfo): TaskState {
+function taskState(task: DownloadTaskDto): TaskState {
   if (task.paused) return "paused";
   if (task.total > 0 && task.completed + task.failed >= task.total) {
     return task.failed > 0 ? "failed" : "done";

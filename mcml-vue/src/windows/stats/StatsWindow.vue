@@ -4,7 +4,7 @@ import WindowFrame from "../../components/ui/WindowFrame.vue";
 import InstanceIcon from "../../components/InstanceIcon.vue";
 import { api } from "../../lib/api";
 import { t } from "../../lib/i18n";
-import type { InstanceInfo } from "../../lib/types";
+import type { InstanceInfo } from "../../lib/bindings";
 
 const instances = ref<InstanceInfo[]>([]);
 

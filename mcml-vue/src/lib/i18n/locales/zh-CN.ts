@@ -604,6 +604,12 @@ export default {
   // 占位窗口
   "winCommon.pending": "该窗口尚未实现",
 
+  // 自绘标题栏
+  "titlebar.minimize": "最小化",
+  "titlebar.maximize": "最大化",
+  "titlebar.restore": "还原",
+  "titlebar.close": "关闭",
+
   // 后端错误：命令的 Err 返回的就是这些键，前端 t() 后展示
   "err.sourceType": "未知的下载源",
   "err.fileTypeNotFound": "未知的资源类型",

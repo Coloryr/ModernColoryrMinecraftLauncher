@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, nextTick } from "vue";
 import { t } from "../lib/i18n";
-import type { InstanceInfo } from "../lib/types";
+import type { InstanceInfo } from "../lib/bindings";
 import InstanceIcon from "./InstanceIcon.vue";
 
 const props = defineProps<{

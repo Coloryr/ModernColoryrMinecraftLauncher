@@ -22,14 +22,7 @@ import {
   setViewMode,
   viewMode,
 } from "../../lib/settings";
-import type {
-  Account,
-  InstanceArgs,
-  InstanceInfo,
-  JavaInfo,
-  NewsItem,
-  VersionInfo,
-} from "../../lib/types";
+import type { AccountStoreDto, InstanceArgs, InstanceInfo, JavaInfo, NewsItem, VersionInfo } from "../../lib/bindings";
 import InstanceIcon from "../../components/InstanceIcon.vue";
 import InstanceSelect from "../../components/InstanceSelect.vue";
 import InstanceMetaPanel from "../../components/InstanceMetaPanel.vue";
@@ -44,7 +37,8 @@ import MainCtxMenu from "./ctxmenu/MainCtxMenu.vue";
 import { useInstanceDrag } from "../../composables/useInstanceDrag";
 import { useMultiSelect } from "../../composables/useMultiSelect";
 import { useFileDrop } from "../../composables/useFileDrop";
-import type { CtxMenuState, FeatureId, InstMenuAction, ViewMode } from "./types";
+import type { ViewMode } from "../../lib/bindings";
+import type { CtxMenuState, FeatureId, InstMenuAction } from "./types";
 import BaseButton from "../../components/ui/BaseButton.vue";
 import BaseModal from "../../components/ui/BaseModal.vue";
 import SegmentedTabs from "../../components/ui/SegmentedTabs.vue";
@@ -170,6 +164,23 @@ function toggleGroup(name: string) {
   collapsedGroups.value = { ...collapsedGroups.value, [name]: !isCollapsed(name) };
 }
 
+// ================= 侧栏：收起 / 展开 =================
+
+/** 是否启用侧栏过渡：默认关闭，只在用户主动收起 / 展开的这 300ms 内打开。
+    常开的话，启动时按配置恢复侧栏宽度也会被播成一次滑动动画 */
+const sidebarAnim = ref(false);
+let sidebarAnimTimer: number | undefined;
+
+/** 用户主动收起 / 展开侧栏（唯一会播放动画的入口） */
+function collapseSidebar(collapsed: boolean) {
+  sidebarAnim.value = true;
+  setSidebarCollapsed(collapsed);
+  window.clearTimeout(sidebarAnimTimer);
+  sidebarAnimTimer = window.setTimeout(() => {
+    sidebarAnim.value = false;
+  }, 300);
+}
+
 // ================= 启动器主页（默认打开） =================
 
 const newsActive = ref(true);
@@ -181,13 +192,20 @@ function toggleNews() {
 }
 
 // 切换选中实例后自动滚动到详情顶部
+//
+// 监听 uuid 而不是 selected 对象本身：改实例设置会触发 instance-change → 重拉实例列表
+// （loadInstances），那里会把 selected 换成一个新对象（uuid 没变）。监听对象引用的话，
+// 每次改设置都会把详情滚回顶部
 const detailEl = ref<HTMLElement | null>(null);
 
-watch(selected, () => {
-  nextTick(() => {
-    if (detailEl.value) detailEl.value.scrollTop = 0;
-  });
-});
+watch(
+  () => selected.value?.uuid,
+  () => {
+    nextTick(() => {
+      if (detailEl.value) detailEl.value.scrollTop = 0;
+    });
+  },
+);
 
 /** 主页卡片显示的就是当前选中实例（持久化在 gui_config.json） */
 function quickLaunch() {
@@ -255,11 +273,11 @@ import {
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
 import { LoadDone } from "../../lib/listens.ts";
-import { LoadState } from "../../lib/dtos/main.ts";
+import type { LoadState } from "../../lib/bindings";
 const accounts = storeAccounts;
 const currentAccount = storeCurrentAccount;
 
-function onAccountChange(account: Account) {
+function onAccountChange(account: AccountStoreDto) {
   setCurrentAccount(account);
   playerName.value = account.userName;
   localStorage.setItem("mcml.playerName", account.userName);
@@ -1105,7 +1123,7 @@ listen<LoadState>(LoadDone, async (data) => {
       />
 
       <!-- 主体 -->
-      <main class="main" :class="{ 'side-right': sidebarSide === 'Right' }">
+      <main class="main" :class="{ 'side-right': sidebarSide === 'Right', 'sidebar-anim': sidebarAnim }">
         <!-- 多选模式浮动工具栏 -->
         <div v-if="multiSelect" class="multi-bar" @contextmenu.prevent @click.stop>
           <span class="multi-count">{{ t("multi.selected", { count: selectedIds.size }) }}</span>
@@ -1140,7 +1158,7 @@ listen<LoadState>(LoadDone, async (data) => {
         <!-- 列表模式：启动器主页 ↔ 实例列表。两者布局角色一致（flex:1 纵向），
              直接作为进出动画的两个子节点，内容不用包一层 -->
         <template v-else-if="mode === 'list'">
-          <Transition name="home-swap" mode="out-in">
+          <Transition name="view-swap" mode="out-in">
             <section v-if="newsActive" key="home" class="news-page">
             <HomePage
               :items="news"
@@ -1214,10 +1232,9 @@ listen<LoadState>(LoadDone, async (data) => {
 
         <!-- 模式：游戏分组 / 平铺（列表模式已在上面的分支处理，这里兜底） -->
         <template v-else>
-          <!-- 侧栏槽位：宽度在展开(320px) / 收起(24px) 之间过渡，动画期间内容被裁掉而不被压扁 -->
+          <!-- 侧栏槽位：宽度在展开(300px) / 收起(24px) 之间过渡，动画期间内容被裁掉而不被压扁 -->
           <div class="sidebar-slot" :class="{ collapsed: sidebarCollapsed }">
             <MainSidebar
-              :collapsed="sidebarCollapsed"
               :mode="mode"
               :mode-options="MODE_OPTIONS"
               :search-text="searchText"
@@ -1244,24 +1261,20 @@ listen<LoadState>(LoadDone, async (data) => {
               @update:search-text="searchText = $event"
               @add-instance="openAdd"
               @add-group="showAddGroup = true"
-              @collapse="setSidebarCollapsed(true)"
+              @collapse="collapseSidebar(true)"
             />
 
             <!-- 展开把手：绝对定位在槽位外缘，收起时淡入（不占位，避免展开瞬间内容跳动） -->
             <button
               class="sidebar-expand"
               :title="t('sidebar.expand')"
-              @click="setSidebarCollapsed(false)"
+              @click="collapseSidebar(false)"
             >›</button>
           </div>
 
-          <Transition name="sidebar-fade">
-            <div v-if="!sidebarCollapsed" class="sidebar-backdrop" @click="setSidebarCollapsed(true)"></div>
-          </Transition>
-
           <!-- 右侧内容区：实例详情 / 启动器主页（进出都走动画） -->
           <section ref="detailEl" class="detail">
-            <Transition name="home-swap" mode="out-in">
+            <Transition name="view-swap" mode="out-in">
               <HomePage
                 v-if="newsActive"
                 key="home"
@@ -1280,7 +1293,9 @@ listen<LoadState>(LoadDone, async (data) => {
               />
 
               <div v-else key="detail" class="detail-content">
-              <template v-if="selected">
+              <!-- 按实例 uuid 做 key：切换实例时整块详情走进出动画 -->
+              <Transition name="view-swap" mode="out-in">
+              <div v-if="selected" :key="selected.uuid" class="detail-instance">
                 <div class="detail-top">
                   <InstanceIcon :name="selected.name" :uuid="selected.uuid" :size="84" />
                   <div class="detail-info">
@@ -1500,8 +1515,13 @@ listen<LoadState>(LoadDone, async (data) => {
                     <ProxyPanel :args="argsOf(selected.uuid)" @update:args="updateArgs" />
                   </CollapsePanel>
                 </div>
-              </template>
-              <template v-else-if="multiSelect">
+              </div>
+              </Transition>
+
+              <!-- 未选中实例：多选提示 / 空提示（保持是 .detail-content 的直接 flex 子节点，
+                   两者都靠 flex:1 垂直居中） -->
+              <template v-if="!selected">
+              <template v-if="multiSelect">
                 <div class="multi-detail">
                   <div class="multi-detail-icon">☑</div>
                   <h2>{{ t("multi.detailTitle") }}</h2>
@@ -1509,6 +1529,7 @@ listen<LoadState>(LoadDone, async (data) => {
                 </div>
               </template>
               <div v-else class="placeholder">{{ t("detail.selectHint") }}</div>
+              </template>
               </div>
             </Transition>
           </section>
@@ -1724,14 +1745,19 @@ listen<LoadState>(LoadDone, async (data) => {
   flex-direction: row-reverse;
 }
 
-/* 侧栏槽位：展开 320px ↔ 收起 24px 宽度过渡。
-   收窄时用 overflow 裁掉侧栏内容（而非把内容压扁），停靠模式下内容区因此平滑跟随。 */
+/* 侧栏槽位：展开 300px ↔ 收起 24px。
+   收窄时用 overflow 裁掉侧栏内容（而非把内容压扁），停靠模式下内容区因此平滑跟随。
+   宽度过渡只在用户主动收起 / 展开时挂上（.main.sidebar-anim，见 MainWindow 的 collapseSidebar）——
+   常开的话，启动时按配置恢复槽位宽度也会被播成一次动画 */
 .sidebar-slot {
   position: relative;
   display: flex;
   flex-shrink: 0;
-  width: 320px; /* 与 MainSidebar 的 .sidebar 同宽 */
+  width: 300px; /* 与 MainSidebar 的 .sidebar 同宽 */
   overflow: hidden;
+}
+
+.main.sidebar-anim .sidebar-slot {
   transition: width 0.22s ease;
 }
 
@@ -1780,40 +1806,6 @@ listen<LoadState>(LoadDone, async (data) => {
   color: var(--accent);
 }
 
-/* 浮层模式（≤880px，与 MainSidebar 的媒体查询一致）：侧栏 position: fixed 脱离文档流，
-   槽位只负责 24px 占位，展开/收起由侧栏自身的位移完成 */
-@media (max-width: 880px) {
-  .sidebar-slot {
-    width: 24px;
-    overflow: visible;
-    transition: none;
-  }
-}
-
-.sidebar-backdrop {
-  display: none;
-}
-
-.sidebar-fade-enter-active,
-.sidebar-fade-leave-active {
-  transition: opacity 0.22s;
-}
-
-.sidebar-fade-enter-from,
-.sidebar-fade-leave-to {
-  opacity: 0;
-}
-
-@media (max-width: 880px) {
-  .sidebar-backdrop {
-    display: block;
-    position: fixed;
-    inset: 64px 0 0 0;
-    background: var(--overlay);
-    z-index: 154;
-  }
-}
-
 /* ----- 侧栏（分组 / 平铺）：样式见 MainSidebar.vue ----- */
 
 /* ----- 右侧内容区 ----- */
@@ -1834,21 +1826,28 @@ listen<LoadState>(LoadDone, async (data) => {
   align-items: center;
 }
 
-/* 启动器主页 ↔ 实例列表 / 实例详情的进出动画：淡入淡出 + 轻微上收
-   （out-in 保证同一时刻只有一个子节点，两者都是 flex:1，不会叠在一起） */
-.home-swap-enter-active,
-.home-swap-leave-active {
+/* 视图切换动画：启动器主页 ↔ 实例列表 / 实例详情，以及实例详情之间切换实例。
+   淡入淡出 + 轻微上收（out-in 保证同一时刻只有一个子节点，避免 flex:1 的两者叠在一起） */
+.view-swap-enter-active,
+.view-swap-leave-active {
   transition: opacity 0.18s ease, transform 0.18s ease;
 }
 
-.home-swap-enter-from,
-.home-swap-leave-to {
+.view-swap-enter-from,
+.view-swap-leave-to {
   opacity: 0;
   transform: translateY(-8px);
 }
 
 /* 实例详情分支的包裹层：复刻 .detail 的纵向 flex 间距，避免包一层后间距丢失 */
 .detail-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* 单个实例的详情：按 uuid 做 key，切换实例时触发动画；同样复刻纵向 flex 间距 */
+.detail-instance {
   display: flex;
   flex-direction: column;
   gap: 16px;

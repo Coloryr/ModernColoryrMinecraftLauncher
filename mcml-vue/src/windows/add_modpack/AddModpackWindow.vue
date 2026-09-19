@@ -7,7 +7,7 @@ import BaseModal from "../../components/ui/BaseModal.vue";
 import { api, onAddPackProgress } from "../../lib/api";
 import { t, tErr } from "../../lib/i18n";
 import { showToast } from "../../lib/toast";
-import type { PackProgress, VersionInfo } from "../../lib/types";
+import type { PackProgressDto, VersionInfo } from "../../lib/bindings";
 import ModpackMode from "./ModpackMode.vue";
 
 defineEmits<{ (e: "close"): void }>();
@@ -20,7 +20,7 @@ const groups = ref<string[]>([]);
 const installing = ref(false);
 
 /** 安装进度（add-pack-progress 事件驱动，null = 未在安装） */
-const packProgress = ref<PackProgress | null>(null);
+const packProgress = ref<PackProgressDto | null>(null);
 
 /** 安装在线整合包：实例名取自整合包元数据 */
 async function install(p: {

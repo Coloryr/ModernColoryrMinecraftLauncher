@@ -2,15 +2,15 @@
 import { computed, ref } from "vue";
 import { t } from "../lib/i18n";
 import { openWindow } from "../windows/windowManager";
-import type { Account } from "../lib/types";
+import type { AccountStoreDto } from "../lib/bindings";
 
 const props = defineProps<{
-  account: Account | null;
-  accounts: Account[];
+  account: AccountStoreDto | null;
+  accounts: AccountStoreDto[];
 }>();
 
 const emit = defineEmits<{
-  (e: "update:account", account: Account): void;
+  (e: "update:account", account: AccountStoreDto): void;
 }>();
 
 const open = ref(false);
@@ -35,7 +35,7 @@ function toggle() {
   open.value = !open.value;
 }
 
-function pick(account: Account) {
+function pick(account: AccountStoreDto) {
   emit("update:account", account);
   open.value = false;
 }

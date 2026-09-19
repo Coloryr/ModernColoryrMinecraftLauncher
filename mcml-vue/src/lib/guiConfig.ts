@@ -3,8 +3,7 @@
 // IPC wire 使用 TS 命名（camelCase），经 Rust dtos::GuiConfigDto 转换；
 // 磁盘 gui_config.json 使用 Rust 命名（snake_case），前端不直接接触。
 // 枚举值即 Rust 变体名：theme/windowMode/sidebarSide 为 PascalCase，locale 为 zh_cn/en_us。
-import { invoke } from "@tauri-apps/api/core";
-import { WindowGetGuiConfig, WindowSaveGuiConfig } from "./invokes";
+import { commands } from "./bindings";
 
 export type Theme = "Dark" | "Light";
 /** 与 core Lang 变体同名：zh_cn / en_us */
@@ -86,7 +85,7 @@ export interface WindowState {
 /** 读取 GUI 状态；非 Tauri 环境返回 null（浏览器回退 localStorage） */
 export async function loadGuiConfig(): Promise<GuiConfig | null> {
   try {
-    return await invoke<GuiConfig>(WindowGetGuiConfig);
+    return await commands.windowManager.getGuiConfig();
   } catch {
     return null;
   }
@@ -106,14 +105,12 @@ export interface GuiConfigPatch {
 export async function saveGuiConfig(patch: GuiConfigPatch): Promise<void> {
   try {
     const cur = (await loadGuiConfig()) ?? defaultConfig();
-    await invoke(WindowSaveGuiConfig, {
-      config: {
-        ...cur,
-        ...patch,
-        mainWindow: { ...cur.mainWindow, ...patch.mainWindow },
-        head: { ...cur.head, ...patch.head },
-        collect: { ...cur.collect, ...patch.collect },
-      },
+    await commands.windowManager.saveGuiConfig({
+      ...cur,
+      ...patch,
+      mainWindow: { ...cur.mainWindow, ...patch.mainWindow },
+      head: { ...cur.head, ...patch.head },
+      collect: { ...cur.collect, ...patch.collect },
     });
   } catch {
     /* 浏览器环境忽略 */

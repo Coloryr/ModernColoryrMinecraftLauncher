@@ -2,12 +2,27 @@
 //
 // 数据全部从 Rust 侧获取（命令见 mcml-gui/src-tauri/src/windows/），
 // 按钮执行的操作也通过 IPC 调用。仅在 Tauri 环境可用（纯浏览器会报错）。
-import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import type { CollectData, DetectedPackInfo, DownloadItemEvent, DownloadStatus, DownloadTaskEvent, ErrorEvent, ExitEvent, InstanceArgs, InstanceInfo, JavaInfo, LogEvent, ModpackFile, ModpackSearchResult, NewsItem, PackProgress, StateEvent, VersionInfo } from "./types";
-import { CollectAddGroup, CollectClear, CollectGetData, CollectRemoveGroup, CollectRemoveItems, CollectSetGroupItems, MainAddGroup, MainAddJava, MainCreateInstance, MainDeleteInstance, MainGetGameLog, MainGetGroups, MainGetInstanceArgs, MainGetInstanceLangs, MainGetInstances, MainGetJavaList, MainGetNews, MainGetRunning, MainGetVersions, MainLaunchGame, MainMoveGroup, MainMoveInstance, MainOpenUrl, MainRefreshVersions, MainRemoveGroup, MainRemoveJava, MainRenameInstance, MainScanJava, MainStopGame, MainUpdateInstance, MainUpdateInstanceArgs } from "./invokes";
-import { AddCreateNew, AddImportFolder, AddImportArchive, AddImportUrl, AddCancel, AddDetectArchive, AddModpackFiles, AddModpackSearch, AddModpackInstall, AddGetLoaderVersions, AddGetLoaders, AddGetPackTypes, AddGetVersionTypes, AddGetSupportLoaders, AddSetCloseGuard, AddAnswerNameConflict } from "./invokes";
-import { DownloadCancelAll, DownloadGetStatus, DownloadPauseAll, DownloadResumeAll } from "./invokes";
+import { commands } from "./bindings";
+import type {
+  CollectDataDto,
+  DetectedPackDto,
+  DownloadItemEvent,
+  DownloadStatusDto,
+  DownloadTaskEvent,
+  ErrorEvent,
+  ExitEvent,
+  InstanceArgs,
+  InstanceInfo,
+  JavaInfo,
+  LogEvent,
+  ModpackFileDto,
+  ModpackSearchDto,
+  NewsItem,
+  PackProgressDto,
+  StateEvent,
+  VersionInfo,
+} from "./bindings";
 import { AddLoaderProgress, AddNameConflict, AddPackProgress, CloseBlocked, CollectChange, DownloadItem, DownloadTask, GameExit, GameLog, InstanceChange, JavaChange, LaunchError, LaunchState } from "./listens";
 
 export interface CreateInstanceOpts {
@@ -20,54 +35,54 @@ export interface CreateInstanceOpts {
 
 export const api = {
   async getInstances(): Promise<InstanceInfo[]> {
-    return invoke<InstanceInfo[]>(MainGetInstances);
+    return commands.main.getInstances();
   },
 
   async getGroups(): Promise<string[]> {
-    return invoke<string[]>(MainGetGroups);
+    return commands.main.getGroups();
   },
 
   /** 获取实例的游戏内语言列表（从资源索引查 minecraft/lang/*.json，资源未下载时为空） */
   async getInstanceLangs(uuid: string): Promise<string[]> {
-    return invoke<string[]>(MainGetInstanceLangs, { uuid });
+    return commands.main.getInstanceLangs(uuid);
   },
 
   async getJavaList(): Promise<JavaInfo[]> {
-    return invoke<JavaInfo[]>(MainGetJavaList);
+    return commands.main.getJavaList();
   },
 
   /** 添加 Java（后端校验有效后入列表；无效返回 false） */
   async addJava(name: string, path: string): Promise<boolean> {
-    return invoke<boolean>(MainAddJava, { name, path });
+    return commands.main.addJava(name, path);
   },
 
   /** 删除指定名称的 Java */
   async removeJava(name: string): Promise<void> {
-    return invoke<void>(MainRemoveJava, { name });
+    return commands.main.removeJava(name);
   },
 
   /** 扫描系统已安装的 Java（耗时查询）并返回最新列表 */
   async scanJava(): Promise<JavaInfo[]> {
-    return invoke<JavaInfo[]>(MainScanJava);
+    return commands.main.scanJava();
   },
 
   async getVersions(): Promise<VersionInfo[]> {
-    return invoke<VersionInfo[]>(MainGetVersions);
+    return commands.main.getVersions();
   },
 
   /** 强制刷新版本列表（清空后端缓存重新拉取） */
   async refreshVersions(): Promise<VersionInfo[]> {
-    return invoke<VersionInfo[]>(MainRefreshVersions);
+    return commands.main.refreshVersions();
   },
 
   /** 获取 Minecraft 官方新闻（第 page 页，默认 1） */
   async getNews(page = 1): Promise<NewsItem[]> {
-    return invoke<NewsItem[]>(MainGetNews, { page });
+    return commands.main.getNews(page);
   },
 
   /** 用系统浏览器打开网址 */
   async openUrl(url: string): Promise<void> {
-    return invoke<void>(MainOpenUrl, { url });
+    return commands.main.openUrl(url);
   },
 
   /** 从头新建实例（版本 + 加载器），返回新实例 uuid */
@@ -78,12 +93,12 @@ export const api = {
     loaderVersion: string | null,
     group: string | null,
   ): Promise<string> {
-    return invoke<string>(AddCreateNew, { name, version, loader, loaderVersion, group });
+    return commands.add.createNew(name, version, loader, loaderVersion, group);
   },
 
   /** 导入文件夹为实例 */
   async addImportFolder(path: string, name: string, group: string | null): Promise<string> {
-    return invoke<string>(AddImportFolder, { path, name, group });
+    return commands.add.importFolder(path, name, group);
   },
 
   /** 导入整合包压缩包（packType：CurseForge / Modrinth / McMod / 本地） */
@@ -94,17 +109,17 @@ export const api = {
     group: string | null,
     unselect: string[] | null,
   ): Promise<string> {
-    return invoke<string>(AddImportArchive, { path, packType, name, group, unselect });
+    return commands.add.importArchive(path, packType, name, group, unselect);
   },
 
   /** 从网址安装实例 */
   async addImportUrl(url: string, name: string, group: string | null): Promise<string> {
-    return invoke<string>(AddImportUrl, { url, name, group });
+    return commands.add.importUrl(url, name, group);
   },
 
   /** 检测压缩包的整合包类型与推荐实例名（识别失败抛错） */
-  async addDetectArchive(path: string): Promise<DetectedPackInfo> {
-    return invoke<DetectedPackInfo>(AddDetectArchive, { path });
+  async addDetectArchive(path: string): Promise<DetectedPackDto> {
+    return commands.add.detectArchive(path);
   },
 
   /** 搜索在线整合包（source：curseforge / modrinth，page 从 0 开始） */
@@ -114,13 +129,13 @@ export const api = {
     version: string | null,
     sort: string,
     page: number,
-  ): Promise<ModpackSearchResult> {
-    return invoke<ModpackSearchResult>(AddModpackSearch, { source, query, version, sort, page });
+  ): Promise<ModpackSearchDto> {
+    return commands.addModpack.search(source, query, version, sort, page);
   },
 
   /** 获取整合包的可安装版本列表（version 传 null 取全部） */
-  async getModpackFiles(source: string, projectId: string, version: string | null): Promise<ModpackFile[]> {
-    return invoke<ModpackFile[]>(AddModpackFiles, { source, projectId, version });
+  async getModpackFiles(source: string, projectId: string, version: string | null): Promise<ModpackFileDto[]> {
+    return commands.addModpack.files(source, projectId, version);
   },
 
   /** 安装在线整合包（实例名取自整合包元数据，返回新实例 uuid） */
@@ -130,54 +145,54 @@ export const api = {
     fileId: string,
     group: string | null,
   ): Promise<string> {
-    return invoke<string>(AddModpackInstall, { source, projectId, fileId, group });
+    return commands.addModpack.install(source, projectId, fileId, group);
   },
 
   /** 取消进行中的安装任务 */
   async addCancel(): Promise<boolean> {
-    return invoke<boolean>(AddCancel);
+    return commands.add.cancel();
   },
 
   /** 获取加载器的可用版本列表（loader：加载器 ID，mc：游戏版本号） */
   async addLoaderVersions(loader: string, mc: string): Promise<string[]> {
-    return invoke<string[]>(AddGetLoaderVersions, { loader, mc });
+    return commands.add.getLoaderVersions(loader, mc);
   },
 
   /** 获取加载器 ID 列表 */
   async addGetLoaders(): Promise<string[]> {
-    return invoke<string[]>(AddGetLoaders);
+    return commands.add.getLoaders();
   },
 
   /** 查询指定游戏版本支持的加载器 ID 列表 */
   async addGetSupportLoaders(mc: string): Promise<string[]> {
-    return invoke<string[]>(AddGetSupportLoaders, { mc });
+    return commands.add.getSupportLoaders(mc);
   },
 
   /** 设置添加实例窗口关闭保护（enabled = true 期间拒绝关闭请求） */
   async setCloseGuard(enabled: boolean): Promise<void> {
-    await invoke(AddSetCloseGuard, { enabled });
+    await commands.add.setCloseGuard(enabled);
   },
 
   /** 获取压缩包类型 ID 列表 */
   async addGetPackTypes(): Promise<string[]> {
-    return invoke<string[]>(AddGetPackTypes);
+    return commands.add.getPackTypes();
   },
 
   /** 获取游戏版本类型 ID 列表（release / snapshot / old_beta / old_alpha） */
   async addGetVersionTypes(): Promise<string[]> {
-    return invoke<string[]>(AddGetVersionTypes);
+    return commands.add.getVersionTypes();
   },
 
   async addGroup(name: string): Promise<boolean> {
-    return invoke<boolean>(MainAddGroup, { name });
+    return commands.main.addGroup(name);
   },
 
   async removeGroup(name: string): Promise<boolean> {
-    return invoke<boolean>(MainRemoveGroup, { name });
+    return commands.main.removeGroup(name);
   },
 
   async moveGroup(name: string, index: number): Promise<boolean> {
-    return invoke<boolean>(MainMoveGroup, { name, index });
+    return commands.main.moveGroup(name, index);
   },
 
   async createInstance(
@@ -185,110 +200,102 @@ export const api = {
     version: string,
     opts?: CreateInstanceOpts,
   ): Promise<InstanceInfo> {
-    return invoke<InstanceInfo>(MainCreateInstance, {
-      name,
-      version,
-      loader: opts?.loader,
-      loaderVersion: opts?.loaderVersion,
-      group: opts?.group ?? null,
-      modpackType: opts?.modpackType,
-      source: opts?.source,
-    });
+    return commands.main.createInstance(name, version, opts?.loader ?? null, opts?.loaderVersion ?? null, opts?.group ?? null, opts?.modpackType ?? null, opts?.source ?? null);
   },
 
   async renameInstance(uuid: string, name: string): Promise<boolean> {
-    return invoke<boolean>(MainRenameInstance, { uuid, name });
+    return commands.main.renameInstance(uuid, name);
   },
 
   /** 更新实例元信息（补丁式，Partial<InstanceInfo>） */
   async updateInstance(uuid: string, patch: Partial<InstanceInfo>): Promise<boolean> {
-    return invoke<boolean>(MainUpdateInstance, { uuid, patch });
+    return commands.main.updateInstance(uuid, patch);
   },
 
   /** 获取实例启动参数（核心实例读配置，遗留数据读内存缓存） */
   async getInstanceArgs(uuid: string): Promise<InstanceArgs> {
-    return invoke<InstanceArgs>(MainGetInstanceArgs, { uuid });
+    return commands.main.getInstanceArgs(uuid);
   },
 
   /** 更新实例启动参数（核心实例写配置并保存） */
   async updateInstanceArgs(uuid: string, args: InstanceArgs): Promise<boolean> {
-    return invoke<boolean>(MainUpdateInstanceArgs, { uuid, args });
+    return commands.main.updateInstanceArgs(uuid, args);
   },
 
   async deleteInstance(uuid: string): Promise<boolean> {
-    return invoke<boolean>(MainDeleteInstance, { uuid });
+    return commands.main.deleteInstance(uuid);
   },
 
   async moveInstance(uuid: string, group: string | null, index: number): Promise<boolean> {
-    return invoke<boolean>(MainMoveInstance, { uuid, group, index });
+    return commands.main.moveInstance(uuid, group, index);
   },
 
   async launchGame(uuid: string, userName: string): Promise<void> {
-    return invoke<void>(MainLaunchGame, { uuid, userName });
+    return commands.main.launchGame(uuid, userName);
   },
 
   async stopGame(uuid: string): Promise<void> {
-    return invoke<void>(MainStopGame, { uuid });
+    return commands.main.stopGame(uuid);
   },
 
   async getGameLog(uuid: string): Promise<string[]> {
-    return invoke<string[]>(MainGetGameLog, { uuid });
+    return commands.main.getGameLog(uuid);
   },
 
   async getRunning(): Promise<string[]> {
-    return invoke<string[]>(MainGetRunning);
+    return commands.main.getRunning();
   },
 
   /** 获取下载状态快照（任务 + 线程 + 总体速度，下载管理窗口轮询） */
-  async getDownloadStatus(): Promise<DownloadStatus> {
-    return invoke<DownloadStatus>(DownloadGetStatus);
+  async getDownloadStatus(): Promise<DownloadStatusDto> {
+    return commands.download.getStatus();
   },
 
   /** 全局暂停所有下载（期间新增任务同样暂停），返回被暂停的任务数 */
   async pauseAllDownloads(): Promise<number> {
-    return invoke<number>(DownloadPauseAll);
+    return commands.download.pauseAll();
   },
 
   /** 全局恢复所有下载，返回被恢复的任务数 */
   async resumeAllDownloads(): Promise<number> {
-    return invoke<number>(DownloadResumeAll);
+    return commands.download.resumeAll();
   },
 
   /** 全局停止（取消）所有下载，返回被停止的任务数 */
   async stopAllDownloads(): Promise<number> {
-    return invoke<number>(DownloadCancelAll);
+    return commands.download.cancelAll();
   },
 
   // ---------------- 收藏 ----------------
 
   /** 获取收藏数据（收藏项 + 分组） */
-  async collectGetData(): Promise<CollectData> {
-    return invoke<CollectData>(CollectGetData);
+  async collectGetData(): Promise<CollectDataDto> {
+    return commands.collect.getData();
   },
 
   /** 添加分组（重名会抛错） */
   async collectAddGroup(name: string): Promise<void> {
-    return invoke(CollectAddGroup, { name });
+    return commands.collect.addGroup(name);
   },
 
   /** 删除分组（组内的收藏条目保留） */
   async collectRemoveGroup(name: string): Promise<void> {
-    return invoke(CollectRemoveGroup, { name });
+    return commands.collect.removeGroup(name);
   },
 
   /** 清空收藏：group 为空 = 清空全部（分组保留），否则只清空该分组 */
   async collectClear(group: string | null): Promise<void> {
-    return invoke(CollectClear, { group });
+    return commands.collect.clear(group);
   },
 
   /** 移除收藏：group 为空 = 从收藏删除，否则只从该分组移除 */
   async collectRemoveItems(uuids: string[], group: string | null): Promise<void> {
-    return invoke(CollectRemoveItems, { uuids, group });
+    return commands.collect.removeItems(uuids, group);
   },
 
   /** 把收藏加入分组 */
   async collectSetGroupItems(group: string, uuids: string[]): Promise<void> {
-    return invoke(CollectSetGroupItems, { group, uuids });
+    return commands.collect.setGroupItems(group, uuids);
   },
 };
 
@@ -341,12 +348,12 @@ export function onAddNameConflict(
 }
 
 /** 整合包安装进度（本地压缩包 / 在线整合包安装共用） */
-export function onAddPackProgress(cb: (e: PackProgress) => void): Promise<UnlistenFn> {
-  return listen<PackProgress>(AddPackProgress, (e) => cb(e.payload));
+export function onAddPackProgress(cb: (e: PackProgressDto) => void): Promise<UnlistenFn> {
+  return listen<PackProgressDto>(AddPackProgress, (e) => cb(e.payload));
 }
 
 export function answerNameConflict(id: number, answer: boolean): Promise<void> {
-  return invoke(AddAnswerNameConflict, { id, answer });
+  return commands.add.answerNameConflict(id, answer);
 }
 
 /** 收藏变更（跨窗口同步） */

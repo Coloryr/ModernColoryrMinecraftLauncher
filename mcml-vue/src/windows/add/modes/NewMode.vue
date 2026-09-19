@@ -5,7 +5,7 @@
 import { computed, onUnmounted, ref } from "vue";
 import { t } from "../../../lib/i18n";
 import BaseButton from "../../../components/ui/BaseButton.vue";
-import type { VersionInfo } from "../../../lib/types";
+import type { VersionInfo } from "../../../lib/bindings";
 
 const props = defineProps<{
   versions: VersionInfo[];

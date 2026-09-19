@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { t } from "../lib/i18n";
-import type { NewsItem } from "../lib/types";
+import type { NewsItem } from "../lib/bindings";
 
 withDefaults(
   defineProps<{
@@ -61,7 +61,7 @@ function tagColor(tag: string) {
         <img :src="item.image" class="banner" alt="" />
         <div class="news-meta">
           <span class="news-tag" :style="tagColor(item.tag)">{{ item.tag }}</span>
-          <span class="news-date">{{ item.date }}</span>
+          <span class="news-date" :title="item.date">{{ item.date }}</span>
         </div>
         <h3 class="news-title">{{ item.title }}</h3>
       </div>
@@ -180,6 +180,8 @@ function tagColor(tag: string) {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  /* 保证左侧分类与右侧副标题至少隔开一点，长副标题时不会挤到一起 */
+  gap: 10px;
   padding: 10px 14px 0;
 }
 
@@ -194,6 +196,13 @@ function tagColor(tag: string) {
 .news-date {
   font-size: 11px;
   color: var(--text-dim);
+  /* 副标题最长 60+ 字，会折行把这一行撑高；标签是垂直居中的，
+     于是下方标题与左侧分类的间距每张卡片都不一样。锁成单行 + 省略号，
+     完整内容靠 title 悬停看 */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .news-title {

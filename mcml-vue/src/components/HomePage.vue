@@ -3,7 +3,7 @@
 // empty=true 时（无任何实例）顶部展示空实例引导块（含添加实例按钮）
 import { t } from "../lib/i18n";
 import { showToast } from "../lib/toast";
-import type { InstanceInfo, NewsItem } from "../lib/types";
+import type { InstanceInfo, NewsItem } from "../lib/bindings";
 import NewsPanel from "./NewsPanel.vue";
 import InstanceIcon from "./InstanceIcon.vue";
 

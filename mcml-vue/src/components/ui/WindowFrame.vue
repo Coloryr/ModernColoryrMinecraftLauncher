@@ -1,10 +1,11 @@
 <script setup lang="ts">
-// 子窗口通用框架：标题 + 内容区
-// “返回主页面”按钮只在单窗口模式（应用内切换）显示；
-// 多窗口模式下子窗口是独立真实窗口/标签页，用系统原生按钮关闭。
+// 子窗口通用框架：标题（兼作自绘标题栏）+ 内容区
+// 头部整条可拖动，两端按平台样式放窗口按钮；「返回主页面」按钮只在单窗口模式下显示。
 import { computed } from "vue";
 import { t } from "../../lib/i18n";
 import { isTauri, multiWindow } from "../../windows/windowManager";
+import WindowControls from "./WindowControls.vue";
+import { onTitleBarPointerDown, titleBarStyle } from "../../lib/titlebar";
 
 defineProps<{ title: string }>();
 
@@ -16,7 +17,10 @@ const showBack = computed(() => !isTauri() && !multiWindow.value);
 
 <template>
   <div class="window-frame">
-    <header class="frame-head">
+    <header class="frame-head" :class="titleBarStyle" @pointerdown="onTitleBarPointerDown">
+      <!-- macos 样式：红黄绿在左端 -->
+      <WindowControls v-if="titleBarStyle === 'macos'" :style="titleBarStyle" />
+
       <button v-if="showBack" class="back-btn" @click="emit('close')">
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
           <path d="m15 18-6-6 6-6" />
@@ -27,6 +31,9 @@ const showBack = computed(() => !isTauri() && !multiWindow.value);
       <span class="spacer"></span>
       <!-- 标题栏右侧扩展区（如查询进度指示） -->
       <slot name="head-right" />
+
+      <!-- windows 样式：最小化 / 最大化 / 关闭在右端 -->
+      <WindowControls v-if="titleBarStyle === 'windows'" :style="titleBarStyle" />
     </header>
     <div class="frame-body">
       <slot />
@@ -51,6 +58,12 @@ const showBack = computed(() => !isTauri() && !multiWindow.value);
   padding: 0 18px;
   background: var(--bg-side);
   border-bottom: 1px solid var(--border);
+}
+
+/* windows 样式的窗口按钮是小方块、不贴边，右侧留一点呼吸空间；
+   macos 样式的圆点留在左内边距之后 */
+.frame-head.windows {
+  padding-right: 10px;
 }
 
 .back-btn {

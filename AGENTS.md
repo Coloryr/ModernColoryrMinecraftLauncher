@@ -20,9 +20,26 @@
 
 ## 3. 构建与运行
 
-- **改动代码前的固定流程：先停掉正在运行的 `tauri dev`（连同应用进程），改完并通过验证
-  （`cargo check` / `cargo build` + `npm run build`）后再重启。** 运行中的 dev 监听会在文件保存
-  中途触发重建 / 热更新，容易出现半成品编译错误、窗口反复重启或行为异常。
+- **改任何代码之前，必须先关闭程序。** 这条没有例外——改一行 CSS 也算。流程固定为：
+  1. 先停掉正在运行的 `tauri dev` 及其带起的应用进程；
+  2. 再改代码；
+  3. 改完跑验证（`cargo check -p <crate>` / `npm run build`，见下一条）；
+  4. 最后才重新启动。
+  运行中的 dev 监听会在文件保存中途触发重建 / 热更新，容易出现半成品编译错误、窗口反复重启或
+  行为异常；用户正在用界面排查问题时尤其不能这么干，会打乱他手上的复现步骤。
+  **不要因为「只是小改」「想省一次重启」就跳过第 1 步**，也不要指望靠热更新看效果。
+- **`tauri dev` 通常是用户手动起的，关它由你负责，别让用户自己关。**（用户已明确授权。）
+  动手前先查进程；发现还在跑就先结束掉，再开始改。参考命令（Windows / bash）：
+
+  ```bash
+  tasklist //FI "IMAGENAME eq mcml-gui.exe"        # 应用进程
+  netstat -ano | grep ":1420"                      # vite 监听（最后一列是 PID）
+  taskkill //IM mcml-gui.exe //F                   # 结束应用
+  taskkill //PID <pid> //F                         # 结束 vite
+  ```
+
+  结束应用后 `tauri dev` 的父进程（cargo-tauri / npm）一般会自行退出；顺手 `tasklist` 确认一下
+  `cargo.exe` / `node.exe` 也没了。
 - **禁止过度检查 / 过度编译测试**：只跑与本次改动直接相关的最小验证——改动所在 crate 的
   `cargo check -p <crate>`、相关的那几个测试（`cargo test -p <crate> --lib`、
   `... --test <name>`，必要时加 `单个用例名` 过滤）。不要动辄
@@ -39,9 +56,12 @@
   `window_open_window`、`add_list_dir`。
 - 事件名由 `emit_xxx_yyy` 推导：去掉 `emit_` 前缀、`_` 换成 `-`，例如
   `emit_account_change` → `account-change`。
-- 命令/事件常量由 `mcml-gui/src-tauri/build.rs` 扫描源码自动生成到
-  `mcml-vue/src/lib/{invokes,listens}.ts`（**勿手改**）。新增命令加 `#[tauri::command]`，
-  新增事件加 `#[gui_macros::emit]`；单独重新生成可跑 `cd mcml-gui && npm run gen`。
+- 前端接口由 `mcml-gui/src-tauri/build.rs` 扫描 Rust 源码自动生成（**勿手改**）：
+  - `mcml-vue/src/lib/bindings.ts`：命令的类型化包装（`commands.xxx(...)`）+ 跨 IPC 类型的
+    TS 定义。命令签名、DTO 结构、`#[serde(rename_all)]` 都是从 Rust 源码解析出来的
+  - `mcml-vue/src/lib/listens.ts`：事件名常量
+  新增命令加 `#[tauri::command]`，新增事件加 `#[gui_macros::emit]`；单独重新生成可跑
+  `cd mcml-gui && npm run gen`（或任意 `cargo check`）。
 - 磁盘配置用 Rust 命名（snake_case），跨 IPC 传输一律经 `src-tauri/src/dtos/` 转成
   camelCase DTO。
 
