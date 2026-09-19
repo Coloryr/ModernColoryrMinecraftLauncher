@@ -12,14 +12,14 @@ import { api, onCollectChange } from "../../lib/api";
 import { loadGuiConfig, saveGuiConfig, type CollectConfig } from "../../lib/guiConfig";
 import { t, tErr } from "../../lib/i18n";
 import { showToast } from "../../lib/toast";
-import type { CollectItem } from "../../lib/types";
+import type { CollectItemDto } from "../../lib/bindings";
 
 defineEmits<{ (e: "close"): void }>();
 
 /** 「默认分组」在下拉里是第 0 项，代表不过滤 */
 const DEFAULT_GROUP = "";
 
-const items = ref<CollectItem[]>([]);
+const items = ref<CollectItemDto[]>([]);
 const groups = ref<Record<string, string[]>>({});
 const group = ref(DEFAULT_GROUP);
 /** 勾选的收藏项 uuid */
@@ -183,7 +183,7 @@ async function removeChecked() {
   }
 }
 
-function openUrl(item: CollectItem) {
+function openUrl(item: CollectItemDto) {
   if (item.url) {
     api.openUrl(item.url).catch(() => {});
   }
@@ -191,11 +191,11 @@ function openUrl(item: CollectItem) {
 
 // ---------------- 右键菜单 ----------------
 
-const menu = ref<{ x: number; y: number; item: CollectItem } | null>(null);
+const menu = ref<{ x: number; y: number; item: CollectItemDto } | null>(null);
 /** 右键点中、当前要操作的条目（卡片按钮也用它） */
-const focus = ref<CollectItem | null>(null);
+const focus = ref<CollectItemDto | null>(null);
 
-function openMenu(e: MouseEvent, item: CollectItem) {
+function openMenu(e: MouseEvent, item: CollectItemDto) {
   menu.value = { x: e.clientX, y: e.clientY, item };
   // 与旧启动器一致：右键会把该项勾上
   toggleCheck(item.uuid, true);

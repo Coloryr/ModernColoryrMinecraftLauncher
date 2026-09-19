@@ -22,12 +22,11 @@ import {
   setCurrentAccount,
   typeLabelKey,
 } from "../../lib/accountStore";
-import type { Account } from "../../lib/types";
+import type { AccountStoreDto } from "../../lib/bindings";
 import { listen } from "@tauri-apps/api/event";
-import { invoke } from "@tauri-apps/api/core";
 import { AccountOAuth, AccountOAuthState } from "../../lib/listens";
-import { AccountOpenBrowser, AccountCancelOAuth } from "../../lib/invokes";
-import { AccountOAuthDto, AccountOAuthStateDto } from "../../lib/dtos/account.ts";
+import { commands } from "../../lib/bindings";
+import type { AccountOAuthDto, AccountOAuthStateDto } from "../../lib/bindings";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
 // 注意：不能用顶层 await —— 会让 <script setup> 变成 async setup，
@@ -159,14 +158,14 @@ function confirmAdd() {
 
 // 微软授权弹窗：打开浏览器并切换到进度窗口
 async function openBrowser() {
-  await invoke(AccountOpenBrowser, { url: oauthUrl.value }).catch(() => { /* 忽略 */ });
+  await commands.account.openBrowser(oauthUrl.value).catch(() => { /* 忽略 */ });
   showOauth.value = false;
   showOauthRun.value = true;
   oauthState.value = t("account.oauthState.waiting");
 }
 
 /** 双击切换当前账户 */
-function switchAccount(acc: Account) {
+function switchAccount(acc: AccountStoreDto) {
   setCurrentAccount(acc);
   showToast(t("account.switched", { name: acc.userName }));
 }
@@ -179,23 +178,23 @@ function seedOf(uuid: string): number {
 }
 
 // 操作
-function refreshToken(acc: Account) {
+function refreshToken(acc: AccountStoreDto) {
   refreshAccountToken(acc.uuid);
   showToast(t("account.refreshed"));
 }
 
-function relogin(acc: Account) {
+function relogin(acc: AccountStoreDto) {
   showToast(t("actions.wip", { name: acc.userName }));
 }
 
 // 取消微软登录：通知后端终止轮询并关闭弹窗
 async function cancelLogin() {
-  await invoke(AccountCancelOAuth).catch(() => { /* 忽略 */ });
+  await commands.account.cancelOAuth().catch(() => { /* 忽略 */ });
   showOauth.value = false;
   showOauthRun.value = false;
 }
 
-const deleteTarget = ref<Account | null>(null);
+const deleteTarget = ref<AccountStoreDto | null>(null);
 
 function confirmDelete() {
   if (!deleteTarget.value) return;
@@ -209,11 +208,11 @@ const TYPE_OPTIONS = computed(() => [
   ...ACCOUNT_TYPES.map((x) => ({ value: x.value, label: t(x.labelKey) })),
 ]);
 
-function typeLabel(acc: Account): string {
+function typeLabel(acc: AccountStoreDto): string {
   return t(typeLabelKey(acc.authType));
 }
 
-function tokenLabel(acc: Account): string {
+function tokenLabel(acc: AccountStoreDto): string {
   return acc.tokenStatus === "valid" ? t("account.tokenValid") : t("account.tokenExpired");
 }
 </script>

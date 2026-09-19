@@ -8,7 +8,7 @@ import { t } from "../../lib/i18n";
 import { showToast } from "../../lib/toast";
 import { api } from "../../lib/api";
 import { loadGuiConfig } from "../../lib/guiConfig";
-import type { InstanceInfo } from "../../lib/types";
+import type { InstanceInfo } from "../../lib/bindings";
 
 type CategoryId =
   | "saves"

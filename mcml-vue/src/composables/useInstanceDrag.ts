@@ -5,7 +5,7 @@
 import { computed, onMounted, onUnmounted, ref, type Ref } from "vue";
 import { api } from "../lib/api";
 import { t } from "../lib/i18n";
-import type { InstanceInfo } from "../lib/types";
+import type { InstanceInfo } from "../lib/bindings";
 
 export interface GroupView {
   name: string;

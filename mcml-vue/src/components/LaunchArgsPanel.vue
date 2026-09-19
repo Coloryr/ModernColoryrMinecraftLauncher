@@ -5,7 +5,7 @@
 //            / 附加环境变量（键值对列表）
 import { ref } from "vue";
 import { t } from "../lib/i18n";
-import type { InstanceArgs, JavaInfo } from "../lib/types";
+import type { InstanceArgs, JavaInfo } from "../lib/bindings";
 import BaseButton from "./ui/BaseButton.vue";
 import NumberStepper from "./ui/NumberStepper.vue";
 import CollapsePanel from "./ui/CollapsePanel.vue";

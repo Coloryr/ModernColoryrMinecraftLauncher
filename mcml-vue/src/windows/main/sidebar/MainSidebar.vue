@@ -4,12 +4,11 @@
 import SegmentedTabs from "../../../components/ui/SegmentedTabs.vue";
 import InstanceIcon from "../../../components/InstanceIcon.vue";
 import { t } from "../../../lib/i18n";
-import type { InstanceInfo } from "../../../lib/types";
-import type { DragCandidate, GroupView, ViewMode } from "../types";
+import type { InstanceInfo } from "../../../lib/bindings";
+import type { ViewMode } from "../../../lib/bindings";
+import type { DragCandidate, GroupView } from "../types";
 
 const props = defineProps<{
-  /** 收起中：仅浮层模式（≤880px）需要，用于把侧栏移出屏幕 */
-  collapsed: boolean;
   mode: ViewMode;
   modeOptions: Array<{ value: string; label: string; icon: string }>;
   searchText: string;
@@ -55,7 +54,7 @@ function isGroupOpen(name: string) {
 </script>
 
 <template>
-  <aside class="sidebar" :class="{ collapsed }">
+  <aside class="sidebar">
     <div class="sidebar-head">
       <SegmentedTabs
         :model-value="mode"
@@ -214,8 +213,8 @@ function isGroupOpen(name: string) {
 
 <style scoped>
 .sidebar {
-  width: 320px;
-  min-width: 320px;
+  width: 300px;
+  min-width: 300px;
   background: var(--bg-side);
   border-right: 1px solid var(--border);
   display: flex;
@@ -288,33 +287,6 @@ function isGroupOpen(name: string) {
 
 .search-clear:hover {
   color: var(--text);
-}
-
-@media (max-width: 880px) {
-  .sidebar {
-    position: fixed;
-    top: 64px;
-    bottom: 0;
-    left: 0;
-    z-index: 160;
-    box-shadow: var(--shadow-lg);
-    /* 浮层模式：展开/收起靠位移（visibility 延迟到动画结束，避免收起后仍可被 Tab 聚焦） */
-    transition: transform 0.22s ease, visibility 0.22s;
-  }
-
-  .main.side-right .sidebar {
-    left: auto;
-    right: 0;
-  }
-
-  .sidebar.collapsed {
-    transform: translateX(-100%);
-    visibility: hidden;
-  }
-
-  .main.side-right .sidebar.collapsed {
-    transform: translateX(100%);
-  }
 }
 
 .icon-btn {
@@ -670,6 +642,12 @@ function isGroupOpen(name: string) {
 .inst-row.multi-checked {
   background: var(--accent-soft);
   outline: 1px solid var(--accent-border);
+}
+
+/* outline 画在元素外沿，会被分组内容容器的 overflow: hidden（收起动画需要）裁掉，故统一向内收 1px */
+.inst-row.active,
+.inst-row.multi-checked {
+  outline-offset: -1px;
 }
 
 .tile.multi-checked {

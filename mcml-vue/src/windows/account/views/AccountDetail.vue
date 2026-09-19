@@ -2,23 +2,23 @@
 // 账户详情视图：全账户表格，操作按钮在左侧
 import { t } from "../../../lib/i18n";
 import AccountActions from "../../../components/AccountActions.vue";
-import type { Account } from "../../../lib/types";
+import type { AccountStoreDto } from "../../../lib/bindings";
 
 const props = defineProps<{
-  accounts: Account[];
+  accounts: AccountStoreDto[];
   currentUuid: string;
-  typeLabel: (acc: Account) => string;
-  tokenLabel: (acc: Account) => string;
+  typeLabel: (acc: AccountStoreDto) => string;
+  tokenLabel: (acc: AccountStoreDto) => string;
 }>();
 
 const emit = defineEmits<{
-  (e: "switch", acc: Account): void;
-  (e: "refresh", acc: Account): void;
-  (e: "relogin", acc: Account): void;
-  (e: "delete", acc: Account): void;
+  (e: "switch", acc: AccountStoreDto): void;
+  (e: "refresh", acc: AccountStoreDto): void;
+  (e: "relogin", acc: AccountStoreDto): void;
+  (e: "delete", acc: AccountStoreDto): void;
 }>();
 
-function isCurrent(acc: Account): boolean {
+function isCurrent(acc: AccountStoreDto): boolean {
   return acc.uuid === props.currentUuid;
 }
 </script>

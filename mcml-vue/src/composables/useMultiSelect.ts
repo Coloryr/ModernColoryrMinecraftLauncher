@@ -1,6 +1,6 @@
 // 多选模式逻辑：右键分组全选进入多选、勾选切换、强制展开分组并居中滚动
 import { nextTick, ref, type Ref } from "vue";
-import type { InstanceInfo } from "../lib/types";
+import type { InstanceInfo } from "../lib/bindings";
 
 interface MultiDeps {
   selected: Ref<InstanceInfo | null>;

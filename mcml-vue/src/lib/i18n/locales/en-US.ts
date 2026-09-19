@@ -356,14 +356,14 @@ export default {
   "add.btnOnline": "Download",
   "add.downloadModpack": "Download modpack",
 
-  // Account
+  // AccountStoreDto
   "account.switch": "Switch account",
   "account.add": "Add",
-  "account.addTitle": "Add Account",
-  "account.added": "Account added",
+  "account.addTitle": "Add AccountStoreDto",
+  "account.added": "AccountStoreDto added",
   "account.loginHint": "Online login (WIP); the account is recorded for now",
   "account.actions": "Actions",
-  "account.username": "Account",
+  "account.username": "AccountStoreDto",
   "account.password": "Password",
   "account.server": "Server address",
   "account.serverId": "Server ID",
@@ -386,9 +386,9 @@ export default {
   "account.offline": "Offline",
   "account.microsoft": "Microsoft",
 
-  // Account window
-  "account.manage": "Account Manager",
-  "account.type": "Account type",
+  // AccountStoreDto window
+  "account.manage": "AccountStoreDto Manager",
+  "account.type": "AccountStoreDto type",
   "account.all": "All",
   "account.search": "Search accounts",
   "account.searchEmpty": "No matching accounts",
@@ -410,16 +410,16 @@ export default {
   "account.capeName": "Cape",
   "account.refresh": "Refresh Token",
   "account.relogin": "Re-login",
-  "account.delete": "Delete Account",
+  "account.delete": "Delete AccountStoreDto",
   "account.deleteConfirm": "Delete account “{name}”?",
   "account.refreshed": "Token refreshed",
-  "account.removed": "Account removed",
+  "account.removed": "AccountStoreDto removed",
   "account.typeOffline": "Offline",
   "account.typeMicrosoft": "Microsoft",
   "account.typeLittleSkin": "LittleSkin",
   "account.typeAuthlib": "Authlib",
   "account.typeNide8": "Nide8",
-  "account.detailTitle": "Account Details",
+  "account.detailTitle": "AccountStoreDto Details",
 
   // Feature entries
   "features.settings": "Launcher Settings",
@@ -602,6 +602,12 @@ export default {
   // Placeholder windows
   "winCommon.pending": "This window is not implemented yet",
 
+  // Custom title bar
+  "titlebar.minimize": "Minimize",
+  "titlebar.maximize": "Maximize",
+  "titlebar.restore": "Restore",
+  "titlebar.close": "Close",
+
   // Backend errors: commands return these keys from Err, the frontend runs t() on them
   "err.sourceType": "Unknown source",
   "err.fileTypeNotFound": "Unknown resource type",
@@ -609,7 +615,7 @@ export default {
   "err.uuid": "Invalid instance UUID",
   "err.gameNotFound": "Instance not found",
   "err.unknownSource": "Unknown modpack source",
-  "err.nameEmpty": "Account name cannot be empty",
+  "err.nameEmpty": "AccountStoreDto name cannot be empty",
   "err.groupEmpty": "Group name cannot be empty",
   "err.groupExists": "This group already exists",
   "err.instanceRunning": "Instance is already running",

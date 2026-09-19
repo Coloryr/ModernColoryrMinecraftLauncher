@@ -40,6 +40,7 @@ async function bootstrap() {
     restoreSelectedInstance(cfg.mainWindow.selectedInstance);
     setMultiWindow(cfg.windowMode !== "Single");
   }
+
   applyTheme();
   applyLocale();
   loadAccounts(); // 账户列表由 Rust 提供（浏览器环境静默跳过）

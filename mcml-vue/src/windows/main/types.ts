@@ -1,5 +1,5 @@
 // 主窗口共享类型（MainWindow 与其子组件共用）
-import type { InstanceInfo } from "../../lib/types";
+import type { InstanceInfo } from "../../lib/bindings";
 
 /** 实例列表显示模式（来源见 lib/guiConfig.ts，默认 list） */
 export type { ViewMode } from "../../lib/guiConfig";

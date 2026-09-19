@@ -14,9 +14,8 @@ import { api, onCloseBlocked, onAddLoaderProgress, onAddNameConflict, onAddPackP
 import { showToast } from "../../lib/toast";
 import { t, tErr } from "../../lib/i18n";
 import { isTauri, openWindow } from "../windowManager";
-import { invoke } from "@tauri-apps/api/core";
-import { AddListDir, AddListArchive } from "../../lib/invokes";
-import type { PackProgress, VersionInfo } from "../../lib/types";
+import { commands } from "../../lib/bindings";
+import type { PackProgressDto, VersionInfo } from "../../lib/bindings";
 
 const emit = defineEmits<{ (e: "close"): void }>();
 
@@ -318,7 +317,7 @@ async function applyArchivePath(path: string) {
   }
   // 读取压缩包真实条目（目录以 / 结尾，buildTree 直接解析）
   try {
-    const list = await invoke<string[]>(AddListArchive, { path });
+    const list = await commands.add.listArchive(path);
     archiveTree.value = buildTree(list);
     archiveChecked.value = new Set(collectFileKeys(archiveTree.value));
     archiveExpanded.value = new Set();
@@ -412,9 +411,7 @@ async function pickFolder() {
 
 /** 列出目录直接内容为树节点（目录标记 lazy，展开时再加载） */
 async function listDirNodes(dirPath: string, rel: string): Promise<FileNode[]> {
-  const entries = await invoke<Array<{ name: string; is_dir: boolean }>>(AddListDir, {
-    path: dirPath,
-  });
+  const entries = await commands.add.listDir(dirPath);
   return entries.map((en) => {
     const key = rel ? `${rel}/${en.name}` : en.name;
     const node: FileNode = { key, name: en.name, isDir: en.is_dir, children: [] };
@@ -608,7 +605,7 @@ async function create() {
 // ================= 整合包进度（压缩包 / 网址导入共用） =================
 
 /** 安装进度（add-pack-progress 事件驱动，null = 未在安装） */
-const packProgress = ref<PackProgress | null>(null);
+const packProgress = ref<PackProgressDto | null>(null);
 
 // ================= 创建成功后的继续添加询问 =================
 

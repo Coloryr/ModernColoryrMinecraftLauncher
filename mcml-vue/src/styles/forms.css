@@ -16,6 +16,13 @@
   background: var(--bg);
   color: var(--text);
   font-size: 14px;
+  /* 定死行高：<select>（含 appearance: base-select 的页面内渲染）与借用此类的
+     <button>（见 NewMode.vue 的 .type-trigger）UA 行高口径不同，不定死两者高度会差一截 */
+  line-height: 20px;
+  /* 高度下限 = 行高 20 + 上下内边距 10×2 + 上下边框 1×2。
+     没有占位项的 <select>（如添加实例窗口的游戏版本 / 加载器）在未选中时渲染不出任何内容，
+     base-select 下内容盒会塌掉，只有加下限才能和已选中时一样高 */
+  min-height: 42px;
   outline: none;
   transition: border-color 0.15s;
   font-family: inherit;

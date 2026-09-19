@@ -2,7 +2,7 @@
 // 实例下拉选择（带实例图标），用于列表模式选中实例
 import { computed, ref } from "vue";
 import { t } from "../lib/i18n";
-import type { InstanceInfo } from "../lib/types";
+import type { InstanceInfo } from "../lib/bindings";
 import InstanceIcon from "./InstanceIcon.vue";
 
 const props = defineProps<{
