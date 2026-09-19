@@ -58,6 +58,7 @@ export default {
 
   // Common tips
   "tip.refreshed": "Refreshed",
+  "tip.deleted": "Deleted",
   "args.loadFailed": "Failed to load instance launch args",
 
   // News
@@ -426,6 +427,7 @@ export default {
   "features.skin": "Skin Viewer",
   "features.help": "Help Manual",
   "features.download": "Downloads",
+  "features.collect": "Favourites",
 
   // Setup
   "init.splash": "Initializing…",
@@ -550,10 +552,16 @@ export default {
   "modpack.curseforge": "CurseForge",
   "modpack.modrinth": "Modrinth",
   "modpack.allVersions": "All game versions",
-  "modpack.sortPopularity": "Popular",
-  "modpack.sortDownloads": "Most downloaded",
-  "modpack.sortUpdated": "Recently updated",
-  "modpack.sortName": "Name",
+  "modpack.sort.popularity": "Popular",
+  "modpack.sort.featured": "Featured",
+  "modpack.sort.total_downloads": "Most downloaded",
+  "modpack.sort.last_updated": "Recently updated",
+  "modpack.sort.name": "Name",
+  "modpack.sort.relevance": "Relevance",
+  "modpack.sort.downloads": "Most downloaded",
+  "modpack.sort.follows": "Most followed",
+  "modpack.sort.newest": "Newest",
+  "modpack.sort.updated": "Recently updated",
   "modpack.searchHint": "Search modpacks…",
   "modpack.search": "Search",
   "modpack.loading": "Searching…",
@@ -563,9 +571,54 @@ export default {
   "modpack.loadingVersions": "Loading versions…",
   "modpack.noVersions": "No versions available for this game version",
   "modpack.install": "Install",
+  "modpack.installDone": "Modpack {name} installed",
   "modpack.prevPage": "Prev",
   "modpack.nextPage": "Next",
   "modpack.unknownSize": "Unknown size",
+
+  // Window titles
+  "winTitle.addModpack": "Download Modpacks",
+  "winTitle.addResource": "Add Resources",
+  "winTitle.collect": "Favourites",
+
+  // Collect window
+  "collect.groupLabel": "Group",
+  "collect.defaultGroup": "Default Group",
+  "collect.addGroup": "Add Group",
+  "collect.addGroupTitle": "Add Collection Group",
+  "collect.groupPlaceholder": "Group name",
+  "collect.deleteGroup": "Delete Group",
+  "collect.deleteGroupConfirm": "Delete group \"{name}\"? Items in it are kept.",
+  "collect.clear": "Clear",
+  "collect.clearAllConfirm": "Clear all favourites? Groups are kept.",
+  "collect.clearGroupConfirm": "Clear group \"{name}\"? Items are kept.",
+  "collect.filterModpack": "Modpack",
+  "collect.openUrl": "Open page",
+  "collect.addToGroup": "Add to group",
+  "collect.addToGroupTitle": "Add to group",
+  "collect.empty": "No favourites yet. Click the star icon when adding resources to an instance.",
+  "collect.count": "{n} items",
+
+  // Placeholder windows
+  "winCommon.pending": "This window is not implemented yet",
+
+  // Backend errors: commands return these keys from Err, the frontend runs t() on them
+  "err.sourceType": "Unknown source",
+  "err.fileTypeNotFound": "Unknown resource type",
+  "err.sortTypeNotFound": "Unknown sort type",
+  "err.uuid": "Invalid instance UUID",
+  "err.gameNotFound": "Instance not found",
+  "err.unknownSource": "Unknown modpack source",
+  "err.nameEmpty": "Account name cannot be empty",
+  "err.groupEmpty": "Group name cannot be empty",
+  "err.groupExists": "This group already exists",
+  "err.instanceRunning": "Instance is already running",
+  "err.modelMissing": "Window model not initialized",
+  "err.unknownLoader": "Unknown loader type",
+  "err.unknownPackType": "Unknown archive type",
+  "err.badFileId": "Invalid file id",
+  "err.fileNotFound": "File not found for this version",
+  "err.groupNotFound": "Group not found",
 };
 
 export const faqs: Array<{ q: string; a: string }> = [

@@ -45,6 +45,16 @@ export function t(key: string, params?: Record<string, string | number>): string
   );
 }
 
+/**
+ * 翻译后端命令返回的错误
+ *
+ * 后端 `Err(...)` 返回的是 i18n 键（`err.*`）；`t()` 对不认识的键原样返回，
+ * 所以网络 / 第三方返回的普通错误串传进来也不会有副作用。
+ */
+export function tErr(e: unknown): string {
+  return t(String(e));
+}
+
 export function useI18n() {
-  return { t, locale, setLocale };
+  return { t, tErr, locale, setLocale };
 }

@@ -51,6 +51,42 @@ pub enum ViewMode {
     Grid,
 }
 
+/// 头像类型（serde 按变体名序列化，与前端同名）
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub enum HeadType {
+    /// 2D 平面头像（默认）
+    #[default]
+    Head2DA,
+    /// 3D 头像，不旋转
+    Head3DA,
+    /// 3D 头像，按 X / Y 旋转
+    Head3DB,
+    /// 2D 大头像
+    Head2DB,
+}
+
+/// 头像设置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct HeadConfig {
+    /// 头像类型：Head2DA / Head3DA / Head3DB / Head2DB
+    pub head_type: HeadType,
+    /// 3D 旋转 X
+    pub x: f32,
+    /// 3D 旋转 Y
+    pub y: f32,
+}
+
+impl Default for HeadConfig {
+    fn default() -> Self {
+        Self {
+            head_type: HeadType::default(),
+            x: 0.0,
+            y: 0.0,
+        }
+    }
+}
+
 /// 主窗口配置（字段名即 wire 名，与前端同名）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -79,6 +115,30 @@ impl Default for MainWindowConfig {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CollectConfig {
+    /// 显示整合包
+    pub modpack: bool,
+    /// 显示模组
+    pub show_mod: bool,
+    /// 显示资源包
+    pub resource_pack: bool,
+    /// 显示光影包
+    pub shaderpack: bool,
+}
+
+impl Default for CollectConfig {
+    fn default() -> Self {
+        Self {
+            modpack: true,
+            show_mod: true,
+            resource_pack: true,
+            shaderpack: true,
+        }
+    }
+}
+
 /// 界面设置
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -91,15 +151,21 @@ pub struct GuiConfig {
     pub window_mode: WindowMode,
     /// 主窗口配置
     pub main_window: MainWindowConfig,
+    /// 头像设置
+    pub head: HeadConfig,
+    /// 收藏界面设置
+    pub collect: CollectConfig,
 }
 
 impl Default for GuiConfig {
     fn default() -> Self {
         Self {
-            theme: Theme::default(),
+            theme: Default::default(),
             locale: Lang::zh_cn,
-            window_mode: WindowMode::default(),
-            main_window: MainWindowConfig::default(),
+            window_mode: Default::default(),
+            main_window: Default::default(),
+            head: Default::default(),
+            collect: Default::default(),
         }
     }
 }

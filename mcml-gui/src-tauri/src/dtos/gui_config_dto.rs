@@ -10,7 +10,22 @@ use serde::{Deserialize, Serialize};
 
 use mcml_names::Lang;
 
-use crate::gui_config::{GuiConfig, MainWindowConfig, SidebarSide, Theme, ViewMode, WindowMode};
+use crate::gui_config::{
+    CollectConfig, GuiConfig, HeadConfig, HeadType, MainWindowConfig, SidebarSide, Theme, ViewMode,
+    WindowMode,
+};
+
+/// 头像设置（前端 wire：camelCase，字段即 `head`）
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct HeadConfigDto {
+    /// Head2DA / Head3DA / Head3DB / Head2DB
+    pub head_type: HeadType,
+    /// 3D 旋转 X
+    pub x: f32,
+    /// 3D 旋转 Y
+    pub y: f32,
+}
 
 /// 主窗口配置（前端 wire：camelCase，字段即 `mainWindow`）
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -26,6 +41,19 @@ pub struct MainWindowConfigDto {
     pub selected_instance: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct CollectConfigDto {
+    /// 显示整合包
+    pub modpack: bool,
+    /// 显示模组
+    pub show_mod: bool,
+    /// 显示资源包
+    pub resource_pack: bool,
+    /// 显示光影包
+    pub shaderpack: bool,
+}
+
 /// GUI 配置（前端 wire：camelCase，即 `window_get_gui_config` 返回值）
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase", default)]
@@ -38,6 +66,10 @@ pub struct GuiConfigDto {
     pub window_mode: WindowMode,
     /// 主窗口配置
     pub main_window: MainWindowConfigDto,
+    /// 头像设置
+    pub head: HeadConfigDto,
+    /// 收藏界面设置
+    pub collect: CollectConfigDto,
 }
 
 impl From<GuiConfig> for GuiConfigDto {
@@ -51,6 +83,17 @@ impl From<GuiConfig> for GuiConfigDto {
                 sidebar_collapsed: c.main_window.sidebar_collapsed,
                 view_mode: c.main_window.view_mode,
                 selected_instance: c.main_window.selected_instance,
+            },
+            head: HeadConfigDto {
+                head_type: c.head.head_type,
+                x: c.head.x,
+                y: c.head.y,
+            },
+            collect: CollectConfigDto {
+                modpack: c.collect.modpack,
+                show_mod: c.collect.show_mod,
+                resource_pack: c.collect.resource_pack,
+                shaderpack: c.collect.shaderpack,
             },
         }
     }
@@ -67,6 +110,17 @@ impl From<GuiConfigDto> for GuiConfig {
                 sidebar_collapsed: d.main_window.sidebar_collapsed,
                 view_mode: d.main_window.view_mode,
                 selected_instance: d.main_window.selected_instance,
+            },
+            head: HeadConfig {
+                head_type: d.head.head_type,
+                x: d.head.x,
+                y: d.head.y,
+            },
+            collect: CollectConfig {
+                modpack: d.collect.modpack,
+                show_mod: d.collect.show_mod,
+                resource_pack: d.collect.resource_pack,
+                shaderpack: d.collect.shaderpack,
             },
         }
     }

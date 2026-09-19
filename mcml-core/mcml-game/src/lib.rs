@@ -57,6 +57,7 @@ pub mod modrinth;
 pub mod mojang;
 pub mod other_launcher;
 pub mod path_watch;
+pub mod player_skin;
 pub mod scan_game;
 pub mod serverpack;
 

@@ -58,6 +58,15 @@ const ADD_WINDOW_UUID: Uuid = uuid!("00000000-0000-0000-0000-000000000008");
 /// 下载窗口固定 uuid
 pub const DOWNLOAD_WINDOW_UUID: Uuid = uuid!("00000000-0000-0000-0000-000000000009");
 
+/// 下载整合包窗口固定 uuid
+const ADD_MODPACK_WINDOW_UUID: Uuid = uuid!("00000000-0000-0000-0000-00000000000a");
+
+/// 添加资源窗口固定 uuid
+const ADD_RESOURCE_WINDOW_UUID: Uuid = uuid!("00000000-0000-0000-0000-00000000000b");
+
+/// 收藏窗口固定 uuid
+const COLLECT_WINDOW_UUID: Uuid = uuid!("00000000-0000-0000-0000-00000000000c");
+
 /// 窗口注册表条目
 struct WindowEntry {
     label: &'static str,
@@ -140,6 +149,30 @@ const WINDOWS_INFO: LazyLock<HashMap<Uuid, WindowEntry>> = LazyLock::new(|| {
                 min_height: DOWNLOAD_MIN_HEIGHT,
             },
         ),
+        (
+            ADD_MODPACK_WINDOW_UUID,
+            WindowEntry {
+                label: "mcml-add_modpack",
+                min_width: MIN_WIDTH,
+                min_height: MIN_HEIGHT,
+            },
+        ),
+        (
+            ADD_RESOURCE_WINDOW_UUID,
+            WindowEntry {
+                label: "mcml-add_resource",
+                min_width: MIN_WIDTH,
+                min_height: MIN_HEIGHT,
+            },
+        ),
+        (
+            COLLECT_WINDOW_UUID,
+            WindowEntry {
+                label: "mcml-collect",
+                min_width: MIN_WIDTH,
+                min_height: MIN_HEIGHT,
+            },
+        ),
     ])
 });
 
@@ -180,7 +213,7 @@ fn ensure_window_model(app: &AppHandle, uuid: &Uuid) {
         models.entry(uuid.clone()).or_insert_with(|| {
             Arc::new(Mutex::new(crate::windows::main::MainWindowModel::new()))
         });
-    } else if *uuid == ADD_WINDOW_UUID {
+    } else if *uuid == ADD_WINDOW_UUID || *uuid == ADD_MODPACK_WINDOW_UUID {
         models
             .entry(uuid.clone())
             .or_insert_with(|| Arc::new(Mutex::new(crate::windows::add::AddWindowModel::new())));
@@ -212,7 +245,7 @@ fn remove_window_model(uuid: &Uuid) {
 /// 窗口是否拒绝本次关闭
 ///
 /// - 下载窗口：仍有下载任务时拒绝（前端弹确认框，确认后停止下载再关窗）
-/// - 添加实例窗口：模型侧关闭保护（查询数据期间）
+/// - 添加实例 / 下载整合包窗口：模型侧关闭保护（查询数据期间）
 /// 其余窗口不保护。
 fn close_guarded(uuid: &Uuid) -> bool {
     // 下载窗口：任务未清空时不让直接关，避免后台下载被静默中断

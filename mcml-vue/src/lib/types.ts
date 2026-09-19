@@ -257,3 +257,24 @@ export interface PackProgress {
   subNow: number;
   subTotal: number;
 }
+
+/** 收藏项（uuid 是后端 collect.json 里的字典 key，增删改都用它寻址） */
+export interface CollectItem {
+  uuid: string;
+  name: string;
+  /** 下载源：curseforge / modrinth */
+  source: string;
+  /** 资源类型：modpack / mod / resourcepack / shaderpack … */
+  fileType: string;
+  pid: string;
+  /** 图标地址（URL） */
+  icon: string | null;
+  /** 项目网页地址 */
+  url: string;
+}
+
+/** 收藏窗口数据：收藏项 + 分组（分组名 → 收藏项 uuid 列表） */
+export interface CollectData {
+  items: CollectItem[];
+  groups: Record<string, string[]>;
+}

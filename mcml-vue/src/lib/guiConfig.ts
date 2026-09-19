@@ -19,6 +19,11 @@ export function normalizeViewMode(value: string | null | undefined): ViewMode {
   return value === "group" || value === "grid" ? value : "list";
 }
 
+/** 把任意值规范成合法的头像类型（非法 / 缺省 → Head2DA） */
+export function normalizeHeadType(value: string | null | undefined): HeadType {
+  return value === "Head3DA" || value === "Head3DB" || value === "Head2DB" ? value : "Head2DA";
+}
+
 /** 主窗口配置（对应 Rust MainWindowConfig，wire 为 mainWindow） */
 export interface MainWindowConfig {
   /** Left / Right */
@@ -31,6 +36,31 @@ export interface MainWindowConfig {
   selectedInstance: string;
 }
 
+/** 头像类型（枚举值即 Rust 变体名） */
+export type HeadType = "Head2DA" | "Head3DA" | "Head3DB" | "Head2DB";
+
+/** 头像设置（对应 Rust HeadConfig，wire 为 head） */
+export interface HeadConfig {
+  /** Head2DA / Head3DA / Head3DB / Head2DB */
+  headType: HeadType;
+  /** 3D 旋转 X */
+  x: number;
+  /** 3D 旋转 Y */
+  y: number;
+}
+
+/** 收藏窗口的类型过滤（对应 Rust CollectConfig，wire 为 collect） */
+export interface CollectConfig {
+  /** 显示整合包 */
+  modpack: boolean;
+  /** 显示模组 */
+  showMod: boolean;
+  /** 显示资源包 */
+  resourcePack: boolean;
+  /** 显示光影包 */
+  shaderpack: boolean;
+}
+
 export interface GuiConfig {
   /** Dark / Light */
   theme: Theme;
@@ -39,6 +69,8 @@ export interface GuiConfig {
   /** Multi / Single */
   windowMode: WindowMode;
   mainWindow: MainWindowConfig;
+  head: HeadConfig;
+  collect: CollectConfig;
 }
 
 export interface WindowState {
@@ -60,12 +92,14 @@ export async function loadGuiConfig(): Promise<GuiConfig | null> {
   }
 }
 
-/** GUI 状态局部更新（mainWindow 内部可只给一个字段，saveGuiConfig 会深合并） */
+/** GUI 状态局部更新（mainWindow / head 内部可只给一个字段，saveGuiConfig 会深合并） */
 export interface GuiConfigPatch {
   theme?: Theme;
   locale?: Locale;
   windowMode?: WindowMode;
   mainWindow?: Partial<MainWindowConfig>;
+  head?: Partial<HeadConfig>;
+  collect?: Partial<CollectConfig>;
 }
 
 /** 合并保存 GUI 状态到 gui_config.json（mainWindow 内部做深合并，避免互相覆盖） */
@@ -77,6 +111,8 @@ export async function saveGuiConfig(patch: GuiConfigPatch): Promise<void> {
         ...cur,
         ...patch,
         mainWindow: { ...cur.mainWindow, ...patch.mainWindow },
+        head: { ...cur.head, ...patch.head },
+        collect: { ...cur.collect, ...patch.collect },
       },
     });
   } catch {
@@ -94,6 +130,17 @@ function defaultConfig(): GuiConfig {
       sidebarCollapsed: localStorage.getItem("mcml.sidebarCollapsed") !== "0",
       viewMode: normalizeViewMode(localStorage.getItem("mcml.viewMode")),
       selectedInstance: localStorage.getItem("mcml.selectedInstance") ?? "",
+    },
+    head: {
+      headType: normalizeHeadType(localStorage.getItem("mcml.headType")),
+      x: Number(localStorage.getItem("mcml.headX")) || 0,
+      y: Number(localStorage.getItem("mcml.headY")) || 0,
+    },
+    collect: {
+      modpack: localStorage.getItem("mcml.collect.modpack") !== "0",
+      showMod: localStorage.getItem("mcml.collect.showMod") !== "0",
+      resourcePack: localStorage.getItem("mcml.collect.resourcePack") !== "0",
+      shaderpack: localStorage.getItem("mcml.collect.shaderpack") !== "0",
     },
   };
 }

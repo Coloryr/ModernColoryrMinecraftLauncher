@@ -58,6 +58,7 @@ export default {
 
   // 通用提示
   "tip.refreshed": "已刷新",
+  "tip.deleted": "已删除",
   "args.loadFailed": "读取实例启动参数失败",
 
   // 新闻
@@ -426,6 +427,7 @@ export default {
   "features.skin": "皮肤查看",
   "features.help": "帮助手册",
   "features.download": "下载管理",
+  "features.collect": "资源收藏",
 
   // 初始化
   "init.splash": "正在初始化…",
@@ -550,10 +552,16 @@ export default {
   "modpack.curseforge": "CurseForge",
   "modpack.modrinth": "Modrinth",
   "modpack.allVersions": "全部游戏版本",
-  "modpack.sortPopularity": "热门",
-  "modpack.sortDownloads": "下载最多",
-  "modpack.sortUpdated": "最近更新",
-  "modpack.sortName": "名字",
+  "modpack.sort.popularity": "热门",
+  "modpack.sort.featured": "精选",
+  "modpack.sort.total_downloads": "下载最多",
+  "modpack.sort.last_updated": "最近更新",
+  "modpack.sort.name": "名字",
+  "modpack.sort.relevance": "推荐",
+  "modpack.sort.downloads": "下载最多",
+  "modpack.sort.follows": "订阅数",
+  "modpack.sort.newest": "最新发布",
+  "modpack.sort.updated": "最近更新",
   "modpack.searchHint": "搜索整合包…",
   "modpack.search": "搜索",
   "modpack.loading": "搜索中…",
@@ -563,6 +571,7 @@ export default {
   "modpack.loadingVersions": "正在获取版本列表…",
   "modpack.noVersions": "该整合包在此游戏版本下没有可用版本",
   "modpack.install": "安装",
+  "modpack.installDone": "整合包 {name} 安装完成",
   "modpack.prevPage": "上一页",
   "modpack.nextPage": "下一页",
   "modpack.unknownSize": "未知大小",
@@ -570,6 +579,48 @@ export default {
   // 窗口标题
   "winTitle.main": "MCML 启动器",
   "winTitle.account": "MCML 账户管理",
+  "winTitle.addModpack": "下载整合包",
+  "winTitle.addResource": "添加资源",
+  "winTitle.collect": "资源收藏",
+
+  // 收藏窗口
+  "collect.groupLabel": "分组",
+  "collect.defaultGroup": "默认分组",
+  "collect.addGroup": "添加分组",
+  "collect.addGroupTitle": "添加收藏分组",
+  "collect.groupPlaceholder": "分组名称",
+  "collect.deleteGroup": "删除分组",
+  "collect.deleteGroupConfirm": "确定删除分组「{name}」吗？组内的收藏条目会保留。",
+  "collect.clear": "清空",
+  "collect.clearAllConfirm": "确定清空全部收藏吗？分组会保留。",
+  "collect.clearGroupConfirm": "确定清空分组「{name}」吗？收藏条目会保留。",
+  "collect.filterModpack": "整合包",
+  "collect.openUrl": "打开网址",
+  "collect.addToGroup": "添加到分组",
+  "collect.addToGroupTitle": "添加到分组",
+  "collect.empty": "没有收藏的资源，给游戏实例添加资源时点击星星图标即可收藏",
+  "collect.count": "共 {n} 项",
+
+  // 占位窗口
+  "winCommon.pending": "该窗口尚未实现",
+
+  // 后端错误：命令的 Err 返回的就是这些键，前端 t() 后展示
+  "err.sourceType": "未知的下载源",
+  "err.fileTypeNotFound": "未知的资源类型",
+  "err.sortTypeNotFound": "未知的排序方式",
+  "err.uuid": "无效的实例 UUID",
+  "err.gameNotFound": "未找到该实例",
+  "err.unknownSource": "未知的整合包来源",
+  "err.nameEmpty": "账户名不能为空",
+  "err.groupEmpty": "分组名不能为空",
+  "err.groupExists": "这个分组已经存在",
+  "err.instanceRunning": "实例已在运行中",
+  "err.modelMissing": "窗口模型未初始化",
+  "err.unknownLoader": "未知的加载器类型",
+  "err.unknownPackType": "未知的压缩包类型",
+  "err.badFileId": "无效的文件编号",
+  "err.fileNotFound": "未找到该版本的文件",
+  "err.groupNotFound": "分组不存在",
 };
 
 export const faqs: Array<{ q: string; a: string }> = [

@@ -1,6 +1,9 @@
-//! 下载资源
+//! 添加资源窗口：从 CurseForge / Modrinth 浏览并获取资源
+//!
+//! 与「下载整合包」窗口（`add_modpack`）分开：这里按资源类型
+//! （模组 / 资源包 / 光影包等）走通用的项目与文件列表查询。
 
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::LazyLock};
 
 use mcml_game::{
     curseforge,
@@ -9,15 +12,22 @@ use mcml_game::{
     modrinth,
 };
 use mcml_net::{
-    curseforge_api::{self, CurseFogreArg, CurseForgeSortType},
-    modrinth_api::ModrinthSortType,
+    curseforge_api::{self, CurseFogreArg, CurseForgeSortType, file_obj::CurseForgeFileDataObj},
+    modrinth_api::{self, ModrinthSortType, version_obj::ModrinthVersionObj},
 };
+use tokio::sync::RwLock;
+use uuid::Uuid;
 
-use crate::dtos::add_resource_dto::FileListDto;
+use crate::dtos::add_resource_dto::{FileListDto, FileListItemDto};
+
+static CURSEFOGRE_INFO: LazyLock<RwLock<HashMap<String, HashMap<String, CurseForgeFileDataObj>>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
+static MODRINTH_INFO: LazyLock<RwLock<HashMap<String, HashMap<String, ModrinthVersionObj>>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
 
 /// 获取下载源
 #[tauri::command]
-pub fn get_source_type() -> Result<Vec<String>, String> {
+pub fn add_resource_source_type() -> Result<Vec<String>, String> {
     Ok(vec![
         ModPackType::Modrinth.to_string(),
         ModPackType::CurseForge.to_string(),
@@ -26,14 +36,14 @@ pub fn get_source_type() -> Result<Vec<String>, String> {
 
 /// 获取分组
 #[tauri::command]
-pub async fn get_categories(
+pub async fn add_resource_categories(
     source: String,
     file_type: String,
 ) -> Result<HashMap<String, String>, String> {
     let source = ModPackType::from_string(&source);
     let file_type = FileType::from_string(&file_type);
     if file_type.is_none() {
-        return Err(String::from("file type not found"));
+        return Err(String::from("err.fileTypeNotFound"));
     }
     let file_type = file_type.unwrap();
 
@@ -44,13 +54,13 @@ pub async fn get_categories(
         ModPackType::Modrinth => modrinth::get_categories(file_type)
             .await
             .map_err(|err| err.to_string()),
-        _ => Err(String::from("error source type")),
+        _ => Err(String::from("err.sourceType")),
     }
 }
 
 /// 获取排序方式
 #[tauri::command]
-pub fn get_sort_type(source: String) -> Result<Vec<String>, String> {
+pub fn add_resource_sort_type(source: String) -> Result<Vec<String>, String> {
     let source = ModPackType::from_string(&source);
 
     match source {
@@ -68,13 +78,13 @@ pub fn get_sort_type(source: String) -> Result<Vec<String>, String> {
             ModrinthSortType::Newest.to_string(),
             ModrinthSortType::Updated.to_string(),
         ]),
-        _ => Err(String::from("error source type")),
+        _ => Err(String::from("err.sourceType")),
     }
 }
 
 /// 获取支持的游戏版本列表
 #[tauri::command]
-pub async fn get_game_versions(source: String) -> Result<Vec<String>, String> {
+pub async fn add_resource_game_versions(source: String) -> Result<Vec<String>, String> {
     let source = ModPackType::from_string(&source);
 
     match source {
@@ -84,13 +94,18 @@ pub async fn get_game_versions(source: String) -> Result<Vec<String>, String> {
         ModPackType::Modrinth => modrinth::get_game_versions()
             .await
             .map_err(|err| err.to_string()),
-        _ => Err("error source type".to_string()),
+        _ => Err("err.sourceType".to_string()),
     }
 }
 
 /// 获取文件列表
+///
+/// 一页50个项目
+/// CurseForge换页需要查询
+/// Modrinth没有换页，一次获取所有
 #[tauri::command]
-pub async fn get_file_versions(
+pub async fn add_resource_file_versions(
+    game: String,
     source: String,
     pid: String,
     file_type: String,
@@ -98,15 +113,24 @@ pub async fn get_file_versions(
     version: Option<String>,
     loader: Option<String>,
 ) -> Result<FileListDto, String> {
+    let uuid = Uuid::parse_str(&game);
+    if uuid.is_err() {
+        return Err(String::from("err.uuid"));
+    }
+    let game = mcml_game::get_instance(&uuid.unwrap());
+    if game.is_none() {
+        return Err(String::from("err.gameNotFound"));
+    }
+    let game = game.unwrap().read().unwrap().read_online_info();
     let source = ModPackType::from_string(&source);
     let file_type = FileType::from_string(&file_type);
     if file_type.is_none() {
-        return Err(String::from("error type not found"));
+        return Err(String::from("err.fileTypeNotFound"));
     }
     let file_type = file_type.unwrap();
-    let mod_loader = LoaderType::from_string(&loader.unwrap_or_default());
+    let mod_loader = LoaderType::from_string(&loader.clone().unwrap_or_default());
     if mod_loader.is_none() {
-        return Err(String::from("error type not found"));
+        return Err(String::from("err.fileTypeNotFound"));
     }
     let mod_loader = if matches!(file_type, FileType::Mod) {
         mod_loader.unwrap()
@@ -129,17 +153,85 @@ pub async fn get_file_versions(
             .await
             .map_err(|err| err.to_string())?;
 
-            Ok(FileListDto {
-                list: list.data.iter().map(|item| ),
-                count: list.pagination.total_count,
-                name: data.data.name
-            })
+            let mut list1 = Vec::new();
 
-            todo!()
+            {
+                let mut lock = CURSEFOGRE_INFO.write().await;
+                let list2 = lock.entry(pid.clone()).or_default();
+
+                for item in list.data {
+                    let info = game.get(&item.mod_id.to_string());
+                    let download = match info {
+                        Some(data) => data.fileid == item.id.to_string(),
+                        None => false,
+                    };
+
+                    list1.push(FileListItemDto::new_curseforge(
+                        &item,
+                        file_type.to_string(),
+                        download,
+                    ));
+                    list2.insert(item.id.to_string(), item);
+                }
+            }
+
+            Ok(FileListDto {
+                list: list1,
+                count: list.pagination.total_count,
+                name: data.data.name,
+                max_page: list.pagination.total_count / 50,
+            })
         }
         ModPackType::Modrinth => {
-            todo!()
+            let data = modrinth_api::get_project(&pid)
+                .await
+                .map_err(|err| err.to_string())?;
+
+            let list = modrinth_api::get_file_versions(
+                &pid,
+                match version.as_ref() {
+                    Some(data) => Some(data),
+                    None => None,
+                },
+                match loader.as_ref() {
+                    Some(data) => Some(data),
+                    None => None,
+                },
+            )
+            .await
+            .map_err(|err| err.to_string())?;
+
+            let mut list1 = Vec::new();
+
+            let len = list.len() as u64;
+
+            {
+                let mut lock = MODRINTH_INFO.write().await;
+                let list2 = lock.entry(pid.clone()).or_default();
+
+                for item in list {
+                    let info = game.get(&item.project_id);
+                    let download = match info {
+                        Some(data) => data.fileid == item.id,
+                        None => false,
+                    };
+
+                    list1.push(FileListItemDto::new_modrinth(
+                        &item,
+                        file_type.to_string(),
+                        download,
+                    ));
+                    list2.insert(item.id.to_string(), item);
+                }
+            }
+
+            Ok(FileListDto {
+                list: list1,
+                count: len,
+                name: data.title,
+                max_page: len / 50,
+            })
         }
-        _ => Err(String::from("error source type")),
+        _ => Err(String::from("err.sourceType")),
     }
 }

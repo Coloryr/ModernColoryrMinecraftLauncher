@@ -19,6 +19,9 @@ const windowMap: Record<WindowKind, Component> = {
   resource: defineAsyncComponent(() => import("./windows/resource/ResourceWindow.vue")),
   account: defineAsyncComponent(() => import("./windows/account/AccountWindow.vue")),
   add: defineAsyncComponent(() => import("./windows/add/AddInstanceWindow.vue")),
+  add_modpack: defineAsyncComponent(() => import("./windows/add_modpack/AddModpackWindow.vue")),
+  add_resource: defineAsyncComponent(() => import("./windows/add_resource/AddResourceWindow.vue")),
+  collect: defineAsyncComponent(() => import("./windows/collect/CollectWindow.vue")),
   download: defineAsyncComponent(() => import("./windows/download/DownloadWindow.vue")),
 };
 
