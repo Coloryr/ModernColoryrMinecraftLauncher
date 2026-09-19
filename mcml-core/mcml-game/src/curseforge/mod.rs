@@ -70,7 +70,7 @@ impl CurseForgeSortField {
 }
 
 pub fn to_loader_id(loader: &LoaderType) -> Option<u32> {
-    match self {
+    match loader {
         LoaderType::Forge => Some(1),
         LoaderType::Fabric => Some(4),
         LoaderType::Quilt => Some(5),
@@ -171,7 +171,7 @@ fn get_mod_dependencies_inner(
             let res1 = curseforge_api::get_files_page(CurseFogreArg {
                 id: Some(id.clone()),
                 version: Some(version.to_string()),
-                loader: Some(loader.get_id()),
+                loader: to_loader_id(loader),
                 ..Default::default()
             })
             .await;

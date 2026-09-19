@@ -84,7 +84,7 @@ pub async fn account_add_account(
 
     let n = name.trim().to_string();
     if n.is_empty() {
-        return Err("账户名不能为空".to_string());
+        return Err("err.nameEmpty".to_string());
     }
     let uuid = Uuid::new_v4().to_string();
     let mut login = LoginObj::new(n, uuid.clone(), String::new(), String::new());

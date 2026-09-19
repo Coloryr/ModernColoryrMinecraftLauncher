@@ -4,28 +4,11 @@
 // 按钮执行的操作也通过 IPC 调用。仅在 Tauri 环境可用（纯浏览器会报错）。
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import type {
-  DetectedPackInfo,
-  DownloadItemEvent,
-  DownloadStatus,
-  DownloadTaskEvent,
-  ErrorEvent,
-  ExitEvent,
-  InstanceArgs,
-  InstanceInfo,
-  JavaInfo,
-  LogEvent,
-  ModpackFile,
-  ModpackSearchResult,
-  NewsItem,
-  PackProgress,
-  StateEvent,
-  VersionInfo,
-} from "./types";
-import { MainGetInstances, MainGetGroups, MainGetInstanceArgs, MainGetInstanceLangs, MainGetJavaList, MainGetVersions, MainGetNews, MainOpenUrl, MainAddGroup, MainRemoveGroup, MainMoveGroup, MainCreateInstance, MainRenameInstance, MainUpdateInstance, MainUpdateInstanceArgs, MainDeleteInstance, MainMoveInstance, MainLaunchGame, MainStopGame, MainGetGameLog, MainGetRunning, MainRefreshVersions, MainAddJava, MainRemoveJava, MainScanJava } from "./invokes";
-import { AddCreateNew, AddImportFolder, AddImportArchive, AddImportUrl, AddCancel, AddDetectArchive, AddGetModpackFiles, AddSearchModpacks, AddInstallModpack, AddGetLoaderVersions, AddGetLoaders, AddGetPackTypes, AddGetVersionTypes, AddGetSupportLoaders, AddSetCloseGuard, AddAnswerNameConflict } from "./invokes";
+import type { CollectData, DetectedPackInfo, DownloadItemEvent, DownloadStatus, DownloadTaskEvent, ErrorEvent, ExitEvent, InstanceArgs, InstanceInfo, JavaInfo, LogEvent, ModpackFile, ModpackSearchResult, NewsItem, PackProgress, StateEvent, VersionInfo } from "./types";
+import { CollectAddGroup, CollectClear, CollectGetData, CollectRemoveGroup, CollectRemoveItems, CollectSetGroupItems, MainAddGroup, MainAddJava, MainCreateInstance, MainDeleteInstance, MainGetGameLog, MainGetGroups, MainGetInstanceArgs, MainGetInstanceLangs, MainGetInstances, MainGetJavaList, MainGetNews, MainGetRunning, MainGetVersions, MainLaunchGame, MainMoveGroup, MainMoveInstance, MainOpenUrl, MainRefreshVersions, MainRemoveGroup, MainRemoveJava, MainRenameInstance, MainScanJava, MainStopGame, MainUpdateInstance, MainUpdateInstanceArgs } from "./invokes";
+import { AddCreateNew, AddImportFolder, AddImportArchive, AddImportUrl, AddCancel, AddDetectArchive, AddModpackFiles, AddModpackSearch, AddModpackInstall, AddGetLoaderVersions, AddGetLoaders, AddGetPackTypes, AddGetVersionTypes, AddGetSupportLoaders, AddSetCloseGuard, AddAnswerNameConflict } from "./invokes";
 import { DownloadCancelAll, DownloadGetStatus, DownloadPauseAll, DownloadResumeAll } from "./invokes";
-import { GameLog, LaunchState, GameExit, LaunchError, InstanceChange, CloseBlocked, AddLoaderProgress, AddNameConflict, AddPackProgress, JavaChange, DownloadItem, DownloadTask } from "./listens";
+import { AddLoaderProgress, AddNameConflict, AddPackProgress, CloseBlocked, CollectChange, DownloadItem, DownloadTask, GameExit, GameLog, InstanceChange, JavaChange, LaunchError, LaunchState } from "./listens";
 
 export interface CreateInstanceOpts {
   loader?: string;
@@ -132,12 +115,12 @@ export const api = {
     sort: string,
     page: number,
   ): Promise<ModpackSearchResult> {
-    return invoke<ModpackSearchResult>(AddSearchModpacks, { source, query, version, sort, page });
+    return invoke<ModpackSearchResult>(AddModpackSearch, { source, query, version, sort, page });
   },
 
   /** 获取整合包的可安装版本列表（version 传 null 取全部） */
   async getModpackFiles(source: string, projectId: string, version: string | null): Promise<ModpackFile[]> {
-    return invoke<ModpackFile[]>(AddGetModpackFiles, { source, projectId, version });
+    return invoke<ModpackFile[]>(AddModpackFiles, { source, projectId, version });
   },
 
   /** 安装在线整合包（实例名取自整合包元数据，返回新实例 uuid） */
@@ -147,7 +130,7 @@ export const api = {
     fileId: string,
     group: string | null,
   ): Promise<string> {
-    return invoke<string>(AddInstallModpack, { source, projectId, fileId, group });
+    return invoke<string>(AddModpackInstall, { source, projectId, fileId, group });
   },
 
   /** 取消进行中的安装任务 */
@@ -275,6 +258,38 @@ export const api = {
   async stopAllDownloads(): Promise<number> {
     return invoke<number>(DownloadCancelAll);
   },
+
+  // ---------------- 收藏 ----------------
+
+  /** 获取收藏数据（收藏项 + 分组） */
+  async collectGetData(): Promise<CollectData> {
+    return invoke<CollectData>(CollectGetData);
+  },
+
+  /** 添加分组（重名会抛错） */
+  async collectAddGroup(name: string): Promise<void> {
+    return invoke(CollectAddGroup, { name });
+  },
+
+  /** 删除分组（组内的收藏条目保留） */
+  async collectRemoveGroup(name: string): Promise<void> {
+    return invoke(CollectRemoveGroup, { name });
+  },
+
+  /** 清空收藏：group 为空 = 清空全部（分组保留），否则只清空该分组 */
+  async collectClear(group: string | null): Promise<void> {
+    return invoke(CollectClear, { group });
+  },
+
+  /** 移除收藏：group 为空 = 从收藏删除，否则只从该分组移除 */
+  async collectRemoveItems(uuids: string[], group: string | null): Promise<void> {
+    return invoke(CollectRemoveItems, { uuids, group });
+  },
+
+  /** 把收藏加入分组 */
+  async collectSetGroupItems(group: string, uuids: string[]): Promise<void> {
+    return invoke(CollectSetGroupItems, { group, uuids });
+  },
 };
 
 // ---------------- 事件订阅（Rust emit → 前端 listen） ----------------
@@ -332,4 +347,9 @@ export function onAddPackProgress(cb: (e: PackProgress) => void): Promise<Unlist
 
 export function answerNameConflict(id: number, answer: boolean): Promise<void> {
   return invoke(AddAnswerNameConflict, { id, answer });
+}
+
+/** 收藏变更（跨窗口同步） */
+export function onCollectChange(cb: () => void): Promise<UnlistenFn> {
+  return listen(CollectChange, () => cb());
 }

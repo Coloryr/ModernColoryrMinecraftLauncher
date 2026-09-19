@@ -124,7 +124,7 @@ fn now_time() -> String {
 /// 这些命令只会由主窗口 webview 调用；模型缺失属异常情形（主窗口未创建），
 /// 返回 Err / 空列表由调用方降级，不 panic。
 fn model(window: &WebviewWindow) -> Result<Arc<Mutex<MainWindowModel>>, String> {
-    crate::window_manager::window_model(window).ok_or_else(|| "主窗口模型未初始化".to_string())
+    crate::window_manager::window_model(window).ok_or_else(|| "err.modelMissing".to_string())
 }
 
 /// 获取实例列表（mcml-game::get_instances 对接，合并运行状态）
@@ -140,11 +140,11 @@ pub fn main_get_instances() -> Vec<InstanceInfo> {
                 group: inst.group.clone(),
                 version: inst.version.clone(),
                 version_type: Some(inst.game_type.id().to_string()),
-                loader: inst.loader.id().to_string(),
+                loader: String::from(inst.loader.to_string()),
                 loader_version: inst.loader_version.clone(),
                 dir: inst.dir.clone(),
                 running: mcml_game::is_running(&inst.uuid),
-                modpack_type: inst.is_modpack.then(|| inst.modpack_type.id().to_string()),
+                modpack_type: inst.is_modpack.then(|| inst.modpack_type.to_string()),
                 pid: inst.pid.clone(),
                 fid: inst.fid.clone(),
                 server_url: inst.server_url.clone(),
@@ -591,7 +591,7 @@ pub fn main_move_group(
     let from = list
         .iter()
         .position(|g| g == &name)
-        .ok_or_else(|| "分组不存在".to_string())?;
+        .ok_or_else(|| "err.groupNotFound".to_string())?;
     list.remove(from);
     let at = (index as usize).min(list.len());
     list.insert(at, name.clone());
@@ -713,7 +713,7 @@ pub fn main_update_instance(
                 obj.game_type = VersionType::from_id(v);
             }
             if let Some(v) = &patch.loader {
-                if let Some(l) = LoaderType::from_id(v) {
+                if let Some(l) = LoaderType::from_string(v) {
                     obj.loader = l;
                 }
             }
@@ -721,7 +721,7 @@ pub fn main_update_instance(
                 obj.loader_version = v;
             }
             if let Some(v) = patch.modpack_type.clone() {
-                obj.modpack_type = ModPackType::from_id(v.as_deref().unwrap_or("none"));
+                obj.modpack_type = ModPackType::from_string(v.as_deref().unwrap_or("none"));
                 obj.is_modpack = obj.modpack_type != ModPackType::None;
             }
             if let Some(v) = patch.pid.clone() {
@@ -889,7 +889,7 @@ pub fn main_launch_game(
     {
         let mut store = store.lock().unwrap();
         if store.running.contains(&uuid) {
-            return Err("实例已在运行中".to_string());
+            return Err("err.instanceRunning".to_string());
         }
         store.running.insert(uuid.clone());
     }

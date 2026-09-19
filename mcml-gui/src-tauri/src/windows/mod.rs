@@ -12,6 +12,9 @@
 
 pub mod account;
 pub mod add;
+pub mod add_modpack;
+pub mod add_resource;
+pub mod collect;
 pub mod download;
 pub mod help;
 pub mod main;
@@ -19,5 +22,3 @@ pub mod resource;
 pub mod settings;
 pub mod skin;
 pub mod stats;
-pub mod add_modpack;
-pub mod add_resource;

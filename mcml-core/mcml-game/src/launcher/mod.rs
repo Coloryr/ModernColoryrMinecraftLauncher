@@ -64,6 +64,8 @@ impl Default for LogEncoding {
 }
 
 /// 文件类型
+#[derive(Serialize_repr, Deserialize_repr, Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
 pub enum FileType {
     Modpack,
     Mod,
@@ -95,12 +97,37 @@ pub enum FileType {
     Lang,
 }
 
+impl Default for FileType {
+    fn default() -> Self {
+        FileType::Modpack
+    }
+}
+
 impl FileType {
     pub fn from_string(id: &str) -> Option<FileType> {
         match id {
             "modpack" => Some(FileType::Modpack),
+            "mod" => Some(FileType::Mod),
+            "save" => Some(FileType::Save),
+            "shaderpack" => Some(FileType::Shaderpack),
+            "resourcepack" => Some(FileType::Resourcepack),
+            "dataPacks" => Some(FileType::DataPacks),
+            "schematic" => Some(FileType::Schematic),
             _ => None,
         }
+    }
+
+    pub fn to_string(&self) -> String {
+        String::from(match self {
+            FileType::Modpack => "modpack",
+            FileType::Mod => "mod",
+            FileType::Save => "save",
+            FileType::Shaderpack => "shaderpack",
+            FileType::Resourcepack => "resourcepack",
+            FileType::DataPacks => "dataPacks",
+            FileType::Schematic => "schematic",
+            _ => "",
+        })
     }
 }
 

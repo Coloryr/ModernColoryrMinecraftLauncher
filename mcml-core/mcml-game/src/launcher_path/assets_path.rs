@@ -106,9 +106,7 @@ pub fn get_skin_from_url(url: String) -> PathBuf {
     };
 
     let dir: String = name.chars().take(2).collect();
-    Path::new(&SKIN_DIR.get().unwrap())
-        .join(dir)
-        .with_file_name(name)
+    Path::new(&SKIN_DIR.get().unwrap()).join(dir).join(name)
 }
 
 /// 读取资源文件

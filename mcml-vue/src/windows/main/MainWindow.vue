@@ -9,7 +9,7 @@ import {
   onLaunchError,
   onLaunchState,
 } from "../../lib/api";
-import { t } from "../../lib/i18n";
+import { t, tErr } from "../../lib/i18n";
 import { showToast } from "../../lib/toast";
 import { theme, toggleTheme } from "../../lib/theme";
 import { openWindow } from "../windowManager";
@@ -178,6 +178,53 @@ const newsLoading = ref(false);
 /** 打开 / 关闭启动器主页（保留选中实例） */
 function toggleNews() {
   newsActive.value = !newsActive.value;
+}
+
+// ================= 侧栏展开把手：点按展开，也可以往展开方向拖出来 =================
+
+/** 往展开方向拖多远算「拖出来」 */
+const EXPAND_DRAG_THRESHOLD = 24;
+/** 判定为拖动（而非点按）的最小位移 */
+const DRAG_SLOP = 4;
+
+/** 拖拽起点 X（null = 未在拖） */
+const handleDragX = ref<number | null>(null);
+/** 本次按下是否发生过拖动（拖动过就不再当成点击，否则反向拖也会展开） */
+const handleDragged = ref(false);
+
+function onExpandPointerDown(e: PointerEvent) {
+  handleDragX.value = e.clientX;
+  handleDragged.value = false;
+  (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+}
+
+function onExpandPointerMove(e: PointerEvent) {
+  if (handleDragX.value === null) {
+    return;
+  }
+  const dx = e.clientX - handleDragX.value;
+  if (Math.abs(dx) >= DRAG_SLOP) {
+    handleDragged.value = true;
+  }
+  // 展开方向：侧栏在左 → 往右拖；在右 → 往左拖
+  const toward = sidebarSide.value === "Right" ? -dx : dx;
+  if (toward >= EXPAND_DRAG_THRESHOLD) {
+    handleDragX.value = null;
+    setSidebarCollapsed(false);
+  }
+}
+
+function onExpandPointerUp(e: PointerEvent) {
+  (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
+  handleDragX.value = null;
+}
+
+function onExpandClick() {
+  if (handleDragged.value) {
+    handleDragged.value = false;
+    return;
+  }
+  setSidebarCollapsed(false);
 }
 
 // 切换选中实例后自动滚动到详情顶部
@@ -388,7 +435,7 @@ function updateArgs(v: InstanceArgs) {
   argsMap.value[uuid] = v;
   if (argsSaveTimer) clearTimeout(argsSaveTimer);
   argsSaveTimer = setTimeout(() => {
-    api.updateInstanceArgs(uuid, argsMap.value[uuid]).catch((e) => showToast(String(e)));
+    api.updateInstanceArgs(uuid, argsMap.value[uuid]).catch((e) => showToast(tErr(e)));
   }, 600);
 }
 
@@ -472,7 +519,7 @@ async function onMetaUpdate(patch: Partial<InstanceInfo>) {
     await api.updateInstance(selected.value.uuid, patch);
     await loadInstances();
   } catch (e) {
-    showToast(String(e));
+    showToast(tErr(e));
   }
 }
 
@@ -815,7 +862,7 @@ async function doRename() {
     }
   } catch (e) {
     // 重名等核心错误直接提示
-    showToast(String(e));
+    showToast(tErr(e));
   } finally {
     renameBusy.value = false;
   }
@@ -831,7 +878,7 @@ async function doDelete() {
     await Promise.all([loadInstances(), loadGroups()]);
   } catch (e) {
     // 删除失败（如文件被占用）直接提示
-    showToast(String(e));
+    showToast(tErr(e));
   } finally {
     deleteBusy.value = false;
   }
@@ -844,6 +891,7 @@ const features: Array<{ id: FeatureId; icon: string }> = [
   { id: "stats", icon: "chart" },
   { id: "skin", icon: "user" },
   { id: "download", icon: "download" },
+  { id: "collect", icon: "star" },
   { id: "help", icon: "book" },
 ];
 
@@ -1015,7 +1063,7 @@ async function launch() {
   } catch (e) {
     if (selected.value) selected.value.running = false;
     statusText.value = t("launch.failed");
-    appendLog(t("launch.error", { msg: String(e) }));
+    appendLog(t("launch.error", { msg: tErr(e) }));
   }
 }
 
@@ -1136,9 +1184,11 @@ listen<LoadState>(LoadDone, async (data) => {
           </section>
         </template>
 
-        <!-- 列表模式下启动器主页整页显示 -->
-        <template v-else-if="newsActive && mode === 'list'">
-          <section class="news-page">
+        <!-- 列表模式：启动器主页 ↔ 实例列表。两者布局角色一致（flex:1 纵向），
+             直接作为进出动画的两个子节点，内容不用包一层 -->
+        <template v-else-if="mode === 'list'">
+          <Transition name="home-swap" mode="out-in">
+            <section v-if="newsActive" key="home" class="news-page">
             <HomePage
               :items="news"
               :loading="newsLoading"
@@ -1153,11 +1203,64 @@ listen<LoadState>(LoadDone, async (data) => {
               @quick-launch="quickLaunch"
               @back="newsActive = false"
             />
-          </section>
+            </section>
+
+            <section v-else key="list" class="list-mode">
+            <div class="list-toolbar">
+              <SegmentedTabs
+                :model-value="mode"
+                :options="MODE_OPTIONS"
+                @update:model-value="setViewMode($event as ViewMode)"
+              />
+            </div>
+
+            <InstanceIcon
+              :name="selected?.name ?? '—'"
+              :uuid="selected?.uuid ?? '0'"
+              :size="120"
+            />
+            <h2 class="list-title">{{ selected?.name ?? t("launch.selectInstance") }}</h2>
+
+            <InstanceSelect
+              :instances="instances"
+              :model-value="selected?.uuid ?? null"
+              @update:model-value="onPickInstance"
+            />
+
+            <div class="launch-actions">
+              <BaseButton
+                variant="primary"
+                size="lg"
+                class="list-launch-btn"
+                :disabled="!selected || selected.running"
+                @click="launch"
+              >
+                <span v-if="selected?.running" class="btn-spinner"></span>
+                <span v-else>▶</span> {{ t("launch.play") }}
+              </BaseButton>
+              <!-- 实例设置：含启动参数（与分组模式下的设置面板一致） -->
+              <BaseButton :disabled="!selected" @click="toggleSettings">
+                ⚙ {{ t("detail.settings") }}
+              </BaseButton>
+            </div>
+            <!-- 设置面板整体展开/收起；宽度与居中由外层槽位承担，与原 .list-args 的占位一致 -->
+            <CollapsePanel :open="settingsOpen && !!selected" class="list-settings-wrap">
+              <div v-if="selected" class="list-args list-settings">
+                <InstanceMetaPanel
+                  :instance="selected"
+                  :versions="versions"
+                  @update="onMetaUpdate"
+                  @refreshed="onVersionsRefreshed"
+                />
+                <LaunchArgsPanel :args="argsOf(selected.uuid)" :javas="javas" @update:args="updateArgs" />
+              </div>
+            </CollapsePanel>
+            </section>
+          </Transition>
         </template>
 
-        <!-- 模式：游戏分组 / 平铺 -->
-        <template v-else-if="mode === 'group' || mode === 'grid'">
+        <!-- 模式：游戏分组 / 平铺（列表模式已在上面的分支处理，这里兜底） -->
+        <template v-else>
           <!-- 侧栏槽位：宽度在展开(320px) / 收起(24px) 之间过渡，动画期间内容被裁掉而不被压扁 -->
           <div class="sidebar-slot" :class="{ collapsed: sidebarCollapsed }">
             <MainSidebar
@@ -1191,11 +1294,16 @@ listen<LoadState>(LoadDone, async (data) => {
               @collapse="setSidebarCollapsed(true)"
             />
 
-            <!-- 展开把手：绝对定位在槽位外缘，收起时淡入（不占位，避免展开瞬间内容跳动） -->
+            <!-- 展开把手：绝对定位在槽位外缘，收起时淡入（不占位，避免展开瞬间内容跳动）。
+                 点按展开，也可以往展开方向拖出来 -->
             <button
               class="sidebar-expand"
               :title="t('sidebar.expand')"
-              @click="setSidebarCollapsed(false)"
+              @click="onExpandClick"
+              @pointerdown="onExpandPointerDown"
+              @pointermove="onExpandPointerMove"
+              @pointerup="onExpandPointerUp"
+              @pointercancel="onExpandPointerUp"
             >›</button>
           </div>
 
@@ -1203,10 +1311,12 @@ listen<LoadState>(LoadDone, async (data) => {
             <div v-if="!sidebarCollapsed" class="sidebar-backdrop" @click="setSidebarCollapsed(true)"></div>
           </Transition>
 
-          <!-- 右侧内容区：实例详情 / 启动器主页 -->
+          <!-- 右侧内容区：实例详情 / 启动器主页（进出都走动画） -->
           <section ref="detailEl" class="detail">
-            <template v-if="newsActive">
+            <Transition name="home-swap" mode="out-in">
               <HomePage
+                v-if="newsActive"
+                key="home"
                 :items="news"
                 :loading="newsLoading"
                 @refresh="fetchNews(newsPage)"
@@ -1220,9 +1330,8 @@ listen<LoadState>(LoadDone, async (data) => {
                 @quick-launch="quickLaunch"
                 @back="newsActive = false"
               />
-            </template>
 
-            <template v-else>
+              <div v-else key="detail" class="detail-content">
               <template v-if="selected">
                 <div class="detail-top">
                   <InstanceIcon :name="selected.name" :uuid="selected.uuid" :size="84" />
@@ -1452,64 +1561,11 @@ listen<LoadState>(LoadDone, async (data) => {
                 </div>
               </template>
               <div v-else class="placeholder">{{ t("detail.selectHint") }}</div>
-            </template>
-          </section>
-        </template>
-
-        <!-- 模式：游戏实例列表（下拉框选中实例） -->
-        <template v-else>
-          <section class="list-mode">
-            <div class="list-toolbar">
-              <SegmentedTabs
-                :model-value="mode"
-                :options="MODE_OPTIONS"
-                @update:model-value="setViewMode($event as ViewMode)"
-              />
-            </div>
-
-            <InstanceIcon
-              :name="selected?.name ?? '—'"
-              :uuid="selected?.uuid ?? '0'"
-              :size="120"
-            />
-            <h2 class="list-title">{{ selected?.name ?? t("launch.selectInstance") }}</h2>
-
-            <InstanceSelect
-              :instances="instances"
-              :model-value="selected?.uuid ?? null"
-              @update:model-value="onPickInstance"
-            />
-
-            <div class="launch-actions">
-              <BaseButton
-                variant="primary"
-                size="lg"
-                class="list-launch-btn"
-                :disabled="!selected || selected.running"
-                @click="launch"
-              >
-                <span v-if="selected?.running" class="btn-spinner"></span>
-                <span v-else>▶</span> {{ t("launch.play") }}
-              </BaseButton>
-              <!-- 实例设置：含启动参数（与分组模式下的设置面板一致） -->
-              <BaseButton :disabled="!selected" @click="toggleSettings">
-                ⚙ {{ t("detail.settings") }}
-              </BaseButton>
-            </div>
-            <!-- 设置面板整体展开/收起；宽度与居中由外层槽位承担，与原 .list-args 的占位一致 -->
-            <CollapsePanel :open="settingsOpen && !!selected" class="list-settings-wrap">
-              <div v-if="selected" class="list-args list-settings">
-                <InstanceMetaPanel
-                  :instance="selected"
-                  :versions="versions"
-                  @update="onMetaUpdate"
-                  @refreshed="onVersionsRefreshed"
-                />
-                <LaunchArgsPanel :args="argsOf(selected.uuid)" :javas="javas" @update:args="updateArgs" />
               </div>
-            </CollapsePanel>
+            </Transition>
           </section>
         </template>
+
       </main>
 
       <!-- 服务器 MOTD 悬浮卡片（启动器下方） -->
@@ -1757,6 +1813,9 @@ listen<LoadState>(LoadDone, async (data) => {
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.15s;
+  /* 拖拽展开时不让浏览器把它当成滚动 / 选中文本 */
+  touch-action: none;
+  user-select: none;
 }
 
 .main.side-right .sidebar-expand {
@@ -1828,6 +1887,26 @@ listen<LoadState>(LoadDone, async (data) => {
 .news-head {
   display: flex;
   align-items: center;
+}
+
+/* 启动器主页 ↔ 实例列表 / 实例详情的进出动画：淡入淡出 + 轻微上收
+   （out-in 保证同一时刻只有一个子节点，两者都是 flex:1，不会叠在一起） */
+.home-swap-enter-active,
+.home-swap-leave-active {
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.home-swap-enter-from,
+.home-swap-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
+/* 实例详情分支的包裹层：复刻 .detail 的纵向 flex 间距，避免包一层后间距丢失 */
+.detail-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
 }
 
 .news-page {

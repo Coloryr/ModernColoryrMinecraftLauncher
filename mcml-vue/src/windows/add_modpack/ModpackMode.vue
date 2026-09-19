@@ -2,10 +2,10 @@
 // 整合包模式：CurseForge / Modrinth 在线搜索 + 选版本安装
 // 实例名取自整合包元数据（安装后端自动处理），分组沿用窗口顶部的分组输入框
 import { computed, ref, watch } from "vue";
-import SegmentedTabs from "../../../components/ui/SegmentedTabs.vue";
-import { api } from "../../../lib/api";
-import { t } from "../../../lib/i18n";
-import type { ModpackFile, ModpackItem, VersionInfo } from "../../../lib/types";
+import SegmentedTabs from "../../components/ui/SegmentedTabs.vue";
+import { api } from "../../lib/api";
+import { t } from "../../lib/i18n";
+import type { ModpackFile, ModpackItem, VersionInfo } from "../../lib/types";
 
 const props = defineProps<{
   /** 游戏版本列表（主窗口共享的版本数据，用于过滤搜索结果） */
@@ -33,12 +33,25 @@ const expandedId = ref("");
 const files = ref<ModpackFile[]>([]);
 const filesLoading = ref(false);
 
-const SORTS = [
-  { value: "popularity", labelKey: "modpack.sortPopularity" },
-  { value: "downloads", labelKey: "modpack.sortDownloads" },
-  { value: "updated", labelKey: "modpack.sortUpdated" },
-  { value: "name", labelKey: "modpack.sortName" },
-];
+/** 排序方式：两种源的集合不同，取值就是后端枚举的线串（`CurseForgeSortType` / `ModrinthSortType`） */
+const SORTS: Record<"curseforge" | "modrinth", Array<{ value: string; labelKey: string }>> = {
+  curseforge: [
+    { value: "popularity", labelKey: "modpack.sort.popularity" },
+    { value: "featured", labelKey: "modpack.sort.featured" },
+    { value: "total_downloads", labelKey: "modpack.sort.total_downloads" },
+    { value: "last_updated", labelKey: "modpack.sort.last_updated" },
+    { value: "name", labelKey: "modpack.sort.name" },
+  ],
+  modrinth: [
+    { value: "relevance", labelKey: "modpack.sort.relevance" },
+    { value: "downloads", labelKey: "modpack.sort.downloads" },
+    { value: "follows", labelKey: "modpack.sort.follows" },
+    { value: "newest", labelKey: "modpack.sort.newest" },
+    { value: "updated", labelKey: "modpack.sort.updated" },
+  ],
+};
+
+const sorts = computed(() => SORTS[source.value]);
 
 const maxPage = computed(() => Math.max(0, Math.ceil(total.value / PAGE_SIZE) - 1));
 
@@ -68,6 +81,11 @@ function submitSearch() {
   page.value = 0;
   void search();
 }
+
+// 来源切换：排序集合不同，回到该源的第一个排序（同一轮 flush 里合并成一次搜索）
+watch(source, (s) => {
+  sort.value = SORTS[s][0].value;
+});
 
 // 来源 / 版本过滤 / 排序变化：回到第一页重新搜索
 watch([source, selVersion, sort], submitSearch);
@@ -134,7 +152,7 @@ function formatSize(size: number): string {
         <option v-for="v in versions" :key="v.id" :value="v.id">{{ v.id }}</option>
       </select>
       <select v-model="sort" class="field-input sel-sort">
-        <option v-for="s in SORTS" :key="s.value" :value="s.value">{{ t(s.labelKey) }}</option>
+        <option v-for="s in sorts" :key="s.value" :value="s.value">{{ t(s.labelKey) }}</option>
       </select>
     </div>
 

@@ -35,6 +35,8 @@ pub const BLOCK_DIR: &str = "block";
 pub const LANG_DIR: &str = "langs";
 pub const ITEM_DIR: &str = "items";
 pub const MINECRAFT_DIR: &str = "minecraft";
+/// GUI 图片缓存目录
+pub const IMAGE_DIR: &str = "image";
 
 pub const LOG_FILE: &str = "logs.log";
 pub const LANG_FILE: &str = "lang.txt";
@@ -81,6 +83,7 @@ pub const WINDOW_SAVE_FILE: &str = "window_save.json";
 pub const BLOCK_FILE: &str = "block.json";
 pub const ITEM_FILE: &str = "items.json";
 pub const GUI_CONFIG_FILE: &str = "gui_config.json";
+pub const COLLECT_FILE:&str = "collect.json";
 
 pub const MINECRAFT_KEY: &str = "minecraft";
 pub const LANG_KEY1: &str = "minecraft/lang/";

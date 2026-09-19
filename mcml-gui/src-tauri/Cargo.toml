@@ -36,6 +36,7 @@ mcml-log = { path = "../../mcml-core/mcml-log" }
 mcml-base = { path = "../../mcml-core/mcml-base" }
 mcml-auth = { path = "../../mcml-core/mcml-auth" }
 mcml-names = { path = "../../mcml-core/mcml-names" }
+mcml-skin = { path = "../../mcml-core/mcml-skin" }
 mcml-skin-draw = { path = "../../mcml-core/mcml-skin-draw" }
 
 uuid = { version = "~1.26.0", features = ["v4", "serde"] }

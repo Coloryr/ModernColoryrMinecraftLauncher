@@ -45,6 +45,13 @@ const emit = defineEmits<{
 function onSearchInput(e: Event) {
   emit("update:searchText", (e.target as HTMLInputElement).value);
 }
+
+/** 分组的实例列表是否展开：拖拽实例 / 搜索时强制展开，便于投放与查看结果 */
+function isGroupOpen(name: string) {
+  return (
+    !props.isCollapsed(name) || props.searching || props.dragActive?.kind === "instance"
+  );
+}
 </script>
 
 <template>
@@ -107,11 +114,9 @@ function onSearchInput(e: Event) {
           </button>
         </div>
 
-        <!-- 拖拽实例时自动展开，便于投放 -->
-        <div
-          v-show="!isCollapsed(g.name) || searching || dragActive?.kind === 'instance'"
-          class="group-items"
-        >
+        <!-- 拖拽实例时自动展开，便于投放；展开 / 收起走高度动画（grid-template-rows 0fr↔1fr） -->
+        <div class="group-items-wrap" :class="{ collapsed: !isGroupOpen(g.name) }">
+        <div class="group-items">
           <!-- 添加实例（与实例行同尺寸；多选时隐藏，拖拽实例时禁用并变色） -->
           <button
             v-show="!multiSelect"
@@ -154,6 +159,7 @@ function onSearchInput(e: Event) {
             <InstanceIcon :name="dragActive?.instance?.name ?? ''" :uuid="dragActive?.instance?.uuid ?? '0'" :size="38" />
             <span class="inst-name">{{ dragActive?.instance?.name ?? "" }}</span>
           </div>
+        </div>
         </div>
         </div>
       </template>
@@ -393,11 +399,25 @@ function onSearchInput(e: Event) {
   margin-left: auto;
 }
 
+/* 分组内容的收起动画：grid-template-rows 0fr↔1fr 可以在不知道内容高度的前提下过渡高度 */
+.group-items-wrap {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 0.22s ease;
+}
+
+.group-items-wrap.collapsed {
+  grid-template-rows: 0fr;
+}
+
 .group-items {
   display: flex;
   flex-direction: column;
   gap: 4px;
   margin-top: 0;
+  /* 收起时裁掉内容（配合 0fr 行高），同时给出过渡的最小高度基准 */
+  overflow: hidden;
+  min-height: 0;
 }
 
 /* 添加实例行（与实例行同尺寸，位于实例上方） */

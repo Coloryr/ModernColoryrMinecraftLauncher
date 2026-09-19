@@ -11,6 +11,9 @@ export type WindowKind =
   | "resource"
   | "account"
   | "add"
+  | "add_modpack"
+  | "add_resource"
+  | "collect"
   | "download";
 
 export interface WindowInfo {
@@ -30,6 +33,9 @@ export const WINDOW_REGISTRY: WindowInfo[] = [
   { kind: "resource", title: "资源管理", width: 900, height: 640 },
   { kind: "account", title: "账户管理", width: 920, height: 640 },
   { kind: "add", title: "添加实例", width: 900, height: 660 },
+  { kind: "add_modpack", title: "下载整合包", width: 900, height: 640 },
+  { kind: "add_resource", title: "添加资源", width: 900, height: 640 },
+  { kind: "collect", title: "资源收藏", width: 900, height: 640 },
   { kind: "download", title: "下载管理", width: 760, height: 600 },
 ];
 

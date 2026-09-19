@@ -2,7 +2,7 @@
 // 实例元信息面板：版本类型+版本 / 加载器+加载器版本 / 游戏内语言+日志编码 / 整合包类型
 // 改动经 update 事件走 IPC 写入核心实例配置；刷新按钮与添加实例窗口同逻辑
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
-import { t } from "../lib/i18n";
+import { t, tErr } from "../lib/i18n";
 import { api, onAddLoaderProgress } from "../lib/api";
 import { showToast } from "../lib/toast";
 import BaseButton from "./ui/BaseButton.vue";
@@ -75,7 +75,7 @@ async function onRefreshVersions() {
     emit("refreshed", await api.refreshVersions());
     showToast(t("tip.refreshed"));
   } catch (e) {
-    showToast(String(e));
+    showToast(tErr(e));
   } finally {
     verLoading.value = false;
   }
@@ -125,7 +125,7 @@ async function onRefreshLoaders() {
     fetchedLoaders.value = await api.addGetSupportLoaders(props.instance.version);
     showToast(t("tip.refreshed"));
   } catch (e) {
-    showToast(String(e));
+    showToast(tErr(e));
   } finally {
     loadersLoading.value = false;
   }
@@ -154,7 +154,7 @@ async function fetchLoaderVersions(loaderId: string, notify = false) {
     lvLocked.value = false;
     if (notify) showToast(t("tip.refreshed"));
   } catch (e) {
-    showToast(String(e));
+    showToast(tErr(e));
   } finally {
     lvLoading.value = false;
   }

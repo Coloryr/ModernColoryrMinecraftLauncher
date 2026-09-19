@@ -218,6 +218,8 @@ async fn get_list(
 }
 
 /// 获取整合包列表
+/// 
+/// 需要version page sort filter page_size category
 pub async fn get_modpack_list(arg: CurseFogreArg) -> CoreResult<CurseForgeListPageObj> {
     get_list(
         CLASS_MODPACK,
@@ -228,7 +230,7 @@ pub async fn get_modpack_list(arg: CurseFogreArg) -> CoreResult<CurseForgeListPa
         arg.page_size.unwrap_or(20),
         arg.sort.unwrap_or_default().to_order_index(),
         &arg.category.unwrap_or_default(),
-        arg.loader.unwrap_or(0),
+        0,
     )
     .await
 }

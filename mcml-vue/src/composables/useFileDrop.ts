@@ -1,7 +1,7 @@
 // 拖拽整合包文件到窗口的逻辑：显示遮罩层，松开后按扩展名创建实例
 import { onMounted, onUnmounted, ref, type Ref } from "vue";
 import { api } from "../lib/api";
-import { t } from "../lib/i18n";
+import { t, tErr } from "../lib/i18n";
 import { showToast } from "../lib/toast";
 import type { VersionInfo } from "../lib/types";
 
@@ -52,7 +52,7 @@ export function useFileDrop(deps: FileDropDeps) {
         const inst = await api.createInstance(name, deps.versions.value[0]?.id ?? "1.21.1");
         showToast(t("drop.added", { name: inst.name }));
       } catch (err) {
-        showToast(t("add.createFail", { msg: String(err) }));
+        showToast(t("add.createFail", { msg: tErr(err) }));
       }
     }
     await deps.loadInstances();

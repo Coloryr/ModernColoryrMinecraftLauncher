@@ -15,6 +15,7 @@ pub mod gui_config;
 pub mod image_manager;
 pub mod models;
 pub mod window_manager;
+pub mod collect_utils;
 pub mod windows;
 
 include!(concat!(env!("OUT_DIR"), "/invokes_gen.rs"));
@@ -44,6 +45,12 @@ pub fn run() {
             let handle = app.handle().clone();
             mcml_downloader::set_gui_handel(Box::new(download::DownloadGuiHook::new(handle)));
             mcml_downloader::start();
+
+            // 收藏数据与核心无关，但必须等 `mcml_core::init` 里的日志系统起来后再读，
+            // 否则解析失败会没有输出、看起来像没加载
+            if let Err(err) = collect_utils::load() {
+                mcml_log::error_type(err);
+            }
 
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {

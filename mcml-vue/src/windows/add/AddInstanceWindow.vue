@@ -9,12 +9,11 @@ import NewMode from "./modes/NewMode.vue";
 import ArchiveMode from "./modes/ArchiveMode.vue";
 import FolderMode from "./modes/FolderMode.vue";
 import OnlineMode from "./modes/OnlineMode.vue";
-import ModpackMode from "./modes/ModpackMode.vue";
 import { buildTree, collectFileKeys, type FileNode } from "../../lib/fileTree";
 import { api, onCloseBlocked, onAddLoaderProgress, onAddNameConflict, onAddPackProgress, answerNameConflict } from "../../lib/api";
 import { showToast } from "../../lib/toast";
-import { t } from "../../lib/i18n";
-import { isTauri } from "../windowManager";
+import { t, tErr } from "../../lib/i18n";
+import { isTauri, openWindow } from "../windowManager";
 import { invoke } from "@tauri-apps/api/core";
 import { AddListDir, AddListArchive } from "../../lib/invokes";
 import type { PackProgress, VersionInfo } from "../../lib/types";
@@ -600,38 +599,16 @@ async function create() {
     askContinue.value = true;
   } catch (e) {
     packProgress.value = null;
-    addError.value = t("add.createFail", { msg: String(e) });
+    addError.value = t("add.createFail", { msg: tErr(e) });
   } finally {
     creating.value = false;
   }
 }
 
-// ================= 整合包下载（弹窗入口，不进模式 tab） =================
-
-/** 是否显示"下载整合包"弹窗 */
-const showModpack = ref(false);
+// ================= 整合包进度（压缩包 / 网址导入共用） =================
 
 /** 安装进度（add-pack-progress 事件驱动，null = 未在安装） */
 const packProgress = ref<PackProgress | null>(null);
-
-/** 安装在线整合包：实例名取自整合包元数据，分组用窗口顶部的输入框 */
-async function installModpack(p: { source: string; projectId: string; fileId: string; fileName: string }) {
-  const group = addGroup.value.trim() === "" ? null : addGroup.value.trim();
-  creating.value = true;
-  addError.value = "";
-  try {
-    const uuid = await api.installModpack(p.source, p.projectId, p.fileId, group);
-    localStorage.setItem("mcml.addedInstance", uuid);
-    showModpack.value = false;
-    addedName.value = p.fileName;
-    askContinue.value = true;
-  } catch (e) {
-    packProgress.value = null;
-    addError.value = t("add.createFail", { msg: String(e) });
-  } finally {
-    creating.value = false;
-  }
-}
 
 // ================= 创建成功后的继续添加询问 =================
 
@@ -875,8 +852,8 @@ onMounted(async () => {
       <p v-if="addError" class="error-text">{{ addError }}</p>
 
       <div class="modal-actions">
-        <!-- 整合包入口：走弹窗浏览 / 安装，不占模式 tab -->
-        <BaseButton class="modpack-entry" @click="showModpack = true">
+        <!-- 整合包入口：浏览 / 安装与安装进度都在「下载整合包」窗口 -->
+        <BaseButton class="modpack-entry" @click="openWindow('add_modpack')">
           {{ t("add.downloadModpack") }}
         </BaseButton>
         <BaseButton @click="$emit('close')">{{ t("add.cancel") }}</BaseButton>
@@ -893,16 +870,6 @@ onMounted(async () => {
     <!-- 浏览器回退的文件 / 文件夹选择器（Tauri 下走系统对话框，不使用） -->
     <input ref="archiveInput" type="file" accept=".zip,.mrpack" class="hidden-input" @change="onArchivePick" />
     <input ref="folderInput" type="file" webkitdirectory class="hidden-input" @change="onFolderPick" />
-
-    <!-- 下载整合包弹窗（CurseForge / Modrinth 搜索 + 选版本安装） -->
-    <BaseModal
-      v-if="showModpack"
-      :title="t('add.downloadModpack')"
-      :width="760"
-      @close="showModpack = false"
-    >
-      <ModpackMode :versions="versions" @install="installModpack" />
-    </BaseModal>
 
     <!-- 实例重名确认弹窗（后端创建流程暂停等待答复，关闭视为拒绝） -->
     <BaseModal
