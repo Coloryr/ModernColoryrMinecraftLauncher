@@ -21,7 +21,10 @@ use tauri::{
 };
 use uuid::Uuid;
 
-use crate::gui_config::{self, HeadType};
+use crate::{
+    gui_config::{self, HeadType},
+    windows::add_resource::SourceInfo,
+};
 
 static INSTANCE_IMAGE: LazyLock<RwLock<HashMap<Uuid, Vec<u8>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
@@ -29,7 +32,7 @@ static SKIN_IMAGE: LazyLock<RwLock<HashMap<UserKeyObj, Vec<u8>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 static HEAD_IMAGE: LazyLock<RwLock<HashMap<UserKeyObj, Vec<u8>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
-static ICON_IMAGE: LazyLock<RwLock<HashMap<SourceInfo, IconCache>>> =
+static ICON_IMAGE: LazyLock<RwLock<HashMap<Uuid, IconCache>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 /// 图标磁盘缓存目录（`<运行目录>/image`）
 static ICON_DIR: OnceLock<PathBuf> = OnceLock::new();
@@ -45,13 +48,7 @@ struct IconCache {
     time: Instant,
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Clone)]
-pub enum SourceInfo {
-    CurseForge(u64),
-    Modrinth(String),
-}
-
-static URL_IMAGE: LazyLock<RwLock<HashMap<SourceInfo, String>>> =
+static URL_IMAGE: LazyLock<RwLock<HashMap<Uuid, String>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 
 /// 把请求路径按 `/` 拆成非空片段
@@ -212,19 +209,21 @@ async fn load_icon_image(uri: &[&str], res: UriSchemeResponder) {
         send_bad(res);
         return;
     }
-    let Some(info) = parse_source_info(uri[1]) else {
+
+    let info = uri[1];
+    let Ok(uuid) = Uuid::parse_str(info) else {
         send_bad(res);
         return;
     };
 
-    let url = URL_IMAGE.read().unwrap().get(&info).cloned();
+    let url = URL_IMAGE.read().unwrap().get(&uuid).cloned();
     let Some(url) = url else {
         send_bad(res);
         return;
     };
 
     // 内存缓存
-    if let Some(data) = get_icon_image(&info) {
+    if let Some(data) = get_icon_image(&uuid) {
         send_png(res, data);
         return;
     }
@@ -233,7 +232,7 @@ async fn load_icon_image(uri: &[&str], res: UriSchemeResponder) {
 
     // 磁盘缓存
     if let Some(data) = read_icon_file(&file) {
-        set_icon_image(info, data.clone());
+        set_icon_image(uuid, data.clone());
         send_png(res, data);
         return;
     }
@@ -250,13 +249,13 @@ async fn load_icon_image(uri: &[&str], res: UriSchemeResponder) {
     };
 
     write_icon_file(&file, &data);
-    set_icon_image(info, data.clone());
+    set_icon_image(uuid, data.clone());
 
     send_png(res, data);
 }
 
 /// 取图标缓存，已过期的条目会被删除并返回 `None`（由调用方回源）
-fn get_icon_image(info: &SourceInfo) -> Option<Vec<u8>> {
+fn get_icon_image(info: &Uuid) -> Option<Vec<u8>> {
     let mut lock = ICON_IMAGE.write().unwrap();
     let alive = lock
         .get(info)
@@ -272,7 +271,7 @@ fn get_icon_image(info: &SourceInfo) -> Option<Vec<u8>> {
 }
 
 /// 写入图标缓存并记录时刻
-fn set_icon_image(info: SourceInfo, data: Vec<u8>) {
+fn set_icon_image(info: Uuid, data: Vec<u8>) {
     ICON_IMAGE.write().unwrap().insert(
         info,
         IconCache {
@@ -280,18 +279,6 @@ fn set_icon_image(info: SourceInfo, data: Vec<u8>) {
             time: Instant::now(),
         },
     );
-}
-
-/// 解析 `icon/<key>` 里的 key（`cf_<id>` / `mo_<id>`）
-fn parse_source_info(key: &str) -> Option<SourceInfo> {
-    if let Some(id) = key.strip_prefix("cf_") {
-        return id.parse::<u64>().ok().map(SourceInfo::CurseForge);
-    }
-    if let Some(id) = key.strip_prefix("mo_") {
-        return Some(SourceInfo::Modrinth(id.to_string()));
-    }
-
-    None
 }
 
 /// 初始化图标磁盘缓存目录（启动时调用）
@@ -386,13 +373,13 @@ fn image_base_url() -> &'static str {
 ///
 /// 返回值形如 `http://mcml-image.localhost/icon/cf_123`，已含协议前缀，
 /// 前端无需再自行拼接。
-pub fn push_image_url(info: SourceInfo, url: String) -> String {
-    let name = match &info {
-        SourceInfo::CurseForge(data) => format!("cf_{}", data),
-        SourceInfo::Modrinth(data1) => format!("mo_{}", data1),
-    };
+pub fn push_image_url(url: &str) -> String {
+    let uuid = Uuid::new_v4();
 
-    URL_IMAGE.write().unwrap().insert(info, url);
+    URL_IMAGE
+        .write()
+        .unwrap()
+        .insert(uuid.clone(), url.to_string());
 
-    format!("{}/icon/{}", image_base_url(), name)
+    format!("{}/icon/{}", image_base_url(), uuid.to_string())
 }

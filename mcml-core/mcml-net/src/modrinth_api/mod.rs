@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::OnceLock};
+use std::collections::HashMap;
 
 use mcml_names::{
     i18_items::error_type::{CoreResult, ErrorData, ErrorType},
@@ -47,6 +47,12 @@ pub enum ModrinthSortType {
     Updated,
 }
 
+impl Default for ModrinthSortType {
+    fn default() -> Self {
+        ModrinthSortType::Relevance
+    }
+}
+
 impl ModrinthSortType {
     /// 获取排序方式名称
     pub fn to_string(&self) -> String {
@@ -74,7 +80,7 @@ impl ModrinthSortType {
 /// Modrinth搜索参数
 pub struct ModrinthSearchArg {
     /// 游戏版本号
-    pub verions: Option<String>,
+    pub version: Option<String>,
     /// 搜索的名字
     pub query: Option<String>,
     /// 搜索排序
@@ -87,6 +93,20 @@ pub struct ModrinthSearchArg {
     pub category: Option<String>,
     /// 加载器类型
     pub loader: Option<String>,
+}
+
+impl Default for ModrinthSearchArg {
+    fn default() -> Self {
+        Self {
+            version: Default::default(),
+            query: Default::default(),
+            sort: Default::default(),
+            page: Default::default(),
+            page_size: Default::default(),
+            category: Default::default(),
+            loader: Default::default(),
+        }
+    }
 }
 
 fn build_facets(list: Vec<FacetsObj>) -> String {
@@ -141,7 +161,7 @@ async fn search(
 ) -> CoreResult<ModrinthSearchObj> {
     // 查询词与 facets 含空格、引号、方括号等特殊字符，
     // 必须经 URL 编码，否则服务端会静默返回空结果
-    let mut url = reqwest::Url::parse(&format!("{}search", urls::MODRINTH)).unwrap();
+    let mut url = reqwest::Url::parse(&format!("{}search", urls::MODRINTH_API)).unwrap();
     url.query_pairs_mut()
         .append_pair("query", query)
         .append_pair("index", &index.to_string())
@@ -155,14 +175,16 @@ async fn search(
 }
 
 /// 获取整合包列表
+///
+/// 需要的参数page_size verions category query sort page
 pub async fn get_modpack_list(arg: ModrinthSearchArg) -> CoreResult<ModrinthSearchObj> {
     let page_size = arg.page_size.unwrap_or(20);
     let mut facets = Vec::new();
 
     facets.push(build_project_type(vec![CLASS_MODPACK.to_string()]));
 
-    if let Some(verions) = arg.verions {
-        facets.push(build_versions(vec![verions.clone()]));
+    if let Some(version) = arg.version {
+        facets.push(build_versions(vec![version.clone()]));
     }
 
     if let Some(category) = arg.category {
@@ -186,8 +208,8 @@ pub async fn get_mod_list(arg: ModrinthSearchArg) -> CoreResult<ModrinthSearchOb
 
     facets.push(build_project_type(vec![CLASS_MOD.to_string()]));
 
-    if let Some(verions) = arg.verions {
-        facets.push(build_versions(vec![verions.clone()]));
+    if let Some(version) = arg.version {
+        facets.push(build_versions(vec![version.clone()]));
     }
 
     let mut cate = build_categories(Vec::new());
@@ -219,8 +241,8 @@ pub async fn get_resourcepack_list(arg: ModrinthSearchArg) -> CoreResult<Modrint
 
     facets.push(build_project_type(vec![CLASS_RESOURCEPACK.to_string()]));
 
-    if let Some(verions) = arg.verions {
-        facets.push(build_versions(vec![verions.clone()]));
+    if let Some(version) = arg.version {
+        facets.push(build_versions(vec![version.clone()]));
     }
 
     if let Some(category) = arg.category {
@@ -244,8 +266,8 @@ pub async fn get_shaderpack_list(arg: ModrinthSearchArg) -> CoreResult<ModrinthS
 
     facets.push(build_project_type(vec![CLASS_SHADERPACK.to_string()]));
 
-    if let Some(verions) = arg.verions {
-        facets.push(build_versions(vec![verions.clone()]));
+    if let Some(version) = arg.version {
+        facets.push(build_versions(vec![version.clone()]));
     }
 
     if let Some(category) = arg.category {
@@ -269,8 +291,8 @@ pub async fn get_datapack_list(arg: ModrinthSearchArg) -> CoreResult<ModrinthSea
 
     facets.push(build_project_type(vec![CLASS_MOD.to_string()]));
 
-    if let Some(verions) = arg.verions {
-        facets.push(build_versions(vec![verions.clone()]));
+    if let Some(version) = arg.version {
+        facets.push(build_versions(vec![version.clone()]));
     }
 
     if let Some(category) = arg.category {
@@ -295,7 +317,7 @@ pub async fn get_datapack_list(arg: ModrinthSearchArg) -> CoreResult<ModrinthSea
 /// - `id`: 项目编号
 /// - `version`: 版本号
 pub async fn get_version(id: &str, version: &str) -> CoreResult<ModrinthVersionObj> {
-    let url = format!("{}project/{id}/version/{version}", urls::MODRINTH);
+    let url = format!("{}project/{id}/version/{version}", urls::MODRINTH_API);
 
     crate::get_work_client()
         .get_json_limited(&url, LIMITE_PER_MIN)
@@ -314,7 +336,7 @@ pub async fn get_versions(ids: Vec<String>) -> CoreResult<Vec<ModrinthVersionObj
         })
     })?;
 
-    let mut url = reqwest::Url::parse(&format!("{}versions", urls::MODRINTH)).unwrap();
+    let mut url = reqwest::Url::parse(&format!("{}versions", urls::MODRINTH_API)).unwrap();
     url.query_pairs_mut().append_pair("ids", &ids_json);
 
     crate::get_work_client()
@@ -326,7 +348,7 @@ pub async fn get_versions(ids: Vec<String>) -> CoreResult<Vec<ModrinthVersionObj
 ///
 /// - `id`: 项目编号
 pub async fn get_team(id: &str) -> CoreResult<Vec<ModrinthTeamObj>> {
-    let url = format!("{}project/{id}/members", urls::MODRINTH);
+    let url = format!("{}project/{id}/members", urls::MODRINTH_API);
 
     crate::get_work_client()
         .get_json_limited(&url, LIMITE_PER_MIN)
@@ -337,7 +359,7 @@ pub async fn get_team(id: &str) -> CoreResult<Vec<ModrinthTeamObj>> {
 ///
 /// - `id`: 项目编号
 pub async fn get_project(id: &str) -> CoreResult<ModrinthProjectObj> {
-    let url = format!("{}project/{id}", urls::MODRINTH);
+    let url = format!("{}project/{id}", urls::MODRINTH_API);
 
     crate::get_work_client()
         .get_json_limited(&url, LIMITE_PER_MIN)
@@ -358,7 +380,7 @@ pub async fn get_file_versions(
         Some(version) => {
             let mut url = format!(
                 "{}project/{id}/version?game_versions=[\"{version}\"]",
-                urls::MODRINTH
+                urls::MODRINTH_API
             );
 
             if let Some(loader) = loader {
@@ -368,7 +390,7 @@ pub async fn get_file_versions(
             url
         }
         None => {
-            let mut url = format!("{}project/{id}/version?", urls::MODRINTH);
+            let mut url = format!("{}project/{id}/version?", urls::MODRINTH_API);
 
             if let Some(loader) = loader {
                 url.push_str(&format!("loaders=[\"{}\"]", loader.to_lowercase()));
@@ -399,7 +421,7 @@ impl Default for ModrinthGameVersionObj {
 
 /// 获取所有游戏版本
 pub async fn get_game_versions() -> CoreResult<Vec<ModrinthGameVersionObj>> {
-    let url = format!("{}tag/game_version", urls::MODRINTH);
+    let url = format!("{}tag/game_version", urls::MODRINTH_API);
 
     crate::get_work_client()
         .get_json_limited(&url, LIMITE_PER_MIN)
@@ -428,7 +450,7 @@ impl Default for ModrinthCategoriesObj {
 
 /// 获取所有类型
 pub async fn get_categories() -> CoreResult<Vec<ModrinthCategoriesObj>> {
-    let url = format!("{}tag/category", urls::MODRINTH);
+    let url = format!("{}tag/category", urls::MODRINTH_API);
 
     crate::get_work_client()
         .get_json_limited(&url, LIMITE_PER_MIN)
@@ -457,7 +479,7 @@ impl Default for VersionHashObj {
 pub async fn get_version_from_sha1(
     sha1: Vec<String>,
 ) -> CoreResult<HashMap<String, ModrinthVersionObj>> {
-    let url = format!("{}version_files", urls::MODRINTH);
+    let url = format!("{}version_files", urls::MODRINTH_API);
 
     crate::get_work_client()
         .post_json_get_json_limited(
@@ -477,7 +499,7 @@ pub async fn get_version_from_sha1(
 pub async fn get_version_from_sha512(
     sha512: Vec<String>,
 ) -> CoreResult<HashMap<String, ModrinthVersionObj>> {
-    let url = format!("{}version_files", urls::MODRINTH);
+    let url = format!("{}version_files", urls::MODRINTH_API);
 
     crate::get_work_client()
         .post_json_get_json_limited(

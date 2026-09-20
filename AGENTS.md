@@ -56,12 +56,19 @@
   `window_open_window`、`add_list_dir`。
 - 事件名由 `emit_xxx_yyy` 推导：去掉 `emit_` 前缀、`_` 换成 `-`，例如
   `emit_account_change` → `account-change`。
-- 前端接口由 `mcml-gui/src-tauri/build.rs` 扫描 Rust 源码自动生成（**勿手改**）：
+- 前端接口由 `mcml-gui/src-tauri/build.rs`（逻辑在 `ipc-gen` 包）扫描 Rust 源码自动生成（**勿手改**）：
   - `mcml-vue/src/lib/bindings.ts`：命令的类型化包装（`commands.xxx(...)`）+ 跨 IPC 类型的
     TS 定义。命令签名、DTO 结构、`#[serde(rename_all)]` 都是从 Rust 源码解析出来的
   - `mcml-vue/src/lib/listens.ts`：事件名常量
   新增命令加 `#[tauri::command]`，新增事件加 `#[gui_macros::emit]`；单独重新生成可跑
   `cd mcml-gui && npm run gen`（或任意 `cargo check`）。
+- 扫描与生成逻辑在 `mcml-gui/ipc-gen/`（包名 `gui-ipc-gen`，有单测）：
+  `src-tauri/build.rs` 只是调用方（算路径、传 `GenConfig`、写文件、打 cargo 指令）；
+  改生成规则改那个包，跑 `cd mcml-gui/ipc-gen && cargo test` 验证。
+- 命令在 `bindings.ts` 里按**来源 .rs 模块**分组（组键取模块最后一段，如
+  `windows::account` → `commands.account`），组内剥掉命令名的公共前段
+  （`add_modpack_search` → `commands.addModpack.search`）。同一个名字的命令**不能定义两次**，
+  否则 `generate_handler!` 会报重复定义。
 - 磁盘配置用 Rust 命名（snake_case），跨 IPC 传输一律经 `src-tauri/src/dtos/` 转成
   camelCase DTO。
 

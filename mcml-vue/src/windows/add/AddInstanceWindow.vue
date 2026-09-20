@@ -414,8 +414,8 @@ async function listDirNodes(dirPath: string, rel: string): Promise<FileNode[]> {
   const entries = await commands.add.listDir(dirPath);
   return entries.map((en) => {
     const key = rel ? `${rel}/${en.name}` : en.name;
-    const node: FileNode = { key, name: en.name, isDir: en.is_dir, children: [] };
-    if (en.is_dir) node.lazy = true;
+    const node: FileNode = { key, name: en.name, isDir: en.isDir, children: [] };
+    if (en.isDir) node.lazy = true;
     return node;
   });
 }

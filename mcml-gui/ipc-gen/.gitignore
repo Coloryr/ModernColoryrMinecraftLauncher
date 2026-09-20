@@ -1,0 +1,3 @@
+# 生成物（本包零依赖，单独 cargo test 时会生成）
+/target/
+/Cargo.lock
