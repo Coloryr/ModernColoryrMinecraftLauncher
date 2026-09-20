@@ -9,6 +9,7 @@ use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
+use mcml_game::GameInstance;
 use mcml_game::add_game::{self, PackType};
 use mcml_game::gui_hook::{
     AddInstanceGui, AddModPackGui, AddModPackState, IAddInstanceGui, IAddModPackGui, IProgressGui,
@@ -16,17 +17,13 @@ use mcml_game::gui_hook::{
 };
 use mcml_game::launcher::instance_setting_obj::InstanceSettingObj;
 use mcml_game::loader::LoaderType;
-use mcml_game::GameInstance;
 use tauri::{AppHandle, Emitter, WebviewWindow};
 use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-use crate::dtos::{
-    DetectedPackDto, DirEntry, LoaderProgressDto,
-    NameConflictDto, PackProgressDto,
-};
-use crate::listens;
+use crate::dtos::{DetectedPackDto, DirEntry, LoaderProgressDto, NameConflictDto, PackProgressDto};
+use crate::{listens, windows};
 
 /// 添加实例窗口模型：只存运行态，不落盘
 pub struct AddWindowModel {
@@ -72,10 +69,9 @@ impl AddWindowModel {
     }
 }
 
-/// 取添加实例窗口模型（模型跟随窗口生命周期，见 window_manager）
+/// 取添加实例窗口模型（模型跟随窗口生命周期，见 windows）
 fn model(window: &WebviewWindow) -> Result<Arc<Mutex<AddWindowModel>>, String> {
-    crate::window_manager::window_model(window)
-        .ok_or_else(|| "err.modelMissing".to_string())
+    windows::window_model(window).ok_or_else(|| "err.modelMissing".to_string())
 }
 
 /// 前端加载器 ID -> LoaderType（ID 列表见 [`add_get_loaders`]）
@@ -378,7 +374,15 @@ pub async fn add_import_url(
     let uuid = tauri::async_runtime::spawn_blocking(move || {
         tauri::async_runtime::block_on(async {
             add_game::install_archive_from_url(
-                &url, name, group, None, gui, progress, None, PackType::ArchivePack, token,
+                &url,
+                name,
+                group,
+                None,
+                gui,
+                progress,
+                None,
+                PackType::ArchivePack,
+                token,
             )
             .await
         })
@@ -455,7 +459,8 @@ pub async fn add_get_support_loaders(app: AppHandle, mc: String) -> Result<Vec<S
     let mc_clone = mc.clone();
     let result = cell
         .get_or_try_init(|| async move {
-            let gui: ProgressGui = Some(Arc::new(SupportLoadersProgressGui { app: gui_app }) as Arc<dyn IProgressGui>);
+            let gui: ProgressGui =
+                Some(Arc::new(SupportLoadersProgressGui { app: gui_app }) as Arc<dyn IProgressGui>);
             mcml_game::loader::loader_versions::get_support_loaders(&mc_clone, gui).await
         })
         .await;
@@ -500,4 +505,3 @@ pub fn add_set_close_guard(window: WebviewWindow, enabled: bool) {
         store.lock().unwrap().set_close_guard(enabled);
     }
 }
-

@@ -13,8 +13,8 @@ use crate::dtos::main_dto::{LoadState, NewsItem};
 use crate::dtos::{
     ErrorEvent, ExitEvent, InstanceChangeEvent, InstancePatch, LogEvent, StateEvent,
 };
-use crate::listens;
 use crate::models::{EnvVarLine, InstanceArgs, InstanceInfo, JavaInfo, VersionInfo};
+use crate::{listens, windows};
 use mcml_config::config_obj::{GCType, RunArgObj, WindowSettingObj};
 use mcml_game::GameInstance;
 use mcml_game::launcher::instance_setting_obj::{
@@ -124,7 +124,7 @@ fn now_time() -> String {
 /// 这些命令只会由主窗口 webview 调用；模型缺失属异常情形（主窗口未创建），
 /// 返回 Err / 空列表由调用方降级，不 panic。
 fn model(window: &WebviewWindow) -> Result<Arc<Mutex<MainWindowModel>>, String> {
-    crate::window_manager::window_model(window).ok_or_else(|| "err.modelMissing".to_string())
+    windows::window_model(window).ok_or_else(|| "err.modelMissing".to_string())
 }
 
 /// 获取实例列表（mcml-game::get_instances 对接，合并运行状态）

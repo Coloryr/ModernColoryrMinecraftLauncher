@@ -119,8 +119,6 @@ pub struct ProjectItemDto {
     pub download_count: u64,
     /// 更新时间
     pub date: String,
-    /// 是否为整合包
-    pub modpack: bool,
     /// 是否已经下载
     pub download: bool,
     /// 能否收藏
@@ -141,11 +139,9 @@ impl ProjectItemDto {
     pub fn new_curseforge(
         data: &CurseForgeListDataObj,
         file_type: String,
-        modpack: bool,
         download: bool,
         can_star: bool,
         is_star: bool,
-        image: String,
         mcmod: Option<McmodDto>,
     ) -> Self {
         let mut authors = Vec::new();
@@ -177,13 +173,12 @@ impl ProjectItemDto {
         Self {
             name: data.name.clone(),
             summary: data.summary.clone(),
-            image,
+            image: data.logo.url.clone(),
             authors,
             tag,
             screenshots,
             download_count: data.download_count,
             date: data.date_modified.clone(),
-            modpack,
             download,
             can_star,
             is_star,

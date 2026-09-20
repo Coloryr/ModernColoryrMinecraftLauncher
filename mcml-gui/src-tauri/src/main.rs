@@ -4,7 +4,7 @@
 use std::path::PathBuf;
 
 use mcml_core::CoreInitObj;
-use mcml_gui_lib::{collect_utils, err_box, gui_config, image_manager, window_manager};
+use mcml_gui_lib::{collect_utils, err_box, gui_config, image_manager, windows};
 use mcml_names::names;
 use mcml_sys::path_helper;
 
@@ -24,7 +24,7 @@ fn main() {
     obj.path = if res.is_err() { get_save_path() } else { path };
 
     // 窗口状态 / GUI 配置与核心共用同一运行路径
-    window_manager::init(&obj.path);
+    windows::init(&obj.path);
     gui_config::init(&obj.path);
     collect_utils::init(&obj.path);
     image_manager::init(&obj.path);

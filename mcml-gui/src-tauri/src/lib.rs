@@ -9,13 +9,12 @@ use mcml_names::i18;
 
 use crate::windows::{download, main};
 
+pub mod collect_utils;
 pub mod dtos;
 pub mod err_box;
 pub mod gui_config;
 pub mod image_manager;
 pub mod models;
-pub mod window_manager;
-pub mod collect_utils;
 pub mod windows;
 
 include!(concat!(env!("OUT_DIR"), "/invokes_gen.rs"));
@@ -29,9 +28,9 @@ pub fn run() {
             });
         })
         .plugin(tauri_plugin_dialog::init())
-        .on_window_event(window_manager::on_window_event)
+        .on_window_event(windows::on_window_event)
         .setup(|app| {
-            if let Err(e) = window_manager::show_main_window(app.handle()) {
+            if let Err(e) = windows::show_main_window(app.handle()) {
                 err_box::fatal_error_text(&e);
             }
 
