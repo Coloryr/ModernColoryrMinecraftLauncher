@@ -6,7 +6,7 @@ import { invoke } from "@tauri-apps/api/core";
 
 /** 命令，按来源 .rs 模块分组（参数顺序与 Rust 一致，Tauri 注入的 AppHandle/WebviewWindow 已剔除）*/
 export const commands = {
-  windowManager: {
+  windows: {
     closeWindow: (kind: string) => invoke<void>("window_close_window", { kind }),
     getGuiConfig: () => invoke<GuiConfigDto>("window_get_gui_config"),
     isMaximized: () => invoke<boolean>("window_is_maximized"),
@@ -45,15 +45,16 @@ export const commands = {
   addModpack: {
     files: (source: string, projectId: string, version: string | null) => invoke<ModpackFileDto[]>("add_modpack_files", { source, projectId, version }),
     install: (source: string, projectId: string, fileId: string, group: string | null) => invoke<string>("add_modpack_install", { source, projectId, fileId, group }),
-    list: (source: string, fileType: string, page: number, sort: string, category: string, filter: string | null, version: string | null, loader: string | null) => invoke<ProjectDto>("add_modpack_list", { source, fileType, page, sort, category, filter, version, loader }),
+    list: (source: string, page: number, sort: string, category: string, filter: string | null, version: string | null) => invoke<ProjectDto>("add_modpack_list", { source, page, sort, category, filter, version }),
     search: (source: string, query: string | null, version: string | null, sort: string | null, page: number) => invoke<ModpackSearchDto>("add_modpack_search", { source, query, version, sort, page }),
   },
   addResource: {
-    categories: (source: string, fileType: string) => invoke<Record<string, string>>("add_resource_categories", { source, fileType }),
-    fileVersions: (game: string, source: string, pid: string, fileType: string, page: number, version: string | null, loader: string | null) => invoke<FileListDto>("add_resource_file_versions", { game, source, pid, fileType, page, version, loader }),
-    gameVersions: (source: string) => invoke<string[]>("add_resource_game_versions", { source }),
-    sortType: (source: string) => invoke<string[]>("add_resource_sort_type", { source }),
-    sourceType: () => invoke<string[]>("add_resource_source_type"),
+    modpackList: (source: string, fileType: string, page: number, sort: string, category: string, filter: string | null, version: string | null, loader: string | null) => invoke<ProjectDto>("add_modpack_list", { source, fileType, page, sort, category, filter, version, loader }),
+    resourceCategories: (source: string, fileType: string) => invoke<Record<string, string>>("add_resource_categories", { source, fileType }),
+    resourceFileVersions: (game: string, source: string, pid: string, fileType: string, page: number, version: string | null, loader: string | null) => invoke<FileListDto>("add_resource_file_versions", { game, source, pid, fileType, page, version, loader }),
+    resourceGameVersions: (source: string) => invoke<string[]>("add_resource_game_versions", { source }),
+    resourceSortType: (source: string) => invoke<string[]>("add_resource_sort_type", { source }),
+    resourceSourceType: () => invoke<string[]>("add_resource_source_type"),
   },
   collect: {
     addGroup: (name: string) => invoke<void>("collect_add_group", { name }),
@@ -215,7 +216,6 @@ export type ProjectItemDto = {
   screenshots: DecPicDto[],
   downloadCount: number,
   date: string,
-  modpack: boolean,
   download: boolean,
   canStar: boolean,
   isStar: boolean,

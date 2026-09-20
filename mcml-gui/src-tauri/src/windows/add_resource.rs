@@ -235,3 +235,41 @@ pub async fn add_resource_file_versions(
         _ => Err(String::from("err.sourceType")),
     }
 }
+
+/// 获取项目列表
+#[tauri::command]
+pub async fn add_modpack_list(
+    source: String,
+    file_type: String,
+    page: u32,
+    sort: String,
+    category: String,
+    filter: Option<String>,
+    version: Option<String>,
+    loader: Option<String>,
+) -> Result<ProjectDto, String> {
+    let source = ModPackType::from_string(&source);
+    let file_type = FileType::from_string(&file_type);
+    if file_type.is_none() {
+        return Err(String::from("err.fileTypeNotFound"));
+    }
+    let file_type = file_type.unwrap();
+
+    match source {
+        ModPackType::CurseForge => {
+            let sort = CurseForgeSortType::from_string(&sort);
+            if sort.is_none() {
+                return Err(String::from("err.sortTypeNotFound"));
+            }
+            let sort = sort.unwrap();
+
+
+
+            todo!()
+        }
+        ModPackType::Modrinth => {
+            todo!()
+        }
+        _ => Err(String::from("err.sourceType")),
+    }
+}

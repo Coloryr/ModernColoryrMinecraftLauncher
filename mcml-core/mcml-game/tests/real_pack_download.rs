@@ -15,6 +15,7 @@ use mcml_downloader::download_item::DownloadItem;
 use mcml_game::add_game::{self, PackType};
 use mcml_game::gui_hook::{AddModPackState, IAddModPackGui};
 use mcml_game::loader::LoaderType;
+use mcml_net::curseforge_api::{self, CurseForgeSortType};
 
 mod common;
 
@@ -93,7 +94,9 @@ async fn download_modrinth_pack(slug: &str, version: &str) -> Option<PathBuf> {
     }
 
     let data = match mcml_net::get_work_client()
-        .get_bytes(&format!("https://api.modrinth.com/v2/project/{slug}/version"))
+        .get_bytes(&format!(
+            "https://api.modrinth.com/v2/project/{slug}/version"
+        ))
         .await
     {
         Ok(data) => data,
@@ -109,10 +112,7 @@ async fn download_modrinth_pack(slug: &str, version: &str) -> Option<PathBuf> {
             return None;
         }
     };
-    let Some(target) = versions
-        .into_iter()
-        .find(|v| v.version_number == version)
-    else {
+    let Some(target) = versions.into_iter().find(|v| v.version_number == version) else {
         eprintln!("{slug} 上不存在版本 {version}");
         return None;
     };
@@ -204,8 +204,7 @@ async fn install_real_modrinth_pack() {
     ensure_init();
 
     // 真包从 Modrinth 下载并缓存（无网跳过）
-    let Some(pack) = download_modrinth_pack("fabulously-optimized", "14.0.0-beta.3").await
-    else {
+    let Some(pack) = download_modrinth_pack("fabulously-optimized", "14.0.0-beta.3").await else {
         eprintln!("跳过: 网络不可用（无法下载 Modrinth 整合包）");
         return;
     };
@@ -330,26 +329,28 @@ async fn install_real_curseforge_pack() {
     }
 
     // 搜索整合包并取其最新文件（体积较小的 Fabulously Optimized）
-    let list = mcml_net::curseforge_api::get_modpack_list(mcml_net::curseforge_api::CurseFogreArg {
-        filter: Some("Fabulously Optimized".to_string()),
-        page_size: Some(5),
-        ..Default::default()
-    })
-    .await
-    .expect("搜索 CurseForge 整合包失败");
+    let list =
+        mcml_net::curseforge_api::get_modpack_list(mcml_net::curseforge_api::CurseFogreArg {
+            filter: Some("Fabulously Optimized".to_string()),
+            page_size: Some(5),
+            ..Default::default()
+        })
+        .await
+        .expect("搜索 CurseForge 整合包失败");
     let Some(item) = list.data.first() else {
         eprintln!("跳过: 搜索结果为空");
         return;
     };
     println!("选中整合包: {} (id={})", item.name, item.id);
 
-    let mut files = mcml_net::curseforge_api::get_files_page(mcml_net::curseforge_api::CurseFogreArg {
-        id: Some(item.id.to_string()),
-        page_size: Some(1),
-        ..Default::default()
-    })
-    .await
-    .expect("获取 CurseForge 文件列表失败");
+    let mut files =
+        mcml_net::curseforge_api::get_files_page(mcml_net::curseforge_api::CurseFogreArg {
+            id: Some(item.id.to_string()),
+            page_size: Some(1),
+            ..Default::default()
+        })
+        .await
+        .expect("获取 CurseForge 文件列表失败");
     let Some(mut file) = files.data.first_mut() else {
         eprintln!("跳过: 整合包没有文件");
         return;
@@ -387,33 +388,33 @@ async fn install_real_curseforge_pack() {
 /// 搜索时按 modLoaderType 过滤，按下载量排序取前 10 个，
 /// 依次找最新文件小于 150MB 的包安装，避免测试耗时过长。
 async fn install_cf_pack_with_loader(loader: u32, loader_name: &str, expect_loader: LoaderType) {
-    let list = mcml_net::curseforge_api::get_modpack_list(
-        mcml_net::curseforge_api::CurseFogreArg {
-            page_size: Some(10),
-            sort: mcml_net::curseforge_api::CurseForgeSortType::TotalDownloads,
-            loader: Some(loader),
-            ..Default::default()
-        },
-    )
+    let list = curseforge_api::get_modpack_list(curseforge_api::CurseFogreArg {
+        page_size: Some(10),
+        sort: Some(CurseForgeSortType::TotalDownloads),
+        loader: Some(loader),
+        ..Default::default()
+    })
     .await
     .expect("搜索 CurseForge 整合包失败");
     assert!(!list.data.is_empty(), "按 {loader_name} 搜索整合包结果为空");
 
     for item in &list.data {
-        let mut files = mcml_net::curseforge_api::get_files_page(
-            mcml_net::curseforge_api::CurseFogreArg {
-                id: Some(item.id.to_string()),
-                page_size: Some(1),
-                ..Default::default()
-            },
-        )
+        let mut files = curseforge_api::get_files_page(curseforge_api::CurseFogreArg {
+            id: Some(item.id.to_string()),
+            page_size: Some(1),
+            ..Default::default()
+        })
         .await
         .expect("获取 CurseForge 文件列表失败");
         let Some(file) = files.data.first_mut() else {
             continue;
         };
         if file.file_length > 150 * 1024 * 1024 {
-            println!("跳过大包: {} ({:.0}MB)", item.name, file.file_length as f64 / 1048576.0);
+            println!(
+                "跳过大包: {} ({:.0}MB)",
+                item.name,
+                file.file_length as f64 / 1048576.0
+            );
             continue;
         }
         println!(
@@ -563,7 +564,10 @@ async fn install_real_modrinth_heavy_pack() {
             .unwrap_or(0)
     };
     assert!(count_jars("mods") >= 100, "mods 目录应下载 100+ 个 jar");
-    assert!(count_jars("resourcepacks") >= 20, "resourcepacks 应下载 20+ 个文件");
+    assert!(
+        count_jars("resourcepacks") >= 20,
+        "resourcepacks 应下载 20+ 个文件"
+    );
     drop(read);
 
     for state in ["readInfo", "extract", "getInfo", "downloadFile", "done"] {

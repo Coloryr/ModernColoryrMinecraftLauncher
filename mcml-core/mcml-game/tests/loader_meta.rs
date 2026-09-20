@@ -29,7 +29,7 @@ fn loader_type_prefixes() {
     // 前缀 = id，保持与版本文件夹命名一致
     for id in LoaderType::ids() {
         let loader = LoaderType::from_string(id).unwrap();
-        assert_eq!(loader.prefix(), id);
+        assert_eq!(loader.to_string(), id);
     }
 }
 

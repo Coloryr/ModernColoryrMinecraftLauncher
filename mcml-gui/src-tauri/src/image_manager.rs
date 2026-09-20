@@ -25,9 +25,12 @@ use crate::gui_config::{self, HeadType};
 
 static INSTANCE_IMAGE: LazyLock<RwLock<HashMap<Uuid, Vec<u8>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
-static SKIN_IMAGE: LazyLock<RwLock<HashMap<UserKeyObj, Vec<u8>>>> = LazyLock::new(|| RwLock::new(HashMap::new()));
-static HEAD_IMAGE: LazyLock<RwLock<HashMap<UserKeyObj, Vec<u8>>>> = LazyLock::new(|| RwLock::new(HashMap::new()));
-static ICON_IMAGE: LazyLock<RwLock<HashMap<SourceInfo, IconCache>>> = LazyLock::new(|| RwLock::new(HashMap::new()));
+static SKIN_IMAGE: LazyLock<RwLock<HashMap<UserKeyObj, Vec<u8>>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
+static HEAD_IMAGE: LazyLock<RwLock<HashMap<UserKeyObj, Vec<u8>>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
+static ICON_IMAGE: LazyLock<RwLock<HashMap<SourceInfo, IconCache>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
 /// 图标磁盘缓存目录（`<运行目录>/image`）
 static ICON_DIR: OnceLock<PathBuf> = OnceLock::new();
 
@@ -48,7 +51,8 @@ pub enum SourceInfo {
     Modrinth(String),
 }
 
-static URL_IMAGE: LazyLock<RwLock<HashMap<SourceInfo, String>>> = LazyLock::new(|| RwLock::new(HashMap::new()));
+static URL_IMAGE: LazyLock<RwLock<HashMap<SourceInfo, String>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
 
 /// 把请求路径按 `/` 拆成非空片段
 ///
@@ -333,7 +337,10 @@ fn read_icon_file(file: &Path) -> Option<Vec<u8>> {
         return None;
     }
 
-    match path_helper::read_byte(file).ok().and_then(|data| decode_as_png(&data)) {
+    match path_helper::read_byte(file)
+        .ok()
+        .and_then(|data| decode_as_png(&data))
+    {
         Some(data) => Some(data),
         None => {
             // 内容损坏：删掉让调用方重新获取

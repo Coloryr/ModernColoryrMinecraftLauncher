@@ -4,16 +4,27 @@
 //! 进度与重名确认复用添加实例窗口的回调（`super::add`），因为压缩包 / 网址
 //! 导入走的是同一套安装流程。
 
+use std::collections::HashMap;
+use std::sync::LazyLock;
+
 use mcml_game::add_game;
 use mcml_game::launcher::{FileType, ModPackType};
+use mcml_net::curseforge_api::list_obj::CurseForgeListDataObj;
 use mcml_net::curseforge_api::{self, CurseFogreArg, CurseForgeSortType};
 use mcml_net::modrinth_api;
 use tauri::{AppHandle, WebviewWindow};
+use tokio::sync::RwLock;
 
-use crate::dtos::add_resource_dto::ProjectDto;
+use crate::collect_utils;
+use crate::dtos::add_resource_dto::{ProjectDto, ProjectItemDto};
 use crate::dtos::{ModpackFileDto, ModpackItemDto, ModpackSearchDto};
 
 use super::add::{instance_gui, pack_gui, prepare};
+
+static CURSEFOGRE_INFO: LazyLock<RwLock<HashMap<String, CurseForgeListDataObj>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
+static MODRINTH_INFO: LazyLock<RwLock<HashMap<String, HashMap<String, ModrinthVersionObj>>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
 
 /// 搜索在线整合包（source：curseforge / modrinth；page 从 0 开始，一页 20 条）
 ///
@@ -183,9 +194,7 @@ pub async fn add_modpack_install(
         tauri::async_runtime::block_on(async {
             let res = match source.as_str() {
                 "curseforge" => {
-                    let fid: u64 = file_id
-                        .parse()
-                        .map_err(|_| "err.badFileId".to_string())?;
+                    let fid: u64 = file_id.parse().map_err(|_| "err.badFileId".to_string())?;
                     let mut list = curseforge_api::get_files(vec![fid])
                         .await
                         .map_err(|e| e.to_string())?;
@@ -222,20 +231,13 @@ pub async fn add_modpack_install(
 #[tauri::command]
 pub async fn add_modpack_list(
     source: String,
-    file_type: String,
     page: u32,
     sort: String,
     category: String,
     filter: Option<String>,
     version: Option<String>,
-    loader: Option<String>,
 ) -> Result<ProjectDto, String> {
     let source = ModPackType::from_string(&source);
-    let file_type = FileType::from_string(&file_type);
-    if file_type.is_none() {
-        return Err(String::from("err.fileTypeNotFound"));
-    }
-    let file_type = file_type.unwrap();
 
     match source {
         ModPackType::CurseForge => {
@@ -245,7 +247,7 @@ pub async fn add_modpack_list(
             }
             let sort = sort.unwrap();
 
-            curseforge_api::get_modpack_list(CurseFogreArg {
+            let list = curseforge_api::get_modpack_list(CurseFogreArg {
                 version,
                 page: Some(page),
                 sort: Some(sort),
@@ -256,11 +258,36 @@ pub async fn add_modpack_list(
             .await
             .map_err(|err| err.to_string())?;
 
-            todo!()
+            let mut list1 = Vec::new();
+
+            let mut map = CURSEFOGRE_INFO.write().await;
+
+            for item in list.data {
+                let pid = item.id.to_string();
+                let temp = ProjectItemDto::new_curseforge(&item, FileType::Modpack.to_string(), check_modpack_download(&pid), true, collect_utils::is_star(&pid), None);
+
+                list1.push(temp);
+                map.insert(pid, item);
+            }
+
+            Ok(ProjectDto {
+                items: list1,
+                count: list.pagination.total_count
+            })
         }
         ModPackType::Modrinth => {
             todo!()
         }
         _ => Err(String::from("err.sourceType")),
     }
+}
+
+fn check_modpack_download(pid: &str) -> bool {
+    mcml_game::get_instances().iter().any(|item|  {
+        let temp = item.read().unwrap();
+        temp.is_modpack && match temp.pid.as_ref() {
+            Some(data) => data == pid,
+            None => false,
+        }
+    })
 }
