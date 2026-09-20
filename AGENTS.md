@@ -48,6 +48,16 @@
 - 桌面壳：`cd mcml-gui && npm run tauri dev`（会先起 mcml-vue 的 vite，**端口 1420 必须空闲**）。
 - 只跑前端：根目录 `dev-frontend.bat`（vite，1420）；
   浏览器可访问 `http://localhost:1420/?window=<kind>` 预览某个窗口（无 IPC 数据）。
+- **出包两个 profile**（各自独立 target 目录，来回切不会互相刷缓存）：
+  - 正式发布：根目录 `build-release.bat`（= `cd mcml-gui && npm run tauri build`）。
+    `[profile.release]` 是 fat LTO + `codegen-units = 1`：体积最小、运行最快，但末尾的
+    跨 crate 优化是单线程的，**构建时会看到只有一个核在跑**，含安装包。
+  - 预发布：根目录 `build-prerelease.bat`（= `cd mcml-gui/src-tauri && cargo build --profile prerelease`）。
+    `[profile.prerelease]` 是 thin LTO + `codegen-units = 16`：快很多，体积略大，只出 exe。
+  - 预发布也要**安装包**时：`tauri` CLI 不认 `--profile`（`--` 透传给 cargo 会让它去
+    `target/release` 找错文件），只能覆盖 release 的设置：
+    `CARGO_PROFILE_RELEASE_LTO=thin CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16 npm run tauri build`。
+    代价是它与正式发布共用 target 目录，来回切会重编末尾那几个单元。
 - Rust workspace 在 `mcml-core/`（首次编译较慢）。
 
 ## 4. IPC 约定

@@ -294,7 +294,7 @@ fn icon_file(url: &str) -> PathBuf {
 
 /// 把图片数据解码后统一转成 PNG，无法解码视为损坏
 ///
-/// 用 `image` 按内容嗅探格式（png / jpeg / webp），不走 Skia：
+/// 用 `image` 按内容嗅探格式（png / jpeg / webp）
 /// skia-safe 的预编译包只带 jpeg / png 解码，Modrinth 的图标是 webp，解不出来。
 fn decode_as_png(data: &[u8]) -> Option<Vec<u8>> {
     let image = image::load_from_memory(data).ok()?;
