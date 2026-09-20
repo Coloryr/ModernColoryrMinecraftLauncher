@@ -54,6 +54,10 @@
 
 - 命令名 = 函数名 = **`窗口名_方法名`**，例如 `main_get_instances`、`account_add_account`、
   `window_open_window`、`add_list_dir`。
+- **命令与 DTO 的唯一来源是 Rust 源码**，全部由生成器产出。前端缺命令 / 缺字段时，
+  先在 Rust 侧补 `#[tauri::command]` 或改 DTO 结构，再跑生成；**不要**在 `bindings.ts`
+  或前端另写一套类型（下次生成会被覆盖，且与 Rust 侧脱节）。
+  `src/lib/api.ts` 只是手写的便捷包装层，其中的类型一律 `import` 自 `./bindings`。
 - 事件名由 `emit_xxx_yyy` 推导：去掉 `emit_` 前缀、`_` 换成 `-`，例如
   `emit_account_change` → `account-change`。
 - 前端接口由 `mcml-gui/src-tauri/build.rs`（逻辑在 `ipc-gen` 包）扫描 Rust 源码自动生成（**勿手改**）：

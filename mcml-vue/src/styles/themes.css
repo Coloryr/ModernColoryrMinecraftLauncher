@@ -36,6 +36,9 @@
 
   /* 弹窗遮罩 */
   --overlay: rgba(0, 0, 0, 0.55);
+
+  /* 自绘标题栏（WindowFrame）高度：弹窗想避开标题栏时用这个值 */
+  --titlebar-h: 60px;
 }
 
 [data-theme="Light"] {

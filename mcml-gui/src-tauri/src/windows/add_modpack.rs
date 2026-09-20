@@ -5,7 +5,7 @@
 //! 导入走的是同一套安装流程。
 
 use std::collections::HashMap;
-use std::sync::LazyLock;
+use std::sync::{LazyLock, Mutex};
 
 use mcml_game::add_game;
 use mcml_game::gui_hook::AddModPackState;
@@ -19,6 +19,7 @@ use mcml_net::modrinth_api::{self};
 use mcml_net::modrinth_api::{ModrinthSearchArg, ModrinthSortType};
 use tauri::{AppHandle, WebviewWindow};
 use tokio::sync::RwLock;
+use tokio_util::sync::CancellationToken;
 
 use crate::collect_utils;
 use crate::dtos::add_resource_dto::{FileListDto, FileListItemDto, ProjectDto, ProjectItemDto};
@@ -47,6 +48,31 @@ pub struct ModPackInstallState {
     pub sub_text: String,
     pub sub_now: usize,
     pub sub_all: Option<usize>,
+}
+
+/// 各窗口正在进行的列表搜索（键 = 窗口 label），窗口关闭时取消
+static SEARCH_CANCEL: LazyLock<Mutex<HashMap<String, CancellationToken>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+/// 登记本窗口这一发搜索并返回取消令牌，顺手取消上一发
+fn register_search(label: &str) -> CancellationToken {
+    let mut lock = SEARCH_CANCEL.lock().unwrap();
+
+    if let Some(old) = lock.get(label) {
+        old.cancel();
+    }
+
+    let token = CancellationToken::new();
+    lock.insert(label.to_string(), token.clone());
+
+    token
+}
+
+/// 取消该窗口正在进行的列表搜索（窗口关闭时调用）
+pub fn cancel_search(label: &str) {
+    if let Some(token) = SEARCH_CANCEL.lock().unwrap().remove(label) {
+        token.cancel();
+    }
 }
 
 /// 安装在线整合包（下载压缩包后走对应类型的安装流程；name 取自整合包元数据）
@@ -103,10 +129,29 @@ pub async fn add_modpack_install(
 /// 获取项目列表
 #[tauri::command]
 pub async fn add_modpack_list(
+    window: WebviewWindow,
     source: String,
     page: u32,
     sort: String,
-    category: String,
+    category: Option<String>,
+    filter: Option<String>,
+    version: Option<String>,
+) -> Result<ProjectDto, String> {
+    // 同一窗口同时只跑一发：新的一发顶掉上一发，窗口关闭时由 `cancel_search` 全部取消
+    let token = register_search(window.label());
+
+    tokio::select! {
+        res = list_projects(source, page, sort, category, filter, version) => res,
+        _ = token.cancelled() => Err(String::from("err.cancelled")),
+    }
+}
+
+/// 按下载源拉取项目列表
+async fn list_projects(
+    source: String,
+    page: u32,
+    sort: String,
+    category: Option<String>,
     filter: Option<String>,
     version: Option<String>,
 ) -> Result<ProjectDto, String> {
@@ -125,7 +170,7 @@ pub async fn add_modpack_list(
                 page: Some(page),
                 sort: Some(sort),
                 filter,
-                category: Some(category),
+                category,
                 ..Default::default()
             })
             .await
@@ -165,7 +210,8 @@ pub async fn add_modpack_list(
 
             let list = modrinth_api::get_modpack_list(ModrinthSearchArg {
                 page: Some(page),
-                category: Some(category),
+                query: filter,
+                category,
                 sort,
                 version,
                 ..Default::default()

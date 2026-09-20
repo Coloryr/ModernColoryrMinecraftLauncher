@@ -13,7 +13,7 @@ mcml-downloader = { path = "../mcml-downloader" }
 mcml-config = { path = "../mcml-config" }
 mcml-log = { path = "../mcml-log" }
 tokio.workspace = true
-skia-safe.workspace = true
+tiny-skia.workspace = true
 glam.workspace = true
 rayon.workspace = true
 serde.workspace = true

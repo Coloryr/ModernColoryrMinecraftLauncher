@@ -5,5 +5,5 @@ edition = "2024"
 
 [dependencies]
 mcml-skin = { path = "../mcml-skin" }
-skia-safe.workspace = true
+tiny-skia.workspace = true
 glam.workspace = true

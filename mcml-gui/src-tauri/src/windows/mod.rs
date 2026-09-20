@@ -111,7 +111,7 @@ const ACCOUNT_MIN_HEIGHT: f64 = 480.0;
 
 /// 添加实例窗口最小尺寸
 const ADD_MIN_WIDTH: f64 = 700.0;
-const ADD_MIN_HEIGHT: f64 = 535.0;
+const ADD_MIN_HEIGHT: f64 = 585.0;
 
 /// 下载窗口最小尺寸
 const DOWNLOAD_MIN_WIDTH: f64 = 670.0;
@@ -484,6 +484,8 @@ pub fn on_window_event(window: &tauri::Window<tauri::Wry>, event: &tauri::Window
                 emit_close_blocked(window);
                 return;
             }
+            // 关闭已放行：取消该窗口还在跑的整合包搜索
+            add_modpack::cancel_search(&label);
             if let Some(win) = window.app_handle().get_webview_window(&label) {
                 let _ = save_window_state(uuid, &win);
             }

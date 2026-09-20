@@ -1,35 +1,31 @@
-use std::{f32::consts::PI, slice};
+use std::f32::consts::PI;
 
 use glam::{Mat4, Vec3, Vec4};
-use skia_safe::{
-    AlphaType, Bitmap, BlendMode, Canvas, Color, ColorType, IRect, ImageInfo, Paint, Point, Point3,
-    SamplingOptions, TileMode,
-    image::CachingHint,
-    surfaces,
-    vertices::{BuilderFlags, VertexMode},
+use tiny_skia::{
+    BlendMode, FillRule, FilterQuality, Paint, PathBuilder, Pattern, Pixmap, SpreadMode, Transform,
 };
 
-static CUBE_VERTICES: [Point3; 16] = [
+static CUBE_VERTICES: [[f32; 3]; 16] = [
     // 前面
-    Point3::new(-1.0, -1.0, 1.0),
-    Point3::new(1.0, -1.0, 1.0),
-    Point3::new(1.0, 1.0, 1.0),
-    Point3::new(-1.0, 1.0, 1.0),
+    [-1.0, -1.0, 1.0],
+    [1.0, -1.0, 1.0],
+    [1.0, 1.0, 1.0],
+    [-1.0, 1.0, 1.0],
     // 背面
-    Point3::new(-1.0, -1.0, -1.0),
-    Point3::new(1.0, -1.0, -1.0),
-    Point3::new(1.0, 1.0, -1.0),
-    Point3::new(-1.0, 1.0, -1.0),
+    [-1.0, -1.0, -1.0],
+    [1.0, -1.0, -1.0],
+    [1.0, 1.0, -1.0],
+    [-1.0, 1.0, -1.0],
     // 前面（顶层，1.125 倍缩放）
-    Point3::new(-1.125, -1.125, 1.125),
-    Point3::new(1.125, -1.125, 1.125),
-    Point3::new(1.125, 1.125, 1.125),
-    Point3::new(-1.125, 1.125, 1.125),
+    [-1.125, -1.125, 1.125],
+    [1.125, -1.125, 1.125],
+    [1.125, 1.125, 1.125],
+    [-1.125, 1.125, 1.125],
     // 背面（顶层）
-    Point3::new(-1.125, -1.125, -1.125),
-    Point3::new(1.125, -1.125, -1.125),
-    Point3::new(1.125, 1.125, -1.125),
-    Point3::new(-1.125, 1.125, -1.125),
+    [-1.125, -1.125, -1.125],
+    [1.125, -1.125, -1.125],
+    [1.125, 1.125, -1.125],
+    [-1.125, 1.125, -1.125],
 ];
 
 static CUBE_INDICES: [usize; 48] = [
@@ -47,70 +43,36 @@ static CUBE_INDICES: [usize; 48] = [
     9, 13, 14, 10, // 前面（顶层）
 ];
 
-static FACE_POS: [IRect; 12] = [
-    IRect::new(56, 8, 64, 16), // 背面（顶层）
-    IRect::new(48, 0, 56, 8),  // 底面（顶层）
-    IRect::new(48, 8, 56, 16), // 右面（顶层）
-    IRect::new(24, 8, 32, 16), // 背面
-    IRect::new(16, 0, 24, 8),  // 底面
-    IRect::new(16, 8, 24, 16), // 右面
-    IRect::new(8, 0, 16, 8),   // 顶面
-    IRect::new(0, 8, 8, 16),   // 左面
-    IRect::new(8, 8, 16, 16),  // 前面
-    IRect::new(40, 0, 48, 8),  // 顶面（顶层）
-    IRect::new(32, 8, 40, 16), // 左面（顶层）
-    IRect::new(40, 8, 48, 16), // 前面（顶层）
+/// 每个面在皮肤贴图上的左上角（8x8 一个面）
+static FACE_POS: [[i32; 2]; 12] = [
+    [56, 8], // 背面（顶层）
+    [48, 0], // 底面（顶层）
+    [48, 8], // 右面（顶层）
+    [24, 8], // 背面
+    [16, 0], // 底面
+    [16, 8], // 右面
+    [8, 0],  // 顶面
+    [0, 8],  // 左面
+    [8, 8],  // 前面
+    [40, 0], // 顶面（顶层）
+    [32, 8], // 左面（顶层）
+    [40, 8], // 前面（顶层）
 ];
 
-static SOURCE_VERTICES: [Point; 48] = [
-    Point::new(0.0, 1.0),
-    Point::new(1.0, 1.0),
-    Point::new(1.0, 0.0),
-    Point::new(0.0, 0.0), // 背面
-    Point::new(1.0, 0.0),
-    Point::new(0.0, 0.0),
-    Point::new(0.0, 1.0),
-    Point::new(1.0, 1.0), // 底面
-    Point::new(1.0, 1.0),
-    Point::new(0.0, 1.0),
-    Point::new(0.0, 0.0),
-    Point::new(1.0, 0.0), // 右面
-    Point::new(0.0, 1.0),
-    Point::new(1.0, 1.0),
-    Point::new(1.0, 0.0),
-    Point::new(0.0, 0.0), // 背面
-    Point::new(1.0, 0.0),
-    Point::new(0.0, 0.0),
-    Point::new(0.0, 1.0),
-    Point::new(1.0, 1.0), // 底面
-    Point::new(1.0, 1.0),
-    Point::new(0.0, 1.0),
-    Point::new(0.0, 0.0),
-    Point::new(1.0, 0.0), // 右面
-    Point::new(1.0, 0.0),
-    Point::new(0.0, 0.0),
-    Point::new(0.0, 1.0),
-    Point::new(1.0, 1.0), // 顶面
-    Point::new(0.0, 1.0),
-    Point::new(1.0, 1.0),
-    Point::new(1.0, 0.0),
-    Point::new(0.0, 0.0), // 左面
-    Point::new(1.0, 1.0),
-    Point::new(0.0, 1.0),
-    Point::new(0.0, 0.0),
-    Point::new(1.0, 0.0), // 前面
-    Point::new(1.0, 0.0),
-    Point::new(0.0, 0.0),
-    Point::new(0.0, 1.0),
-    Point::new(1.0, 1.0), // 顶面
-    Point::new(0.0, 1.0),
-    Point::new(1.0, 1.0),
-    Point::new(1.0, 0.0),
-    Point::new(0.0, 0.0), // 左面
-    Point::new(1.0, 1.0),
-    Point::new(0.0, 1.0),
-    Point::new(0.0, 0.0),
-    Point::new(1.0, 0.0), // 前面
+/// 每个面四个角的归一化 uv
+static SOURCE_VERTICES: [[f32; 2]; 48] = [
+    [0.0, 1.0], [1.0, 1.0], [1.0, 0.0], [0.0, 0.0], // 背面
+    [1.0, 0.0], [0.0, 0.0], [0.0, 1.0], [1.0, 1.0], // 底面
+    [1.0, 1.0], [0.0, 1.0], [0.0, 0.0], [1.0, 0.0], // 右面
+    [0.0, 1.0], [1.0, 1.0], [1.0, 0.0], [0.0, 0.0], // 背面
+    [1.0, 0.0], [0.0, 0.0], [0.0, 1.0], [1.0, 1.0], // 底面
+    [1.0, 1.0], [0.0, 1.0], [0.0, 0.0], [1.0, 0.0], // 右面
+    [1.0, 0.0], [0.0, 0.0], [0.0, 1.0], [1.0, 1.0], // 顶面
+    [0.0, 1.0], [1.0, 1.0], [1.0, 0.0], [0.0, 0.0], // 左面
+    [1.0, 1.0], [0.0, 1.0], [0.0, 0.0], [1.0, 0.0], // 前面
+    [1.0, 0.0], [0.0, 0.0], [0.0, 1.0], [1.0, 1.0], // 顶面
+    [0.0, 1.0], [1.0, 1.0], [1.0, 0.0], [0.0, 0.0], // 左面
+    [1.0, 1.0], [0.0, 1.0], [0.0, 0.0], [1.0, 0.0], // 前面
 ];
 
 fn create_tran() -> Mat4 {
@@ -135,8 +97,9 @@ fn create_tran_rotate(x: f32, y: f32) -> Mat4 {
     tran * scale * rotx * roty
 }
 
-fn project(tran: &Mat4, point: Point3, enable_z: bool) -> Point {
-    let mut res = tran * Vec4::new(point.x, point.y, point.z, 1.0);
+/// 投影一个顶点到屏幕坐标
+fn project(tran: &Mat4, point: [f32; 3], enable_z: bool) -> (f32, f32) {
+    let mut res = tran * Vec4::new(point[0], point[1], point[2], 1.0);
 
     if res.w != 0.0 {
         res.x /= res.w;
@@ -150,142 +113,184 @@ fn project(tran: &Mat4, point: Point3, enable_z: bool) -> Point {
         res.y /= z;
     }
 
-    Point::new(res.x, res.y)
+    (res.x, res.y)
 }
 
-fn draw_texture_faces(canvas: &Canvas, texture: &Bitmap, tran: &Mat4, enable_z: bool) {
-    let face_count = CUBE_INDICES.len() / 4;
+/// 输出尺寸
+const SIZE: u32 = 400;
 
-    let mut builder = skia_safe::vertices::Builder::new(
-        VertexMode::Triangles,
-        face_count * 6,
-        0,
-        BuilderFlags::HAS_TEX_COORDS,
+/// 超采样倍数
+///
+/// 不对每个三角形单独开抗锯齿：相邻三角形会在公共边上各贡献一次半覆盖，
+/// 叠加后形成细线（每个面的内部对角线和立方体的棱上都会出现）。
+/// 改为按二进制覆盖绘制、再降采样得到抗锯齿，从根上避开接缝。
+const SUPERSAMPLE: u32 = 2;
+
+/// 用一个纹理三角形填充屏幕三角形
+///
+/// 三个顶点给出屏幕坐标与纹理坐标的对应关系，据此求出「屏幕 → 纹理」的仿射变换；
+/// `Pattern` 的 transform 是反过来的（纹理 → 屏幕），所以传它的逆。
+/// 屏幕坐标会先乘以 `scale`（超采样）。
+fn fill_triangle(
+    pixmap: &mut Pixmap,
+    texture: &Pixmap,
+    triangle: [((f32, f32), (f32, f32)); 3],
+    scale: f32,
+) {
+    let (p0, t0) = triangle[0];
+    let (p1, t1) = triangle[1];
+    let (p2, t2) = triangle[2];
+
+    // 屏幕空间的两条边（放大到超采样坐标）
+    let p0 = (p0.0 * scale, p0.1 * scale);
+    let p1 = (p1.0 * scale, p1.1 * scale);
+    let p2 = (p2.0 * scale, p2.1 * scale);
+
+    let (ax, ay) = (p1.0 - p0.0, p1.1 - p0.1);
+    let (bx, by) = (p2.0 - p0.0, p2.1 - p0.1);
+    let det = ax * by - ay * bx;
+
+    // 完全退化的三角形（投影成一条线）会让下面的仿射变换不可逆，丢掉
+    if det.abs() < f32::EPSILON {
+        return;
+    }
+
+    // 纹理空间的两条边
+    let (ux, uy) = (t1.0 - t0.0, t1.1 - t0.1);
+    let (vx, vy) = (t2.0 - t0.0, t2.1 - t0.1);
+
+    let inv = 1.0 / det;
+    let m00 = (ux * by - vx * ay) * inv;
+    let m01 = (-ux * bx + vx * ax) * inv;
+    let m10 = (uy * by - vy * ay) * inv;
+    let m11 = (-uy * bx + vy * ax) * inv;
+    let m02 = t0.0 - (m00 * p0.0 + m01 * p0.1);
+    let m12 = t0.1 - (m10 * p0.0 + m11 * p0.1);
+
+    // 注意 `from_row` 的参数是 (sx, ky, kx, sy, tx, ty)，对应矩阵 | sx kx tx ; ky sy ty |，
+    // 所以这里不能按行序传（传错等于把矩阵转置，纹理采样会整片错位）
+    let Some(texture_to_screen) =
+        Transform::from_row(m00, m10, m01, m11, m02, m12).invert()
+    else {
+        return;
+    };
+
+    let pattern = Pattern::new(
+        texture.as_ref(),
+        SpreadMode::Pad,
+        FilterQuality::Nearest,
+        1.0,
+        texture_to_screen,
     );
+
+    let mut paint = Paint::default();
+    paint.shader = pattern;
+    // 关掉抗锯齿：抗锯齿交给降采样（见 `SUPERSAMPLE` 的说明）
+    paint.anti_alias = false;
+    paint.blend_mode = BlendMode::SourceOver;
+
+    let mut builder = PathBuilder::new();
+    builder.move_to(p0.0, p0.1);
+    builder.line_to(p1.0, p1.1);
+    builder.line_to(p2.0, p2.1);
+    builder.close();
+
+    let Some(path) = builder.finish() else {
+        return;
+    };
+
+    pixmap.fill_path(&path, &paint, FillRule::Winding, Transform::identity(), None);
+}
+
+fn draw_texture_faces(pixmap: &mut Pixmap, texture: &Pixmap, tran: &Mat4, enable_z: bool, scale: f32) {
+    let face_count = CUBE_INDICES.len() / 4;
 
     // 每个面的四边形按 (0,1,2) (0,2,3) 展开为两个三角形
     const TRI_ORDER: [usize; 6] = [0, 1, 2, 0, 2, 3];
 
-    {
-        let positions = builder.positions();
-        for (face_index, chunk) in positions.chunks_mut(6).enumerate() {
-            let base_index = face_index * 4;
-            for (i, pos) in chunk.iter_mut().enumerate() {
-                *pos = project(
-                    tran,
-                    CUBE_VERTICES[CUBE_INDICES[base_index + TRI_ORDER[i]]],
-                    enable_z,
-                );
+    for face in 0..face_count {
+        let base = face * 4;
+        let pos = FACE_POS[face];
+
+        // 先把这个面的四个角都投影出来
+        let mut corners = [((0.0f32, 0.0f32), (0.0f32, 0.0f32)); 4];
+        for (i, corner) in corners.iter_mut().enumerate() {
+            let screen = project(tran, CUBE_VERTICES[CUBE_INDICES[base + i]], enable_z);
+            let src = SOURCE_VERTICES[base + i];
+            let tex = (
+                pos[0] as f32 + src[0] * 8.0,
+                pos[1] as f32 + src[1] * 8.0,
+            );
+            *corner = (screen, tex);
+        }
+
+        for tri in 0..2 {
+            let idx = [
+                TRI_ORDER[tri * 3],
+                TRI_ORDER[tri * 3 + 1],
+                TRI_ORDER[tri * 3 + 2],
+            ];
+            fill_triangle(
+                pixmap,
+                texture,
+                [corners[idx[0]], corners[idx[1]], corners[idx[2]]],
+                scale,
+            );
+        }
+    }
+}
+
+/// 整数倍降采样（预乘像素直接求平均即可，不需要还原成直乘）
+fn downsample(src: &Pixmap, factor: u32) -> Option<Pixmap> {
+    let width = src.width() / factor;
+    let height = src.height() / factor;
+    let mut out = Pixmap::new(width, height)?;
+
+    let count = (factor * factor) as u32;
+
+    for y in 0..height {
+        for x in 0..width {
+            let mut sum = [0u32; 4];
+
+            for dy in 0..factor {
+                for dx in 0..factor {
+                    let px = src.pixel(x * factor + dx, y * factor + dy)?;
+                    sum[0] += px.red() as u32;
+                    sum[1] += px.green() as u32;
+                    sum[2] += px.blue() as u32;
+                    sum[3] += px.alpha() as u32;
+                }
+            }
+
+            let offset = ((y * width + x) * 4) as usize;
+            let dst = &mut out.data_mut()[offset..offset + 4];
+            for (i, value) in sum.iter().enumerate() {
+                dst[i] = (value / count) as u8;
             }
         }
     }
 
-    {
-        let tex_coords = builder.tex_coords().unwrap();
-        for (face_index, chunk) in tex_coords.chunks_mut(6).enumerate() {
-            let face = FACE_POS[face_index];
-            let base_index = face_index * 4;
-            for (i, tex) in chunk.iter_mut().enumerate() {
-                let src = SOURCE_VERTICES[base_index + TRI_ORDER[i]];
-                *tex = Point::new(
-                    face.left as f32 + src.x * 8.0,
-                    face.top as f32 + src.y * 8.0,
-                );
-            }
-        }
-    }
-
-    let vertices = builder.detach();
-
-    let shader = texture.to_shader(
-        Some((TileMode::Clamp, TileMode::Clamp)),
-        SamplingOptions::default(),
-        None,
-    );
-
-    let mut paint = Paint::default();
-    let paint = paint.set_anti_alias(true);
-    let paint = paint.set_shader(shader);
-
-    canvas.draw_vertices(&vertices, BlendMode::SrcOver, &paint);
+    Some(out)
 }
 
-pub fn draw_head_3d_typea(image: &mut Bitmap) -> Option<Bitmap> {
-    let width = 400;
-    let height = 400;
+/// 渲染 3D 头像（固定角度），输出 `SIZE` x `SIZE`
+fn draw_head(image: &Pixmap, tran: &Mat4, enable_z: bool) -> Option<Pixmap> {
+    let scale = SUPERSAMPLE as f32;
+    let size = SIZE * SUPERSAMPLE;
 
-    let info = ImageInfo::new(
-        (width, height),
-        ColorType::RGBA8888,
-        AlphaType::Premul,
-        None,
-    );
+    // 新建的位图是全透明的，与旧实现 clear(透明) 一致
+    let mut pixmap = Pixmap::new(size, size)?;
 
-    let mut draw = surfaces::raster(&info, None, None)?;
-    let canvas = draw.canvas();
-    canvas.clear(Color::new(0x00000000));
+    draw_texture_faces(&mut pixmap, image, tran, enable_z, scale);
 
-    let tran = create_tran();
-
-    draw_texture_faces(canvas, image, &tran, false);
-
-    let image = draw.image_snapshot();
-
-    let mut bitmap = Bitmap::new();
-    if !bitmap.set_info(&info, None) {
-        return None;
-    }
-    bitmap.alloc_pixels();
-    let size = bitmap.compute_byte_size();
-    let pixels = unsafe { slice::from_raw_parts_mut(bitmap.pixels() as *mut u8, size) };
-    if !image.read_pixels(
-        &info,
-        pixels,
-        bitmap.row_bytes(),
-        (0, 0),
-        CachingHint::Disallow,
-    ) {
-        return None;
-    }
-    Some(bitmap)
+    downsample(&pixmap, SUPERSAMPLE)
 }
 
-pub fn draw_head_3d_typeb(image: &mut Bitmap, x: f32, y: f32) -> Option<Bitmap> {
-    let width = 400;
-    let height = 400;
-
-    let info = ImageInfo::new(
-        (width, height),
-        ColorType::RGBA8888,
-        AlphaType::Premul,
-        None,
-    );
-
-    let mut draw = surfaces::raster(&info, None, None)?;
-    let canvas = draw.canvas();
-    canvas.clear(Color::new(0x00000000));
-
-    let tran = create_tran_rotate(x, y);
-
-    draw_texture_faces(canvas, image, &tran, true);
-
-    let image = draw.image_snapshot();
-
-    let mut bitmap = Bitmap::new();
-    if !bitmap.set_info(&info, None) {
-        return None;
-    }
-    bitmap.alloc_pixels();
-    let size = bitmap.compute_byte_size();
-    let pixels = unsafe { slice::from_raw_parts_mut(bitmap.pixels() as *mut u8, size) };
-    if !image.read_pixels(
-        &info,
-        pixels,
-        bitmap.row_bytes(),
-        (0, 0),
-        CachingHint::Disallow,
-    ) {
-        return None;
-    }
-    Some(bitmap)
+pub fn draw_head_3d_typea(image: &Pixmap) -> Option<Pixmap> {
+    draw_head(image, &create_tran(), false)
 }
+
+pub fn draw_head_3d_typeb(image: &Pixmap, x: f32, y: f32) -> Option<Pixmap> {
+    draw_head(image, &create_tran_rotate(x, y), true)
+}
+

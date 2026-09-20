@@ -7,13 +7,11 @@ import BaseModal from "../../components/ui/BaseModal.vue";
 import { api, onAddPackProgress } from "../../lib/api";
 import { t, tErr } from "../../lib/i18n";
 import { showToast } from "../../lib/toast";
-import type { PackProgressDto, VersionInfo } from "../../lib/bindings";
+import type { PackProgressDto } from "../../lib/bindings";
 import ModpackMode from "./ModpackMode.vue";
 
 defineEmits<{ (e: "close"): void }>();
 
-/** 游戏版本列表（用于过滤搜索结果） */
-const versions = ref<VersionInfo[]>([]);
 /** 分组（空 = 默认分组），带已有分组作为候选 */
 const group = ref("");
 const groups = ref<string[]>([]);
@@ -63,32 +61,18 @@ onMounted(async () => {
   } catch {
     groups.value = [];
   }
-  try {
-    versions.value = await api.getVersions();
-  } catch {
-    versions.value = [];
-  }
 });
 </script>
 
 <template>
   <WindowFrame :title="t('winTitle.addModpack')" @close="$emit('close')">
     <div class="modpack-body">
-      <div class="group-row">
-        <label class="field-label">{{ t("add.group") }}</label>
-        <input
-          v-model="group"
-          class="field-input"
-          list="modpack-groups"
-          :placeholder="t('add.groupPlaceholder')"
-          spellcheck="false"
-        />
-        <datalist id="modpack-groups">
-          <option v-for="g in groups" :key="g" :value="g" />
-        </datalist>
-      </div>
-
-      <ModpackMode :versions="versions" @install="install" />
+      <ModpackMode
+        :group="group"
+        :groups="groups"
+        @update:group="group = $event"
+        @install="install"
+      />
     </div>
 
     <!-- 整合包安装进度 -->
@@ -123,18 +107,6 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 12px;
-}
-
-.group-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 0 0 auto;
-}
-
-.group-row .field-label {
-  margin: 0;
-  white-space: nowrap;
 }
 
 /* 整合包安装进度弹窗 */

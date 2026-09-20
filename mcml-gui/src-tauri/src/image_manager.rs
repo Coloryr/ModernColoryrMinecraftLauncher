@@ -1,6 +1,7 @@
 use std::{
     collections::HashMap,
     fs,
+    io::Cursor,
     path::{Path, PathBuf},
     str::FromStr,
     sync::{LazyLock, OnceLock, RwLock},
@@ -14,7 +15,7 @@ use mcml_names::names;
 use mcml_net::mojang_api;
 use mcml_skin_draw::{head_2d_draw, head_3d_draw};
 use mcml_sys::path_helper;
-use skia_safe::{Bitmap, Data, EncodedImageFormat, Image};
+use tiny_skia::Pixmap;
 use tauri::{
     UriSchemeResponder,
     http::{Request, Response, StatusCode},
@@ -32,7 +33,7 @@ static SKIN_IMAGE: LazyLock<RwLock<HashMap<UserKeyObj, Vec<u8>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 static HEAD_IMAGE: LazyLock<RwLock<HashMap<UserKeyObj, Vec<u8>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
-static ICON_IMAGE: LazyLock<RwLock<HashMap<Uuid, IconCache>>> =
+static ICON_IMAGE: LazyLock<RwLock<HashMap<String, IconCache>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 /// 图标磁盘缓存目录（`<运行目录>/image`）
 static ICON_DIR: OnceLock<PathBuf> = OnceLock::new();
@@ -48,7 +49,8 @@ struct IconCache {
     time: Instant,
 }
 
-static URL_IMAGE: LazyLock<RwLock<HashMap<Uuid, String>>> =
+/// 图标请求名（网址的 sha256）→ 远程网址
+static URL_IMAGE: LazyLock<RwLock<HashMap<String, String>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 
 /// 把请求路径按 `/` 拆成非空片段
@@ -89,11 +91,7 @@ fn send_bad(res: UriSchemeResponder) {
 }
 
 fn read_as_png<P: AsRef<Path>>(file: P) -> Option<Vec<u8>> {
-    let data = Data::from_filename(file)?;
-    let image = Image::from_encoded(data)?;
-    let data = image.encode(None, EncodedImageFormat::PNG, 100)?;
-
-    Some(data.to_vec())
+    decode_as_png(&fs::read(file).ok()?)
 }
 
 fn load_instance_image(uri: &[&str], res: UriSchemeResponder) {
@@ -171,21 +169,20 @@ async fn load_skin_image(uri: &[&str], res: UriSchemeResponder) {
         return;
     };
 
-    let Some(mut bitmap) = mcml_skin::open_bitmap(&file) else {
+    let Some(bitmap) = mcml_skin::open_bitmap(&file) else {
         send_bad(res);
         return;
     };
 
-    let Some(head) = gen_head_image(&mut bitmap) else {
+    let Some(head) = gen_head_image(&bitmap) else {
         send_bad(res);
         return;
     };
 
-    let Some(data) = head.encode(EncodedImageFormat::PNG, 100) else {
+    let Ok(data) = head.encode_png() else {
         send_bad(res);
         return;
     };
-    let data = data.to_vec();
 
     HEAD_IMAGE.write().unwrap().insert(key, data.clone());
 
@@ -193,7 +190,7 @@ async fn load_skin_image(uri: &[&str], res: UriSchemeResponder) {
 }
 
 /// 按配置的头像类型渲染头像
-fn gen_head_image(bitmap: &mut Bitmap) -> Option<Bitmap> {
+fn gen_head_image(bitmap: &Pixmap) -> Option<Pixmap> {
     let config = gui_config::get().head;
 
     match config.head_type {
@@ -210,20 +207,16 @@ async fn load_icon_image(uri: &[&str], res: UriSchemeResponder) {
         return;
     }
 
-    let info = uri[1];
-    let Ok(uuid) = Uuid::parse_str(info) else {
-        send_bad(res);
-        return;
-    };
+    let name = uri[1];
 
-    let url = URL_IMAGE.read().unwrap().get(&uuid).cloned();
+    let url = URL_IMAGE.read().unwrap().get(name).cloned();
     let Some(url) = url else {
         send_bad(res);
         return;
     };
 
     // 内存缓存
-    if let Some(data) = get_icon_image(&uuid) {
+    if let Some(data) = get_icon_image(name) {
         send_png(res, data);
         return;
     }
@@ -232,7 +225,7 @@ async fn load_icon_image(uri: &[&str], res: UriSchemeResponder) {
 
     // 磁盘缓存
     if let Some(data) = read_icon_file(&file) {
-        set_icon_image(uuid, data.clone());
+        set_icon_image(name, data.clone());
         send_png(res, data);
         return;
     }
@@ -249,13 +242,13 @@ async fn load_icon_image(uri: &[&str], res: UriSchemeResponder) {
     };
 
     write_icon_file(&file, &data);
-    set_icon_image(uuid, data.clone());
+    set_icon_image(name, data.clone());
 
     send_png(res, data);
 }
 
 /// 取图标缓存，已过期的条目会被删除并返回 `None`（由调用方回源）
-fn get_icon_image(info: &Uuid) -> Option<Vec<u8>> {
+fn get_icon_image(info: &str) -> Option<Vec<u8>> {
     let mut lock = ICON_IMAGE.write().unwrap();
     let alive = lock
         .get(info)
@@ -271,9 +264,9 @@ fn get_icon_image(info: &Uuid) -> Option<Vec<u8>> {
 }
 
 /// 写入图标缓存并记录时刻
-fn set_icon_image(info: Uuid, data: Vec<u8>) {
+fn set_icon_image(info: &str, data: Vec<u8>) {
     ICON_IMAGE.write().unwrap().insert(
-        info,
+        info.to_string(),
         IconCache {
             data,
             time: Instant::now(),
@@ -286,19 +279,29 @@ pub fn init<P: AsRef<Path>>(path: P) {
     ICON_DIR.get_or_init(|| path.as_ref().join(names::IMAGE_DIR));
 }
 
-/// 远程图片的磁盘缓存位置（按网址 sha256 命名，与旧启动器一致）
-fn icon_file(url: &str) -> PathBuf {
-    let name = hash_helper::gen_hash_from_string(HashType::Sha256, url);
+/// 图标请求名：网址的 sha256（十六进制小写，与旧启动器的缓存命名一致）
+///
+/// 同一个网址每次都得到同一个名字，前端拿到的地址因此是稳定的，
+/// 浏览器缓存与磁盘缓存都能直接命中。
+fn icon_name(url: &str) -> String {
+    hash_helper::gen_hash_from_string(HashType::Sha256, url)
+}
 
-    ICON_DIR.get().unwrap().join(format!("{}.png", name))
+/// 远程图片的磁盘缓存位置（`<网址 sha256>.png`）
+fn icon_file(url: &str) -> PathBuf {
+    ICON_DIR.get().unwrap().join(format!("{}.png", icon_name(url)))
 }
 
 /// 把图片数据解码后统一转成 PNG，无法解码视为损坏
+///
+/// 用 `image` 按内容嗅探格式（png / jpeg / webp），不走 Skia：
+/// skia-safe 的预编译包只带 jpeg / png 解码，Modrinth 的图标是 webp，解不出来。
 fn decode_as_png(data: &[u8]) -> Option<Vec<u8>> {
-    let image = Image::from_encoded(Data::new_copy(data))?;
-    let data = image.encode(None, EncodedImageFormat::PNG, 100)?;
+    let image = image::load_from_memory(data).ok()?;
+    let mut out = Cursor::new(Vec::new());
+    image.write_to(&mut out, image::ImageFormat::Png).ok()?;
 
-    Some(data.to_vec())
+    Some(out.into_inner())
 }
 
 /// 磁盘缓存是否已过期（按文件修改时间判断）
@@ -371,15 +374,16 @@ fn image_base_url() -> &'static str {
 
 /// 登记远程图片地址并返回可直接用于 `src` 的网址
 ///
-/// 返回值形如 `http://mcml-image.localhost/icon/cf_123`，已含协议前缀，
-/// 前端无需再自行拼接。
+/// 请求名取**网址的 sha256**，所以返回值形如
+/// `http://mcml-image.localhost/icon/<sha256>`，已含协议前缀，前端无需再拼接；
+/// 同一个网址每次返回同一个地址，重复渲染不会产生新地址。
 pub fn push_image_url(url: &str) -> String {
-    let uuid = Uuid::new_v4();
+    let name = icon_name(url);
 
     URL_IMAGE
         .write()
         .unwrap()
-        .insert(uuid.clone(), url.to_string());
+        .insert(name.clone(), url.to_string());
 
-    format!("{}/icon/{}", image_base_url(), uuid.to_string())
+    format!("{}/icon/{}", image_base_url(), name)
 }

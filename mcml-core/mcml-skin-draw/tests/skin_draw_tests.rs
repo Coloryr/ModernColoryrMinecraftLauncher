@@ -1,20 +1,11 @@
 use std::path::Path;
 
-use mcml_skin_draw::{
-    cape_2d_draw,
-    head_2d_draw, head_3d_draw, skin_2d_draw,
-};
-use skia_safe::Bitmap;
+use mcml_skin_draw::{cape_2d_draw, head_2d_draw, head_3d_draw, skin_2d_draw};
+use tiny_skia::Pixmap;
 
-/// 比较两个 Bitmap 的内容是否完全一致
-fn assert_bitmap_eq(a: &mut Bitmap, b: &mut Bitmap) {
-    assert_eq!(
-        a.width(),
-        b.width(),
-        "bitmap width mismatch: {} != {}",
-        a.width(),
-        b.width()
-    );
+/// 比较两个位图的内容是否完全一致
+fn assert_bitmap_eq(a: &Pixmap, b: &Pixmap) {
+    assert_eq!(a.width(), b.width(), "bitmap width mismatch: {} != {}", a.width(), b.width());
     assert_eq!(
         a.height(),
         b.height(),
@@ -22,203 +13,128 @@ fn assert_bitmap_eq(a: &mut Bitmap, b: &mut Bitmap) {
         a.height(),
         b.height()
     );
-    assert_eq!(a.color_type(), b.color_type(), "bitmap color_type mismatch");
-    assert_eq!(a.alpha_type(), b.alpha_type(), "bitmap alpha_type mismatch");
-    assert_eq!(a.row_bytes(), b.row_bytes(), "bitmap row_bytes mismatch");
+    assert_eq!(a.data().len(), b.data().len(), "bitmap data length mismatch");
+    assert_eq!(a.data(), b.data(), "bitmap pixel data mismatch");
+}
 
-    let a_bytes = a.pixels();
-    let b_bytes = b.pixels();
-    assert!(!a_bytes.is_null(), "first bitmap pixels is null");
-    assert!(!b_bytes.is_null(), "second bitmap pixels is null");
+/// 读取参考图
+fn load_reference(name: &str) -> Pixmap {
+    let file = Path::new("tests").join(name);
+    let out = mcml_skin::open_bitmap(file.as_path());
+    assert!(out.is_some(), "{name} 应能读取");
 
-    let total_size = (a.height() as usize) * (a.row_bytes() as usize);
-    unsafe {
-        let a_slice = std::slice::from_raw_parts(a_bytes as *const u8, total_size);
-        let b_slice = std::slice::from_raw_parts(b_bytes as *const u8, total_size);
-        assert_eq!(a_slice, b_slice, "bitmap pixel data mismatch");
-    }
+    out.unwrap()
+}
+
+/// 读取测试用皮肤
+fn load_skin(name: &str) -> Pixmap {
+    let file = Path::new("tests").join(name);
+    let image = mcml_skin::open_bitmap(file.as_path());
+    assert!(image.is_some(), "{name} 应能读取");
+
+    image.unwrap()
 }
 
 #[test]
 fn test_cape_draw() {
-    let file = Path::new("tests").join("cape.png");
-    let file = file.as_path();
-    let image = mcml_skin::open_bitmap(file);
-    assert!(image.is_some());
-    let mut image = image.unwrap();
-    let res = cape_2d_draw::draw_cape_2d(&mut image);
+    let image = load_skin("cape.png");
+
+    let res = cape_2d_draw::draw_cape_2d(&image);
     assert!(res.is_some());
-    let mut res = res.unwrap();
+    let res = res.unwrap();
 
-    let file = Path::new("tests").join("out_cape.png");
-    let file = file.as_path();
-
-    let out = mcml_skin::open_bitmap(file);
-    assert!(out.is_some());
-    let mut out = out.unwrap();
-
-    assert_bitmap_eq(&mut res, &mut out);
-
-    // skin::save_bitmap(&res, file);
+    assert_bitmap_eq(&res, &load_reference("out_cape.png"));
 }
 
 #[test]
 fn test_cape_back_draw() {
-    let file = Path::new("tests").join("cape.png");
-    let file = file.as_path();
-    let image = mcml_skin::open_bitmap(file);
-    assert!(image.is_some());
-    let mut image = image.unwrap();
-    let res = cape_2d_draw::draw_cape_back_2d(&mut image);
+    let image = load_skin("cape.png");
+
+    let res = cape_2d_draw::draw_cape_back_2d(&image);
     assert!(res.is_some());
-    let mut res = res.unwrap();
+    let res = res.unwrap();
 
-    let file = Path::new("tests").join("out_cape_back.png");
-    let file = file.as_path();
-
-    let out = mcml_skin::open_bitmap(file);
-    assert!(out.is_some());
-    let mut out = out.unwrap();
-
-    assert_bitmap_eq(&mut res, &mut out);
-
-    // skin::save_bitmap(&res, file);
+    assert_bitmap_eq(&res, &load_reference("out_cape_back.png"));
 }
 
 #[test]
 fn test_head_draw_typea() {
-    let file = Path::new("tests").join("skin_slim.png");
-    let file = file.as_path();
-    let image = mcml_skin::open_bitmap(file);
-    assert!(image.is_some());
-    let mut image = image.unwrap();
-    let res = head_2d_draw::head_2d_draw_typea(&mut image);
+    let image = load_skin("skin_slim.png");
+
+    let res = head_2d_draw::head_2d_draw_typea(&image);
     assert!(res.is_some());
-    let mut res = res.unwrap();
+    let res = res.unwrap();
 
-    let file = Path::new("tests").join("out_head_a.png");
-    let file = file.as_path();
-
-    let out = mcml_skin::open_bitmap(file);
-    assert!(out.is_some());
-    let mut out = out.unwrap();
-
-    assert_bitmap_eq(&mut res, &mut out);
-
-    // skin::save_bitmap(&res, file);
+    assert_bitmap_eq(&res, &load_reference("out_head_a.png"));
 }
 
 #[test]
 fn test_head_draw_typeb() {
-    let file = Path::new("tests").join("skin_slim.png");
-    let file = file.as_path();
-    let image = mcml_skin::open_bitmap(file);
-    assert!(image.is_some());
-    let mut image = image.unwrap();
-    let res = head_2d_draw::head_2d_draw_typeb(&mut image);
+    let image = load_skin("skin_slim.png");
+
+    let res = head_2d_draw::head_2d_draw_typeb(&image);
     assert!(res.is_some());
-    let mut res = res.unwrap();
+    let res = res.unwrap();
 
-    let file = Path::new("tests").join("out_head_b.png");
-    let file = file.as_path();
-
-    let out = mcml_skin::open_bitmap(file);
-    assert!(out.is_some());
-    let mut out = out.unwrap();
-
-    assert_bitmap_eq(&mut res, &mut out);
-
-    // skin::save_bitmap(&res, file);
+    assert_bitmap_eq(&res, &load_reference("out_head_b.png"));
 }
 
 #[test]
 fn test_skin_draw_typea() {
-    let file = Path::new("tests").join("skin_slim.png");
-    let file = file.as_path();
-    let image = mcml_skin::open_bitmap(file);
-    assert!(image.is_some());
-    let mut image = image.unwrap();
-    let res = skin_2d_draw::skin_2d_draw_typea(&mut image, None);
+    let image = load_skin("skin_slim.png");
+
+    let res = skin_2d_draw::skin_2d_draw_typea(&image, None);
     assert!(res.is_some());
-    let mut res = res.unwrap();
+    let res = res.unwrap();
 
-    let file = Path::new("tests").join("out_skin_2d_a.png");
-    let file = file.as_path();
-
-    let out = mcml_skin::open_bitmap(file);
-    assert!(out.is_some());
-    let mut out = out.unwrap();
-
-    assert_bitmap_eq(&mut res, &mut out);
-
-    // skin::save_bitmap(&res, file);
+    assert_bitmap_eq(&res, &load_reference("out_skin_2d_a.png"));
 }
 
 #[test]
 fn test_skin_draw_typeb() {
-    let file = Path::new("tests").join("skin_slim.png");
-    let file = file.as_path();
-    let image = mcml_skin::open_bitmap(file);
-    assert!(image.is_some());
-    let mut image = image.unwrap();
-    let res = skin_2d_draw::skin_2d_draw_typeb(&mut image, None);
+    let image = load_skin("skin_slim.png");
+
+    let res = skin_2d_draw::skin_2d_draw_typeb(&image, None);
     assert!(res.is_some());
-    let mut res = res.unwrap();
+    let res = res.unwrap();
 
-    let file = Path::new("tests").join("out_skin_2d_b.png");
-    let file = file.as_path();
-
-    let out = mcml_skin::open_bitmap(file);
-    assert!(out.is_some());
-    let mut out = out.unwrap();
-
-    assert_bitmap_eq(&mut res, &mut out);
-
-    // skin::save_bitmap(&res, file);
+    assert_bitmap_eq(&res, &load_reference("out_skin_2d_b.png"));
 }
 
 #[test]
 fn test_head_3d_draw_typea() {
-    let file = Path::new("tests").join("skin_slim.png");
-    let file = file.as_path();
-    let image = mcml_skin::open_bitmap(file);
-    assert!(image.is_some());
-    let mut image = image.unwrap();
-    let res = head_3d_draw::draw_head_3d_typea(&mut image);
+    let image = load_skin("skin_slim.png");
+
+    let res = head_3d_draw::draw_head_3d_typea(&image);
     assert!(res.is_some());
-    let mut res = res.unwrap();
+    let res = res.unwrap();
 
-    let file = Path::new("tests").join("out_head_3d_a.png");
-    let file = file.as_path();
-
-    let out = mcml_skin::open_bitmap(file);
-    assert!(out.is_some());
-    let mut out = out.unwrap();
-
-    assert_bitmap_eq(&mut res, &mut out);
-
-    // skin::save_bitmap(&res, file);
+    assert_bitmap_eq(&res, &load_reference("out_head_3d_a.png"));
 }
 
 #[test]
 fn test_head_3d_draw_typeb() {
-    let file = Path::new("tests").join("skin_slim.png");
-    let file = file.as_path();
-    let image = mcml_skin::open_bitmap(file);
-    assert!(image.is_some());
-    let mut image = image.unwrap();
-    let res = head_3d_draw::draw_head_3d_typeb(&mut image, 15.0, 65.0);
+    let image = load_skin("skin_slim.png");
+
+    let res = head_3d_draw::draw_head_3d_typeb(&image, 15.0, 65.0);
     assert!(res.is_some());
-    let mut res = res.unwrap();
+    let res = res.unwrap();
 
-    let file = Path::new("tests").join("out_head_3d_b.png");
-    let file = file.as_path();
+    assert_bitmap_eq(&res, &load_reference("out_head_3d_b.png"));
+}
 
-    let out = mcml_skin::open_bitmap(file);
-    assert!(out.is_some());
-    let mut out = out.unwrap();
+/// 重新生成 3D 参考图
+///
+/// 3D 输出带抗锯齿，换光栅器后不可能与旧图逐字节一致，所以这两张图由本实现重新生成：
+/// `cargo test -p mcml-skin-draw --test skin_draw_tests regen_3d_refs -- --ignored`
+#[test]
+#[ignore]
+fn regen_3d_refs() {
+    let image = load_skin("skin_slim.png");
 
-    assert_bitmap_eq(&mut res, &mut out);
+    let a = head_3d_draw::draw_head_3d_typea(&image).expect("3d typea 应成功");
+    mcml_skin::save_bitmap(&a, Path::new("tests").join("out_head_3d_a.png").as_path());
 
-    // skin::save_bitmap(&res, file);
+    let b = head_3d_draw::draw_head_3d_typeb(&image, 15.0, 65.0).expect("3d typeb 应成功");
+    mcml_skin::save_bitmap(&b, Path::new("tests").join("out_head_3d_b.png").as_path());
 }

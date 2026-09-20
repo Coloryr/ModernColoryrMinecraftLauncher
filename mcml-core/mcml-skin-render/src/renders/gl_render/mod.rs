@@ -1,12 +1,12 @@
 pub mod gl_model;
 pub mod gl_shader;
 
-use std::{slice, sync::Arc};
+use std::sync::Arc;
 
 use glam::{Vec2, Vec3};
 use glow::*;
 use mcml_skin::SkinType;
-use skia_safe::{Bitmap, ColorType, ImageInfo};
+use tiny_skia::Pixmap;
 
 use crate::{
     BaseSkinRender, ErrorType, ModelPartType, cube, cube_model::CubeModelItemObj, model, renders::gl_render::gl_model::{ModelVao, VaoItem, VertexOpenGL}, texture
@@ -86,29 +86,7 @@ fn check_error(gl: &Context) {
     }
 }
 
-fn change_color_type(image: &Bitmap) -> Option<Bitmap> {
-    let rgba_info = ImageInfo::new(
-        image.dimensions(),
-        ColorType::RGBA8888,
-        image.alpha_type(),
-        image.color_space(),
-    );
-    let mut bitmap = Bitmap::new();
-    if !bitmap.set_info(&rgba_info, image.row_bytes()) {
-        return None;
-    }
-    bitmap.alloc_pixels();
-
-    unsafe {
-        if image.read_pixels(&rgba_info, bitmap.pixels(), bitmap.row_bytes(), 0, 0) {
-            Some(bitmap)
-        } else {
-            None
-        }
-    }
-}
-
-fn load_tex(is_gles: bool, gl: &glow::Context, image: &mut Bitmap, texture: Texture) {
+fn load_tex(gl: &glow::Context, image: &Pixmap, texture: Texture) {
     unsafe {
         gl.active_texture(TEXTURE0);
         gl.bind_texture(TEXTURE_2D, Some(texture));
@@ -120,53 +98,19 @@ fn load_tex(is_gles: bool, gl: &glow::Context, image: &mut Bitmap, texture: Text
         gl.tex_parameter_i32(TEXTURE_2D, TEXTURE_WRAP_T, CLAMP_TO_BORDER as i32);
     }
 
-    let width = image.width();
-    let height = image.height();
-    let pixel_data_size = width * height * 4;
-
-    if is_gles && image.color_type() == ColorType::BGRA8888 {
-        unsafe {
-            let mut image = change_color_type(&image).unwrap();
-            let pixels_slice =
-                slice::from_raw_parts(image.pixels() as *const u8, pixel_data_size as usize);
-
-            gl.tex_image_2d(
-                glow::TEXTURE_2D,
-                0,
-                glow::RGBA8 as i32,
-                width,
-                height,
-                0,
-                glow::RGBA,
-                glow::UNSIGNED_BYTE,
-                PixelUnpackData::Slice(Some(pixels_slice)),
-            );
-        }
-    } else {
-        let (internal_format, format) = match image.color_type() {
-            ColorType::RGBA8888 => (glow::RGBA8, glow::RGBA),
-            ColorType::BGRA8888 => (glow::RGBA8, glow::BGRA),
-            _ => {
-                panic!("Color type error");
-            }
-        };
-
-        unsafe {
-            let pixels_slice =
-                slice::from_raw_parts(image.pixels() as *const u8, pixel_data_size as usize);
-
-            gl.tex_image_2d(
-                glow::TEXTURE_2D,
-                0,
-                internal_format as i32,
-                width,
-                height,
-                0,
-                format,
-                glow::UNSIGNED_BYTE,
-                PixelUnpackData::Slice(Some(pixels_slice)),
-            );
-        }
+    // 位图固定是 RGBA8，直接按 RGBA 上传（原先 GLES 下的 BGRA 转换分支不再需要）
+    unsafe {
+        gl.tex_image_2d(
+            glow::TEXTURE_2D,
+            0,
+            glow::RGBA8 as i32,
+            image.width() as i32,
+            image.height() as i32,
+            0,
+            glow::RGBA,
+            glow::UNSIGNED_BYTE,
+            PixelUnpackData::Slice(Some(image.data())),
+        );
     }
 
     unsafe {
@@ -273,7 +217,6 @@ pub struct SkinRenderOpenGL {
     pub base: BaseSkinRender,
 
     gl: Arc<Context>,
-    is_gles: bool,
 
     pub info: String,
 
@@ -300,7 +243,7 @@ pub struct SkinRenderOpenGL {
 }
 
 impl SkinRenderOpenGL {
-    pub fn new(gl: Arc<glow::Context>, is_gles: bool) -> Self {
+    pub fn new(gl: Arc<glow::Context>) -> Self {
         unsafe {
             let pg = init_shader(&gl);
             let skin = gl.create_texture().unwrap();
@@ -322,7 +265,6 @@ impl SkinRenderOpenGL {
             Self {
                 base: BaseSkinRender::new(),
                 gl,
-                is_gles,
                 info,
                 pg,
                 render_width: 0,
@@ -812,10 +754,10 @@ impl SkinRenderOpenGL {
         }
 
         let skin_tex = base.skin_tex.as_mut().unwrap();
-        load_tex(self.is_gles, &self.gl, skin_tex, self.texture_skin);
+        load_tex(&self.gl, skin_tex, self.texture_skin);
 
         if let Some(cape_tex) = base.cape.as_mut() {
-            load_tex(self.is_gles, &self.gl, cape_tex, self.texture_cape);
+            load_tex(&self.gl, cape_tex, self.texture_cape);
         }
 
         base.switch_skin = false;

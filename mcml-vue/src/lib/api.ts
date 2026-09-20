@@ -12,14 +12,14 @@ import type {
   DownloadTaskEvent,
   ErrorEvent,
   ExitEvent,
+  FileListDto,
   InstanceArgs,
   InstanceInfo,
   JavaInfo,
   LogEvent,
-  ModpackFileDto,
-  ModpackSearchDto,
   NewsItem,
   PackProgressDto,
+  ProjectDto,
   StateEvent,
   VersionInfo,
 } from "./bindings";
@@ -122,20 +122,48 @@ export const api = {
     return commands.add.detectArchive(path);
   },
 
-  /** 搜索在线整合包（source：curseforge / modrinth，page 从 0 开始） */
-  async searchModpacks(
-    source: string,
-    query: string | null,
-    version: string | null,
-    sort: string,
-    page: number,
-  ): Promise<ModpackSearchDto> {
-    return commands.addModpack.search(source, query, version, sort, page);
+  // ---------------- 在线整合包 ----------------
+
+  /** 获取整合包下载源 ID 列表（curseforge / modrinth） */
+  async getModpackSources(): Promise<string[]> {
+    return commands.addResource.sourceType();
   },
 
-  /** 获取整合包的可安装版本列表（version 传 null 取全部） */
-  async getModpackFiles(source: string, projectId: string, version: string | null): Promise<ModpackFileDto[]> {
-    return commands.addModpack.files(source, projectId, version);
+  /** 获取某下载源的排序方式列表（取值即后端枚举线串，可原样回传） */
+  async getModpackSorts(source: string): Promise<string[]> {
+    return commands.addResource.sortType(source);
+  },
+
+  /** 获取某下载源整合包的分类（键 = 传给后端的分类值，值 = 显示名） */
+  async getModpackCategories(source: string): Promise<Record<string, string>> {
+    return commands.addResource.categories(source, "modpack");
+  },
+
+  /** 获取某下载源支持的游戏版本列表 */
+  async getModpackVersions(source: string): Promise<string[]> {
+    return commands.addResource.gameVersions(source);
+  },
+
+  /** 搜索在线整合包（page 从 0 开始；category / filter / version 传 null 表示不过滤） */
+  async searchModpacks(
+    source: string,
+    page: number,
+    sort: string,
+    category: string | null,
+    filter: string | null,
+    version: string | null,
+  ): Promise<ProjectDto> {
+    return commands.addModpack.list(source, page, sort, category, filter, version);
+  },
+
+  /** 获取某整合包的可安装版本列表（version 传 null 取全部） */
+  async getModpackFiles(
+    source: string,
+    projectId: string,
+    page: number,
+    version: string | null,
+  ): Promise<FileListDto> {
+    return commands.addModpack.file(source, projectId, page, version);
   },
 
   /** 安装在线整合包（实例名取自整合包元数据，返回新实例 uuid） */
