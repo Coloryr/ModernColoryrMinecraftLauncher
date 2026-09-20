@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct ModrinthSearchObj {
-    pub total_hits: u32,
+    pub total_hits: u64,
     pub hits: Vec<HitObj>,
 }
 

@@ -1,9 +1,16 @@
-use mcml_game::launcher::ModPackType;
+use mcml_game::{
+    launcher::{FileType, ModPackType},
+    modrinth,
+};
+use mcml_names::i18_items::error_type::CoreResult;
 use mcml_net::{
     curseforge_api::{file_obj::CurseForgeFileDataObj, list_obj::CurseForgeListDataObj},
-    modrinth_api::version_obj::ModrinthVersionObj,
+    modrinth_api::{self, search_obj::HitObj, version_obj::ModrinthVersionObj},
+    urls,
 };
 use serde::{Deserialize, Serialize};
+
+use crate::image_manager::{self};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -30,6 +37,8 @@ pub struct FileListItemDto {
     pub time: String,
     /// 是否已经下载
     pub is_download: bool,
+    /// 是否正在下载
+    pub download_now: bool,
     /// 下载源信息
     pub source: SourceTypeDto,
 }
@@ -37,8 +46,9 @@ pub struct FileListItemDto {
 impl FileListItemDto {
     pub fn new_curseforge(
         data: &CurseForgeFileDataObj,
-        file_type: String,
+        file_type: FileType,
         is_download: bool,
+        download_now: bool,
     ) -> Self {
         Self {
             name: data.display_name.clone(),
@@ -46,8 +56,9 @@ impl FileListItemDto {
             size: data.file_length,
             is_download,
             time: data.file_date.clone(),
+            download_now,
             source: SourceTypeDto {
-                file_type: file_type,
+                file_type: file_type.to_string(),
                 source: ModPackType::CurseForge.to_string(),
                 pid: data.mod_id.to_string(),
                 fid: data.id.to_string(),
@@ -55,7 +66,12 @@ impl FileListItemDto {
         }
     }
 
-    pub fn new_modrinth(data: &ModrinthVersionObj, file_type: String, is_download: bool) -> Self {
+    pub fn new_modrinth(
+        data: &ModrinthVersionObj,
+        file_type: FileType,
+        is_download: bool,
+        download_now: bool,
+    ) -> Self {
         let file = data
             .files
             .iter()
@@ -68,8 +84,9 @@ impl FileListItemDto {
             size: file.size,
             time: data.date_published.clone(),
             is_download,
+            download_now,
             source: SourceTypeDto {
-                file_type,
+                file_type: file_type.to_string(),
                 source: ModPackType::Modrinth.to_string(),
                 pid: data.id.clone(),
                 fid: data.project_id.clone(),
@@ -138,17 +155,18 @@ pub struct ProjectItemDto {
 impl ProjectItemDto {
     pub fn new_curseforge(
         data: &CurseForgeListDataObj,
-        file_type: String,
+        file_type: FileType,
         download: bool,
         can_star: bool,
         is_star: bool,
+        download_now: bool,
         mcmod: Option<McmodDto>,
     ) -> Self {
         let mut authors = Vec::new();
         for item in data.authors.iter() {
             authors.push(PicDto {
                 name: item.name.clone(),
-                logo: item.avatar_url.clone(),
+                logo: image_manager::push_image_url(&item.avatar_url),
             });
         }
 
@@ -156,7 +174,7 @@ impl ProjectItemDto {
         for item in data.categories.iter() {
             tag.push(TagDto {
                 name: item.name.clone(),
-                logo: item.icon_url.clone(),
+                logo: Some(image_manager::push_image_url(&item.icon_url)),
                 svg: None,
             });
         }
@@ -165,7 +183,7 @@ impl ProjectItemDto {
         for item in data.screenshots.iter() {
             screenshots.push(DecPicDto {
                 name: item.title.clone(),
-                logo: item.url.clone(),
+                logo: image_manager::push_image_url(&item.url),
                 description: item.description.clone(),
             });
         }
@@ -173,7 +191,7 @@ impl ProjectItemDto {
         Self {
             name: data.name.clone(),
             summary: data.summary.clone(),
-            image: data.logo.url.clone(),
+            image: image_manager::push_image_url(&data.logo.url),
             authors,
             tag,
             screenshots,
@@ -182,17 +200,106 @@ impl ProjectItemDto {
             download,
             can_star,
             is_star,
-            download_now: false,
+            download_now,
             url: data.links.website_url.clone(),
             mcmod,
             source: SourceTypeDto {
-                file_type,
+                file_type: file_type.to_string(),
                 source: ModPackType::CurseForge.to_string(),
                 pid: data.id.to_string(),
                 fid: Default::default(),
             },
         }
     }
+
+    pub async fn new_modrinth(
+        data: &HitObj,
+        file_type: FileType,
+        download: bool,
+        can_star: bool,
+        is_star: bool,
+        download_now: bool,
+        mcmod: Option<McmodDto>,
+    ) -> CoreResult<Self> {
+        let mut authors = Vec::new();
+
+        let mut project = modrinth_api::get_project(&data.project_id).await?;
+        let team = modrinth_api::get_team(&data.project_id).await?;
+
+        for item in team {
+            authors.push(PicDto {
+                name: item.user.username,
+                logo: image_manager::push_image_url(&item.user.avatar_url),
+            });
+        }
+
+        let mut tag = Vec::new();
+
+        for item in project.loaders {
+            tag.push(TagDto {
+                name: item.clone(),
+                logo: None,
+                svg: modrinth::get_categories_icon(&item).await,
+            });
+        }
+
+        for item in project.categories {
+            tag.push(TagDto {
+                name: item.clone(),
+                logo: None,
+                svg: modrinth::get_categories_icon(&item).await,
+            });
+        }
+
+        let mut screenshots = Vec::new();
+
+        project.gallery.sort_by(|a, b| a.ordering.cmp(&b.ordering));
+
+        for item in project.gallery {
+            screenshots.push(DecPicDto {
+                name: item.title,
+                logo: image_manager::push_image_url(&item.raw_url),
+                description: item.description,
+            });
+        }
+
+        Ok(Self {
+            name: data.title.clone(),
+            summary: data.description.clone(),
+            image: image_manager::push_image_url(&data.icon_url),
+            authors,
+            tag,
+            screenshots,
+            download_count: data.downloads,
+            date: data.date_modified.clone(),
+            download,
+            can_star,
+            is_star,
+            download_now,
+            url: get_modrinth_url(&file_type, &data.project_id),
+            mcmod,
+            source: SourceTypeDto {
+                file_type: file_type.to_string(),
+                source: ModPackType::Modrinth.to_string(),
+                pid: data.project_id.clone(),
+                fid: Default::default(),
+            },
+        })
+    }
+}
+
+fn get_modrinth_url(file_type: &FileType, id: &str) -> String {
+    format!(
+        "{}{}/{id}",
+        urls::MODRINTH,
+        match file_type {
+            FileType::Modpack => "modpack",
+            FileType::Shaderpack => "shaders",
+            FileType::Resourcepack => "resourcepacks",
+            FileType::DataPacks => "datapacks",
+            _ => "mod",
+        }
+    )
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -213,7 +320,7 @@ pub struct PicDto {
 #[serde(rename_all = "camelCase")]
 pub struct TagDto {
     pub name: String,
-    pub logo: String,
+    pub logo: Option<String>,
     pub svg: Option<String>,
 }
 

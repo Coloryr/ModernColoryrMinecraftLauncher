@@ -133,7 +133,8 @@ pub const CURSEFORGE: &str = "https://api.curseforge.com/v1/";
 // Modrinth API
 // ============================================================================
 
-pub const MODRINTH: &str = "https://api.modrinth.com/v2/";
+pub const MODRINTH: &str = "https://modrinth.com/";
+pub const MODRINTH_API: &str = "https://api.modrinth.com/v2/";
 pub const MODRINTH_DOWNLOAD: &str = "https://cdn.modrinth.com/";
 
 // ============================================================================

@@ -1993,6 +1993,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "gui-ipc-gen"
+version = "0.1.0"
+
+[[package]]
 name = "gui-macros"
 version = "0.1.0"
 
@@ -2985,6 +2989,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "dirs",
+ "gui-ipc-gen",
  "gui-macros",
  "mcml-auth",
  "mcml-base",

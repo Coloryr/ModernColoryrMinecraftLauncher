@@ -85,7 +85,7 @@ export interface WindowState {
 /** 读取 GUI 状态；非 Tauri 环境返回 null（浏览器回退 localStorage） */
 export async function loadGuiConfig(): Promise<GuiConfig | null> {
   try {
-    return await commands.windowManager.getGuiConfig();
+    return await commands.windows.getGuiConfig();
   } catch {
     return null;
   }
@@ -105,7 +105,7 @@ export interface GuiConfigPatch {
 export async function saveGuiConfig(patch: GuiConfigPatch): Promise<void> {
   try {
     const cur = (await loadGuiConfig()) ?? defaultConfig();
-    await commands.windowManager.saveGuiConfig({
+    await commands.windows.saveGuiConfig({
       ...cur,
       ...patch,
       mainWindow: { ...cur.mainWindow, ...patch.mainWindow },

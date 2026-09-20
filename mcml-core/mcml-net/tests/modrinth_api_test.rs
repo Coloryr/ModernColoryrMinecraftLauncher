@@ -78,7 +78,7 @@ async fn modrinth_search() {
     init();
 
     let arg = ModrinthSearchArg {
-        verions: None,
+        version: None,
         query: Some(String::from("fabulously optimized")),
         sort: ModrinthSortType::Relevance,
         page: Some(0),

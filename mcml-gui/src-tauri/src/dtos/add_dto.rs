@@ -4,6 +4,7 @@ use serde::Serialize;
 
 /// 目录项（list_dir 返回）
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct DirEntry {
     pub name: String,
     pub is_dir: bool,
@@ -42,31 +43,6 @@ pub struct ModpackItemDto {
     pub icon: String,
     pub author: String,
     pub downloads: u64,
-}
-
-/// 整合包搜索结果分页
-#[derive(Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ModpackSearchDto {
-    pub items: Vec<ModpackItemDto>,
-    /// 当前页（从 0 开始）
-    pub page: u32,
-    /// 总条数
-    pub total: u64,
-}
-
-/// 整合包可安装版本（id 为文件/版本 ID，安装时回传）
-#[derive(Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ModpackFileDto {
-    pub id: String,
-    /// 版本名
-    pub name: String,
-    /// 版本号 / 文件名
-    pub file_name: String,
-    pub date: String,
-    /// 文件大小（字节，未知为 0）
-    pub size: u64,
 }
 
 /// 整合包安装进度（state：downloadPack / readInfo / getInfo / downloadFile / extract / done）

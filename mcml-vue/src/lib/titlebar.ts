@@ -67,13 +67,13 @@ export function onTitleBarPointerDown(e: PointerEvent) {
     // 双击：只在这一次里最大化，且不再起拖拽
     lastDownAt = 0;
     lastDownTarget = null;
-    commands.windowManager.toggleMaximize().catch(() => {});
+    commands.windows.toggleMaximize().catch(() => {});
     return;
   }
 
   lastDownAt = now;
   lastDownTarget = e.target;
-  commands.windowManager.startDragging().catch(() => {});
+  commands.windows.startDragging().catch(() => {});
 }
 
 /** 最小化当前窗口 */
@@ -81,7 +81,7 @@ export function minimizeWindow() {
   if (!isTauri()) {
     return;
   }
-  commands.windowManager.minimize().catch(() => {});
+  commands.windows.minimize().catch(() => {});
 }
 
 /** 最大化 / 还原当前窗口，返回新状态（非 Tauri 环境返回 null） */
@@ -90,7 +90,7 @@ export async function toggleMaximizeWindow(): Promise<boolean | null> {
     return null;
   }
   try {
-    return await commands.windowManager.toggleMaximize();
+    return await commands.windows.toggleMaximize();
   } catch {
     return null;
   }
@@ -102,7 +102,7 @@ export async function isWindowMaximized(): Promise<boolean> {
     return false;
   }
   try {
-    return await commands.windowManager.isMaximized();
+    return await commands.windows.isMaximized();
   } catch {
     return false;
   }

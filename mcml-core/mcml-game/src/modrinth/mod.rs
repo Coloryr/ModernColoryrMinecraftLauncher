@@ -40,6 +40,16 @@ pub mod pack_obj;
 static CATEGORISE: OnceLock<Vec<ModrinthCategoriesObj>> = OnceLock::new();
 static GAME_VERSIONS: OnceLock<Vec<String>> = OnceLock::new();
 
+pub fn to_loader_id(loader: &LoaderType) -> Option<String> {
+    match loader {
+        LoaderType::Forge => Some(loader.to_string().to_string()),
+        LoaderType::Fabric => Some(loader.to_string().to_string()),
+        LoaderType::Quilt => Some(loader.to_string().to_string()),
+        LoaderType::NeoForge => Some(loader.to_string().to_string()),
+        _ => None
+    }
+}
+
 /// 创建下载项目
 pub fn make_download_obj<P: AsRef<Path>>(obj: &ModrinthVersionObj, path: P) -> FileItemObj {
     let file = obj
@@ -85,6 +95,26 @@ pub fn make_file_online_obj(obj: &ModrinthVersionObj, path: &str) -> OnlineInfoO
         modid: obj.project_id.clone(),
         fileid: obj.id.clone(),
     }
+}
+
+pub async fn get_categories_icon(name: &str) -> Option<String> {
+    let cap = match CATEGORISE.get() {
+        Some(cap) => cap,
+        None => {
+            let list = modrinth_api::get_categories().await;
+            match list {
+                Ok(list) => CATEGORISE.get_or_init(|| list),
+                Err(err) => {
+                    mcml_log::error_type(err);
+                    &Vec::new()
+                }
+            }
+        }
+    };
+
+    cap.iter()
+        .find(|item| item.name == name)
+        .map(|item| item.icon.clone())
 }
 
 /// 获取分组
@@ -277,7 +307,9 @@ fn get_mod_dependencies_inner(
 
     dependencies.par_iter().for_each(|item| {
         // 无 project_id 的依赖是打包内置文件（如 Mod Menu Helper.zip），无法通过项目 API 解析
-        let Some(project_id) = &item.project_id else { return };
+        let Some(project_id) = &item.project_id else {
+            return;
+        };
 
         // 原子检查并插入：HashSet::insert 在元素已存在时返回 false
         {
@@ -308,12 +340,9 @@ fn get_mod_dependencies_inner(
                         } else {
                             Some(loader.to_string())
                         };
-                        let data1 = modrinth_api::get_file_versions(
-                            project_id,
-                            Some(version),
-                            loader,
-                        )
-                        .await;
+                        let data1 =
+                            modrinth_api::get_file_versions(project_id, Some(version), loader)
+                                .await;
 
                         match data1 {
                             Ok(mut data1) => (Ok(data), Ok(data1.remove(0))),

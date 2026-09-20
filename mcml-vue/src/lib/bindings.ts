@@ -43,18 +43,17 @@ export const commands = {
     setCloseGuard: (enabled: boolean) => invoke<void>("add_set_close_guard", { enabled }),
   },
   addModpack: {
-    files: (source: string, projectId: string, version: string | null) => invoke<ModpackFileDto[]>("add_modpack_files", { source, projectId, version }),
+    file: (source: string, pid: string, page: number, version: string | null) => invoke<FileListDto>("add_modpack_file", { source, pid, page, version }),
     install: (source: string, projectId: string, fileId: string, group: string | null) => invoke<string>("add_modpack_install", { source, projectId, fileId, group }),
     list: (source: string, page: number, sort: string, category: string, filter: string | null, version: string | null) => invoke<ProjectDto>("add_modpack_list", { source, page, sort, category, filter, version }),
-    search: (source: string, query: string | null, version: string | null, sort: string | null, page: number) => invoke<ModpackSearchDto>("add_modpack_search", { source, query, version, sort, page }),
   },
   addResource: {
-    modpackList: (source: string, fileType: string, page: number, sort: string, category: string, filter: string | null, version: string | null, loader: string | null) => invoke<ProjectDto>("add_modpack_list", { source, fileType, page, sort, category, filter, version, loader }),
-    resourceCategories: (source: string, fileType: string) => invoke<Record<string, string>>("add_resource_categories", { source, fileType }),
-    resourceFileVersions: (game: string, source: string, pid: string, fileType: string, page: number, version: string | null, loader: string | null) => invoke<FileListDto>("add_resource_file_versions", { game, source, pid, fileType, page, version, loader }),
-    resourceGameVersions: (source: string) => invoke<string[]>("add_resource_game_versions", { source }),
-    resourceSortType: (source: string) => invoke<string[]>("add_resource_sort_type", { source }),
-    resourceSourceType: () => invoke<string[]>("add_resource_source_type"),
+    categories: (source: string, fileType: string) => invoke<Record<string, string>>("add_resource_categories", { source, fileType }),
+    file: (game: string, source: string, pid: string, fileType: string, page: number, version: string | null, loader: string | null) => invoke<FileListDto>("add_resource_file", { game, source, pid, fileType, page, version, loader }),
+    gameVersions: (source: string) => invoke<string[]>("add_resource_game_versions", { source }),
+    list: (game: string, source: string, fileType: string, page: number, sort: string, category: string, filter: string | null, version: string | null, loader: string | null) => invoke<ProjectDto>("add_resource_list", { game, source, fileType, page, sort, category, filter, version, loader }),
+    sortType: (source: string) => invoke<string[]>("add_resource_sort_type", { source }),
+    sourceType: () => invoke<string[]>("add_resource_source_type"),
   },
   collect: {
     addGroup: (name: string) => invoke<void>("collect_add_group", { name }),
@@ -128,7 +127,7 @@ export type AccountOAuthStateDto = {
 
 export type DirEntry = {
   name: string,
-  is_dir: boolean,
+  isDir: boolean,
 };
 
 export type LoaderProgressDto = {
@@ -156,20 +155,6 @@ export type ModpackItemDto = {
   downloads: number,
 };
 
-export type ModpackSearchDto = {
-  items: ModpackItemDto[],
-  page: number,
-  total: number,
-};
-
-export type ModpackFileDto = {
-  id: string,
-  name: string,
-  fileName: string,
-  date: string,
-  size: number,
-};
-
 export type PackProgressDto = {
   state: string,
   now: number,
@@ -192,6 +177,7 @@ export type FileListItemDto = {
   size: number,
   time: string,
   isDownload: boolean,
+  downloadNow: boolean,
   source: SourceTypeDto,
 };
 
@@ -237,7 +223,7 @@ export type PicDto = {
 
 export type TagDto = {
   name: string,
-  logo: string,
+  logo: string | null,
   svg: string | null,
 };
 
