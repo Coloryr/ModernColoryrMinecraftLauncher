@@ -10,7 +10,7 @@ use glam::{
     Mat4, Vec2, Vec3, Vec4,
 };
 use mcml_skin::SkinType;
-use skia_safe::Bitmap;
+use tiny_skia::Pixmap;
 use std::f32::consts::PI;
 use std::sync::{Arc, Mutex};
 
@@ -74,8 +74,8 @@ pub struct BaseSkinRender {
     pub skin_type: SkinType,
 
     // 贴图
-    pub skin_tex: Option<Bitmap>,
-    pub cape: Option<Bitmap>,
+    pub skin_tex: Option<Pixmap>,
+    pub cape: Option<Pixmap>,
 
     // 时间和性能
     pub time: f64,
@@ -211,7 +211,7 @@ impl BaseSkinRender {
         self.distance += x;
     }
 
-    pub fn set_skin_tex(&mut self, skin: Option<Bitmap>) -> Result<(), ErrorType> {
+    pub fn set_skin_tex(&mut self, skin: Option<Pixmap>) -> Result<(), ErrorType> {
         if let Some(skin_tex) = skin {
             if skin_tex.width() != 64 {
                 return Err(ErrorType::InvalidSkin);
@@ -231,7 +231,7 @@ impl BaseSkinRender {
         }
     }
 
-    pub fn set_cape_tex(&mut self, cape: Option<Bitmap>) -> Result<(), ErrorType> {
+    pub fn set_cape_tex(&mut self, cape: Option<Pixmap>) -> Result<(), ErrorType> {
         if let Some(cape_tex) = cape {
             self.cape = Some(cape_tex);
             self.switch_skin = true;
@@ -502,29 +502,17 @@ impl Drop for BaseSkinRender {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use skia_safe::{AlphaType, ColorType, ImageInfo};
     use std::sync::Mutex;
+    use tiny_skia::IntSize;
 
-    /// 创建指定位图的辅助函数（RGBA8888，纯色填充）
-    fn make_bitmap(w: i32, h: i32, r: u8, g: u8, b: u8) -> Bitmap {
-        let info = ImageInfo::new((w, h), ColorType::RGBA8888, AlphaType::Premul, None);
-        let mut bm = Bitmap::new();
-        assert!(bm.set_info(&info, None));
-        bm.alloc_pixels();
-        let row = bm.row_bytes() as usize;
-        let bpp = bm.bytes_per_pixel() as usize;
-        let ptr = bm.pixels() as *mut u8;
-        assert!(!ptr.is_null());
-        unsafe {
-            for y in 0..h {
-                for x in 0..w {
-                    let off = y as usize * row + x as usize * bpp;
-                    let p = std::slice::from_raw_parts_mut(ptr.add(off), bpp);
-                    p.copy_from_slice(&[r, g, b, 255]);
-                }
-            }
+    /// 创建指定位图的辅助函数（RGBA8，纯色填充；不透明色预乘值与原色相同）
+    fn make_bitmap(w: u32, h: u32, r: u8, g: u8, b: u8) -> Pixmap {
+        let mut data = vec![0u8; (w * h * 4) as usize];
+        for px in data.chunks_exact_mut(4) {
+            px.copy_from_slice(&[r, g, b, 255]);
         }
-        bm
+
+        Pixmap::from_vec(data, IntSize::from_wh(w, h).unwrap()).unwrap()
     }
 
     /// new() 的默认值

@@ -37,9 +37,9 @@ impl Default for ModrinthProjectObj {
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct GalleryObj {
-    pub title: String,
+    pub title: Option<String>,
     pub raw_url: String,
-    pub description: String,
+    pub description: Option<String>,
     pub ordering: i32,
 }
 

@@ -23,7 +23,9 @@ include!(concat!(env!("OUT_DIR"), "/invokes_gen.rs"));
 pub fn run() {
     tauri::Builder::default()
         .register_asynchronous_uri_scheme_protocol("mcml-image", move |_app, request, responder| {
-            tokio::spawn(async move {
+            // 该回调跑在 WebView2 主线程的窗口过程里，不在 tokio 运行时上下文内，
+            // 用 `tokio::spawn` 会 panic（no reactor running）；必须走 Tauri 的全局 Handle
+            tauri::async_runtime::spawn(async move {
                 image_manager::url_image(request, responder).await;
             });
         })

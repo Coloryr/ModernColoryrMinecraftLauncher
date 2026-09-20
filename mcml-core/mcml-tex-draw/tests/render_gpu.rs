@@ -3,7 +3,7 @@
 //! 每个后端一个用例，可单独过滤运行（VK/GL在部分机器上可能无适配器，失败只打印跳过）：
 //! `cargo test -p mcml-tex-draw --test render_gpu -- --ignored --nocapture render_dx12`
 //! 环境变量 MCML_TEST_JAR 指定客户端jar，缺省用反编译参考jar
-//! 输出：tests/out/{furnace,apple,enchanted_book}_{cpu,DX12,VULKAN,GL}.png
+//! 输出：tests/out/{furnace,apple,enchanted_book}_{DX12,VULKAN,GL}.png
 
 use std::{collections::HashMap, path::PathBuf, sync::Once};
 
@@ -12,7 +12,7 @@ use mcml_tex_draw::{
     gpu::GpuCtx,
     model::{bake_model, BakedModel},
 };
-use skia_safe::Bitmap;
+use tiny_skia::Pixmap;
 
 fn ref_jar() -> PathBuf {
     std::env::var("MCML_TEST_JAR").map(PathBuf::from).unwrap_or_else(|_| {
@@ -50,15 +50,21 @@ fn write_png(name: &str, size: u32, rgba: &[u8]) {
 }
 
 /// 烘焙对照方块模型（furnace：多贴图元素模型）
-fn bake_furnace() -> (BakedModel, HashMap<String, Bitmap>) {
+fn bake_furnace() -> (BakedModel, HashMap<String, Pixmap>) {
     let jar = ref_jar();
     assert!(jar.exists(), "参考jar不存在：{}", jar.display());
     let archive = BaseArchive::open(&jar).unwrap();
     let mut cache = HashMap::new();
-    bake_model(&archive, "block/furnace", &mut cache).expect("bake_model 失败")
+    let (model, mut textures) =
+        bake_model(&archive, "block/furnace", &mut cache).expect("bake_model 失败");
+
+    // 动画贴图换成首帧：渲染器按单帧 uv 取样，直接喂整条帧条带会渲染错
+    mcml_tex_draw::block::use_first_frame(&mut textures);
+
+    (model, textures)
 }
 
-/// 诊断：每个quad的屏幕包围盒与深度（与 render_cpu 同一矩阵）
+/// 诊断：每个quad的屏幕包围盒与深度（与 GPU 渲染同一矩阵）
 fn print_quad_diag(model: &BakedModel) {
     use glam::{Mat3, Mat4, Vec3, Vec4};
     let size = 256.0f32;
@@ -102,18 +108,14 @@ fn print_quad_diag(model: &BakedModel) {
 }
 
 /// 单后端全套出图：方块直调GPU，物品经render_item（extrude + glint各一）
-/// `ctx`为None时全部走CPU对照
-fn render_backend_suite(tag: &str, ctx: Option<&GpuCtx>) {
+fn render_backend_suite(tag: &str, ctx: &GpuCtx) {
     ensure_item_dir();
     let archive = BaseArchive::open(ref_jar()).expect("参考jar应能打开");
 
-    // 方块：furnace（多贴图元素模型，GPU与CPU同矩阵直出，对照遮挡/光照）
+    // 方块：furnace（多贴图元素模型）
     let (model, textures) = bake_furnace();
     print_quad_diag(&model);
-    let pixels = match ctx {
-        Some(ctx) => ctx.render(&model, &textures, None, 256),
-        None => mcml_tex_draw::cpu::render_cpu(&model, &textures, 256),
-    };
+    let pixels = ctx.render(&model, &textures, None, 256);
     match pixels {
         Some(pixels) => write_png(&format!("furnace_{tag}.png"), 256, &pixels),
         None => println!("{tag} furnace 渲染失败"),
@@ -122,7 +124,7 @@ fn render_backend_suite(tag: &str, ctx: Option<&GpuCtx>) {
     // 物品：apple（extrude挤出）、enchanted_book（glint附魔光效）
     let mut cache = HashMap::new();
     for id in ["apple", "enchanted_book"] {
-        let out = mcml_tex_draw::item::render_item(ctx, &archive, &mut cache, id)
+        let out = mcml_tex_draw::item::render_item(Some(ctx), &archive, &mut cache, id)
             .unwrap_or_else(|| panic!("{tag} {id} 渲染失败"));
         let dst = out_dir().join(format!("{id}_{tag}.png"));
         std::fs::copy(out_dir().join("items").join(&out.1), &dst).unwrap();
@@ -130,19 +132,12 @@ fn render_backend_suite(tag: &str, ctx: Option<&GpuCtx>) {
     }
 }
 
-/// CPU对照（skia，painter's algorithm）：区分GPU深度问题与数据问题
-#[test]
-#[ignore]
-fn render_cpu() {
-    render_backend_suite("cpu", None);
-}
-
 /// DX12后端（Windows缺省）
 #[test]
 #[ignore]
 fn render_dx12() {
     match GpuCtx::try_new_backend("DX12", wgpu::Backends::DX12) {
-        Some(ctx) => render_backend_suite("DX12", Some(&ctx)),
+        Some(ctx) => render_backend_suite("DX12", &ctx),
         None => println!("DX12 无可用适配器，跳过"),
     }
 }
@@ -152,7 +147,7 @@ fn render_dx12() {
 #[ignore]
 fn render_vulkan() {
     match GpuCtx::try_new_backend("VULKAN", wgpu::Backends::VULKAN) {
-        Some(ctx) => render_backend_suite("VULKAN", Some(&ctx)),
+        Some(ctx) => render_backend_suite("VULKAN", &ctx),
         None => println!("VULKAN 无可用适配器，跳过"),
     }
 }
@@ -162,7 +157,7 @@ fn render_vulkan() {
 #[ignore]
 fn render_gl() {
     match GpuCtx::try_new_backend("GL", wgpu::Backends::GL) {
-        Some(ctx) => render_backend_suite("GL", Some(&ctx)),
+        Some(ctx) => render_backend_suite("GL", &ctx),
         None => println!("GL 无可用适配器，跳过"),
     }
 }

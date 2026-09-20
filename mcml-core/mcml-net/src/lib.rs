@@ -567,11 +567,11 @@ pub fn get_login_client() -> Arc<Client> {
 /// 处理 HTTP 响应：检查状态码并解析 JSON
 ///
 /// 如果状态码表示失败（非 2xx），返回 `HttpReadError`。
-/// 成功时反序列化 JSON 为指定类型。
+/// 成功时反序列化 JSON 为指定类型；解析失败时把请求地址一并写进错误信息。
 pub async fn handle_response<T: DeserializeOwned>(resp: reqwest::Response) -> CoreResult<T> {
     let status = resp.status();
+    let url = resp.url().to_string();
     if !status.is_success() {
-        let url = resp.url().to_string();
         let error = resp.text().await.unwrap_or_default();
         return Err(ErrorType::HttpReadError(HttpReadErrorData {
             error,
@@ -580,5 +580,23 @@ pub async fn handle_response<T: DeserializeOwned>(resp: reqwest::Response) -> Co
         }));
     }
     let bytes = resp.bytes().await.map_err(map_err)?;
-    serialize_tools::json_from_bytes(&bytes)
+    serialize_tools::json_from_bytes(&bytes).map_err(|err| serialize_err_context::<T>(err, &url))
+}
+
+/// 给 JSON 解析错误补上请求地址与目标解析类型
+///
+/// serde 的报错只有字段级描述（如 `invalid type: null at line 1 column 42`），
+/// 定位不到是哪个接口、哪个结构体出的问题，网络侧解析失败时统一补在后面。
+pub fn serialize_err_context<T>(err: ErrorType, url: &str) -> ErrorType {
+    match err {
+        ErrorType::SerializerError(mut data) => {
+            data.error = format!(
+                "{} (url: {url}, target: {})",
+                data.error,
+                std::any::type_name::<T>()
+            );
+            ErrorType::SerializerError(data)
+        }
+        other => other,
+    }
 }

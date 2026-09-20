@@ -1,4 +1,4 @@
-//! 物品渲染：items/*.json 图标定义 → 模型解析 → extrude 挤出/元素烘焙 → GPU/CPU 出图
+//! 物品渲染：items/*.json 图标定义 → 模型解析 → extrude 挤出/元素烘焙 → GPU 出图
 //!
 //! 与方块共用烘焙与渲染管线（model.rs/block::render_baked），差异在：
 //! - items/*.json 的 model 节点为类型分派（model/composite/condition/select/range_dispatch），
@@ -22,10 +22,10 @@ use std::{
 use glam::{Mat3, Mat4, Quat, Vec3};
 use mcml_base::{archives::BaseArchive, serialize_tools};
 use mcml_game::gui_hook::ProgressGui;
-use mcml_names::i18_items::error_type::{CoreResult, ErrorType};
+use mcml_names::i18_items::error_type::{CoreResult, ErrorType, ErrorData};
 use rayon::prelude::*;
 use serde::Deserialize;
-use skia_safe::Bitmap;
+use tiny_skia::Pixmap;
 
 use crate::{
     block::{fit_composite, read_anim_meta, render_baked, GRASS_TINT},
@@ -314,11 +314,11 @@ fn bake_face(
 fn bake_generated(
     archive: &BaseArchive,
     textures: &HashMap<String, crate::block::TextureRefObj>,
-    tex_cache: &mut HashMap<String, Bitmap>,
+    tex_cache: &mut HashMap<String, Pixmap>,
     tints: &[[u8; 3]],
 ) -> Option<Vec<Quad>> {
     // 层贴图：layer0..layer4，遇缺失即止
-    let layers: Vec<(String, Bitmap)> = (0..5)
+    let layers: Vec<(String, Pixmap)> = (0..5)
         .map_while(|i| {
             let value = textures.get(&format!("layer{i}"))?.value()?;
             let path = texture_path(value)?;
@@ -479,10 +479,10 @@ fn bake_generated(
 pub(crate) fn bake_item_model(
     archive: &BaseArchive,
     rel: &str,
-    tex_cache: &mut HashMap<String, Bitmap>,
+    tex_cache: &mut HashMap<String, Pixmap>,
     tints: &[[u8; 3]],
     extra: Option<Mat4>,
-) -> Option<(BakedModel, HashMap<String, Bitmap>)> {
+) -> Option<(BakedModel, HashMap<String, Pixmap>)> {
     let Resolved {
         textures,
         transform,
@@ -549,7 +549,12 @@ pub fn render_items(archive: &BaseArchive, gui: ProgressGui) -> CoreResult<()> {
     // 输出目录未初始化时报错
     crate::get_item_dir().ok_or(ErrorType::DownloadFileFail)?;
 
-    let gpu = GpuCtx::try_new();
+    // 图标渲染只有 GPU 一条路径（无 CPU 软件光栅化回退），全不可用时直接报错
+    let Some(gpu) = GpuCtx::try_new() else {
+        return Err(ErrorType::TaskError(ErrorData {
+            error: String::from("没有可用的 GPU 后端，无法渲染物品图标"),
+        }));
+    };
     let (block_names, item_names) = crate::extract_langs(archive);
 
     // 枚举jar内全部物品定义；block表已有的ID不重复渲染（图标由方块表负责）
@@ -572,7 +577,7 @@ pub fn render_items(archive: &BaseArchive, gui: ProgressGui) -> CoreResult<()> {
     // 与render_blocks相同的工作线程资源：只读jar句柄 + 贴图解码缓存
     thread_local! {
         static LOCAL_ARCHIVE: RefCell<Option<Option<BaseArchive>>> = const { RefCell::new(None) };
-        static TEX_CACHE: RefCell<HashMap<String, Bitmap>> = RefCell::new(HashMap::new());
+        static TEX_CACHE: RefCell<HashMap<String, Pixmap>> = RefCell::new(HashMap::new());
     }
 
     let rendered: Vec<Option<(String, String)>> = defs
@@ -588,7 +593,7 @@ pub fn render_items(archive: &BaseArchive, gui: ProgressGui) -> CoreResult<()> {
                         .unwrap_or(archive);
 
                     // 处理完一个计一个（含跳过的），每跨过step阈值上报一次
-                    let out = render_item(gpu.as_ref(), archive, &mut tex_cache, id);
+                    let out = render_item(Some(&gpu), archive, &mut tex_cache, id);
                     let now = done.fetch_add(1, Ordering::Relaxed) + 1;
                     if now % step == 0
                         && let Some(gui) = &gui
@@ -630,7 +635,7 @@ pub fn render_items(archive: &BaseArchive, gui: ProgressGui) -> CoreResult<()> {
 pub fn render_item(
     gpu: Option<&GpuCtx>,
     archive: &BaseArchive,
-    tex_cache: &mut HashMap<String, Bitmap>,
+    tex_cache: &mut HashMap<String, Pixmap>,
     id: &str,
 ) -> Option<(String, String)> {
     let data = archive
@@ -651,7 +656,7 @@ pub fn render_item(
 
     // 各子模型烘焙合并（composite）；gui变换与光照取首part
     let mut quads = Vec::new();
-    let mut textures: HashMap<String, Bitmap> = HashMap::new();
+    let mut textures: HashMap<String, Pixmap> = HashMap::new();
     let mut base: Option<(bool, GuiTransform)> = None;
     // composite 子模型带 transformation（床等）超出单格，渲染前按投影包围盒适配画布
     let mut oversized = false;

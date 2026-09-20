@@ -88,8 +88,10 @@ impl FileListItemDto {
             source: SourceTypeDto {
                 file_type: file_type.to_string(),
                 source: ModPackType::Modrinth.to_string(),
-                pid: data.id.clone(),
-                fid: data.project_id.clone(),
+                // pid 是项目、fid 是文件（版本号），与 CurseForge 侧一致；
+                // 反了会让 add_modpack_install 拿版本号当项目号去查
+                pid: data.project_id.clone(),
+                fid: data.id.clone(),
             },
         }
     }
@@ -166,7 +168,7 @@ impl ProjectItemDto {
         for item in data.authors.iter() {
             authors.push(PicDto {
                 name: item.name.clone(),
-                logo: image_manager::push_image_url(&item.avatar_url),
+                logo: Some(image_manager::push_image_url(&item.avatar_url)),
             });
         }
 
@@ -229,7 +231,7 @@ impl ProjectItemDto {
         for item in team {
             authors.push(PicDto {
                 name: item.user.username,
-                logo: image_manager::push_image_url(&item.user.avatar_url),
+                logo: item.user.avatar_url.map(|data| image_manager::push_image_url(&data)),
             });
         }
 
@@ -257,9 +259,9 @@ impl ProjectItemDto {
 
         for item in project.gallery {
             screenshots.push(DecPicDto {
-                name: item.title,
+                name: item.title.unwrap_or_default(),
                 logo: image_manager::push_image_url(&item.raw_url),
-                description: item.description,
+                description: item.description.unwrap_or_default(),
             });
         }
 
@@ -313,7 +315,7 @@ pub struct McmodDto {
 #[serde(rename_all = "camelCase")]
 pub struct PicDto {
     pub name: String,
-    pub logo: String,
+    pub logo: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -1,17 +1,31 @@
 <script setup lang="ts">
 // 统一弹窗：标题 + 内容插槽 + 关闭
-withDefaults(defineProps<{ title?: string; width?: number; closable?: boolean }>(), {
-  title: "",
-  width: 420,
-  closable: true,
-});
+withDefaults(
+  defineProps<{
+    title?: string;
+    width?: number;
+    closable?: boolean;
+    /** 遮罩从自绘标题栏下方开始，让标题栏（可拖动 / 窗口按钮）保持可操作 */
+    belowTitlebar?: boolean;
+  }>(),
+  {
+    title: "",
+    width: 420,
+    closable: true,
+    belowTitlebar: false,
+  },
+);
 
 const emit = defineEmits<{ (e: "close"): void }>();
 </script>
 
 <template>
   <Teleport to="body">
-    <div class="modal-mask" @click.self="emit('close')">
+    <div
+      class="modal-mask"
+      :class="{ 'below-titlebar': belowTitlebar }"
+      @click.self="emit('close')"
+    >
       <div class="modal" :style="{ width: width + 'px' }">
         <div v-if="title" class="modal-head">
           <h3>{{ title }}</h3>
@@ -34,6 +48,11 @@ const emit = defineEmits<{ (e: "close"): void }>();
   align-items: center;
   justify-content: center;
   z-index: 100;
+}
+
+/* 避开自绘标题栏：遮罩从标题栏下沿开始，标题栏仍可拖动 / 点窗口按钮 */
+.modal-mask.below-titlebar {
+  top: var(--titlebar-h);
 }
 
 .modal {

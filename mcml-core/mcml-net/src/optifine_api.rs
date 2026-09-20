@@ -171,7 +171,8 @@ pub async fn get_optifine_version() -> CoreResult<Vec<GetOptifineObj>> {
             return Err(ErrorType::DataNotFound(DataNotFoundData::Url));
         }
     } else {
-        let mut obj = serialize_tools::json_from_str::<Vec<OptifineListObj>>(&data)?;
+        let mut obj = serialize_tools::json_from_str::<Vec<OptifineListObj>>(&data)
+            .map_err(|err| crate::serialize_err_context::<Vec<OptifineListObj>>(err, &url))?;
 
         for item in obj.drain(..) {
             let url = url_helper::get_optifine_jar(&item);

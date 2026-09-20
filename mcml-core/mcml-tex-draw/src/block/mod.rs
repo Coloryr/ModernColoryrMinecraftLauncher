@@ -6,7 +6,6 @@ use std::{
     cell::RefCell,
     collections::HashMap,
     io::Cursor,
-    slice,
     sync::{LazyLock, atomic::{AtomicU64, AtomicUsize, Ordering}},
 };
 
@@ -17,10 +16,10 @@ use crate::model::{BakedModel, bake_model};
 use mcml_base::{archives::BaseArchive, serialize_tools};
 use mcml_game::gui_hook::ProgressGui;
 use rayon::prelude::*;
-use mcml_names::i18_items::error_type::{CoreResult, ErrorType};
+use mcml_names::i18_items::error_type::{CoreResult, ErrorData, ErrorType};
 use mcml_sys::path_helper;
 use serde::{Deserialize, Serialize};
-use skia_safe::{AlphaType, Bitmap, ColorType, Data, IRect, Image, ImageInfo};
+use tiny_skia::Pixmap;
 
 /// 输出图片尺寸
 const BLOCK_SIZE: i32 = 256;
@@ -35,59 +34,66 @@ pub(crate) const FOLIAGE_TINT: [u8; 3] = [119, 171, 47]; // #77AB2F
 pub(crate) const BIRCH_TINT: [u8; 3] = [128, 167, 85]; // #80A755
 pub(crate) const SPRUCE_TINT: [u8; 3] = [97, 153, 97]; // #619961
 
-/// 解码贴图数据
-pub fn decode_png(data: &[u8]) -> Option<Bitmap> {
-    let image = Image::from_encoded(Data::new_copy(data))?;
+/// 解码贴图数据（预乘 RGBA8）
+pub fn decode_png(data: &[u8]) -> Option<Pixmap> {
+    Pixmap::decode_png(data).ok()
+}
 
-    let dims = image.dimensions();
-    let info = ImageInfo::new(
-        (dims.width, dims.height),
-        ColorType::RGBA8888,
-        AlphaType::Premul,
-        None,
-    );
-    let mut bitmap = Bitmap::new();
-    if !bitmap.set_info(&info, None) {
-        return None;
+/// 预乘 RGBA 转 straight alpha（边界处给 GL / PNG 用）
+///
+/// 换算与旧实现一致：按 a 归一化后就近取整（`.5` 取偶，与 skia 在此处的取值仅个别半值差 1）。
+pub(crate) fn to_straight_rgba(data: &[u8]) -> Vec<u8> {
+    let mut out = data.to_vec();
+
+    for px in out.chunks_exact_mut(4) {
+        let a = px[3] as u32;
+        if a == 0 {
+            px[0] = 0;
+            px[1] = 0;
+            px[2] = 0;
+            continue;
+        }
+        if a == 255 {
+            continue;
+        }
+
+        for c in px.iter_mut().take(3) {
+            *c = (f32::from(*c) * 255.0 / a as f32).round_ties_even() as u8;
+        }
     }
-    bitmap.alloc_pixels();
-    let size = bitmap.compute_byte_size();
-    let pixels = unsafe { slice::from_raw_parts_mut(bitmap.pixels() as *mut u8, size) };
-    if !image.read_pixels(
-        &info,
-        pixels,
-        bitmap.row_bytes(),
-        (0, 0),
-        skia_safe::image::CachingHint::Disallow,
-    ) {
-        return None;
-    }
-    Some(bitmap)
+
+    out
 }
 
 /// 从竖排动画贴图中取出一帧
-fn extract_frame(tex: &Bitmap, index: usize) -> Option<Bitmap> {
-    let height = tex.width();
-    let top = index as i32 * height;
-    let mut frame = Bitmap::new();
-    if !tex.extract_subset(&mut frame, &IRect::new(0, top, height, top + height)) {
-        return None;
+fn extract_frame(tex: &Pixmap, index: usize) -> Option<Pixmap> {
+    let size = tex.width();
+    let top = index as u32 * size;
+    let stride = size as usize * 4;
+
+    let mut frame = Pixmap::new(size, size)?;
+
+    for y in 0..size as usize {
+        let src = (top as usize + y) * stride;
+        let dst = y * stride;
+        frame.data_mut()[dst..dst + stride].copy_from_slice(&tex.data()[src..src + stride]);
     }
+
     Some(frame)
 }
 
 /// 动画时间线：源帧 + 展开后的帧序列，按刻惰性取帧。
 /// 取帧时才做克隆/插值混合，避免物化整条逐刻帧序列（frametime大时可达上千帧位图）
 struct AnimTimeline {
-    src: Vec<Bitmap>,
+    src: Vec<Pixmap>,
     entries: Vec<(u32, u32)>,
     interpolate: bool,
 }
 
 impl AnimTimeline {
-    fn build(tex: &Bitmap, meta: &AnimMeta) -> Option<Self> {
+    fn build(tex: &Pixmap, meta: &AnimMeta) -> Option<Self> {
         let count = (tex.height() / tex.width()).max(1) as usize;
-        let src: Vec<Bitmap> = (0..count)
+        let src: Vec<Pixmap> = (0..count)
             .map(|i| extract_frame(tex, i))
             .collect::<Option<Vec<_>>>()?;
         let frametime = meta.frametime.max(1);
@@ -110,7 +116,7 @@ impl AnimTimeline {
     }
 
     /// 取逐刻时间线上第tick刻的帧；interpolate时向序列下一帧线性过渡
-    fn frame_at(&self, tick: u32) -> Option<Bitmap> {
+    fn frame_at(&self, tick: u32) -> Option<Pixmap> {
         let mut acc = 0u32;
         for (i, &(idx, time)) in self.entries.iter().enumerate() {
             if tick < acc + time {
@@ -130,46 +136,24 @@ impl AnimTimeline {
 }
 
 /// 按比例混合两张贴图（RGBA线性插值）
-fn blend_bitmap(a: &Bitmap, b: &Bitmap, f: f32) -> Option<Bitmap> {
-    let info = a.info().clone();
-    let size = info.min_row_bytes() as usize * a.height() as usize;
-
-    let mut pa = vec![0u8; size];
-    if !a.as_image().read_pixels(
-        &info,
-        &mut pa,
-        info.min_row_bytes(),
-        (0, 0),
-        skia_safe::image::CachingHint::Disallow,
-    ) {
-        return None;
-    }
-    let mut pb = vec![0u8; size];
-    if !b.as_image().read_pixels(
-        &info,
-        &mut pb,
-        info.min_row_bytes(),
-        (0, 0),
-        skia_safe::image::CachingHint::Disallow,
-    ) {
+fn blend_bitmap(a: &Pixmap, b: &Pixmap, f: f32) -> Option<Pixmap> {
+    if a.width() != b.width() || a.height() != b.height() {
         return None;
     }
 
-    let mut pixels = vec![0u8; size];
-    for (o, (x, y)) in pixels.chunks_exact_mut(4).zip(pa.chunks_exact(4).zip(pb.chunks_exact(4))) {
+    let mut out = Pixmap::new(a.width(), a.height())?;
+
+    for ((o, x), y) in out
+        .data_mut()
+        .chunks_exact_mut(4)
+        .zip(a.data().chunks_exact(4))
+        .zip(b.data().chunks_exact(4))
+    {
         for c in 0..4 {
             o[c] = (f32::from(x[c]) * (1.0 - f) + f32::from(y[c]) * f).round() as u8;
         }
     }
 
-    let mut out = Bitmap::new();
-    if !out.set_info(&info, None) {
-        return None;
-    }
-    out.alloc_pixels();
-    let size = out.compute_byte_size();
-    let dst = unsafe { slice::from_raw_parts_mut(out.pixels() as *mut u8, size) };
-    dst.copy_from_slice(&pixels);
     Some(out)
 }
 
@@ -290,7 +274,7 @@ impl RenderProfile {
 fn render_icon(
     gpu: Option<&GpuCtx>,
     archive: &BaseArchive,
-    tex_cache: &mut HashMap<String, Bitmap>,
+    tex_cache: &mut HashMap<String, Pixmap>,
     id_rel: &str,
     spec: &IconSpec,
 ) -> Option<(String, String)> {
@@ -351,25 +335,45 @@ fn render_icon(
 /// 静态模型单帧出图。动画帧的APNG延迟规则同前（等距采样，相同帧合并延迟）
 ///
 /// `glint`：Some(贴图)时叠加附魔光效（仅GPU路径，CPU回退忽略）
+/// 把动画贴图条带换成首帧
+///
+/// quad 的 uv 是**单帧**空间（16×16），而带 mcmeta 的贴图是竖排帧条带
+/// （如 campfire_fire 是 16×128）。直接拿条带渲染会把所有帧压在一张面上，
+/// 火、水、岩浆这类动画方块会明显错位。
+///
+/// 图标管线 `render_baked` 内部会调用；**测试或其它直接调渲染器的调用方同样要调用**，
+/// 否则渲染结果不代表实际图标。
+pub fn use_first_frame(textures: &mut HashMap<String, Pixmap>) {
+    for path in textures.keys().cloned().collect::<Vec<_>>() {
+        let Some(strip) = textures.get(&path) else {
+            continue;
+        };
+        if strip.height() > strip.width() {
+            let first = extract_frame(strip, 0).unwrap_or_else(|| strip.clone());
+            textures.insert(path.clone(), first);
+        }
+    }
+}
+
 pub(crate) fn render_baked(
     gpu: Option<&GpuCtx>,
     archive: &BaseArchive,
     model: BakedModel,
-    mut textures: HashMap<String, Bitmap>,
-    glint: Option<&Bitmap>,
+    mut textures: HashMap<String, Pixmap>,
+    glint: Option<&Pixmap>,
 ) -> Option<Vec<u8>> {
-    // 动画贴图：quad的uv是单帧空间，时间线从条带展开；先把条带换成首帧供渲染上传
+    // 动画贴图：时间线必须用**原始条带**建，所以要在换首帧之前
     let mut timelines: Vec<(String, AnimTimeline)> = Vec::new();
     for path in textures.keys().cloned().collect::<Vec<_>>() {
         let strip = textures.get(&path)?;
         if strip.height() > strip.width() {
             let meta = read_anim_meta(archive, &path);
-            let tl = AnimTimeline::build(strip, &meta)?;
-            let first = extract_frame(strip, 0).unwrap_or_else(|| strip.clone());
-            textures.insert(path.clone(), first);
-            timelines.push((path, tl));
+            timelines.push((path.clone(), AnimTimeline::build(strip, &meta)?));
         }
     }
+
+    // 渲染上传用首帧（quad 的 uv 是单帧空间）
+    use_first_frame(&mut textures);
     if timelines.is_empty() {
         // 静态模型：渲染出的RGBA像素编码为PNG
         return encode_png(BLOCK_SIZE as u32, &render_once(gpu, &model, &textures, glint)?);
@@ -453,15 +457,18 @@ pub(crate) fn fit_composite(model: &mut BakedModel) {
     ];
 }
 
-/// 单帧渲染：GPU优先，未成功逐图标回退CPU软件光栅化
+/// 单帧渲染（仅 GPU）
+///
+/// 不再提供 CPU 软件光栅化回退：那条路径用画家算法排序，遇到互相穿插的几何
+/// （如篝火的火焰斜插在原木之间）前后关系会错，结果与 GPU 明显不一致，
+/// 与其产出错的图标不如在无 GPU 时直接报错。
 fn render_once(
     gpu: Option<&GpuCtx>,
     model: &BakedModel,
-    textures: &HashMap<String, Bitmap>,
-    glint: Option<&Bitmap>,
+    textures: &HashMap<String, Pixmap>,
+    glint: Option<&Pixmap>,
 ) -> Option<Vec<u8>> {
     gpu.and_then(|ctx| ctx.render(model, textures, glint, BLOCK_SIZE as u32))
-        .or_else(|| crate::cpu::render_cpu(model, textures, BLOCK_SIZE as u32))
 }
 
 /// 按创造模式图标表渲染全部方块
@@ -479,9 +486,13 @@ pub fn render_blocks(archive: &BaseArchive, gui: ProgressGui) -> CoreResult<()> 
     // 输出目录未初始化时报错（各图标写盘前也各自取一次）
     crate::get_block_dir().ok_or(ErrorType::DownloadFileFail)?;
 
-    // GPU上下文按平台条件编译自动选择后端（DX12→VK→GL等链），
-    // 创建一次跨线程复用；全不可用时render_icon内逐图标回退CPU
-    let gpu = GpuCtx::try_new();
+    // GPU上下文按平台条件编译自动选择后端（DX12→VK→GL等链），创建一次跨线程复用。
+    // 图标渲染只有这一条路径，全不可用时直接报错（不再回退 CPU 软件光栅化）
+    let Some(gpu) = GpuCtx::try_new() else {
+        return Err(ErrorType::TaskError(ErrorData {
+            error: String::from("没有可用的 GPU 后端，无法渲染方块图标"),
+        }));
+    };
 
     // 提取语言文件并构建 ID->语言键 映射
     let (names, _) = crate::extract_langs(archive);
@@ -499,7 +510,7 @@ pub fn render_blocks(archive: &BaseArchive, gui: ProgressGui) -> CoreResult<()> 
     // - 贴图解码缓存：同一贴图常被多个方块/多个面共用，按线程缓存避免反复解码
     thread_local! {
         static LOCAL_ARCHIVE: RefCell<Option<Option<BaseArchive>>> = const { RefCell::new(None) };
-        static TEX_CACHE: RefCell<HashMap<String, Bitmap>> = RefCell::new(HashMap::new());
+        static TEX_CACHE: RefCell<HashMap<String, Pixmap>> = RefCell::new(HashMap::new());
     }
 
     // 并发渲染
@@ -517,7 +528,7 @@ pub fn render_blocks(archive: &BaseArchive, gui: ProgressGui) -> CoreResult<()> 
 
                     // 单个表条目的处理（进度计数对跳过的条目也要生效）
                     let item_start = std::time::Instant::now();
-                    let out = render_icon(gpu.as_ref(), archive, &mut tex_cache, id_rel, spec);
+                    let out = render_icon(Some(&gpu), archive, &mut tex_cache, id_rel, spec);
 
                     // 定位异常慢的单方块（如超大动画贴图）
                     if PROFILE.enabled {
@@ -737,24 +748,19 @@ mod sprite_tests {
     use super::*;
 
     /// 构造竖排动画条带（n帧16x16，每帧灰度渐变便于区分）
-    fn anim_strip(frames: usize) -> Bitmap {
-        let info = ImageInfo::new(
-            (16, 16 * frames as i32),
-            ColorType::RGBA8888,
-            AlphaType::Premul,
-            None,
-        );
-        let mut bm = Bitmap::new();
-        assert!(bm.set_info(&info, None));
-        bm.alloc_pixels();
-        let size = bm.compute_byte_size();
-        let px = unsafe { slice::from_raw_parts_mut(bm.pixels() as *mut u8, size) };
-        for (i, px_chunk) in px.chunks_exact_mut(4).enumerate() {
+    fn anim_strip(frames: usize) -> Pixmap {
+        let mut data = vec![0u8; 16 * 16 * frames * 4];
+        for (i, px_chunk) in data.chunks_exact_mut(4).enumerate() {
             // 每帧整体一种不透明颜色，帧间可区分（去重不会合并）
             let frame = (i / (16 * 16)) as u8;
             px_chunk.copy_from_slice(&[frame * 60, 128, 64, 255]);
         }
-        bm
+
+        Pixmap::from_vec(
+            data,
+            tiny_skia::IntSize::from_wh(16, 16 * frames as u32).unwrap(),
+        )
+        .unwrap()
     }
 
     /// 动画条带时间线逐帧取图 + APNG编码（render_baked的核心环节）

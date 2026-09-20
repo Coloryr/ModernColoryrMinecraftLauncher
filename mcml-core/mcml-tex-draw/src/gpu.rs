@@ -9,7 +9,7 @@ use std::collections::HashMap;
 
 use glam::{Mat3, Mat4, Vec3};
 use pollster::block_on;
-use skia_safe::Bitmap;
+use tiny_skia::Pixmap;
 
 use crate::model::BakedModel;
 
@@ -85,7 +85,7 @@ pub struct GpuCtx {
 }
 
 impl GpuCtx {
-    /// 按系统选择后端回退链，全失败返回 None（调用方回退CPU skia）：
+    /// 按系统选择后端回退链，全失败返回 None（图标渲染不再有 CPU 回退）：
     /// - Windows：DX12 → VK → GL
     /// - macOS：Metal → VK → GL
     /// - Linux/其他Unix：VK → GL
@@ -381,8 +381,8 @@ impl GpuCtx {
     pub fn render(
         &self,
         model: &BakedModel,
-        textures: &HashMap<String, Bitmap>,
-        glint: Option<&Bitmap>,
+        textures: &HashMap<String, Pixmap>,
+        glint: Option<&Pixmap>,
         size: u32,
     ) -> Option<Vec<u8>> {
         use wgpu::util::DeviceExt;

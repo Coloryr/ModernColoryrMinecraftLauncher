@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use glam::{Mat4, Vec3};
 use mcml_base::{archives::BaseArchive, serialize_tools};
 use serde::Deserialize;
-use skia_safe::Bitmap;
+use tiny_skia::Pixmap;
 
 use crate::block::{
     decode_png, read_anim_meta, AnimMeta, TextureRefObj, BIRCH_TINT, FOLIAGE_TINT, GRASS_TINT,
@@ -339,9 +339,9 @@ pub(crate) fn texture_path(value: &str) -> Option<String> {
 /// 加载贴图（带缓存），返回 RGBA 位图
 pub(crate) fn load_texture(
     archive: &BaseArchive,
-    cache: &mut HashMap<String, Bitmap>,
+    cache: &mut HashMap<String, Pixmap>,
     path: &str,
-) -> Option<Bitmap> {
+) -> Option<Pixmap> {
     if let Some(tex) = cache.get(path) {
         return Some(tex.clone());
     }
@@ -351,31 +351,17 @@ pub(crate) fn load_texture(
     Some(tex)
 }
 
-/// 读取位图为 straight-alpha RGBA（read_pixels 顺带完成 premul->unpremul）
-pub(crate) fn bitmap_rgba(tex: &Bitmap) -> Option<(Vec<u8>, usize, usize, usize)> {
-    let (w, h) = (tex.width(), tex.height());
-    let info = skia_safe::ImageInfo::new(
-        (w, h),
-        skia_safe::ColorType::RGBA8888,
-        skia_safe::AlphaType::Unpremul,
-        None,
-    );
-    let row = info.min_row_bytes() as usize;
-    let mut buf = vec![0u8; row * h as usize];
-    let ok = tex.as_image().read_pixels(
-        &info,
-        &mut buf,
-        row as usize,
-        (0, 0),
-        skia_safe::image::CachingHint::Disallow,
-    );
-    ok.then_some((buf, row, w as usize, h as usize))
+/// 读取位图为 straight-alpha RGBA
+pub(crate) fn bitmap_rgba(tex: &Pixmap) -> Option<(Vec<u8>, usize, usize, usize)> {
+    let (w, h) = (tex.width() as usize, tex.height() as usize);
+
+    Some((crate::block::to_straight_rgba(tex.data()), w * 4, w, h))
 }
 
 /// 按 NativeImage.computeTransparency 扫 uv 矩形：仅当含 1..254 之间的 alpha
 /// 才算 translucent（alpha==0 只是镂空，仍走cutout管线）；
 /// x0=floor(u0·w) y0=floor(v0·h) x1=ceil(u1·w) y1=ceil(v1·h)，动画贴图所有唯一帧合并判定
-pub(crate) fn rect_translucent(tex: &Bitmap, anim: Option<&AnimMeta>, uv: &[f32; 4]) -> bool {
+pub(crate) fn rect_translucent(tex: &Pixmap, anim: Option<&AnimMeta>, uv: &[f32; 4]) -> bool {
     let Some((base, stride, w, h_total)) = bitmap_rgba(tex) else {
         return false;
     };
@@ -537,7 +523,7 @@ pub(crate) fn bake_element(
     element: &ElementJson,
     textures: &HashMap<String, TextureRefObj>,
     archive: &BaseArchive,
-    tex_cache: &mut HashMap<String, Bitmap>,
+    tex_cache: &mut HashMap<String, Pixmap>,
     item_tints: Option<&[[u8; 3]]>,
 ) -> Vec<Quad> {
     let mut quads = Vec::new();
@@ -661,8 +647,8 @@ fn is_fullbright_tex(path: &str) -> bool {
 pub fn bake_model(
     archive: &BaseArchive,
     rel: &str,
-    tex_cache: &mut HashMap<String, Bitmap>,
-) -> Option<(BakedModel, HashMap<String, Bitmap>)> {
+    tex_cache: &mut HashMap<String, Pixmap>,
+) -> Option<(BakedModel, HashMap<String, Pixmap>)> {
     let resolved = resolve(archive, rel)?;
     let mut quads = Vec::new();
     for element in &resolved.elements {

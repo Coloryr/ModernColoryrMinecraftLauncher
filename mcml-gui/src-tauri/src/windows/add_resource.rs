@@ -275,7 +275,7 @@ pub async fn add_resource_list(
     file_type: String,
     page: u32,
     sort: String,
-    category: String,
+    category: Option<String>,
     filter: Option<String>,
     version: Option<String>,
     loader: Option<String>,
@@ -322,7 +322,7 @@ pub async fn add_resource_list(
                         page: Some(page),
                         sort: Some(sort),
                         filter,
-                        category: Some(category),
+                        category,
                         loader: curseforge::to_loader_id(&mod_loader),
                         ..Default::default()
                     })
@@ -371,7 +371,7 @@ pub async fn add_resource_list(
 
             let list = modrinth_api::get_modpack_list(ModrinthSearchArg {
                 page: Some(page),
-                category: Some(category),
+                category,
                 query: filter,
                 sort,
                 version,

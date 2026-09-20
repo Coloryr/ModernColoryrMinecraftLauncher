@@ -50,7 +50,7 @@ const showBack = computed(() => !isTauri() && !multiWindow.value);
 }
 
 .frame-head {
-  height: 60px;
+  height: var(--titlebar-h);
   flex-shrink: 0;
   display: flex;
   align-items: center;

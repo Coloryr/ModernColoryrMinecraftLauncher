@@ -20,7 +20,6 @@ use mcml_sys::path_helper;
 use crate::block::obj::{BlocksObj, ItemsObj};
 
 pub mod block;
-pub mod cpu;
 pub mod gpu;
 pub mod item;
 pub mod model;

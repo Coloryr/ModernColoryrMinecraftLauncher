@@ -18,7 +18,7 @@ impl Default for ModrinthTeamObj {
 #[serde(default)]
 pub struct TeamserObj {
     pub username: String,
-    pub avatar_url: String,
+    pub avatar_url: Option<String>,
 }
 
 impl Default for TeamserObj {

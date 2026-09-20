@@ -45,13 +45,13 @@ export const commands = {
   addModpack: {
     file: (source: string, pid: string, page: number, version: string | null) => invoke<FileListDto>("add_modpack_file", { source, pid, page, version }),
     install: (source: string, projectId: string, fileId: string, group: string | null) => invoke<string>("add_modpack_install", { source, projectId, fileId, group }),
-    list: (source: string, page: number, sort: string, category: string, filter: string | null, version: string | null) => invoke<ProjectDto>("add_modpack_list", { source, page, sort, category, filter, version }),
+    list: (source: string, page: number, sort: string, category: string | null, filter: string | null, version: string | null) => invoke<ProjectDto>("add_modpack_list", { source, page, sort, category, filter, version }),
   },
   addResource: {
     categories: (source: string, fileType: string) => invoke<Record<string, string>>("add_resource_categories", { source, fileType }),
     file: (game: string, source: string, pid: string, fileType: string, page: number, version: string | null, loader: string | null) => invoke<FileListDto>("add_resource_file", { game, source, pid, fileType, page, version, loader }),
     gameVersions: (source: string) => invoke<string[]>("add_resource_game_versions", { source }),
-    list: (game: string, source: string, fileType: string, page: number, sort: string, category: string, filter: string | null, version: string | null, loader: string | null) => invoke<ProjectDto>("add_resource_list", { game, source, fileType, page, sort, category, filter, version, loader }),
+    list: (game: string, source: string, fileType: string, page: number, sort: string, category: string | null, filter: string | null, version: string | null, loader: string | null) => invoke<ProjectDto>("add_resource_list", { game, source, fileType, page, sort, category, filter, version, loader }),
     sortType: (source: string) => invoke<string[]>("add_resource_sort_type", { source }),
     sourceType: () => invoke<string[]>("add_resource_source_type"),
   },
@@ -218,7 +218,7 @@ export type McmodDto = {
 
 export type PicDto = {
   name: string,
-  logo: string,
+  logo: string | null,
 };
 
 export type TagDto = {

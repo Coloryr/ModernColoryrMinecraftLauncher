@@ -1,11 +1,11 @@
-//! 单方块 / 单物品对照渲染：GPU管道冒烟与遮挡/透明诊断（直接用本地jar，不走下载链）
+//! 单方块 / 单物品渲染：GPU管道冒烟与遮挡/透明诊断（直接用本地jar，不走下载链）
 //!
 //! 运行：cargo test -p mcml-tex-draw --test render_single -- --ignored --nocapture
 //! 环境变量：
 //! - MCML_TEST_JAR 指定客户端jar，缺省用反编译参考jar
 //! - MCML_TEST_BLOCK 指定方块模型（如 block/big_dripleaf），缺省 block/oak_stairs
 //! - MCML_TEST_ITEM 指定物品ID（如 enchanted_book），缺省 apple
-//! GPU/CPU 各出一张图到 tests/out/
+//! 出图到 tests/out/
 
 use std::{collections::HashMap, path::PathBuf};
 
@@ -43,7 +43,7 @@ fn write_png(path: &PathBuf, size: u32, rgba: &[u8]) {
     println!("输出：{}", path.display());
 }
 
-/// 渲染单个方块模型并出图（GPU与CPU各出一张，诊断遮挡/透明问题）
+/// 渲染单个方块模型并出图（诊断遮挡/透明问题）
 #[test]
 #[ignore]
 fn render_one_block() {
@@ -55,11 +55,14 @@ fn render_one_block() {
     let name = rel.rsplit('/').next().unwrap_or(&rel).to_string();
 
     let mut cache = HashMap::new();
-    let Some((model, textures)) =
+    let Some((model, mut textures)) =
         mcml_tex_draw::model::bake_model(&archive, &rel, &mut cache)
     else {
         panic!("bake_model 失败");
     };
+    // 动画贴图换成首帧：渲染器按单帧 uv 取样，直接喂整条帧条带会渲染错
+    //（图标管线 render_baked 内部同样会做这一步）
+    mcml_tex_draw::block::use_first_frame(&mut textures);
     println!(
         "bake：{} quads，{} 贴图，gui_light_3d={}",
         model.quads.len(),
@@ -123,14 +126,9 @@ fn render_one_block() {
     } else {
         println!("无可用GPU后端，跳过GPU出图");
     }
-
-    // CPU对照：painter's algorithm（无深度缓冲），用于区分GPU深度问题与数据问题
-    if let Some(pixels) = mcml_tex_draw::cpu::render_cpu(&model, &textures, 256) {
-        write_png(&out_path(&format!("{name}_cpu.png")), 256, &pixels);
-    }
 }
 
-/// 渲染单个物品图标（items/*.json → extrude/元素烘焙 → GPU/CPU各出一张）
+/// 渲染单个物品图标（items/*.json → extrude/元素烘焙 → 出图，仅 GPU）
 /// 样例：diamond_sword（挤出）、enchanted_book（glint）、compass（condition→range_dispatch）、
 /// spyglass（select）、leather_chestplate（tint）、trident（select gui分支）
 #[test]
@@ -152,8 +150,4 @@ fn render_one_item() {
     let out = mcml_tex_draw::item::render_item(gpu.as_ref(), &archive, &mut cache, &id)
         .unwrap_or_else(|| panic!("render_item GPU失败：{id}"));
     std::fs::copy(dir.join("items").join(&out.1), out_path(&format!("{name}_gpu.png"))).unwrap();
-
-    let out = mcml_tex_draw::item::render_item(None, &archive, &mut cache, &id)
-        .unwrap_or_else(|| panic!("render_item CPU失败：{id}"));
-    std::fs::copy(dir.join("items").join(&out.1), out_path(&format!("{name}_cpu.png"))).unwrap();
 }
