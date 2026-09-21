@@ -124,7 +124,7 @@ async function loadSources() {
   source.value = sources.value[0].value;
 }
 
-/** 切换下载源：清空结果，重新拉排序 / 版本 / 分类，然后搜第一页 */
+/** 切换下载源：清空搜索词与结果，重新拉排序 / 版本 / 分类，然后搜第一页 */
 async function loadSource() {
   items.value = [];
   total.value = 0;
@@ -136,6 +136,7 @@ async function loadSource() {
   allFiles.value = [];
   latestFile.value = null;
   fileVersion.value = "";
+  filter.value = "";
   version.value = "";
   category.value = "";
   sort.value = "";
