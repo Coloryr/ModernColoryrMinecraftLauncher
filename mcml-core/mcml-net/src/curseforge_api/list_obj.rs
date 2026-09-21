@@ -88,7 +88,7 @@ impl Default for ScreenshotsObj {
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct LogoObj {
-    pub url: String,
+    pub url: Option<String>,
 }
 
 impl Default for LogoObj {
@@ -104,7 +104,7 @@ impl Default for LogoObj {
 pub struct AuthorsObj {
     pub name: String,
     #[serde(rename = "avatarUrl")]
-    pub avatar_url: String,
+    pub avatar_url: Option<String>,
 }
 
 impl Default for AuthorsObj {

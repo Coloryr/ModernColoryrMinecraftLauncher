@@ -43,6 +43,7 @@ export const commands = {
     setCloseGuard: (enabled: boolean) => invoke<void>("add_set_close_guard", { enabled }),
   },
   addModpack: {
+    detail: (source: string, pid: string) => invoke<ProjectDetailDto>("add_modpack_detail", { source, pid }),
     file: (source: string, pid: string, page: number, version: string | null) => invoke<FileListDto>("add_modpack_file", { source, pid, page, version }),
     install: (source: string, projectId: string, fileId: string, group: string | null) => invoke<string>("add_modpack_install", { source, projectId, fileId, group }),
     list: (source: string, page: number, sort: string, category: string | null, filter: string | null, version: string | null) => invoke<ProjectDto>("add_modpack_list", { source, page, sort, category, filter, version }),
@@ -62,6 +63,7 @@ export const commands = {
     removeGroup: (name: string) => invoke<void>("collect_remove_group", { name }),
     removeItems: (uuids: string[], group: string | null) => invoke<void>("collect_remove_items", { uuids, group }),
     setGroupItems: (group: string, uuids: string[]) => invoke<void>("collect_set_group_items", { group, uuids }),
+    star: (source: string, fileType: string, pid: string, name: string, icon: string | null, url: string, star: boolean) => invoke<void>("collect_star", { source, fileType, pid, name, icon, url, star }),
   },
   download: {
     cancelAll: () => invoke<number>("download_cancel_all"),
@@ -196,7 +198,7 @@ export type ProjectDto = {
 export type ProjectItemDto = {
   name: string,
   summary: string,
-  image: string,
+  image: string | null,
   authors: PicDto[],
   tag: TagDto[],
   screenshots: DecPicDto[],
@@ -209,6 +211,14 @@ export type ProjectItemDto = {
   url: string,
   mcmod: McmodDto | null,
   source: SourceTypeDto,
+};
+
+export type ProjectDetailDto = {
+  summary: string,
+  body: string | null,
+  authors: PicDto[],
+  tag: TagDto[],
+  screenshots: DecPicDto[],
 };
 
 export type McmodDto = {

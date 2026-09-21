@@ -15,7 +15,7 @@
 use mcml_config::config_obj::SourceLocal;
 use mcml_names::i18_items::error_type::{CoreResult, ErrorType};
 
-use reqwest::{Method, Request, Url, header::HeaderValue};
+use reqwest::{Method, Request, StatusCode, Url, header::ETAG, header::HeaderValue};
 use serde::{Deserialize, Serialize};
 
 use crate::{WORK_CLIENT, url_helper, urls};
@@ -23,6 +23,49 @@ use crate::{WORK_CLIENT, url_helper, urls};
 /// 直接下载资源
 pub async fn get_assets(url: &String) -> CoreResult<Vec<u8>> {
     WORK_CLIENT.get().unwrap().get_bytes(url).await
+}
+
+/// 缓存校验下载的结果
+pub struct AssetCheckResponse {
+    /// 服务器返回 304：本地缓存的资源仍然有效
+    pub not_modified: bool,
+    /// ETag 响应头（S3 / R2 类存储在非分片上传时就是内容的 MD5）
+    pub etag: Option<String>,
+    /// 响应体（304 时为空）
+    pub data: Vec<u8>,
+}
+
+/// 直接下载资源，可带上次记录的 ETag 做缓存校验（If-None-Match）
+///
+/// - 服务器 304 → `not_modified = true`，`data` 为空，本地缓存可以继续用
+/// - 服务器 200 → 返回新内容与新的 ETag，本地缓存应更新
+pub async fn get_assets_with_check(
+    url: &String,
+    etag: Option<&str>,
+) -> CoreResult<AssetCheckResponse> {
+    let resp = WORK_CLIENT
+        .get()
+        .unwrap()
+        .get_if_none_match(url, etag)
+        .await?;
+
+    let not_modified = resp.status() == StatusCode::NOT_MODIFIED;
+    let etag = resp
+        .headers()
+        .get(ETAG)
+        .and_then(|value| value.to_str().ok())
+        .map(|value| value.to_string());
+    let data = if not_modified {
+        Vec::new()
+    } else {
+        resp.bytes().await.map_err(crate::map_err)?.to_vec()
+    };
+
+    Ok(AssetCheckResponse {
+        not_modified,
+        etag,
+        data,
+    })
 }
 
 /// 获取主版本列表

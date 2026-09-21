@@ -19,6 +19,7 @@ import type {
   LogEvent,
   NewsItem,
   PackProgressDto,
+  ProjectDetailDto,
   ProjectDto,
   StateEvent,
   VersionInfo,
@@ -164,6 +165,11 @@ export const api = {
     version: string | null,
   ): Promise<FileListDto> {
     return commands.addModpack.file(source, projectId, page, version);
+  },
+
+  /** 获取某整合包的项目详情（Modrinth 含 markdown 正文；CurseForge 只有简介） */
+  async getModpackDetail(source: string, projectId: string): Promise<ProjectDetailDto> {
+    return commands.addModpack.detail(source, projectId);
   },
 
   /** 安装在线整合包（实例名取自整合包元数据，返回新实例 uuid） */
@@ -324,6 +330,19 @@ export const api = {
   /** 把收藏加入分组 */
   async collectSetGroupItems(group: string, uuids: string[]): Promise<void> {
     return commands.collect.setGroupItems(group, uuids);
+  },
+
+  /** 收藏 / 取消收藏在线项目（列表与详情里的星标） */
+  async collectStar(
+    source: string,
+    fileType: string,
+    pid: string,
+    name: string,
+    icon: string | null,
+    url: string,
+    star: boolean,
+  ): Promise<void> {
+    return commands.collect.star(source, fileType, pid, name, icon, url, star);
   },
 };
 

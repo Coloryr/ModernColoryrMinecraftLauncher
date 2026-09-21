@@ -581,6 +581,16 @@ export default {
   "modpack.prevPage": "上一页",
   "modpack.nextPage": "下一页",
   "modpack.unknownSize": "未知大小",
+  "modpack.detail": "整合包详情",
+  "modpack.screenshots": "截图",
+  "modpack.versions": "版本列表",
+  "modpack.summary": "项目简介",
+  "modpack.download": "下载",
+  "modpack.back": "返回",
+  "modpack.detailHint": "双击查看详情",
+  "modpack.groupPlaceholder": "分组（空=默认）",
+  "modpack.star": "收藏",
+  "modpack.unstar": "取消收藏",
 
   // 窗口标题
   "winTitle.main": "MCML 启动器",

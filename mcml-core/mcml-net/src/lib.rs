@@ -34,7 +34,7 @@ use mcml_config::config_obj::{ProxyState, ProxyType};
 use mcml_names::i18_items::error_type::{
     CoreResult, ErrorType, HttpReadErrorData, HttpReqErrorData,
 };
-use reqwest::header::{HeaderMap, HeaderValue, USER_AGENT};
+use reqwest::header::{HeaderMap, HeaderValue, IF_NONE_MATCH, USER_AGENT};
 use reqwest::{Proxy, Request, Response};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -349,6 +349,25 @@ impl Client {
     /// 发送 GET 请求，返回原始响应
     pub async fn get(&self, url: &str) -> CoreResult<Response> {
         self.get_with_retry(url).await
+    }
+
+    /// 发送带 If-None-Match 的 GET 请求（缓存校验），返回原始响应
+    ///
+    /// 本地存有资源的 ETag 时带上；服务器返回 304 表示资源没变，
+    /// 返回 200 时响应头里会带新的 ETag。失败时自动重试一次（同 `get_with_retry`）。
+    pub async fn get_if_none_match(&self, url: &str, etag: Option<&str>) -> CoreResult<Response> {
+        let build = |etag: Option<&str>| {
+            let mut req = self.inner.get(url);
+            if let Some(etag) = etag {
+                req = req.header(IF_NONE_MATCH, etag);
+            }
+            req
+        };
+
+        match build(etag).send().await {
+            Ok(resp) => Ok(resp),
+            Err(_) => build(etag).send().await.map_err(map_err),
+        }
     }
 
     /// 发送 GET 请求，返回响应体文本

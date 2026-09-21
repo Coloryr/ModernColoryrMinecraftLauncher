@@ -1,11 +1,9 @@
-use mcml_game::{
-    launcher::{FileType, ModPackType},
-    modrinth,
-};
+use mcml_game::launcher::{FileType, ModPackType};
+use mcml_game::modrinth;
 use mcml_names::i18_items::error_type::CoreResult;
 use mcml_net::{
     curseforge_api::{file_obj::CurseForgeFileDataObj, list_obj::CurseForgeListDataObj},
-    modrinth_api::{self, search_obj::HitObj, version_obj::ModrinthVersionObj},
+    modrinth_api::{self, project_obj::ModrinthProjectObj, search_obj::HitObj, version_obj::ModrinthVersionObj},
     urls,
 };
 use serde::{Deserialize, Serialize};
@@ -127,7 +125,7 @@ pub struct ProjectItemDto {
     /// 描述
     pub summary: String,
     /// 图片地址 从image_manager加载
-    pub image: String,
+    pub image: Option<String>,
     /// 作者
     pub authors: Vec<PicDto>,
     /// 标签
@@ -168,7 +166,10 @@ impl ProjectItemDto {
         for item in data.authors.iter() {
             authors.push(PicDto {
                 name: item.name.clone(),
-                logo: Some(image_manager::push_image_url(&item.avatar_url)),
+                logo: item
+                    .avatar_url
+                    .as_ref()
+                    .map(|item| image_manager::push_image_url(item)),
             });
         }
 
@@ -193,7 +194,11 @@ impl ProjectItemDto {
         Self {
             name: data.name.clone(),
             summary: data.summary.clone(),
-            image: image_manager::push_image_url(&data.logo.url),
+            image: data
+                .logo
+                .url
+                .as_ref()
+                .map(|item| image_manager::push_image_url(item)),
             authors,
             tag,
             screenshots,
@@ -214,6 +219,9 @@ impl ProjectItemDto {
         }
     }
 
+    /// 列表项只从 HitObj 构造，不发 project / team 请求（对齐旧 C# GetModPackListAsync）；
+    /// 作者头像 / 截图在列表里留空，等项目详情（GetFileItemAsync）再补。
+    /// 分类 svg 来自 OnceLock 缓存的 /tag/category，逐条取没有额外网络请求
     pub async fn new_modrinth(
         data: &HitObj,
         file_type: FileType,
@@ -222,56 +230,32 @@ impl ProjectItemDto {
         is_star: bool,
         download_now: bool,
         mcmod: Option<McmodDto>,
-    ) -> CoreResult<Self> {
-        let mut authors = Vec::new();
-
-        let mut project = modrinth_api::get_project(&data.project_id).await?;
-        let team = modrinth_api::get_team(&data.project_id).await?;
-
-        for item in team {
-            authors.push(PicDto {
-                name: item.user.username,
-                logo: item.user.avatar_url.map(|data| image_manager::push_image_url(&data)),
-            });
-        }
+    ) -> Self {
+        let authors = vec![PicDto {
+            name: data.author.clone(),
+            logo: None,
+        }];
 
         let mut tag = Vec::new();
 
-        for item in project.loaders {
+        for item in data.categories.iter() {
             tag.push(TagDto {
                 name: item.clone(),
                 logo: None,
-                svg: modrinth::get_categories_icon(&item).await,
+                svg: modrinth::get_categories_icon(item).await,
             });
         }
 
-        for item in project.categories {
-            tag.push(TagDto {
-                name: item.clone(),
-                logo: None,
-                svg: modrinth::get_categories_icon(&item).await,
-            });
-        }
-
-        let mut screenshots = Vec::new();
-
-        project.gallery.sort_by(|a, b| a.ordering.cmp(&b.ordering));
-
-        for item in project.gallery {
-            screenshots.push(DecPicDto {
-                name: item.title.unwrap_or_default(),
-                logo: image_manager::push_image_url(&item.raw_url),
-                description: item.description.unwrap_or_default(),
-            });
-        }
-
-        Ok(Self {
+        Self {
             name: data.title.clone(),
             summary: data.description.clone(),
-            image: image_manager::push_image_url(&data.icon_url),
+            image: data
+                .icon_url
+                .as_ref()
+                .map(|item| image_manager::push_image_url(item)),
             authors,
             tag,
-            screenshots,
+            screenshots: Vec::new(),
             download_count: data.downloads,
             date: data.date_modified.clone(),
             download,
@@ -286,7 +270,112 @@ impl ProjectItemDto {
                 pid: data.project_id.clone(),
                 fid: Default::default(),
             },
+        }
+    }
+}
+
+/// 项目详情（双击列表项弹出）：简介 + 正文 + 作者 + 标签 + 截图
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectDetailDto {
+    /// 简介
+    pub summary: String,
+    /// 正文（Modrinth 的 body，markdown 文本）；CurseForge 没有正文，只有简介
+    pub body: Option<String>,
+    /// 作者
+    pub authors: Vec<PicDto>,
+    /// 标签
+    pub tag: Vec<TagDto>,
+    /// 截图
+    pub screenshots: Vec<DecPicDto>,
+}
+
+impl ProjectDetailDto {
+    /// Modrinth 详情：project 拿正文 / 截图，team 拿作者头像
+    pub async fn new_modrinth(data: &ModrinthProjectObj) -> CoreResult<Self> {
+        let mut authors = Vec::new();
+
+        let team = modrinth_api::get_team(&data.id).await?;
+
+        for item in team {
+            authors.push(PicDto {
+                name: item.user.username,
+                logo: item
+                    .user
+                    .avatar_url
+                    .map(|item| image_manager::push_image_url(&item)),
+            });
+        }
+
+        let mut tag = Vec::new();
+
+        for item in data.loaders.iter().chain(data.categories.iter()) {
+            tag.push(TagDto {
+                name: item.clone(),
+                logo: None,
+                svg: modrinth::get_categories_icon(item).await,
+            });
+        }
+
+        let mut gallery: Vec<_> = data.gallery.iter().collect();
+        gallery.sort_by(|a, b| a.ordering.cmp(&b.ordering));
+
+        let mut screenshots = Vec::new();
+        for item in gallery {
+            screenshots.push(DecPicDto {
+                name: item.title.clone().unwrap_or_default(),
+                logo: image_manager::push_image_url(&item.raw_url),
+                description: item.description.clone().unwrap_or_default(),
+            });
+        }
+
+        Ok(Self {
+            summary: data.description.clone(),
+            body: Some(data.body.clone()),
+            authors,
+            tag,
+            screenshots,
         })
+    }
+
+    /// CurseForge 详情：只有简介（数据来自列表缓存或 mod_info，没有正文）
+    pub fn new_curseforge(data: &CurseForgeListDataObj) -> Self {
+        let mut authors = Vec::new();
+        for item in data.authors.iter() {
+            authors.push(PicDto {
+                name: item.name.clone(),
+                logo: item
+                    .avatar_url
+                    .as_ref()
+                    .map(|item| image_manager::push_image_url(item)),
+            });
+        }
+
+        let mut tag = Vec::new();
+        for item in data.categories.iter() {
+            tag.push(TagDto {
+                name: item.name.clone(),
+                logo: Some(image_manager::push_image_url(&item.icon_url)),
+                svg: None,
+            });
+        }
+
+        let mut screenshots = Vec::new();
+        for item in data.screenshots.iter() {
+            screenshots.push(DecPicDto {
+                name: item.title.clone(),
+                logo: image_manager::push_image_url(&item.url),
+                description: item.description.clone(),
+            });
+        }
+
+        Self {
+            summary: data.summary.clone(),
+            body: None,
+            authors,
+            tag,
+            screenshots,
+        }
     }
 }
 

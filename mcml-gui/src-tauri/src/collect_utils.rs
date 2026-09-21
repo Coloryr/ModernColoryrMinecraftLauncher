@@ -257,5 +257,6 @@ pub fn set_group_items(group: &str, uuids: &[String]) {
 pub fn is_star(pid: &str) -> bool {
     let data = COLLECT.read().unwrap();
 
-    data.items.contains_key(pid)
+    // items 以收藏条目的 uuid 为键，按 pid 匹配值里的项目ID
+    data.items.values().any(|item| item.pid == pid)
 }

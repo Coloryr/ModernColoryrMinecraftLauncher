@@ -38,13 +38,21 @@ static ICON_IMAGE: LazyLock<RwLock<HashMap<String, IconCache>>> =
 /// 图标磁盘缓存目录（`<运行目录>/image`）
 static ICON_DIR: OnceLock<PathBuf> = OnceLock::new();
 
-/// 图标缓存存活时长，超时后删除并回源重新下载
+/// 图标内存缓存存活时长，超时后删除并回源重新下载
 const ICON_TIMEOUT: Duration = Duration::from_secs(60);
 
+/// 图标磁盘缓存的新鲜窗口（按文件修改时间判断）。
+/// 过期后不再直接删掉重下，而是带 If-None-Match 去服务器校验：
+/// 304 就续用本地（重写文件刷新时间戳），200 才真正重新下载
+const DISK_ICON_TIMEOUT: Duration = Duration::from_secs(24 * 3600);
+
 /// 图标缓存条目
+#[derive(Clone)]
 struct IconCache {
-    /// PNG 数据
+    /// 图片数据
     data: Vec<u8>,
+    /// 内容类型
+    mime: &'static str,
     /// 写入时刻
     time: Instant,
 }
@@ -86,6 +94,61 @@ fn send_bad(res: UriSchemeResponder) {
         Response::builder()
             .status(StatusCode::BAD_REQUEST)
             .body(&[0u8; 0])
+            .unwrap(),
+    );
+}
+
+/// 图标内容：能解码的统一转 PNG，解不动的（gif / avif / 动图 webp / svg 等）
+/// 按内容嗅探后原样透传，交给 webview 自己渲染
+struct IconBytes {
+    data: Vec<u8>,
+    mime: &'static str,
+}
+
+/// 按文件头嗅探图片类型
+fn sniff_mime(data: &[u8]) -> Option<&'static str> {
+    if data.starts_with(&[0x89, b'P', b'N', b'G']) {
+        Some("image/png")
+    } else if data.starts_with(&[0xFF, 0xD8, 0xFF]) {
+        Some("image/jpeg")
+    } else if data.starts_with(b"GIF8") {
+        Some("image/gif")
+    } else if data.len() > 12 && &data[0..4] == b"RIFF" && &data[8..12] == b"WEBP" {
+        Some("image/webp")
+    } else if data.len() > 12 && &data[4..8] == b"ftyp" && (&data[8..12] == b"avif" || &data[8..12] == b"avis")
+    {
+        Some("image/avif")
+    } else if data.starts_with(b"<?xml") || data.starts_with(b"<svg") {
+        Some("image/svg+xml")
+    } else if data.starts_with(b"BM") {
+        Some("image/bmp")
+    } else {
+        None
+    }
+}
+
+/// 归一化图标：优先转 PNG，解不动再原样透传
+fn normalize_icon(data: &[u8]) -> Option<IconBytes> {
+    if let Some(png) = decode_as_png(data) {
+        return Some(IconBytes {
+            data: png,
+            mime: "image/png",
+        });
+    }
+
+    let mime = sniff_mime(data)?;
+    Some(IconBytes {
+        data: data.to_vec(),
+        mime,
+    })
+}
+
+fn send_icon(res: UriSchemeResponder, icon: &IconBytes) {
+    res.respond(
+        Response::builder()
+            .status(StatusCode::OK)
+            .header("Content-Type", icon.mime)
+            .body(icon.data.clone())
             .unwrap(),
     );
 }
@@ -216,46 +279,87 @@ async fn load_icon_image(uri: &[&str], res: UriSchemeResponder) {
     };
 
     // 内存缓存
-    if let Some(data) = get_icon_image(name) {
-        send_png(res, data);
+    if let Some(icon) = get_icon_image(name) {
+        send_icon(
+            res,
+            &IconBytes {
+                data: icon.data,
+                mime: icon.mime,
+            },
+        );
         return;
     }
 
     let file = icon_file(&url);
+    let etag_file = icon_etag_file(&url);
 
-    // 磁盘缓存
-    if let Some(data) = read_icon_file(&file) {
-        set_icon_image(name, data.clone());
-        send_png(res, data);
-        return;
+    // 磁盘缓存的本地副本（有文件但过期时保留，供 304 续用 / 网络失败兜底）
+    let cached = read_icon_bytes(&file);
+    if cached.is_none() && file.is_file() {
+        // 内容损坏：删掉重新下载
+        let _ = path_helper::delete(&file);
     }
 
-    // 回源下载并统一转成 PNG，再写入内存与磁盘
-    let Ok(data) = mojang_api::get_assets(&url).await else {
-        send_bad(res);
-        return;
-    };
+    // 磁盘缓存仍新鲜：直接用，不发请求
+    if let Some(icon) = &cached {
+        if !is_icon_expired(&file) {
+            set_icon_image(name, icon.data.clone(), icon.mime);
+            send_icon(res, icon);
+            return;
+        }
+    }
 
-    let Some(data) = decode_as_png(&data) else {
-        send_bad(res);
-        return;
-    };
+    // 过期 / 缺失：回源。存有 ETag（两家 CDN 的 ETag 都是图片内容的 MD5）就带
+    // If-None-Match 校验，图没变时 304 直接续用本地，不用重新下载
+    let etag = read_icon_etag(&etag_file);
+    match mojang_api::get_assets_with_check(&url, etag.as_deref()).await {
+        Ok(check) if check.not_modified => {
+            if let Some(icon) = &cached {
+                // 重写一份刷新修改时间，把新鲜窗口清零
+                write_icon_file(&file, &icon.data);
+                set_icon_image(name, icon.data.clone(), icon.mime);
+                send_icon(res, icon);
+            } else {
+                // 只有 ETag 没有图片（异常状态），重新下载
+                let _ = path_helper::delete(&etag_file);
+                send_bad(res);
+            }
+        }
+        Ok(check) => {
+            let Some(icon) = normalize_icon(&check.data) else {
+                send_bad(res);
+                return;
+            };
 
-    write_icon_file(&file, &data);
-    set_icon_image(name, data.clone());
+            if let Some(etag) = check.etag {
+                write_icon_etag(&etag_file, &etag);
+            }
+            write_icon_file(&file, &icon.data);
+            set_icon_image(name, icon.data.clone(), icon.mime);
 
-    send_png(res, data);
+            send_icon(res, &icon);
+        }
+        Err(_) => {
+            // 网络失败：有过期的本地副本就先用着
+            if let Some(icon) = &cached {
+                set_icon_image(name, icon.data.clone(), icon.mime);
+                send_icon(res, icon);
+            } else {
+                send_bad(res);
+            }
+        }
+    }
 }
 
 /// 取图标缓存，已过期的条目会被删除并返回 `None`（由调用方回源）
-fn get_icon_image(info: &str) -> Option<Vec<u8>> {
+fn get_icon_image(info: &str) -> Option<IconCache> {
     let mut lock = ICON_IMAGE.write().unwrap();
     let alive = lock
         .get(info)
         .is_some_and(|item| item.time.elapsed() < ICON_TIMEOUT);
 
     if alive {
-        return lock.get(info).map(|item| item.data.clone());
+        return lock.get(info).cloned();
     }
 
     lock.remove(info);
@@ -264,11 +368,12 @@ fn get_icon_image(info: &str) -> Option<Vec<u8>> {
 }
 
 /// 写入图标缓存并记录时刻
-fn set_icon_image(info: &str, data: Vec<u8>) {
+fn set_icon_image(info: &str, data: Vec<u8>, mime: &'static str) {
     ICON_IMAGE.write().unwrap().insert(
         info.to_string(),
         IconCache {
             data,
+            mime,
             time: Instant::now(),
         },
     );
@@ -292,6 +397,23 @@ fn icon_file(url: &str) -> PathBuf {
     ICON_DIR.get().unwrap().join(format!("{}.png", icon_name(url)))
 }
 
+/// 图标的 ETag 旁车文件（`<网址 sha256>.etag`）
+fn icon_etag_file(url: &str) -> PathBuf {
+    ICON_DIR.get().unwrap().join(format!("{}.etag", icon_name(url)))
+}
+
+/// 读取记录的 ETag
+fn read_icon_etag(file: &Path) -> Option<String> {
+    let text = fs::read_to_string(file).ok()?;
+    let text = text.trim().to_string();
+    (!text.is_empty()).then_some(text)
+}
+
+/// 记录 ETag，供下次回源时做 If-None-Match 校验
+fn write_icon_etag(file: &Path, etag: &str) {
+    let _ = fs::write(file, etag);
+}
+
 /// 把图片数据解码后统一转成 PNG，无法解码视为损坏
 ///
 /// 用 `image` 按内容嗅探格式（png / jpeg / webp）
@@ -312,32 +434,19 @@ fn is_icon_expired(file: &Path) -> bool {
 
     // 修改时间晚于当前时间（时钟回拨）时按未过期处理，避免反复重新下载
     time.elapsed()
-        .map(|elapsed| elapsed >= ICON_TIMEOUT)
+        .map(|elapsed| elapsed >= DISK_ICON_TIMEOUT)
         .unwrap_or(false)
 }
 
-/// 读取磁盘缓存的图标，过期或内容损坏时删掉该文件
-fn read_icon_file(file: &Path) -> Option<Vec<u8>> {
+/// 读取磁盘缓存的图标内容（不管新鲜度，过期判断由调用方做）
+fn read_icon_bytes(file: &Path) -> Option<IconBytes> {
     if !file.is_file() {
         return None;
     }
 
-    if is_icon_expired(file) {
-        let _ = path_helper::delete(file);
-        return None;
-    }
-
-    match path_helper::read_byte(file)
+    path_helper::read_byte(file)
         .ok()
-        .and_then(|data| decode_as_png(&data))
-    {
-        Some(data) => Some(data),
-        None => {
-            // 内容损坏：删掉让调用方重新获取
-            let _ = path_helper::delete(file);
-            None
-        }
-    }
+        .and_then(|data| normalize_icon(&data))
 }
 
 /// 写入磁盘缓存的图标
