@@ -27,7 +27,7 @@ pub struct HitObj {
     pub categories: Vec<String>,
     pub gallery: Vec<String>,
     pub downloads: u64,
-    pub icon_url: String,
+    pub icon_url: Option<String>,
     pub date_modified: String,
 }
 

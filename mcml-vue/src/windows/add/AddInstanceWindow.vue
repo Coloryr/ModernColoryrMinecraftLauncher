@@ -853,7 +853,7 @@ onMounted(async () => {
         <BaseButton class="modpack-entry" @click="openWindow('add_modpack')">
           {{ t("add.downloadModpack") }}
         </BaseButton>
-        <BaseButton @click="$emit('close')">{{ t("add.cancel") }}</BaseButton>
+        <BaseButton variant="accent" @click="$emit('close')">{{ t("add.cancel") }}</BaseButton>
         <BaseButton variant="primary" :disabled="creating" @click="create">
           {{
             creating
@@ -1103,9 +1103,18 @@ onMounted(async () => {
   margin-top: auto;
 }
 
-/* 整合包入口靠左，与右侧的取消 / 创建分开 */
-.modpack-entry {
+/* 整合包入口靠左，与右侧的取消 / 创建分开；绿色软底，和侧边栏「添加分组」同色系。
+   加 .ui-btn 提高优先级，稳定压过 BaseButton 的 .v-plain 底色 */
+.ui-btn.modpack-entry {
   margin-right: auto;
+  border: 1px solid color-mix(in srgb, var(--green) 42%, transparent);
+  background: color-mix(in srgb, var(--green) 12%, transparent);
+  color: var(--green);
+}
+
+.ui-btn.modpack-entry:hover {
+  background: color-mix(in srgb, var(--green) 20%, transparent);
+  color: var(--green);
 }
 
 /* 模式切换：图标 + 渐变激活态（按 tab 数量等分填满整行） */

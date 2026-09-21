@@ -399,15 +399,21 @@ function isGroupOpen(name: string) {
   gap: 10px;
   width: 100%;
   padding: 9px 12px;
-  border: 1px dashed var(--border);
+  border: 1px dashed var(--accent-border);
   border-radius: 10px;
   background: transparent;
-  color: var(--text-dim);
+  color: var(--accent);
   font-size: 13px;
   font-family: inherit;
   cursor: pointer;
   transition: all 0.12s;
   min-height: 48px;
+}
+
+/* 默认态就用主题色，和绿色系的「添加分组」区分开 */
+.add-inst-row:not(:disabled) .add-inst-icon {
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 
 .add-inst-row:hover:not(:disabled) {
@@ -430,9 +436,27 @@ function isGroupOpen(name: string) {
   color: var(--text-dim);
 }
 
-/* 添加分组行（列表底部） */
+/* 添加分组行（列表底部）：绿色系，与「添加实例」的主题色区分 */
 .add-group-row {
   margin-top: 6px;
+  border-color: color-mix(in srgb, var(--green) 42%, transparent);
+  color: var(--green);
+}
+
+.add-group-row:not(:disabled) .add-inst-icon {
+  background: color-mix(in srgb, var(--green) 14%, transparent);
+  color: var(--green);
+}
+
+.add-group-row:hover:not(:disabled) {
+  border-color: var(--green);
+  color: var(--green);
+  background: color-mix(in srgb, var(--green) 12%, transparent);
+}
+
+.add-group-row:hover:not(:disabled) .add-inst-icon {
+  background: color-mix(in srgb, var(--green) 18%, transparent);
+  color: var(--green);
 }
 
 .add-inst-icon {

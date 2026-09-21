@@ -206,6 +206,13 @@ fn download(index: u32, mut obj: DownloadObj) {
     loop {
         temp_file = crate::gen_temp_file();
 
+        // 任务已被取消：立即放弃，不再重试
+        // （stop 时下载线程要 join，取消必须能尽快打断在途下载）
+        if obj.task.is_cancelled() {
+            is_fail = true;
+            break;
+        }
+
         let file = if is_keep {
             path_helper::open_append(&temp_file)
         } else {
@@ -351,6 +358,13 @@ async fn write_file(
     file: &mut File,
 ) -> CoreResult<()> {
     loop {
+        // 任务已被取消：立即中断在途下载（stop / 用户取消时不再等当前文件下完）
+        if obj.task.is_cancelled() {
+            obj.item.set_state(DownloadItemState::Error);
+            crate::update(index, &obj.item);
+            return Err(ErrorType::TaskCancel);
+        }
+
         // 任务暂停：原地等待恢复（期间同时响应取消，避免暂停期间无法取消）
         while obj.task.is_paused() {
             if obj.task.is_cancelled() {

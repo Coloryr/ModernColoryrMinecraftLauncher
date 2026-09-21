@@ -22,7 +22,9 @@ use tokio::sync::RwLock;
 use tokio_util::sync::CancellationToken;
 
 use crate::collect_utils;
-use crate::dtos::add_resource_dto::{FileListDto, FileListItemDto, ProjectDto, ProjectItemDto};
+use crate::dtos::add_resource_dto::{
+    FileListDto, FileListItemDto, ProjectDetailDto, ProjectDto, ProjectItemDto,
+};
 use crate::windows::add_resource::SourceInfo;
 
 use super::add::{instance_gui, pack_gui, prepare};
@@ -234,8 +236,7 @@ async fn list_projects(
                     check_download_now(&pid).await,
                     None,
                 )
-                .await
-                .map_err(|err| err.to_string())?;
+                .await;
 
                 list1.push(temp);
                 map.insert(pid, item);
@@ -245,6 +246,44 @@ async fn list_projects(
                 items: list1,
                 count: list.total_hits,
             })
+        }
+        _ => Err(String::from("err.sourceType")),
+    }
+}
+
+/// 获取项目详情（双击列表项）
+///
+/// Modrinth：project 拿正文（markdown）/ 截图，team 拿作者头像；
+/// CurseForge：只有简介 + 截图，优先用列表缓存，缓存未命中再查 mod_info
+#[tauri::command]
+pub async fn add_modpack_detail(source: String, pid: String) -> Result<ProjectDetailDto, String> {
+    let source = ModPackType::from_string(&source);
+
+    match source {
+        ModPackType::CurseForge => {
+            // 列表时已缓存了 mod 数据，直接借用构造；未命中才发请求
+            let detail = {
+                let map = CURSEFOGRE_INFO.read().await;
+                map.get(&pid).map(ProjectDetailDto::new_curseforge)
+            };
+            match detail {
+                Some(detail) => Ok(detail),
+                None => {
+                    let data = curseforge_api::get_mod_info(&pid)
+                        .await
+                        .map_err(|err| err.to_string())?;
+                    Ok(ProjectDetailDto::new_curseforge(&data.data))
+                }
+            }
+        }
+        ModPackType::Modrinth => {
+            let data = modrinth_api::get_project(&pid)
+                .await
+                .map_err(|err| err.to_string())?;
+
+            ProjectDetailDto::new_modrinth(&data)
+                .await
+                .map_err(|err| err.to_string())
         }
         _ => Err(String::from("err.sourceType")),
     }

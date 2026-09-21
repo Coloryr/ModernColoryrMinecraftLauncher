@@ -398,8 +398,7 @@ pub async fn add_resource_list(
                     check_download_now(&uuid, &pid).await,
                     None,
                 )
-                .await
-                .map_err(|err| err.to_string())?;
+                .await;
 
                 list1.push(temp);
                 map.insert(pid, item);

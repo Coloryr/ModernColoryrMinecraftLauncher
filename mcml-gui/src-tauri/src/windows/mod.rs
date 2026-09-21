@@ -117,6 +117,10 @@ const ADD_MIN_HEIGHT: f64 = 585.0;
 const DOWNLOAD_MIN_WIDTH: f64 = 670.0;
 const DOWNLOAD_MIN_HEIGHT: f64 = 470.0;
 
+/// 下载整合包窗口最小尺寸
+const ADD_MODPACK_MIN_WIDTH: f64 = 920.0;
+const ADD_MODPACK_MIN_HEIGHT: f64 = 600.0;
+
 /// 窗口注册表：uuid → 窗口信息
 const WINDOWS_INFO: LazyLock<HashMap<Uuid, WindowEntry>> = LazyLock::new(|| {
     HashMap::from([
@@ -196,8 +200,8 @@ const WINDOWS_INFO: LazyLock<HashMap<Uuid, WindowEntry>> = LazyLock::new(|| {
             ADD_MODPACK_WINDOW_UUID,
             WindowEntry {
                 label: "mcml-add_modpack",
-                min_width: MIN_WIDTH,
-                min_height: MIN_HEIGHT,
+                min_width: ADD_MODPACK_MIN_WIDTH,
+                min_height: ADD_MODPACK_MIN_HEIGHT,
             },
         ),
         (

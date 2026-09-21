@@ -581,6 +581,16 @@ export default {
   "modpack.prevPage": "Prev",
   "modpack.nextPage": "Next",
   "modpack.unknownSize": "Unknown size",
+  "modpack.detail": "Modpack details",
+  "modpack.screenshots": "Screenshots",
+  "modpack.versions": "Versions",
+  "modpack.summary": "Summary",
+  "modpack.download": "Download",
+  "modpack.back": "Back",
+  "modpack.detailHint": "Double-click to view details",
+  "modpack.groupPlaceholder": "Group (empty = default)",
+  "modpack.star": "Star",
+  "modpack.unstar": "Unstar",
 
   // Window titles
   "winTitle.addModpack": "Download Modpacks",
