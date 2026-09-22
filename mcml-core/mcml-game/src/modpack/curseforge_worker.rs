@@ -214,7 +214,8 @@ impl ModPackWorker for CurseForgeWorker {
         if items.is_empty() {
             return;
         }
-        mcml_downloader::start_download_task(items).await;
+        // 挂上取消令牌：安装任务取消时同步中断剩余文件的下载
+        mcml_downloader::start_download_task_cancellable(items, self.base.cancel.clone()).await;
     }
 
     /// 更新游戏实例版本信息

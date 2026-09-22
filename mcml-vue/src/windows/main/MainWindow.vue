@@ -30,6 +30,10 @@ import LaunchArgsPanel from "../../components/LaunchArgsPanel.vue";
 import HomePage from "../../components/HomePage.vue";
 import CustomExecPanel from "../../components/CustomExecPanel.vue";
 import ProxyPanel from "../../components/ProxyPanel.vue";
+import ModpackInstallBar from "../../components/ModpackInstallBar.vue";
+import { useModpackStatus } from "../../lib/modpackTasks";
+import ResourceDownloadBar from "../../components/ResourceDownloadBar.vue";
+import { useResourceStatus } from "../../lib/resourceTasks";
 import SplashScreen from "../../components/ui/SplashScreen.vue";
 import MainTopbar from "./topbar/MainTopbar.vue";
 import MainSidebar from "./sidebar/MainSidebar.vue";
@@ -787,12 +791,17 @@ function onDocKeyDown(e: KeyboardEvent) {
   else if (multiSelect.value) exitMultiSelect();
 }
 
+/** 刷新实例列表并选中给定实例（添加 / 整合包安装完成后调用） */
+async function adoptAddedInstance(uuid: string) {
+  await Promise.all([loadInstances(), loadGroups()]);
+  const inst = instances.value.find((i) => i.uuid === uuid);
+  if (inst) select(inst);
+}
+
 /** 添加实例窗口创建成功后（跨窗口 storage 事件），刷新并选中新实例 */
 async function onAddedInstanceStorage(e: StorageEvent) {
   if (e.key !== "mcml.addedInstance" || !e.newValue) return;
-  await Promise.all([loadInstances(), loadGroups()]);
-  const inst = instances.value.find((i) => i.uuid === e.newValue);
-  if (inst) select(inst);
+  await adoptAddedInstance(e.newValue);
 }
 
 // 轻提示（统一使用全局 showToast）
@@ -815,6 +824,10 @@ function onAction(id: ActionId) {
     case "manageResource":
       // 跳转到资源管理窗口（当前实例已持久化在 gui_config.json，窗口自己读）
       openWindow("resource");
+      break;
+    case "addResource":
+      // 跳转到添加资源窗口（当前实例已持久化在 gui_config.json，窗口自己读）
+      openWindow("add_resource");
       break;
     default:
       showToast(t("actions.wip", { name: t(ACTION_LABELS[id]) }));
@@ -901,6 +914,15 @@ function refreshMotd() {
 // ================= 事件订阅 =================
 
 const unlistens: Array<() => void> = [];
+
+// 整合包安装任务（下载整合包窗口关闭后，进度条迁到主窗口显示）
+const { status: modpackStatus, init: initModpackStatus } = useModpackStatus(
+  false,
+  adoptAddedInstance,
+);
+
+// 资源下载任务（添加资源窗口关闭后，进度条迁到主窗口显示）
+const { status: resourceStatus, init: initResourceStatus } = useResourceStatus(false);
 
 async function subscribeEvents() {
   const fns = await Promise.all([
@@ -1074,6 +1096,8 @@ async function createGroup() {
 
 onMounted(async () => {
   subscribeEvents();
+  initModpackStatus().then((unlisten) => unlistens.push(unlisten));
+  initResourceStatus().then((unlisten) => unlistens.push(unlisten));
   document.addEventListener("click", onDocClick);
   document.addEventListener("keydown", onDocKeyDown);
   window.addEventListener("storage", onAddedInstanceStorage);
@@ -1120,6 +1144,20 @@ listen<LoadState>(LoadDone, async (data) => {
         @feature="openWindow"
         @toggle-theme="toggleTheme"
         @update:account="onAccountChange"
+      />
+
+      <!-- 整合包安装进度（下载整合包窗口关闭后迁到这里显示） -->
+      <ModpackInstallBar
+        v-if="modpackStatus?.tasks.length && !modpackStatus.windowOpen"
+        :status="modpackStatus"
+        class="mpbar-in-main"
+      />
+
+      <!-- 资源下载进度（添加资源窗口关闭后迁到这里显示） -->
+      <ResourceDownloadBar
+        v-if="resourceStatus?.tasks.length && !resourceStatus.windowOpen"
+        :status="resourceStatus"
+        class="mpbar-in-main"
       />
 
       <!-- 主体 -->
@@ -1692,6 +1730,11 @@ listen<LoadState>(LoadDone, async (data) => {
   display: flex;
   flex-direction: column;
   height: 100vh;
+}
+
+/* 顶部整合包安装进度条（窗口内容有自身内边距，这里只加外边距） */
+.mpbar-in-main {
+  margin: 4px 12px 0;
 }
 
 /* 删除实例进度条（删除弹窗内） */
