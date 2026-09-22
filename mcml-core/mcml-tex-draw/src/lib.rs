@@ -26,13 +26,14 @@ pub mod model;
 
 /// 下载并渲染方块/物品贴图（版本清单 → 客户端jar → 解包渲染）
 ///
-/// `gui`可选，渲染期间按已处理的模型数上报进度
-pub async fn load_blocks(gui: gui_hook::ProgressGui) -> CoreResult<()> {
+/// `gui`可选，渲染期间按已处理的模型数上报进度；
+/// `force`为 true 时忽略版本短路，全量重渲染
+pub async fn load_blocks(gui: gui_hook::ProgressGui, force: bool) -> CoreResult<()> {
     // 版本清单（本地缓存，缺了才在线拉）；方块与物品分开短路，只补渲染缺的那部分
     let versions = version_path::get_version_obj_online().await?;
     let last = versions.latest.release.clone();
-    let block_done = block::mcml_tex_draw_id() == last;
-    let item_done = item::items_id() == last;
+    let block_done = !force && block::mcml_tex_draw_id() == last;
+    let item_done = !force && item::items_id() == last;
     if block_done && item_done {
         return Ok(());
     }
@@ -133,8 +134,9 @@ pub fn init<P: AsRef<Path>>(path: P) -> CoreResult<()> {
 
 /// 加载数据
 ///
-/// 读回上次的结果后，在后台执行load_blocks（版本短路命中时直接返回），
-/// 首次运行没有数据文件也正常，等后台下载渲染完成再save
+/// 读回上次的结果后，仅在用户同意渲染（block_render = true）时后台执行
+/// load_blocks（版本短路命中时直接返回）；首次运行没有数据文件也正常，
+/// 等后台下载渲染完成再save
 pub fn load() -> CoreResult<()> {
     if let Ok(obj) = serialize_tools::json_from_file::<BlocksObj>(BLOCK_FILE.get().unwrap()) {
         *BLOCKS.write().unwrap() = obj;
@@ -145,7 +147,10 @@ pub fn load() -> CoreResult<()> {
         *ITEMS.write().unwrap() = obj;
     }
 
-    spawn_load_task();
+    // 默认不渲染：用户在界面同意后写入配置，之后每次启动自动补渲染缺失版本
+    if mcml_config::read_config().block_render {
+        spawn_load_task();
+    }
 
     Ok(())
 }
@@ -153,7 +158,7 @@ pub fn load() -> CoreResult<()> {
 /// 后台执行load_blocks，不阻塞调用方，错误只记日志
 fn spawn_load_task() {
     let task = async {
-        if let Err(err) = load_blocks(None).await {
+        if let Err(err) = load_blocks(None, false).await {
             mcml_log::error_type(err);
         }
     };
@@ -289,6 +294,16 @@ pub fn blocks() -> Vec<String> {
         .keys()
         .map(|item| item.clone())
         .collect()
+}
+
+/// 方块数据的渲染版本（未渲染过为空串）
+pub fn block_version() -> String {
+    BLOCKS.read().unwrap().id.clone()
+}
+
+/// 方块ID → 语言键（block.minecraft.stone 之类，翻译经 `get_lang`）
+pub fn block_name_key(id: &str) -> Option<String> {
+    BLOCKS.read().unwrap().name.get(id).cloned()
 }
 
 /// 锁定方块数据表（内部写入用）

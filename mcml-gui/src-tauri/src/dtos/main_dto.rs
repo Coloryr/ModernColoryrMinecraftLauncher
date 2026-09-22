@@ -101,3 +101,39 @@ pub struct InstancePatch {
     pub lang: Option<String>,
     pub log_encoding: Option<String>,
 }
+
+/// 方块列表条目
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BlockItemDto {
+    /// 方块ID（如 minecraft:stone）
+    pub id: String,
+    /// 显示名（按请求语言翻译，miss 回退 id 尾段）
+    pub name: String,
+    /// 创造分组尾段（buildingBlocks / natural / …）
+    pub cat: String,
+    /// 贴图地址（mcml-image 完整 URL，带 ?v= 版本参数）
+    pub image: String,
+}
+
+/// 方块贴图渲染状态
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BlockStatusDto {
+    /// 已有渲染结果（blocks() 非空）
+    pub rendered: bool,
+    /// 用户已同意渲染（配置开关）
+    pub opt_in: bool,
+    /// 已渲染的游戏版本（未渲染为空串）
+    pub version: String,
+    /// 正在渲染
+    pub running: bool,
+    /// 进度：已处理数
+    pub now: u32,
+    /// 进度：总数
+    pub total: u32,
+    /// 进度文字（渲染中才有）
+    pub text: Option<String>,
+    /// 上次渲染失败的错误信息
+    pub error: Option<String>,
+}

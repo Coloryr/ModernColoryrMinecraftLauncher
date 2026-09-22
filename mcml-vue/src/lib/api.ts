@@ -5,6 +5,8 @@
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { commands } from "./bindings";
 import type {
+  BlockItemDto,
+  BlockStatusDto,
   CollectDataDto,
   DetectedPackDto,
   DownloadItemEvent,
@@ -27,7 +29,7 @@ import type {
   StateEvent,
   VersionInfo,
 } from "./bindings";
-import { AddLoaderProgress, AddModpackStatus, AddNameConflict, AddPackProgress, AddResourceStatus, CloseBlocked, CollectChange, DownloadItem, DownloadTask, GameExit, GameLog, InstanceChange, JavaChange, LaunchError, LaunchState } from "./listens";
+import { AddLoaderProgress, AddModpackStatus, AddNameConflict, AddPackProgress, AddResourceStatus, CloseBlocked, CollectChange, DownloadItem, DownloadTask, GameExit, GameLog, InstanceChange, JavaChange, LaunchError, LaunchState, MainBlockRender } from "./listens";
 
 export interface CreateInstanceOpts {
   loader?: string;
@@ -456,8 +458,9 @@ export function onGameExit(cb: (e: ExitEvent) => void): Promise<UnlistenFn> {
 export function onLaunchError(cb: (e: ErrorEvent) => void): Promise<UnlistenFn> {
   return listen<ErrorEvent>(LaunchError, (e) => cb(e.payload));
 }
-export function onInstanceChange(cb: () => void): Promise<UnlistenFn> {
-  return listen(InstanceChange, () => cb());
+/** 实例数据变更（type：add / edit / remove / group） */
+export function onInstanceChange(cb: (type: string) => void): Promise<UnlistenFn> {
+  return listen<{ type: string }>(InstanceChange, (e) => cb(e.payload.type));
 }
 export function onJavaChange(cb: () => void): Promise<UnlistenFn> {
   return listen(JavaChange, () => cb());
@@ -512,4 +515,36 @@ export function answerNameConflict(id: number, answer: boolean): Promise<void> {
 /** 收藏变更（跨窗口同步） */
 export function onCollectChange(cb: () => void): Promise<UnlistenFn> {
   return listen(CollectChange, () => cb());
+}
+
+// ==================== 方块列表 ====================
+
+/** 获取方块列表（按语言翻译显示名） */
+export function getBlockList(lang: string): Promise<BlockItemDto[]> {
+  return commands.main.blockList(lang);
+}
+
+/** 获取方块贴图渲染状态 */
+export function getBlockStatus(): Promise<BlockStatusDto> {
+  return commands.main.blockStatus();
+}
+
+/** 开始渲染方块贴图（force = 全量重渲染；已在进行返回 false） */
+export function blockRenderStart(force: boolean): Promise<boolean> {
+  return commands.main.blockRenderStart(force);
+}
+
+/** 把方块贴图设为实例图标 */
+export function blockSetIcon(uuid: string, id: string): Promise<boolean> {
+  return commands.main.blockSetIcon(uuid, id);
+}
+
+/** 方块渲染状态事件（进度 / 结束） */
+export function onBlockRender(cb: (e: BlockStatusDto) => void): Promise<UnlistenFn> {
+  return listen<BlockStatusDto>(MainBlockRender, (e) => cb(e.payload));
+}
+
+/** mcml-image 协议访问前缀（拼实例图标等本地图片地址用） */
+export function getImageBaseUrl(): Promise<string> {
+  return commands.main.imageBaseUrl();
 }
