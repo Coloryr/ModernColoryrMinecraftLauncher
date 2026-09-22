@@ -578,6 +578,12 @@ export default {
   "modpack.noVersions": "该整合包在此游戏版本下没有可用版本",
   "modpack.install": "安装",
   "modpack.installDone": "整合包 {name} 安装完成",
+  "modpack.bar.running": "正在安装 {count} 个整合包",
+  "modpack.bar.clearDone": "清除已完成",
+  "modpack.bar.cancel": "取消",
+  "modpack.bar.cancelled": "已取消",
+  "modpack.bar.failed": "失败",
+  "modpack.bar.cancelFail": "取消失败：{msg}",
   "modpack.prevPage": "上一页",
   "modpack.nextPage": "下一页",
   "modpack.unknownSize": "未知大小",
@@ -591,6 +597,28 @@ export default {
   "modpack.groupPlaceholder": "分组（空=默认）",
   "modpack.star": "收藏",
   "modpack.unstar": "取消收藏",
+
+  // 添加资源窗口
+  "addResource.mods": "模组",
+  "addResource.resourcepacks": "材质包",
+  "addResource.shaders": "光影包",
+  "addResource.saves": "存档",
+  "addResource.datapacks": "数据包",
+  "addResource.searchHint": "搜索资源…",
+  "addResource.empty": "没有找到相关资源",
+  "addResource.modLoader": "加载器",
+  "addResource.loader.normal": "全部",
+  "addResource.chooseSave": "选择存档",
+  "addResource.instance": "目标实例",
+  "addResource.chooseSaveHint": "选择要安装数据包的存档",
+  "addResource.download": "下载",
+  "addResource.downloadOk": "{name} 已加入下载",
+  "addResource.bar.running": "正在下载 {count} 个资源",
+  "addResource.bar.done": "下载完成",
+  "addResource.bar.failed": "失败",
+  "addResource.noInstance": "未选择实例，请先在主界面选择一个实例",
+  "addResource.saveSourceLimit": "存档下载仅支持 CurseForge 源",
+  "err.saveNotFound": "请先选择一个存档",
 
   // 窗口标题
   "winTitle.main": "MCML 启动器",
@@ -643,6 +671,8 @@ export default {
   "err.badFileId": "无效的文件编号",
   "err.fileNotFound": "未找到该版本的文件",
   "err.groupNotFound": "分组不存在",
+  "err.alreadyDownloading": "该整合包正在安装中",
+  "err.taskNotFound": "安装任务不存在",
 };
 
 export const faqs: Array<{ q: string; a: string }> = [

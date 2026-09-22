@@ -6,6 +6,7 @@
 
 pub mod account_dto;
 pub mod add_dto;
+pub mod add_modpack_dto;
 pub mod add_resource_dto;
 pub mod collect_dto;
 pub mod download_dto;
@@ -15,6 +16,11 @@ pub mod main_dto;
 pub use account_dto::{AccountStoreDto, AccountStoreViewDto};
 pub use add_dto::{
     DetectedPackDto, DirEntry, LoaderProgressDto, ModpackItemDto, NameConflictDto, PackProgressDto,
+};
+pub use add_modpack_dto::{ModPackStatusDto, ModPackTaskDto};
+pub use add_resource_dto::{
+    DecPicDto, FileListDto, FileListItemDto, McmodDto, PicDto, ProjectDetailDto, ProjectDto,
+    ProjectItemDto, ResourceSaveDto, ResourceStatusDto, ResourceTaskDto, SourceTypeDto, TagDto,
 };
 pub use collect_dto::{CollectDataDto, CollectItemDto};
 pub use download_dto::{

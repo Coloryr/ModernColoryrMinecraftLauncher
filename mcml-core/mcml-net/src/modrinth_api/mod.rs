@@ -295,11 +295,12 @@ pub async fn get_datapack_list(arg: ModrinthSearchArg) -> CoreResult<ModrinthSea
         facets.push(build_versions(vec![version.clone()]));
     }
 
+    // datapack 是独立的一组 facets（组间 AND，组内 OR）：
+    // 无论是否选分类都必须带上，否则会搜出全部模组
+    facets.push(build_categories(vec![CATEGORIES_DATA_PACK.to_string()]));
+
     if let Some(category) = arg.category {
-        facets.push(build_categories(vec![
-            category.clone(),
-            CATEGORIES_DATA_PACK.to_string(),
-        ]));
+        facets.push(build_categories(vec![category.clone()]));
     }
 
     search(

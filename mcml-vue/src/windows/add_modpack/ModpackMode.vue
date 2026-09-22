@@ -10,13 +10,15 @@ import AsyncImage from "../../components/ui/AsyncImage.vue";
 import { api } from "../../lib/api";
 import { t, tErr } from "../../lib/i18n";
 import { showToast } from "../../lib/toast";
-import type { FileListItemDto, ProjectDetailDto, ProjectItemDto } from "../../lib/bindings";
+import type { FileListItemDto, ModPackStatusDto, ProjectDetailDto, ProjectItemDto } from "../../lib/bindings";
 
 const props = defineProps<{
   /** 安装到的分组（空 = 默认分组） */
   group: string;
   /** 已有分组候选（datalist 下拉用） */
   groups: string[];
+  /** 安装任务状态（同步列表的「已安装 / 安装中」角标） */
+  status: ModPackStatusDto | null;
 }>();
 
 const emit = defineEmits<{
@@ -398,6 +400,38 @@ onUnmounted(() => window.removeEventListener("keydown", onDetailKey));
 function formatDate(date: string): string {
   return date ? date.slice(0, 10) : "";
 }
+
+/** 安装状态变化时同步列表角标：项目级「已安装」按 pid，版本级按 pid+fid */
+watch(
+  () => props.status,
+  (status) => {
+    if (!status) return;
+    const isRunning = (t: { done: boolean; failed: boolean; cancelled: boolean }) =>
+      !t.done && !t.failed && !t.cancelled;
+    const doneFiles = new Set(
+      status.tasks.filter((t) => t.done).map((t) => `${t.pid}|${t.fid}`),
+    );
+    const doneProjects = new Set(status.tasks.filter((t) => t.done).map((t) => t.pid));
+    const runningFiles = new Set(
+      status.tasks.filter(isRunning).map((t) => `${t.pid}|${t.fid}`),
+    );
+    const runningProjects = new Set(status.tasks.filter(isRunning).map((t) => t.pid));
+
+    for (const item of items.value) {
+      if (doneProjects.has(item.source.pid)) item.download = true;
+      if (runningProjects.has(item.source.pid)) item.downloadNow = true;
+    }
+    for (const file of [...files.value, ...allFiles.value]) {
+      const key = `${file.source.pid}|${file.source.fid}`;
+      if (doneFiles.has(key)) {
+        file.isDownload = true;
+        file.downloadNow = false;
+      } else if (runningFiles.has(key)) {
+        file.downloadNow = true;
+      }
+    }
+  },
+);
 
 function formatSize(size: number): string {
   if (!size) return t("modpack.unknownSize");

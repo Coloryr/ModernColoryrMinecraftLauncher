@@ -1,91 +1,117 @@
-# TASK：优化整合包搜索用时
+# 方块列表（主界面）实施计划
 
-## 背景
+## Context
 
-下载整合包窗口搜一页（Modrinth 源）要 **30~60 秒**才出结果，界面上就是一直「搜索中…」。
-CurseForge 源没这个问题（一次 `get_modpack_list` 就够）。
+启动器主页面的「每日抽奖」占位卡改为「方块列表」：点卡片切入方块网格视图（搜索 / 分类 / 滚动，返回键回主页）。方块贴图由 mcml-tex-draw 渲染；**默认不渲染**，首次打开提示渲染，渲染带进度条，可手动重新渲染；贴图可设为实例图标。
 
-## 实测（2026-09-20，本机）
+探索确认的关键事实（已验证）：
+- mcml-core **没有** re-export mcml-tex-draw，mcml-gui 也未依赖它 → 需在 `mcml-gui/src-tauri/Cargo.toml` 加 `mcml-tex-draw = { path = "../../mcml-core/mcml-tex-draw" }`
+- `InputFile` 在 mcml-net（`input_file.rs:19`）；`InputFile::Path.save_file` 本质是 `copy_file_async`，set-icon 直接用 `tokio::fs::copy` 即可
+- ConfigObj 有 struct 级 `#[serde(default)]`（config_obj.rs:422），新增字段无需迁移；`mcml_config::init` 先于 `mcml_tex_draw::load`（mcml-core/src/lib.rs:75-77,93），tex-draw 可安全读配置
+- 前端从未构造过 mcml-image URL；InstanceIcon.vue 目前只画渐变占位、不加载真实图标 → 本次一并接通
+- `t()` miss 时返回 key 本身（i18n/index.ts:41），可作分类名回退
+- `blocks()` 顺序不稳定 → 列表命令需排序
+- 事件名：`emit_main_block_render` → `"main-block-render"`，由 build.rs/gui-ipc-gen 自动写入 listens.ts
+- 进度回调参照 `windows/add_modpack.rs:126-163` 的 TaskPackGui 模式
 
-| 路径 | 单次请求 | 20 条结果合计 |
-| --- | --- | --- |
-| 直连 | project 0.82s / team 0.91s | ≈ 35s |
-| 走 7890 代理 | project 1.03s / team 1.45s | ≈ 50s+ |
+## 第 0 步：写 TASK.md
 
-限流不是原因：`LIMITE_PER_MIN` 是 300，40 个请求碰不到。
+用本任务替换 `D:\code\ModernColoryrMinecraftLauncher\TASK.md` 现有内容（现为「优化整合包搜索用时」的旧记录），按其既有格式写：背景 / 需求 / 方案要点 / 验收。
 
-## 根因
+## 第 1 步：mcml-config 开关字段
 
-`mcml-gui/src-tauri/src/windows/add_modpack.rs:226` 的 Modrinth 分支逐条构造列表项：
-
+`mcml-core/mcml-config/src/config_obj.rs`（ConfigObj ~:423）：
 ```rust
-for item in list.hits {                                  // 一页 20 条
-    let temp = ProjectItemDto::new_modrinth(&item, ...).await?;
-}
+/// 方块贴图已渲染（用户同意后开启；开启后启动时自动补渲染缺失版本）
+#[serde(rename = "BlockRender")]
+pub block_render: bool,
 ```
+Default 中补 `block_render: false`。
 
-而 `ProjectItemDto::new_modrinth`（`dtos/add_resource_dto.rs:217`）**每条都要发两次网络请求，且串行**：
+## 第 2 步：mcml-tex-draw 改造
 
-```rust
-let mut project = modrinth_api::get_project(&data.project_id).await?;   // project 详情
-let team = modrinth_api::get_team(&data.project_id).await?;            // 成员（作者）
-```
+`mcml-core/mcml-tex-draw/src/lib.rs`：
+1. `load_blocks(gui, force: bool)`（:30）：短路条件加 `!force &&`（`block_done`/`item_done`），force=true 强制全量重渲染；`spawn_load_task`（:154）传 `(None, false)`
+2. `load()`（:138）：仅在 `mcml_config::read_config().block_render` 为 true 时 `spawn_load_task()` —— 实现「默认不渲染」
+3. 新增访问器（GUI 无法读 `BlocksObj.name`，均为 pub(crate)）：
+   ```rust
+   pub fn block_version() -> String                       // BLOCKS.read().id，未渲染为空
+   pub fn block_name_key(id: &str) -> Option<String>      // name: id → lang key
+   ```
 
-于是**一页 = 40 次串行往返**。
+## 第 3 步：image_manager /block/ 端点 + 图标缓存失效
 
-`get_categories_icon`（`mcml-game/src/modrinth/mod.rs:100`）只在首次拉一次 `/tag/category`，
-之后走 `OnceLock` 缓存，不是瓶颈。
+`mcml-gui/src-tauri/src/image_manager.rs`：
+1. `image_base_url()`（:476）改为 `pub`
+2. `url_image` 分发（:457）加 `"block" => load_block_image(&uri, res)`
+3. 新函数（PNG 直接读盘透传，**不进内存缓存**，重渲染即时生效；webview 缓存靠 URL `?v=<version>` 破）：
+   ```rust
+   fn load_block_image(uri: &[&str], res: UriSchemeResponder) {
+       if uri.len() != 2 { send_bad(res); return; }
+       let Some(file) = mcml_tex_draw::get_block_path(uri[1]) else { send_bad(res); return };
+       match path_helper::read_byte(&file) { Ok(data) => send_png(res, data), Err(_) => send_bad(res) }
+   }
+   ```
+   （`uri[1]` 形如 `minecraft:stone`，冒号保留在同一段内）
+4. 实例图标失效：
+   ```rust
+   pub fn clear_instance_image(uuid: &Uuid) { INSTANCE_IMAGE.write().unwrap().remove(uuid); }
+   ```
 
-## 参照物：旧 C# 不这么干
+## 第 4 步：DTO
 
-`e:/code/ColorMC/src/ColorMC.Gui/UIBinding/WebBinding.cs` 的 `GetModPackListAsync`（:139 起）
-Modrinth 分支是**直接从 `HitObj` 构造列表项**的，没有任何 project / team 请求：
+`mcml-gui/src-tauri/src/dtos/main_dto.rs`（`#[serde(rename_all = "camelCase")]`）：
+- `BlockItemDto { id, name, cat, image }` —— cat 为创造分组尾段（buildingBlocks/natural/…），image 为完整 mcml-image URL（带 ?v=）
+- `BlockStatusDto { rendered, opt_in, version, running, now, total, text: Option, error: Option }`
+- `dtos/mod.rs` 扩充 main_dto 的 re-export
 
-```csharp
-// 循环之前只做一次批量请求，取 mcmod 百科翻译（不是 per-hit 的两次）
-var list2 = await ColorMCAPI.GetMcModFromMOAsync(modlist, 1);
-foreach (var item in list.Hits)
-{
-    list1.Add(new FileItemModel(item, FileType.Modpack,
-        list2?.TryGetValue(item.ProjectId, out var data1) == true ? data1 : null));
-}
-```
+## 第 5 步：main.rs 命令 + 事件
 
-项目详情（`get_project` + `get_team` + 截图）在 C# 里是**单独一条路** —— `GetFileItemAsync`（:181），
-只在用户点开某个项目时才调（对应 `AddModPackControlModel.GoFile`）。
+`mcml-gui/src-tauri/src/windows/main.rs`（参照 add_modpack.rs TaskPackGui 模式）：
 
-移植时把这条「详情」路径塞进了列表构造，于是每搜一页多打 40 个请求。
+- 静态状态 `BlockRenderState { running: AtomicBool, now/total: AtomicUsize, text/error: Mutex<Option<String>> }`，`static BLOCK_RENDER: LazyLock<_>`
+- `struct BlockRenderGui { app: AppHandle }` 实现 `IProgressGui`：写状态并 `emit_main_block_render(&app, block_status())`（回调全同步，简单）
+- `fn block_status() -> BlockStatusDto`：读 BLOCK_RENDER + config.block_render + `blocks()` 非空 + `block_version()`
+- 事件：`#[gui_macros::emit] pub fn emit_main_block_render(app, BlockStatusDto)`
+- 命令：
+  - `main_block_list(lang: String) -> Vec<BlockItemDto>`：Lang 按字符串解析（en_us / 其余 zh_cn）；name = `block_name_key` → `get_lang` miss 回退 id 尾段；image = `{base}/block/{id}?v={ver}`；按 cat + name 排序
+  - `main_block_status() -> BlockStatusDto`
+  - `async main_block_render_start(app, force: bool) -> Result<bool, String>`：`running.swap` 防重入（已跑返回 Ok(false)）；写 `write_config().block_render = true` + `mcml_config::save()`（guard 先 drop 再 save）；spawn `load_blocks(Some(gui), force)`，结束时写 error/running=false 并 emit
+  - `async main_block_set_icon(app, uuid, id) -> Result<bool, String>`：解析 uuid → `get_instance`（miss → `err.instanceNotFound`）；**锁内只取 `get_icon_file()` 后 drop 再 await**（std 锁跨 await 破坏 Send）；`tokio::fs::copy(get_block_path(&id)?, dest)`；`clear_instance_image`；`emit_instance_change(&app, "edit")` 让 InstanceIcon 刷新
 
-## 方案
+## 第 6 步：前端 api
 
-**A（推荐，对齐 C#）**：列表项只从 `HitObj` 构造 —— 作者名取 `HitObj.author`、分类取 `categories`、
-图标 `icon_url`、描述 `description`、时间 `date_modified`、下载数 `downloads`；
-`authors`（作者头像）/ `tag`（带 svg 的分类图标）/ `screenshots` 在列表里留空，
-等以后做「打开项目详情」（对齐 `GetFileItemAsync`）时再补。
+bindings.ts / listens.ts 由 build.rs 自动生成（先跑 cargo check）。`mcml-vue/src/lib/api.ts` 增加：`getBlockList(lang)`、`getBlockStatus()`、`blockRenderStart(force)`、`blockSetIcon(uuid, id)`、`onBlockRender(cb)`，类型引入 BlockItemDto/BlockStatusDto。
 
-- 预期：**50s → ~1s**。
-- 代价：列表卡片少作者头像和分类图标（作者名、分类名仍在）。
+## 第 7 步：BlockPanel.vue（新组件）
 
-**B（保留现在的富列表）**：把每条的 project / team 请求并行化（限并发 8 左右），
-并按 `project_id` 缓存 project / team 结果。首次约 5~8s，翻页与二次搜索命中缓存。
+`mcml-vue/src/components/BlockPanel.vue`，props `currentInstance`，由 `status` 驱动三态：
+- **未渲染且未在跑**：提示卡（renderPromptTitle/renderPromptDesc）+「开始渲染」按钮 → `blockRenderStart(false)`；有 error 时显示失败 + 重试
+- **running**：进度条 now/total + `status.text`
+- **rendered**：工具栏（搜索框、分类 chips「全部+各分组」、重新渲染按钮）+ 网格（AsyncImage 图标 + 名称）；数据 `getBlockList(locale)`，`watch(locale)` 重取；过滤 = 分类匹配 + id/name 含关键字；条目 `content-visibility: auto`（上千条）；点条目：无选中实例 → toast `blocks.noInstance`；否则 `blockSetIcon` → 成功/失败 toast
 
-- 偏离 C# 行为，且首次仍明显慢于 A。
+## 第 8 步：HomePage.vue + InstanceIcon.vue
 
-## 影响面
+- HomePage：抽奖卡（:104-117）替换为「方块列表」卡（立方体 SVG + home.blocks/blocksDesc）；`showBlocks` ref 切换视图，主体 `v-if="!showBlocks"` 包住 entry-cards + NewsPanel，else 渲染 `<BlockPanel :current-instance="currentInstance"/>`；返回键 label 在 `home.backToList` / `blocks.back` 间切换
+- InstanceIcon.vue：加载真实图标 `${base}/instance/${uuid}`（base 经新小命令 `main_image_base_url()` 取 `image_base_url()`），渐变+字母作 `@error` 回退；监听 `InstanceChange`（type=edit 且 uuid 匹配）时加 `?v=Date.now()` 破缓存刷新
 
-- `ProjectItemDto::new_modrinth` 是**列表与资源窗口共用**的：`windows/add_resource.rs:392`
-  也调它，改了对两边都生效。
-- 前端 `mcml-vue/src/windows/add_modpack/ModpackMode.vue` 现在会渲染 `authors` / `tag` / `screenshots`，
-  走 A 之后这几项为空 —— 不显示即可，不用改结构。
-- CurseForge 分支不受影响。
+## 第 9 步：i18n（zh-CN + en-US）
 
-## 验收
+删 `home.lottery` / `home.lotteryDesc`。新增：`home.blocks`、`home.blocksDesc`、`blocks.back/search/catAll/renderPromptTitle/renderPromptDesc/renderNow/rendering/reRender/renderFailed/retry/noInstance/setIconOk/empty/count`、`blocks.cat.*`（buildingBlocks/natural/functionalBlocks/redstoneBlocks/tools/combat/foodAndDrinks/ingredients/spawnEggs/opBlocks/construction/misc，未知值回退原文）。
 
-- 出一页结果的端到端耗时降到 ~1s 量级；Modrinth / CurseForge 两种源都测，直连与走代理各测一次。
-- 翻页、切筛选（游戏版本 / 排序 / 分类）不再重复发起同一批 project 请求。
-- 列表卡片的信息不缺失：名字、作者名、描述、分类名、下载数、更新时间。
+## 边界情况
 
-## 备注
+- 渲染中关主窗口：spawn 的任务持 AppHandle 继续，事件无人听无害；重开窗口 `main_block_status()` 重同步
+- 首渲染中断：`block_render` 在 spawn 前已置 true，下次启动版本短路自动续渲染缺失部分
+- 重渲染覆盖同版本 PNG：无内存缓存即时生效；webview 缓存靠 `?v=`（同版本重渲染纹理相同，可接受）
+- `blocks()` 空 → rendered=false → 提示视图，永不出空网格；get_lang miss → id 尾段回退；get_block_path miss → 400 → AsyncImage 灰块
+- 伪 uuid 实例（mcml- 前缀）设图标报 `err.instanceNotFound`
+- 双击渲染按钮：AtomicBool::swap 拦截
 
-- 复现时注意本机代理：`config.json` 里 `ProxyWork = 2`（走 127.0.0.1:7890），单次往返比直连慢 30% 左右。
-- 诊断手段：`ProjectItemDto::new_modrinth` 里加一次性的耗时打点，或直接看服务端请求条数。
+## 验证
+
+1. `cargo check -p mcml-config`、`cargo check -p mcml-tex-draw`（workspace 根）
+2. `cd mcml-gui/src-tauri && cargo check` —— 同时再生成 bindings.ts/listens.ts，确认 `BlockRender` const 与 `commands.main.block*` 出现
+3. `cargo test -p mcml-tex-draw`（现有 init/names 测试保持绿）
+4. `cd mcml-vue && npx vue-tsc --noEmit && npx vite build`
+5. 手动：首开提示 → 渲染进度 → 完成出网格；重启自动补渲染；搜索/分类/设为图标即时生效（InstanceIcon + 主页卡片）；语言切换改名；渲染中重复点击无效

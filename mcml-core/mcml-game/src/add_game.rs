@@ -376,6 +376,11 @@ async fn modpack<P: AsRef<Path>>(
 
     work.download().await;
 
+    if cancel.is_cancelled() {
+        crate::delete_instance(&uuid)?;
+        return Err(ErrorType::TaskCancel);
+    }
+
     if let Some(pack_gui) = &pack_gui {
         pack_gui.set_state(AddModPackState::Done);
         pack_gui.set_now(5, Some(5));

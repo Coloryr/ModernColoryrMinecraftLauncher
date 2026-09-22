@@ -43,18 +43,24 @@ export const commands = {
     setCloseGuard: (enabled: boolean) => invoke<void>("add_set_close_guard", { enabled }),
   },
   addModpack: {
+    cancel: (pid: string, fid: string) => invoke<void>("add_modpack_cancel", { pid, fid }),
+    clearDone: () => invoke<void>("add_modpack_clear_done"),
     detail: (source: string, pid: string) => invoke<ProjectDetailDto>("add_modpack_detail", { source, pid }),
     file: (source: string, pid: string, page: number, version: string | null) => invoke<FileListDto>("add_modpack_file", { source, pid, page, version }),
-    install: (source: string, projectId: string, fileId: string, group: string | null) => invoke<string>("add_modpack_install", { source, projectId, fileId, group }),
+    install: (source: string, projectId: string, fileId: string, group: string | null) => invoke<void>("add_modpack_install", { source, projectId, fileId, group }),
     list: (source: string, page: number, sort: string, category: string | null, filter: string | null, version: string | null) => invoke<ProjectDto>("add_modpack_list", { source, page, sort, category, filter, version }),
+    status: () => invoke<ModPackStatusDto>("add_modpack_status"),
   },
   addResource: {
     categories: (source: string, fileType: string) => invoke<Record<string, string>>("add_resource_categories", { source, fileType }),
+    download: (game: string, source: string, pid: string, fid: string, fileType: string, world: string | null) => invoke<void>("add_resource_download", { game, source, pid, fid, fileType, world }),
     file: (game: string, source: string, pid: string, fileType: string, page: number, version: string | null, loader: string | null) => invoke<FileListDto>("add_resource_file", { game, source, pid, fileType, page, version, loader }),
     gameVersions: (source: string) => invoke<string[]>("add_resource_game_versions", { source }),
     list: (game: string, source: string, fileType: string, page: number, sort: string, category: string | null, filter: string | null, version: string | null, loader: string | null) => invoke<ProjectDto>("add_resource_list", { game, source, fileType, page, sort, category, filter, version, loader }),
+    saves: (game: string) => invoke<ResourceSaveDto[]>("add_resource_saves", { game }),
     sortType: (source: string) => invoke<string[]>("add_resource_sort_type", { source }),
     sourceType: () => invoke<string[]>("add_resource_source_type"),
+    status: () => invoke<ResourceStatusDto>("add_resource_status"),
   },
   collect: {
     addGroup: (name: string) => invoke<void>("collect_add_group", { name }),
@@ -166,6 +172,30 @@ export type PackProgressDto = {
   subTotal: number,
 };
 
+export type ModPackTaskDto = {
+  uuid: string,
+  source: string,
+  pid: string,
+  fid: string,
+  name: string,
+  state: string,
+  now: number,
+  total: number,
+  subText: string | null,
+  subNow: number,
+  subTotal: number,
+  done: boolean,
+  failed: boolean,
+  cancelled: boolean,
+  error: string | null,
+  instanceUuid: string | null,
+};
+
+export type ModPackStatusDto = {
+  windowOpen: boolean,
+  tasks: ModPackTaskDto[],
+};
+
 export type FileListDto = {
   list: FileListItemDto[],
   count: number,
@@ -241,6 +271,25 @@ export type DecPicDto = {
   name: string,
   logo: string,
   description: string,
+};
+
+export type ResourceSaveDto = {
+  name: string,
+  dir: string,
+};
+
+export type ResourceTaskDto = {
+  pid: string,
+  fid: string,
+  name: string,
+  progress: number,
+  done: boolean,
+  failed: boolean,
+};
+
+export type ResourceStatusDto = {
+  windowOpen: boolean,
+  tasks: ResourceTaskDto[],
 };
 
 export type CollectItemDto = {

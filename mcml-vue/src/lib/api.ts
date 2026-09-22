@@ -17,14 +17,17 @@ import type {
   InstanceInfo,
   JavaInfo,
   LogEvent,
+  ModPackStatusDto,
   NewsItem,
   PackProgressDto,
   ProjectDetailDto,
   ProjectDto,
+  ResourceSaveDto,
+  ResourceStatusDto,
   StateEvent,
   VersionInfo,
 } from "./bindings";
-import { AddLoaderProgress, AddNameConflict, AddPackProgress, CloseBlocked, CollectChange, DownloadItem, DownloadTask, GameExit, GameLog, InstanceChange, JavaChange, LaunchError, LaunchState } from "./listens";
+import { AddLoaderProgress, AddModpackStatus, AddNameConflict, AddPackProgress, AddResourceStatus, CloseBlocked, CollectChange, DownloadItem, DownloadTask, GameExit, GameLog, InstanceChange, JavaChange, LaunchError, LaunchState } from "./listens";
 
 export interface CreateInstanceOpts {
   loader?: string;
@@ -172,14 +175,107 @@ export const api = {
     return commands.addModpack.detail(source, projectId);
   },
 
-  /** 安装在线整合包（实例名取自整合包元数据，返回新实例 uuid） */
+  /** 安装在线整合包（多任务：命令立即返回，任务后台安装，进度走 add-modpack-status 事件） */
   async installModpack(
     source: string,
     projectId: string,
     fileId: string,
     group: string | null,
-  ): Promise<string> {
+  ): Promise<void> {
     return commands.addModpack.install(source, projectId, fileId, group);
+  },
+
+  /** 查询整合包安装任务总览（挂载时同步一次，之后靠事件） */
+  async getModpackStatus(): Promise<ModPackStatusDto> {
+    return commands.addModpack.status();
+  },
+
+  // ---------------- 在线资源（实例设置 → 添加资源） ----------------
+
+  /** 获取某下载源某资源类型的分类（键 = 传给后端的分类值，值 = 显示名） */
+  async getResourceCategories(source: string, fileType: string): Promise<Record<string, string>> {
+    return commands.addResource.categories(source, fileType);
+  },
+
+  /** 获取某下载源的排序方式列表（取值即后端枚举线串，可原样回传） */
+  async getResourceSorts(source: string): Promise<string[]> {
+    return commands.addResource.sortType(source);
+  },
+
+  /** 获取某下载源支持的游戏版本列表 */
+  async getResourceVersions(source: string): Promise<string[]> {
+    return commands.addResource.gameVersions(source);
+  },
+
+  /** 搜索在线资源（page 从 0 开始；category / filter / version / loader 传 null 表示不过滤） */
+  async searchResources(
+    game: string,
+    source: string,
+    fileType: string,
+    page: number,
+    sort: string,
+    category: string | null,
+    filter: string | null,
+    version: string | null,
+    loader: string | null,
+  ): Promise<ProjectDto> {
+    return commands.addResource.list(
+      game,
+      source,
+      fileType,
+      page,
+      sort,
+      category,
+      filter,
+      version,
+      loader,
+    );
+  },
+
+  /** 获取某资源的可下载版本列表（page 从 0 开始；version / loader 传 null 表示不过滤） */
+  async getResourceFiles(
+    game: string,
+    source: string,
+    projectId: string,
+    fileType: string,
+    page: number,
+    version: string | null,
+    loader: string | null,
+  ): Promise<FileListDto> {
+    return commands.addResource.file(game, source, projectId, fileType, page, version, loader);
+  },
+
+  /** 获取实例的存档列表（下载数据包时选择目标存档） */
+  async getResourceSaves(game: string): Promise<ResourceSaveDto[]> {
+    return commands.addResource.saves(game);
+  },
+
+  /** 下载资源到实例（fileType = mod / resourcepack / shaderpack / save / dataPacks；
+   *  数据包必须传 world = 存档文件夹名；命令立即返回，下载走全局下载器） */
+  async downloadResource(
+    game: string,
+    source: string,
+    projectId: string,
+    fileId: string,
+    fileType: string,
+    world: string | null,
+  ): Promise<void> {
+    return commands.addResource.download(game, source, projectId, fileId, fileType, world);
+  },
+
+  /** 查询资源下载任务总览（挂载时同步一次，之后靠事件） */
+  async getResourceStatus(): Promise<ResourceStatusDto> {
+    return commands.addResource.status();
+  },
+
+  /** 取消一个进行中的整合包安装任务（pid + fid 定位） */
+  async cancelModpackInstall(pid: string, fid: string): Promise<void> {
+    return commands.addModpack.cancel(pid, fid);
+  },
+
+  /** 清除已结束（完成 / 失败 / 取消）的整合包安装任务 */
+  async clearModpackDone(): Promise<void> {
+    return commands.addModpack.clearDone();
   },
 
   /** 取消进行中的安装任务 */
@@ -397,6 +493,16 @@ export function onAddNameConflict(
 /** 整合包安装进度（本地压缩包 / 在线整合包安装共用） */
 export function onAddPackProgress(cb: (e: PackProgressDto) => void): Promise<UnlistenFn> {
   return listen<PackProgressDto>(AddPackProgress, (e) => cb(e.payload));
+}
+
+/** 整合包安装任务总览（多任务进度条，下载整合包窗口 / 主窗口共用） */
+export function onAddModpackStatus(cb: (e: ModPackStatusDto) => void): Promise<UnlistenFn> {
+  return listen<ModPackStatusDto>(AddModpackStatus, (e) => cb(e.payload));
+}
+
+/** 资源下载任务总览事件（任务增删 / 进度变化 / 移除时广播） */
+export function onAddResourceStatus(cb: (e: ResourceStatusDto) => void): Promise<UnlistenFn> {
+  return listen<ResourceStatusDto>(AddResourceStatus, (e) => cb(e.payload));
 }
 
 export function answerNameConflict(id: number, answer: boolean): Promise<void> {

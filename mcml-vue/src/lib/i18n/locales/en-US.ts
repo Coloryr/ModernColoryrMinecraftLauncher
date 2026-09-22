@@ -578,6 +578,12 @@ export default {
   "modpack.noVersions": "No versions available for this game version",
   "modpack.install": "Install",
   "modpack.installDone": "Modpack {name} installed",
+  "modpack.bar.running": "Installing {count} modpack(s)",
+  "modpack.bar.clearDone": "Clear finished",
+  "modpack.bar.cancel": "Cancel",
+  "modpack.bar.cancelled": "Cancelled",
+  "modpack.bar.failed": "Failed",
+  "modpack.bar.cancelFail": "Cancel failed: {msg}",
   "modpack.prevPage": "Prev",
   "modpack.nextPage": "Next",
   "modpack.unknownSize": "Unknown size",
@@ -591,6 +597,28 @@ export default {
   "modpack.groupPlaceholder": "Group (empty = default)",
   "modpack.star": "Star",
   "modpack.unstar": "Unstar",
+
+  // Add resource window
+  "addResource.mods": "Mods",
+  "addResource.resourcepacks": "Texture Packs",
+  "addResource.shaders": "Shader Packs",
+  "addResource.saves": "Worlds",
+  "addResource.datapacks": "Data Packs",
+  "addResource.searchHint": "Search resources…",
+  "addResource.empty": "No matching resources found",
+  "addResource.modLoader": "Loader",
+  "addResource.loader.normal": "All",
+  "addResource.chooseSave": "Choose a World",
+  "addResource.instance": "Target instance",
+  "addResource.chooseSaveHint": "Choose the world to install the data pack into",
+  "addResource.download": "Download",
+  "addResource.downloadOk": "{name} added to downloads",
+  "addResource.bar.running": "Downloading {count} resources",
+  "addResource.bar.done": "Done",
+  "addResource.bar.failed": "Failed",
+  "addResource.noInstance": "No instance selected — pick one in the main window first",
+  "addResource.saveSourceLimit": "World downloads are only available on CurseForge",
+  "err.saveNotFound": "Choose a world first",
 
   // Window titles
   "winTitle.addModpack": "Download Modpacks",
@@ -641,6 +669,8 @@ export default {
   "err.badFileId": "Invalid file id",
   "err.fileNotFound": "File not found for this version",
   "err.groupNotFound": "Group not found",
+  "err.alreadyDownloading": "This modpack is already being installed",
+  "err.taskNotFound": "Install task not found",
 };
 
 export const faqs: Array<{ q: string; a: string }> = [

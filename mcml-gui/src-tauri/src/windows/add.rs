@@ -186,7 +186,7 @@ impl IAddModPackGui for PackProgressGui {
 }
 
 /// 安装阶段 ID（与前端 i18n 键对应）
-fn pack_state_id(state: AddModPackState) -> &'static str {
+pub(crate) fn pack_state_id(state: AddModPackState) -> &'static str {
     match state {
         AddModPackState::DownloadPack => "downloadPack",
         AddModPackState::ReadInfo => "readInfo",

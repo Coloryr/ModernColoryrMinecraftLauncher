@@ -55,6 +55,7 @@ use std::{
 use mcml_base::{file_item::FileItemObj};
 use mcml_names::{i18_items::error_type::CoreResult, names};
 use mcml_sys::path_helper;
+use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::{
@@ -424,6 +425,16 @@ pub fn cancel_task(id: u64) -> bool {
 /// `true` — 全部下载成功
 /// `false` — 下载被停止或有文件下载失败
 pub async fn start_download_task(items: Vec<FileItemObj>) -> bool {
+    start_download_task_cancellable(items, CancellationToken::new()).await
+}
+
+/// 创建新下载任务并开始下载，外部可通过 `cancel` 取消
+///
+/// 取消后任务被移出队列（在途文件自然结束），返回 `false`
+pub async fn start_download_task_cancellable(
+    items: Vec<FileItemObj>,
+    cancel: CancellationToken,
+) -> bool {
     if STOP.load(Ordering::SeqCst) {
         return false;
     }
@@ -445,7 +456,16 @@ pub async fn start_download_task(items: Vec<FileItemObj>) -> bool {
         item.run();
     }
 
-    task_handel.wait_done().await
+    tokio::select! {
+        res = task_handel.wait_done() => res,
+        _ = cancel.cancelled() => {
+            // 与 cancel_task 相同：移出队列并唤醒完成等待
+            TASKS.write().unwrap().retain(|t| t.id != id);
+            task_handel.cancel();
+            task_done(&task_handel);
+            false
+        }
+    }
 }
 
 // ============================================================================

@@ -165,6 +165,9 @@ impl mcml_downloader::IDownloadGui for DownloadGuiHook {
         // 线程状态表始终刷新（速度采样需要每次回调）
         Self::track(thread, file, &name, &state_id);
 
+        // 资源下载进度（添加资源窗口顶部进度条）：按目标文件路径匹配任务表
+        crate::windows::add_resource::on_download_item(file, &self.app);
+
         // 事件按 (文件名, 状态) 去重，避免按块刷屏
         {
             let mut last = self.last.lock().unwrap();
