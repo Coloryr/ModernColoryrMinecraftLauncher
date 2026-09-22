@@ -442,6 +442,9 @@ pub struct ConfigObj {
     /// 游戏文件检查设置
     #[serde(rename = "GameCheck")]
     pub check: GameCheckObj,
+    /// 方块贴图已渲染（用户同意后开启；开启后启动时自动补渲染缺失版本）
+    #[serde(rename = "BlockRender")]
+    pub block_render: bool,
 }
 
 impl Default for ConfigObj {
@@ -454,6 +457,7 @@ impl Default for ConfigObj {
             jvm_arg: RunArgObj::new(),
             window: WindowSettingObj::new(),
             check: GameCheckObj::default(),
+            block_render: false,
         }
     }
 }

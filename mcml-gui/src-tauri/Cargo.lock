@@ -2973,6 +2973,7 @@ dependencies = [
  "mcml-skin",
  "mcml-skin-draw",
  "mcml-sys",
+ "mcml-tex-draw",
  "rfd",
  "serde",
  "serde_json",

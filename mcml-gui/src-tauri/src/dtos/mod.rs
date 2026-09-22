@@ -28,5 +28,6 @@ pub use download_dto::{
 };
 pub use gui_config_dto::{GuiConfigDto, MainWindowConfigDto};
 pub use main_dto::{
-    ErrorEvent, ExitEvent, InstanceChangeEvent, InstancePatch, LogEvent, NewsItem, StateEvent,
+    BlockItemDto, BlockStatusDto, ErrorEvent, ExitEvent, InstanceChangeEvent, InstancePatch,
+    LogEvent, NewsItem, StateEvent,
 };

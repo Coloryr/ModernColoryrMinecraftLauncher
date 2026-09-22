@@ -384,6 +384,29 @@ pub fn init<P: AsRef<Path>>(path: P) {
     ICON_DIR.get_or_init(|| path.as_ref().join(names::IMAGE_DIR));
 }
 
+/// 方块贴图（`mcml-image/block/<方块ID>`）：
+/// PNG 直接读盘透传，不进内存缓存——重渲染后立即生效；
+/// webview 自身的缓存由 URL 上的 `?v=<版本>` 破掉
+fn load_block_image(uri: &[&str], res: UriSchemeResponder) {
+    if uri.len() != 2 {
+        send_bad(res);
+        return;
+    }
+    let Some(file) = mcml_tex_draw::get_block_path(uri[1]) else {
+        send_bad(res);
+        return;
+    };
+    match path_helper::read_byte(&file) {
+        Ok(data) => send_png(res, data),
+        Err(_) => send_bad(res),
+    }
+}
+
+/// 实例图标内存缓存失效（实例图标被外部更换后调用，让下次请求重读磁盘）
+pub fn clear_instance_image(uuid: &Uuid) {
+    INSTANCE_IMAGE.write().unwrap().remove(uuid);
+}
+
 /// 图标请求名：网址的 sha256（十六进制小写，与旧启动器的缓存命名一致）
 ///
 /// 同一个网址每次都得到同一个名字，前端拿到的地址因此是稳定的，
@@ -464,6 +487,8 @@ pub async fn url_image(req: Request<Vec<u8>>, res: UriSchemeResponder) {
         load_skin_image(&uri, res).await;
     } else if image_type == "icon" {
         load_icon_image(&uri, res).await;
+    } else if image_type == "block" {
+        load_block_image(&uri, res);
     } else {
         send_bad(res);
     }
@@ -473,7 +498,7 @@ pub async fn url_image(req: Request<Vec<u8>>, res: UriSchemeResponder) {
 ///
 /// Windows / Android 上自定义协议被映射到 `http://<scheme>.localhost`，
 /// 其余平台是 `<scheme>://localhost`（与 Tauri `convertFileSrc` 的规则一致）。
-fn image_base_url() -> &'static str {
+pub fn image_base_url() -> &'static str {
     if cfg!(windows) || cfg!(target_os = "android") {
         "http://mcml-image.localhost"
     } else {

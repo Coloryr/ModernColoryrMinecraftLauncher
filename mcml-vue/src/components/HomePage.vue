@@ -1,11 +1,13 @@
 <script setup lang="ts">
-// 启动器主页：上次启动实例 / 联机大厅 / 每日抽奖 入口 + Minecraft 新闻
+// 启动器主页：上次启动实例 / 联机大厅 / 方块列表 入口 + Minecraft 新闻
 // empty=true 时（无任何实例）顶部展示空实例引导块（含添加实例按钮）
+import { ref } from "vue";
 import { t } from "../lib/i18n";
 import { showToast } from "../lib/toast";
 import type { InstanceInfo, NewsItem } from "../lib/bindings";
 import NewsPanel from "./NewsPanel.vue";
 import InstanceIcon from "./InstanceIcon.vue";
+import BlockPanel from "./BlockPanel.vue";
 
 withDefaults(
   defineProps<{
@@ -36,14 +38,21 @@ const emit = defineEmits<{
 function entry(name: string) {
   showToast(t("actions.wip", { name }));
 }
+
+/** 方块列表视图（点方块卡切入，返回键回主页） */
+const showBlocks = ref(false);
 </script>
 
 <template>
   <div class="home-page">
     <!-- 页头：主页标题 + 返回实例列表（主页自己的页面级控件，不占卡片槽位） -->
     <div v-if="!empty" class="page-head">
-      <h2 class="page-title">{{ t("home.entry") }}</h2>
-      <button class="page-back" @click="emit('back')">
+      <h2 class="page-title">{{ showBlocks ? t("home.blocks") : t("home.entry") }}</h2>
+      <button v-if="showBlocks" class="page-back" @click="showBlocks = false">
+        <span class="page-back-arrow">‹</span>
+        {{ t("blocks.back") }}
+      </button>
+      <button v-else class="page-back" @click="emit('back')">
         <span class="page-back-arrow">‹</span>
         {{ t("home.backToList") }}
       </button>
@@ -84,49 +93,56 @@ function entry(name: string) {
       <button class="last-open" @click="emit('select', currentInstance)">›</button>
     </div>
 
-    <div class="entry-cards">
-      <!-- 联机大厅 -->
-      <button class="entry-card lobby" @click="entry(t('home.lobby'))">
-        <span class="entry-icon">
-          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-            <circle cx="9" cy="7" r="4" />
-            <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
-          </svg>
-        </span>
-        <span class="entry-text">
-          <span class="entry-title">{{ t("home.lobby") }}</span>
-          <span class="entry-desc">{{ t("home.lobbyDesc") }}</span>
-        </span>
-        <span class="entry-arrow">›</span>
-      </button>
+    <template v-if="!showBlocks">
+      <div class="entry-cards">
+        <!-- 联机大厅 -->
+        <button class="entry-card lobby" @click="entry(t('home.lobby'))">
+          <span class="entry-icon">
+            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+              <circle cx="9" cy="7" r="4" />
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
+            </svg>
+          </span>
+          <span class="entry-text">
+            <span class="entry-title">{{ t("home.lobby") }}</span>
+            <span class="entry-desc">{{ t("home.lobbyDesc") }}</span>
+          </span>
+          <span class="entry-arrow">›</span>
+        </button>
 
-      <!-- 每日抽奖 -->
-      <button class="entry-card lottery" @click="entry(t('home.lottery'))">
-        <span class="entry-icon">
-          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 2 14.5 8.5 21 10l-6.5 1.5L12 18l-2.5-6.5L3 10l6.5-1.5L12 2z" />
-            <path d="M19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15z" />
-          </svg>
-        </span>
-        <span class="entry-text">
-          <span class="entry-title">{{ t("home.lottery") }}</span>
-          <span class="entry-desc">{{ t("home.lotteryDesc") }}</span>
-        </span>
-        <span class="entry-arrow">›</span>
-      </button>
-    </div>
+        <!-- 方块列表 -->
+        <button class="entry-card lottery" @click="showBlocks = true">
+          <span class="entry-icon">
+            <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 3 4.5 7.5v9L12 21l7.5-4.5v-9L12 3z" />
+              <path d="M4.5 7.5 12 12l7.5-4.5" />
+              <path d="M12 12v9" />
+              <path d="M19.5 11v6L12 21" />
+            </svg>
+          </span>
+          <span class="entry-text">
+            <span class="entry-title">{{ t("home.blocks") }}</span>
+            <span class="entry-desc">{{ t("home.blocksDesc") }}</span>
+          </span>
+          <span class="entry-arrow">›</span>
+        </button>
+      </div>
 
-    <NewsPanel
-      :items="items"
-      :loading="loading"
-      :page="page"
-      :has-more="hasMore"
-      @refresh="emit('refresh')"
-      @prev="emit('prev')"
-      @next="emit('next')"
-      @open="(url: string) => emit('open', url)"
-    />
+      <NewsPanel
+        :items="items"
+        :loading="loading"
+        :page="page"
+        :has-more="hasMore"
+        @refresh="emit('refresh')"
+        @prev="emit('prev')"
+        @next="emit('next')"
+        @open="(url: string) => emit('open', url)"
+      />
+    </template>
+
+    <!-- 方块列表视图：搜索 / 分类 / 设为实例图标 -->
+    <BlockPanel v-else :current-instance="currentInstance" />
   </div>
 </template>
 

@@ -80,6 +80,10 @@ export const commands = {
   main: {
     addGroup: (name: string) => invoke<boolean>("main_add_group", { name }),
     addJava: (name: string, path: string) => invoke<boolean>("main_add_java", { name, path }),
+    blockList: (lang: string) => invoke<BlockItemDto[]>("main_block_list", { lang }),
+    blockRenderStart: (force: boolean) => invoke<boolean>("main_block_render_start", { force }),
+    blockSetIcon: (uuid: string, id: string) => invoke<boolean>("main_block_set_icon", { uuid, id }),
+    blockStatus: () => invoke<BlockStatusDto>("main_block_status"),
     createInstance: (name: string, version: string, loader: string | null, loaderVersion: string | null, group: string | null, modpackType: string | null, source: string | null) => invoke<InstanceInfo>("main_create_instance", { name, version, loader, loaderVersion, group, modpackType, source }),
     deleteInstance: (uuid: string) => invoke<boolean>("main_delete_instance", { uuid }),
     getGameLog: (uuid: string) => invoke<string[]>("main_get_game_log", { uuid }),
@@ -91,6 +95,7 @@ export const commands = {
     getNews: (page: number | null) => invoke<NewsItem[]>("main_get_news", { page }),
     getRunning: () => invoke<string[]>("main_get_running"),
     getVersions: () => invoke<VersionInfo[]>("main_get_versions"),
+    imageBaseUrl: () => invoke<string>("main_image_base_url"),
     launchGame: (uuid: string, userName: string) => invoke<void>("main_launch_game", { uuid, userName }),
     moveGroup: (name: string, index: number) => invoke<boolean>("main_move_group", { name, index }),
     moveInstance: (uuid: string, group: string | null, index: number) => invoke<boolean>("main_move_instance", { uuid, group, index }),
@@ -429,6 +434,24 @@ export type InstancePatch = {
   serverUrl?: string | null,
   lang?: string | null,
   logEncoding?: string | null,
+};
+
+export type BlockItemDto = {
+  id: string,
+  name: string,
+  cat: string,
+  image: string,
+};
+
+export type BlockStatusDto = {
+  rendered: boolean,
+  optIn: boolean,
+  version: string,
+  running: boolean,
+  now: number,
+  total: number,
+  text: string | null,
+  error: string | null,
 };
 
 export type Theme = "Dark" | "Light";

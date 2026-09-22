@@ -39,6 +39,7 @@ mcml-auth = { path = "../../mcml-core/mcml-auth" }
 mcml-names = { path = "../../mcml-core/mcml-names" }
 mcml-skin = { path = "../../mcml-core/mcml-skin" }
 mcml-skin-draw = { path = "../../mcml-core/mcml-skin-draw" }
+mcml-tex-draw = { path = "../../mcml-core/mcml-tex-draw" }
 
 uuid = { version = "~1.26.0", features = ["v4", "serde"] }
 dirs = "~6.0.0"
