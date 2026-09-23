@@ -1,7 +1,7 @@
 // English (US) language pack
 export default {
   // App
-  "app.name": "ModernMinecraftLauncher",
+  "app.name": "MML Launcher",
   "app.sub": "Modern Minecraft Launcher",
 
   // Common window

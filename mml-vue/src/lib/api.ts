@@ -20,6 +20,7 @@ import type {
   InstanceArgs,
   InstanceInfo,
   JavaInfo,
+  LoadState,
   LogEvent,
   ModItemDto,
   ModPackStatusDto,
@@ -566,6 +567,11 @@ export function onBlockRender(cb: (e: BlockStatusDto) => void): Promise<Unlisten
 /** mml-image 协议访问前缀（拼实例图标等本地图片地址用） */
 export function getImageBaseUrl(): Promise<string> {
   return commands.main.imageBaseUrl();
+}
+
+/** 核心加载状态（启动兜底：load-done 事件可能在页面监听前就发出） */
+export function getLoadState(): Promise<LoadState> {
+  return commands.main.loadState();
 }
 
 // ==================== 实例资源管理 ====================

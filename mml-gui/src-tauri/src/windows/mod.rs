@@ -603,9 +603,19 @@ pub fn window_set_title(window: WebviewWindow, title: String) -> Result<(), Stri
 }
 
 /// 获取 GUI 状态（无文件时返回默认值；前端 wire 为 DTO，TS 命名 camelCase）
+///
+/// 首次启动（无配置文件）时默认主题跟随系统深浅色——WebView2 的窗口主题
+/// 即系统的应用模式。此时不落盘，用户第一次改设置才会把当时的主题存进文件
 #[tauri::command]
-pub fn window_get_gui_config() -> GuiConfigDto {
-    crate::gui_config::get().into()
+pub fn window_get_gui_config(window: WebviewWindow) -> GuiConfigDto {
+    let mut config = crate::gui_config::get();
+    if crate::gui_config::is_fresh() {
+        config.theme = match window.theme() {
+            Ok(tauri::Theme::Light) => crate::gui_config::Theme::Light,
+            _ => crate::gui_config::Theme::Dark,
+        };
+    }
+    config.into()
 }
 
 /// 保存 GUI 状态到 gui_config.json（前端 DTO 转内部 GuiConfig）

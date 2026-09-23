@@ -6,7 +6,10 @@
 
 use std::{
     path::{Path, PathBuf},
-    sync::{Arc, OnceLock, RwLock},
+    sync::{
+        Arc, OnceLock, RwLock,
+        atomic::{AtomicBool, Ordering},
+    },
 };
 
 use mml_base::serialize_tools;
@@ -172,6 +175,8 @@ impl Default for GuiConfig {
 
 static FILE: OnceLock<PathBuf> = OnceLock::new();
 static CONFIG: OnceLock<Arc<RwLock<GuiConfig>>> = OnceLock::new();
+/// 启动时没有配置文件（用户还没做过任何显式设置，默认值应跟随系统主题）
+static FRESH_CONFIG: AtomicBool = AtomicBool::new(false);
 
 /// 读取配置（启动时调用）
 pub fn init<P: AsRef<Path>>(path: P) {
@@ -183,9 +188,15 @@ pub fn init<P: AsRef<Path>>(path: P) {
     {
         data
     } else {
+        FRESH_CONFIG.store(true, Ordering::Release);
         GuiConfig::default()
     };
     let _ = CONFIG.set(Arc::new(RwLock::new(config)));
+}
+
+/// 启动时是否没有配置文件（前端据此让默认主题跟随系统）
+pub fn is_fresh() -> bool {
+    FRESH_CONFIG.load(Ordering::Acquire)
 }
 
 /// 当前配置
@@ -201,6 +212,8 @@ pub fn set(config: GuiConfig) {
     if let Some(c) = CONFIG.get() {
         *c.write().unwrap() = config;
     }
+    // 用户做过显式设置：配置已落盘，不再视为首次启动
+    FRESH_CONFIG.store(false, Ordering::Release);
     save();
 }
 

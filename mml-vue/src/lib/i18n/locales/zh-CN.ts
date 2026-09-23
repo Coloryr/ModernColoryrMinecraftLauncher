@@ -1,7 +1,7 @@
 // 中文（简体）语言包
 export default {
   // 应用
-  "app.name": "ModernMinecraftLauncher",
+  "app.name": "M²L 启动器",
   "app.sub": "Modern Minecraft Launcher",
 
   // 通用窗口

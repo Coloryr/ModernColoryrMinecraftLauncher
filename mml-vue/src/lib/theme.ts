@@ -38,8 +38,16 @@ export const ACCENTS: { id: AccentId; color: string; check: string }[] = [
 const THEME_KEY = "mml.theme";
 const ACCENT_KEY = "mml.accent";
 
+/** 系统当前的应用深浅色（无显式选择时的默认来源） */
+export function systemTheme(): Theme {
+  return matchMedia("(prefers-color-scheme: dark)").matches ? "Dark" : "Light";
+}
+
 const storedTheme = localStorage.getItem(THEME_KEY) as Theme | null;
-export const theme = ref<Theme>(storedTheme === "Light" ? "Light" : "Dark");
+// 显式存过的用存储值，否则跟随系统（配置加载前先用它首绘，避免闪一下错误主题）
+export const theme = ref<Theme>(
+  storedTheme === "Light" || storedTheme === "Dark" ? storedTheme : systemTheme(),
+);
 
 const storedAccent = localStorage.getItem(ACCENT_KEY) as AccentId | null;
 export const accent = ref<AccentId>(

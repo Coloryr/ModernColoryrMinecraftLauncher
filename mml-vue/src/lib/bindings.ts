@@ -105,6 +105,7 @@ export const commands = {
     getVersions: () => invoke<VersionInfo[]>("main_get_versions"),
     imageBaseUrl: () => invoke<string>("main_image_base_url"),
     launchGame: (uuid: string, userName: string) => invoke<void>("main_launch_game", { uuid, userName }),
+    loadState: () => invoke<LoadState>("main_load_state"),
     moveGroup: (name: string, index: number) => invoke<boolean>("main_move_group", { name, index }),
     moveInstance: (uuid: string, group: string | null, index: number) => invoke<boolean>("main_move_instance", { uuid, group, index }),
     openUrl: (url: string) => invoke<void>("main_open_url", { url }),
