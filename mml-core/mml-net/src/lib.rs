@@ -32,7 +32,7 @@
 use mml_base::serialize_tools;
 use mml_config::config_obj::{ProxyState, ProxyType};
 use mml_names::i18_items::error_type::{
-    CoreResult, ErrorType, HttpReadErrorData, HttpReqErrorData,
+    CoreResult, ErrorType, HttpErrorData,
 };
 use reqwest::header::{HeaderMap, HeaderValue, IF_NONE_MATCH, USER_AGENT};
 use reqwest::{Proxy, Request, Response};
@@ -70,12 +70,13 @@ const DEFAULT_USER_AGENT: &str = "mml/1.0.0";
 
 /// 将 reqwest 错误映射为项目统一的 ErrorType
 fn map_err(error: reqwest::Error) -> ErrorType {
-    ErrorType::HttpReqError(HttpReqErrorData {
+    ErrorType::HttpError(HttpErrorData {
         error: error.to_string(),
         url: match error.url() {
             Some(url) => url.to_string(),
             None => Default::default(),
         },
+        status: None,
     })
 }
 
@@ -585,17 +586,17 @@ pub fn get_login_client() -> Arc<Client> {
 
 /// 处理 HTTP 响应：检查状态码并解析 JSON
 ///
-/// 如果状态码表示失败（非 2xx），返回 `HttpReadError`。
+/// 如果状态码表示失败（非 2xx），返回 `HttpError`。
 /// 成功时反序列化 JSON 为指定类型；解析失败时把请求地址一并写进错误信息。
 pub async fn handle_response<T: DeserializeOwned>(resp: reqwest::Response) -> CoreResult<T> {
     let status = resp.status();
     let url = resp.url().to_string();
     if !status.is_success() {
         let error = resp.text().await.unwrap_or_default();
-        return Err(ErrorType::HttpReadError(HttpReadErrorData {
+        return Err(ErrorType::HttpError(HttpErrorData {
             error,
             url,
-            status: status.as_u16(),
+            status: Some(status.as_u16()),
         }));
     }
     let bytes = resp.bytes().await.map_err(map_err)?;

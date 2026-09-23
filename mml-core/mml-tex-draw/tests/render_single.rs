@@ -2,9 +2,9 @@
 //!
 //! 运行：cargo test -p mml-tex-draw --test render_single -- --ignored --nocapture
 //! 环境变量：
-//! - M²L_TEST_JAR 指定客户端jar，缺省用反编译参考jar
-//! - M²L_TEST_BLOCK 指定方块模型（如 block/big_dripleaf），缺省 block/oak_stairs
-//! - M²L_TEST_ITEM 指定物品ID（如 enchanted_book），缺省 apple
+//! - MML_TEST_JAR 指定客户端jar，缺省用反编译参考jar
+//! - MML_TEST_BLOCK 指定方块模型（如 block/big_dripleaf），缺省 block/oak_stairs
+//! - MML_TEST_ITEM 指定物品ID（如 enchanted_book），缺省 apple
 //! 出图到 tests/out/
 
 use std::{collections::HashMap, path::PathBuf};
@@ -12,10 +12,10 @@ use std::{collections::HashMap, path::PathBuf};
 use mml_base::archives::BaseArchive;
 
 fn ref_jar() -> PathBuf {
-    std::env::var("M²L_TEST_JAR").map(PathBuf::from).unwrap_or_else(|_| {
+    std::env::var("MML_TEST_JAR").map(PathBuf::from).unwrap_or_else(|_| {
         // 优先用渲染测试已下载的客户端jar（tests/out/run），其次H盘Temp的反编译参考jar
         let run_jar = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(
-            "tests/out/run/minecraft/libraries/net/minecraft/client/26.2/client-26.2.jar",
+            "tests/out/run/minecraft/libraries/net/minecraft/client/26.3/client-26.3.jar",
         );
         if run_jar.exists() {
             run_jar
@@ -51,7 +51,7 @@ fn render_one_block() {
     assert!(jar.exists(), "参考jar不存在：{}", jar.display());
     let archive = BaseArchive::open(&jar).unwrap();
 
-    let rel = std::env::var("M²L_TEST_BLOCK").unwrap_or_else(|_| "block/oak_stairs".into());
+    let rel = std::env::var("MML_TEST_BLOCK").unwrap_or_else(|_| "block/oak_stairs".into());
     let name = rel.rsplit('/').next().unwrap_or(&rel).to_string();
 
     let mut cache = HashMap::new();
@@ -138,7 +138,7 @@ fn render_one_item() {
     assert!(jar.exists(), "参考jar不存在：{}", jar.display());
     let archive = BaseArchive::open(&jar).unwrap();
 
-    let id = std::env::var("M²L_TEST_ITEM").unwrap_or_else(|_| "apple".into());
+    let id = std::env::var("MML_TEST_ITEM").unwrap_or_else(|_| "apple".into());
     let name = id.rsplit('/').next().unwrap_or(&id).to_string();
 
     // 物品输出目录初始化到独立子目录（渲染结果再拷到tests/out查看）

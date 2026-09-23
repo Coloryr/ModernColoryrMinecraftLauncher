@@ -183,7 +183,7 @@ fn spawn_load_task() {
 /// 保存数据
 pub fn save() -> CoreResult<()> {
     let file = BLOCK_FILE.get().ok_or_else(|| {
-        ErrorType::FileNotExists(PathNotExistsData {
+        ErrorType::PathNotExists(PathNotExistsData {
             path: PathBuf::from(names::BLOCK_FILE),
         })
     })?;
@@ -208,6 +208,7 @@ pub fn get_block_path(id: &str) -> Option<PathBuf> {
 }
 
 pub use block::icons::SpecialForm;
+pub use block::skin::{SKIN_CAT, add_skin_block, remove_skin_block};
 
 /// 判断方块ID是否有特殊形态图标，返回对应的形态
 ///

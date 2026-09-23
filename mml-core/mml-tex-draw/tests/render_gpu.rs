@@ -2,7 +2,7 @@
 //!
 //! 每个后端一个用例，可单独过滤运行（VK/GL在部分机器上可能无适配器，失败只打印跳过）：
 //! `cargo test -p mml-tex-draw --test render_gpu -- --ignored --nocapture render_dx12`
-//! 环境变量 M²L_TEST_JAR 指定客户端jar，缺省用反编译参考jar
+//! 环境变量 MML_TEST_JAR 指定客户端jar，缺省用反编译参考jar
 //! 输出：tests/out/{furnace,apple,enchanted_book}_{DX12,VULKAN,GL}.png
 
 use std::{collections::HashMap, path::PathBuf, sync::Once};
@@ -15,7 +15,7 @@ use mml_tex_draw::{
 use tiny_skia::Pixmap;
 
 fn ref_jar() -> PathBuf {
-    std::env::var("M²L_TEST_JAR").map(PathBuf::from).unwrap_or_else(|_| {
+    std::env::var("MML_TEST_JAR").map(PathBuf::from).unwrap_or_else(|_| {
         PathBuf::from(std::env::var("TEMP").unwrap_or_default())
             .join("mml-262-ref")
             .join("client.jar")

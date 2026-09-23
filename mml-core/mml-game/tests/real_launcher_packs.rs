@@ -3,7 +3,7 @@
 //! - M²L（= ColorMC）实例压缩包：核心导出 API 做导出 → 导入 roundtrip（离线），
 //!   另有真实导出的 colormc-instance.zip 用例。
 //! - HMCL / MMC(Prism) 导出包、HMCL 整包、MultiMC 整包：真实启动器生成的压缩包，
-//!   放到 `tests/packs/`（或环境变量 `M²L_REAL_PACK_DIR` 指定的目录），文件不存在时
+//!   放到 `tests/packs/`（或环境变量 `MML_REAL_PACK_DIR` 指定的目录），文件不存在时
 //!   自动跳过。断言基于包内元数据动态推导，不写死版本号。
 //!
 //! 全局初始化每进程一次，互斥锁串行各用例。
@@ -25,9 +25,9 @@ use uuid::Uuid;
 
 mod common;
 
-/// 真实导出包存放目录（环境变量 M²L_REAL_PACK_DIR 或 tests/packs/）
+/// 真实导出包存放目录（环境变量 MML_REAL_PACK_DIR 或 tests/packs/）
 fn pack_dir() -> PathBuf {
-    std::env::var("M²L_REAL_PACK_DIR")
+    std::env::var("MML_REAL_PACK_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|_| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/packs"))
 }

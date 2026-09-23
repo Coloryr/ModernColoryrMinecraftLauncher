@@ -14,7 +14,8 @@ export type WindowKind =
   | "add_modpack"
   | "add_resource"
   | "collect"
-  | "download";
+  | "download"
+  | "log";
 
 export interface WindowInfo {
   kind: WindowKind;
@@ -37,6 +38,7 @@ export const WINDOW_REGISTRY: WindowInfo[] = [
   { kind: "add_resource", title: "添加资源", width: 900, height: 640 },
   { kind: "collect", title: "资源收藏", width: 900, height: 640 },
   { kind: "download", title: "下载管理", width: 760, height: 600 },
+  { kind: "log", title: "运行日志", width: 960, height: 640 },
 ];
 
 export function isWindowKind(v: string | null): v is WindowKind {

@@ -1,13 +1,13 @@
 <script setup lang="ts">
-import { ref, watch, nextTick } from "vue";
+import { computed, ref, watch, nextTick } from "vue";
 import { t } from "../lib/i18n";
-import type { InstanceInfo } from "../lib/bindings";
+import type { InstanceInfo, LogLine } from "../lib/bindings";
 import InstanceIcon from "./InstanceIcon.vue";
 
 const props = defineProps<{
   instance: InstanceInfo | null;
   statusText: string;
-  logs: string[];
+  logs: LogLine[];
   running: boolean;
 }>();
 
@@ -27,6 +27,47 @@ watch(
     });
   },
 );
+
+// ================= 筛选器（线程 / 级别 / 分类） =================
+
+const ALL = "";
+const threadFilter = ref(ALL);
+const levelFilter = ref(ALL);
+const categoryFilter = ref(ALL);
+
+/** 去空去重排序 */
+function uniq(values: string[]): string[] {
+  return [...new Set(values.filter(Boolean))].sort();
+}
+
+const threadOptions = computed(() => uniq(props.logs.map((l) => l.thread)));
+const categoryOptions = computed(() => uniq(props.logs.map((l) => l.category)));
+
+/** 级别按严重度排序 */
+const levelOptions = computed(() => {
+  const set = new Set(props.logs.map((l) => l.level).filter(Boolean));
+  return ["Error", "Warn", "Info", "Debug"].filter((l) => set.delete(l)).concat([...set]);
+});
+
+const filteredLogs = computed(() =>
+  props.logs.filter(
+    (l) =>
+      (threadFilter.value === ALL || l.thread === threadFilter.value) &&
+      (levelFilter.value === ALL || l.level === levelFilter.value) &&
+      (categoryFilter.value === ALL || l.category === categoryFilter.value),
+  ),
+);
+
+watch(
+  () => props.logs.length === 0,
+  (empty) => {
+    if (empty) {
+      threadFilter.value = ALL;
+      levelFilter.value = ALL;
+      categoryFilter.value = ALL;
+    }
+  },
+);
 </script>
 
 <template>
@@ -43,9 +84,31 @@ watch(
         <span class="status-text">{{ statusText }}</span>
       </div>
 
+      <div class="filter-bar">
+        <select v-model="threadFilter" class="filter-select" :title="t('launch.filterThread')">
+          <option value="">{{ t("launch.filterThread") }} · {{ t("launch.filterAll") }}</option>
+          <option v-for="th in threadOptions" :key="th" :value="th">{{ th }}</option>
+        </select>
+        <select v-model="levelFilter" class="filter-select" :title="t('launch.filterLevel')">
+          <option value="">{{ t("launch.filterLevel") }} · {{ t("launch.filterAll") }}</option>
+          <option v-for="lv in levelOptions" :key="lv" :value="lv">{{ lv }}</option>
+        </select>
+        <select v-model="categoryFilter" class="filter-select" :title="t('launch.filterCategory')">
+          <option value="">{{ t("launch.filterCategory") }} · {{ t("launch.filterAll") }}</option>
+          <option v-for="c in categoryOptions" :key="c" :value="c">{{ c }}</option>
+        </select>
+      </div>
+
       <div ref="consoleEl" class="console">
-        <div v-for="(line, i) in logs" :key="i" class="log-line">{{ line }}</div>
-        <div v-if="logs.length === 0" class="log-empty">{{ t("launch.waitLog") }}</div>
+        <div
+          v-for="(line, i) in filteredLogs"
+          :key="i"
+          class="log-line"
+          :class="{ 'log-error': line.level === 'Error', 'log-warn': line.level === 'Warn' }"
+        >
+          {{ line.text }}
+        </div>
+        <div v-if="filteredLogs.length === 0" class="log-empty">{{ t("launch.waitLog") }}</div>
       </div>
 
       <button class="btn-stop" @click="emit('stop')">{{ t("launch.stop") }}</button>
@@ -125,10 +188,36 @@ watch(
   text-align: left;
 }
 
+.filter-bar {
+  width: 100%;
+  display: flex;
+  gap: 8px;
+}
+
+.filter-select {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
 .log-line {
   white-space: pre-wrap;
   word-break: break-all;
   color: #c8d0da;
+}
+
+.log-line.log-error {
+  color: #ff7b72;
+}
+
+.log-line.log-warn {
+  color: #e3b341;
 }
 
 .log-empty {

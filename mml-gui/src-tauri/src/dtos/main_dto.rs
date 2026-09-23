@@ -39,13 +39,30 @@ pub struct NewsItem {
 }
 
 /// 游戏日志事件
+///
+/// thread / level / category 由核心的日志解析填充（与InstanceRuntimeLog同一套正则），
+/// 解析不出的行为空串，前端筛选器据此显示"全部"
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LogEvent {
     pub uuid: String,
     pub time: String,
     pub text: String,
+    pub thread: String,
+    pub level: String,
+    pub category: String,
     pub clear: bool,
+}
+
+/// 游戏日志行（`main_get_game_log` 返回的历史条目，字段同 LogEvent 去掉事件头）
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LogLine {
+    pub time: String,
+    pub text: String,
+    pub thread: String,
+    pub level: String,
+    pub category: String,
 }
 
 /// 启动状态事件

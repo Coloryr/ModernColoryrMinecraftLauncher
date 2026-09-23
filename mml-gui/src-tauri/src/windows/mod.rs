@@ -23,6 +23,7 @@ pub mod add_resource;
 pub mod collect;
 pub mod download;
 pub mod help;
+pub mod log;
 pub mod main;
 pub mod resource;
 pub mod settings;
@@ -160,6 +161,14 @@ const WINDOWS_INFO: LazyLock<HashMap<Uuid, WindowEntry>> = LazyLock::new(|| {
             uuid!("00000000-0000-0000-0000-000000000005"),
             WindowEntry {
                 label: "mml-skin",
+                min_width: MIN_WIDTH,
+                min_height: MIN_HEIGHT,
+            },
+        ),
+        (
+            uuid!("00000000-0000-0000-0000-00000000000d"),
+            WindowEntry {
+                label: "mml-log",
                 min_width: MIN_WIDTH,
                 min_height: MIN_HEIGHT,
             },

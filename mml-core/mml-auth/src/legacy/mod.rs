@@ -119,9 +119,9 @@ pub async fn authenticate(
         .await?;
 
     if let Some(data) = obj.error_message {
-        Err(ErrorType::AuthLoginFail(data))
+        Err(ErrorType::AuthFail(data))
     } else if obj.selected_profile.is_none() && obj.available_profiles.is_none() {
-        Err(ErrorType::AuthLoginNoProfile)
+        Err(ErrorType::AuthNoProfile)
     } else if let Some(data) = obj.selected_profile {
         // 服务器明确选中了某个角色
         Ok(LegacyLoginRes {
@@ -130,7 +130,7 @@ pub async fn authenticate(
         })
     } else if let Some(list) = obj.available_profiles {
         if list.len() == 0 {
-            Err(ErrorType::AuthLoginNoProfile)
+            Err(ErrorType::AuthNoProfile)
         } else if list.len() == 1 {
             // 仅有一个角色，直接选中
             let temp = &list[0];
@@ -173,7 +173,7 @@ pub async fn authenticate(
             }
         }
     } else {
-        Err(ErrorType::AuthLoginNoProfile)
+        Err(ErrorType::AuthNoProfile)
     }
 }
 
@@ -217,9 +217,9 @@ pub async fn refresh(server: &String, login: &mut LoginObj, select: bool) -> Cor
         .await?;
 
     if let Some(data) = obj.error_message {
-        Err(ErrorType::AuthLoginFail(data))
+        Err(ErrorType::AuthFail(data))
     } else if obj.selected_profile.is_none() && !select {
-        Err(ErrorType::AuthRefreshNoProfile)
+        Err(ErrorType::AuthNoProfile)
     } else if obj.selected_profile.is_some() {
         // 服务器返回了新的角色信息，更新本地账户
         let select = obj.selected_profile.unwrap();

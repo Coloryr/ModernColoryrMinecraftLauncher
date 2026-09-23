@@ -517,7 +517,7 @@ impl InstanceSettingObj {
         }
 
         if !path.exists() {
-            return Err(ErrorType::FileNotExists(PathNotExistsData {
+            return Err(ErrorType::PathNotExists(PathNotExistsData {
                 path: PathBuf::from(name),
             }));
         }

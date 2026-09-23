@@ -1,4 +1,4 @@
-//! 26.2 固定方块图标表（生成脚本一次性提取，提交后可手工维护）
+//! 26.3 固定方块图标表（生成脚本一次性提取，26.3增量更新，提交后可手工维护）
 //!
 //! 每行：方块ID、创造模式分类（itemGroup lang键尾段）、渲染规格。
 //! 渲染规格取自 assets/minecraft/items/*.json（创造物品栏图标定义）：
@@ -31,6 +31,12 @@ pub enum IconSpec {
     /// （如 minecraft:oak_door + Open → minecraft:oak_door_open）。ID非真实方块名，
     /// 出图但不注册进方块列表（blocks()查不到），经get_block_path_form按形态取图
     Form(SpecialForm, &'static IconSpec),
+    /// 头颅（方块实体渲染器画的头部立方体，照 SkullModel/SkullBlockRenderer 的几何与摆放）：
+    /// 值 = 贴图（jar内相对路径，如 entity/zombie/zombie），
+    /// 第二项 = 是否带帽子层：玩家头/僵尸头走 humanoidHeadLayer（64×64，含 texOffs(32,0) 的帽子层），
+    /// 骷髅/凋灵骷髅/苦力怕走 mobHeadLayer（64×32 单层）。
+    /// 玩家头离线取不到皮肤缓存，用默认皮肤；猪灵头（耳朵）/龙头（下颌）是自定义模型，仍是 Skip
+    Head(&'static str, bool),
     /// 实体渲染，跳过
     Skip,
 }
@@ -127,6 +133,17 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         ]),
     ),
     (
+        "minecraft:acacia_door_open",
+        "buildingBlocks",
+        IconSpec::Form(
+            SpecialForm::Open,
+            &IconSpec::Composite(&[
+                ("block/acacia_door_bottom_left_open", [0.0, 0.0, 0.0], 90.0),
+                ("block/acacia_door_top_left_open", [0.0, 1.0, 0.0], 90.0),
+            ]),
+        ),
+    ),
+    (
         "minecraft:acacia_fence",
         "buildingBlocks",
         IconSpec::Model("block/acacia_fence_inventory"),
@@ -135,6 +152,14 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         "minecraft:acacia_fence_gate",
         "buildingBlocks",
         IconSpec::Model("block/acacia_fence_gate"),
+    ),
+    (
+        "minecraft:acacia_fence_gate_open",
+        "buildingBlocks",
+        IconSpec::Form(
+            SpecialForm::Open,
+            &IconSpec::IsoModel("block/acacia_fence_gate_open"),
+        ),
     ),
     (
         "minecraft:acacia_leaves",
@@ -188,6 +213,14 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         "minecraft:acacia_trapdoor",
         "buildingBlocks",
         IconSpec::Model("block/acacia_trapdoor_bottom"),
+    ),
+    (
+        "minecraft:acacia_trapdoor_open",
+        "buildingBlocks",
+        IconSpec::Form(
+            SpecialForm::Open,
+            &IconSpec::IsoModel("block/acacia_trapdoor_open"),
+        ),
     ),
     (
         "minecraft:acacia_wood",
@@ -267,6 +300,17 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         ]),
     ),
     (
+        "minecraft:bamboo_door_open",
+        "buildingBlocks",
+        IconSpec::Form(
+            SpecialForm::Open,
+            &IconSpec::Composite(&[
+                ("block/bamboo_door_bottom_left_open", [0.0, 0.0, 0.0], 90.0),
+                ("block/bamboo_door_top_left_open", [0.0, 1.0, 0.0], 90.0),
+            ]),
+        ),
+    ),
+    (
         "minecraft:bamboo_fence",
         "buildingBlocks",
         IconSpec::Model("block/bamboo_fence_inventory"),
@@ -275,6 +319,14 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         "minecraft:bamboo_fence_gate",
         "buildingBlocks",
         IconSpec::Model("block/bamboo_fence_gate"),
+    ),
+    (
+        "minecraft:bamboo_fence_gate_open",
+        "buildingBlocks",
+        IconSpec::Form(
+            SpecialForm::Open,
+            &IconSpec::IsoModel("block/bamboo_fence_gate_open"),
+        ),
     ),
     (
         "minecraft:bamboo_mosaic",
@@ -335,9 +387,22 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         IconSpec::Model("block/bamboo_trapdoor_bottom"),
     ),
     (
+        "minecraft:bamboo_trapdoor_open",
+        "buildingBlocks",
+        IconSpec::Form(
+            SpecialForm::Open,
+            &IconSpec::IsoModel("block/bamboo_trapdoor_open"),
+        ),
+    ),
+    (
         "minecraft:barrel",
         "functional",
         IconSpec::Model("block/barrel"),
+    ),
+    (
+        "minecraft:barrel_open",
+        "functional",
+        IconSpec::Form(SpecialForm::Open, &IconSpec::Model("block/barrel_open")),
     ),
     (
         "minecraft:basalt",
@@ -391,6 +456,17 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         ]),
     ),
     (
+        "minecraft:birch_door_open",
+        "buildingBlocks",
+        IconSpec::Form(
+            SpecialForm::Open,
+            &IconSpec::Composite(&[
+                ("block/birch_door_bottom_left_open", [0.0, 0.0, 0.0], 90.0),
+                ("block/birch_door_top_left_open", [0.0, 1.0, 0.0], 90.0),
+            ]),
+        ),
+    ),
+    (
         "minecraft:birch_fence",
         "buildingBlocks",
         IconSpec::Model("block/birch_fence_inventory"),
@@ -399,6 +475,14 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         "minecraft:birch_fence_gate",
         "buildingBlocks",
         IconSpec::Model("block/birch_fence_gate"),
+    ),
+    (
+        "minecraft:birch_fence_gate_open",
+        "buildingBlocks",
+        IconSpec::Form(
+            SpecialForm::Open,
+            &IconSpec::IsoModel("block/birch_fence_gate_open"),
+        ),
     ),
     (
         "minecraft:birch_leaves",
@@ -454,6 +538,14 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         IconSpec::Model("block/birch_trapdoor_bottom"),
     ),
     (
+        "minecraft:birch_trapdoor_open",
+        "buildingBlocks",
+        IconSpec::Form(
+            SpecialForm::Open,
+            &IconSpec::IsoModel("block/birch_trapdoor_open"),
+        ),
+    ),
+    (
         "minecraft:birch_wood",
         "buildingBlocks",
         IconSpec::Model("block/birch_wood"),
@@ -483,6 +575,16 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         IconSpec::Model("block/black_concrete_powder"),
     ),
     (
+        "minecraft:black_concrete_slab",
+        "coloredBlocks",
+        IconSpec::Model("block/black_concrete_slab"),
+    ),
+    (
+        "minecraft:black_concrete_stairs",
+        "coloredBlocks",
+        IconSpec::Model("block/black_concrete_stairs"),
+    ),
+    (
         "minecraft:black_glazed_terracotta",
         "coloredBlocks",
         IconSpec::Model("block/black_glazed_terracotta"),
@@ -506,6 +608,16 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         "minecraft:black_wool",
         "coloredBlocks",
         IconSpec::Model("block/black_wool"),
+    ),
+    (
+        "minecraft:black_wool_slab",
+        "coloredBlocks",
+        IconSpec::Model("block/black_wool_slab"),
+    ),
+    (
+        "minecraft:black_wool_stairs",
+        "coloredBlocks",
+        IconSpec::Model("block/black_wool_stairs"),
     ),
     (
         "minecraft:blackstone",
@@ -562,6 +674,16 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         IconSpec::Model("block/blue_concrete_powder"),
     ),
     (
+        "minecraft:blue_concrete_slab",
+        "coloredBlocks",
+        IconSpec::Model("block/blue_concrete_slab"),
+    ),
+    (
+        "minecraft:blue_concrete_stairs",
+        "coloredBlocks",
+        IconSpec::Model("block/blue_concrete_stairs"),
+    ),
+    (
         "minecraft:blue_glazed_terracotta",
         "coloredBlocks",
         IconSpec::Model("block/blue_glazed_terracotta"),
@@ -590,6 +712,16 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         "minecraft:blue_wool",
         "coloredBlocks",
         IconSpec::Model("block/blue_wool"),
+    ),
+    (
+        "minecraft:blue_wool_slab",
+        "coloredBlocks",
+        IconSpec::Model("block/blue_wool_slab"),
+    ),
+    (
+        "minecraft:blue_wool_stairs",
+        "coloredBlocks",
+        IconSpec::Model("block/blue_wool_stairs"),
     ),
     (
         "minecraft:bone_block",
@@ -651,6 +783,16 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         IconSpec::Model("block/brown_concrete_powder"),
     ),
     (
+        "minecraft:brown_concrete_slab",
+        "coloredBlocks",
+        IconSpec::Model("block/brown_concrete_slab"),
+    ),
+    (
+        "minecraft:brown_concrete_stairs",
+        "coloredBlocks",
+        IconSpec::Model("block/brown_concrete_stairs"),
+    ),
+    (
         "minecraft:brown_glazed_terracotta",
         "coloredBlocks",
         IconSpec::Model("block/brown_glazed_terracotta"),
@@ -679,6 +821,16 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         "minecraft:brown_wool",
         "coloredBlocks",
         IconSpec::Model("block/brown_wool"),
+    ),
+    (
+        "minecraft:brown_wool_slab",
+        "coloredBlocks",
+        IconSpec::Model("block/brown_wool_slab"),
+    ),
+    (
+        "minecraft:brown_wool_stairs",
+        "coloredBlocks",
+        IconSpec::Model("block/brown_wool_stairs"),
     ),
     (
         "minecraft:bubble_coral_block",
@@ -711,14 +863,22 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         IconSpec::Model("block/calibrated_sculk_sensor_inactive"),
     ),
     (
+        "minecraft:calibrated_sculk_sensor_active",
+        "redstone",
+        IconSpec::Form(
+            SpecialForm::Active,
+            &IconSpec::Model("block/calibrated_sculk_sensor_active"),
+        ),
+    ),
+    (
         "minecraft:campfire",
         "functional",
         IconSpec::Model("block/campfire"),
     ),
     (
-        "minecraft:soul_campfire",
+        "minecraft:campfire_off",
         "functional",
-        IconSpec::Model("block/soul_campfire"),
+        IconSpec::Form(SpecialForm::Off, &IconSpec::Model("block/campfire_off")),
     ),
     (
         "minecraft:cartography_table",
@@ -754,6 +914,17 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         ),
     ),
     (
+        "minecraft:cherry_door_open",
+        "buildingBlocks",
+        IconSpec::Form(
+            SpecialForm::Open,
+            &IconSpec::Composite(&[
+                ("block/cherry_door_bottom_left_open", [0.0, 0.0, 0.0], 90.0),
+                ("block/cherry_door_top_left_open", [0.0, 1.0, 0.0], 90.0),
+            ]),
+        ),
+    ),
+    (
         "minecraft:cherry_fence",
         "buildingBlocks",
         IconSpec::Model("block/cherry_fence_inventory"),
@@ -762,6 +933,14 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         "minecraft:cherry_fence_gate",
         "buildingBlocks",
         IconSpec::Model("block/cherry_fence_gate"),
+    ),
+    (
+        "minecraft:cherry_fence_gate_open",
+        "buildingBlocks",
+        IconSpec::Form(
+            SpecialForm::Open,
+            &IconSpec::IsoModel("block/cherry_fence_gate_open"),
+        ),
     ),
     (
         "minecraft:cherry_leaves",
@@ -810,6 +989,14 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         "minecraft:cherry_trapdoor",
         "buildingBlocks",
         IconSpec::Model("block/cherry_trapdoor_bottom"),
+    ),
+    (
+        "minecraft:cherry_trapdoor_open",
+        "buildingBlocks",
+        IconSpec::Form(
+            SpecialForm::Open,
+            &IconSpec::IsoModel("block/cherry_trapdoor_open"),
+        ),
     ),
     (
         "minecraft:cherry_wood",
@@ -1009,6 +1196,11 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         IconSpec::IsoModel("block/comparator"),
     ),
     (
+        "minecraft:comparator_on",
+        "redstone",
+        IconSpec::Form(SpecialForm::On, &IconSpec::IsoModel("block/comparator_on")),
+    ),
+    (
         "minecraft:composter",
         "functional",
         IconSpec::Model("block/composter"),
@@ -1025,6 +1217,11 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         IconSpec::Model("block/copper_bulb"),
     ),
     (
+        "minecraft:copper_bulb_lit",
+        "buildingBlocks",
+        IconSpec::Form(SpecialForm::Lit, &IconSpec::Model("block/copper_bulb_lit")),
+    ),
+    (
         "minecraft:copper_door",
         "buildingBlocks",
         IconSpec::Composite(&[
@@ -1033,94 +1230,16 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         ]),
     ),
     (
-        "minecraft:exposed_copper_door",
+        "minecraft:copper_door_open",
         "buildingBlocks",
-        IconSpec::Composite(&[
-            (
-                "block/exposed_copper_door_bottom_left",
-                [0.0, 0.0, 0.0],
-                90.0,
-            ),
-            ("block/exposed_copper_door_top_left", [0.0, 1.0, 0.0], 90.0),
-        ]),
+        IconSpec::Form(
+            SpecialForm::Open,
+            &IconSpec::Composite(&[
+                ("block/copper_door_bottom_left_open", [0.0, 0.0, 0.0], 90.0),
+                ("block/copper_door_top_left_open", [0.0, 1.0, 0.0], 90.0),
+            ]),
+        ),
     ),
-    (
-        "minecraft:weathered_copper_door",
-        "buildingBlocks",
-        IconSpec::Composite(&[
-            (
-                "block/weathered_copper_door_bottom_left",
-                [0.0, 0.0, 0.0],
-                90.0,
-            ),
-            (
-                "block/weathered_copper_door_top_left",
-                [0.0, 1.0, 0.0],
-                90.0,
-            ),
-        ]),
-    ),
-    (
-        "minecraft:oxidized_copper_door",
-        "buildingBlocks",
-        IconSpec::Composite(&[
-            (
-                "block/oxidized_copper_door_bottom_left",
-                [0.0, 0.0, 0.0],
-                90.0,
-            ),
-            ("block/oxidized_copper_door_top_left", [0.0, 1.0, 0.0], 90.0),
-        ]),
-    ),
-    (
-        "minecraft:waxed_copper_door",
-        "buildingBlocks",
-        IconSpec::Composite(&[
-            ("block/copper_door_bottom_left", [0.0, 0.0, 0.0], 90.0),
-            ("block/copper_door_top_left", [0.0, 1.0, 0.0], 90.0),
-        ]),
-    ),
-    (
-        "minecraft:waxed_exposed_copper_door",
-        "buildingBlocks",
-        IconSpec::Composite(&[
-            (
-                "block/exposed_copper_door_bottom_left",
-                [0.0, 0.0, 0.0],
-                90.0,
-            ),
-            ("block/exposed_copper_door_top_left", [0.0, 1.0, 0.0], 90.0),
-        ]),
-    ),
-    (
-        "minecraft:waxed_weathered_copper_door",
-        "buildingBlocks",
-        IconSpec::Composite(&[
-            (
-                "block/weathered_copper_door_bottom_left",
-                [0.0, 0.0, 0.0],
-                90.0,
-            ),
-            (
-                "block/weathered_copper_door_top_left",
-                [0.0, 1.0, 0.0],
-                90.0,
-            ),
-        ]),
-    ),
-    (
-        "minecraft:waxed_oxidized_copper_door",
-        "buildingBlocks",
-        IconSpec::Composite(&[
-            (
-                "block/oxidized_copper_door_bottom_left",
-                [0.0, 0.0, 0.0],
-                90.0,
-            ),
-            ("block/oxidized_copper_door_top_left", [0.0, 1.0, 0.0], 90.0),
-        ]),
-    ),
-    ("minecraft:copper_chest", "functional", IconSpec::Skip),
     (
         "minecraft:copper_golem_statue",
         "functional",
@@ -1140,6 +1259,14 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         "minecraft:copper_trapdoor",
         "buildingBlocks",
         IconSpec::Model("block/copper_trapdoor_bottom"),
+    ),
+    (
+        "minecraft:copper_trapdoor_open",
+        "buildingBlocks",
+        IconSpec::Form(
+            SpecialForm::Open,
+            &IconSpec::IsoModel("block/copper_trapdoor_open"),
+        ),
     ),
     (
         "minecraft:cracked_deepslate_bricks",
@@ -1181,7 +1308,11 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         "spawnEggs",
         IconSpec::Model("block/creaking_heart"),
     ),
-    ("minecraft:creeper_head", "functional", IconSpec::Skip),
+    (
+        "minecraft:creeper_head",
+        "functional",
+        IconSpec::Head("entity/creeper/creeper", false),
+    ),
     (
         "minecraft:crimson_button",
         "buildingBlocks",
@@ -1204,6 +1335,17 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         ]),
     ),
     (
+        "minecraft:crimson_door_open",
+        "buildingBlocks",
+        IconSpec::Form(
+            SpecialForm::Open,
+            &IconSpec::Composite(&[
+                ("block/crimson_door_bottom_left_open", [0.0, 0.0, 0.0], 90.0),
+                ("block/crimson_door_top_left_open", [0.0, 1.0, 0.0], 90.0),
+            ]),
+        ),
+    ),
+    (
         "minecraft:crimson_fence",
         "buildingBlocks",
         IconSpec::Model("block/crimson_fence_inventory"),
@@ -1212,6 +1354,14 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         "minecraft:crimson_fence_gate",
         "buildingBlocks",
         IconSpec::Model("block/crimson_fence_gate"),
+    ),
+    (
+        "minecraft:crimson_fence_gate_open",
+        "buildingBlocks",
+        IconSpec::Form(
+            SpecialForm::Open,
+            &IconSpec::IsoModel("block/crimson_fence_gate_open"),
+        ),
     ),
     (
         "minecraft:crimson_hyphae",
@@ -1270,6 +1420,14 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         "minecraft:crimson_trapdoor",
         "buildingBlocks",
         IconSpec::Model("block/crimson_trapdoor_bottom"),
+    ),
+    (
+        "minecraft:crimson_trapdoor_open",
+        "buildingBlocks",
+        IconSpec::Form(
+            SpecialForm::Open,
+            &IconSpec::IsoModel("block/crimson_trapdoor_open"),
+        ),
     ),
     (
         "minecraft:crying_obsidian",
@@ -1336,6 +1494,16 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         IconSpec::Model("block/cyan_concrete_powder"),
     ),
     (
+        "minecraft:cyan_concrete_slab",
+        "coloredBlocks",
+        IconSpec::Model("block/cyan_concrete_slab"),
+    ),
+    (
+        "minecraft:cyan_concrete_stairs",
+        "coloredBlocks",
+        IconSpec::Model("block/cyan_concrete_stairs"),
+    ),
+    (
         "minecraft:cyan_glazed_terracotta",
         "coloredBlocks",
         IconSpec::Model("block/cyan_glazed_terracotta"),
@@ -1359,6 +1527,16 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         "minecraft:cyan_wool",
         "coloredBlocks",
         IconSpec::Model("block/cyan_wool"),
+    ),
+    (
+        "minecraft:cyan_wool_slab",
+        "coloredBlocks",
+        IconSpec::Model("block/cyan_wool_slab"),
+    ),
+    (
+        "minecraft:cyan_wool_stairs",
+        "coloredBlocks",
+        IconSpec::Model("block/cyan_wool_stairs"),
     ),
     (
         "minecraft:damaged_anvil",
@@ -1387,6 +1565,21 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         ]),
     ),
     (
+        "minecraft:dark_oak_door_open",
+        "buildingBlocks",
+        IconSpec::Form(
+            SpecialForm::Open,
+            &IconSpec::Composite(&[
+                (
+                    "block/dark_oak_door_bottom_left_open",
+                    [0.0, 0.0, 0.0],
+                    90.0,
+                ),
+                ("block/dark_oak_door_top_left_open", [0.0, 1.0, 0.0], 90.0),
+            ]),
+        ),
+    ),
+    (
         "minecraft:dark_oak_fence",
         "buildingBlocks",
         IconSpec::Model("block/dark_oak_fence_inventory"),
@@ -1395,6 +1588,14 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         "minecraft:dark_oak_fence_gate",
         "buildingBlocks",
         IconSpec::Model("block/dark_oak_fence_gate"),
+    ),
+    (
+        "minecraft:dark_oak_fence_gate_open",
+        "buildingBlocks",
+        IconSpec::Form(
+            SpecialForm::Open,
+            &IconSpec::IsoModel("block/dark_oak_fence_gate_open"),
+        ),
     ),
     (
         "minecraft:dark_oak_leaves",
@@ -1448,6 +1649,14 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         "minecraft:dark_oak_trapdoor",
         "buildingBlocks",
         IconSpec::Model("block/dark_oak_trapdoor_bottom"),
+    ),
+    (
+        "minecraft:dark_oak_trapdoor_open",
+        "buildingBlocks",
+        IconSpec::Form(
+            SpecialForm::Open,
+            &IconSpec::IsoModel("block/dark_oak_trapdoor_open"),
+        ),
     ),
     (
         "minecraft:dark_oak_wood",
@@ -1631,6 +1840,7 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         "functional",
         IconSpec::Model("block/dragon_egg"),
     ),
+    // 龙头是自定义模型（含下颌），几何不是头部立方体，暂不渲染
     ("minecraft:dragon_head", "functional", IconSpec::Skip),
     (
         "minecraft:dried_ghast",
@@ -1719,9 +1929,48 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         IconSpec::Model("block/exposed_copper_bulb"),
     ),
     (
+        "minecraft:exposed_copper_bulb_lit",
+        "ingredients",
+        IconSpec::Form(
+            SpecialForm::Lit,
+            &IconSpec::Model("block/exposed_copper_bulb_lit"),
+        ),
+    ),
+    (
         "minecraft:exposed_copper_chest",
         "ingredients",
         IconSpec::Skip,
+    ),
+    (
+        "minecraft:exposed_copper_door",
+        "buildingBlocks",
+        IconSpec::Composite(&[
+            (
+                "block/exposed_copper_door_bottom_left",
+                [0.0, 0.0, 0.0],
+                90.0,
+            ),
+            ("block/exposed_copper_door_top_left", [0.0, 1.0, 0.0], 90.0),
+        ]),
+    ),
+    (
+        "minecraft:exposed_copper_door_open",
+        "buildingBlocks",
+        IconSpec::Form(
+            SpecialForm::Open,
+            &IconSpec::Composite(&[
+                (
+                    "block/exposed_copper_door_bottom_left_open",
+                    [0.0, 0.0, 0.0],
+                    90.0,
+                ),
+                (
+                    "block/exposed_copper_door_top_left_open",
+                    [0.0, 1.0, 0.0],
+                    90.0,
+                ),
+            ]),
+        ),
     ),
     (
         "minecraft:exposed_copper_golem_statue",
@@ -1737,6 +1986,14 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         "minecraft:exposed_copper_trapdoor",
         "ingredients",
         IconSpec::Model("block/exposed_copper_trapdoor_bottom"),
+    ),
+    (
+        "minecraft:exposed_copper_trapdoor_open",
+        "buildingBlocks",
+        IconSpec::Form(
+            SpecialForm::Open,
+            &IconSpec::IsoModel("block/exposed_copper_trapdoor_open"),
+        ),
     ),
     (
         "minecraft:exposed_cut_copper",
@@ -1873,6 +2130,16 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         IconSpec::Model("block/gray_concrete_powder"),
     ),
     (
+        "minecraft:gray_concrete_slab",
+        "coloredBlocks",
+        IconSpec::Model("block/gray_concrete_slab"),
+    ),
+    (
+        "minecraft:gray_concrete_stairs",
+        "coloredBlocks",
+        IconSpec::Model("block/gray_concrete_stairs"),
+    ),
+    (
         "minecraft:gray_glazed_terracotta",
         "coloredBlocks",
         IconSpec::Model("block/gray_glazed_terracotta"),
@@ -1899,6 +2166,16 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
     ),
     ("minecraft:green_banner", "coloredBlocks", IconSpec::Skip),
     (
+        "minecraft:gray_wool_slab",
+        "coloredBlocks",
+        IconSpec::Model("block/gray_wool_slab"),
+    ),
+    (
+        "minecraft:gray_wool_stairs",
+        "coloredBlocks",
+        IconSpec::Model("block/gray_wool_stairs"),
+    ),
+    (
         "minecraft:green_bed",
         "coloredBlocks",
         IconSpec::Composite(&[
@@ -1920,6 +2197,16 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         "minecraft:green_concrete_powder",
         "coloredBlocks",
         IconSpec::Model("block/green_concrete_powder"),
+    ),
+    (
+        "minecraft:green_concrete_slab",
+        "coloredBlocks",
+        IconSpec::Model("block/green_concrete_slab"),
+    ),
+    (
+        "minecraft:green_concrete_stairs",
+        "coloredBlocks",
+        IconSpec::Model("block/green_concrete_stairs"),
     ),
     (
         "minecraft:green_glazed_terracotta",
@@ -1945,6 +2232,16 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         "minecraft:green_wool",
         "coloredBlocks",
         IconSpec::Model("block/green_wool"),
+    ),
+    (
+        "minecraft:green_wool_slab",
+        "coloredBlocks",
+        IconSpec::Model("block/green_wool_slab"),
+    ),
+    (
+        "minecraft:green_wool_stairs",
+        "coloredBlocks",
+        IconSpec::Model("block/green_wool_stairs"),
     ),
     (
         "minecraft:grindstone",
@@ -2031,11 +2328,6 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         IconSpec::Model("block/iron_block"),
     ),
     (
-        "minecraft:iron_ore",
-        "natural",
-        IconSpec::Model("block/iron_ore"),
-    ),
-    (
         "minecraft:iron_door",
         "buildingBlocks",
         IconSpec::Composite(&[
@@ -2044,9 +2336,33 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         ]),
     ),
     (
+        "minecraft:iron_door_open",
+        "buildingBlocks",
+        IconSpec::Form(
+            SpecialForm::Open,
+            &IconSpec::Composite(&[
+                ("block/iron_door_bottom_left_open", [0.0, 0.0, 0.0], 90.0),
+                ("block/iron_door_top_left_open", [0.0, 1.0, 0.0], 90.0),
+            ]),
+        ),
+    ),
+    (
+        "minecraft:iron_ore",
+        "natural",
+        IconSpec::Model("block/iron_ore"),
+    ),
+    (
         "minecraft:iron_trapdoor",
         "buildingBlocks",
         IconSpec::Model("block/iron_trapdoor_bottom"),
+    ),
+    (
+        "minecraft:iron_trapdoor_open",
+        "buildingBlocks",
+        IconSpec::Form(
+            SpecialForm::Open,
+            &IconSpec::IsoModel("block/iron_trapdoor_open"),
+        ),
     ),
     (
         "minecraft:jack_o_lantern",
@@ -2081,6 +2397,17 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         ]),
     ),
     (
+        "minecraft:jungle_door_open",
+        "buildingBlocks",
+        IconSpec::Form(
+            SpecialForm::Open,
+            &IconSpec::Composite(&[
+                ("block/jungle_door_bottom_left_open", [0.0, 0.0, 0.0], 90.0),
+                ("block/jungle_door_top_left_open", [0.0, 1.0, 0.0], 90.0),
+            ]),
+        ),
+    ),
+    (
         "minecraft:jungle_fence",
         "buildingBlocks",
         IconSpec::Model("block/jungle_fence_inventory"),
@@ -2089,6 +2416,14 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         "minecraft:jungle_fence_gate",
         "buildingBlocks",
         IconSpec::Model("block/jungle_fence_gate"),
+    ),
+    (
+        "minecraft:jungle_fence_gate_open",
+        "buildingBlocks",
+        IconSpec::Form(
+            SpecialForm::Open,
+            &IconSpec::IsoModel("block/jungle_fence_gate_open"),
+        ),
     ),
     (
         "minecraft:jungle_leaves",
@@ -2144,6 +2479,14 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         IconSpec::Model("block/jungle_trapdoor_bottom"),
     ),
     (
+        "minecraft:jungle_trapdoor_open",
+        "buildingBlocks",
+        IconSpec::Form(
+            SpecialForm::Open,
+            &IconSpec::IsoModel("block/jungle_trapdoor_open"),
+        ),
+    ),
+    (
         "minecraft:jungle_wood",
         "buildingBlocks",
         IconSpec::Model("block/jungle_wood"),
@@ -2192,6 +2535,16 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         IconSpec::Model("block/light_blue_concrete_powder"),
     ),
     (
+        "minecraft:light_blue_concrete_slab",
+        "coloredBlocks",
+        IconSpec::Model("block/light_blue_concrete_slab"),
+    ),
+    (
+        "minecraft:light_blue_concrete_stairs",
+        "coloredBlocks",
+        IconSpec::Model("block/light_blue_concrete_stairs"),
+    ),
+    (
         "minecraft:light_blue_glazed_terracotta",
         "coloredBlocks",
         IconSpec::Model("block/light_blue_glazed_terracotta"),
@@ -2215,6 +2568,16 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         "minecraft:light_blue_wool",
         "coloredBlocks",
         IconSpec::Model("block/light_blue_wool"),
+    ),
+    (
+        "minecraft:light_blue_wool_slab",
+        "coloredBlocks",
+        IconSpec::Model("block/light_blue_wool_slab"),
+    ),
+    (
+        "minecraft:light_blue_wool_stairs",
+        "coloredBlocks",
+        IconSpec::Model("block/light_blue_wool_stairs"),
     ),
     (
         "minecraft:light_gray_banner",
@@ -2245,6 +2608,16 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         IconSpec::Model("block/light_gray_concrete_powder"),
     ),
     (
+        "minecraft:light_gray_concrete_slab",
+        "coloredBlocks",
+        IconSpec::Model("block/light_gray_concrete_slab"),
+    ),
+    (
+        "minecraft:light_gray_concrete_stairs",
+        "coloredBlocks",
+        IconSpec::Model("block/light_gray_concrete_stairs"),
+    ),
+    (
         "minecraft:light_gray_glazed_terracotta",
         "coloredBlocks",
         IconSpec::Model("block/light_gray_glazed_terracotta"),
@@ -2270,6 +2643,16 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         IconSpec::Model("block/light_gray_wool"),
     ),
     (
+        "minecraft:light_gray_wool_slab",
+        "coloredBlocks",
+        IconSpec::Model("block/light_gray_wool_slab"),
+    ),
+    (
+        "minecraft:light_gray_wool_stairs",
+        "coloredBlocks",
+        IconSpec::Model("block/light_gray_wool_stairs"),
+    ),
+    (
         "minecraft:light_weighted_pressure_plate",
         "buildingBlocks",
         IconSpec::Model("block/light_weighted_pressure_plate"),
@@ -2288,6 +2671,11 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         IconSpec::Model("block/lightning_rod"),
     ),
     ("minecraft:lime_banner", "coloredBlocks", IconSpec::Skip),
+    (
+        "minecraft:lightning_rod_on",
+        "functional",
+        IconSpec::Form(SpecialForm::On, &IconSpec::Model("block/lightning_rod_on")),
+    ),
     (
         "minecraft:lime_bed",
         "coloredBlocks",
@@ -2310,6 +2698,16 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         "minecraft:lime_concrete_powder",
         "coloredBlocks",
         IconSpec::Model("block/lime_concrete_powder"),
+    ),
+    (
+        "minecraft:lime_concrete_slab",
+        "coloredBlocks",
+        IconSpec::Model("block/lime_concrete_slab"),
+    ),
+    (
+        "minecraft:lime_concrete_stairs",
+        "coloredBlocks",
+        IconSpec::Model("block/lime_concrete_stairs"),
     ),
     (
         "minecraft:lime_glazed_terracotta",
@@ -2335,6 +2733,16 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         "minecraft:lime_wool",
         "coloredBlocks",
         IconSpec::Model("block/lime_wool"),
+    ),
+    (
+        "minecraft:lime_wool_slab",
+        "coloredBlocks",
+        IconSpec::Model("block/lime_wool_slab"),
+    ),
+    (
+        "minecraft:lime_wool_stairs",
+        "coloredBlocks",
+        IconSpec::Model("block/lime_wool_stairs"),
     ),
     (
         "minecraft:lodestone",
@@ -2371,6 +2779,16 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         IconSpec::Model("block/magenta_concrete_powder"),
     ),
     (
+        "minecraft:magenta_concrete_slab",
+        "coloredBlocks",
+        IconSpec::Model("block/magenta_concrete_slab"),
+    ),
+    (
+        "minecraft:magenta_concrete_stairs",
+        "coloredBlocks",
+        IconSpec::Model("block/magenta_concrete_stairs"),
+    ),
+    (
         "minecraft:magenta_glazed_terracotta",
         "coloredBlocks",
         IconSpec::Model("block/magenta_glazed_terracotta"),
@@ -2394,6 +2812,16 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         "minecraft:magenta_wool",
         "coloredBlocks",
         IconSpec::Model("block/magenta_wool"),
+    ),
+    (
+        "minecraft:magenta_wool_slab",
+        "coloredBlocks",
+        IconSpec::Model("block/magenta_wool_slab"),
+    ),
+    (
+        "minecraft:magenta_wool_stairs",
+        "coloredBlocks",
+        IconSpec::Model("block/magenta_wool_stairs"),
     ),
     (
         "minecraft:magma_block",
@@ -2422,6 +2850,21 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         ]),
     ),
     (
+        "minecraft:mangrove_door_open",
+        "buildingBlocks",
+        IconSpec::Form(
+            SpecialForm::Open,
+            &IconSpec::Composite(&[
+                (
+                    "block/mangrove_door_bottom_left_open",
+                    [0.0, 0.0, 0.0],
+                    90.0,
+                ),
+                ("block/mangrove_door_top_left_open", [0.0, 1.0, 0.0], 90.0),
+            ]),
+        ),
+    ),
+    (
         "minecraft:mangrove_fence",
         "buildingBlocks",
         IconSpec::Model("block/mangrove_fence_inventory"),
@@ -2430,6 +2873,14 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         "minecraft:mangrove_fence_gate",
         "buildingBlocks",
         IconSpec::Model("block/mangrove_fence_gate"),
+    ),
+    (
+        "minecraft:mangrove_fence_gate_open",
+        "buildingBlocks",
+        IconSpec::Form(
+            SpecialForm::Open,
+            &IconSpec::IsoModel("block/mangrove_fence_gate_open"),
+        ),
     ),
     (
         "minecraft:mangrove_leaves",
@@ -2488,6 +2939,14 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         "minecraft:mangrove_trapdoor",
         "buildingBlocks",
         IconSpec::Model("block/mangrove_trapdoor_bottom"),
+    ),
+    (
+        "minecraft:mangrove_trapdoor_open",
+        "buildingBlocks",
+        IconSpec::Form(
+            SpecialForm::Open,
+            &IconSpec::IsoModel("block/mangrove_trapdoor_open"),
+        ),
     ),
     (
         "minecraft:mangrove_wood",
@@ -2658,6 +3117,17 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         ]),
     ),
     (
+        "minecraft:oak_door_open",
+        "buildingBlocks",
+        IconSpec::Form(
+            SpecialForm::Open,
+            &IconSpec::Composite(&[
+                ("block/oak_door_bottom_left_open", [0.0, 0.0, 0.0], 90.0),
+                ("block/oak_door_top_left_open", [0.0, 1.0, 0.0], 90.0),
+            ]),
+        ),
+    ),
+    (
         "minecraft:oak_fence",
         "buildingBlocks",
         IconSpec::Model("block/oak_fence_inventory"),
@@ -2666,6 +3136,14 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         "minecraft:oak_fence_gate",
         "buildingBlocks",
         IconSpec::Model("block/oak_fence_gate"),
+    ),
+    (
+        "minecraft:oak_fence_gate_open",
+        "buildingBlocks",
+        IconSpec::Form(
+            SpecialForm::Open,
+            &IconSpec::IsoModel("block/oak_fence_gate_open"),
+        ),
     ),
     (
         "minecraft:oak_leaves",
@@ -2721,6 +3199,14 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         IconSpec::Model("block/oak_trapdoor_bottom"),
     ),
     (
+        "minecraft:oak_trapdoor_open",
+        "buildingBlocks",
+        IconSpec::Form(
+            SpecialForm::Open,
+            &IconSpec::IsoModel("block/oak_trapdoor_open"),
+        ),
+    ),
+    (
         "minecraft:oak_wood",
         "buildingBlocks",
         IconSpec::Model("block/oak_wood"),
@@ -2730,6 +3216,13 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         "redstone",
         IconSpec::Model("block/observer"),
     ),
+    (
+        "minecraft:observer_on",
+        "redstone",
+        IconSpec::Form(SpecialForm::On, &IconSpec::Model("block/observer_on")),
+    ),
+    // piston_extended.json无parent且贴图引用未定义（游戏内不作为物品渲染），
+    // 用头板+活塞本体拼出伸出形态（头板0..4px、活塞杆4..20px、本体12..28px）
     (
         "minecraft:obsidian",
         "natural",
@@ -2765,9 +3258,24 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         IconSpec::Model("block/orange_concrete_powder"),
     ),
     (
+        "minecraft:orange_concrete_slab",
+        "coloredBlocks",
+        IconSpec::Model("block/orange_concrete_slab"),
+    ),
+    (
+        "minecraft:orange_concrete_stairs",
+        "coloredBlocks",
+        IconSpec::Model("block/orange_concrete_stairs"),
+    ),
+    (
         "minecraft:orange_glazed_terracotta",
         "coloredBlocks",
         IconSpec::Model("block/orange_glazed_terracotta"),
+    ),
+    (
+        "minecraft:orange_poplar_leaves",
+        "natural",
+        IconSpec::Model("block/orange_poplar_leaves"),
     ),
     (
         "minecraft:orange_shulker_box",
@@ -2790,6 +3298,16 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         IconSpec::Model("block/orange_wool"),
     ),
     (
+        "minecraft:orange_wool_slab",
+        "coloredBlocks",
+        IconSpec::Model("block/orange_wool_slab"),
+    ),
+    (
+        "minecraft:orange_wool_stairs",
+        "coloredBlocks",
+        IconSpec::Model("block/orange_wool_stairs"),
+    ),
+    (
         "minecraft:oxidized_chiseled_copper",
         "ingredients",
         IconSpec::Model("block/oxidized_chiseled_copper"),
@@ -2805,9 +3323,48 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         IconSpec::Model("block/oxidized_copper_bulb"),
     ),
     (
+        "minecraft:oxidized_copper_bulb_lit",
+        "ingredients",
+        IconSpec::Form(
+            SpecialForm::Lit,
+            &IconSpec::Model("block/oxidized_copper_bulb_lit"),
+        ),
+    ),
+    (
         "minecraft:oxidized_copper_chest",
         "ingredients",
         IconSpec::Skip,
+    ),
+    (
+        "minecraft:oxidized_copper_door",
+        "buildingBlocks",
+        IconSpec::Composite(&[
+            (
+                "block/oxidized_copper_door_bottom_left",
+                [0.0, 0.0, 0.0],
+                90.0,
+            ),
+            ("block/oxidized_copper_door_top_left", [0.0, 1.0, 0.0], 90.0),
+        ]),
+    ),
+    (
+        "minecraft:oxidized_copper_door_open",
+        "buildingBlocks",
+        IconSpec::Form(
+            SpecialForm::Open,
+            &IconSpec::Composite(&[
+                (
+                    "block/oxidized_copper_door_bottom_left_open",
+                    [0.0, 0.0, 0.0],
+                    90.0,
+                ),
+                (
+                    "block/oxidized_copper_door_top_left_open",
+                    [0.0, 1.0, 0.0],
+                    90.0,
+                ),
+            ]),
+        ),
     ),
     (
         "minecraft:oxidized_copper_golem_statue",
@@ -2823,6 +3380,14 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         "minecraft:oxidized_copper_trapdoor",
         "ingredients",
         IconSpec::Model("block/oxidized_copper_trapdoor_bottom"),
+    ),
+    (
+        "minecraft:oxidized_copper_trapdoor_open",
+        "buildingBlocks",
+        IconSpec::Form(
+            SpecialForm::Open,
+            &IconSpec::IsoModel("block/oxidized_copper_trapdoor_open"),
+        ),
     ),
     (
         "minecraft:oxidized_cut_copper",
@@ -2886,6 +3451,21 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         ]),
     ),
     (
+        "minecraft:pale_oak_door_open",
+        "buildingBlocks",
+        IconSpec::Form(
+            SpecialForm::Open,
+            &IconSpec::Composite(&[
+                (
+                    "block/pale_oak_door_bottom_left_open",
+                    [0.0, 0.0, 0.0],
+                    90.0,
+                ),
+                ("block/pale_oak_door_top_left_open", [0.0, 1.0, 0.0], 90.0),
+            ]),
+        ),
+    ),
+    (
         "minecraft:pale_oak_fence",
         "buildingBlocks",
         IconSpec::Model("block/pale_oak_fence_inventory"),
@@ -2894,6 +3474,14 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         "minecraft:pale_oak_fence_gate",
         "buildingBlocks",
         IconSpec::Model("block/pale_oak_fence_gate"),
+    ),
+    (
+        "minecraft:pale_oak_fence_gate_open",
+        "buildingBlocks",
+        IconSpec::Form(
+            SpecialForm::Open,
+            &IconSpec::IsoModel("block/pale_oak_fence_gate_open"),
+        ),
     ),
     (
         "minecraft:pale_oak_leaves",
@@ -2949,6 +3537,14 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         IconSpec::Model("block/pale_oak_trapdoor_bottom"),
     ),
     (
+        "minecraft:pale_oak_trapdoor_open",
+        "buildingBlocks",
+        IconSpec::Form(
+            SpecialForm::Open,
+            &IconSpec::IsoModel("block/pale_oak_trapdoor_open"),
+        ),
+    ),
+    (
         "minecraft:pale_oak_wood",
         "buildingBlocks",
         IconSpec::Model("block/pale_oak_wood"),
@@ -2963,6 +3559,7 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         "ingredients",
         IconSpec::Model("block/petrified_oak_slab"),
     ),
+    // 猪灵头是自定义模型（含耳朵），几何不是头部立方体，暂不渲染
     ("minecraft:piglin_head", "functional", IconSpec::Skip),
     ("minecraft:pink_banner", "coloredBlocks", IconSpec::Skip),
     (
@@ -2987,6 +3584,16 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         "minecraft:pink_concrete_powder",
         "coloredBlocks",
         IconSpec::Model("block/pink_concrete_powder"),
+    ),
+    (
+        "minecraft:pink_concrete_slab",
+        "coloredBlocks",
+        IconSpec::Model("block/pink_concrete_slab"),
+    ),
+    (
+        "minecraft:pink_concrete_stairs",
+        "coloredBlocks",
+        IconSpec::Model("block/pink_concrete_stairs"),
     ),
     (
         "minecraft:pink_glazed_terracotta",
@@ -3014,11 +3621,37 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         IconSpec::Model("block/pink_wool"),
     ),
     (
+        "minecraft:pink_wool_slab",
+        "coloredBlocks",
+        IconSpec::Model("block/pink_wool_slab"),
+    ),
+    (
+        "minecraft:pink_wool_stairs",
+        "coloredBlocks",
+        IconSpec::Model("block/pink_wool_stairs"),
+    ),
+    (
         "minecraft:piston",
         "redstone",
         IconSpec::Model("block/piston_inventory"),
     ),
-    ("minecraft:player_head", "functional", IconSpec::Skip),
+    // 玩家头取不到皮肤缓存（离线），用默认皮肤
+    (
+        "minecraft:player_head",
+        "functional",
+        IconSpec::Head("entity/player/wide/steve", true),
+    ),
+    (
+        "minecraft:piston_extended",
+        "redstone",
+        IconSpec::Form(
+            SpecialForm::Extended,
+            &IconSpec::Composite(&[
+                ("block/piston_head", [0.0, 0.0, 0.0], 0.0),
+                ("block/piston", [0.0, 0.0, 0.75], 0.0),
+            ]),
+        ),
+    ),
     (
         "minecraft:podzol",
         "natural",
@@ -3221,6 +3854,90 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         IconSpec::Model("block/polished_tuff_wall_inventory"),
     ),
     (
+        "minecraft:poplar_button",
+        "buildingBlocks",
+        IconSpec::Model("block/poplar_button_inventory"),
+    ),
+    (
+        "minecraft:poplar_button_pressed",
+        "buildingBlocks",
+        IconSpec::Form(
+            SpecialForm::Pressed,
+            &IconSpec::IsoModel("block/poplar_button_pressed"),
+        ),
+    ),
+    (
+        "minecraft:poplar_door",
+        "buildingBlocks",
+        IconSpec::Composite(&[
+            ("block/poplar_door_bottom_left", [0.0, 0.0, 0.0], 90.0),
+            ("block/poplar_door_top_left", [0.0, 1.0, 0.0], 90.0),
+        ]),
+    ),
+    (
+        "minecraft:poplar_fence",
+        "buildingBlocks",
+        IconSpec::Model("block/poplar_fence_inventory"),
+    ),
+    (
+        "minecraft:poplar_fence_gate",
+        "buildingBlocks",
+        IconSpec::Model("block/poplar_fence_gate"),
+    ),
+    (
+        "minecraft:poplar_log",
+        "buildingBlocks",
+        IconSpec::Model("block/poplar_log"),
+    ),
+    (
+        "minecraft:poplar_planks",
+        "buildingBlocks",
+        IconSpec::Model("block/poplar_planks"),
+    ),
+    (
+        "minecraft:poplar_pressure_plate",
+        "buildingBlocks",
+        IconSpec::Model("block/poplar_pressure_plate"),
+    ),
+    (
+        "minecraft:poplar_pressure_plate_down",
+        "buildingBlocks",
+        IconSpec::Form(
+            SpecialForm::Down,
+            &IconSpec::IsoModel("block/poplar_pressure_plate_down"),
+        ),
+    ),
+    (
+        "minecraft:poplar_shelf",
+        "functional",
+        IconSpec::Model("block/poplar_shelf_inventory"),
+    ),
+    (
+        "minecraft:poplar_sign",
+        "functional",
+        IconSpec::Model("block/poplar_sign_rot_0"),
+    ),
+    (
+        "minecraft:poplar_slab",
+        "buildingBlocks",
+        IconSpec::Model("block/poplar_slab"),
+    ),
+    (
+        "minecraft:poplar_stairs",
+        "buildingBlocks",
+        IconSpec::Model("block/poplar_stairs"),
+    ),
+    (
+        "minecraft:poplar_trapdoor",
+        "buildingBlocks",
+        IconSpec::Model("block/poplar_trapdoor_bottom"),
+    ),
+    (
+        "minecraft:poplar_wood",
+        "buildingBlocks",
+        IconSpec::Model("block/poplar_wood"),
+    ),
+    (
         "minecraft:potent_sulfur",
         "natural",
         IconSpec::Model("block/potent_sulfur"),
@@ -3290,6 +4007,16 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         IconSpec::Model("block/purple_concrete_powder"),
     ),
     (
+        "minecraft:purple_concrete_slab",
+        "coloredBlocks",
+        IconSpec::Model("block/purple_concrete_slab"),
+    ),
+    (
+        "minecraft:purple_concrete_stairs",
+        "coloredBlocks",
+        IconSpec::Model("block/purple_concrete_stairs"),
+    ),
+    (
         "minecraft:purple_glazed_terracotta",
         "coloredBlocks",
         IconSpec::Model("block/purple_glazed_terracotta"),
@@ -3313,6 +4040,16 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         "minecraft:purple_wool",
         "coloredBlocks",
         IconSpec::Model("block/purple_wool"),
+    ),
+    (
+        "minecraft:purple_wool_slab",
+        "coloredBlocks",
+        IconSpec::Model("block/purple_wool_slab"),
+    ),
+    (
+        "minecraft:purple_wool_stairs",
+        "coloredBlocks",
+        IconSpec::Model("block/purple_wool_stairs"),
     ),
     (
         "minecraft:purpur_block",
@@ -3399,6 +4136,16 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         IconSpec::Model("block/red_concrete_powder"),
     ),
     (
+        "minecraft:red_concrete_slab",
+        "coloredBlocks",
+        IconSpec::Model("block/red_concrete_slab"),
+    ),
+    (
+        "minecraft:red_concrete_stairs",
+        "coloredBlocks",
+        IconSpec::Model("block/red_concrete_stairs"),
+    ),
+    (
         "minecraft:red_glazed_terracotta",
         "coloredBlocks",
         IconSpec::Model("block/red_glazed_terracotta"),
@@ -3427,6 +4174,11 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         "minecraft:red_nether_bricks",
         "buildingBlocks",
         IconSpec::Model("block/red_nether_bricks"),
+    ),
+    (
+        "minecraft:red_poplar_leaves",
+        "natural",
+        IconSpec::Model("block/red_poplar_leaves"),
     ),
     (
         "minecraft:red_sand",
@@ -3468,6 +4220,16 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         "minecraft:red_wool",
         "coloredBlocks",
         IconSpec::Model("block/red_wool"),
+    ),
+    (
+        "minecraft:red_wool_slab",
+        "coloredBlocks",
+        IconSpec::Model("block/red_wool_slab"),
+    ),
+    (
+        "minecraft:red_wool_stairs",
+        "coloredBlocks",
+        IconSpec::Model("block/red_wool_stairs"),
     ),
     (
         "minecraft:redstone_block",
@@ -3572,6 +4334,14 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         IconSpec::Model("block/sculk_sensor_inactive"),
     ),
     (
+        "minecraft:sculk_sensor_active",
+        "natural",
+        IconSpec::Form(
+            SpecialForm::Active,
+            &IconSpec::Model("block/sculk_sensor_active"),
+        ),
+    ),
+    (
         "minecraft:sculk_shrieker",
         "natural",
         IconSpec::Model("block/sculk_shrieker"),
@@ -3582,12 +4352,21 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         IconSpec::Model("block/sea_lantern"),
     ),
     (
+        "minecraft:shelf_mushroom",
+        "natural",
+        IconSpec::Model("block/shelf_mushroom_stage0"),
+    ),
+    (
         "minecraft:shroomlight",
         "natural",
         IconSpec::Model("block/shroomlight"),
     ),
     ("minecraft:shulker_box", "coloredBlocks", IconSpec::Skip),
-    ("minecraft:skeleton_skull", "functional", IconSpec::Skip),
+    (
+        "minecraft:skeleton_skull",
+        "functional",
+        IconSpec::Head("entity/skeleton/skeleton", false),
+    ),
     (
         "minecraft:slime_block",
         "natural",
@@ -3607,6 +4386,11 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         "minecraft:smoker",
         "functional",
         IconSpec::Model("block/smoker"),
+    ),
+    (
+        "minecraft:smoker_lit",
+        "functional",
+        IconSpec::Form(SpecialForm::Lit, &IconSpec::Model("block/smoker_on")),
     ),
     (
         "minecraft:smooth_basalt",
@@ -3679,6 +4463,11 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         IconSpec::Model("block/snow_block"),
     ),
     (
+        "minecraft:soul_campfire",
+        "functional",
+        IconSpec::Model("block/soul_campfire"),
+    ),
+    (
         "minecraft:soul_sand",
         "natural",
         IconSpec::Model("block/soul_sand"),
@@ -3725,6 +4514,17 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         ]),
     ),
     (
+        "minecraft:spruce_door_open",
+        "buildingBlocks",
+        IconSpec::Form(
+            SpecialForm::Open,
+            &IconSpec::Composite(&[
+                ("block/spruce_door_bottom_left_open", [0.0, 0.0, 0.0], 90.0),
+                ("block/spruce_door_top_left_open", [0.0, 1.0, 0.0], 90.0),
+            ]),
+        ),
+    ),
+    (
         "minecraft:spruce_fence",
         "buildingBlocks",
         IconSpec::Model("block/spruce_fence_inventory"),
@@ -3733,6 +4533,14 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         "minecraft:spruce_fence_gate",
         "buildingBlocks",
         IconSpec::Model("block/spruce_fence_gate"),
+    ),
+    (
+        "minecraft:spruce_fence_gate_open",
+        "buildingBlocks",
+        IconSpec::Form(
+            SpecialForm::Open,
+            &IconSpec::IsoModel("block/spruce_fence_gate_open"),
+        ),
     ),
     (
         "minecraft:spruce_leaves",
@@ -3786,6 +4594,14 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         "minecraft:spruce_trapdoor",
         "buildingBlocks",
         IconSpec::Model("block/spruce_trapdoor_bottom"),
+    ),
+    (
+        "minecraft:spruce_trapdoor_open",
+        "buildingBlocks",
+        IconSpec::Form(
+            SpecialForm::Open,
+            &IconSpec::IsoModel("block/spruce_trapdoor_open"),
+        ),
     ),
     (
         "minecraft:spruce_wood",
@@ -3862,6 +4678,14 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         "minecraft:stonecutter",
         "functional",
         IconSpec::Model("block/stonecutter"),
+    ),
+    (
+        "minecraft:straw_bed",
+        "functional",
+        IconSpec::Composite(&[
+            ("block/straw_bed_head", [1.0, 0.0, 1.0], 180.0),
+            ("block/straw_bed_foot", [1.0, 0.0, 2.0], 180.0),
+        ]),
     ),
     (
         "minecraft:stripped_acacia_log",
@@ -3957,6 +4781,16 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         "minecraft:stripped_pale_oak_wood",
         "buildingBlocks",
         IconSpec::Model("block/stripped_pale_oak_wood"),
+    ),
+    (
+        "minecraft:stripped_poplar_log",
+        "buildingBlocks",
+        IconSpec::Model("block/stripped_poplar_log"),
+    ),
+    (
+        "minecraft:stripped_poplar_wood",
+        "buildingBlocks",
+        IconSpec::Model("block/stripped_poplar_wood"),
     ),
     (
         "minecraft:stripped_spruce_log",
@@ -4066,6 +4900,14 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         IconSpec::Model("block/trial_spawner"),
     ),
     (
+        "minecraft:trial_spawner_active",
+        "spawnEggs",
+        IconSpec::Form(
+            SpecialForm::Active,
+            &IconSpec::Model("block/trial_spawner_active"),
+        ),
+    ),
+    (
         "minecraft:tube_coral_block",
         "natural",
         IconSpec::Model("block/tube_coral_block"),
@@ -4116,6 +4958,10 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         IconSpec::Model("block/vault"),
     ),
     (
+        "minecraft:vault_active",
+        "functional",
+        IconSpec::Form(SpecialForm::Active, &IconSpec::Model("block/vault_active")),
+    ),    (
         "minecraft:verdant_froglight",
         "natural",
         IconSpec::Model("block/verdant_froglight"),
@@ -4142,6 +4988,17 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         ]),
     ),
     (
+        "minecraft:warped_door_open",
+        "buildingBlocks",
+        IconSpec::Form(
+            SpecialForm::Open,
+            &IconSpec::Composite(&[
+                ("block/warped_door_bottom_left_open", [0.0, 0.0, 0.0], 90.0),
+                ("block/warped_door_top_left_open", [0.0, 1.0, 0.0], 90.0),
+            ]),
+        ),
+    ),
+    (
         "minecraft:warped_fence",
         "buildingBlocks",
         IconSpec::Model("block/warped_fence_inventory"),
@@ -4151,6 +5008,15 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         "buildingBlocks",
         IconSpec::Model("block/warped_fence_gate"),
     ),
+    (
+        "minecraft:warped_fence_gate_open",
+        "buildingBlocks",
+        IconSpec::Form(
+            SpecialForm::Open,
+            &IconSpec::IsoModel("block/warped_fence_gate_open"),
+        ),
+    ),
+    // 单个特殊形态
     (
         "minecraft:warped_hyphae",
         "buildingBlocks",
@@ -4210,6 +5076,14 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         IconSpec::Model("block/warped_trapdoor_bottom"),
     ),
     (
+        "minecraft:warped_trapdoor_open",
+        "buildingBlocks",
+        IconSpec::Form(
+            SpecialForm::Open,
+            &IconSpec::IsoModel("block/warped_trapdoor_open"),
+        ),
+    ),
+    (
         "minecraft:warped_wart_block",
         "natural",
         IconSpec::Model("block/warped_wart_block"),
@@ -4230,9 +5104,33 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         IconSpec::Model("block/copper_bulb"),
     ),
     (
+        "minecraft:waxed_copper_bulb_lit",
+        "ingredients",
+        IconSpec::Form(SpecialForm::Lit, &IconSpec::Model("block/copper_bulb_lit")),
+    ),
+    (
         "minecraft:waxed_copper_chest",
         "ingredients",
         IconSpec::Skip,
+    ),
+    (
+        "minecraft:waxed_copper_door",
+        "buildingBlocks",
+        IconSpec::Composite(&[
+            ("block/copper_door_bottom_left", [0.0, 0.0, 0.0], 90.0),
+            ("block/copper_door_top_left", [0.0, 1.0, 0.0], 90.0),
+        ]),
+    ),
+    (
+        "minecraft:waxed_copper_door_open",
+        "buildingBlocks",
+        IconSpec::Form(
+            SpecialForm::Open,
+            &IconSpec::Composite(&[
+                ("block/copper_door_bottom_left_open", [0.0, 0.0, 0.0], 90.0),
+                ("block/copper_door_top_left_open", [0.0, 1.0, 0.0], 90.0),
+            ]),
+        ),
     ),
     (
         "minecraft:waxed_copper_golem_statue",
@@ -4248,6 +5146,14 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         "minecraft:waxed_copper_trapdoor",
         "ingredients",
         IconSpec::Model("block/copper_trapdoor_bottom"),
+    ),
+    (
+        "minecraft:waxed_copper_trapdoor_open",
+        "buildingBlocks",
+        IconSpec::Form(
+            SpecialForm::Open,
+            &IconSpec::IsoModel("block/copper_trapdoor_open"),
+        ),
     ),
     (
         "minecraft:waxed_cut_copper",
@@ -4280,9 +5186,48 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         IconSpec::Model("block/exposed_copper_bulb"),
     ),
     (
+        "minecraft:waxed_exposed_copper_bulb_lit",
+        "ingredients",
+        IconSpec::Form(
+            SpecialForm::Lit,
+            &IconSpec::Model("block/exposed_copper_bulb_lit"),
+        ),
+    ),
+    (
         "minecraft:waxed_exposed_copper_chest",
         "ingredients",
         IconSpec::Skip,
+    ),
+    (
+        "minecraft:waxed_exposed_copper_door",
+        "buildingBlocks",
+        IconSpec::Composite(&[
+            (
+                "block/exposed_copper_door_bottom_left",
+                [0.0, 0.0, 0.0],
+                90.0,
+            ),
+            ("block/exposed_copper_door_top_left", [0.0, 1.0, 0.0], 90.0),
+        ]),
+    ),
+    (
+        "minecraft:waxed_exposed_copper_door_open",
+        "buildingBlocks",
+        IconSpec::Form(
+            SpecialForm::Open,
+            &IconSpec::Composite(&[
+                (
+                    "block/exposed_copper_door_bottom_left_open",
+                    [0.0, 0.0, 0.0],
+                    90.0,
+                ),
+                (
+                    "block/exposed_copper_door_top_left_open",
+                    [0.0, 1.0, 0.0],
+                    90.0,
+                ),
+            ]),
+        ),
     ),
     (
         "minecraft:waxed_exposed_copper_golem_statue",
@@ -4298,6 +5243,14 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         "minecraft:waxed_exposed_copper_trapdoor",
         "ingredients",
         IconSpec::Model("block/exposed_copper_trapdoor_bottom"),
+    ),
+    (
+        "minecraft:waxed_exposed_copper_trapdoor_open",
+        "buildingBlocks",
+        IconSpec::Form(
+            SpecialForm::Open,
+            &IconSpec::IsoModel("block/exposed_copper_trapdoor_open"),
+        ),
     ),
     (
         "minecraft:waxed_exposed_cut_copper",
@@ -4340,10 +5293,51 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         IconSpec::Model("block/oxidized_copper_bulb"),
     ),
     (
+        "minecraft:waxed_oxidized_copper_bulb_lit",
+        "ingredients",
+        IconSpec::Form(
+            SpecialForm::Lit,
+            &IconSpec::Model("block/oxidized_copper_bulb_lit"),
+        ),
+    ),
+    (
         "minecraft:waxed_oxidized_copper_chest",
         "ingredients",
         IconSpec::Skip,
     ),
+    (
+        "minecraft:waxed_oxidized_copper_door",
+        "buildingBlocks",
+        IconSpec::Composite(&[
+            (
+                "block/oxidized_copper_door_bottom_left",
+                [0.0, 0.0, 0.0],
+                90.0,
+            ),
+            ("block/oxidized_copper_door_top_left", [0.0, 1.0, 0.0], 90.0),
+        ]),
+    ),
+    ("minecraft:copper_chest", "functional", IconSpec::Skip),
+    (
+        "minecraft:waxed_oxidized_copper_door_open",
+        "buildingBlocks",
+        IconSpec::Form(
+            SpecialForm::Open,
+            &IconSpec::Composite(&[
+                (
+                    "block/oxidized_copper_door_bottom_left_open",
+                    [0.0, 0.0, 0.0],
+                    90.0,
+                ),
+                (
+                    "block/oxidized_copper_door_top_left_open",
+                    [0.0, 1.0, 0.0],
+                    90.0,
+                ),
+            ]),
+        ),
+    ),
+    // 活板门打开（open模型无display，强制iso）
     (
         "minecraft:waxed_oxidized_copper_golem_statue",
         "ingredients",
@@ -4359,6 +5353,15 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         "ingredients",
         IconSpec::Model("block/oxidized_copper_trapdoor_bottom"),
     ),
+    (
+        "minecraft:waxed_oxidized_copper_trapdoor_open",
+        "buildingBlocks",
+        IconSpec::Form(
+            SpecialForm::Open,
+            &IconSpec::IsoModel("block/oxidized_copper_trapdoor_open"),
+        ),
+    ),
+    // 栅栏门打开（open模板无display，强制iso）
     (
         "minecraft:waxed_oxidized_cut_copper",
         "ingredients",
@@ -4395,9 +5398,52 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         IconSpec::Model("block/weathered_copper_bulb"),
     ),
     (
+        "minecraft:waxed_weathered_copper_bulb_lit",
+        "ingredients",
+        IconSpec::Form(
+            SpecialForm::Lit,
+            &IconSpec::Model("block/weathered_copper_bulb_lit"),
+        ),
+    ),
+    (
         "minecraft:waxed_weathered_copper_chest",
         "ingredients",
         IconSpec::Skip,
+    ),
+    (
+        "minecraft:waxed_weathered_copper_door",
+        "buildingBlocks",
+        IconSpec::Composite(&[
+            (
+                "block/weathered_copper_door_bottom_left",
+                [0.0, 0.0, 0.0],
+                90.0,
+            ),
+            (
+                "block/weathered_copper_door_top_left",
+                [0.0, 1.0, 0.0],
+                90.0,
+            ),
+        ]),
+    ),
+    (
+        "minecraft:waxed_weathered_copper_door_open",
+        "buildingBlocks",
+        IconSpec::Form(
+            SpecialForm::Open,
+            &IconSpec::Composite(&[
+                (
+                    "block/weathered_copper_door_bottom_left_open",
+                    [0.0, 0.0, 0.0],
+                    90.0,
+                ),
+                (
+                    "block/weathered_copper_door_top_left_open",
+                    [0.0, 1.0, 0.0],
+                    90.0,
+                ),
+            ]),
+        ),
     ),
     (
         "minecraft:waxed_weathered_copper_golem_statue",
@@ -4413,6 +5459,14 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         "minecraft:waxed_weathered_copper_trapdoor",
         "ingredients",
         IconSpec::Model("block/weathered_copper_trapdoor_bottom"),
+    ),
+    (
+        "minecraft:waxed_weathered_copper_trapdoor_open",
+        "buildingBlocks",
+        IconSpec::Form(
+            SpecialForm::Open,
+            &IconSpec::IsoModel("block/weathered_copper_trapdoor_open"),
+        ),
     ),
     (
         "minecraft:waxed_weathered_cut_copper",
@@ -4450,9 +5504,52 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         IconSpec::Model("block/weathered_copper_bulb"),
     ),
     (
+        "minecraft:weathered_copper_bulb_lit",
+        "ingredients",
+        IconSpec::Form(
+            SpecialForm::Lit,
+            &IconSpec::Model("block/weathered_copper_bulb_lit"),
+        ),
+    ),
+    (
         "minecraft:weathered_copper_chest",
         "ingredients",
         IconSpec::Skip,
+    ),
+    (
+        "minecraft:weathered_copper_door",
+        "buildingBlocks",
+        IconSpec::Composite(&[
+            (
+                "block/weathered_copper_door_bottom_left",
+                [0.0, 0.0, 0.0],
+                90.0,
+            ),
+            (
+                "block/weathered_copper_door_top_left",
+                [0.0, 1.0, 0.0],
+                90.0,
+            ),
+        ]),
+    ),
+    (
+        "minecraft:weathered_copper_door_open",
+        "buildingBlocks",
+        IconSpec::Form(
+            SpecialForm::Open,
+            &IconSpec::Composite(&[
+                (
+                    "block/weathered_copper_door_bottom_left_open",
+                    [0.0, 0.0, 0.0],
+                    90.0,
+                ),
+                (
+                    "block/weathered_copper_door_top_left_open",
+                    [0.0, 1.0, 0.0],
+                    90.0,
+                ),
+            ]),
+        ),
     ),
     (
         "minecraft:weathered_copper_golem_statue",
@@ -4468,6 +5565,14 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         "minecraft:weathered_copper_trapdoor",
         "ingredients",
         IconSpec::Model("block/weathered_copper_trapdoor_bottom"),
+    ),
+    (
+        "minecraft:weathered_copper_trapdoor_open",
+        "buildingBlocks",
+        IconSpec::Form(
+            SpecialForm::Open,
+            &IconSpec::IsoModel("block/weathered_copper_trapdoor_open"),
+        ),
     ),
     (
         "minecraft:weathered_cut_copper",
@@ -4519,6 +5624,16 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         IconSpec::Model("block/white_concrete_powder"),
     ),
     (
+        "minecraft:white_concrete_slab",
+        "coloredBlocks",
+        IconSpec::Model("block/white_concrete_slab"),
+    ),
+    (
+        "minecraft:white_concrete_stairs",
+        "coloredBlocks",
+        IconSpec::Model("block/white_concrete_stairs"),
+    ),
+    (
         "minecraft:white_glazed_terracotta",
         "coloredBlocks",
         IconSpec::Model("block/white_glazed_terracotta"),
@@ -4544,9 +5659,19 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         IconSpec::Model("block/white_wool"),
     ),
     (
+        "minecraft:white_wool_slab",
+        "coloredBlocks",
+        IconSpec::Model("block/white_wool_slab"),
+    ),
+    (
+        "minecraft:white_wool_stairs",
+        "coloredBlocks",
+        IconSpec::Model("block/white_wool_stairs"),
+    ),
+    (
         "minecraft:wither_skeleton_skull",
         "functional",
-        IconSpec::Skip,
+        IconSpec::Head("entity/skeleton/wither_skeleton", false),
     ),
     ("minecraft:yellow_banner", "coloredBlocks", IconSpec::Skip),
     (
@@ -4573,9 +5698,24 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         IconSpec::Model("block/yellow_concrete_powder"),
     ),
     (
+        "minecraft:yellow_concrete_slab",
+        "coloredBlocks",
+        IconSpec::Model("block/yellow_concrete_slab"),
+    ),
+    (
+        "minecraft:yellow_concrete_stairs",
+        "coloredBlocks",
+        IconSpec::Model("block/yellow_concrete_stairs"),
+    ),
+    (
         "minecraft:yellow_glazed_terracotta",
         "coloredBlocks",
         IconSpec::Model("block/yellow_glazed_terracotta"),
+    ),
+    (
+        "minecraft:yellow_poplar_leaves",
+        "natural",
+        IconSpec::Model("block/yellow_poplar_leaves"),
     ),
     (
         "minecraft:yellow_shulker_box",
@@ -4597,695 +5737,22 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         "coloredBlocks",
         IconSpec::Model("block/yellow_wool"),
     ),
-    ("minecraft:zombie_head", "functional", IconSpec::Skip),
+    (
+        "minecraft:zombie_head",
+        "functional",
+        IconSpec::Head("entity/zombie/zombie", true),
+    ),
     // ---- 特殊形态（对应SpecialForm，ID = 基础ID + "_" + 形态后缀，非真实方块名）----
     // 门打开（open模型本身已转90°朝向，同closed一样yaw 90正对镜头）
     (
-        "minecraft:acacia_door_open",
-        "buildingBlocks",
-        IconSpec::Form(
-            SpecialForm::Open,
-            &IconSpec::Composite(&[
-                ("block/acacia_door_bottom_left_open", [0.0, 0.0, 0.0], 90.0),
-                ("block/acacia_door_top_left_open", [0.0, 1.0, 0.0], 90.0),
-            ]),
-        ),
+        "minecraft:yellow_wool_slab",
+        "coloredBlocks",
+        IconSpec::Model("block/yellow_wool_slab"),
     ),
     (
-        "minecraft:bamboo_door_open",
-        "buildingBlocks",
-        IconSpec::Form(
-            SpecialForm::Open,
-            &IconSpec::Composite(&[
-                ("block/bamboo_door_bottom_left_open", [0.0, 0.0, 0.0], 90.0),
-                ("block/bamboo_door_top_left_open", [0.0, 1.0, 0.0], 90.0),
-            ]),
-        ),
+        "minecraft:yellow_wool_stairs",
+        "coloredBlocks",
+        IconSpec::Model("block/yellow_wool_stairs"),
     ),
-    (
-        "minecraft:birch_door_open",
-        "buildingBlocks",
-        IconSpec::Form(
-            SpecialForm::Open,
-            &IconSpec::Composite(&[
-                ("block/birch_door_bottom_left_open", [0.0, 0.0, 0.0], 90.0),
-                ("block/birch_door_top_left_open", [0.0, 1.0, 0.0], 90.0),
-            ]),
-        ),
-    ),
-    (
-        "minecraft:cherry_door_open",
-        "buildingBlocks",
-        IconSpec::Form(
-            SpecialForm::Open,
-            &IconSpec::Composite(&[
-                ("block/cherry_door_bottom_left_open", [0.0, 0.0, 0.0], 90.0),
-                ("block/cherry_door_top_left_open", [0.0, 1.0, 0.0], 90.0),
-            ]),
-        ),
-    ),
-    (
-        "minecraft:crimson_door_open",
-        "buildingBlocks",
-        IconSpec::Form(
-            SpecialForm::Open,
-            &IconSpec::Composite(&[
-                ("block/crimson_door_bottom_left_open", [0.0, 0.0, 0.0], 90.0),
-                ("block/crimson_door_top_left_open", [0.0, 1.0, 0.0], 90.0),
-            ]),
-        ),
-    ),
-    (
-        "minecraft:dark_oak_door_open",
-        "buildingBlocks",
-        IconSpec::Form(
-            SpecialForm::Open,
-            &IconSpec::Composite(&[
-                (
-                    "block/dark_oak_door_bottom_left_open",
-                    [0.0, 0.0, 0.0],
-                    90.0,
-                ),
-                ("block/dark_oak_door_top_left_open", [0.0, 1.0, 0.0], 90.0),
-            ]),
-        ),
-    ),
-    (
-        "minecraft:iron_door_open",
-        "buildingBlocks",
-        IconSpec::Form(
-            SpecialForm::Open,
-            &IconSpec::Composite(&[
-                ("block/iron_door_bottom_left_open", [0.0, 0.0, 0.0], 90.0),
-                ("block/iron_door_top_left_open", [0.0, 1.0, 0.0], 90.0),
-            ]),
-        ),
-    ),
-    (
-        "minecraft:jungle_door_open",
-        "buildingBlocks",
-        IconSpec::Form(
-            SpecialForm::Open,
-            &IconSpec::Composite(&[
-                ("block/jungle_door_bottom_left_open", [0.0, 0.0, 0.0], 90.0),
-                ("block/jungle_door_top_left_open", [0.0, 1.0, 0.0], 90.0),
-            ]),
-        ),
-    ),
-    (
-        "minecraft:mangrove_door_open",
-        "buildingBlocks",
-        IconSpec::Form(
-            SpecialForm::Open,
-            &IconSpec::Composite(&[
-                (
-                    "block/mangrove_door_bottom_left_open",
-                    [0.0, 0.0, 0.0],
-                    90.0,
-                ),
-                ("block/mangrove_door_top_left_open", [0.0, 1.0, 0.0], 90.0),
-            ]),
-        ),
-    ),
-    (
-        "minecraft:oak_door_open",
-        "buildingBlocks",
-        IconSpec::Form(
-            SpecialForm::Open,
-            &IconSpec::Composite(&[
-                ("block/oak_door_bottom_left_open", [0.0, 0.0, 0.0], 90.0),
-                ("block/oak_door_top_left_open", [0.0, 1.0, 0.0], 90.0),
-            ]),
-        ),
-    ),
-    (
-        "minecraft:pale_oak_door_open",
-        "buildingBlocks",
-        IconSpec::Form(
-            SpecialForm::Open,
-            &IconSpec::Composite(&[
-                (
-                    "block/pale_oak_door_bottom_left_open",
-                    [0.0, 0.0, 0.0],
-                    90.0,
-                ),
-                ("block/pale_oak_door_top_left_open", [0.0, 1.0, 0.0], 90.0),
-            ]),
-        ),
-    ),
-    (
-        "minecraft:spruce_door_open",
-        "buildingBlocks",
-        IconSpec::Form(
-            SpecialForm::Open,
-            &IconSpec::Composite(&[
-                ("block/spruce_door_bottom_left_open", [0.0, 0.0, 0.0], 90.0),
-                ("block/spruce_door_top_left_open", [0.0, 1.0, 0.0], 90.0),
-            ]),
-        ),
-    ),
-    (
-        "minecraft:warped_door_open",
-        "buildingBlocks",
-        IconSpec::Form(
-            SpecialForm::Open,
-            &IconSpec::Composite(&[
-                ("block/warped_door_bottom_left_open", [0.0, 0.0, 0.0], 90.0),
-                ("block/warped_door_top_left_open", [0.0, 1.0, 0.0], 90.0),
-            ]),
-        ),
-    ),
-    (
-        "minecraft:copper_door_open",
-        "buildingBlocks",
-        IconSpec::Form(
-            SpecialForm::Open,
-            &IconSpec::Composite(&[
-                ("block/copper_door_bottom_left_open", [0.0, 0.0, 0.0], 90.0),
-                ("block/copper_door_top_left_open", [0.0, 1.0, 0.0], 90.0),
-            ]),
-        ),
-    ),
-    (
-        "minecraft:exposed_copper_door_open",
-        "buildingBlocks",
-        IconSpec::Form(
-            SpecialForm::Open,
-            &IconSpec::Composite(&[
-                (
-                    "block/exposed_copper_door_bottom_left_open",
-                    [0.0, 0.0, 0.0],
-                    90.0,
-                ),
-                (
-                    "block/exposed_copper_door_top_left_open",
-                    [0.0, 1.0, 0.0],
-                    90.0,
-                ),
-            ]),
-        ),
-    ),
-    (
-        "minecraft:weathered_copper_door_open",
-        "buildingBlocks",
-        IconSpec::Form(
-            SpecialForm::Open,
-            &IconSpec::Composite(&[
-                (
-                    "block/weathered_copper_door_bottom_left_open",
-                    [0.0, 0.0, 0.0],
-                    90.0,
-                ),
-                (
-                    "block/weathered_copper_door_top_left_open",
-                    [0.0, 1.0, 0.0],
-                    90.0,
-                ),
-            ]),
-        ),
-    ),
-    (
-        "minecraft:oxidized_copper_door_open",
-        "buildingBlocks",
-        IconSpec::Form(
-            SpecialForm::Open,
-            &IconSpec::Composite(&[
-                (
-                    "block/oxidized_copper_door_bottom_left_open",
-                    [0.0, 0.0, 0.0],
-                    90.0,
-                ),
-                (
-                    "block/oxidized_copper_door_top_left_open",
-                    [0.0, 1.0, 0.0],
-                    90.0,
-                ),
-            ]),
-        ),
-    ),
-    (
-        "minecraft:waxed_copper_door_open",
-        "buildingBlocks",
-        IconSpec::Form(
-            SpecialForm::Open,
-            &IconSpec::Composite(&[
-                ("block/copper_door_bottom_left_open", [0.0, 0.0, 0.0], 90.0),
-                ("block/copper_door_top_left_open", [0.0, 1.0, 0.0], 90.0),
-            ]),
-        ),
-    ),
-    (
-        "minecraft:waxed_exposed_copper_door_open",
-        "buildingBlocks",
-        IconSpec::Form(
-            SpecialForm::Open,
-            &IconSpec::Composite(&[
-                (
-                    "block/exposed_copper_door_bottom_left_open",
-                    [0.0, 0.0, 0.0],
-                    90.0,
-                ),
-                (
-                    "block/exposed_copper_door_top_left_open",
-                    [0.0, 1.0, 0.0],
-                    90.0,
-                ),
-            ]),
-        ),
-    ),
-    (
-        "minecraft:waxed_weathered_copper_door_open",
-        "buildingBlocks",
-        IconSpec::Form(
-            SpecialForm::Open,
-            &IconSpec::Composite(&[
-                (
-                    "block/weathered_copper_door_bottom_left_open",
-                    [0.0, 0.0, 0.0],
-                    90.0,
-                ),
-                (
-                    "block/weathered_copper_door_top_left_open",
-                    [0.0, 1.0, 0.0],
-                    90.0,
-                ),
-            ]),
-        ),
-    ),
-    (
-        "minecraft:waxed_oxidized_copper_door_open",
-        "buildingBlocks",
-        IconSpec::Form(
-            SpecialForm::Open,
-            &IconSpec::Composite(&[
-                (
-                    "block/oxidized_copper_door_bottom_left_open",
-                    [0.0, 0.0, 0.0],
-                    90.0,
-                ),
-                (
-                    "block/oxidized_copper_door_top_left_open",
-                    [0.0, 1.0, 0.0],
-                    90.0,
-                ),
-            ]),
-        ),
-    ),
-    // 活板门打开（open模型无display，强制iso）
-    (
-        "minecraft:acacia_trapdoor_open",
-        "buildingBlocks",
-        IconSpec::Form(
-            SpecialForm::Open,
-            &IconSpec::IsoModel("block/acacia_trapdoor_open"),
-        ),
-    ),
-    (
-        "minecraft:bamboo_trapdoor_open",
-        "buildingBlocks",
-        IconSpec::Form(
-            SpecialForm::Open,
-            &IconSpec::IsoModel("block/bamboo_trapdoor_open"),
-        ),
-    ),
-    (
-        "minecraft:birch_trapdoor_open",
-        "buildingBlocks",
-        IconSpec::Form(
-            SpecialForm::Open,
-            &IconSpec::IsoModel("block/birch_trapdoor_open"),
-        ),
-    ),
-    (
-        "minecraft:cherry_trapdoor_open",
-        "buildingBlocks",
-        IconSpec::Form(
-            SpecialForm::Open,
-            &IconSpec::IsoModel("block/cherry_trapdoor_open"),
-        ),
-    ),
-    (
-        "minecraft:crimson_trapdoor_open",
-        "buildingBlocks",
-        IconSpec::Form(
-            SpecialForm::Open,
-            &IconSpec::IsoModel("block/crimson_trapdoor_open"),
-        ),
-    ),
-    (
-        "minecraft:dark_oak_trapdoor_open",
-        "buildingBlocks",
-        IconSpec::Form(
-            SpecialForm::Open,
-            &IconSpec::IsoModel("block/dark_oak_trapdoor_open"),
-        ),
-    ),
-    (
-        "minecraft:iron_trapdoor_open",
-        "buildingBlocks",
-        IconSpec::Form(
-            SpecialForm::Open,
-            &IconSpec::IsoModel("block/iron_trapdoor_open"),
-        ),
-    ),
-    (
-        "minecraft:jungle_trapdoor_open",
-        "buildingBlocks",
-        IconSpec::Form(
-            SpecialForm::Open,
-            &IconSpec::IsoModel("block/jungle_trapdoor_open"),
-        ),
-    ),
-    (
-        "minecraft:mangrove_trapdoor_open",
-        "buildingBlocks",
-        IconSpec::Form(
-            SpecialForm::Open,
-            &IconSpec::IsoModel("block/mangrove_trapdoor_open"),
-        ),
-    ),
-    (
-        "minecraft:oak_trapdoor_open",
-        "buildingBlocks",
-        IconSpec::Form(
-            SpecialForm::Open,
-            &IconSpec::IsoModel("block/oak_trapdoor_open"),
-        ),
-    ),
-    (
-        "minecraft:pale_oak_trapdoor_open",
-        "buildingBlocks",
-        IconSpec::Form(
-            SpecialForm::Open,
-            &IconSpec::IsoModel("block/pale_oak_trapdoor_open"),
-        ),
-    ),
-    (
-        "minecraft:spruce_trapdoor_open",
-        "buildingBlocks",
-        IconSpec::Form(
-            SpecialForm::Open,
-            &IconSpec::IsoModel("block/spruce_trapdoor_open"),
-        ),
-    ),
-    (
-        "minecraft:warped_trapdoor_open",
-        "buildingBlocks",
-        IconSpec::Form(
-            SpecialForm::Open,
-            &IconSpec::IsoModel("block/warped_trapdoor_open"),
-        ),
-    ),
-    (
-        "minecraft:copper_trapdoor_open",
-        "buildingBlocks",
-        IconSpec::Form(
-            SpecialForm::Open,
-            &IconSpec::IsoModel("block/copper_trapdoor_open"),
-        ),
-    ),
-    (
-        "minecraft:exposed_copper_trapdoor_open",
-        "buildingBlocks",
-        IconSpec::Form(
-            SpecialForm::Open,
-            &IconSpec::IsoModel("block/exposed_copper_trapdoor_open"),
-        ),
-    ),
-    (
-        "minecraft:weathered_copper_trapdoor_open",
-        "buildingBlocks",
-        IconSpec::Form(
-            SpecialForm::Open,
-            &IconSpec::IsoModel("block/weathered_copper_trapdoor_open"),
-        ),
-    ),
-    (
-        "minecraft:oxidized_copper_trapdoor_open",
-        "buildingBlocks",
-        IconSpec::Form(
-            SpecialForm::Open,
-            &IconSpec::IsoModel("block/oxidized_copper_trapdoor_open"),
-        ),
-    ),
-    (
-        "minecraft:waxed_copper_trapdoor_open",
-        "buildingBlocks",
-        IconSpec::Form(
-            SpecialForm::Open,
-            &IconSpec::IsoModel("block/copper_trapdoor_open"),
-        ),
-    ),
-    (
-        "minecraft:waxed_exposed_copper_trapdoor_open",
-        "buildingBlocks",
-        IconSpec::Form(
-            SpecialForm::Open,
-            &IconSpec::IsoModel("block/exposed_copper_trapdoor_open"),
-        ),
-    ),
-    (
-        "minecraft:waxed_weathered_copper_trapdoor_open",
-        "buildingBlocks",
-        IconSpec::Form(
-            SpecialForm::Open,
-            &IconSpec::IsoModel("block/weathered_copper_trapdoor_open"),
-        ),
-    ),
-    (
-        "minecraft:waxed_oxidized_copper_trapdoor_open",
-        "buildingBlocks",
-        IconSpec::Form(
-            SpecialForm::Open,
-            &IconSpec::IsoModel("block/oxidized_copper_trapdoor_open"),
-        ),
-    ),
-    // 栅栏门打开（open模板无display，强制iso）
-    (
-        "minecraft:acacia_fence_gate_open",
-        "buildingBlocks",
-        IconSpec::Form(
-            SpecialForm::Open,
-            &IconSpec::IsoModel("block/acacia_fence_gate_open"),
-        ),
-    ),
-    (
-        "minecraft:bamboo_fence_gate_open",
-        "buildingBlocks",
-        IconSpec::Form(
-            SpecialForm::Open,
-            &IconSpec::IsoModel("block/bamboo_fence_gate_open"),
-        ),
-    ),
-    (
-        "minecraft:birch_fence_gate_open",
-        "buildingBlocks",
-        IconSpec::Form(
-            SpecialForm::Open,
-            &IconSpec::IsoModel("block/birch_fence_gate_open"),
-        ),
-    ),
-    (
-        "minecraft:cherry_fence_gate_open",
-        "buildingBlocks",
-        IconSpec::Form(
-            SpecialForm::Open,
-            &IconSpec::IsoModel("block/cherry_fence_gate_open"),
-        ),
-    ),
-    (
-        "minecraft:crimson_fence_gate_open",
-        "buildingBlocks",
-        IconSpec::Form(
-            SpecialForm::Open,
-            &IconSpec::IsoModel("block/crimson_fence_gate_open"),
-        ),
-    ),
-    (
-        "minecraft:dark_oak_fence_gate_open",
-        "buildingBlocks",
-        IconSpec::Form(
-            SpecialForm::Open,
-            &IconSpec::IsoModel("block/dark_oak_fence_gate_open"),
-        ),
-    ),
-    (
-        "minecraft:jungle_fence_gate_open",
-        "buildingBlocks",
-        IconSpec::Form(
-            SpecialForm::Open,
-            &IconSpec::IsoModel("block/jungle_fence_gate_open"),
-        ),
-    ),
-    (
-        "minecraft:mangrove_fence_gate_open",
-        "buildingBlocks",
-        IconSpec::Form(
-            SpecialForm::Open,
-            &IconSpec::IsoModel("block/mangrove_fence_gate_open"),
-        ),
-    ),
-    (
-        "minecraft:oak_fence_gate_open",
-        "buildingBlocks",
-        IconSpec::Form(
-            SpecialForm::Open,
-            &IconSpec::IsoModel("block/oak_fence_gate_open"),
-        ),
-    ),
-    (
-        "minecraft:pale_oak_fence_gate_open",
-        "buildingBlocks",
-        IconSpec::Form(
-            SpecialForm::Open,
-            &IconSpec::IsoModel("block/pale_oak_fence_gate_open"),
-        ),
-    ),
-    (
-        "minecraft:spruce_fence_gate_open",
-        "buildingBlocks",
-        IconSpec::Form(
-            SpecialForm::Open,
-            &IconSpec::IsoModel("block/spruce_fence_gate_open"),
-        ),
-    ),
-    (
-        "minecraft:warped_fence_gate_open",
-        "buildingBlocks",
-        IconSpec::Form(
-            SpecialForm::Open,
-            &IconSpec::IsoModel("block/warped_fence_gate_open"),
-        ),
-    ),
-    // 单个特殊形态
-    (
-        "minecraft:barrel_open",
-        "functional",
-        IconSpec::Form(SpecialForm::Open, &IconSpec::Model("block/barrel_open")),
-    ),
-    (
-        "minecraft:campfire_off",
-        "functional",
-        IconSpec::Form(SpecialForm::Off, &IconSpec::Model("block/campfire_off")),
-    ),
-    (
-        "minecraft:comparator_on",
-        "redstone",
-        IconSpec::Form(SpecialForm::On, &IconSpec::IsoModel("block/comparator_on")),
-    ),
-    (
-        "minecraft:copper_bulb_lit",
-        "buildingBlocks",
-        IconSpec::Form(SpecialForm::Lit, &IconSpec::Model("block/copper_bulb_lit")),
-    ),
-    (
-        "minecraft:exposed_copper_bulb_lit",
-        "ingredients",
-        IconSpec::Form(
-            SpecialForm::Lit,
-            &IconSpec::Model("block/exposed_copper_bulb_lit"),
-        ),
-    ),
-    (
-        "minecraft:weathered_copper_bulb_lit",
-        "ingredients",
-        IconSpec::Form(
-            SpecialForm::Lit,
-            &IconSpec::Model("block/weathered_copper_bulb_lit"),
-        ),
-    ),
-    (
-        "minecraft:oxidized_copper_bulb_lit",
-        "ingredients",
-        IconSpec::Form(
-            SpecialForm::Lit,
-            &IconSpec::Model("block/oxidized_copper_bulb_lit"),
-        ),
-    ),
-    (
-        "minecraft:waxed_copper_bulb_lit",
-        "ingredients",
-        IconSpec::Form(SpecialForm::Lit, &IconSpec::Model("block/copper_bulb_lit")),
-    ),
-    (
-        "minecraft:waxed_exposed_copper_bulb_lit",
-        "ingredients",
-        IconSpec::Form(
-            SpecialForm::Lit,
-            &IconSpec::Model("block/exposed_copper_bulb_lit"),
-        ),
-    ),
-    (
-        "minecraft:waxed_weathered_copper_bulb_lit",
-        "ingredients",
-        IconSpec::Form(
-            SpecialForm::Lit,
-            &IconSpec::Model("block/weathered_copper_bulb_lit"),
-        ),
-    ),
-    (
-        "minecraft:waxed_oxidized_copper_bulb_lit",
-        "ingredients",
-        IconSpec::Form(
-            SpecialForm::Lit,
-            &IconSpec::Model("block/oxidized_copper_bulb_lit"),
-        ),
-    ),
-    (
-        "minecraft:calibrated_sculk_sensor_active",
-        "redstone",
-        IconSpec::Form(
-            SpecialForm::Active,
-            &IconSpec::Model("block/calibrated_sculk_sensor_active"),
-        ),
-    ),
-    (
-        "minecraft:sculk_sensor_active",
-        "natural",
-        IconSpec::Form(
-            SpecialForm::Active,
-            &IconSpec::Model("block/sculk_sensor_active"),
-        ),
-    ),
-    (
-        "minecraft:lightning_rod_on",
-        "functional",
-        IconSpec::Form(SpecialForm::On, &IconSpec::Model("block/lightning_rod_on")),
-    ),
-    (
-        "minecraft:observer_on",
-        "redstone",
-        IconSpec::Form(SpecialForm::On, &IconSpec::Model("block/observer_on")),
-    ),
-    // piston_extended.json无parent且贴图引用未定义（游戏内不作为物品渲染），
-    // 用头板+活塞本体拼出伸出形态（头板0..4px、活塞杆4..20px、本体12..28px）
-    (
-        "minecraft:piston_extended",
-        "redstone",
-        IconSpec::Form(
-            SpecialForm::Extended,
-            &IconSpec::Composite(&[
-                ("block/piston_head", [0.0, 0.0, 0.0], 0.0),
-                ("block/piston", [0.0, 0.0, 0.75], 0.0),
-            ]),
-        ),
-    ),
-    (
-        "minecraft:smoker_lit",
-        "functional",
-        IconSpec::Form(SpecialForm::Lit, &IconSpec::Model("block/smoker_on")),
-    ),
-    (
-        "minecraft:trial_spawner_active",
-        "spawnEggs",
-        IconSpec::Form(
-            SpecialForm::Active,
-            &IconSpec::Model("block/trial_spawner_active"),
-        ),
-    ),
-    (
-        "minecraft:vault_active",
-        "functional",
-        IconSpec::Form(SpecialForm::Active, &IconSpec::Model("block/vault_active")),
-    ),
+
 ];

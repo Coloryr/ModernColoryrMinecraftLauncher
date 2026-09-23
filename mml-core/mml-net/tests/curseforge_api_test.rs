@@ -221,7 +221,7 @@ fn deserialize_search_page() {
     assert_eq!(item.categories[0].name, "Map and Information");
     assert_eq!(item.categories[0].class_id, 6);
     assert_eq!(item.authors[0].name, "mezz");
-    assert_eq!(item.logo.url, "https://media.forgecdn.net/avatars/456.png");
+    assert_eq!(item.logo.url, Some(String::from("https://media.forgecdn.net/avatars/456.png")));
     assert_eq!(item.screenshots[0].url, "https://media.forgecdn.net/attachments/1/2/shot.png");
     assert_eq!(item.date_modified, "2026-01-01T00:00:00Z");
 

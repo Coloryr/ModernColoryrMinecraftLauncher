@@ -1,6 +1,7 @@
 //! 方块渲染：图标表、数据、渲染管线
 pub mod icons;
 pub mod obj;
+pub mod skin;
 
 use std::{
     cell::RefCell,
@@ -11,12 +12,12 @@ use std::{
 
 use crate::block::icons::{BLOCK_ICONS, IconSpec};
 use crate::gpu::GpuCtx;
-use crate::model::{BakedModel, bake_model};
+use crate::model::{BakedModel, Quad, bake_model};
 
 use mml_base::{archives::BaseArchive, serialize_tools};
 use mml_game::gui_hook::ProgressGui;
 use rayon::prelude::*;
-use mml_names::i18_items::error_type::{CoreResult, ErrorData, ErrorType};
+use mml_names::i18_items::error_type::{CoreResult, ErrorType};
 use mml_sys::path_helper;
 use serde::{Deserialize, Serialize};
 use tiny_skia::Pixmap;
@@ -227,10 +228,10 @@ impl TextureRefObj {
     }
 }
 
-/// 分阶段耗时统计（纳秒累计），设置 M²L_RENDER_PROFILE=1 时在渲染结束后打印
+/// 分阶段耗时统计（纳秒累计），设置 MML_RENDER_PROFILE=1 时在渲染结束后打印
 /// （用于定位并发渲染的性能瓶颈，正常路径零开销仅两次fetch_add）
 static PROFILE: LazyLock<RenderProfile> = LazyLock::new(|| RenderProfile {
-    enabled: std::env::var("M²L_RENDER_PROFILE").is_ok(),
+    enabled: std::env::var("MML_RENDER_PROFILE").is_ok(),
     ..Default::default()
 });
 
@@ -262,13 +263,140 @@ impl RenderProfile {
     }
 }
 
+/// 头颅立方体的几何（照 SkullModel 的 head 部件）
+///
+/// 模型空间（像素，y 轴向下）：8×8×8 立方体，x/z ∈ ±4、y ∈ -8..0；
+/// 帽子层（humanoidHeadLayer）同尺寸向外膨胀 0.25 像素、贴图偏移 (32,0)。
+///
+/// 面顶点与 uv 分配照 ModelPart.Cube：每面的 4 个顶点按索引取 uv 矩形的
+/// [0]右上 [1]左上 [2]左下 [3]右下（uv 矩形来自各面在贴图上的展开位置，
+/// 头颅即皮肤头部布局：右(0,8) 前(8,8) 左(16,8) 后(24,8) 顶(8,0) 底(16,0)）。
+///
+/// 摆放照 SkullBlockRenderer：绕 X 轴 180° 翻转（模型 y 轴向下）后平移到方块中心，
+/// 头落在方块内 4..12 / 0..8 / 4..12 像素处（下半格、水平居中）。
+/// 180° 是纯旋转（行列式 +1），顶点绕序仍与法线一致，无需重排 winding
+fn push_head_cube(quads: &mut Vec<Quad>, tex: &Pixmap, path: &str, tex_off: [f32; 2], grow: f32) {
+    let (tw, th) = (tex.width() as f32, tex.height() as f32);
+    let min = [-4.0 - grow, -8.0 - grow, -4.0 - grow];
+    let max = [4.0 + grow, 0.0 + grow, 4.0 + grow];
+
+    // 立方体三边都是8：uv 展开的各列/行位置（u1..u4、v1..v2）
+    let (u, v) = (tex_off[0], tex_off[1]);
+    let (u1, u2, u3, u4) = (u + 8.0, u + 16.0, u + 24.0, u + 32.0);
+    let (v1, v2) = (v + 8.0, v + 16.0);
+
+    // 顶点：t* 在 z=min 面、l* 在 z=max 面（照 ModelPart.Cube 的命名）
+    let t0 = [min[0], min[1], min[2]];
+    let t1 = [max[0], min[1], min[2]];
+    let t2 = [max[0], max[1], min[2]];
+    let t3 = [min[0], max[1], min[2]];
+    let l0 = [min[0], min[1], max[2]];
+    let l1 = [max[0], min[1], max[2]];
+    let l2 = [max[0], max[1], max[2]];
+    let l3 = [min[0], max[1], max[2]];
+
+    // (顶点, 模型空间法线, uv矩形[left,top,right,bottom])，面顺序同 ModelPart.Cube
+    let faces: [([[f32; 3]; 4], [f32; 3], [f32; 4]); 6] = [
+        ([l1, l0, t0, t1], [0.0, -1.0, 0.0], [u1, v, u2, v1]),  // 底
+        ([t2, t3, l3, l2], [0.0, 1.0, 0.0], [u2, v1, u3, v]),   // 顶（矩形上下颠倒）
+        ([t0, l0, l3, t3], [-1.0, 0.0, 0.0], [u, v1, u1, v2]),  // 西
+        ([t1, t0, t3, t2], [0.0, 0.0, -1.0], [u1, v1, u2, v2]), // 北
+        ([l1, t1, t2, l2], [1.0, 0.0, 0.0], [u2, v1, u3, v2]),  // 东
+        ([l0, l1, l2, l3], [0.0, 0.0, 1.0], [u3, v1, u4, v2]),  // 南
+    ];
+
+    for (verts, normal, rect) in faces {
+        let (left, top, right, bottom) = (rect[0], rect[1], rect[2], rect[3]);
+        // 顶点i的uv角（照 Polygon 构造： [0]→(right,top) [1]→(left,top) [2]→(left,bottom) [3]→(right,bottom)）
+        let corners = [
+            [right, top],
+            [left, top],
+            [left, bottom],
+            [right, bottom],
+        ];
+        let pos = verts.map(|p| {
+            // 180°绕X翻转（模型y向下→方块空间y向上）后平移到方块中心，像素→方块
+            [p[0] / 16.0 + 0.5, -p[1] / 16.0, -p[2] / 16.0 + 0.5]
+        });
+        let uv = corners.map(|c| [c[0] / tw, c[1] / th]);
+        let uv_rect = [
+            left.min(right) / tw,
+            top.min(bottom) / th,
+            left.max(right) / tw,
+            top.max(bottom) / th,
+        ];
+        quads.push(Quad {
+            pos,
+            uv,
+            normal: [normal[0], -normal[1], -normal[2]],
+            // 头颅贴图无 tint（玩家头的皮肤颜色已烘在贴图里）
+            color: [[1.0; 4]; 4],
+            tex: path.to_string(),
+            translucent: crate::model::rect_translucent(tex, None, &uv_rect),
+            fullbright: false,
+        });
+    }
+}
+
+/// 烘焙一个头颅为 quad 列表（贴图 + 立方体几何 + 图标gui变换）
+///
+/// `tex_rel`：jar 内贴图相对路径（如 entity/zombie/zombie）；
+/// `hat`：是否带帽子层（玩家头/僵尸头，贴图须为 64×64）。
+/// gui 变换取 item/template_skull 的 display.gui（30/45/0、平移 0/3/0、缩放1）——
+/// 头颅图标在创造栏就是这个视角；模型空间已居中，无需再适配画布
+fn bake_head(
+    archive: &BaseArchive,
+    tex_rel: &str,
+    hat: bool,
+    tex_cache: &mut HashMap<String, Pixmap>,
+) -> Option<(BakedModel, HashMap<String, Pixmap>)> {
+    let path = crate::model::texture_path(tex_rel)?;
+    let tex = crate::model::load_texture(archive, tex_cache, &path)?;
+
+    // 帽子层取自 humanoidHeadLayer（玩家头/僵尸头，贴图 64×64）；
+    // mobHeadLayer 的 64×32 贴图同样"放得下"texOffs(32,0)，但取到的是头部侧面，
+    // 所以这里按贴图高度判断表的 hat 标记是否标错
+    debug_assert!(
+        !hat || tex.height() >= 64,
+        "{tex_rel} 标了帽子层，但贴图 {}×{} 不是 humanoidHeadLayer 的 64×64",
+        tex.width(),
+        tex.height()
+    );
+
+    let mut textures = HashMap::new();
+    textures.insert(path.clone(), tex.clone());
+    Some((bake_head_model(tex, hat, &path), textures))
+}
+
+/// 头颅烘焙核心：从已加载的贴图直接出模型（外部皮肤文件的图标渲染也走这里）
+fn bake_head_model(tex: Pixmap, hat: bool, path: &str) -> BakedModel {
+    let mut quads = Vec::new();
+    push_head_cube(&mut quads, &tex, path, [0.0, 0.0], 0.0);
+    if hat {
+        push_head_cube(&mut quads, &tex, path, [32.0, 0.0], 0.25);
+    }
+
+    BakedModel {
+        quads,
+        // 头颅是3D模型，走 ITEMS_3D 侧向光照（同游戏）
+        gui_light_3d: true,
+        transform: crate::model::GuiTransform {
+            rotation: [30.0, 45.0, 0.0],
+            // display 的平移单位是1/16方块，此处已按 GuiTransform 约定换算
+            translation: [0.0, 3.0 / 16.0, 0.0],
+            scale: [1.0; 3],
+        },
+    }
+}
+
 /// 渲染一个方块图标（block_icons表的一行）
 ///
 /// - Model：等轴测渲染3D模型（GPU优先，逐图标回退CPU）
 /// - IsoModel：无display的模型强制标准gui旋转等轴测渲染
 /// - Composite：多模型按transformation拼合（床/门）
 /// - Form：特殊形态，按内层规格渲染（ID非真实方块名，注册由render_blocks跳过）
-/// - Skip：实体渲染（箱子/头颅/旗帜等），跳过
+/// - Head：头颅立方体（手工几何，见bake_head）
+/// - Skip：实体渲染（箱子/旗帜/潜影盒等），跳过
 ///
 /// 返回（方块ID, 输出文件名）
 fn render_icon(
@@ -298,6 +426,10 @@ fn render_icon(
                 translation: [0.0; 3],
                 scale: [0.625; 3],
             };
+            render_baked(gpu, archive, model, textures, None)?
+        }
+        IconSpec::Head(tex_rel, hat) => {
+            let (model, textures) = bake_head(archive, tex_rel, *hat, tex_cache)?;
             render_baked(gpu, archive, model, textures, None)?
         }
         IconSpec::Composite(parts) => {
@@ -474,7 +606,7 @@ fn render_once(
 /// 按创造模式图标表渲染全部方块
 ///
 /// 渲染清单与分类来自block_icons::BLOCK_ICONS（生成脚本从26.2客户端jar一次性
-/// 提取的固定表：items/*.json图标定义 + CreativeModeTabs创造分类，之后手工维护）。
+/// 提取的固定表：items/*.json图标定义 + CreativeModeTabs创造分类，26.3增量更新，之后手工维护）。
 /// 下载流程（版本清单 → 客户端jar）见lib的load_blocks，这里只做解包渲染。
 ///
 /// 渲染按CPU核数并发（rayon）：各工作线程经thread_local持有一份只读jar句柄
@@ -489,9 +621,7 @@ pub fn render_blocks(archive: &BaseArchive, gui: ProgressGui) -> CoreResult<()> 
     // GPU上下文按平台条件编译自动选择后端（DX12→VK→GL等链），创建一次跨线程复用。
     // 图标渲染只有这一条路径，全不可用时直接报错（不再回退 CPU 软件光栅化）
     let Some(gpu) = GpuCtx::try_new() else {
-        return Err(ErrorType::TaskError(ErrorData {
-            error: String::from("没有可用的 GPU 后端，无法渲染方块图标"),
-        }));
+        return Err(ErrorType::GpuNotAvailable);
     };
 
     // 提取语言文件并构建 ID->语言键 映射
@@ -554,7 +684,7 @@ pub fn render_blocks(archive: &BaseArchive, gui: ProgressGui) -> CoreResult<()> 
         })
         .collect();
 
-    // 分阶段耗时统计（M²L_RENDER_PROFILE=1 时打印）
+    // 分阶段耗时统计（MML_RENDER_PROFILE=1 时打印）
     PROFILE.print(render_start.elapsed());
 
     // 完成时补一次100%，避免进度停在最后一个step前
@@ -680,6 +810,8 @@ mod icon_table_tests {
                     assert!(!rel.is_empty(), "{id} 模型名为空")
                 }
                 IconSpec::Composite(parts) => assert!(!parts.is_empty(), "{id} composite无part"),
+                // 头颅：贴图路径非空；带帽子层的贴图必须是64×64（humanoidHeadLayer）
+                IconSpec::Head(tex, _) => assert!(!tex.is_empty(), "{id} 头颅贴图为空"),
                 // Form形态：ID必须以形态后缀结尾，内层规格不能是Skip/Form
                 IconSpec::Form(form, inner) => {
                     assert!(
@@ -709,7 +841,9 @@ mod icon_table_tests {
         assert!(matches!(table["minecraft:white_bed"].1, IconSpec::Composite(_)));
         // special实体渲染跳过
         assert!(matches!(table["minecraft:chest"].1, IconSpec::Skip));
-        assert!(matches!(table["minecraft:skeleton_skull"].1, IconSpec::Skip));
+        // 头颅走手工立方体几何（骷髅头单层、玩家头带帽子层）
+        assert!(matches!(table["minecraft:skeleton_skull"].1, IconSpec::Head(_, false)));
+        assert!(matches!(table["minecraft:player_head"].1, IconSpec::Head(_, true)));
         // 原木在游戏的建筑方块栏
         assert_eq!(table["minecraft:oak_log"].0, "buildingBlocks");
         assert_eq!(table["minecraft:grass_block"].0, "natural");
@@ -740,6 +874,87 @@ mod icon_table_tests {
                 assert!(hit, "形态图标缺失：{alt}（{cat}）");
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod head_render_tests {
+    use super::*;
+
+    /// 头颅渲染冒烟：各头颅出图到 tests/out/head_*.png（需GPU与本地客户端jar）
+    ///
+    /// 运行：cargo test -p mml-tex-draw --lib head_render -- --ignored --nocapture
+    /// 环境变量 MML_TEST_JAR 指定客户端jar，缺省用 tests/out/tools/client-26.3.jar
+    #[test]
+    #[ignore]
+    fn head_render_smoke() {
+        let jar = std::env::var("MML_TEST_JAR").map(std::path::PathBuf::from).unwrap_or_else(|_| {
+            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("tests/out/tools/client-26.3.jar")
+        });
+        assert!(jar.exists(), "客户端jar不存在：{}", jar.display());
+
+        let archive = BaseArchive::open(&jar).unwrap();
+        let gpu = GpuCtx::try_new().expect("无可用GPU后端");
+
+        let dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/out");
+        std::fs::create_dir_all(&dir).unwrap();
+
+        // 各头颅：单层（64×32贴图）与带帽子层（64×64贴图）各取一个
+        for (id, tex, hat) in [
+            ("skeleton_skull", "entity/skeleton/skeleton", false),
+            ("creeper_head", "entity/creeper/creeper", false),
+            ("player_head", "entity/player/wide/steve", true),
+            ("zombie_head", "entity/zombie/zombie", true),
+        ] {
+            let mut cache = HashMap::new();
+            let (model, textures) = bake_head(&archive, tex, hat, &mut cache)
+                .unwrap_or_else(|| panic!("{id} 烘焙失败"));
+            assert_eq!(model.quads.len(), if hat { 12 } else { 6 }, "{id} 面数不符");
+
+            // 带帽子层的贴图必须是 humanoidHeadLayer 的 64×64（mobHeadLayer 是 64×32）
+            let tex_size = textures.values().map(|p| (p.width(), p.height())).next().unwrap();
+            assert_eq!(tex_size, if hat { (64, 64) } else { (64, 32) }, "{id} 贴图尺寸不符");
+            let rgba = gpu.render(&model, &textures, None, 256).expect("GPU渲染失败");
+
+            let path = dir.join(format!("head_{id}.png"));
+            let file = std::fs::File::create(&path).unwrap();
+            let mut encoder = png::Encoder::new(file, 256, 256);
+            encoder.set_color(png::ColorType::Rgba);
+            encoder.set_depth(png::BitDepth::Eight);
+            encoder.write_header().unwrap().write_image_data(&rgba).unwrap();
+            println!("输出：{}", path.display());
+        }
+    }
+
+    /// 用本地皮肤文件渲染头颅图标（slim/wide只差手臂，头部区域一致，均按带帽子层烘焙）
+    ///
+    /// 运行：cargo test -p mml-tex-draw --lib head_render_skin_file -- --ignored --nocapture
+    #[test]
+    #[ignore]
+    fn head_render_skin_file() {
+        let skin = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../mml-skin-draw/tests/skin_slim.png");
+        assert!(skin.exists(), "皮肤文件不存在：{}", skin.display());
+        let bytes = std::fs::read(&skin).unwrap();
+        let tex = decode_png(&bytes).expect("皮肤解码失败");
+
+        let gpu = GpuCtx::try_new().expect("无可用GPU后端");
+
+        let model = bake_head_model(tex.clone(), true, "skin");
+        assert_eq!(model.quads.len(), 12, "面数不符");
+        let textures = HashMap::from([("skin".to_string(), tex)]);
+        let rgba = gpu.render(&model, &textures, None, 256).expect("GPU渲染失败");
+
+        let dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/out");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("head_skin_slim.png");
+        let file = std::fs::File::create(&path).unwrap();
+        let mut encoder = png::Encoder::new(file, 256, 256);
+        encoder.set_color(png::ColorType::Rgba);
+        encoder.set_depth(png::BitDepth::Eight);
+        encoder.write_header().unwrap().write_image_data(&rgba).unwrap();
+        println!("输出：{}", path.display());
     }
 }
 

@@ -22,7 +22,7 @@ import {
   setViewMode,
   viewMode,
 } from "../../lib/settings";
-import type { AccountStoreDto, InstanceArgs, InstanceInfo, JavaInfo, NewsItem, VersionInfo } from "../../lib/bindings";
+import type { AccountStoreDto, InstanceArgs, InstanceInfo, JavaInfo, LogLine, NewsItem, VersionInfo } from "../../lib/bindings";
 import InstanceIcon from "../../components/InstanceIcon.vue";
 import InstanceSelect from "../../components/InstanceSelect.vue";
 import InstanceMetaPanel from "../../components/InstanceMetaPanel.vue";
@@ -290,7 +290,7 @@ function onAccountChange(account: AccountStoreDto) {
 // ================= 启动状态 =================
 
 const statusText = ref(t("launch.ready"));
-const logs = ref<string[]>([]);
+const logs = ref<LogLine[]>([]);
 
 function stateText(state: string): string {
   const key = `state.${state}`;
@@ -298,9 +298,14 @@ function stateText(state: string): string {
   return msg === key ? state : msg;
 }
 
-function appendLog(line: string) {
+function appendLog(line: LogLine) {
   logs.value.push(line);
   if (logs.value.length > 3000) logs.value.splice(0, logs.value.length - 3000);
+}
+
+/** 追加一行无结构的启动器消息（无线程/级别/分类） */
+function appendLogText(text: string) {
+  appendLog({ time: "", text, thread: "", level: "", category: "" });
 }
 
 // ================= 启动参数（经 IPC 读写核心实例配置） =================
@@ -876,6 +881,7 @@ const features: Array<{ id: FeatureId; icon: string }> = [
   { id: "skin", icon: "user" },
   { id: "download", icon: "download" },
   { id: "collect", icon: "star" },
+  { id: "log", icon: "log" },
   { id: "help", icon: "book" },
 ];
 
@@ -932,7 +938,13 @@ async function subscribeEvents() {
         logs.value = [];
         return;
       }
-      appendLog(e.text);
+      appendLog({
+        time: e.time,
+        text: e.text,
+        thread: e.thread,
+        level: e.level,
+        category: e.category,
+      });
     }),
     onLaunchState((e) => {
       if (e.uuid !== selected.value?.uuid) return;
@@ -942,7 +954,7 @@ async function subscribeEvents() {
       if (e.uuid !== selected.value?.uuid) return;
       statusText.value =
         e.code === 0 ? t("launch.exited") : t("launch.exitedCode", { code: e.code });
-      appendLog(
+      appendLogText(
         e.code === 0
           ? t("launch.processExited")
           : t("launch.processExitedCode", { code: e.code }),
@@ -953,7 +965,7 @@ async function subscribeEvents() {
     onLaunchError((e) => {
       if (e.uuid && e.uuid !== selected.value?.uuid) return;
       statusText.value = t("launch.failed");
-      appendLog(t("launch.error", { msg: e.message }));
+      appendLogText(t("launch.error", { msg: e.message }));
       if (e.uuid) {
         const inst = instances.value.find((i) => i.uuid === e.uuid);
         if (inst) inst.running = false;
@@ -1056,7 +1068,7 @@ async function launch() {
   } catch (e) {
     if (selected.value) selected.value.running = false;
     statusText.value = t("launch.failed");
-    appendLog(t("launch.error", { msg: tErr(e) }));
+    appendLogText(t("launch.error", { msg: tErr(e) }));
   }
 }
 

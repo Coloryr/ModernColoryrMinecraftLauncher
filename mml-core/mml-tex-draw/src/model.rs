@@ -1,4 +1,4 @@
-//! 26.2 模型 JSON → 渲染 quad 的精确烘焙（照反编译 FaceBakery/CuboidRotation/ItemTransform 规则）
+//! 26.3 模型 JSON → 渲染 quad 的精确烘焙（照反编译 FaceBakery/CuboidRotation/ItemTransform 规则）
 //!
 //! 顶点 0..1 模型空间（FaceBakery.bakeVertex 的 div(16)），gui display 变换由渲染后端在
 //! shader 矩阵里叠加；quad 只携带几何/uv/法线/贴图名/tint 色/透明度分组。
@@ -130,7 +130,7 @@ fn element_rotation_matrix(origin: [f32; 3], axis: usize, angle_deg: f32, rescal
 }
 
 
-/// ===== 模型 JSON 结构（自带完整 display 解析，26.2 语义） =====
+/// ===== 模型 JSON 结构（自带完整 display 解析，26.3 语义） =====
 
 #[derive(Deserialize)]
 struct ModelJson {

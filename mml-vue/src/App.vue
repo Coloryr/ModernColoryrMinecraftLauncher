@@ -23,6 +23,7 @@ const windowMap: Record<WindowKind, Component> = {
   add_resource: defineAsyncComponent(() => import("./windows/add_resource/AddResourceWindow.vue")),
   collect: defineAsyncComponent(() => import("./windows/collect/CollectWindow.vue")),
   download: defineAsyncComponent(() => import("./windows/download/DownloadWindow.vue")),
+  log: defineAsyncComponent(() => import("./windows/log/LogWindow.vue")),
 };
 
 const currentWindow = computed(() => windowMap[currentKind.value]);

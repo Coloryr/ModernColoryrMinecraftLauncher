@@ -146,6 +146,14 @@ pub async fn get_user_profile(uuid: &str, url: Option<&str>) -> CoreResult<UserP
         .await
 }
 
+/// 按玩家名查UUID档案（查不到玩家时接口返回204，这里同样报DataNotFound）
+pub async fn get_profile_by_name(name: &str) -> CoreResult<MinecraftProfileObj> {
+    let url = format!("{}/{name}", urls::MINECRAFT_PROFILE_API);
+    crate::get_login_client()
+        .get_json::<MinecraftProfileObj>(&url)
+        .await
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct MinecraftTokenObj {

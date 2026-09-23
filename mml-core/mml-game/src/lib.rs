@@ -486,9 +486,7 @@ pub fn rename_instance(uuid: &Uuid, name: &str) -> CoreResult<()> {
 
     // 新名字与别的实例重复（自己保持原名除外）则拒绝
     if have_instance_name(name) && instance.read().unwrap().name != name {
-        return Err(ErrorType::TaskError(mml_names::i18_items::error_type::ErrorData {
-            error: format!("实例名字 {name} 已存在"),
-        }));
+        return Err(ErrorType::InstanceNameExists(name.to_string()));
     }
 
     let old_base = instance.read().unwrap().get_base_path();

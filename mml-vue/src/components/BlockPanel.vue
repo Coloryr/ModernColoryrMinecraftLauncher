@@ -6,7 +6,9 @@ import { locale, t, tErr } from "../lib/i18n";
 import { showToast } from "../lib/toast";
 import type { BlockItemDto, BlockStatusDto, InstanceInfo } from "../lib/bindings";
 import AsyncImage from "./ui/AsyncImage.vue";
-import { blockRenderStart, blockSetIcon, getBlockList, getBlockStatus, onBlockRender } from "../lib/api";
+import BaseButton from "./ui/BaseButton.vue";
+import BaseModal from "./ui/BaseModal.vue";
+import { blockRenderStart, blockSetIcon, blockSkinAdd, blockSkinRemove, getBlockList, getBlockStatus, onBlockRender } from "../lib/api";
 
 const props = defineProps<{
   currentInstance: InstanceInfo | null;
@@ -73,13 +75,13 @@ const keyword = ref("");
 /** 当前分类（"" = 全部） */
 const cat = ref("");
 
-/** 出现过的分类（保持后端排序），未知分类名回退原文 */
+/** 出现过的分类（保持后端排序），原版分组后端已按游戏语言翻译，自定义分组走前端键 */
 const cats = computed(() => [...new Set(blocks.value.map((b) => b.cat).filter(Boolean))]);
 
 function catLabel(c: string): string {
   const key = `blocks.cat.${c}`;
   const text = t(key);
-  // t() miss 时返回 key 本身，此时回退原文
+  // t() miss 时返回 key 本身，此时回退原文（原版分组即游戏语言翻译结果）
   return text === key ? c : text;
 }
 
@@ -103,6 +105,48 @@ async function pick(b: BlockItemDto) {
   try {
     await blockSetIcon(props.currentInstance.uuid, b.id);
     showToast(t("blocks.setIconOk"));
+  } catch (e) {
+    showToast(tErr(e));
+  }
+}
+
+// ---------- 皮肤方块 ----------
+
+/** 皮肤方块分组（与 Rust 侧 SKIN_CAT 一致），ID 形如 custom:<名字> */
+const SKIN_CAT = "playerSkin";
+
+const skinOpen = ref(false);
+const skinInput = ref("");
+const skinBusy = ref(false);
+
+function openSkinDialog() {
+  skinInput.value = "";
+  skinOpen.value = true;
+}
+
+/** 按用户名或UUID添加（同名覆盖），成功后刷新列表 */
+async function addSkin() {
+  const input = skinInput.value.trim();
+  if (!input || skinBusy.value) return;
+  skinBusy.value = true;
+  try {
+    await blockSkinAdd(input);
+    showToast(t("blocks.skinAddOk"));
+    skinOpen.value = false;
+    await loadBlocks();
+  } catch (e) {
+    showToast(tErr(e));
+  } finally {
+    skinBusy.value = false;
+  }
+}
+
+/** 删除皮肤方块 */
+async function removeSkin(b: BlockItemDto) {
+  try {
+    await blockSkinRemove(b.id.slice("custom:".length));
+    showToast(t("blocks.skinRemoveOk"));
+    await loadBlocks();
   } catch (e) {
     showToast(tErr(e));
   }
@@ -152,6 +196,9 @@ async function pick(b: BlockItemDto) {
           type="text"
           :placeholder="t('blocks.search')"
         />
+        <button class="block-rerender" :title="t('blocks.addSkin')" @click="openSkinDialog">
+          {{ t("blocks.addSkin") }}
+        </button>
         <button class="block-rerender" :title="t('blocks.reRender')" @click="startRender(true)">
           {{ t("blocks.reRender") }}
         </button>
@@ -184,6 +231,13 @@ async function pick(b: BlockItemDto) {
           :title="b.id"
           @click="pick(b)"
         >
+          <!-- 皮肤方块：悬停角标删除 -->
+          <span
+            v-if="b.cat === SKIN_CAT"
+            class="block-del"
+            :title="t('blocks.skinRemove')"
+            @click.stop="removeSkin(b)"
+          >✕</span>
           <AsyncImage class="block-img" :src="b.image" :alt="b.name" />
           <span class="block-name">{{ b.name }}</span>
         </button>
@@ -192,6 +246,27 @@ async function pick(b: BlockItemDto) {
 
       <div class="block-count">{{ t("blocks.count", { n: filtered.length }) }}</div>
     </template>
+
+    <!-- 添加皮肤方块（用户名或UUID） -->
+    <BaseModal v-if="skinOpen" :title="t('blocks.addSkin')" @close="!skinBusy && (skinOpen = false)">
+      <label class="field-label">{{ t("blocks.skinInput") }}</label>
+      <input
+        v-model="skinInput"
+        class="field-input"
+        :placeholder="t('blocks.skinInputHint')"
+        spellcheck="false"
+        @keyup.enter="addSkin"
+      />
+
+      <div class="modal-actions">
+        <BaseButton :disabled="skinBusy" @click="skinOpen = false">
+          {{ t("blocks.cancel") }}
+        </BaseButton>
+        <BaseButton variant="primary" :disabled="skinBusy || !skinInput.trim()" @click="addSkin">
+          {{ skinBusy ? t("blocks.skinAdding") : t("blocks.addSkin") }}
+        </BaseButton>
+      </div>
+    </BaseModal>
   </div>
 </template>
 
@@ -389,6 +464,33 @@ async function pick(b: BlockItemDto) {
   cursor: pointer;
   transition: border-color 0.15s, transform 0.15s;
   content-visibility: auto;
+  position: relative;
+}
+
+/* 皮肤方块的删除角标（悬停显示） */
+.block-del {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: var(--bg-hover);
+  color: var(--text-dim);
+  font-size: 11px;
+  line-height: 1;
+}
+
+.block-cell:hover .block-del {
+  display: flex;
+}
+
+.block-del:hover {
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 
 .block-cell:hover {

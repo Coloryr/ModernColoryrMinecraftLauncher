@@ -42,12 +42,10 @@ mml-skin-draw = { path = "../../mml-core/mml-skin-draw" }
 mml-tex-draw = { path = "../../mml-core/mml-tex-draw" }
 
 uuid = { version = "~1.26.0", features = ["v4", "serde"] }
-dirs = "~6.0.0"
-tiny-skia = "~0.11.4"
+dirs = "~7.0.0"
+tiny-skia = "~0.12.0"
 image = { version = "~0.25.10", default-features = false, features = ["png", "jpeg", "webp"] }
-rfd = "~0.16"
+rfd = "~0.17"
 tokio = "~1.53.1"
 tokio-util = "~0.7.19"
 
-# 发布 / 预发布的 [profile.release] / [profile.prerelease] 在工作区根 Cargo.toml
-# （profile 只在 workspace 根清单里生效）

@@ -768,14 +768,14 @@ mod tests {
 
         let work = temp_work_dir();
         let mut env = std::collections::HashMap::new();
-        env.insert("M²L_TEST_VAR".to_string(), "mml_env_value".to_string());
+        env.insert("MML_TEST_VAR".to_string(), "mml_env_value".to_string());
 
         let mut result = launch(
             PathBuf::from("cmd"),
             vec![
                 "/C".to_string(),
                 "echo".to_string(),
-                "%M²L_TEST_VAR%".to_string(),
+                "%MML_TEST_VAR%".to_string(),
             ],
             env,
             work.clone(),
@@ -799,12 +799,12 @@ mod tests {
 
         let work = temp_work_dir();
         let mut env = std::collections::HashMap::new();
-        env.insert("M²L_TEST_VAR".to_string(), "mml_env_value".to_string());
+        env.insert("MML_TEST_VAR".to_string(), "mml_env_value".to_string());
 
         // 通过 sh 读取环境变量
         let mut result = launch(
             PathBuf::from("sh"),
-            vec!["-c".to_string(), "echo $M²L_TEST_VAR".to_string()],
+            vec!["-c".to_string(), "echo $MML_TEST_VAR".to_string()],
             env,
             work.clone(),
             false,
