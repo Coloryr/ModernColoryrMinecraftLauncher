@@ -17,6 +17,7 @@ use mcml_names::{
 };
 use mcml_sys::path_helper;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
+use uuid::Uuid;
 use zip::ZipArchive;
 
 use crate::{class_scan, launcher::instance_setting_obj::InstanceSettingObj, loader::LoaderType};
@@ -91,6 +92,8 @@ impl Default for ModItemObj {
 
 /// 模组信息
 pub struct ModObj {
+    /// 稳定标识（文件完整路径的 uuid v5，同一文件每次扫描结果一致）
+    pub uuid: Uuid,
     /// 模组列表
     pub info: Vec<ModItemObj>,
     /// 是否被禁用
@@ -110,6 +113,7 @@ pub struct ModObj {
 impl Default for ModObj {
     fn default() -> Self {
         Self {
+            uuid: Default::default(),
             info: Default::default(),
             disable: Default::default(),
             core: Default::default(),
@@ -767,6 +771,16 @@ fn read_mod<P: AsRef<Path>>(path: P, sha256: bool) -> CoreResult<ModObj> {
     Ok(mod_info)
 }
 
+/// 模组 uuid 的命名空间（固定值，保证不同启动器数据目录下生成的 uuid 一致）
+const MOD_UUID_NAMESPACE: Uuid = Uuid::from_u128(0x9d1a_2f3e_4c5b_6a70_8192_a3b4_c5d6_e7f8);
+
+/// 模组的稳定标识：文件完整路径的 uuid v5
+///
+/// 同一文件每次扫描得到同一个 uuid，启用 / 禁用 / 删除按它定位
+fn gen_mod_uuid(path: &Path) -> Uuid {
+    Uuid::new_v5(&MOD_UUID_NAMESPACE, path.to_string_lossy().as_bytes())
+}
+
 /// 扫描文件列表
 /// - `files`: 文件列表
 /// - `process_fn`: 处理的函数
@@ -786,7 +800,7 @@ where
                 let disable = is_disabled;
                 let result = process_fn(item);
 
-                let entry = match result {
+                let mut entry = match result {
                     Ok(mut item) => {
                         item.disable = disable;
                         item
@@ -800,6 +814,7 @@ where
                         }
                     }
                 };
+                entry.uuid = gen_mod_uuid(item);
 
                 list.lock().unwrap().push(entry);
             }

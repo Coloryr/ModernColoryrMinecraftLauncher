@@ -584,6 +584,15 @@ pub fn window_is_maximized(window: WebviewWindow) -> bool {
     window.is_maximized().unwrap_or(false)
 }
 
+/// 设置调用方窗口的原生标题（任务栏 / Alt+Tab 显示）
+///
+/// 窗口创建时统一叫 `names::MCML`；自绘标题栏文案由前端持有（已 i18n），
+/// 因此由前端在标题变化时同步过来，语言切换后原生标题也能跟随
+#[tauri::command]
+pub fn window_set_title(window: WebviewWindow, title: String) -> Result<(), String> {
+    window.set_title(&title).map_err(|err| err.to_string())
+}
+
 /// 获取 GUI 状态（无文件时返回默认值；前端 wire 为 DTO，TS 命名 camelCase）
 #[tauri::command]
 pub fn window_get_gui_config() -> GuiConfigDto {

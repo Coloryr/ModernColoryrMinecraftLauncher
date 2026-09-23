@@ -58,7 +58,9 @@
     `target/release` 找错文件），只能覆盖 release 的设置：
     `CARGO_PROFILE_RELEASE_LTO=thin CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16 npm run tauri build`。
     代价是它与正式发布共用 target 目录，来回切会重编末尾那几个单元。
-- Rust workspace 在 `mcml-core/`（首次编译较慢）。
+- Rust workspace 在**仓库根目录**（根 `Cargo.toml` 收编 `mcml-core/` 全部子 crate 与
+  `mcml-gui/src-tauri` + `ipc-gen` / `macros`；`workspace.dependencies` 与 `[profile.*]`
+  也统一在根清单维护）。target 目录在根目录 `target\`（首次编译较慢）。
 
 ## 4. IPC 约定
 
@@ -90,7 +92,7 @@
 
 | 目录 | 职责 |
 | --- | --- |
-| `mcml-core/` | 启动器内核（cargo workspace，多 crate） |
+| `mcml-core/` | 启动器内核（多 crate，隶属根目录 workspace） |
 | `mcml-gui/` | Tauri 桌面壳；`src-tauri/src/windows/<窗口>.rs` 放该窗口的规格 / 模型 / IPC |
 | `mcml-vue/` | 前端（Vue3 + Vite）；窗口在 `src/windows/<kind>/`，通用组件在 `src/components/` |
 
@@ -121,4 +123,10 @@
 - 只读本次任务直接相关的文件：用户在指令里点名的文件，以及为完成改动所必需的那些。
 - 非必要不要扩大范围去翻别的 `.rs` 文件。确有必要时，**先说明要读哪个文件、为什么**，
   得到用户同意再读；不要静默地顺藤摸瓜。
+
+## 10. 子代理使用
+
+- **查找代码等探索类工作可以用子代理**（Explore 等，并行摸底、汇总结论）。
+- **写计划不能使用代理**：方案设计、计划文件必须由主会话自己完成，不派 Plan 代理。
+
 

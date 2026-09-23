@@ -300,11 +300,13 @@ impl SaveObj {
     }
 
     /// 备份存档
+    ///
+    /// 返回备份文件名（level_name_年_月_日_时_分_秒.zip）
     pub fn backup(
         &self,
-        instance: &Arc<InstanceSettingObj>,
+        instance: &InstanceSettingObj,
         gui: Option<Arc<dyn IBaseArchiveGui>>,
-    ) -> CoreResult<()> {
+    ) -> CoreResult<String> {
         let path = instance.get_backup_path();
         path_helper::create_dir_all(&path)?;
 
@@ -325,7 +327,7 @@ impl SaveObj {
 
         let mut info = instance.get_backups()?;
         if let Some(obj) = info.get_mut(&self.level_name) {
-            obj.back.push(name);
+            obj.back.push(name.clone());
         } else {
             let path = instance.get_saves_path();
             let dir = self
@@ -339,19 +341,19 @@ impl SaveObj {
                 })?
                 .to_string_lossy()
                 .to_string();
-            let back: Vec<String> = vec![name];
+            let back: Vec<String> = vec![name.clone()];
             info.insert(self.level_name.clone(), SaveBackupObj { dir, back });
         }
 
         instance.save_backups(&info);
 
-        Ok(())
+        Ok(name)
     }
 
     /// 保存 NBT 数据到文件
     fn save_nbt(&self) -> CoreResult<()> {
         let file = self.get_level_file();
-        let mut stream = path_helper::open_read(file)?;
+        let mut stream = path_helper::open_write(file)?;
 
         self.nbt.write(&mut stream)?;
 

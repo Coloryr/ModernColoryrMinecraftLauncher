@@ -8,6 +8,7 @@ import type {
   BlockItemDto,
   BlockStatusDto,
   CollectDataDto,
+  DataPackItemDto,
   DetectedPackDto,
   DownloadItemEvent,
   DownloadStatusDto,
@@ -19,13 +20,20 @@ import type {
   InstanceInfo,
   JavaInfo,
   LogEvent,
+  ModItemDto,
   ModPackStatusDto,
   NewsItem,
+  PackItemDto,
   PackProgressDto,
   ProjectDetailDto,
   ProjectDto,
   ResourceSaveDto,
   ResourceStatusDto,
+  SaveItemDto,
+  ScreenshotItemDto,
+  ServerItemDto,
+  ShaderItemDto,
+  SchematicItemDto,
   StateEvent,
   VersionInfo,
 } from "./bindings";
@@ -547,4 +555,136 @@ export function onBlockRender(cb: (e: BlockStatusDto) => void): Promise<Unlisten
 /** mcml-image 协议访问前缀（拼实例图标等本地图片地址用） */
 export function getImageBaseUrl(): Promise<string> {
   return commands.main.imageBaseUrl();
+}
+
+// ==================== 实例资源管理 ====================
+
+/** 模组列表（解析 jar 元数据，条目多时耗时数秒） */
+export function listMods(uuid: string): Promise<ModItemDto[]> {
+  return commands.resource.listMods(uuid);
+}
+/** 启用模组（去掉 .disable / .disabled 后缀） */
+export function enableMod(uuid: string, modUuid: string): Promise<void> {
+  return commands.resource.modEnable(uuid, modUuid);
+}
+/** 禁用模组（追加 .disable 后缀） */
+export function disableMod(uuid: string, modUuid: string): Promise<void> {
+  return commands.resource.modDisable(uuid, modUuid);
+}
+/** 删除模组（进回收站） */
+export function deleteMod(uuid: string, modUuid: string): Promise<void> {
+  return commands.resource.deleteMod(uuid, modUuid);
+}
+
+/** 材质包列表 */
+export function listResourcepacks(uuid: string): Promise<PackItemDto[]> {
+  return commands.resource.listResourcepacks(uuid);
+}
+/** 删除材质包（进回收站） */
+export function deleteResourcepack(uuid: string, file: string): Promise<void> {
+  return commands.resource.deleteResourcepack(uuid, file);
+}
+
+/** 存档列表 */
+export function listSaves(uuid: string): Promise<SaveItemDto[]> {
+  return commands.resource.listSaves(uuid);
+}
+/** 删除存档（进回收站） */
+export function deleteSave(uuid: string, dir: string): Promise<void> {
+  return commands.resource.deleteSave(uuid, dir);
+}
+/** 备份存档（zip 到实例备份目录），返回备份文件名 */
+export function backupSave(uuid: string, dir: string): Promise<string> {
+  return commands.resource.backupSave(uuid, dir);
+}
+
+/** 截图列表 */
+export function listScreenshots(uuid: string): Promise<ScreenshotItemDto[]> {
+  return commands.resource.listScreenshots(uuid);
+}
+/** 删除截图（进回收站） */
+export function deleteScreenshot(uuid: string, name: string): Promise<void> {
+  return commands.resource.deleteScreenshot(uuid, name);
+}
+/** 清空全部截图（进回收站） */
+export function clearScreenshots(uuid: string): Promise<void> {
+  return commands.resource.clearScreenshots(uuid);
+}
+
+/** 打开资源目录（name 为空打开目录本身，否则资源管理器选中该文件；
+ * datapacks 类别需传 parent = 存档目录名） */
+export function openResourceFolder(
+  uuid: string,
+  kind: string,
+  name: string | null,
+  parent: string | null = null,
+): Promise<void> {
+  return commands.resource.openFolder(uuid, kind, name, parent);
+}
+
+// ==================== 服务器 ====================
+
+/** 服务器列表（servers.dat） */
+export function listServers(uuid: string): Promise<ServerItemDto[]> {
+  return commands.resource.listServers(uuid);
+}
+/** 添加服务器 */
+export function addServer(uuid: string, name: string, ip: string): Promise<void> {
+  return commands.resource.serverAdd(uuid, name, ip);
+}
+/** 编辑服务器（按原 name + ip 定位） */
+export function updateServer(
+  uuid: string,
+  name: string,
+  ip: string,
+  newName: string,
+  newIp: string,
+  acceptTextures: boolean,
+): Promise<void> {
+  return commands.resource.serverUpdate(uuid, name, ip, newName, newIp, acceptTextures);
+}
+/** 删除服务器 */
+export function deleteServer(uuid: string, name: string, ip: string): Promise<void> {
+  return commands.resource.serverDelete(uuid, name, ip);
+}
+
+// ==================== 光影包 ====================
+
+/** 光影包列表（selected 标出当前启用的包） */
+export function listShaderpacks(uuid: string): Promise<ShaderItemDto[]> {
+  return commands.resource.listShaderpacks(uuid);
+}
+/** 启用 / 停用光影包（null = 停用，options.txt 写 OFF） */
+export function setShader(uuid: string, file: string | null): Promise<void> {
+  return commands.resource.shaderSet(uuid, file);
+}
+/** 删除光影包（进回收站） */
+export function deleteShaderpack(uuid: string, file: string): Promise<void> {
+  return commands.resource.deleteShaderpack(uuid, file);
+}
+
+// ==================== 结构文件 ====================
+
+/** 结构文件列表 */
+export function listSchematics(uuid: string): Promise<SchematicItemDto[]> {
+  return commands.resource.listSchematics(uuid);
+}
+/** 删除结构文件（进回收站） */
+export function deleteSchematic(uuid: string, file: string): Promise<void> {
+  return commands.resource.deleteSchematic(uuid, file);
+}
+
+// ==================== 数据包（存档子页） ====================
+
+/** 存档的数据包列表 */
+export function listDatapacks(uuid: string, dir: string): Promise<DataPackItemDto[]> {
+  return commands.resource.listDatapacks(uuid, dir);
+}
+/** 切换数据包启用状态 */
+export function toggleDatapack(uuid: string, dir: string, name: string): Promise<void> {
+  return commands.resource.datapackToggle(uuid, dir, name);
+}
+/** 删除数据包（清 level.dat 引用 + 文件进回收站） */
+export function deleteDatapack(uuid: string, dir: string, name: string): Promise<void> {
+  return commands.resource.datapackDelete(uuid, dir, name);
 }

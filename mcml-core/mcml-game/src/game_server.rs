@@ -124,7 +124,7 @@ impl InstanceSettingObj {
     /// - `ip`: 地址
     pub fn remove_server(&self, name: &str, ip: &str) -> CoreResult<()> {
         let mut list = self.get_server_infos()?;
-        list.retain(|item| item.name == name && item.ip == ip);
+        list.retain(|item| !(item.name == name && item.ip == ip));
 
         self.save_servers(&list)
     }

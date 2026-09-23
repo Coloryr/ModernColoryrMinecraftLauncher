@@ -12,6 +12,7 @@ pub mod collect_dto;
 pub mod download_dto;
 pub mod gui_config_dto;
 pub mod main_dto;
+pub mod resource_dto;
 
 pub use account_dto::{AccountStoreDto, AccountStoreViewDto};
 pub use add_dto::{
@@ -30,4 +31,8 @@ pub use gui_config_dto::{GuiConfigDto, MainWindowConfigDto};
 pub use main_dto::{
     BlockItemDto, BlockStatusDto, ErrorEvent, ExitEvent, InstanceChangeEvent, InstancePatch,
     LogEvent, NewsItem, StateEvent,
+};
+pub use resource_dto::{
+    DataPackItemDto, ModItemDto, PackItemDto, SaveItemDto, ScreenshotItemDto, ServerItemDto,
+    ShaderItemDto, SchematicItemDto,
 };
