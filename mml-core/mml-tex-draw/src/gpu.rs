@@ -1,7 +1,7 @@
 //! GPU 渲染后端（wgpu）：离屏渲染 0..1 模型空间 quad -> RGBA 读回
 //!
 //! 后端回退链 DX12 → VK → GL（无可用适配器时由调用方回退 CPU skia 路径）。
-//! 变换链与光照公式照 26.2 反编译语义：
+//! 变换链与光照公式照 26.3 反编译语义：
 //! M = T(slot/2) · S(slot,-slot,slot) · Tt · Rx·Ry·Rz · Ss · T(-0.5)
 //! 光照：accum = min(1, (max(0,dot(L0,N)) + max(0,dot(L1,N))) · 0.6 + 0.4)
 

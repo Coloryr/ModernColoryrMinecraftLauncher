@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use tauri::{AppHandle, Emitter, WebviewWindow};
 
-use crate::dtos::main_dto::{LoadState, NewsItem};
+use crate::dtos::main_dto::{LoadState, LogLine, NewsItem};
 use crate::dtos::{
     BlockItemDto, BlockStatusDto, ErrorEvent, ExitEvent, InstanceChangeEvent, InstancePatch,
     LogEvent, StateEvent,
@@ -48,7 +48,7 @@ pub struct MainWindowModel {
     pub extra_groups: Vec<String>,
     pub group_order: Vec<String>,
     pub running: HashSet<String>,
-    pub logs: HashMap<String, Vec<String>>,
+    pub logs: HashMap<String, Vec<LogLine>>,
 }
 
 impl MainWindowModel {
@@ -523,6 +523,26 @@ fn emit_game_log(app: &AppHandle, event: LogEvent) {
     let _ = app.emit(listens::GAME_LOG, event);
 }
 
+/// 发出一行游戏日志（自动解析 thread / level / category 筛选字段）
+///
+/// 解析用 mml-core `InstanceRuntimeLog::add_game_log` 同一套正则，
+/// 保证事件里的字段与核心侧处理结果一致
+fn emit_log_line(app: &AppHandle, uuid: &str, text: &str, clear: bool) {
+    let obj = mml_game::game_log::InstanceRuntimeLog::parse_game_log_line(text);
+    emit_game_log(
+        app,
+        LogEvent {
+            uuid: uuid.to_string(),
+            time: now_time(),
+            text: text.to_string(),
+            thread: obj.thread,
+            level: obj.level.as_str().to_string(),
+            category: obj.category,
+            clear,
+        },
+    );
+}
+
 /// 游戏退出事件
 #[gui_macros::emit]
 fn emit_game_exit(app: &AppHandle, event: ExitEvent) {
@@ -904,15 +924,7 @@ pub fn main_launch_game(
             state: "launching".into(),
         },
     );
-    emit_game_log(
-        &app,
-        LogEvent {
-            uuid: uuid.clone(),
-            time: now_time(),
-            text: "游戏启动中…".into(),
-            clear: true,
-        },
-    );
+    emit_log_line(&app, &uuid, "游戏启动中…", true);
 
     // 占位：3 秒后发出退出事件（真实启动需接入 mml-core）
     // 直接持有模型的 Arc：模型跟随主窗口，销毁后后台线程仍能安全收尾
@@ -920,15 +932,7 @@ pub fn main_launch_game(
     let uuid2 = uuid.clone();
     std::thread::spawn(move || {
         std::thread::sleep(Duration::from_secs(3));
-        emit_game_log(
-            &app,
-            LogEvent {
-                uuid: uuid2.clone(),
-                time: now_time(),
-                text: "游戏进程已退出".into(),
-                clear: false,
-            },
-        );
+        emit_log_line(&app, &uuid2, "游戏进程已退出", false);
         emit_game_exit(
             &app,
             ExitEvent {
@@ -954,7 +958,7 @@ pub fn main_stop_game(app: AppHandle, window: WebviewWindow, uuid: String) -> Re
 
 /// 获取实例日志
 #[tauri::command]
-pub fn main_get_game_log(window: WebviewWindow, uuid: String) -> Vec<String> {
+pub fn main_get_game_log(window: WebviewWindow, uuid: String) -> Vec<LogLine> {
     let Ok(store) = model(&window) else {
         eprintln!("[main_get_game_log] 主窗口模型未初始化");
         return Vec::new();
@@ -1072,6 +1076,9 @@ pub fn main_block_list(lang: String) -> Vec<BlockItemDto> {
                 .and_then(|key| mml_tex_draw::get_lang(lang, &key))
                 .unwrap_or_else(|| id.rsplit(':').next().unwrap_or(&id).to_string());
             let cat = mml_tex_draw::block_cat(&id).unwrap_or_default();
+            // 分组名从游戏语言文件翻译（itemGroup.<cat>键，与方块名同一来源）；
+            // miss（如自定义皮肤分组 playerSkin 不是游戏键）时回退原值，前端兜底
+            let cat = mml_tex_draw::get_lang(lang, &format!("itemGroup.{cat}")).unwrap_or(cat);
             BlockItemDto {
                 name,
                 cat,
@@ -1147,6 +1154,26 @@ pub async fn main_block_set_icon(app: AppHandle, uuid: String, id: String) -> Re
     image_manager::clear_instance_image(&id);
     emit_instance_change(&app, "edit");
     Ok(true)
+}
+
+/// 按用户名或UUID添加皮肤方块（拉取该玩家的皮肤，渲染成头颅图标），返回方块ID
+///
+/// 同名玩家重复添加即覆盖（刷新图标）
+#[tauri::command]
+pub async fn main_block_skin_add(input: String) -> Result<String, String> {
+    let (name, skin) = mml_game::player_skin::fetch_skin_by_input(&input)
+        .await
+        .map_err(|e| e.to_string())?;
+
+    // 锁内只取路径，文件读取在drop后（std锁跨await破坏Send同理，这里没锁）
+    let data = tokio::fs::read(&skin).await.map_err(|e| e.to_string())?;
+    mml_tex_draw::add_skin_block(&name, &data).map_err(|e| e.to_string())
+}
+
+/// 删除皮肤方块（名字即皮肤方块显示名）
+#[tauri::command]
+pub fn main_block_skin_remove(name: String) -> Result<(), String> {
+    mml_tex_draw::remove_skin_block(&name).map_err(|e| e.to_string())
 }
 
 /// `mml-image` 协议访问前缀（前端拼实例图标等地址用）

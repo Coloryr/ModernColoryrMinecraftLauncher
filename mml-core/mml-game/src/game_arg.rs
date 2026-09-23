@@ -790,7 +790,7 @@ impl InstanceSettingObj {
                 LoaderType::Custom => {
                     let loader_file = self.get_loader_file();
                     if !loader_file.exists() {
-                        return Err(ErrorType::FileNotExists(PathNotExistsData {
+                        return Err(ErrorType::PathNotExists(PathNotExistsData {
                             path: loader_file.clone(),
                         }));
                     }

@@ -2,7 +2,7 @@
 //! 1. Modrinth 真包 Fabulously Optimized（Fabric，48 文件）
 //! 2. Modrinth 真包 Optimized FPS（NeoForge，17 文件）
 //! 3. CurseForge 真包 Fabulously Optimized（`#[ignore]` 手动测试，key 由环境
-//!    变量 `M²L_CF_API_KEY` 注入，与 GUI 运行时同源）
+//!    变量 `MML_CF_API_KEY` 注入，与 GUI 运行时同源）
 //! 4. Modrinth 大体积真包 Fresh & Smooth（`#[ignore]` 手动测试，约 310MB，
 //!    mods/resourcepacks/shaderpacks 多目录安装）
 //!
@@ -37,19 +37,19 @@ fn ensure_init() {
         mml_log::start(mml_base::get_base_dir()).unwrap();
         mml_config::init(mml_base::get_base_dir()).unwrap();
 
-        // 可选测试代理：设置 M²L_TEST_PROXY=ip:port 时走显式代理
+        // 可选测试代理：设置 MML_TEST_PROXY=ip:port 时走显式代理
         // （reqwest 的 Auto 模式在本环境不读取 HTTP_PROXY 等环境变量，须写进配置）
-        if let Ok(proxy) = std::env::var("M²L_TEST_PROXY") {
+        if let Ok(proxy) = std::env::var("MML_TEST_PROXY") {
             let (ip, port) = proxy
                 .split_once(':')
-                .expect("M²L_TEST_PROXY 格式应为 ip:port");
+                .expect("MML_TEST_PROXY 格式应为 ip:port");
             use mml_config::config_obj::ProxyState;
             {
                 let mut config = mml_config::write_config();
                 config.http.work_proxy = ProxyState::User;
                 config.http.login_proxy = ProxyState::User;
                 config.http.proxy_ip = ip.to_string();
-                config.http.proxy_port = port.parse().expect("M²L_TEST_PROXY 端口不合法");
+                config.http.proxy_port = port.parse().expect("MML_TEST_PROXY 端口不合法");
             }
             println!("[代理] 走显式代理 {proxy}");
         }
@@ -58,8 +58,8 @@ fn ensure_init() {
         mml_game::init(mml_base::get_base_dir()).unwrap();
         mml_net::init();
 
-        // CurseForge API key：由环境变量 M²L_CF_API_KEY 注入（与 GUI 运行时同源）
-        if let Ok(key) = std::env::var("M²L_CF_API_KEY") {
+        // CurseForge API key：由环境变量 MML_CF_API_KEY 注入（与 GUI 运行时同源）
+        if let Ok(key) = std::env::var("MML_CF_API_KEY") {
             mml_net::curseforge_api::set_key(&key);
         }
 
@@ -305,11 +305,11 @@ async fn install_real_modrinth_neoforge_pack() {
 
 /// 真实 CurseForge 整合包完整安装（手动测试）。
 ///
-/// API key 由环境变量 `M²L_CF_API_KEY` 注入（GUI 运行时也是同一个 key），
+/// API key 由环境变量 `MML_CF_API_KEY` 注入（GUI 运行时也是同一个 key），
 /// 先设置环境变量再手动运行：
 ///
 /// ```bash
-/// M²L_CF_API_KEY='key' cargo test -p mml-game --test real_pack_download \
+/// MML_CF_API_KEY='key' cargo test -p mml-game --test real_pack_download \
 ///     install_real_curseforge_pack -- --ignored --nocapture
 /// ```
 #[tokio::test]
@@ -319,7 +319,7 @@ async fn install_real_curseforge_pack() {
     ensure_init();
 
     if mml_net::curseforge_api::get_key().is_err() {
-        eprintln!("跳过: 未设置 M²L_CF_API_KEY 环境变量（CurseForge API 需要 key）");
+        eprintln!("跳过: 未设置 MML_CF_API_KEY 环境变量（CurseForge API 需要 key）");
         return;
     }
 
@@ -470,7 +470,7 @@ async fn install_real_curseforge_fabric_pack() {
     ensure_init();
 
     if mml_net::curseforge_api::get_key().is_err() {
-        eprintln!("跳过: 未设置 M²L_CF_API_KEY 环境变量（CurseForge API 需要 key）");
+        eprintln!("跳过: 未设置 MML_CF_API_KEY 环境变量（CurseForge API 需要 key）");
         return;
     }
     if !network_available().await {
@@ -495,7 +495,7 @@ async fn install_real_curseforge_neoforge_pack() {
     ensure_init();
 
     if mml_net::curseforge_api::get_key().is_err() {
-        eprintln!("跳过: 未设置 M²L_CF_API_KEY 环境变量（CurseForge API 需要 key）");
+        eprintln!("跳过: 未设置 MML_CF_API_KEY 环境变量（CurseForge API 需要 key）");
         return;
     }
     if !network_available().await {

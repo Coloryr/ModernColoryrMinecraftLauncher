@@ -32,6 +32,19 @@ pub enum LogLevel {
     Debug,
 }
 
+impl LogLevel {
+    /// 级别文本（与原版日志一致；None为空串）
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            LogLevel::None => "",
+            LogLevel::Info => "Info",
+            LogLevel::Warn => "Warn",
+            LogLevel::Error => "Error",
+            LogLevel::Debug => "Debug",
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct GameLogObj {
     pub log: String,
@@ -180,6 +193,43 @@ impl InstanceRuntimeLog {
         };
 
         self.add_log_item(obj)
+    }
+
+    /// 解析单行游戏日志
+    ///
+    /// 与[`InstanceRuntimeLog::add_game_log`]同一套正则；解析不出的行
+    /// thread / category / time 为空、级别为None。GUI据此填充筛选字段。
+    pub fn parse_game_log_line(log: &str) -> GameLogObj {
+        let temp = log.trim();
+        if let Some(captures) = REGEX_LOG.captures(temp)
+            && captures.len() == 6
+        {
+            GameLogObj {
+                level: get_level(&captures[3]),
+                log: String::from(log),
+                thread: String::from(&captures[2]),
+                category: String::from(&captures[4]),
+                time: String::from(&captures[1]),
+            }
+        } else if let Some(captures) = REGEX_LOG_OLD.captures(temp)
+            && captures.len() == 4
+        {
+            GameLogObj {
+                level: get_level(&captures[3]),
+                log: String::from(log),
+                thread: String::from(&captures[2]),
+                category: Default::default(),
+                time: String::from(&captures[1]),
+            }
+        } else {
+            GameLogObj {
+                level: LogLevel::None,
+                log: String::from(log),
+                thread: Default::default(),
+                category: Default::default(),
+                time: Default::default(),
+            }
+        }
     }
 
     /// 添加日志

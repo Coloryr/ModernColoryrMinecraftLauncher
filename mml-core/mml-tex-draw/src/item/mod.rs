@@ -22,7 +22,7 @@ use std::{
 use glam::{Mat3, Mat4, Quat, Vec3};
 use mml_base::{archives::BaseArchive, serialize_tools};
 use mml_game::gui_hook::ProgressGui;
-use mml_names::i18_items::error_type::{CoreResult, ErrorType, ErrorData};
+use mml_names::i18_items::error_type::{CoreResult, ErrorType};
 use rayon::prelude::*;
 use serde::Deserialize;
 use tiny_skia::Pixmap;
@@ -551,9 +551,7 @@ pub fn render_items(archive: &BaseArchive, gui: ProgressGui) -> CoreResult<()> {
 
     // 图标渲染只有 GPU 一条路径（无 CPU 软件光栅化回退），全不可用时直接报错
     let Some(gpu) = GpuCtx::try_new() else {
-        return Err(ErrorType::TaskError(ErrorData {
-            error: String::from("没有可用的 GPU 后端，无法渲染物品图标"),
-        }));
+        return Err(ErrorType::GpuNotAvailable);
     };
     let (block_names, item_names) = crate::extract_langs(archive);
 

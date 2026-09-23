@@ -211,7 +211,7 @@ mod tests {
         assert_eq!(i18::get_info(InfoType::TempFile), String::from("临时文件"));
 
         // 错误文案（带参数的格式化）
-        let err = ErrorType::ConfigSaveError(FileSystemErrorData {
+        let err = ErrorType::ConfigError(FileSystemErrorData {
             path: PathBuf::from("a.json"),
             error: String::from("boom"),
         });

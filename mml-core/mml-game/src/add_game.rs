@@ -217,7 +217,7 @@ pub async fn add_game_folder<P: AsRef<Path>>(
     cancel: CancellationToken,
 ) -> CoreResult<GameInstance> {
     if !dir.as_ref().exists() || !dir.as_ref().is_dir() {
-        return Err(ErrorType::DirNotExists(PathNotExistsData {
+        return Err(ErrorType::PathNotExists(PathNotExistsData {
             path: dir.as_ref().to_path_buf(),
         }));
     }
@@ -295,7 +295,7 @@ async fn modpack<P: AsRef<Path>>(
     cancel: CancellationToken,
 ) -> CoreResult<Uuid> {
     if !file.as_ref().exists() || file.as_ref().is_dir() {
-        return Err(ErrorType::FileNotExists(PathNotExistsData {
+        return Err(ErrorType::PathNotExists(PathNotExistsData {
             path: file.as_ref().to_path_buf(),
         }));
     }
@@ -417,7 +417,7 @@ async fn archive<P: AsRef<Path>>(
     cancel: CancellationToken,
 ) -> CoreResult<Uuid> {
     if !file.as_ref().exists() || file.as_ref().is_dir() {
-        return Err(ErrorType::FileNotExists(PathNotExistsData {
+        return Err(ErrorType::PathNotExists(PathNotExistsData {
             path: file.as_ref().to_path_buf(),
         }));
     }
@@ -497,7 +497,7 @@ async fn mmc_archive<P: AsRef<Path>>(
     cancel: CancellationToken,
 ) -> CoreResult<Uuid> {
     if !file.as_ref().exists() || file.as_ref().is_dir() {
-        return Err(ErrorType::FileNotExists(PathNotExistsData {
+        return Err(ErrorType::PathNotExists(PathNotExistsData {
             path: file.as_ref().to_path_buf(),
         }));
     }
@@ -615,7 +615,7 @@ async fn hmcl_archive<P: AsRef<Path>>(
     cancel: CancellationToken,
 ) -> CoreResult<Uuid> {
     if !file.as_ref().exists() || file.as_ref().is_dir() {
-        return Err(ErrorType::FileNotExists(PathNotExistsData {
+        return Err(ErrorType::PathNotExists(PathNotExistsData {
             path: file.as_ref().to_path_buf(),
         }));
     }
@@ -735,7 +735,7 @@ async fn hmcl_server_archive<P: AsRef<Path>>(
     cancel: CancellationToken,
 ) -> CoreResult<Uuid> {
     if !file.as_ref().exists() || file.as_ref().is_dir() {
-        return Err(ErrorType::FileNotExists(PathNotExistsData {
+        return Err(ErrorType::PathNotExists(PathNotExistsData {
             path: file.as_ref().to_path_buf(),
         }));
     }
@@ -1037,7 +1037,7 @@ async fn launcher_pack<P: AsRef<Path>>(
     cancel: CancellationToken,
 ) -> CoreResult<Uuid> {
     if !file.as_ref().exists() || file.as_ref().is_dir() {
-        return Err(ErrorType::FileNotExists(PathNotExistsData {
+        return Err(ErrorType::PathNotExists(PathNotExistsData {
             path: file.as_ref().to_path_buf(),
         }));
     }

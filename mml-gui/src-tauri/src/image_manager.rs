@@ -8,12 +8,13 @@ use std::{
     time::{Duration, Instant},
 };
 
-use mml_auth::{AuthType, UserKeyObj, auths};
+use mml_auth::{UserKeyObj, auths};
 use mml_base::hash_helper::{self, HashType};
 use mml_game::player_skin;
 use mml_names::names;
 use mml_net::mojang_api;
-use mml_skin_draw::{head_2d_draw, head_3d_draw};
+use mml_skin::SkinType;
+use mml_skin_draw::{cape_2d_draw, head_2d_draw, head_3d_draw, skin_2d_draw};
 use mml_sys::path_helper;
 use tiny_skia::Pixmap;
 use tauri::{
@@ -23,8 +24,8 @@ use tauri::{
 use uuid::Uuid;
 
 use crate::{
+    dtos::account_dto::auth_type_from_str,
     gui_config::{self, HeadType},
-    windows::add_resource::SourceInfo,
 };
 
 static INSTANCE_IMAGE: LazyLock<RwLock<HashMap<Uuid, Vec<u8>>>> =
@@ -32,6 +33,14 @@ static INSTANCE_IMAGE: LazyLock<RwLock<HashMap<Uuid, Vec<u8>>>> =
 static SKIN_IMAGE: LazyLock<RwLock<HashMap<UserKeyObj, Vec<u8>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 static HEAD_IMAGE: LazyLock<RwLock<HashMap<UserKeyObj, Vec<u8>>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
+static SKIN2D_IMAGE: LazyLock<RwLock<HashMap<(UserKeyObj, String), Vec<u8>>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
+static SKINRAW_IMAGE: LazyLock<RwLock<HashMap<UserKeyObj, Vec<u8>>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
+static CAPERAW_IMAGE: LazyLock<RwLock<HashMap<UserKeyObj, Vec<u8>>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
+static CAPE2D_IMAGE: LazyLock<RwLock<HashMap<UserKeyObj, Vec<u8>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 static ICON_IMAGE: LazyLock<RwLock<HashMap<String, IconCache>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
@@ -206,17 +215,16 @@ async fn load_skin_image(uri: &[&str], res: UriSchemeResponder) {
         send_bad(res);
         return;
     }
-    let user_type = AuthType::from_str(uri[1]);
-    let uuid = uri[2];
 
-    let user = auths::get(uuid, user_type);
-    if user.is_none() {
+    let Some(files) = resolve_skin_files(uri).await else {
         send_bad(res);
         return;
-    }
-
-    let user = user.unwrap();
-    let key = user.get_key();
+    };
+    let key = files.key;
+    let Some(file) = files.skin else {
+        send_bad(res);
+        return;
+    };
 
     {
         let image = HEAD_IMAGE.read().unwrap().get(&key).cloned();
@@ -225,12 +233,6 @@ async fn load_skin_image(uri: &[&str], res: UriSchemeResponder) {
             return;
         }
     }
-
-    let skin = player_skin::download_skin(&user).await;
-    let Some(file) = skin.skin else {
-        send_bad(res);
-        return;
-    };
 
     let Some(bitmap) = mml_skin::open_bitmap(&file) else {
         send_bad(res);
@@ -248,6 +250,203 @@ async fn load_skin_image(uri: &[&str], res: UriSchemeResponder) {
     };
 
     HEAD_IMAGE.write().unwrap().insert(key, data.clone());
+
+    send_png(res, data);
+}
+
+/// 账户皮肤与披风的本地缓存文件
+struct SkinFiles {
+    key: UserKeyObj,
+    skin: Option<PathBuf>,
+    cape: Option<PathBuf>,
+}
+
+/// 皮肤类URI（`skin*/cape*/<账户类型>/<uuid>`）解析出账户并取回皮肤/披风文件
+///
+/// 账户不存在返回None；皮肤/披风某一项可能没有（如离线账户都没有）；
+/// 下载结果由player_skin层缓存到本地皮肤目录
+async fn resolve_skin_files(uri: &[&str]) -> Option<SkinFiles> {
+    let user_type = auth_type_from_str(uri.get(1)?);
+    let user = auths::get(uri.get(2)?, user_type)?;
+    let res = player_skin::download_skin(&user).await;
+    Some(SkinFiles {
+        key: user.get_key(),
+        skin: res.skin,
+        cape: res.cape,
+    })
+}
+
+/// 皮肤全身2D平面图（skin_2d_draw_typea，128×256）
+///
+/// 第4段为皮肤类型：`auto`（自动检测，可省略）/ `old`（1.7旧版）/ `new`（1.8新版）/ `slim`（纤细）
+async fn load_skin2d_image(uri: &[&str], res: UriSchemeResponder) {
+    if uri.len() != 3 && uri.len() != 4 {
+        send_bad(res);
+        return;
+    }
+    let skin_type = uri.get(3).copied().unwrap_or("auto");
+    if parse_skin_type(skin_type).is_none() {
+        send_bad(res);
+        return;
+    }
+
+    let Some(files) = resolve_skin_files(uri).await else {
+        send_bad(res);
+        return;
+    };
+    let key = (files.key, skin_type.to_string());
+    let Some(file) = files.skin else {
+        send_bad(res);
+        return;
+    };
+
+    {
+        let image = SKIN2D_IMAGE.read().unwrap().get(&key).cloned();
+        if let Some(data) = image {
+            send_png(res, data);
+            return;
+        }
+    }
+
+    let Some(bitmap) = mml_skin::open_bitmap(&file) else {
+        send_bad(res);
+        return;
+    };
+    let Some(image) = skin_2d_draw::skin_2d_draw_typea(&bitmap, parse_skin_type(skin_type).flatten())
+    else {
+        send_bad(res);
+        return;
+    };
+    let Ok(data) = image.encode_png() else {
+        send_bad(res);
+        return;
+    };
+
+    SKIN2D_IMAGE.write().unwrap().insert(key, data.clone());
+
+    send_png(res, data);
+}
+
+/// URI里的皮肤类型段 → SkinType（None = 自动检测）
+fn parse_skin_type(s: &str) -> Option<Option<SkinType>> {
+    match s {
+        "auto" => Some(None),
+        "old" => Some(Some(SkinType::Old)),
+        "new" => Some(Some(SkinType::New)),
+        "slim" => Some(Some(SkinType::NewSlim)),
+        _ => None,
+    }
+}
+
+/// 原始皮肤贴图PNG（供前端 skinview3d 做3D渲染）
+async fn load_skinraw_image(uri: &[&str], res: UriSchemeResponder) {
+    if uri.len() != 3 {
+        send_bad(res);
+        return;
+    }
+
+    let Some(files) = resolve_skin_files(uri).await else {
+        send_bad(res);
+        return;
+    };
+    let key = files.key;
+    let Some(file) = files.skin else {
+        send_bad(res);
+        return;
+    };
+
+    {
+        let image = SKINRAW_IMAGE.read().unwrap().get(&key).cloned();
+        if let Some(data) = image {
+            send_png(res, data);
+            return;
+        }
+    }
+
+    let Ok(data) = path_helper::read_byte(&file) else {
+        send_bad(res);
+        return;
+    };
+
+    SKINRAW_IMAGE.write().unwrap().insert(key, data.clone());
+
+    send_png(res, data);
+}
+
+/// 原始披风贴图PNG（供前端 skinview3d 挂载）
+async fn load_caperaw_image(uri: &[&str], res: UriSchemeResponder) {
+    if uri.len() != 3 {
+        send_bad(res);
+        return;
+    }
+
+    let Some(files) = resolve_skin_files(uri).await else {
+        send_bad(res);
+        return;
+    };
+    let key = files.key;
+    let Some(file) = files.cape else {
+        send_bad(res);
+        return;
+    };
+
+    {
+        let image = CAPERAW_IMAGE.read().unwrap().get(&key).cloned();
+        if let Some(data) = image {
+            send_png(res, data);
+            return;
+        }
+    }
+
+    let Ok(data) = path_helper::read_byte(&file) else {
+        send_bad(res);
+        return;
+    };
+
+    CAPERAW_IMAGE.write().unwrap().insert(key, data.clone());
+
+    send_png(res, data);
+}
+
+/// 披风2D平面图（cape_2d_draw 正面）
+async fn load_cape2d_image(uri: &[&str], res: UriSchemeResponder) {
+    if uri.len() != 3 {
+        send_bad(res);
+        return;
+    }
+
+    let Some(files) = resolve_skin_files(uri).await else {
+        send_bad(res);
+        return;
+    };
+    let key = files.key;
+    let Some(file) = files.cape else {
+        send_bad(res);
+        return;
+    };
+
+    {
+        let image = CAPE2D_IMAGE.read().unwrap().get(&key).cloned();
+        if let Some(data) = image {
+            send_png(res, data);
+            return;
+        }
+    }
+
+    let Some(bitmap) = mml_skin::open_bitmap(&file) else {
+        send_bad(res);
+        return;
+    };
+    let Some(image) = cape_2d_draw::draw_cape_2d(&bitmap) else {
+        send_bad(res);
+        return;
+    };
+    let Ok(data) = image.encode_png() else {
+        send_bad(res);
+        return;
+    };
+
+    CAPE2D_IMAGE.write().unwrap().insert(key, data.clone());
 
     send_png(res, data);
 }
@@ -520,6 +719,14 @@ pub async fn url_image(req: Request<Vec<u8>>, res: UriSchemeResponder) {
         load_instance_image(&uri, res);
     } else if image_type == "skin" {
         load_skin_image(&uri, res).await;
+    } else if image_type == "skin2d" {
+        load_skin2d_image(&uri, res).await;
+    } else if image_type == "skinraw" {
+        load_skinraw_image(&uri, res).await;
+    } else if image_type == "caperaw" {
+        load_caperaw_image(&uri, res).await;
+    } else if image_type == "cape2d" {
+        load_cape2d_image(&uri, res).await;
     } else if image_type == "icon" {
         load_icon_image(&uri, res).await;
     } else if image_type == "block" {

@@ -7,6 +7,7 @@ use std::path::PathBuf;
 
 use mml_auth::{AuthType, LoginObj};
 use mml_base::hash_helper;
+use mml_names::i18_items::error_type::{CoreResult, ErrorType, SkinBlockErrorData};
 use mml_net::{mojang_api, urls};
 use mml_sys::path_helper;
 use serde::Deserialize;
@@ -17,6 +18,9 @@ use crate::launcher_path::assets_path;
 #[derive(Debug, Deserialize, Default)]
 #[serde(default)]
 struct MinecraftTexturesObj {
+    /// 档案所属玩家名（皮肤方块的显示名来源）
+    #[serde(rename = "profileName")]
+    profile_name: Option<String>,
     textures: TexturesObj,
 }
 
@@ -119,6 +123,46 @@ async fn load_textures(obj: &LoginObj, url: Option<&str>) -> Option<MinecraftTex
     let value = res.properties.first()?.value.clone();
 
     parse_textures(&value)
+}
+
+/// 输入是否为UUID（带/不带横线均可）
+fn is_uuid(input: &str) -> bool {
+    let plain = input.replace('-', "");
+    plain.len() == 32 && plain.chars().all(|c| c.is_ascii_hexdigit())
+}
+
+/// 按用户名或UUID取玩家皮肤（走官方会话服务器）
+///
+/// 输入是UUID（带/不带横线）时直接查档案，否则先经Mojang API按名查UUID。
+/// 玩家不存在 / 档案没有皮肤 / 皮肤下载失败都报DataNotFound。
+/// 返回（玩家名，皮肤文件缓存路径）；名字以档案里的profileName为准
+pub async fn fetch_skin_by_input(input: &str) -> CoreResult<(String, PathBuf)> {
+    let input = input.trim();
+    let not_found = || ErrorType::SkinBlockError(SkinBlockErrorData::PlayerNotFound);
+
+    // UUID直接用；玩家名先查UUID（查UUID成功后档案里会带权威名字，以那个为准）
+    let (uuid, name) = if is_uuid(input) {
+        (input.to_string(), None)
+    } else {
+        let profile = mojang_api::get_profile_by_name(input)
+            .await
+            .map_err(|_| not_found())?;
+        (profile.id, Some(profile.name))
+    };
+
+    let res = mojang_api::get_user_profile(&uuid, None)
+        .await
+        .map_err(|_| not_found())?;
+    let value = res.properties.first().ok_or_else(not_found)?.value.clone();
+    let textures = parse_textures(&value).ok_or_else(not_found)?;
+    let skin = textures.textures.skin.ok_or_else(not_found)?;
+    let file = load_texture(&skin.url).await.ok_or_else(not_found)?;
+
+    let name = textures
+        .profile_name
+        .or(name)
+        .unwrap_or_else(|| uuid.clone());
+    Ok((name, file))
 }
 
 /// 解析 profile 属性（base64 后的 JSON）里的皮肤数据

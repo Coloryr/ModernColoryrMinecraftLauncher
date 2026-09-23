@@ -127,7 +127,7 @@
 //     match data {
 //         Ok(data) => {
 //             if data.res != 100 {
-//                 Err(ErrorType::HttpReadError(data.res))
+//                 Err(ErrorType::HttpError(data.res))
 //             } else {
 //                 Ok(data.data.unwrap())
 //             }

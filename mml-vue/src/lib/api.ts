@@ -10,6 +10,7 @@ import type {
   CollectDataDto,
   DataPackItemDto,
   DetectedPackDto,
+  LogLine,
   DownloadItemEvent,
   DownloadStatusDto,
   DownloadTaskEvent,
@@ -378,7 +379,7 @@ export const api = {
     return commands.main.stopGame(uuid);
   },
 
-  async getGameLog(uuid: string): Promise<string[]> {
+  async getGameLog(uuid: string): Promise<LogLine[]> {
     return commands.main.getGameLog(uuid);
   },
 
@@ -545,6 +546,16 @@ export function blockRenderStart(force: boolean): Promise<boolean> {
 /** 把方块贴图设为实例图标 */
 export function blockSetIcon(uuid: string, id: string): Promise<boolean> {
   return commands.main.blockSetIcon(uuid, id);
+}
+
+/** 按用户名或UUID添加皮肤方块（同名覆盖），返回方块ID */
+export function blockSkinAdd(input: string): Promise<string> {
+  return commands.main.blockSkinAdd(input);
+}
+
+/** 删除皮肤方块（名字即皮肤方块显示名） */
+export function blockSkinRemove(name: string): Promise<void> {
+  return commands.main.blockSkinRemove(name);
 }
 
 /** 方块渲染状态事件（进度 / 结束） */

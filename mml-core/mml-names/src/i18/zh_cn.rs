@@ -4,7 +4,12 @@ use crate::i18_items::gui_type::GuiType;
 use crate::{
     i18::I18Lang,
     i18_items::{
-        error_type::ErrorType, info_type::InfoType, panic_type::PanicType, thread_type::ThreadType,
+        error_type::{
+            ArgEmptyData, ArgErrorData, DataNotFoundData, ErrorType, SkinBlockErrorData,
+        },
+        info_type::InfoType,
+        panic_type::PanicType,
+        thread_type::ThreadType,
     },
 };
 
@@ -21,40 +26,124 @@ impl I18Lang for ZhCn {
 
     fn get_error(&self, error: &ErrorType) -> String {
         match error {
-            ErrorType::ConfigSaveError(data) => {
+            ErrorType::Panic(panic) => self.get_panic(panic),
+
+            ErrorType::ConfigError(data) => {
                 format!(
-                    "配置文件 {} 保存失败：{}",
+                    "配置文件 {} 处理失败：{}",
                     data.path.display().to_string(),
                     data.error
                 )
             }
-            ErrorType::ConfigReadError(data) => {
-                format!(
-                    "配置文件 {} 读取失败：{}",
-                    data.path.display().to_string(),
-                    data.error
-                )
-            }
-            ErrorType::HttpReqError(data) => {
-                format!("发送网络请求 {} 错误：{}", data.url, data.error)
-            }
-            ErrorType::HttpReadError(data) => {
-                format!("发送网络请求 {} 读取失败：{}", data.url, data.error)
-            }
+            ErrorType::HttpError(data) => match data.status {
+                Some(status) => format!(
+                    "网络请求 {} 失败：{}（状态码 {}）",
+                    data.url, data.error, status
+                ),
+                None => format!("网络请求 {} 失败：{}", data.url, data.error),
+            },
 
             ErrorType::SerializerError(data) => format!("Json解析失败：{}", data.error),
-            ErrorType::FileNotExists(data) => {
-                format!("文件不存在：{}", data.path.display().to_string())
+            ErrorType::PathNotExists(data) => {
+                format!("路径不存在：{}", data.path.display().to_string())
             }
 
-            ErrorType::AuthLoginFail(data) => format!("账户登录失败：{}", data),
-            ErrorType::AuthLoginNoProfile => String::from("账户登录错误，没有找到账户"),
-            ErrorType::AuthRefreshFail(data) => format!("账户刷新失败：{}", data),
-            ErrorType::AuthRefreshNoProfile => String::from("账户刷新错误，没有找到账户"),
+            ErrorType::AuthFail(data) => format!("账户操作失败：{}", data),
+            ErrorType::AuthNoProfile => String::from("账户操作错误，没有找到账户"),
+            ErrorType::AuthTokenTimeout => String::from("账户令牌已过期，请重新登录"),
+            ErrorType::OAuthGetTokenError(data) => format!("OAuth获取登录令牌失败：{}", data.error),
+            ErrorType::OAuthGetTokenEmpty => String::from("OAuth没有获取到登录令牌"),
+
+            ErrorType::FileSystemError(data) => {
+                format!("文件 {} 处理失败：{}", data.path.display().to_string(), data.error)
+            }
+            ErrorType::FileReadError(data) => format!("文件读取失败：{}", data.error),
+
+            ErrorType::ArchiveOpenError(data) => {
+                format!(
+                    "压缩包 {} 打开失败：{}",
+                    data.path.display().to_string(),
+                    data.error
+                )
+            }
+            ErrorType::ArchiveReadError(data) => format!("压缩包读取失败：{}", data.error),
+            ErrorType::ArchiveError(data) => {
+                format!("压缩包处理失败：{} → {}：{}", data.source, data.target, data.error)
+            }
+            ErrorType::ArchiveWriteError(data) => format!("压缩包写入失败：{}", data.error),
+
             ErrorType::TaskCancel => String::from("任务已取消"),
             ErrorType::TaskTimeout => String::from("任务执行超时"),
             ErrorType::TaskError(data) => format!("任务出错：{}", data.error),
-            _ => String::new(),
+
+            ErrorType::NbtTypeError => String::from("NBT类型错误"),
+            ErrorType::NbtReadError => String::from("NBT读取失败"),
+
+            ErrorType::ArgEmpty(data) => match data {
+                ArgEmptyData::Name => String::from("名字参数为空"),
+                ArgEmptyData::UUID => String::from("UUID参数为空"),
+                ArgEmptyData::Version => String::from("版本参数为空"),
+            },
+            ErrorType::ArgError(data) => match data {
+                ArgErrorData::ArchiveType => String::from("压缩包类型参数错误"),
+            },
+            ErrorType::DataNotFound(data) => match data {
+                DataNotFoundData::Info => String::from("找不到请求的信息"),
+                DataNotFoundData::RegistryKey(key) => format!("注册表键不存在：{key}"),
+                DataNotFoundData::Url => String::from("找不到请求的网址"),
+                DataNotFoundData::GameInstance => String::from("找不到游戏实例"),
+                DataNotFoundData::Version(ver) => format!("找不到游戏版本：{ver}"),
+            },
+            ErrorType::JavaNotFound => String::from("找不到合适的Java"),
+            ErrorType::GpuNotAvailable => String::from("没有可用的 GPU 后端，无法渲染图标"),
+            ErrorType::InstanceNameExists(name) => format!("实例名字 {name} 已存在"),
+
+            ErrorType::DownloadFileOverFail(data) => {
+                format!("文件 {} 覆盖失败：{}", data.file.display().to_string(), data.error)
+            }
+            ErrorType::DownloadFileSizeError(data) => {
+                format!(
+                    "文件 {} 下载大小不符（预期 {}，实际 {}）",
+                    data.file.display().to_string(),
+                    data.size,
+                    data.now
+                )
+            }
+            ErrorType::DownloadFileHashError(data) => {
+                format!(
+                    "文件 {} 校验失败（预期 {}，实际 {}）",
+                    data.file.display().to_string(),
+                    data.hash,
+                    data.now
+                )
+            }
+            ErrorType::DownloadFileFail => String::from("文件下载失败"),
+
+            ErrorType::InvalidOperation => String::from("错误的操作"),
+
+            ErrorType::SocketError(data) => format!("Socket处理出错：{}", data.error),
+            ErrorType::ThreadError(data) => format!("线程启动失败：{}", data.error),
+            ErrorType::ProcessError(data) => format!("进程启动失败：{}", data.error),
+            ErrorType::InstanceVersionError => String::from("版本号错误"),
+            ErrorType::Base64Error(data) => format!("BASE64处理失败：{}", data.error),
+            ErrorType::StreamError(data) => format!("流处理异常：{}", data.error),
+
+            ErrorType::KeyIsNull => String::from("密钥未设置"),
+
+            ErrorType::SkinBlockError(data) => match data {
+                SkinBlockErrorData::NameIllegal(name) => {
+                    format!("皮肤方块名非法：{name}（只允许英文字母数字-_，不超过64字符）")
+                }
+                SkinBlockErrorData::SkinSize { width, height } => {
+                    format!("皮肤尺寸须为64×64（或旧版64×32），实际{width}×{height}")
+                }
+                SkinBlockErrorData::PlayerNotFound => {
+                    String::from("找不到该玩家，或该玩家没有皮肤")
+                }
+                SkinBlockErrorData::DecodeFail => String::from("皮肤PNG解码失败"),
+                SkinBlockErrorData::RenderFail => String::from("皮肤方块渲染失败"),
+                SkinBlockErrorData::NotFound(id) => format!("皮肤方块不存在：{id}"),
+            },
         }
     }
 

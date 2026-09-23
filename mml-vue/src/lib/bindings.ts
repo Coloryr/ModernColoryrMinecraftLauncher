@@ -78,16 +78,23 @@ export const commands = {
     pauseAll: () => invoke<number>("download_pause_all"),
     resumeAll: () => invoke<number>("download_resume_all"),
   },
+  log: {
+    errors: () => invoke<string>("log_read_errors"),
+    history: () => invoke<string>("log_read_history"),
+    runtime: () => invoke<string>("log_read_runtime"),
+  },
   main: {
     addGroup: (name: string) => invoke<boolean>("main_add_group", { name }),
     addJava: (name: string, path: string) => invoke<boolean>("main_add_java", { name, path }),
     blockList: (lang: string) => invoke<BlockItemDto[]>("main_block_list", { lang }),
     blockRenderStart: (force: boolean) => invoke<boolean>("main_block_render_start", { force }),
     blockSetIcon: (uuid: string, id: string) => invoke<boolean>("main_block_set_icon", { uuid, id }),
+    blockSkinAdd: (input: string) => invoke<string>("main_block_skin_add", { input }),
+    blockSkinRemove: (name: string) => invoke<void>("main_block_skin_remove", { name }),
     blockStatus: () => invoke<BlockStatusDto>("main_block_status"),
     createInstance: (name: string, version: string, loader: string | null, loaderVersion: string | null, group: string | null, modpackType: string | null, source: string | null) => invoke<InstanceInfo>("main_create_instance", { name, version, loader, loaderVersion, group, modpackType, source }),
     deleteInstance: (uuid: string) => invoke<boolean>("main_delete_instance", { uuid }),
-    getGameLog: (uuid: string) => invoke<string[]>("main_get_game_log", { uuid }),
+    getGameLog: (uuid: string) => invoke<LogLine[]>("main_get_game_log", { uuid }),
     getGroups: () => invoke<string[]>("main_get_groups"),
     getInstanceArgs: (uuid: string) => invoke<InstanceArgs>("main_get_instance_args", { uuid }),
     getInstanceLangs: (uuid: string) => invoke<string[]>("main_get_instance_langs", { uuid }),
@@ -427,7 +434,18 @@ export type LogEvent = {
   uuid: string,
   time: string,
   text: string,
+  thread: string,
+  level: string,
+  category: string,
   clear: boolean,
+};
+
+export type LogLine = {
+  time: string,
+  text: string,
+  thread: string,
+  level: string,
+  category: string,
 };
 
 export type StateEvent = {

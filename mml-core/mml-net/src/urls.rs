@@ -114,6 +114,8 @@ pub const MINECRAFT_SERVICES: &str = "https://api.minecraftservices.com/minecraf
 /// Minecraft 会话服务器（皮肤/披风查询）
 pub const MINECRAFT_SESSION_SERVER: &str =
     "https://sessionserver.mojang.com/session/minecraft/profile";
+/// Minecraft 玩家名查UUID（无需鉴权，查不到返回204）
+pub const MINECRAFT_PROFILE_API: &str = "https://api.mojang.com/users/profiles/minecraft";
 /// Minecraft Xbox 登录认证
 pub const MINECRAFT_SERVICES_XBOX: &str =
     "https://api.minecraftservices.com/authentication/login_with_xbox";

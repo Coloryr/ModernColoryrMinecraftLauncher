@@ -227,7 +227,7 @@ pub async fn refresh_oauth_token(token: &str) -> CoreResult<OAuthGetCodeObj> {
         .await?;
 
     match data.error {
-        Some(err) => Err(ErrorType::AuthRefreshFail(err)),
+        Some(err) => Err(ErrorType::AuthFail(err)),
         None => Ok(data),
     }
 }

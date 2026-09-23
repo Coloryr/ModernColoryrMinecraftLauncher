@@ -7,22 +7,15 @@ pub struct ErrorData {
     pub error: String,
 }
 
-/// 配置文件保存时错误信息
+/// HTTP请求错误信息（status = 响应状态码，请求阶段失败时为None）
 #[derive(Clone, Debug)]
-pub struct HttpReqErrorData {
+pub struct HttpErrorData {
     pub url: String,
     pub error: String,
+    pub status: Option<u16>,
 }
 
-/// 配置文件保存时错误信息
-#[derive(Clone, Debug)]
-pub struct HttpReadErrorData {
-    pub url: String,
-    pub error: String,
-    pub status: u16,
-}
-
-/// 文件找不到
+/// 路径找不到
 #[derive(Clone, Debug)]
 pub struct PathNotExistsData {
     pub path: PathBuf,
@@ -92,6 +85,23 @@ pub enum DataNotFoundData {
     Version(String),
 }
 
+/// 皮肤方块错误
+#[derive(Clone, Debug)]
+pub enum SkinBlockErrorData {
+    /// 名字非法（只允许英文字母数字-_，≤64字符），值 = 传入的名字
+    NameIllegal(String),
+    /// 皮肤尺寸不符（须64×64或旧版64×32）
+    SkinSize { width: u32, height: u32 },
+    /// 找不到玩家或玩家没有皮肤
+    PlayerNotFound,
+    /// 皮肤PNG解码失败
+    DecodeFail,
+    /// 图标渲染失败
+    RenderFail,
+    /// 皮肤方块不存在，值 = 方块ID
+    NotFound(String),
+}
+
 /// mml执行结果
 pub type CoreResult<T> = result::Result<T, ErrorType>;
 
@@ -101,34 +111,22 @@ pub enum ErrorType {
     /// 严重错误，直接结束程序
     Panic(PanicType),
 
-    /// 配置文件保存时出错
-    ConfigSaveError(FileSystemErrorData),
-    /// 配置文件读取时出错
-    ConfigReadError(FileSystemErrorData),
+    /// 配置文件处理时出错
+    ConfigError(FileSystemErrorData),
 
     /// Http请求出错
-    HttpReqError(HttpReqErrorData),
-    /// Http请求出错
-    HttpReadError(HttpReadErrorData),
+    HttpError(HttpErrorData),
 
     /// 序列化处理错误
     SerializerError(ErrorData),
 
-    /// 登录返回数据错误
-    AuthDataError(String),
-    /// 登录错误
-    AuthLoginFail(String),
-    /// 登录没有账户返回
-    AuthLoginNoProfile,
-    /// 登录刷新错误
-    AuthRefreshFail(String),
-    /// 登录刷新没有账户返回
-    AuthRefreshNoProfile,
+    /// 账户操作错误
+    AuthFail(String),
+    /// 账户操作没有返回档案
+    AuthNoProfile,
     /// 登录密钥过期
     AuthTokenTimeout,
 
-    /// OAuth标识请求超时
-    OAuthTokenTimeout,
     /// OAuth获取登录码错误
     OAuthGetTokenError(ErrorData),
     /// OAuth获取不到登录码
@@ -138,10 +136,8 @@ pub enum ErrorType {
     FileSystemError(FileSystemErrorData),
     /// 文件获取错误
     FileReadError(ErrorData),
-    /// 文件不存在
-    FileNotExists(PathNotExistsData),
-    /// 目录不存在
-    DirNotExists(PathNotExistsData),
+    /// 路径不存在
+    PathNotExists(PathNotExistsData),
 
     /// 压缩包打开错误
     ArchiveOpenError(FileSystemErrorData),
@@ -170,6 +166,12 @@ pub enum ErrorType {
     ArgError(ArgErrorData),
     /// 所需文件未能找到
     DataNotFound(DataNotFoundData),
+    /// 没有可用的GPU后端
+    GpuNotAvailable,
+    /// 实例名字已存在，值 = 名字
+    InstanceNameExists(String),
+    /// 皮肤方块错误
+    SkinBlockError(SkinBlockErrorData),
     /// 找不到合适的Java
     JavaNotFound,
 

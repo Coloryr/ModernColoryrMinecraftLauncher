@@ -1,4 +1,4 @@
-// 26.2 GUI 物品渲染 shader（照 item.vsh/item.fsh + light.glsl）
+// 26.3 GUI 物品渲染 shader（照 item.vsh/item.fsh + light.glsl）
 // 顶点：MVP 变换 + 法线矩阵；片元：双方向半兰伯特光照（cutout 带阈值 discard）
 
 struct Uniforms {

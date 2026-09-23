@@ -4,7 +4,7 @@ import type { InstanceInfo } from "../../lib/bindings";
 /** 实例列表显示模式（来源见 lib/guiConfig.ts，默认 list） */
 export type { ViewMode } from "../../lib/guiConfig";
 
-export type FeatureId = "settings" | "stats" | "skin" | "help" | "download" | "collect";
+export type FeatureId = "settings" | "stats" | "skin" | "help" | "download" | "collect" | "log";
 
 export interface GroupView {
   name: string;

@@ -73,7 +73,7 @@ windows = { version = "~0.62.2", features = [
 zip = { version = "~8.6.0", features = ["chrono"] }
 tar = "~0.4.46"
 flate2 = "~1.1.10"
-sevenz-rust2 = "~0.22.2"
+sevenz-rust2 = "~0.23.0"
 xz2 = { version = "~0.1.7", features = ["static"] }
 lz4_flex = "~0.14.0 "
 rayon = "~1.12.0"
@@ -95,10 +95,10 @@ clipboard-rs = "~0.3.5"
 dbus = "~0.9.12"
 bytes = "~1.12.1"
 png = "~0.18.1"
-tiny-skia = "~0.11.4"
+tiny-skia = "~0.12.0"
 wgpu = "~30.0"
-pollster = "~0.4.0"
-bytemuck = { version = "~1.24.0", features = ["derive"] }
+pollster = "~1.0.1"
+bytemuck = { version = "~1.25.2", features = ["derive"] }
 
 # 正式发布：fat LTO + 单代码生成单元，体积最小、运行最快，但出包慢（单线程合并优化）
 # 命令：cargo build --release / npm run build:release
