@@ -1,0 +1,12 @@
+[package]
+name = "mml-ipc"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+mml-log = { path = "../mml-log" }
+mml-base = { path = "../mml-base" }
+mml-names = { path = "../mml-names" }
+uuid.workspace = true
+tokio = { workspace = true, features = ["net", "sync", "time"] }
+bytes.workspace = true

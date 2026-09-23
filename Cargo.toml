@@ -1,34 +1,34 @@
-# MCML 工作区根清单
+# M²L 工作区根清单
 #
 # 全部 Rust crate 收进一个 workspace：
-# - mcml-core 与其 16 个子 crate（内核）
-# - mcml-gui/src-tauri（Tauri 桌面壳）+ ipc-gen / macros（IPC 代码生成）
+# - mml-core 与其 16 个子 crate（内核）
+# - mml-gui/src-tauri（Tauri 桌面壳）+ ipc-gen / macros（IPC 代码生成）
 # [workspace.dependencies] 与 [profile.*] 统一在此维护（成员清单里只写包自身定义）。
 # target 目录随之合并到根目录 target\（各 crate 原有的 target 不再使用）。
 
 [workspace]
 resolver = "3"
 members = [
-    "mcml-core",
-    "mcml-core/mcml-auth",
-    "mcml-core/mcml-base",
-    "mcml-core/mcml-tex-draw",
-    "mcml-core/mcml-config",
-    "mcml-core/mcml-downloader",
-    "mcml-core/mcml-game",
-    "mcml-core/mcml-ipc",
-    "mcml-core/mcml-jvms",
-    "mcml-core/mcml-log",
-    "mcml-core/mcml-names",
-    "mcml-core/mcml-nbt",
-    "mcml-core/mcml-net",
-    "mcml-core/mcml-skin",
-    "mcml-core/mcml-skin-draw",
-    "mcml-core/mcml-skin-render",
-    "mcml-core/mcml-sys",
-    "mcml-gui/src-tauri",
-    "mcml-gui/ipc-gen",
-    "mcml-gui/macros",
+    "mml-core",
+    "mml-core/mml-auth",
+    "mml-core/mml-base",
+    "mml-core/mml-tex-draw",
+    "mml-core/mml-config",
+    "mml-core/mml-downloader",
+    "mml-core/mml-game",
+    "mml-core/mml-ipc",
+    "mml-core/mml-jvms",
+    "mml-core/mml-log",
+    "mml-core/mml-names",
+    "mml-core/mml-nbt",
+    "mml-core/mml-net",
+    "mml-core/mml-skin",
+    "mml-core/mml-skin-draw",
+    "mml-core/mml-skin-render",
+    "mml-core/mml-sys",
+    "mml-gui/src-tauri",
+    "mml-gui/ipc-gen",
+    "mml-gui/macros",
 ]
 
 [workspace.dependencies]

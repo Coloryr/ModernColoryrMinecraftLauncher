@@ -1,0 +1,12 @@
+[package]
+name = "mml-jvms"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+mml-names = { path = "../mml-names" }
+mml-config = { path = "../mml-config" }
+mml-base = { path = "../mml-base" }
+mml-sys = { path = "../mml-sys" }
+tokio.workspace = true
+

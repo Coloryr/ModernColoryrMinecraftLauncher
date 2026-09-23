@@ -1,0 +1,10 @@
+[package]
+name = "mml-log"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+mml-names = { path = "../mml-names" }
+crossbeam-queue.workspace = true
+semrs.workspace = true
+chrono.workspace = true

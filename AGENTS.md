@@ -1,4 +1,4 @@
-# MCML 项目约定
+# M²L 项目约定
 
 > 适用于本仓库内的所有协作方（人类与 AI 助手）。
 
@@ -32,9 +32,9 @@
   动手前先查进程；发现还在跑就先结束掉，再开始改。参考命令（Windows / bash）：
 
   ```bash
-  tasklist //FI "IMAGENAME eq mcml-gui.exe"        # 应用进程
+  tasklist //FI "IMAGENAME eq mml-gui.exe"        # 应用进程
   netstat -ano | grep ":1420"                      # vite 监听（最后一列是 PID）
-  taskkill //IM mcml-gui.exe //F                   # 结束应用
+  taskkill //IM mml-gui.exe //F                   # 结束应用
   taskkill //PID <pid> //F                         # 结束 vite
   ```
 
@@ -45,21 +45,21 @@
   `... --test <name>`，必要时加 `单个用例名` 过滤）。不要动辄
   `cargo check --workspace --all-targets` / `cargo test --workspace` / 整仓全量测试；
   同一结论不要重复跑第二遍（改了代码再验一次除外）。
-- 桌面壳：`cd mcml-gui && npm run tauri dev`（会先起 mcml-vue 的 vite，**端口 1420 必须空闲**）。
+- 桌面壳：`cd mml-gui && npm run tauri dev`（会先起 mml-vue 的 vite，**端口 1420 必须空闲**）。
 - 只跑前端：根目录 `dev-frontend.bat`（vite，1420）；
   浏览器可访问 `http://localhost:1420/?window=<kind>` 预览某个窗口（无 IPC 数据）。
 - **出包两个 profile**（各自独立 target 目录，来回切不会互相刷缓存）：
-  - 正式发布：根目录 `build-release.bat`（= `cd mcml-gui && npm run tauri build`）。
+  - 正式发布：根目录 `build-release.bat`（= `cd mml-gui && npm run tauri build`）。
     `[profile.release]` 是 fat LTO + `codegen-units = 1`：体积最小、运行最快，但末尾的
     跨 crate 优化是单线程的，**构建时会看到只有一个核在跑**，含安装包。
-  - 预发布：根目录 `build-prerelease.bat`（= `cd mcml-gui/src-tauri && cargo build --profile prerelease`）。
+  - 预发布：根目录 `build-prerelease.bat`（= `cd mml-gui/src-tauri && cargo build --profile prerelease`）。
     `[profile.prerelease]` 是 thin LTO + `codegen-units = 16`：快很多，体积略大，只出 exe。
   - 预发布也要**安装包**时：`tauri` CLI 不认 `--profile`（`--` 透传给 cargo 会让它去
     `target/release` 找错文件），只能覆盖 release 的设置：
     `CARGO_PROFILE_RELEASE_LTO=thin CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16 npm run tauri build`。
     代价是它与正式发布共用 target 目录，来回切会重编末尾那几个单元。
-- Rust workspace 在**仓库根目录**（根 `Cargo.toml` 收编 `mcml-core/` 全部子 crate 与
-  `mcml-gui/src-tauri` + `ipc-gen` / `macros`；`workspace.dependencies` 与 `[profile.*]`
+- Rust workspace 在**仓库根目录**（根 `Cargo.toml` 收编 `mml-core/` 全部子 crate 与
+  `mml-gui/src-tauri` + `ipc-gen` / `macros`；`workspace.dependencies` 与 `[profile.*]`
   也统一在根清单维护）。target 目录在根目录 `target\`（首次编译较慢）。
 
 ## 4. IPC 约定
@@ -72,15 +72,15 @@
   `src/lib/api.ts` 只是手写的便捷包装层，其中的类型一律 `import` 自 `./bindings`。
 - 事件名由 `emit_xxx_yyy` 推导：去掉 `emit_` 前缀、`_` 换成 `-`，例如
   `emit_account_change` → `account-change`。
-- 前端接口由 `mcml-gui/src-tauri/build.rs`（逻辑在 `ipc-gen` 包）扫描 Rust 源码自动生成（**勿手改**）：
-  - `mcml-vue/src/lib/bindings.ts`：命令的类型化包装（`commands.xxx(...)`）+ 跨 IPC 类型的
+- 前端接口由 `mml-gui/src-tauri/build.rs`（逻辑在 `ipc-gen` 包）扫描 Rust 源码自动生成（**勿手改**）：
+  - `mml-vue/src/lib/bindings.ts`：命令的类型化包装（`commands.xxx(...)`）+ 跨 IPC 类型的
     TS 定义。命令签名、DTO 结构、`#[serde(rename_all)]` 都是从 Rust 源码解析出来的
-  - `mcml-vue/src/lib/listens.ts`：事件名常量
+  - `mml-vue/src/lib/listens.ts`：事件名常量
   新增命令加 `#[tauri::command]`，新增事件加 `#[gui_macros::emit]`；单独重新生成可跑
-  `cd mcml-gui && npm run gen`（或任意 `cargo check`）。
-- 扫描与生成逻辑在 `mcml-gui/ipc-gen/`（包名 `gui-ipc-gen`，有单测）：
+  `cd mml-gui && npm run gen`（或任意 `cargo check`）。
+- 扫描与生成逻辑在 `mml-gui/ipc-gen/`（包名 `gui-ipc-gen`，有单测）：
   `src-tauri/build.rs` 只是调用方（算路径、传 `GenConfig`、写文件、打 cargo 指令）；
-  改生成规则改那个包，跑 `cd mcml-gui/ipc-gen && cargo test` 验证。
+  改生成规则改那个包，跑 `cd mml-gui/ipc-gen && cargo test` 验证。
 - 命令在 `bindings.ts` 里按**来源 .rs 模块**分组（组键取模块最后一段，如
   `windows::account` → `commands.account`），组内剥掉命令名的公共前段
   （`add_modpack_search` → `commands.addModpack.search`）。同一个名字的命令**不能定义两次**，
@@ -92,9 +92,9 @@
 
 | 目录 | 职责 |
 | --- | --- |
-| `mcml-core/` | 启动器内核（多 crate，隶属根目录 workspace） |
-| `mcml-gui/` | Tauri 桌面壳；`src-tauri/src/windows/<窗口>.rs` 放该窗口的规格 / 模型 / IPC |
-| `mcml-vue/` | 前端（Vue3 + Vite）；窗口在 `src/windows/<kind>/`，通用组件在 `src/components/` |
+| `mml-core/` | 启动器内核（多 crate，隶属根目录 workspace） |
+| `mml-gui/` | Tauri 桌面壳；`src-tauri/src/windows/<窗口>.rs` 放该窗口的规格 / 模型 / IPC |
+| `mml-vue/` | 前端（Vue3 + Vite）；窗口在 `src/windows/<kind>/`，通用组件在 `src/components/` |
 
 ## 6. 临时文件
 

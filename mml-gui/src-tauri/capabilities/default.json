@@ -1,0 +1,14 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Capability for all launcher windows",
+  "windows": ["main", "mml-*"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-close",
+    "core:window:allow-get-all-windows",
+    "core:window:allow-set-focus",
+    "core:webview:allow-create-webview-window",
+    "dialog:default"
+  ]
+}

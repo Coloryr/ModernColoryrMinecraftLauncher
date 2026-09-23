@@ -8,7 +8,7 @@
       "type": "shell",
       "command": "npm run dev",
       "options": {
-        "cwd": "${workspaceFolder}/mcml-vue"
+        "cwd": "${workspaceFolder}/mml-vue"
       },
       "isBackground": true,
       "problemMatcher": {
@@ -37,7 +37,7 @@
       "type": "shell",
       "command": "npm run tauri dev",
       "options": {
-        "cwd": "${workspaceFolder}/mcml-gui"
+        "cwd": "${workspaceFolder}/mml-gui"
       },
       "isBackground": true,
       "problemMatcher": [],
@@ -52,7 +52,7 @@
       "type": "shell",
       "command": "npm run build",
       "options": {
-        "cwd": "${workspaceFolder}/mcml-vue"
+        "cwd": "${workspaceFolder}/mml-vue"
       },
       "problemMatcher": []
     },
@@ -61,7 +61,7 @@
       "type": "shell",
       "command": "cargo check",
       "options": {
-        "cwd": "${workspaceFolder}/mcml-gui/src-tauri"
+        "cwd": "${workspaceFolder}/mml-gui/src-tauri"
       },
       "problemMatcher": []
     }

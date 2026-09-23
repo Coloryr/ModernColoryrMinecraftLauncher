@@ -1,0 +1,36 @@
+[package]
+name = "mml-game"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+mml-names = { path = "../mml-names" }
+mml-config = { path = "../mml-config" }
+mml-auth = { path = "../mml-auth" }
+mml-base = { path = "../mml-base" }
+mml-log = { path = "../mml-log" }
+mml-net = { path = "../mml-net" }
+mml-jvms = { path = "../mml-jvms" }
+mml-nbt = { path = "../mml-nbt" }
+mml-sys = { path = "../mml-sys" }
+mml-downloader = { path = "../mml-downloader" }
+zip.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+serde_repr.workspace = true
+chrono.workspace = true
+uuid.workspace = true
+url.workspace = true
+rayon.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+regex.workspace = true
+soft-canonicalize.workspace = true
+encoding_rs.workspace = true
+async-trait.workspace = true
+encoding_rs_io.workspace = true
+notify.workspace = true
+flate2.workspace = true
+toml.workspace = true
+if-addrs.workspace = true
+socket2.workspace = true

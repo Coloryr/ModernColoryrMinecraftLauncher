@@ -1,9 +1,0 @@
-[package]
-name = "mcml-skin-draw"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
-mcml-skin = { path = "../mcml-skin" }
-tiny-skia.workspace = true
-glam.workspace = true

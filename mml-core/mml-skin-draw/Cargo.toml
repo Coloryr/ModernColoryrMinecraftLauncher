@@ -1,0 +1,9 @@
+[package]
+name = "mml-skin-draw"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+mml-skin = { path = "../mml-skin" }
+tiny-skia.workspace = true
+glam.workspace = true

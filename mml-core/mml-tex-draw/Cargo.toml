@@ -1,0 +1,28 @@
+[package]
+name = "mml-tex-draw"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+mml-names = { path = "../mml-names" }
+mml-sys = { path = "../mml-sys" }
+mml-game = { path = "../mml-game" }
+mml-base = { path = "../mml-base" }
+mml-net = { path = "../mml-net" }
+mml-downloader = { path = "../mml-downloader" }
+mml-config = { path = "../mml-config" }
+mml-log = { path = "../mml-log" }
+tokio.workspace = true
+tiny-skia.workspace = true
+glam.workspace = true
+rayon.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+png.workspace = true
+wgpu.workspace = true
+pollster.workspace = true
+bytemuck.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
+mml-log = { path = "../mml-log" }
