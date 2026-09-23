@@ -1,7 +1,7 @@
 // English (US) language pack
 export default {
   // App
-  "app.name": "MCML Launcher",
+  "app.name": "ModernContainerMinecraftLauncher",
   "app.sub": "Modern Minecraft Launcher",
 
   // Common window
@@ -199,6 +199,40 @@ export default {
   "resource.datapacks": "Data Packs",
   "resource.empty": "No items",
   "resource.back": "Back to main",
+  "resource.refresh": "Refresh",
+  "resource.openFolder": "Open folder",
+  "resource.delete": "Delete",
+  "resource.deleteConfirm": "Delete \"{name}\"? It will be moved to the recycle bin.",
+  "resource.enable": "Enable",
+  "resource.disable": "Disable",
+  "resource.modDisabled": "Disabled",
+  "resource.modFail": "Failed to read",
+  "resource.modCore": "Core",
+  "resource.backup": "Backup",
+  "resource.backupOk": "Backed up: {name}",
+  "resource.clear": "Clear all",
+  "resource.clearConfirm": "Clear all screenshots? They will be moved to the recycle bin.",
+  "resource.lastPlayed": "Last played: {time}",
+  "resource.packFormat": "Pack format {format}",
+  "resource.broken": "Broken",
+  "resource.notSelected": "No instance selected",
+  "resource.fileMissing": "Resource file is missing or was moved",
+  "resource.loading": "Loading…",
+  "resource.cancel": "Cancel",
+  "resource.serverAdd": "Add Server",
+  "resource.serverEdit": "Edit Server",
+  "resource.serverName": "Name",
+  "resource.serverIp": "Address",
+  "resource.acceptTextures": "Accept server resource packs",
+  "resource.save": "Save",
+  "resource.shaderOn": "Active",
+  "resource.dims": "Size {w}×{h}×{l}",
+  "resource.blockCount": "{count} blocks",
+  "resource.author": "Author",
+  "resource.selectSave": "Select a save…",
+  "resource.dpOn": "Enabled",
+  "resource.dpOff": "Disabled",
+  "resource.dpNone": "Not listed",
 
   // Instance actions
   "actions.addResource": "Add Resource",
@@ -647,6 +681,8 @@ export default {
   "err.saveNotFound": "Choose a world first",
 
   // Window titles
+  "winTitle.main": "ModernContainerMinecraftLauncher",
+  "winTitle.account": "MCML Accounts",
   "winTitle.addModpack": "Download Modpacks",
   "winTitle.addResource": "Add Resources",
   "winTitle.collect": "Favourites",
@@ -697,6 +733,8 @@ export default {
   "err.groupNotFound": "Group not found",
   "err.alreadyDownloading": "This modpack is already being installed",
   "err.taskNotFound": "Install task not found",
+  "err.fileName": "Invalid file name",
+  "err.nameIp": "Server name and address are required",
 };
 
 export const faqs: Array<{ q: string; a: string }> = [

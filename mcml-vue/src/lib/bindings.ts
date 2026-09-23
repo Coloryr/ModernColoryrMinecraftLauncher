@@ -13,6 +13,7 @@ export const commands = {
     minimize: () => invoke<void>("window_minimize"),
     openWindow: (kind: string) => invoke<void>("window_open_window", { kind }),
     saveGuiConfig: (config: GuiConfigDto) => invoke<void>("window_save_gui_config", { config }),
+    setTitle: (title: string) => invoke<void>("window_set_title", { title }),
     startDragging: () => invoke<void>("window_start_dragging"),
     toggleMaximize: () => invoke<boolean>("window_toggle_maximize"),
   },
@@ -108,6 +109,33 @@ export const commands = {
     stopGame: (uuid: string) => invoke<void>("main_stop_game", { uuid }),
     updateInstance: (uuid: string, patch: InstancePatch) => invoke<boolean>("main_update_instance", { uuid, patch }),
     updateInstanceArgs: (uuid: string, args: InstanceArgs) => invoke<boolean>("main_update_instance_args", { uuid, args }),
+  },
+  resource: {
+    backupSave: (uuid: string, dir: string) => invoke<string>("resource_backup_save", { uuid, dir }),
+    clearScreenshots: (uuid: string) => invoke<void>("resource_clear_screenshots", { uuid }),
+    datapackDelete: (uuid: string, dir: string, name: string) => invoke<void>("resource_datapack_delete", { uuid, dir, name }),
+    datapackToggle: (uuid: string, dir: string, name: string) => invoke<void>("resource_datapack_toggle", { uuid, dir, name }),
+    deleteMod: (uuid: string, modUuid: string) => invoke<void>("resource_delete_mod", { uuid, modUuid }),
+    deleteResourcepack: (uuid: string, file: string) => invoke<void>("resource_delete_resourcepack", { uuid, file }),
+    deleteSave: (uuid: string, dir: string) => invoke<void>("resource_delete_save", { uuid, dir }),
+    deleteSchematic: (uuid: string, file: string) => invoke<void>("resource_delete_schematic", { uuid, file }),
+    deleteScreenshot: (uuid: string, name: string) => invoke<void>("resource_delete_screenshot", { uuid, name }),
+    deleteShaderpack: (uuid: string, file: string) => invoke<void>("resource_delete_shaderpack", { uuid, file }),
+    listDatapacks: (uuid: string, dir: string) => invoke<DataPackItemDto[]>("resource_list_datapacks", { uuid, dir }),
+    listMods: (uuid: string) => invoke<ModItemDto[]>("resource_list_mods", { uuid }),
+    listResourcepacks: (uuid: string) => invoke<PackItemDto[]>("resource_list_resourcepacks", { uuid }),
+    listSaves: (uuid: string) => invoke<SaveItemDto[]>("resource_list_saves", { uuid }),
+    listSchematics: (uuid: string) => invoke<SchematicItemDto[]>("resource_list_schematics", { uuid }),
+    listScreenshots: (uuid: string) => invoke<ScreenshotItemDto[]>("resource_list_screenshots", { uuid }),
+    listServers: (uuid: string) => invoke<ServerItemDto[]>("resource_list_servers", { uuid }),
+    listShaderpacks: (uuid: string) => invoke<ShaderItemDto[]>("resource_list_shaderpacks", { uuid }),
+    modDisable: (uuid: string, modUuid: string) => invoke<void>("resource_mod_disable", { uuid, modUuid }),
+    modEnable: (uuid: string, modUuid: string) => invoke<void>("resource_mod_enable", { uuid, modUuid }),
+    openFolder: (uuid: string, kind: string, name: string | null, parent: string | null) => invoke<void>("resource_open_folder", { uuid, kind, name, parent }),
+    serverAdd: (uuid: string, name: string, ip: string) => invoke<void>("resource_server_add", { uuid, name, ip }),
+    serverDelete: (uuid: string, name: string, ip: string) => invoke<void>("resource_server_delete", { uuid, name, ip }),
+    serverUpdate: (uuid: string, name: string, ip: string, newName: string, newIp: string, acceptTextures: boolean) => invoke<void>("resource_server_update", { uuid, name, ip, newName, newIp, acceptTextures }),
+    shaderSet: (uuid: string, file: string | null) => invoke<void>("resource_shader_set", { uuid, file }),
   },
 };
 
@@ -452,6 +480,81 @@ export type BlockStatusDto = {
   total: number,
   text: string | null,
   error: string | null,
+};
+
+export type ModItemDto = {
+  uuid: string,
+  file: string,
+  disable: boolean,
+  fail: boolean,
+  core: boolean,
+  modId: string,
+  name: string,
+  version: string,
+  author: string,
+  description: string,
+  icon: string,
+};
+
+export type PackItemDto = {
+  file: string,
+  description: string,
+  packFormat: number,
+  minFormat: number,
+  maxFormat: number,
+  fail: boolean,
+  icon: string,
+};
+
+export type SaveItemDto = {
+  dir: string,
+  levelName: string,
+  lastPlayed: number,
+  gameType: number,
+  hardCore: boolean,
+  difficulty: number,
+  broken: boolean,
+  icon: string,
+};
+
+export type ScreenshotItemDto = {
+  name: string,
+};
+
+export type ServerItemDto = {
+  name: string,
+  ip: string,
+  acceptTextures: boolean,
+  icon: string,
+};
+
+export type ShaderItemDto = {
+  file: string,
+  name: string,
+  comment: string,
+  selected: boolean,
+};
+
+export type SchematicItemDto = {
+  file: string,
+  name: string,
+  author: string,
+  description: string,
+  typeName: string,
+  width: number,
+  height: number,
+  length: number,
+  blockCount: number,
+  blockTypes: number,
+  fail: boolean,
+};
+
+export type DataPackItemDto = {
+  name: string,
+  file: string,
+  description: string,
+  packFormat: number,
+  enable: boolean | null,
 };
 
 export type Theme = "Dark" | "Light";

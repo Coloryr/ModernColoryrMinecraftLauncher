@@ -100,4 +100,38 @@ impl InstanceSettingObj {
 
         Ok(())
     }
+
+    /// 读取游戏配置文件（options.txt，`=` 分隔；文件不存在时返回空表）
+    pub fn get_minecraft_options(&self) -> CoreResult<InstanceCfg> {
+        let file = self.get_option_file();
+        if file.exists() {
+            read_options_from_file(file, Some('='))
+        } else {
+            Ok(Default::default())
+        }
+    }
+
+    /// 保存游戏配置文件（options.txt，`=` 分隔）
+    /// - `list`: 配置选项
+    pub fn save_minecraft_options(&self, list: &InstanceCfg) -> CoreResult<()> {
+        let file = self.get_option_file();
+        let mut stream = path_helper::open_write(file)?;
+
+        for (key, value) in list.iter() {
+            stream
+                .write_fmt(format_args!(
+                    "{}={}{}",
+                    key,
+                    value,
+                    mcml_names::get_line_ending()
+                ))
+                .map_err(|err| {
+                    ErrorType::StreamError(ErrorData {
+                        error: err.to_string(),
+                    })
+                })?;
+        }
+
+        Ok(())
+    }
 }

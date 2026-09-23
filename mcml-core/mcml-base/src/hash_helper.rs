@@ -135,6 +135,13 @@ pub fn gen_base64(input: &str) -> String {
     BASE64.encode(input.as_bytes())
 }
 
+/// 生成 Base64（二进制数据）
+///
+/// - `input`: 需要生成的数据（图片字节等）
+pub fn gen_base64_bytes(input: &[u8]) -> String {
+    BASE64.encode(input)
+}
+
 /// 反解 Base64
 ///
 /// - `input`: Base64字符串

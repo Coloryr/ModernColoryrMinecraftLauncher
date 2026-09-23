@@ -49,20 +49,5 @@ rfd = "~0.16"
 tokio = "~1.53.1"
 tokio-util = "~0.7.19"
 
-# Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
-# 正式发布：fat LTO + 单代码生成单元，体积最小、运行最快，但出包慢（单线程合并优化）
-# 命令：cargo build --release / npm run build:release
-[profile.release]
-codegen-units = 1
-lto = true
-opt-level = 3
-panic = "abort"
-strip = true
-
-# 预发布：thin LTO + 并行代码生成，出包快很多，性能与此前基本一致（体积略大）
-# 命令：cargo build --profile prerelease / npm run build:pre
-# 注意：自定义 profile 有自己的 target 子目录（target/prerelease），首次构建要重编全部依赖
-[profile.prerelease]
-inherits = "release"
-codegen-units = 16
-lto = "thin"
+# 发布 / 预发布的 [profile.release] / [profile.prerelease] 在工作区根 Cargo.toml
+# （profile 只在 workspace 根清单里生效）

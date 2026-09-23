@@ -1,0 +1,118 @@
+# MCML 工作区根清单
+#
+# 全部 Rust crate 收进一个 workspace：
+# - mcml-core 与其 16 个子 crate（内核）
+# - mcml-gui/src-tauri（Tauri 桌面壳）+ ipc-gen / macros（IPC 代码生成）
+# [workspace.dependencies] 与 [profile.*] 统一在此维护（成员清单里只写包自身定义）。
+# target 目录随之合并到根目录 target\（各 crate 原有的 target 不再使用）。
+
+[workspace]
+resolver = "3"
+members = [
+    "mcml-core",
+    "mcml-core/mcml-auth",
+    "mcml-core/mcml-base",
+    "mcml-core/mcml-tex-draw",
+    "mcml-core/mcml-config",
+    "mcml-core/mcml-downloader",
+    "mcml-core/mcml-game",
+    "mcml-core/mcml-ipc",
+    "mcml-core/mcml-jvms",
+    "mcml-core/mcml-log",
+    "mcml-core/mcml-names",
+    "mcml-core/mcml-nbt",
+    "mcml-core/mcml-net",
+    "mcml-core/mcml-skin",
+    "mcml-core/mcml-skin-draw",
+    "mcml-core/mcml-skin-render",
+    "mcml-core/mcml-sys",
+    "mcml-gui/src-tauri",
+    "mcml-gui/ipc-gen",
+    "mcml-gui/macros",
+]
+
+[workspace.dependencies]
+crossbeam-queue = "~0.3.13"
+tokio = { version = "~1.53.1", features = [
+    "rt",
+    "macros",
+    "io-util",
+    "process",
+    "fs",
+] }
+tokio-util = "~0.7.19"
+semrs = "~0.5.2"
+reqwest = { version = "~0.13.4", features = ["json", "stream", "form"] }
+chrono = { version = "~0.4.45", features = ["serde"] }
+serde = { version = "~1.0.229", features = ["derive"] }
+serde_json = "~1.0.151"
+serde_repr = "~0.1.21"
+glow = "~0.18.0"
+glam = "~0.33.6"
+uuid = { version = "~1.26.0", features = ["v4", "v5", "serde"] }
+url = "~2.5.8"
+md-5 = "~0.11.0"
+sha1 = "~0.11.0"
+digest = "~0.11.3"
+sha2 = "~0.11.0"
+base64 = "~0.23.1"
+winreg = "~0.56.0"
+windows = { version = "~0.62.2", features = [
+    "Win32_Foundation",
+    "Win32_System_IO",
+    "Win32_System_Pipes",
+    "Win32_System_Threading",
+    "Win32_Security",
+    "Win32_Storage_FileSystem",
+    "Win32_System_SystemInformation",
+    "Win32_Storage_FileSystem",
+    "Win32_UI_Shell",
+    "Win32_System_Com",
+    "Win32_UI_Shell_Common",
+] }
+zip = { version = "~8.6.0", features = ["chrono"] }
+tar = "~0.4.46"
+flate2 = "~1.1.10"
+sevenz-rust2 = "~0.22.2"
+xz2 = { version = "~0.1.7", features = ["static"] }
+lz4_flex = "~0.14.0 "
+rayon = "~1.12.0"
+sys-locale = "~0.3.2"
+regex = "~1.13.1"
+scraper = "~0.27.0"
+itertools = "~0.15.0"
+semka = "~2.0.7"
+soft-canonicalize = "~0.5.6"
+async-trait = "~0.1.92"
+encoding_rs = "~0.8.35"
+encoding_rs_io = "~0.1.8"
+notify = "~8.2.0"
+toml = "~1.1.4"
+if-addrs = "~0.15.0"
+socket2 = "~0.6.5"
+ico = "~0.5.0"
+clipboard-rs = "~0.3.5"
+dbus = "~0.9.12"
+bytes = "~1.12.1"
+png = "~0.18.1"
+tiny-skia = "~0.11.4"
+wgpu = "~30.0"
+pollster = "~0.4.0"
+bytemuck = { version = "~1.24.0", features = ["derive"] }
+
+# 正式发布：fat LTO + 单代码生成单元，体积最小、运行最快，但出包慢（单线程合并优化）
+# 命令：cargo build --release / npm run build:release
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+panic = "abort"
+strip = true
+
+# 预发布：thin LTO + 并行代码生成，出包快很多，性能与此前基本一致（体积略大）
+# 命令：cargo build --profile prerelease / npm run build:pre
+# 注意：自定义 profile 有自己的产物子目录（target/prerelease），首次构建要重编全部依赖
+[profile.prerelease]
+inherits = "release"
+codegen-units = 16
+lto = "thin"

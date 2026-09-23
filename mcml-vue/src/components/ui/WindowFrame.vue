@@ -1,18 +1,29 @@
 <script setup lang="ts">
 // 子窗口通用框架：标题（兼作自绘标题栏）+ 内容区
 // 头部整条可拖动，两端按平台样式放窗口按钮；「返回主页面」按钮只在单窗口模式下显示。
-import { computed } from "vue";
+import { computed, watch } from "vue";
 import { t } from "../../lib/i18n";
 import { isTauri, multiWindow } from "../../windows/windowManager";
+import { commands } from "../../lib/bindings";
 import WindowControls from "./WindowControls.vue";
 import { onTitleBarPointerDown, titleBarStyle } from "../../lib/titlebar";
 
-defineProps<{ title: string }>();
+const props = defineProps<{ title: string }>();
 
 const emit = defineEmits<{ (e: "close"): void }>();
 
 /** 单窗口模式（仅浏览器存在）才显示返回按钮 */
 const showBack = computed(() => !isTauri() && !multiWindow.value);
+
+// 原生窗口标题（任务栏 / Alt+Tab）跟随自绘标题栏文案，语言切换时同步更新
+watch(
+  () => props.title,
+  (title) => {
+    if (!isTauri()) return;
+    commands.windows.setTitle(title).catch(() => {});
+  },
+  { immediate: true },
+);
 </script>
 
 <template>

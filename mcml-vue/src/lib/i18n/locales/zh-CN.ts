@@ -1,7 +1,7 @@
 // 中文（简体）语言包
 export default {
   // 应用
-  "app.name": "MCML 启动器",
+  "app.name": "ModernContainerMinecraftLauncher",
   "app.sub": "Modern Minecraft Launcher",
 
   // 通用窗口
@@ -199,6 +199,40 @@ export default {
   "resource.datapacks": "数据包",
   "resource.empty": "暂无内容",
   "resource.back": "返回主界面",
+  "resource.refresh": "刷新",
+  "resource.openFolder": "打开文件夹",
+  "resource.delete": "删除",
+  "resource.deleteConfirm": "确定删除「{name}」？将移入回收站。",
+  "resource.enable": "启用",
+  "resource.disable": "禁用",
+  "resource.modDisabled": "已禁用",
+  "resource.modFail": "读取失败",
+  "resource.modCore": "核心",
+  "resource.backup": "备份",
+  "resource.backupOk": "已备份：{name}",
+  "resource.clear": "清空",
+  "resource.clearConfirm": "确定清空全部截图？将移入回收站。",
+  "resource.lastPlayed": "上次游玩：{time}",
+  "resource.packFormat": "资源包格式 {format}",
+  "resource.broken": "已损坏",
+  "resource.notSelected": "未选择实例",
+  "resource.fileMissing": "资源文件不存在或已被移动",
+  "resource.loading": "正在加载…",
+  "resource.cancel": "取消",
+  "resource.serverAdd": "添加服务器",
+  "resource.serverEdit": "编辑服务器",
+  "resource.serverName": "名称",
+  "resource.serverIp": "地址",
+  "resource.acceptTextures": "接受服务器资源包",
+  "resource.save": "保存",
+  "resource.shaderOn": "启用中",
+  "resource.dims": "尺寸 {w}×{h}×{l}",
+  "resource.blockCount": "{count} 个方块",
+  "resource.author": "作者",
+  "resource.selectSave": "选择存档…",
+  "resource.dpOn": "已启用",
+  "resource.dpOff": "已停用",
+  "resource.dpNone": "未登记",
 
   // 实例操作
   "actions.addResource": "添加资源",
@@ -647,7 +681,7 @@ export default {
   "err.saveNotFound": "请先选择一个存档",
 
   // 窗口标题
-  "winTitle.main": "MCML 启动器",
+  "winTitle.main": "ModernContainerMinecraftLauncher",
   "winTitle.account": "MCML 账户管理",
   "winTitle.addModpack": "下载整合包",
   "winTitle.addResource": "添加资源",
@@ -699,6 +733,8 @@ export default {
   "err.groupNotFound": "分组不存在",
   "err.alreadyDownloading": "该整合包正在安装中",
   "err.taskNotFound": "安装任务不存在",
+  "err.fileName": "无效的文件名",
+  "err.nameIp": "服务器名称和地址不能为空",
 };
 
 export const faqs: Array<{ q: string; a: string }> = [

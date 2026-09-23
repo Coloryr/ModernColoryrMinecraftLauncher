@@ -25,7 +25,7 @@ export interface WindowInfo {
 }
 
 export const WINDOW_REGISTRY: WindowInfo[] = [
-  { kind: "main", title: "MCML 启动器", width: 1100, height: 720 },
+  { kind: "main", title: "ModernContainerMinecraftLauncher", width: 1100, height: 720 },
   { kind: "settings", title: "启动器设置", width: 760, height: 600 },
   { kind: "stats", title: "游戏统计", width: 760, height: 600 },
   { kind: "skin", title: "皮肤查看", width: 760, height: 600 },
