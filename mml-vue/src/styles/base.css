@@ -12,13 +12,21 @@ body,
   height: 100%;
 }
 
+/* 字体栈顺序即基线归属：行盒基线由栈里第一个可用字体决定，汉字由后续字体
+   回退绘制。若西文字体在前，中文墨迹会整体偏离行盒中心（实测偏高约 2px）。
+   所以中文界面 CJK 字体在前——画字的字体和定基线的字体一致才居中；
+   英文界面（lang=en_us）文本以西文为主，反转顺序让西文优先。 */
 body {
-  font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+  font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", system-ui, sans-serif;
   background: var(--bg);
   color: var(--text);
   overflow: hidden;
   user-select: none;
   transition: background 0.2s, color 0.2s;
+}
+
+:root[lang="en_us"] body {
+  font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
 }
 
 /* ---------------- 下拉浮层动效：<Transition name="drop"> ----------------

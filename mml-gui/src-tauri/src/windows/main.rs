@@ -1181,3 +1181,12 @@ pub fn main_block_skin_remove(name: String) -> Result<(), String> {
 pub fn main_image_base_url() -> String {
     image_manager::image_base_url().to_string()
 }
+
+/// 核心加载状态（前端兜底：启动太快时 load-done 事件会先于页面监听发出而被错过）
+#[tauri::command]
+pub fn main_load_state() -> LoadState {
+    LoadState {
+        ok: mml_core::get_state(),
+        error: None,
+    }
+}

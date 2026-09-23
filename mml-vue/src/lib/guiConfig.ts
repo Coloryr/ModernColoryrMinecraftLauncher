@@ -118,8 +118,15 @@ export async function saveGuiConfig(patch: GuiConfigPatch): Promise<void> {
 }
 
 function defaultConfig(): GuiConfig {
+  const stored = localStorage.getItem("mml.theme");
   return {
-    theme: localStorage.getItem("mml.theme") === "Light" ? "Light" : "Dark",
+    // 没有显式选择时跟随系统深浅色（与 theme.ts 的首绘兜底一致）
+    theme:
+      stored === "Light" || stored === "Dark"
+        ? stored
+        : matchMedia("(prefers-color-scheme: dark)").matches
+          ? "Dark"
+          : "Light",
     locale: localStorage.getItem("mml.locale") === "en_us" ? "en_us" : "zh_cn",
     windowMode: localStorage.getItem("mml.windowMode") === "Single" ? "Single" : "Multi",
     mainWindow: {

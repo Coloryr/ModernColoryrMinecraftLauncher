@@ -54,7 +54,13 @@ function pick(account: AccountStoreDto) {
         </span>
       </template>
       <template v-else>
-        <span class="avatar placeholder">＋</span>
+        <!-- 加号用 SVG 而非全角“＋”字符：中文字体把该字形画在 em 框偏上位置，
+             盒子居中了笔画仍显偏上，SVG 由 flex 居中不受字体度量影响 -->
+        <span class="avatar placeholder">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+        </span>
         <span class="account-meta">
           <span class="account-name dim">{{ t("account.noAccount") }}</span>
         </span>
@@ -64,10 +70,14 @@ function pick(account: AccountStoreDto) {
       </svg>
     </button>
 
-    <div v-if="open" class="menu-backdrop" @click="open = false"></div>
+    <!-- data-no-drag：遮罩在顶栏（标题栏拖拽区）里，不标记的话按下会被
+         startDragging 接管，click 事件到不了，菜单就收不起来 -->
+    <div v-if="open" class="menu-backdrop" data-no-drag @click="open = false"></div>
 
+    <!-- data-no-drag：菜单也在标题栏拖拽区里，footer 等非 button 区域
+         的 click 会被 startDragging 吞掉，须整体豁免 -->
     <Transition name="drop">
-      <div v-if="open" class="account-menu">
+      <div v-if="open" class="account-menu" data-no-drag>
         <div class="menu-title">{{ t("account.switch") }}</div>
         <div v-if="accounts.length === 0" class="empty-tip">{{ t("account.noAccount") }}</div>
         <button
@@ -145,6 +155,20 @@ function pick(account: AccountStoreDto) {
   font-size: 13px;
 }
 
+/* 未选择账户的占位头像：底色用暗色，＋号才不至白字落在亮背景上看不见 */
+.avatar.placeholder {
+  background: var(--bg-hover);
+  border: 1px dashed var(--border);
+  color: var(--text-dim);
+  box-shadow: none;
+}
+
+/* 未选择账户的文字弱化 */
+.account-name.dim {
+  color: var(--text-dim);
+  font-weight: 500;
+}
+
 .account-meta {
   display: flex;
   flex-direction: column;
@@ -202,6 +226,14 @@ function pick(account: AccountStoreDto) {
   font-size: 12px;
   color: var(--text-dim);
   padding: 6px 8px;
+}
+
+/* 菜单空状态（还没有任何账户） */
+.empty-tip {
+  font-size: 12px;
+  color: var(--text-dim);
+  text-align: center;
+  padding: 10px 8px;
 }
 
 .menu-item {

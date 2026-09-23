@@ -2,6 +2,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import {
   api,
+  getLoadState,
   onGameExit,
   onGameLog,
   onInstanceChange,
@@ -985,7 +986,12 @@ async function subscribeEvents() {
 
 // ================= 初始化 =================
 
+// 只初始化一次：load-done 事件与下面的状态查询兜底可能先后到达
+let inited = false;
+
 async function doInit() {
+  if (inited) return;
+  inited = true;
   try {
     await Promise.all([loadInstances(), loadGroups(), loadJava()]);
     restoreSelection();
@@ -1129,6 +1135,19 @@ listen<LoadState>(LoadDone, async (data) => {
     doInit();
   } else {
     closeSplash(state.error || t("init.failed"));
+  }
+});
+
+// 兜底：启动很快时 load-done 可能在页面监听注册前就已发出而被错过，
+// 挂载后主动查一次核心状态（已加载则直接进主界面）
+onMounted(async () => {
+  try {
+    const state = await getLoadState();
+    if (state.ok) {
+      doInit();
+    }
+  } catch {
+    /* 浏览器环境忽略，等 load-done 事件 */
   }
 });
 </script>
