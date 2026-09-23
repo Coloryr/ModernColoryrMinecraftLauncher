@@ -1,0 +1,11 @@
+[package]
+name = "mml-nbt"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+mml-names = { path = "../mml-names" }
+flate2.workspace = true
+lz4_flex.workspace = true
+rayon.workspace = true
+chrono.workspace = true

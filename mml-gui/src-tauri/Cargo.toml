@@ -1,0 +1,53 @@
+[package]
+name = "mml-gui"
+version = "0.1.0"
+description = "M²L Launcher"
+authors = ["coloryr"]
+edition = "2024"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "mml_gui_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "~2.6.3", features = [] }
+gui-ipc-gen = { path = "../ipc-gen" }
+
+[dependencies]
+tauri = { version = "~2.11.5", features = [] }
+tauri-plugin-dialog = "~2.7.2"
+async-trait = "~0.1.92"
+gui-macros = { path = "../macros" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+mml-core = { path = "../../mml-core" }
+mml-game = { path = "../../mml-core/mml-game" }
+mml-config = { path = "../../mml-core/mml-config" }
+mml-jvms = { path = "../../mml-core/mml-jvms" }
+mml-downloader = { path = "../../mml-core/mml-downloader" }
+mml-sys = { path = "../../mml-core/mml-sys" }
+mml-net = { path = "../../mml-core/mml-net" }
+mml-log = { path = "../../mml-core/mml-log" }
+mml-base = { path = "../../mml-core/mml-base" }
+mml-auth = { path = "../../mml-core/mml-auth" }
+mml-names = { path = "../../mml-core/mml-names" }
+mml-skin = { path = "../../mml-core/mml-skin" }
+mml-skin-draw = { path = "../../mml-core/mml-skin-draw" }
+mml-tex-draw = { path = "../../mml-core/mml-tex-draw" }
+
+uuid = { version = "~1.26.0", features = ["v4", "serde"] }
+dirs = "~6.0.0"
+tiny-skia = "~0.11.4"
+image = { version = "~0.25.10", default-features = false, features = ["png", "jpeg", "webp"] }
+rfd = "~0.16"
+tokio = "~1.53.1"
+tokio-util = "~0.7.19"
+
+# 发布 / 预发布的 [profile.release] / [profile.prerelease] 在工作区根 Cargo.toml
+# （profile 只在 workspace 根清单里生效）

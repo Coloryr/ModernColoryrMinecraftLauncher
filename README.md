@@ -1,4 +1,4 @@
-# ModernContainerMinecraftLauncher
+# ModernMinecraftLauncher
 
 [ColorMC](https://github.com/Coloryr/ColorMC)的迭代软件
 

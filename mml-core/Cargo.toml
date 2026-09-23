@@ -1,0 +1,23 @@
+[package]
+name = "mml-core"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+mml-log = { path = "mml-log" }
+mml-names = { path = "mml-names" }
+mml-config = { path = "mml-config" }
+mml-downloader = { path = "mml-downloader" }
+mml-auth = { path = "mml-auth" }
+mml-base = { path = "mml-base" }
+mml-net = { path = "mml-net" }
+mml-tex-draw = { path = "mml-tex-draw" }
+mml-game = { path = "mml-game" }
+mml-jvms = { path = "mml-jvms" }
+crossbeam-queue.workspace = true
+tokio.workspace = true
+tokio-util.workspace = true
+semrs.workspace = true
+chrono.workspace = true
+
+[build-dependencies]

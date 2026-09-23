@@ -14,12 +14,12 @@
 
 ## 方案要点
 
-- **内核修正（mcml-core，2 个真 bug + 1 对方法）**：
+- **内核修正（mml-core，2 个真 bug + 1 对方法）**：
   - `game_server.rs` `remove_server`：retain 逻辑反了（保留匹配项而非删除）→ 取反
   - `game_saves.rs` `save_nbt`：用 `open_read`（只读句柄）写 level.dat 必失败 → 改 `open_write`
   - `game_options.rs` 补 vanilla options.txt 读写：`get_minecraft_options` / `save_minecraft_options`
     （照 `get_options`/`save_options`，`=` 分隔，文件走 `get_option_file()`）
-- **复用 mcml-game 现有 API**：`get_server_infos`/`add_server`/`save_servers`、
+- **复用 mml-game 现有 API**：`get_server_infos`/`add_server`/`save_servers`、
   `get_shaderpacks`（zip 语言文件解析）、`get_schematics`（按扩展名解析 NBT，
   Minecraft/Litematic/WorldEdit/Create 四类）、`SaveObj::get_datapacks` / `change_data_pack`
   （对传入包做状态翻转，传单个即 toggle）/ `delete_datapack`（只清 NBT 引用，文件另行回收站）
@@ -41,5 +41,5 @@
 - 数据包子页：存档下拉选中后列出数据包；toggle 后 level.dat 的 DataPacks 列表变化
   且游戏内可见；删除 = 清 NBT 引用 + 文件进回收站
 - 删除均进回收站；打开文件夹定位正确；空目录 / 未选存档显示空态
-- `cargo check -p mcml-game`（内核）+ `cargo check`（mcml-gui/src-tauri）+
+- `cargo check -p mml-game`（内核）+ `cargo check`（mml-gui/src-tauri）+
   `vue-tsc --noEmit` + `vite build` 全绿
