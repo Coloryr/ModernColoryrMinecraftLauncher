@@ -84,6 +84,7 @@ export default {
   // Instance detail
   "detail.selectHint": "Select an instance from the left",
   "detail.settings": "Instance Settings",
+"detail.logs": "Instance logs",
   "detail.group": "Group: {name}",
   "detail.launchCount": "Launched {count} times",
   "detail.lastPlay": "Last played: {last}",

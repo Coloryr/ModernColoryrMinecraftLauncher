@@ -1,14 +1,14 @@
 <script setup lang="ts">
 // 游戏内代理：地址 / 端口 / 用户名 / 密码
 import { t } from "../lib/i18n";
-import type { InstanceArgs } from "../lib/bindings";
+import type { InstanceArgsDto } from "../lib/bindings";
 import NumberStepper from "./ui/NumberStepper.vue";
 
-const props = defineProps<{ args: InstanceArgs }>();
+const props = defineProps<{ args: InstanceArgsDto }>();
 
-const emit = defineEmits<{ (e: "update:args", v: InstanceArgs): void }>();
+const emit = defineEmits<{ (e: "update:args", v: InstanceArgsDto): void }>();
 
-function update(patch: Partial<InstanceArgs>) {
+function update(patch: Partial<InstanceArgsDto>) {
   emit("update:args", { ...props.args, ...patch });
 }
 </script>

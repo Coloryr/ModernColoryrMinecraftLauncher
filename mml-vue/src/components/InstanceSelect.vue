@@ -2,11 +2,11 @@
 // 实例下拉选择（带实例图标），用于列表模式选中实例
 import { computed, ref } from "vue";
 import { t } from "../lib/i18n";
-import type { InstanceInfo } from "../lib/bindings";
+import type { InstanceInfoDto } from "../lib/bindings";
 import InstanceIcon from "./InstanceIcon.vue";
 
 const props = defineProps<{
-  instances: InstanceInfo[];
+  instances: InstanceInfoDto[];
   modelValue: string | null;
 }>();
 
@@ -18,7 +18,7 @@ const selected = computed(() =>
   props.instances.find((i) => i.uuid === props.modelValue) ?? null,
 );
 
-function pick(inst: InstanceInfo) {
+function pick(inst: InstanceInfoDto) {
   emit("update:modelValue", inst.uuid);
   open.value = false;
 }

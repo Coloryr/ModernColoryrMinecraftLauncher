@@ -5,22 +5,22 @@
 //            / 附加环境变量（键值对列表）
 import { ref } from "vue";
 import { t } from "../lib/i18n";
-import type { InstanceArgs, JavaInfo } from "../lib/bindings";
+import type { InstanceArgsDto, JavaInfoDto } from "../lib/bindings";
 import BaseButton from "./ui/BaseButton.vue";
 import NumberStepper from "./ui/NumberStepper.vue";
 import CollapsePanel from "./ui/CollapsePanel.vue";
 
 const props = defineProps<{
-  args: InstanceArgs;
-  javas: JavaInfo[];
+  args: InstanceArgsDto;
+  javas: JavaInfoDto[];
 }>();
 
-const emit = defineEmits<{ (e: "update:args", v: InstanceArgs): void }>();
+const emit = defineEmits<{ (e: "update:args", v: InstanceArgsDto): void }>();
 
 const advancedOpen = ref(false);
 const fileInput = ref<HTMLInputElement | null>(null);
 
-function update(patch: Partial<InstanceArgs>) {
+function update(patch: Partial<InstanceArgsDto>) {
   emit("update:args", { ...props.args, ...patch });
 }
 
@@ -39,17 +39,17 @@ type LineKey = "jvmArgs" | "gameArgs" | "classPath";
 function setLine(key: LineKey, idx: number, value: string) {
   const arr = [...props.args[key]];
   arr[idx] = value;
-  update({ [key]: arr } as Partial<InstanceArgs>);
+  update({ [key]: arr } as Partial<InstanceArgsDto>);
 }
 
 function removeLine(key: LineKey, idx: number) {
   const arr = [...props.args[key]];
   arr.splice(idx, 1);
-  update({ [key]: arr } as Partial<InstanceArgs>);
+  update({ [key]: arr } as Partial<InstanceArgsDto>);
 }
 
 function addLine(key: LineKey) {
-  update({ [key]: [...props.args[key], ""] } as Partial<InstanceArgs>);
+  update({ [key]: [...props.args[key], ""] } as Partial<InstanceArgsDto>);
 }
 
 // ---- 环境变量（键值对） ----

@@ -4,14 +4,14 @@
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { locale, t, tErr } from "../lib/i18n";
 import { showToast } from "../lib/toast";
-import type { BlockItemDto, BlockStatusDto, InstanceInfo } from "../lib/bindings";
+import type { BlockItemDto, BlockStatusDto, InstanceInfoDto } from "../lib/bindings";
 import AsyncImage from "./ui/AsyncImage.vue";
 import BaseButton from "./ui/BaseButton.vue";
 import BaseModal from "./ui/BaseModal.vue";
 import { blockRenderStart, blockSetIcon, blockSkinAdd, blockSkinRemove, getBlockList, getBlockStatus, onBlockRender } from "../lib/api";
 
 const props = defineProps<{
-  currentInstance: InstanceInfo | null;
+  currentInstance: InstanceInfoDto | null;
 }>();
 
 const status = ref<BlockStatusDto | null>(null);

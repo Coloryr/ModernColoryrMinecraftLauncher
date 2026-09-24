@@ -84,6 +84,7 @@ export default {
   // 实例详情
   "detail.selectHint": "从左侧选择一个游戏实例",
   "detail.settings": "实例设置",
+"detail.logs": "实例日志",
   "detail.group": "分组：{name}",
   "detail.launchCount": "启动 {count} 次",
   "detail.lastPlay": "上次游玩：{last}",

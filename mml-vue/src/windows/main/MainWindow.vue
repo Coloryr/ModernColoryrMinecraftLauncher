@@ -23,13 +23,14 @@ import {
   setViewMode,
   viewMode,
 } from "../../lib/settings";
-import type { AccountStoreDto, InstanceArgs, InstanceInfo, JavaInfo, LogLine, NewsItem, VersionInfo } from "../../lib/bindings";
+import type { AccountStoreDto, InstanceArgsDto, InstanceInfoDto, JavaInfoDto, LogLine, NewsItem, VersionInfoDto } from "../../lib/bindings";
 import InstanceIcon from "../../components/InstanceIcon.vue";
 import InstanceSelect from "../../components/InstanceSelect.vue";
 import InstanceMetaPanel from "../../components/InstanceMetaPanel.vue";
 import LaunchArgsPanel from "../../components/LaunchArgsPanel.vue";
 import HomePage from "../../components/HomePage.vue";
 import CustomExecPanel from "../../components/CustomExecPanel.vue";
+import InstanceLogPanel from "../../components/InstanceLogPanel.vue";
 import ProxyPanel from "../../components/ProxyPanel.vue";
 import ModpackInstallBar from "../../components/ModpackInstallBar.vue";
 import { useModpackStatus } from "../../lib/modpackTasks";
@@ -61,16 +62,16 @@ const playerName = ref(localStorage.getItem("mml.playerName") ?? "Player");
 
 // ================= 数据 =================
 
-const instances = ref<InstanceInfo[]>([]);
-const javas = ref<JavaInfo[]>([]);
-const selected = ref<InstanceInfo | null>(null);
+const instances = ref<InstanceInfoDto[]>([]);
+const javas = ref<JavaInfoDto[]>([]);
+const selected = ref<InstanceInfoDto | null>(null);
 
 // ================= 实例搜索 =================
 
 const searchText = ref("");
 const searching = computed(() => searchText.value.trim().length > 0);
 
-function matchInst(inst: InstanceInfo, q: string): boolean {
+function matchInst(inst: InstanceInfoDto, q: string): boolean {
   return [
     inst.name,
     inst.version,
@@ -100,7 +101,7 @@ const filteredGroups = computed(() => {
     .filter((g) => g.items.length > 0);
 });
 
-function select(inst: InstanceInfo) {
+function select(inst: InstanceInfoDto) {
   selected.value = inst;
   // 持久化当前选中实例到 gui_config.json（uuid 未变时内部跳过，不会重复写盘）
   setSelectedInstance(inst.uuid);
@@ -134,7 +135,7 @@ function groupKeyOf(group?: string | null): string {
 
 const groups = computed(() => {
   const defaultKey = t("group.default");
-  const map = new Map<string, InstanceInfo[]>();
+  const map = new Map<string, InstanceInfoDto[]>();
   for (const inst of instances.value) {
     const key = groupKeyOf(inst.group);
     if (!map.has(key)) map.set(key, []);
@@ -309,6 +310,20 @@ function appendLogText(text: string) {
   appendLog({ time: "", text, thread: "", level: "", category: "" });
 }
 
+// ================= 启动进度（顶部进度条） =================
+// 核心按 login→check→…→end 顺序推进，已知阶段映射为近似百分比；未知阶段走滚动条
+const LAUNCH_STAGES = ["login", "check", "readinfo", "download", "jvm", "pre", "post", "end"];
+const launchStage = ref("");
+
+const launchPct = computed(() => {
+  const i = LAUNCH_STAGES.indexOf(launchStage.value);
+  return i < 0 ? null : Math.round(((i + 1) / LAUNCH_STAGES.length) * 100);
+});
+
+const launchStageText = computed(() =>
+  launchStage.value ? stateText(launchStage.value) : statusText.value,
+);
+
 // ================= 启动参数（经 IPC 读写核心实例配置） =================
 
 /** 列表模式下的实例设置面板（版本/加载器/内存/Java + 启动参数，与分组模式一致） */
@@ -317,14 +332,37 @@ const execOpen = ref(false);
 const serverOpen = ref(false);
 const proxyOpen = ref(false);
 
+// 实例日志：列表模式走弹窗，分组模式走设置内的折叠节；打开时从核心拉一次完整历史
+const logOpen = ref(false);
+const detailLogOpen = ref(false);
+
+async function refreshLogs() {
+  if (!selected.value) return;
+  try {
+    logs.value = await api.getGameLog(selected.value.uuid);
+  } catch {
+    // 核心侧还没有该实例的日志时忽略
+  }
+}
+
+function openLogModal() {
+  logOpen.value = true;
+  refreshLogs();
+}
+
+function toggleDetailLog() {
+  detailLogOpen.value = !detailLogOpen.value;
+  if (detailLogOpen.value) refreshLogs();
+}
+
 function toggleSettings() {
   settingsOpen.value = !settingsOpen.value;
 }
-const argsMap = ref<Record<string, InstanceArgs>>({});
+const argsMap = ref<Record<string, InstanceArgsDto>>({});
 const argsLoaded = ref<Record<string, boolean>>({});
 
 // 加载完成前先用骨架默认值占位（真实值随后端返回覆盖）
-function argsOf(uuid: string): InstanceArgs {
+function argsOf(uuid: string): InstanceArgsDto {
   if (!argsMap.value[uuid]) {
     argsMap.value[uuid] = {
       memory: 4096,
@@ -381,7 +419,7 @@ watch(
 let argsSaveTimer: ReturnType<typeof setTimeout> | null = null;
 
 /** 自动加入服务器信息（按实例存储） */
-function patchArgs(patch: Partial<InstanceArgs>) {
+function patchArgs(patch: Partial<InstanceArgsDto>) {
   if (selected.value) updateArgs({ ...argsOf(selected.value.uuid), ...patch });
 }
 
@@ -410,7 +448,7 @@ function playHoursOf(uuid: string): number {
   return PLAY_HOURS[uuid] ?? 0;
 }
 
-function updateArgs(v: InstanceArgs) {
+function updateArgs(v: InstanceArgsDto) {
   const uuid = selected.value?.uuid;
   if (!uuid) return;
   argsMap.value[uuid] = v;
@@ -494,7 +532,7 @@ function onMenuPick(opt: { labelKey: string }) {
 
 // ================= 元信息（版本 / 加载器 / 整合包 / 语言，合并进实例设置） =================
 
-async function onMetaUpdate(patch: Partial<InstanceInfo>) {
+async function onMetaUpdate(patch: Partial<InstanceInfoDto>) {
   if (!selected.value) return;
   try {
     await api.updateInstance(selected.value.uuid, patch);
@@ -505,7 +543,7 @@ async function onMetaUpdate(patch: Partial<InstanceInfo>) {
 }
 
 /** 实例设置面板刷新版本列表（清空后端缓存重新拉取） */
-function onVersionsRefreshed(list: VersionInfo[]) {
+function onVersionsRefreshed(list: VersionInfoDto[]) {
   versions.value = list;
 }
 
@@ -552,7 +590,7 @@ const {
 });
 
 /** 实例点击：多选模式切换勾选，普通模式单选（拖拽结束后忽略误触点击） */
-function onInstClick(inst: InstanceInfo) {
+function onInstClick(inst: InstanceInfoDto) {
   if (consumeSuppressClick()) return;
   if (multiSelect.value) toggleSelect(inst);
   else select(inst);
@@ -672,7 +710,7 @@ async function doDeleteGroup() {
 }
 
 /** 右键实例：多选模式打开操作菜单；普通模式弹出实例操作菜单 */
-function onInstContext(e: MouseEvent, inst: InstanceInfo) {
+function onInstContext(e: MouseEvent, inst: InstanceInfoDto) {
   if (multiSelect.value) {
     // 右键未勾选的实例时先加入选择
     if (!selectedIds.value.has(inst.uuid)) {
@@ -888,7 +926,7 @@ const features: Array<{ id: FeatureId; icon: string }> = [
 
 // ================= 添加分组 弹窗 =================
 
-const versions = ref<VersionInfo[]>([]);
+const versions = ref<VersionInfoDto[]>([]);
 
 // ================= 拖拽整合包文件（逻辑见 composables/useFileDrop） =================
 
@@ -950,11 +988,13 @@ async function subscribeEvents() {
     onLaunchState((e) => {
       if (e.uuid !== selected.value?.uuid) return;
       statusText.value = stateText(e.state);
+      launchStage.value = e.state;
     }),
     onGameExit((e) => {
       if (e.uuid !== selected.value?.uuid) return;
       statusText.value =
         e.code === 0 ? t("launch.exited") : t("launch.exitedCode", { code: e.code });
+      launchStage.value = "";
       appendLogText(
         e.code === 0
           ? t("launch.processExited")
@@ -966,6 +1006,7 @@ async function subscribeEvents() {
     onLaunchError((e) => {
       if (e.uuid && e.uuid !== selected.value?.uuid) return;
       statusText.value = t("launch.failed");
+      launchStage.value = "";
       appendLogText(t("launch.error", { msg: e.message }));
       if (e.uuid) {
         const inst = instances.value.find((i) => i.uuid === e.uuid);
@@ -1068,6 +1109,7 @@ async function launch() {
   const uuid = selected.value.uuid;
   selected.value.running = true;
   statusText.value = t("launch.launching");
+  launchStage.value = "";
   logs.value = [];
   try {
     await api.launchGame(uuid, playerName.value);
@@ -1191,6 +1233,23 @@ onMounted(async () => {
         class="mpbar-in-main"
       />
 
+      <!-- 启动进度（启动期间显示：阶段文本 + 进度条；未知阶段走滚动条） -->
+      <div v-if="selected?.running" class="mpbar-in-main launch-progress">
+        <div class="launch-progress-head">
+          <span class="launch-spinner"></span>
+          <span class="launch-stage">{{ launchStageText }}</span>
+          <span v-if="launchPct !== null" class="launch-pct">{{ launchPct }}%</span>
+        </div>
+        <div class="launch-progress-track">
+          <div
+            v-if="launchPct !== null"
+            class="launch-progress-bar"
+            :style="{ width: launchPct + '%' }"
+          ></div>
+          <div v-else class="launch-progress-bar rolling"></div>
+        </div>
+      </div>
+
       <!-- 主体 -->
       <main class="main" :class="{ 'side-right': sidebarSide === 'Right', 'sidebar-anim': sidebarAnim }">
         <!-- 多选模式浮动工具栏 -->
@@ -1239,7 +1298,7 @@ onMounted(async () => {
               @next="nextNewsPage"
               @open="openNews"
               :current-instance="selected"
-              @select="(inst: InstanceInfo) => select(inst)"
+              @select="(inst: InstanceInfoDto) => select(inst)"
               @quick-launch="quickLaunch"
               @back="newsActive = false"
             />
@@ -1281,6 +1340,10 @@ onMounted(async () => {
               <!-- 实例设置：含启动参数（与分组模式下的设置面板一致） -->
               <BaseButton :disabled="!selected" @click="toggleSettings">
                 ⚙ {{ t("detail.settings") }}
+              </BaseButton>
+              <!-- 实例日志：从设置入口旁打开（弹窗），主页面不显示日志 -->
+              <BaseButton :disabled="!selected" @click="openLogModal">
+                📄 {{ t("detail.logs") }}
               </BaseButton>
             </div>
             <!-- 设置面板整体展开/收起；宽度与居中由外层槽位承担，与原 .list-args 的占位一致 -->
@@ -1356,7 +1419,7 @@ onMounted(async () => {
                 @next="nextNewsPage"
                 @open="openNews"
                 :current-instance="selected"
-                @select="(inst: InstanceInfo) => select(inst)"
+                @select="(inst: InstanceInfoDto) => select(inst)"
                 @quick-launch="quickLaunch"
                 @back="newsActive = false"
               />
@@ -1471,6 +1534,28 @@ onMounted(async () => {
                     :javas="javas"
                     @update:args="updateArgs"
                   />
+                </div>
+
+                <!-- 实例日志（设置内的折叠节：线程 / 级别 / 分类筛选 + 实时日志） -->
+                <div class="args-section">
+                  <button class="args-toggle" @click="toggleDetailLog">
+                    <span>📄 {{ t("detail.logs") }}</span>
+                    <svg
+                      class="args-chevron"
+                      :class="{ flip: detailLogOpen }"
+                      viewBox="0 0 24 24"
+                      width="13"
+                      height="13"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <path d="m6 9 6 6 6-6" />
+                    </svg>
+                  </button>
+                  <CollapsePanel :open="detailLogOpen">
+                    <InstanceLogPanel :logs="logs" />
+                  </CollapsePanel>
                 </div>
 
                 <!-- 自定义执行 -->
@@ -1664,6 +1749,11 @@ onMounted(async () => {
     <!-- ===== 添加实例：独立窗口（openAdd 打开） ===== -->
 
     <!-- ===== 重命名实例弹窗 ===== -->
+    <!-- 实例日志弹窗（列表模式）：筛选 + 实时日志 -->
+    <BaseModal v-if="logOpen && selected" :title="t('detail.logs')" :width="860" @close="logOpen = false">
+      <InstanceLogPanel :logs="logs" />
+    </BaseModal>
+
     <BaseModal v-if="showRename && selected" :title="t('actions.renameTitle')" @close="showRename = false">
       <label class="field-label">{{ t("add.name") }}</label>
       <input v-model="renameName" class="field-input" @keyup.enter="doRename" spellcheck="false" />
@@ -1766,6 +1856,84 @@ onMounted(async () => {
 /* 顶部整合包安装进度条（窗口内容有自身内边距，这里只加外边距） */
 .mpbar-in-main {
   margin: 4px 12px 0;
+}
+
+/* 顶部启动进度条 */
+.launch-progress {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 14px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.launch-progress-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.launch-spinner {
+  flex-shrink: 0;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--border);
+  border-top-color: var(--blue, var(--accent));
+  border-radius: 50%;
+  animation: launch-spin 0.8s linear infinite;
+}
+
+@keyframes launch-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.launch-stage {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.launch-pct {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.launch-progress-track {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg-side);
+  overflow: hidden;
+}
+
+.launch-progress-bar {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--blue, var(--accent));
+  transition: width 0.3s ease;
+}
+
+.launch-progress-bar.rolling {
+  width: 40%;
+  animation: launch-slide 1.1s ease-in-out infinite;
+}
+
+@keyframes launch-slide {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(350%);
+  }
 }
 
 /* 删除实例进度条（删除弹窗内） */

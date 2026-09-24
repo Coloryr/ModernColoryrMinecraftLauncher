@@ -4,7 +4,7 @@
 import SegmentedTabs from "../../../components/ui/SegmentedTabs.vue";
 import InstanceIcon from "../../../components/InstanceIcon.vue";
 import { t } from "../../../lib/i18n";
-import type { InstanceInfo } from "../../../lib/bindings";
+import type { InstanceInfoDto } from "../../../lib/bindings";
 import type { ViewMode } from "../../../lib/bindings";
 import type { DragCandidate, GroupView } from "../types";
 
@@ -14,9 +14,9 @@ const props = defineProps<{
   searchText: string;
   groups: GroupView[];
   filteredGroups: GroupView[];
-  filteredInstances: InstanceInfo[];
+  filteredInstances: InstanceInfoDto[];
   searching: boolean;
-  selected: InstanceInfo | null;
+  selected: InstanceInfoDto | null;
   multiSelect: boolean;
   selectedIds: Set<string>;
   collapsedGroups: Record<string, boolean>;
@@ -24,8 +24,8 @@ const props = defineProps<{
   draggingUuid: string | null;
   isCollapsed: (name: string) => boolean;
   onDragPointerDown: (e: PointerEvent, cand: DragCandidate) => void;
-  onInstClick: (inst: InstanceInfo) => void;
-  onInstContext: (e: MouseEvent, inst: InstanceInfo) => void;
+  onInstClick: (inst: InstanceInfoDto) => void;
+  onInstContext: (e: MouseEvent, inst: InstanceInfoDto) => void;
   onGroupContext: (e: MouseEvent, groupName: string) => void;
   onGroupTitleClick: (name: string) => void;
   isInstInsert: (groupName: string, idx: number) => boolean;

@@ -1,10 +1,10 @@
-//! 游戏实例模型
+//! 游戏实例 DTO
 use serde::{Deserialize, Serialize};
 
 /// 游戏实例信息
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct InstanceInfo {
+pub struct InstanceInfoDto {
     pub uuid: String,
     pub name: String,
     pub group: Option<String>,
@@ -31,7 +31,7 @@ pub struct InstanceInfo {
     pub source: Option<String>,
 }
 
-impl InstanceInfo {
+impl InstanceInfoDto {
     /// 分组名（无分组时为 None，前端映射为“默认分组”）
     pub fn group_key(&self) -> Option<&str> {
         self.group.as_deref()

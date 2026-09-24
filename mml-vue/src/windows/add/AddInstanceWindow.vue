@@ -15,7 +15,7 @@ import { showToast } from "../../lib/toast";
 import { t, tErr } from "../../lib/i18n";
 import { isTauri, openWindow } from "../windowManager";
 import { commands } from "../../lib/bindings";
-import type { PackProgressDto, VersionInfo } from "../../lib/bindings";
+import type { PackProgressDto, VersionInfoDto } from "../../lib/bindings";
 
 const emit = defineEmits<{ (e: "close"): void }>();
 
@@ -55,7 +55,7 @@ function pickGroup(name: string) {
 
 // ================= 模式一：从头新建（表单见 modes/NewMode.vue） =================
 
-const versions = ref<VersionInfo[]>([]);
+const versions = ref<VersionInfoDto[]>([]);
 /** 版本类型列表（mml-core 提供独立 ID，显示名走 i18n） */
 const versionTypes = ref<string[]>([]);
 /** 版本类型（可多选，mml-core 独立 ID；空 = 不过滤） */
