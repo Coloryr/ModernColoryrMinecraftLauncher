@@ -5,6 +5,7 @@
 
 use std::{collections::BTreeMap, path::PathBuf};
 
+/// 构建入口：Tauri 构建 + 生成 IPC 绑定文件
 fn main() {
     tauri_build::build();
 

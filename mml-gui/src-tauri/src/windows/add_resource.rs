@@ -42,13 +42,17 @@ use crate::{
     listens,
 };
 
+/// CurseForge 项目列表缓存（pid → 项目数据，列表页请求时填充）
 static CURSEFOGRE_INFO: LazyLock<AsyncRwLock<HashMap<String, CurseForgeListDataObj>>> =
     LazyLock::new(|| AsyncRwLock::new(HashMap::new()));
+/// Modrinth 项目列表缓存（pid → 搜索命中项，列表页请求时填充）
 static MODRINTH_INFO: LazyLock<AsyncRwLock<HashMap<String, HitObj>>> =
     LazyLock::new(|| AsyncRwLock::new(HashMap::new()));
 
+/// CurseForge 文件缓存（pid → fid → 文件数据，文件列表页请求时填充）
 static CURSEFOGRE_FILE: LazyLock<AsyncRwLock<HashMap<String, HashMap<String, CurseForgeFileDataObj>>>> =
     LazyLock::new(|| AsyncRwLock::new(HashMap::new()));
+/// Modrinth 版本缓存（pid → 版本号 → 版本数据，文件列表页请求时填充）
 static MODRINTH_FILE: LazyLock<AsyncRwLock<HashMap<String, HashMap<String, ModrinthVersionObj>>>> =
     LazyLock::new(|| AsyncRwLock::new(HashMap::new()));
 
@@ -57,9 +61,12 @@ static MODRINTH_FILE: LazyLock<AsyncRwLock<HashMap<String, HashMap<String, Modri
 static DOWNLOAD_NOW: LazyLock<RwLock<HashMap<Uuid, HashMap<SourceInfo, SourceDownloadInfo>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 
+/// 下载源定位信息（pid + fid 唯一确定一个资源 / 文件）
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct SourceInfo {
+    /// 项目 ID
     pub pid: String,
+    /// 文件 ID
     pub fid: String,
 }
 
@@ -513,6 +520,7 @@ pub async fn add_resource_list(
     }
 }
 
+/// 项目是否正在下载（该实例任务表里有同 pid 的条目，列表角标用）
 fn check_download_now(game: &Uuid, pid: &str) -> bool {
     let read = DOWNLOAD_NOW.read().unwrap();
     let list = read.get(game);
@@ -528,6 +536,7 @@ fn check_download_now(game: &Uuid, pid: &str) -> bool {
     return false;
 }
 
+/// 具体文件是否正在下载（该实例任务表里有同 pid + fid 的条目）
 fn check_version_download_now(game: &Uuid, pid: &str, fid: &str) -> bool {
     let read = DOWNLOAD_NOW.read().unwrap();
     let list = read.get(game);

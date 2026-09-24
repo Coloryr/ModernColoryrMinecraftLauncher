@@ -42,8 +42,8 @@ pub(crate) fn bindings_ts(
     b
 }
 
-// 命令表：按来源 .rs 模块分组（AGENTS §4 下，命令名 = 窗口名_方法名，
-// 所以同一文件里的命令共享同一个前段；把它剥掉，组内只剩方法名）
+/// 命令表：按来源 .rs 模块分组（AGENTS §4 下，命令名 = 窗口名_方法名，
+/// 所以同一文件里的命令共享同一个前段；把它剥掉，组内只剩方法名）
 fn append_commands(b: &mut String, sigs: &[Sig]) {
     b.push_str("/** 命令，按来源 .rs 模块分组（参数顺序与 Rust 一致，Tauri 注入的 AppHandle/WebviewWindow 已剔除）*/\n");
     b.push_str("export const commands = {\n");
@@ -117,6 +117,7 @@ fn append_commands(b: &mut String, sigs: &[Sig]) {
     b.push_str("};\n\n");
 }
 
+/// 类型定义：枚举生成字符串联合，struct 逐字段转 TS（rename_all 生效）
 fn append_types(b: &mut String, decls: &[Decl], ext: &BTreeMap<String, String>) {
     b.push_str("/** 类型 */\n");
     for d in decls {

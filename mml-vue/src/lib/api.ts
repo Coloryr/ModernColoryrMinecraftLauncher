@@ -50,10 +50,12 @@ export interface CreateInstanceOpts {
 }
 
 export const api = {
+  /** 获取实例列表（含运行状态） */
   async getInstances(): Promise<InstanceInfoDto[]> {
     return commands.main.getInstances();
   },
 
+  /** 获取分组列表 */
   async getGroups(): Promise<string[]> {
     return commands.main.getGroups();
   },
@@ -63,6 +65,7 @@ export const api = {
     return commands.main.getInstanceLangs(uuid);
   },
 
+  /** 获取 Java 列表（配置加载 / 扫描异步进行，未完成时为空） */
   async getJavaList(): Promise<JavaInfoDto[]> {
     return commands.main.getJavaList();
   },
@@ -82,6 +85,7 @@ export const api = {
     return commands.main.scanJava();
   },
 
+  /** 获取游戏版本列表（后端进程级缓存） */
   async getVersions(): Promise<VersionInfoDto[]> {
     return commands.main.getVersions();
   },
@@ -325,18 +329,22 @@ export const api = {
     return commands.add.getVersionTypes();
   },
 
+  /** 添加空分组（重名返回 false） */
   async addGroup(name: string): Promise<boolean> {
     return commands.main.addGroup(name);
   },
 
+  /** 删除空分组（组内实例移入默认分组；空白分组名即默认分组，不可删） */
   async removeGroup(name: string): Promise<boolean> {
     return commands.main.removeGroup(name);
   },
 
+  /** 调整分组显示顺序（index 为目标位置） */
   async moveGroup(name: string, index: number): Promise<boolean> {
     return commands.main.moveGroup(name, index);
   },
 
+  /** 创建实例（占位数据），返回实例信息 */
   async createInstance(
     name: string,
     version: string,
@@ -345,6 +353,7 @@ export const api = {
     return commands.main.createInstance(name, version, opts?.loader ?? null, opts?.loaderVersion ?? null, opts?.group ?? null, opts?.modpackType ?? null, opts?.source ?? null);
   },
 
+  /** 重命名实例（核心实例目录跟随改名，重名抛错） */
   async renameInstance(uuid: string, name: string): Promise<boolean> {
     return commands.main.renameInstance(uuid, name);
   },
@@ -364,26 +373,32 @@ export const api = {
     return commands.main.updateInstanceArgs(uuid, args);
   },
 
+  /** 删除实例（含文件，进回收站；后台执行避免卡 UI） */
   async deleteInstance(uuid: string): Promise<boolean> {
     return commands.main.deleteInstance(uuid);
   },
 
+  /** 移动实例到 (分组, 组内位置)，支持同组排序与跨组移动 */
   async moveInstance(uuid: string, group: string | null, index: number): Promise<boolean> {
     return commands.main.moveInstance(uuid, group, index);
   },
 
+  /** 启动游戏（占位：标记运行 + 发事件） */
   async launchGame(uuid: string, userName: string): Promise<void> {
     return commands.main.launchGame(uuid, userName);
   },
 
+  /** 停止游戏 */
   async stopGame(uuid: string): Promise<void> {
     return commands.main.stopGame(uuid);
   },
 
+  /** 获取实例游戏日志（历史行） */
   async getGameLog(uuid: string): Promise<LogLine[]> {
     return commands.main.getGameLog(uuid);
   },
 
+  /** 获取运行中实例 uuid 列表 */
   async getRunning(): Promise<string[]> {
     return commands.main.getRunning();
   },
@@ -456,15 +471,19 @@ export const api = {
 
 // ---------------- 事件订阅（Rust emit → 前端 listen） ----------------
 
+/** 游戏日志事件（uuid + 日志行；clear = true 时前端清屏） */
 export function onGameLog(cb: (e: LogEvent) => void): Promise<UnlistenFn> {
   return listen<LogEvent>(GameLog, (e) => cb(e.payload));
 }
+/** 启动状态事件（state：launching 等） */
 export function onLaunchState(cb: (e: StateEvent) => void): Promise<UnlistenFn> {
   return listen<StateEvent>(LaunchState, (e) => cb(e.payload));
 }
+/** 游戏退出事件（code = 进程退出码） */
 export function onGameExit(cb: (e: ExitEvent) => void): Promise<UnlistenFn> {
   return listen<ExitEvent>(GameExit, (e) => cb(e.payload));
 }
+/** 启动失败事件 */
 export function onLaunchError(cb: (e: ErrorEvent) => void): Promise<UnlistenFn> {
   return listen<ErrorEvent>(LaunchError, (e) => cb(e.payload));
 }

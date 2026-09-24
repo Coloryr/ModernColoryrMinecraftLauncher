@@ -5,7 +5,6 @@ use std::{
     fs,
     io::{Read, Seek, SeekFrom},
     path::{Path, PathBuf},
-    sync::Arc,
 };
 
 use mml_names::i18_items::error_type::{
@@ -14,7 +13,7 @@ use mml_names::i18_items::error_type::{
 use mml_sys::path_helper;
 use sevenz_rust2::{ArchiveEntry, ArchiveReader, ArchiveWriter, Password};
 
-use crate::archives::{self, ArchiveEntryInfo, ArchiveHandle, ArchiveProcess, IBaseArchiveGui};
+use crate::archives::{self, ArchiveEntryInfo, ArchiveHandle, ArchiveProcess, BaseArchiveGui, IBaseArchiveGui};
 
 /// 保持打开文件句柄的 7z 读取句柄。
 ///
@@ -72,7 +71,7 @@ impl R7zReader {
         pack_dir: &Path,
         root_path: Option<&Path>,
         filter: &Option<Vec<String>>,
-        gui: Option<Arc<dyn IBaseArchiveGui>>,
+        gui: BaseArchiveGui,
     ) -> CoreResult<()> {
         let process = ArchiveProcess::new(gui);
         let root_path = match root_path {
@@ -90,7 +89,7 @@ impl R7zReader {
     pub(crate) fn decompress(
         archive_file: &Path,
         output_dir: &Path,
-        gui: Option<Arc<dyn IBaseArchiveGui>>,
+        gui: BaseArchiveGui,
     ) -> CoreResult<()> {
         let process = ArchiveProcess::new(gui);
         Self::r7z_decompress(&process, archive_file, output_dir)

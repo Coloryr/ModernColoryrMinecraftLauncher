@@ -10,14 +10,14 @@
 use std::sync::Mutex;
 
 use async_trait::async_trait;
-use mml_base::{archives::BaseArchive, file_item::FileItemObj};
+use mml_base::{archives::{BaseArchive, BaseArchiveGui}, file_item::FileItemObj};
 use mml_names::i18_items::error_type::{CoreResult, DataNotFoundData, ErrorType};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::{
     GameInstance,
-    gui_hook::{AddInstanceGui, AddModPackGui, BaseArchiveGui},
+    gui_hook::{AddInstanceGui, AddModPackGui},
     loader::LoaderType,
 };
 

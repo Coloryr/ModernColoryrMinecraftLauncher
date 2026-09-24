@@ -1,5 +1,6 @@
 // 账户皮肤 / 头像 / 披风占位图（SVG data URI，无需网络）
-// 接入真实皮肤服务后替换为实际图片 URL
+// 后端尚未返回真实皮肤贴图（AccountStoreDto.avatar 恒为 None），
+// 前端用这些占位图兜底；接入真实皮肤后可替换
 
 function svg(w: number, h: number, body: string): string {
   const data =

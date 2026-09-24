@@ -4,7 +4,7 @@ use std::{
     fs,
     io::{self, Read, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
-    sync::{Arc, atomic::Ordering},
+    sync::atomic::Ordering,
 };
 
 use mml_names::i18_items::error_type::{
@@ -14,7 +14,9 @@ use mml_sys::path_helper;
 use zip::write::SimpleFileOptions;
 use zip::{CompressionMethod, DateTime, ZipArchive, ZipWriter};
 
-use crate::archives::{self, ArchiveEntryInfo, ArchiveHandle, ArchiveProcess, IBaseArchiveGui};
+use crate::archives::{
+    self, ArchiveEntryInfo, ArchiveHandle, ArchiveProcess, BaseArchiveGui, IBaseArchiveGui,
+};
 
 /// 保持打开的 Zip 读取句柄（缓存 [`ZipArchive`]，中央目录只解析一次）。
 ///
@@ -41,7 +43,7 @@ impl ZipReader {
         pack_dir: &Path,
         root_path: Option<&Path>,
         filter: &Option<Vec<String>>,
-        gui: Option<Arc<dyn IBaseArchiveGui>>,
+        gui: BaseArchiveGui,
     ) -> CoreResult<()> {
         let process = ArchiveProcess::new(gui);
         let root_path = match root_path {
@@ -59,7 +61,7 @@ impl ZipReader {
     pub(crate) fn decompress(
         archive_file: &Path,
         output_dir: &Path,
-        gui: Option<Arc<dyn IBaseArchiveGui>>,
+        gui: BaseArchiveGui,
     ) -> CoreResult<()> {
         let process = ArchiveProcess::new(gui);
         Self::unzip(&process, archive_file, output_dir)

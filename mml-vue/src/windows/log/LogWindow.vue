@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 运行日志窗口：Monaco 只读编辑器展示 运行时 / 历史 / 错误 三种日志视图
 import { onBeforeUnmount, onMounted, ref } from "vue";
 import * as monaco from "monaco-editor";
 import EditorWorker from "monaco-editor/editor/editor.worker.js?worker";

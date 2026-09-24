@@ -177,7 +177,7 @@ async fn mml_instance_archive_roundtrip() {
         .unwrap()
         .export(ExportArg {
             file: export_file.clone(),
-            pack: ExportPackType::ColorMC,
+            pack: ExportPackType::MML,
             archive: ArchiveType::Zip,
             mods: Vec::new(),
             files: Vec::new(),

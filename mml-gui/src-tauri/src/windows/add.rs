@@ -44,26 +44,32 @@ impl AddWindowModel {
         }
     }
 
+    /// 记录当前安装任务的取消令牌
     fn set_cancel(&self, token: CancellationToken) {
         *self.cancel.lock().unwrap() = Some(token);
     }
 
+    /// 取走当前取消令牌（取后为 None）
     fn take_cancel(&self) -> Option<CancellationToken> {
         self.cancel.lock().unwrap().take()
     }
 
+    /// 开关关闭保护
     pub fn set_close_guard(&self, enabled: bool) {
         self.close_guard.store(enabled, Ordering::Release);
     }
 
+    /// 查询关闭保护
     pub fn close_guard(&self) -> bool {
         self.close_guard.load(Ordering::Acquire)
     }
 
+    /// 登记重名确认应答通道
     fn set_dialog(&self, id: u32, tx: oneshot::Sender<bool>) {
         self.dialog.lock().unwrap().insert(id, tx);
     }
 
+    /// 取走重名确认应答通道（取后移除）
     fn take_dialog(&self, id: u32) -> Option<oneshot::Sender<bool>> {
         self.dialog.lock().unwrap().remove(&id)
     }
@@ -154,6 +160,7 @@ struct PackProgressGui {
 }
 
 impl PackProgressGui {
+    /// 更新进度快照并发事件
     fn update(&self, f: impl FnOnce(&mut PackProgressDto)) {
         let mut dto = self.dto.lock().unwrap();
         f(&mut dto);
@@ -162,10 +169,12 @@ impl PackProgressGui {
 }
 
 impl IAddModPackGui for PackProgressGui {
+    /// 设置安装阶段
     fn set_state(&self, state: AddModPackState) {
         self.update(|dto| dto.state = pack_state_id(state).into());
     }
 
+    /// 设置主进度（value / all）
     fn set_now(&self, value: usize, all: Option<usize>) {
         self.update(|dto| {
             dto.now = value as u32;
@@ -173,10 +182,12 @@ impl IAddModPackGui for PackProgressGui {
         });
     }
 
+    /// 设置子任务说明文字
     fn set_sub_text(&self, text: Option<String>) {
         self.update(|dto| dto.sub_text = text);
     }
 
+    /// 设置子任务进度（value / all）
     fn set_sub_now(&self, value: usize, all: Option<usize>) {
         self.update(|dto| {
             dto.sub_now = value as u32;
@@ -426,6 +437,7 @@ struct SupportLoadersProgressGui {
 impl IProgressGui for SupportLoadersProgressGui {
     fn set_progress_text(&self, _text: Option<String>) {}
 
+    /// 把步数转发为进度事件
     fn set_progress_now(&self, value: usize, all: Option<usize>) {
         emit_add_loader_progress(
             &self.app,

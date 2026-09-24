@@ -1,9 +1,13 @@
 //! M²L 启动器 Tauri 壳
 //!
-//! 当前阶段：主窗口数据/操作已接入真实 IPC（见 `windows/main.rs`），
-//! 其余窗口仍使用前端模拟数据。通用数据模型见 `models/`。
-//! 每个窗口的规格 / 专属模型 / 创建操作 / 窗口按钮调用的方法见 `windows/`。
-//! 所有窗口的创建 / 聚焦 / 关闭统一由 `window_manager.rs` 处理。
+//! | 模块 | 说明 |
+//! | --- | --- |
+//! | [`collect_utils`] | 收藏数据读写 |
+//! | [`dtos`] | 跨 IPC DTO（Rust 结构转 camelCase） |
+//! | [`err_box`] | 致命错误弹窗 |
+//! | [`gui_config`] | GUI 配置读写 |
+//! | [`image_manager`] | 图片资源加载（`mml-image://` 协议） |
+//! | [`windows`] | 各窗口的规格 / IPC 命令 / 事件，窗口创建 / 聚焦 / 关闭统一处理 |
 
 use mml_names::i18;
 
@@ -18,6 +22,10 @@ pub mod windows;
 
 include!(concat!(env!("OUT_DIR"), "/invokes_gen.rs"));
 
+/// 启动 Tauri 应用
+///
+/// 挂接图片协议、窗口事件、Java 列表变更与下载器回调，
+/// 注册全部 IPC 命令后进入事件循环。
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()

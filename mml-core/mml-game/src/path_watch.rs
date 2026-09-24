@@ -58,11 +58,35 @@ pub(crate) fn init_watch() -> CoreResult<()> {
                         }
 
                         match event.kind {
-                            EventKind::Create(create_kind) => {
-                                if create_kind == CreateKind::Folder {}
+                            EventKind::Create(CreateKind::Folder) => {
+                                // 新文件夹自动载入为实例（game.json 尚未写出时跳过）；
+                                // 本启动器创建 / 改名实例时监听已暂停，uuid 已存在的忽略
+                                for path in &event.paths {
+                                    if let Some(obj) = instance_path::load_instance(path)
+                                        && crate::get_instance(&obj.uuid).is_none()
+                                    {
+                                        crate::add_to_group(obj);
+                                    }
+                                }
                             }
-                            EventKind::Remove(remove_kind) => {
-                                if remove_kind == RemoveKind::Folder {}
+                            EventKind::Remove(RemoveKind::Folder) => {
+                                // 文件夹被外部删除时，把对应实例从列表移除；
+                                // 本启动器删除 / 改名实例时记录已先行更新，这里匹配不到即跳过
+                                for path in &event.paths {
+                                    let name = path
+                                        .file_name()
+                                        .map(|n| n.to_string_lossy().to_string())
+                                        .unwrap_or_default();
+
+                                    let uuid = crate::get_instances().iter().find_map(|item| {
+                                        let obj = item.read().unwrap();
+                                        (obj.dir == name).then_some(obj.uuid)
+                                    });
+
+                                    if let Some(uuid) = uuid {
+                                        crate::remove_instance_record(&uuid);
+                                    }
+                                }
                             }
                             _ => {}
                         }

@@ -8,7 +8,7 @@
 
 use std::{
     fs,
-    io::Read,
+    io::{Cursor, Read},
     path::{Path, PathBuf},
     sync::{
         Arc,
@@ -268,12 +268,21 @@ fn test_base_archive_open_read_extract() {
 
         // 追加内存数据后重新读取
         archive
-            .add_data("added/from_memory.txt", b"memory data", None)
+            .add_data("added/from_memory.txt", b"memory data")
             .unwrap_or_else(|e| panic!("{:?} add_data 失败: {:?}", archive_type, e));
         assert!(archive.contains("added/from_memory.txt"));
         assert_eq!(
             archive.read("added/from_memory.txt").unwrap(),
             b"memory data".to_vec()
+        );
+
+        // 追加流数据
+        archive
+            .add_stream("added/from_stream.txt", &mut Cursor::new(b"stream data"))
+            .unwrap_or_else(|e| panic!("{:?} add_stream 失败: {:?}", archive_type, e));
+        assert_eq!(
+            archive.read("added/from_stream.txt").unwrap(),
+            b"stream data".to_vec()
         );
 
         // 追加磁盘文件
@@ -386,7 +395,7 @@ fn test_base_archive_create_empty() {
         assert!(archive.entries().is_empty());
 
         archive
-            .add_data("x.txt", b"xxx", None)
+            .add_data("x.txt", b"xxx")
             .unwrap_or_else(|e| panic!("{:?} create_empty+add_data 失败: {:?}", archive_type, e));
         assert_eq!(archive.read("x.txt").unwrap(), b"xxx".to_vec());
 

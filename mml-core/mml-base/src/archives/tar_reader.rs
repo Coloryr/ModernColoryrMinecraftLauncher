@@ -4,7 +4,6 @@ use std::{
     fs,
     io::{Read, Seek, SeekFrom},
     path::{Path, PathBuf},
-    sync::Arc,
 };
 
 use flate2::read::GzDecoder;
@@ -17,7 +16,8 @@ use tar::{Archive, Builder};
 use xz2::{read::XzDecoder, write::XzEncoder};
 
 use crate::archives::{
-    self, ArchiveEntryInfo, ArchiveHandle, ArchiveProcess, ArchiveType, IBaseArchiveGui, TarMode,
+    self, ArchiveEntryInfo, ArchiveHandle, ArchiveProcess, ArchiveType, BaseArchiveGui,
+    IBaseArchiveGui, TarMode,
 };
 
 /// 保持打开文件句柄的 Tar/TarGz/TarXz 读取句柄。
@@ -95,7 +95,7 @@ impl TarReader {
         pack_dir: &Path,
         root_path: Option<&Path>,
         filter: &Option<Vec<String>>,
-        gui: Option<Arc<dyn IBaseArchiveGui>>,
+        gui: BaseArchiveGui,
     ) -> CoreResult<()> {
         let process = ArchiveProcess::new(gui);
         let root_path = match root_path {
@@ -115,7 +115,7 @@ impl TarReader {
         mode: Option<TarMode>,
         archive_file: &Path,
         output_dir: &Path,
-        gui: Option<Arc<dyn IBaseArchiveGui>>,
+        gui: BaseArchiveGui,
     ) -> CoreResult<()> {
         let process = ArchiveProcess::new(gui);
         Self::un_tar(&process, archive_file, output_dir, mode)

@@ -12,19 +12,31 @@ use serde::Serialize;
 pub struct ModPackTaskDto {
     /// 任务 ID（安装开始时生成，与最终实例 uuid 无关）
     pub uuid: String,
+    /// 整合包来源平台 ID
     pub source: String,
+    /// 整合包项目 ID
     pub pid: String,
+    /// 整合包文件 ID
     pub fid: String,
     /// 显示名（取自整合包列表缓存）
     pub name: String,
+    /// 当前安装阶段 ID
     pub state: String,
+    /// 当前阶段进度
     pub now: u32,
+    /// 当前阶段总量
     pub total: u32,
+    /// 子进度说明文本
     pub sub_text: Option<String>,
+    /// 子进度当前值
     pub sub_now: u32,
+    /// 子进度总量
     pub sub_total: u32,
+    /// 是否安装完成
     pub done: bool,
+    /// 是否安装失败
     pub failed: bool,
+    /// 是否已被用户取消
     pub cancelled: bool,
     /// 失败原因（failed 时有值）
     pub error: Option<String>,
@@ -38,5 +50,6 @@ pub struct ModPackTaskDto {
 pub struct ModPackStatusDto {
     /// 下载整合包窗口是否开着（决定进度条显示在整合包窗口还是主窗口）
     pub window_open: bool,
+    /// 全部安装任务
     pub tasks: Vec<ModPackTaskDto>,
 }

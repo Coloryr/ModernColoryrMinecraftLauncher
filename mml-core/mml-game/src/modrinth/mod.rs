@@ -7,9 +7,7 @@ use std::{
 };
 
 use mml_base::{
-    archives::BaseArchive,
-    file_item::{FileHash, FileItemObj, LaterRun},
-    tools,
+    archives::{BaseArchive, BaseArchiveGui}, file_item::{FileHash, FileItemObj, LaterRun}, tools,
 };
 use mml_names::{
     i18_items::error_type::{CoreResult, ErrorType},
@@ -28,7 +26,7 @@ use tokio_util::sync::CancellationToken;
 use crate::{
     GameInstance,
     data_res::DownloadItemRes,
-    gui_hook::{AddModPackGui, AddModPackState, BaseArchiveGui},
+    gui_hook::{AddModPackGui, AddModPackState},
     launcher::{
         FileType, file_online_info_obj::OnlineInfoObj, instance_setting_obj::InstanceSettingObj,
     },

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 帮助窗口：FAQ 手风琴（文案取当前语言的 locale 包）+ 问题反馈提示
 import { computed, ref } from "vue";
 import WindowFrame from "../../components/ui/WindowFrame.vue";
 import { t, locale } from "../../lib/i18n";

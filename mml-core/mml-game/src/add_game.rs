@@ -3,9 +3,7 @@
 use std::path::{Path, PathBuf};
 
 use mml_base::{
-    archives::{ArchiveEntryInfo, BaseArchive},
-    file_item::{FileHash, FileItemObj, LaterRun},
-    serialize_tools::{self, MiniJsonObj},
+    archives::{ArchiveEntryInfo, BaseArchive, BaseArchiveGui}, file_item::{FileHash, FileItemObj, LaterRun}, serialize_tools::{self, MiniJsonObj},
 };
 use mml_names::{
     i18,
@@ -27,7 +25,7 @@ use crate::{
     GameInstance,
     curseforge::{self, pack_obj::CurseForgePackObj},
     game_options,
-    gui_hook::{AddInstanceGui, AddModPackGui, AddModPackState, BaseArchiveGui, ProgressGui},
+    gui_hook::{AddInstanceGui, AddModPackGui, AddModPackState, ProgressGui},
     launcher::{
         ModPackType,
         file_online_info_obj::OnlineInfoObj,

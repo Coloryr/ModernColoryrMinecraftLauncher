@@ -20,7 +20,7 @@ use mml_sys::path_helper;
 use uuid::Uuid;
 
 use crate::archives::{
-    ArchiveHandle, ArchiveType, IBaseArchiveGui, TarMode, r7z_reader::R7zReader,
+    ArchiveHandle, ArchiveType, BaseArchiveGui, IBaseArchiveGui, TarMode, r7z_reader::R7zReader,
     replace_invalid_name, tar_reader::TarReader, zip_reader::ZipReader,
 };
 
@@ -173,7 +173,7 @@ impl BaseArchive {
         source_dir: P,
         root_path: Option<P>,
         filter: &Option<Vec<String>>,
-        gui: Option<Arc<dyn IBaseArchiveGui>>,
+        gui: BaseArchiveGui,
     ) -> CoreResult<Self> {
         Self::compress_inner(
             archive_type,
@@ -224,7 +224,7 @@ impl BaseArchive {
         archive_type: ArchiveType,
         archive_file: P,
         output_dir: P,
-        gui: Option<Arc<dyn IBaseArchiveGui>>,
+        gui: BaseArchiveGui,
     ) -> CoreResult<()> {
         let archive_file = archive_file.as_ref();
         let output_dir = output_dir.as_ref();
@@ -255,7 +255,7 @@ impl BaseArchive {
         source_dir: &Path,
         root_path: Option<&Path>,
         filter: &Option<Vec<String>>,
-        gui: Option<Arc<dyn IBaseArchiveGui>>,
+        gui: BaseArchiveGui,
     ) -> CoreResult<()> {
         match archive_type {
             ArchiveType::Zip => {
@@ -614,7 +614,7 @@ impl BaseArchive {
         output_dir: P,
         unselect: Option<Vec<String>>,
         strip_dir: Option<String>,
-        gui: Option<Arc<dyn IBaseArchiveGui>>,
+        gui: BaseArchiveGui,
     ) -> CoreResult<()> {
         let output_dir = output_dir.as_ref();
 
@@ -697,7 +697,7 @@ impl BaseArchive {
     pub fn add_files<P: AsRef<Path>>(
         &mut self,
         files: &[(P, P)],
-        gui: Option<Arc<dyn IBaseArchiveGui>>,
+        gui: BaseArchiveGui,
     ) -> CoreResult<()> {
         if files.is_empty() {
             return Ok(());
@@ -725,7 +725,7 @@ impl BaseArchive {
     fn add_files_extract_recompress<P: AsRef<Path>>(
         &mut self,
         files: &[(P, P)],
-        gui: Option<Arc<dyn IBaseArchiveGui>>,
+        gui: BaseArchiveGui,
     ) -> CoreResult<()> {
         // 创建临时目录用于解压和新文件
         let temp_dir = std::env::temp_dir().join(format!("mml_archive_{}", Uuid::new_v4()));
@@ -752,8 +752,7 @@ impl BaseArchive {
         }
 
         // 先压缩到临时文件，再原子替换
-        let temp_archive =
-            std::env::temp_dir().join(format!("mml_archive_{}.tmp", Uuid::new_v4()));
+        let temp_archive = std::env::temp_dir().join(format!("mml_archive_{}.tmp", Uuid::new_v4()));
 
         let compress_result = Self::compress_inner(
             self.archive_type,
@@ -800,15 +799,9 @@ impl BaseArchive {
     ///
     /// * `name` — 条目在压缩包内的路径（如 `"subdir/readme.txt"`）。
     /// * `data` — 文件内容的原始字节。
-    /// * `gui` — 可选的进度回调（仅在重压缩时使用）。
     ///
     /// 调用成功后内部条目列表会自动刷新。
-    pub fn add_data(
-        &mut self,
-        name: &str,
-        data: &[u8],
-        gui: Option<Arc<dyn IBaseArchiveGui>>,
-    ) -> CoreResult<()> {
+    pub fn add_data(&mut self, name: &str, data: &[u8]) -> CoreResult<()> {
         // Zip / Tar 支持就地追加；其余解压后重压缩
         match self.archive_type {
             ArchiveType::Zip | ArchiveType::Tar => {
@@ -817,7 +810,7 @@ impl BaseArchive {
                 self.entries = handle.read_entries()?;
                 Ok(())
             }
-            _ => self.add_data_extract_recompress(name, data, gui),
+            _ => self.add_data_extract_recompress(name, data),
         }
     }
 
@@ -825,13 +818,7 @@ impl BaseArchive {
     ///
     /// * `name` — 条目在压缩包内的路径（如 `"subdir/readme.txt"`）。
     /// * `data` — 文件内容的原始字节。
-    /// * `gui` — 可选的进度回调（仅在重压缩时使用）。
-    fn add_data_extract_recompress(
-        &mut self,
-        name: &str,
-        data: &[u8],
-        gui: Option<Arc<dyn IBaseArchiveGui>>,
-    ) -> CoreResult<()> {
+    fn add_data_extract_recompress(&mut self, name: &str, data: &[u8]) -> CoreResult<()> {
         // 创建临时目录用于解压和新文件
         let temp_dir = std::env::temp_dir().join(format!("mml_archive_{}", Uuid::new_v4()));
         path_helper::create_dir_all(&temp_dir)?;
@@ -858,8 +845,7 @@ impl BaseArchive {
         })?;
 
         // 先压缩到临时文件，再原子替换
-        let temp_archive =
-            std::env::temp_dir().join(format!("mml_archive_{}.tmp", Uuid::new_v4()));
+        let temp_archive = std::env::temp_dir().join(format!("mml_archive_{}.tmp", Uuid::new_v4()));
 
         let compress_result = Self::compress_inner(
             self.archive_type,
@@ -867,7 +853,7 @@ impl BaseArchive {
             temp_dir.as_path(),
             None::<&Path>,
             &None,
-            gui,
+            None,
         );
 
         // 无论成功与否都清理临时目录
@@ -896,6 +882,48 @@ impl BaseArchive {
         self.refresh_after_modify()?;
 
         Ok(())
+    }
+
+    /// 将磁盘上的单个文件添加到压缩包并原地保存。
+    ///
+    /// Zip / Tar 格式下文件直接追加，无需解压或重压缩已有条目。
+    /// 7z 和压缩 tar 格式则先解压到临时目录，复制文件后重压缩。
+    /// 已有同路径条目会被覆盖。
+    ///
+    /// * `name` — 条目在压缩包内的路径（如 `"subdir/readme.txt"`）。
+    /// * `path` — 磁盘上的源文件路径。
+    ///
+    /// 调用成功后内部条目列表会自动刷新。
+    pub fn add_file<P: AsRef<Path>>(&mut self, name: &str, path: P) -> CoreResult<()> {
+        self.add_files(&[(path.as_ref().to_path_buf(), PathBuf::from(name))], None)
+    }
+
+    /// 将一个流的内容添加到压缩包并原地保存。
+    ///
+    /// tar 系格式需要预知条目大小，因此统一先把流写入临时文件，
+    /// 再按 [`add_file`](Self::add_file) 的路径追加；内存占用恒定。
+    /// 已有同路径条目会被覆盖。
+    ///
+    /// * `name` — 条目在压缩包内的路径（如 `"subdir/readme.txt"`）。
+    /// * `stream` — 内容来源，读取到 EOF 为止。
+    ///
+    /// 调用成功后内部条目列表会自动刷新。
+    pub fn add_stream(&mut self, name: &str, stream: &mut dyn Read) -> CoreResult<()> {
+        let temp_file = std::env::temp_dir().join(format!("mml_stream_{}", Uuid::new_v4()));
+
+        let result = (|| -> CoreResult<()> {
+            let mut file = path_helper::open_write(&temp_file)?;
+            std::io::copy(stream, &mut file).map_err(|err| {
+                ErrorType::ArchiveWriteError(ErrorData {
+                    error: err.to_string(),
+                })
+            })?;
+            drop(file);
+            self.add_file(name, &temp_file)
+        })();
+
+        let _ = fs::remove_file(&temp_file);
+        result
     }
 
     /// 在磁盘上的压缩包被**替换**后重新打开读取句柄并刷新条目。

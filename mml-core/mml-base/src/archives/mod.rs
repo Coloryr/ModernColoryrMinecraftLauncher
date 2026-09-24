@@ -35,6 +35,25 @@ pub mod zip_reader;
 pub use base_archive::{ArchiveEntryInfo, BaseArchive};
 use mml_sys::path_helper;
 
+pub type BaseArchiveGui = Option<Arc<dyn IBaseArchiveGui>>;
+
+/// 压缩包处理显示回调
+pub trait IBaseArchiveGui: Send + Sync {
+    /// 开始处理压缩包
+    ///
+    /// - `total`: 总计需要处理的数量
+    fn start(&self, total: usize);
+    /// 更新压缩包处理信息
+    ///
+    /// - `filename`: 当前文件名
+    /// - `current`: 当前处理数量
+    fn update(&self, filename: Option<String>, current: usize);
+    /// 解压完成
+    fn done(&self);
+    /// 文件名含非法字符时询问是否同意替换，返回是否同意（不同意时调用方返回 `TaskCancel`）
+    fn file_rename(&self, name: &str) -> bool;
+}
+
 /// 压缩包类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ArchiveType {
@@ -80,7 +99,7 @@ impl TarMode {
 
 pub(crate) struct ArchiveProcess {
     /// 进度回调
-    gui: Option<Arc<dyn IBaseArchiveGui>>,
+    gui: BaseArchiveGui,
     /// 总文件数
     size: AtomicUsize,
     /// 当前处理数
@@ -89,7 +108,7 @@ pub(crate) struct ArchiveProcess {
 
 impl ArchiveProcess {
     /// 创建进度追踪器
-    pub fn new(gui: Option<Arc<dyn IBaseArchiveGui>>) -> Self {
+    pub fn new(gui: BaseArchiveGui) -> Self {
         Self {
             gui,
             size: AtomicUsize::new(0),
@@ -185,23 +204,6 @@ pub(crate) trait ArchiveHandle: Send {
     }
 }
 
-/// 压缩包处理显示回调
-pub trait IBaseArchiveGui: Send + Sync {
-    /// 开始处理压缩包
-    ///
-    /// - `total`: 总计需要处理的数量
-    fn start(&self, total: usize);
-    /// 更新压缩包处理信息
-    ///
-    /// - `filename`: 当前文件名
-    /// - `current`: 当前处理数量
-    fn update(&self, filename: Option<String>, current: usize);
-    /// 解压完成
-    fn done(&self);
-    /// 文件名含非法字符时询问是否同意替换，返回是否同意（不同意时调用方返回 `TaskCancel`）
-    fn file_rename(&self, name: &str) -> bool;
-}
-
 /// 归一化路径分隔符为 `/`
 ///
 /// - `path`: 待归一化的路径
@@ -245,7 +247,7 @@ pub fn compress<P: AsRef<Path>>(
     pack_dir: P,
     root_path: Option<P>,
     filter: &Option<Vec<String>>,
-    gui: Option<Arc<dyn IBaseArchiveGui>>,
+    gui: BaseArchiveGui,
 ) -> CoreResult<()> {
     BaseArchive::compress(archive_type, archive_file, pack_dir, root_path, filter, gui)?;
     Ok(())
@@ -261,7 +263,7 @@ pub fn decompress<P: AsRef<Path>>(
     archive_type: ArchiveType,
     archive_file: P,
     output_dir: P,
-    gui: Option<Arc<dyn IBaseArchiveGui>>,
+    gui: BaseArchiveGui,
 ) -> CoreResult<()> {
     BaseArchive::decompress(archive_type, archive_file, output_dir, gui)
 }

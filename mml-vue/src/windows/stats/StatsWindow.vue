@@ -1,4 +1,6 @@
 <script setup lang="ts">
+// 游戏统计窗口：汇总卡片 + 每实例启动次数 / 时长表
+// TEMP 演示数据：stats 与总计为硬编码假数据，接入后端统计接口后替换
 import { onMounted, ref } from "vue";
 import WindowFrame from "../../components/ui/WindowFrame.vue";
 import InstanceIcon from "../../components/InstanceIcon.vue";

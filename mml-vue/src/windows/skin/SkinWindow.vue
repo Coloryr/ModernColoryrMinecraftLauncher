@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 皮肤查看窗口：2D 平面图 / 3D 模型（skinview3d）两种预览，按账户经 mml-image 协议取贴图
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import WindowFrame from "../../components/ui/WindowFrame.vue";
 import AccountSelector from "../../components/AccountSelector.vue";

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 根组件：按当前窗口标识（currentKind）挂载对应窗口，附全局 Toast
 import { computed, defineAsyncComponent, type Component } from "vue";
 import { applyTheme } from "./lib/theme";
 import { applyLocale } from "./lib/i18n";

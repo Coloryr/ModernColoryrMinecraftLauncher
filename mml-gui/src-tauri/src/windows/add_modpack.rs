@@ -37,14 +37,18 @@ use crate::windows::add_resource::SourceInfo;
 
 use super::add::{instance_gui, pack_state_id};
 
+/// CurseForge 项目列表缓存（pid → 项目数据，列表页请求时填充）
 static CURSEFOGRE_INFO: LazyLock<AsyncRwLock<HashMap<String, CurseForgeListDataObj>>> =
     LazyLock::new(|| AsyncRwLock::new(HashMap::new()));
+/// Modrinth 项目列表缓存（pid → 搜索命中项，列表页请求时填充）
 static MODRINTH_INFO: LazyLock<AsyncRwLock<HashMap<String, HitObj>>> =
     LazyLock::new(|| AsyncRwLock::new(HashMap::new()));
 
+/// CurseForge 文件缓存（pid → fid → 文件数据，文件列表页请求时填充）
 static CURSEFOGRE_FILE: LazyLock<
     AsyncRwLock<HashMap<String, HashMap<String, CurseForgeFileDataObj>>>,
 > = LazyLock::new(|| AsyncRwLock::new(HashMap::new()));
+/// Modrinth 版本缓存（pid → 版本号 → 版本数据，文件列表页请求时填充）
 static MODRINTH_FILE: LazyLock<AsyncRwLock<HashMap<String, HashMap<String, ModrinthVersionObj>>>> =
     LazyLock::new(|| AsyncRwLock::new(HashMap::new()));
 
@@ -54,11 +58,17 @@ static DOWNLOAD_NOW: LazyLock<RwLock<HashMap<SourceInfo, Arc<ModPackTask>>>> =
 
 /// 任务主/子进度快照（各回调分别更新字段）
 pub struct ModPackProgress {
+    /// 安装阶段 ID（见 [`pack_state_id`])
     state: String,
+    /// 主进度：已完成数
     now: u32,
+    /// 主进度：总数
     total: u32,
+    /// 子任务说明文字
     sub_text: Option<String>,
+    /// 子任务进度：已完成数
     sub_now: u32,
+    /// 子任务进度：总数
     sub_total: u32,
 }
 
@@ -74,16 +84,24 @@ pub struct ModPackTask {
     fid: String,
     /// 显示名（安装开始时从列表缓存取）
     name: String,
+    /// 取消令牌
     cancel: CancellationToken,
+    /// 主/子进度快照
     progress: Mutex<ModPackProgress>,
+    /// 安装完成
     done: AtomicBool,
+    /// 安装失败
     failed: AtomicBool,
+    /// 已取消
     cancelled: AtomicBool,
+    /// 失败错误文案（failed 为 true 时有值）
     error: Mutex<Option<String>>,
+    /// 安装出的实例 uuid（成功后回填）
     instance_uuid: Mutex<Option<String>>,
 }
 
 impl ModPackTask {
+    /// 转前端 DTO（快照当前进度与终态）
     fn dto(&self) -> ModPackTaskDto {
         let progress = self.progress.lock().unwrap();
         ModPackTaskDto {
@@ -129,6 +147,7 @@ struct TaskPackGui {
 }
 
 impl TaskPackGui {
+    /// 更新任务进度并广播总览事件
     fn update(&self, f: impl FnOnce(&mut ModPackProgress)) {
         {
             let mut progress = self.task.progress.lock().unwrap();
@@ -139,10 +158,12 @@ impl TaskPackGui {
 }
 
 impl IAddModPackGui for TaskPackGui {
+    /// 设置安装阶段
     fn set_state(&self, state: AddModPackState) {
         self.update(|progress| progress.state = pack_state_id(state).into());
     }
 
+    /// 设置主进度（value / all）
     fn set_now(&self, value: usize, all: Option<usize>) {
         self.update(|progress| {
             progress.now = value as u32;
@@ -150,10 +171,12 @@ impl IAddModPackGui for TaskPackGui {
         });
     }
 
+    /// 设置子任务说明文字
     fn set_sub_text(&self, text: Option<String>) {
         self.update(|progress| progress.sub_text = text);
     }
 
+    /// 设置子任务进度（value / all）
     fn set_sub_now(&self, value: usize, all: Option<usize>) {
         self.update(|progress| {
             progress.sub_now = value as u32;
@@ -613,6 +636,7 @@ pub async fn add_modpack_file(
     }
 }
 
+/// 项目是否已安装过（实例表里有同 pid 的整合包实例）
 fn check_modpack_download(pid: &str) -> bool {
     mml_game::get_instances().iter().any(|item| {
         let temp = item.read().unwrap();
@@ -624,6 +648,7 @@ fn check_modpack_download(pid: &str) -> bool {
     })
 }
 
+/// 具体版本是否已安装过（实例表里有同 pid + fid 的整合包实例）
 fn check_modpack_version_download(pid: &str, fid: &str) -> bool {
     mml_game::get_instances().iter().any(|item| {
         let temp = item.read().unwrap();

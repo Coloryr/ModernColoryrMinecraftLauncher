@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 启动中的全屏遮罩：实例图标 + 状态指示 + 日志控制台（筛选同 InstanceLogPanel）+ 强制停止
 import { computed, ref, watch, nextTick } from "vue";
 import { t } from "../lib/i18n";
 import type { InstanceInfoDto, LogLine } from "../lib/bindings";

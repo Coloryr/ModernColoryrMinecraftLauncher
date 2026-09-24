@@ -8,11 +8,14 @@ use std::sync::{LazyLock, Mutex, RwLock};
 
 use regex::Regex;
 
+use mml_base::serialize_tools;
 use mml_config::config_obj::SourceLocal;
 use mml_names::i18_items::error_type::{CoreResult, DataNotFoundData, ErrorType};
 
 use crate::gui_hook::ProgressGui;
+use crate::launcher_path::version_path;
 use crate::loader::LoaderType;
+use crate::loader::liteloader_meta_obj::LiteloaderMetaObj;
 
 /// Forge 官方源全量版本缓存（maven-metadata.xml 较大，避免每次选择重复下载解析）
 static FORGE_META_ALL: LazyLock<RwLock<Option<Vec<String>>>> = LazyLock::new(|| RwLock::new(None));
@@ -462,8 +465,8 @@ async fn optifine_versions(mc: &str) -> CoreResult<Vec<String>> {
         .collect())
 }
 
-/// LiteLoader：versions.json 形如 `{"versions": {"1.12": {"1.12.2-SNAPSHOT": {...}}}}`，
-/// 按游戏版本前缀取内层版本名
+/// LiteLoader 版本名 = 正式版（artefacts）与快照（snapshots）加载器键的并集，
+/// 如 `1.12` / `1.12-SNAPSHOT` / `1.7.10_04`
 ///
 /// # 参数
 ///
@@ -473,22 +476,22 @@ async fn optifine_versions(mc: &str) -> CoreResult<Vec<String>> {
 ///
 /// 返回版本名列表；下载或解析失败返回对应错误
 async fn liteloader_versions(mc: &str) -> CoreResult<Vec<String>> {
-    let meta = mml_net::liteloader_api::get_meta().await?;
-    let obj: serde_json::Value = serde_json::from_slice(&meta)
-        .map_err(|_| ErrorType::DataNotFound(DataNotFoundData::Info))?;
-
-    let versions = obj
-        .get("versions")
-        .and_then(|v| v.as_object())
-        .ok_or(ErrorType::DataNotFound(DataNotFoundData::Info))?;
-
-    let mut list = Vec::new();
-    for (mcver, inner) in versions {
-        if !mc.starts_with(mcver.as_str()) {
-            continue;
+    // 版本信息取缓存；无缓存时在线拉取并落盘
+    let data = match version_path::get_liteloader(mc) {
+        Some(data) => data,
+        None => {
+            let meta = mml_net::liteloader_api::get_meta().await?;
+            let obj = serialize_tools::json_from_bytes::<LiteloaderMetaObj>(&meta)?;
+            version_path::add_liteloader(obj);
+            version_path::get_liteloader(mc)
+                .ok_or(ErrorType::DataNotFound(DataNotFoundData::Info))?
         }
-        if let Some(inner) = inner.as_object() {
-            list.extend(inner.keys().cloned());
+    };
+
+    let mut list: Vec<String> = data.artefacts.loader.keys().cloned().collect();
+    for item in data.snapshots.loader.keys() {
+        if !list.contains(item) {
+            list.push(item.clone());
         }
     }
     Ok(list)

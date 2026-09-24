@@ -5,11 +5,17 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct JavaInfoDto {
+    /// 显示名
     pub name: String,
+    /// 可执行文件路径
     pub path: String,
+    /// 完整版本号
     pub version: String,
+    /// 主版本号
     pub major: u32,
+    /// 发行类型（JDK / JRE）
     pub java_type: String,
+    /// 位数（x86 / x64）
     pub arch: String,
 }
 

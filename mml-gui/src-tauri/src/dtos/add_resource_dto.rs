@@ -1,3 +1,5 @@
+//! 资源添加窗口 DTO（CurseForge / Modrinth 的项目列表、详情、文件列表与下载任务）
+
 use mml_game::launcher::{FileType, ModPackType};
 use mml_game::modrinth;
 use mml_names::i18_items::error_type::CoreResult;
@@ -10,9 +12,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::image_manager::{self};
 
+/// 项目文件列表（项目详情内的版本 / 文件分页）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FileListDto {
+    /// 当前页条目
     pub list: Vec<FileListItemDto>,
     /// 项目总数
     pub count: u64,
@@ -22,6 +26,7 @@ pub struct FileListDto {
     pub max_page: u64,
 }
 
+/// 项目文件条目（某个可下载的版本 / 文件）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FileListItemDto {
@@ -42,6 +47,18 @@ pub struct FileListItemDto {
 }
 
 impl FileListItemDto {
+    /// 由 CurseForge 文件数据构造
+    ///
+    /// # 参数
+    ///
+    /// - `data`: CurseForge 文件数据
+    /// - `file_type`: 资源类型
+    /// - `is_download`: 是否已经下载
+    /// - `download_now`: 是否正在下载
+    ///
+    /// # 返回值
+    ///
+    /// 返回列表条目
     pub fn new_curseforge(
         data: &CurseForgeFileDataObj,
         file_type: FileType,
@@ -64,6 +81,18 @@ impl FileListItemDto {
         }
     }
 
+    /// 由 Modrinth 版本数据构造
+    ///
+    /// # 参数
+    ///
+    /// - `data`: Modrinth 版本数据
+    /// - `file_type`: 资源类型
+    /// - `is_download`: 是否已经下载
+    /// - `download_now`: 是否正在下载
+    ///
+    /// # 返回值
+    ///
+    /// 返回列表条目（文件取 primary，没有 primary 取第一个）
     pub fn new_modrinth(
         data: &ModrinthVersionObj,
         file_type: FileType,
@@ -95,6 +124,7 @@ impl FileListItemDto {
     }
 }
 
+/// 下载源定位信息（pid + fid 唯一确定一个资源 / 文件）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SourceTypeDto {
@@ -108,6 +138,7 @@ pub struct SourceTypeDto {
     pub fid: String,
 }
 
+/// 项目搜索结果（分页）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectDto {
@@ -117,6 +148,7 @@ pub struct ProjectDto {
     pub count: u64,
 }
 
+/// 项目搜索结果条目（列表卡片）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ProjectItemDto {
@@ -153,6 +185,21 @@ pub struct ProjectItemDto {
 }
 
 impl ProjectItemDto {
+    /// 由 CurseForge 项目数据构造
+    ///
+    /// # 参数
+    ///
+    /// - `data`: CurseForge 项目数据
+    /// - `file_type`: 资源类型
+    /// - `download`: 是否已经下载
+    /// - `can_star`: 能否收藏
+    /// - `is_star`: 是否已经收藏
+    /// - `download_now`: 是否正在下载
+    /// - `mcmod`: 百科翻译（无则 None）
+    ///
+    /// # 返回值
+    ///
+    /// 返回列表条目（图标 / 作者头像 / 标签 / 截图经 image_manager 转发地址）
     pub fn new_curseforge(
         data: &CurseForgeListDataObj,
         file_type: FileType,
@@ -222,6 +269,20 @@ impl ProjectItemDto {
     /// 列表项只从 HitObj 构造，不发 project / team 请求（对齐旧 C# GetModPackListAsync）；
     /// 作者头像 / 截图在列表里留空，等项目详情（GetFileItemAsync）再补。
     /// 分类 svg 来自 OnceLock 缓存的 /tag/category，逐条取没有额外网络请求
+    ///
+    /// # 参数
+    ///
+    /// - `data`: Modrinth 搜索命中项
+    /// - `file_type`: 资源类型
+    /// - `download`: 是否已经下载
+    /// - `can_star`: 能否收藏
+    /// - `is_star`: 是否已经收藏
+    /// - `download_now`: 是否正在下载
+    /// - `mcmod`: 百科翻译（无则 None）
+    ///
+    /// # 返回值
+    ///
+    /// 返回列表条目
     pub async fn new_modrinth(
         data: &HitObj,
         file_type: FileType,
@@ -292,6 +353,14 @@ pub struct ProjectDetailDto {
 
 impl ProjectDetailDto {
     /// Modrinth 详情：project 拿正文 / 截图，team 拿作者头像
+    ///
+    /// # 参数
+    ///
+    /// - `data`: Modrinth 项目数据
+    ///
+    /// # 返回值
+    ///
+    /// 返回项目详情，team 请求失败返回对应错误
     pub async fn new_modrinth(data: &ModrinthProjectObj) -> CoreResult<Self> {
         let mut authors = Vec::new();
 
@@ -339,6 +408,14 @@ impl ProjectDetailDto {
     }
 
     /// CurseForge 详情：只有简介（数据来自列表缓存或 mod_info，没有正文）
+    ///
+    /// # 参数
+    ///
+    /// - `data`: CurseForge 项目数据
+    ///
+    /// # 返回值
+    ///
+    /// 返回项目详情（body 为 None）
     pub fn new_curseforge(data: &CurseForgeListDataObj) -> Self {
         let mut authors = Vec::new();
         for item in data.authors.iter() {
@@ -379,6 +456,16 @@ impl ProjectDetailDto {
     }
 }
 
+/// 拼接 Modrinth 项目网页地址
+///
+/// # 参数
+///
+/// - `file_type`: 资源类型（决定 URL 段）
+/// - `id`: 项目 ID
+///
+/// # 返回值
+///
+/// 返回项目网页地址
 fn get_modrinth_url(file_type: &FileType, id: &str) -> String {
     format!(
         "{}{}/{id}",
@@ -393,33 +480,47 @@ fn get_modrinth_url(file_type: &FileType, id: &str) -> String {
     )
 }
 
+/// MC 百科（mcmod.cn）翻译条目
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct McmodDto {
+    /// 百科页面 ID
     pub mcmod_id: String,
+    /// 百科页面名
     pub mcmod_name: String,
 }
 
+/// 图像条目（作者头像等）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PicDto {
+    /// 名字
     pub name: String,
+    /// 图像地址（mml-image 转发地址，无则 None）
     pub logo: Option<String>,
 }
 
+/// 标签条目
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TagDto {
+    /// 标签名
     pub name: String,
+    /// 位图图标地址（CurseForge，无则 None）
     pub logo: Option<String>,
+    /// SVG 图标内容（Modrinth，无则 None）
     pub svg: Option<String>,
 }
 
+/// 截图条目
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DecPicDto {
+    /// 标题
     pub name: String,
+    /// 图像地址（mml-image 转发地址）
     pub logo: String,
+    /// 描述
     pub description: String,
 }
 

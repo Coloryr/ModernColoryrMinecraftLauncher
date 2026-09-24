@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 新闻面板：公告卡片列表（分类标签 + 封面 + 标题）与分页，数据由父组件拉取
 import { t } from "../lib/i18n";
 import type { NewsItem } from "../lib/bindings";
 

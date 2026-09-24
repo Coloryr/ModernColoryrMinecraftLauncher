@@ -1,4 +1,6 @@
 <script setup lang="ts">
+// 启动器设置窗口：语言 / 强调色 / 窗口模式（仅浏览器可切）/ 侧栏位置，
+// 其余分组为占位说明（下载源 / 网络 / 默认 Java / 界面）
 import { ref } from "vue";
 import WindowFrame from "../../components/ui/WindowFrame.vue";
 import SegmentedTabs from "../../components/ui/SegmentedTabs.vue";
