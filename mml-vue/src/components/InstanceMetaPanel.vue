@@ -6,19 +6,19 @@ import { t, tErr } from "../lib/i18n";
 import { api, onAddLoaderProgress } from "../lib/api";
 import { showToast } from "../lib/toast";
 import BaseButton from "./ui/BaseButton.vue";
-import type { InstanceInfo, VersionInfo } from "../lib/bindings";
+import type { InstanceInfoDto, VersionInfoDto } from "../lib/bindings";
 
 const props = defineProps<{
-  instance: InstanceInfo;
-  versions: VersionInfo[];
+  instance: InstanceInfoDto;
+  versions: VersionInfoDto[];
 }>();
 
 const emit = defineEmits<{
-  (e: "update", patch: Partial<InstanceInfo>): void;
-  (e: "refreshed", versions: VersionInfo[]): void;
+  (e: "update", patch: Partial<InstanceInfoDto>): void;
+  (e: "refreshed", versions: VersionInfoDto[]): void;
 }>();
 
-function change(patch: Partial<InstanceInfo>) {
+function change(patch: Partial<InstanceInfoDto>) {
   emit("update", patch);
 }
 

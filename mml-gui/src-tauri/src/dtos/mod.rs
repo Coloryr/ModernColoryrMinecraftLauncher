@@ -8,13 +8,21 @@ pub mod account_dto;
 pub mod add_dto;
 pub mod add_modpack_dto;
 pub mod add_resource_dto;
+pub mod args_dto;
 pub mod collect_dto;
 pub mod download_dto;
 pub mod gui_config_dto;
+pub mod instance_dto;
+pub mod java_dto;
 pub mod main_dto;
 pub mod resource_dto;
+pub mod version_dto;
 
 pub use account_dto::{AccountStoreDto, AccountStoreViewDto};
+pub use args_dto::{EnvVarLineDto, InstanceArgsDto};
+pub use instance_dto::InstanceInfoDto;
+pub use java_dto::JavaInfoDto;
+pub use version_dto::VersionInfoDto;
 pub use add_dto::{
     DetectedPackDto, DirEntry, LoaderProgressDto, ModpackItemDto, NameConflictDto, PackProgressDto,
 };

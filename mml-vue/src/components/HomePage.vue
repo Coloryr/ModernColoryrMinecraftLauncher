@@ -4,7 +4,7 @@
 import { ref } from "vue";
 import { t } from "../lib/i18n";
 import { showToast } from "../lib/toast";
-import type { InstanceInfo, NewsItem } from "../lib/bindings";
+import type { InstanceInfoDto, NewsItem } from "../lib/bindings";
 import NewsPanel from "./NewsPanel.vue";
 import InstanceIcon from "./InstanceIcon.vue";
 import BlockPanel from "./BlockPanel.vue";
@@ -12,7 +12,7 @@ import BlockPanel from "./BlockPanel.vue";
 withDefaults(
   defineProps<{
     items: NewsItem[];
-    currentInstance: InstanceInfo | null;
+    currentInstance: InstanceInfoDto | null;
     empty?: boolean;
     loading?: boolean;
     page?: number;
@@ -22,7 +22,7 @@ withDefaults(
 );
 
 const emit = defineEmits<{
-  (e: "select", inst: InstanceInfo): void;
+  (e: "select", inst: InstanceInfoDto): void;
   (e: "quick-launch"): void;
   /** 点击页头返回按钮：返回实例列表（关闭启动器主页） */
   (e: "back"): void;

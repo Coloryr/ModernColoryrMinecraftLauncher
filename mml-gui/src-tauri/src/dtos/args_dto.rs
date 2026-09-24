@@ -1,10 +1,10 @@
-//! 启动参数模型
+//! 启动参数 DTO
 use serde::{Deserialize, Serialize};
 
 /// 附加环境变量（键值对）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct EnvVarLine {
+pub struct EnvVarLineDto {
     pub key: String,
     pub value: String,
 }
@@ -12,7 +12,7 @@ pub struct EnvVarLine {
 /// 实例启动参数（内存 / 窗口 / Java + 扩展参数 + 自定义执行 + 代理）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct InstanceArgs {
+pub struct InstanceArgsDto {
     /// 最大内存（MB）
     pub memory: i64,
     /// 最小内存（MB）
@@ -37,7 +37,7 @@ pub struct InstanceArgs {
     /// 附加 classpath
     pub class_path: Vec<String>,
     /// 附加环境变量
-    pub env_vars: Vec<EnvVarLine>,
+    pub env_vars: Vec<EnvVarLineDto>,
     /// 游戏内语言
     pub lang: String,
     /// 日志编码：utf8 / gbk
@@ -59,7 +59,7 @@ pub struct InstanceArgs {
     pub join_server: bool,
 }
 
-impl InstanceArgs {
+impl InstanceArgsDto {
     /// 默认启动参数
     pub fn default() -> Self {
         Self {

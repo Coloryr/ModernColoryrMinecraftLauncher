@@ -14,7 +14,6 @@ pub mod dtos;
 pub mod err_box;
 pub mod gui_config;
 pub mod image_manager;
-pub mod models;
 pub mod windows;
 
 include!(concat!(env!("OUT_DIR"), "/invokes_gen.rs"));

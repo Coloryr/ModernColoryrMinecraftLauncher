@@ -5,10 +5,10 @@
 import { computed, onUnmounted, ref } from "vue";
 import { t } from "../../../lib/i18n";
 import BaseButton from "../../../components/ui/BaseButton.vue";
-import type { VersionInfo } from "../../../lib/bindings";
+import type { VersionInfoDto } from "../../../lib/bindings";
 
 const props = defineProps<{
-  versions: VersionInfo[];
+  versions: VersionInfoDto[];
   /** 版本列表是否已加载（区分"加载中"与"该类型下无版本"） */
   versionsLoaded: boolean;
   /** 版本列表刷新中 */

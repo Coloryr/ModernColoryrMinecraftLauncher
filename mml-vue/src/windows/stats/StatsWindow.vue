@@ -4,9 +4,9 @@ import WindowFrame from "../../components/ui/WindowFrame.vue";
 import InstanceIcon from "../../components/InstanceIcon.vue";
 import { api } from "../../lib/api";
 import { t } from "../../lib/i18n";
-import type { InstanceInfo } from "../../lib/bindings";
+import type { InstanceInfoDto } from "../../lib/bindings";
 
-const instances = ref<InstanceInfo[]>([]);
+const instances = ref<InstanceInfoDto[]>([]);
 
 // 模拟统计数据
 const stats = new Map<string, { count: number; hours: number; last: string }>([

@@ -1,0 +1,157 @@
+<script setup lang="ts">
+// 实例日志面板：线程 / 级别 / 分类筛选 + 彩色控制台 + 自动滚动
+import { computed, ref, watch, nextTick } from "vue";
+import { t } from "../lib/i18n";
+import type { LogLine } from "../lib/bindings";
+
+const props = defineProps<{
+  logs: LogLine[];
+}>();
+
+const consoleEl = ref<HTMLElement | null>(null);
+
+watch(
+  () => props.logs.length,
+  () => {
+    nextTick(() => {
+      if (consoleEl.value) {
+        consoleEl.value.scrollTop = consoleEl.value.scrollHeight;
+      }
+    });
+  },
+);
+
+// ================= 筛选器（线程 / 级别 / 分类） =================
+
+const ALL = "";
+const threadFilter = ref(ALL);
+const levelFilter = ref(ALL);
+const categoryFilter = ref(ALL);
+
+/** 去空去重排序 */
+function uniq(values: string[]): string[] {
+  return [...new Set(values.filter(Boolean))].sort();
+}
+
+const threadOptions = computed(() => uniq(props.logs.map((l) => l.thread)));
+const categoryOptions = computed(() => uniq(props.logs.map((l) => l.category)));
+
+/** 级别按严重度排序 */
+const levelOptions = computed(() => {
+  const set = new Set(props.logs.map((l) => l.level).filter(Boolean));
+  return ["Error", "Warn", "Info", "Debug"].filter((l) => set.delete(l)).concat([...set]);
+});
+
+const filteredLogs = computed(() =>
+  props.logs.filter(
+    (l) =>
+      (threadFilter.value === ALL || l.thread === threadFilter.value) &&
+      (levelFilter.value === ALL || l.level === levelFilter.value) &&
+      (categoryFilter.value === ALL || l.category === categoryFilter.value),
+  ),
+);
+
+// 日志被清空（clear 事件 / 切换实例）时重置筛选
+watch(
+  () => props.logs.length === 0,
+  (empty) => {
+    if (empty) {
+      threadFilter.value = ALL;
+      levelFilter.value = ALL;
+      categoryFilter.value = ALL;
+    }
+  },
+);
+</script>
+
+<template>
+  <div class="inst-log">
+    <div class="filter-bar">
+      <select v-model="threadFilter" class="filter-select" :title="t('launch.filterThread')">
+        <option value="">{{ t("launch.filterThread") }} · {{ t("launch.filterAll") }}</option>
+        <option v-for="th in threadOptions" :key="th" :value="th">{{ th }}</option>
+      </select>
+      <select v-model="levelFilter" class="filter-select" :title="t('launch.filterLevel')">
+        <option value="">{{ t("launch.filterLevel") }} · {{ t("launch.filterAll") }}</option>
+        <option v-for="lv in levelOptions" :key="lv" :value="lv">{{ lv }}</option>
+      </select>
+      <select v-model="categoryFilter" class="filter-select" :title="t('launch.filterCategory')">
+        <option value="">{{ t("launch.filterCategory") }} · {{ t("launch.filterAll") }}</option>
+        <option v-for="c in categoryOptions" :key="c" :value="c">{{ c }}</option>
+      </select>
+    </div>
+
+    <div ref="consoleEl" class="console">
+      <div
+        v-for="(line, i) in filteredLogs"
+        :key="i"
+        class="log-line"
+        :class="{ 'log-error': line.level === 'Error', 'log-warn': line.level === 'Warn' }"
+      >
+        {{ line.text }}
+      </div>
+      <div v-if="filteredLogs.length === 0" class="log-empty">{{ t("launch.waitLog") }}</div>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.inst-log {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+
+.filter-bar {
+  display: flex;
+  gap: 8px;
+}
+
+.filter-select {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.console {
+  height: 46vh;
+  max-height: 480px;
+  background: #0d0f12;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 12px 14px;
+  overflow-y: auto;
+  font-family: "Cascadia Code", Consolas, "Courier New", monospace;
+  font-size: 12.5px;
+  line-height: 1.65;
+  user-select: text;
+  text-align: left;
+}
+
+.log-line {
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: #c8d0da;
+}
+
+.log-line.log-error {
+  color: #ff7b72;
+}
+
+.log-line.log-warn {
+  color: #e3b341;
+}
+
+.log-empty {
+  color: #4d5560;
+  text-align: center;
+  margin-top: 80px;
+}
+</style>

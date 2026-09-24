@@ -12,10 +12,9 @@ use tauri::{AppHandle, Emitter, WebviewWindow};
 
 use crate::dtos::main_dto::{LoadState, LogLine, NewsItem};
 use crate::dtos::{
-    BlockItemDto, BlockStatusDto, ErrorEvent, ExitEvent, InstanceChangeEvent, InstancePatch,
-    LogEvent, StateEvent,
+    BlockItemDto, BlockStatusDto, EnvVarLineDto, ErrorEvent, ExitEvent, InstanceArgsDto, InstanceChangeEvent,
+    InstanceInfoDto, InstancePatch, JavaInfoDto, LogEvent, StateEvent, VersionInfoDto,
 };
-use crate::models::{EnvVarLine, InstanceArgs, InstanceInfo, JavaInfo, VersionInfo};
 use crate::{image_manager, listens, windows};
 use mml_config::config_obj::{GCType, RunArgObj, WindowSettingObj};
 use mml_game::GameInstance;
@@ -43,8 +42,8 @@ pub fn emit_load_done(app: &AppHandle, data: Option<String>) {
 
 /// 主窗口数据存储：实例 / 启动参数 / 分组 / 运行状态 / 日志
 pub struct MainWindowModel {
-    pub instances: Vec<InstanceInfo>,
-    pub args: HashMap<String, InstanceArgs>,
+    pub instances: Vec<InstanceInfoDto>,
+    pub args: HashMap<String, InstanceArgsDto>,
     pub extra_groups: Vec<String>,
     pub group_order: Vec<String>,
     pub running: HashSet<String>,
@@ -91,10 +90,10 @@ impl MainWindowModel {
 }
 
 /// 从 mml_jvms 读取 Java 列表（配置加载 / 扫描异步进行，未完成时为空）
-fn java_list() -> Vec<JavaInfo> {
+fn java_list() -> Vec<JavaInfoDto> {
     mml_jvms::get_all_java()
         .iter()
-        .map(|j| JavaInfo {
+        .map(|j| JavaInfoDto {
             name: j.name.clone(),
             path: j.path.to_string_lossy().to_string(),
             version: j.version.clone(),
@@ -133,12 +132,12 @@ fn model(window: &WebviewWindow) -> Result<Arc<Mutex<MainWindowModel>>, String> 
 
 /// 获取实例列表（mml-game::get_instances 对接，合并运行状态）
 #[tauri::command]
-pub fn main_get_instances() -> Vec<InstanceInfo> {
+pub fn main_get_instances() -> Vec<InstanceInfoDto> {
     mml_game::get_instances()
         .into_iter()
         .map(|inst| {
             let inst = inst.read().unwrap();
-            InstanceInfo {
+            InstanceInfoDto {
                 uuid: inst.uuid.to_string(),
                 name: inst.name.clone(),
                 group: inst.group.clone(),
@@ -183,8 +182,8 @@ pub fn main_get_instance_langs(uuid: String) -> Vec<String> {
 }
 
 /// 解析核心实例配置 -> 前端启动参数 DTO
-fn args_from_core(inst: &InstanceSettingObj) -> InstanceArgs {
-    let mut a = InstanceArgs::default();
+fn args_from_core(inst: &InstanceSettingObj) -> InstanceArgsDto {
+    let mut a = InstanceArgsDto::default();
     if let Some(jvm) = &inst.jvm_arg {
         if let Some(v) = jvm.max_memory {
             a.memory = v as i64;
@@ -209,7 +208,7 @@ fn args_from_core(inst: &InstanceSettingObj) -> InstanceArgs {
             a.env_vars = s
                 .lines()
                 .filter_map(|l| {
-                    l.split_once('=').map(|(k, v)| EnvVarLine {
+                    l.split_once('=').map(|(k, v)| EnvVarLineDto {
                         key: k.to_string(),
                         value: v.to_string(),
                     })
@@ -268,7 +267,7 @@ fn args_from_core(inst: &InstanceSettingObj) -> InstanceArgs {
 }
 
 /// 前端启动参数 DTO -> 写入核心实例配置（不保存，由调用方 save）
-fn apply_args_to_core(inst: &mut InstanceSettingObj, a: &InstanceArgs) {
+fn apply_args_to_core(inst: &mut InstanceSettingObj, a: &InstanceArgsDto) {
     let jvm = inst.jvm_arg.get_or_insert_with(RunArgObj::default);
     jvm.max_memory = Some(a.memory.max(0) as u32);
     jvm.min_memory = Some(a.min_memory.max(0) as u32);
@@ -330,7 +329,7 @@ fn core_instance(uuid: &str) -> Option<(Uuid, GameInstance)> {
 
 /// 获取实例启动参数（核心实例读配置；遗留数据读内存缓存）
 #[tauri::command]
-pub fn main_get_instance_args(window: WebviewWindow, uuid: String) -> InstanceArgs {
+pub fn main_get_instance_args(window: WebviewWindow, uuid: String) -> InstanceArgsDto {
     if let Some((_, instance)) = core_instance(&uuid) {
         let obj = instance.read().unwrap();
         return args_from_core(&obj);
@@ -340,7 +339,7 @@ pub fn main_get_instance_args(window: WebviewWindow, uuid: String) -> InstanceAr
             return a.clone();
         }
     }
-    InstanceArgs::default()
+    InstanceArgsDto::default()
 }
 
 /// 更新实例启动参数（核心实例写配置并保存；遗留数据只更新内存缓存）
@@ -349,7 +348,7 @@ pub fn main_update_instance_args(
     app: AppHandle,
     window: WebviewWindow,
     uuid: String,
-    args: InstanceArgs,
+    args: InstanceArgsDto,
 ) -> Result<bool, String> {
     if let Some((_, instance)) = core_instance(&uuid) {
         {
@@ -367,7 +366,7 @@ pub fn main_update_instance_args(
 
 /// 获取 Java 列表（来自 mml_jvms，配置加载 / 扫描异步进行）
 #[tauri::command]
-pub fn main_get_java_list() -> Vec<JavaInfo> {
+pub fn main_get_java_list() -> Vec<JavaInfoDto> {
     java_list()
 }
 
@@ -385,18 +384,18 @@ pub fn main_remove_java(name: String) {
 
 /// 扫描系统已安装的 Java（注册表 / 常见路径，耗时查询放线程池）并返回最新列表
 #[tauri::command]
-pub async fn main_scan_java() -> Vec<JavaInfo> {
+pub async fn main_scan_java() -> Vec<JavaInfoDto> {
     let _ = tauri::async_runtime::spawn_blocking(mml_jvms::scan_java).await;
     java_list()
 }
 
 /// 版本列表缓存（进程级：主窗口 / 添加实例窗口共用，不挂在窗口模型上）
-static VERSIONS_CACHE: LazyLock<RwLock<Vec<VersionInfo>>> =
+static VERSIONS_CACHE: LazyLock<RwLock<Vec<VersionInfoDto>>> =
     LazyLock::new(|| RwLock::new(Vec::new()));
 
 /// 获取游戏版本列表（从 mml-core 拉取版本清单，缓存于进程）
 #[tauri::command]
-pub async fn main_get_versions() -> Result<Vec<VersionInfo>, String> {
+pub async fn main_get_versions() -> Result<Vec<VersionInfoDto>, String> {
     {
         let cache = VERSIONS_CACHE.read().unwrap();
         if !cache.is_empty() {
@@ -410,7 +409,7 @@ pub async fn main_get_versions() -> Result<Vec<VersionInfo>, String> {
 
 /// 强制刷新版本列表（清空缓存重新从版本清单拉取）
 #[tauri::command]
-pub async fn main_refresh_versions() -> Result<Vec<VersionInfo>, String> {
+pub async fn main_refresh_versions() -> Result<Vec<VersionInfoDto>, String> {
     VERSIONS_CACHE.write().unwrap().clear();
     main_get_versions().await
 }
@@ -456,7 +455,7 @@ pub fn main_open_url(url: String) {
 /// 从 mml-core 拉取版本清单（按配置源：官方 / BMCLAPI），
 /// 按类型分组排序（正式版 > 快照 > 旧版 Beta > 旧版 Alpha），
 /// 组内保持清单顺序（清单本身按新旧排列）；失败返回空
-async fn fetch_versions() -> Vec<VersionInfo> {
+async fn fetch_versions() -> Vec<VersionInfoDto> {
     #[derive(serde::Deserialize)]
     struct Manifest {
         versions: Vec<ManifestVersion>,
@@ -473,10 +472,10 @@ async fn fetch_versions() -> Vec<VersionInfo> {
     let Ok(manifest) = serde_json::from_slice::<Manifest>(&bytes) else {
         return Vec::new();
     };
-    let mut list: Vec<VersionInfo> = manifest
+    let mut list: Vec<VersionInfoDto> = manifest
         .versions
         .into_iter()
-        .map(|v| VersionInfo {
+        .map(|v| VersionInfoDto {
             id: v.id,
             version_type: v.version_type,
         })
@@ -637,10 +636,10 @@ pub fn main_create_instance(
     group: Option<String>,
     modpack_type: Option<String>,
     source: Option<String>,
-) -> Result<InstanceInfo, String> {
+) -> Result<InstanceInfoDto, String> {
     let uuid = format!("mml-{}", uuid_short());
     let dir = name.clone();
-    let inst = InstanceInfo {
+    let inst = InstanceInfoDto {
         uuid: uuid.clone(),
         name,
         group,
@@ -661,7 +660,7 @@ pub fn main_create_instance(
     let store = model(&window)?;
     let mut store = store.lock().unwrap();
     store.instances.insert(0, inst.clone());
-    store.args.insert(uuid, InstanceArgs::default());
+    store.args.insert(uuid, InstanceArgsDto::default());
     drop(store);
     emit_instance_change(&app, "add");
     Ok(inst)

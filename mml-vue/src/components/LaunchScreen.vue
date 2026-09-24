@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed, ref, watch, nextTick } from "vue";
 import { t } from "../lib/i18n";
-import type { InstanceInfo, LogLine } from "../lib/bindings";
+import type { InstanceInfoDto, LogLine } from "../lib/bindings";
 import InstanceIcon from "./InstanceIcon.vue";
 
 const props = defineProps<{
-  instance: InstanceInfo | null;
+  instance: InstanceInfoDto | null;
   statusText: string;
   logs: LogLine[];
   running: boolean;

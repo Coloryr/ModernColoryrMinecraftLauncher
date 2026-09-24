@@ -1,13 +1,13 @@
 <script setup lang="ts">
 // 自定义执行：启动前 / 启动后命令（可开关）
 import { t } from "../lib/i18n";
-import type { InstanceArgs } from "../lib/bindings";
+import type { InstanceArgsDto } from "../lib/bindings";
 
-const props = defineProps<{ args: InstanceArgs }>();
+const props = defineProps<{ args: InstanceArgsDto }>();
 
-const emit = defineEmits<{ (e: "update:args", v: InstanceArgs): void }>();
+const emit = defineEmits<{ (e: "update:args", v: InstanceArgsDto): void }>();
 
-function update(patch: Partial<InstanceArgs>) {
+function update(patch: Partial<InstanceArgsDto>) {
   emit("update:args", { ...props.args, ...patch });
 }
 </script>

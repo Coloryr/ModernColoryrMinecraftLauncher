@@ -5,11 +5,11 @@
 import { computed, onMounted, onUnmounted, ref, type Ref } from "vue";
 import { api } from "../lib/api";
 import { t } from "../lib/i18n";
-import type { InstanceInfo } from "../lib/bindings";
+import type { InstanceInfoDto } from "../lib/bindings";
 
 export interface GroupView {
   name: string;
-  items: InstanceInfo[];
+  items: InstanceInfoDto[];
 }
 
 interface DragDeps {
@@ -22,7 +22,7 @@ interface DragDeps {
 
 interface DragCandidate {
   kind: "instance" | "group";
-  instance?: InstanceInfo;
+  instance?: InstanceInfoDto;
   groupName?: string;
 }
 

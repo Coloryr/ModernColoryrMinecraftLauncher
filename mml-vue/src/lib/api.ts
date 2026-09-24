@@ -17,9 +17,9 @@ import type {
   ErrorEvent,
   ExitEvent,
   FileListDto,
-  InstanceArgs,
-  InstanceInfo,
-  JavaInfo,
+  InstanceArgsDto,
+  InstanceInfoDto,
+  JavaInfoDto,
   LoadState,
   LogEvent,
   ModItemDto,
@@ -37,7 +37,7 @@ import type {
   ShaderItemDto,
   SchematicItemDto,
   StateEvent,
-  VersionInfo,
+  VersionInfoDto,
 } from "./bindings";
 import { AddLoaderProgress, AddModpackStatus, AddNameConflict, AddPackProgress, AddResourceStatus, CloseBlocked, CollectChange, DownloadItem, DownloadTask, GameExit, GameLog, InstanceChange, JavaChange, LaunchError, LaunchState, MainBlockRender } from "./listens";
 
@@ -50,7 +50,7 @@ export interface CreateInstanceOpts {
 }
 
 export const api = {
-  async getInstances(): Promise<InstanceInfo[]> {
+  async getInstances(): Promise<InstanceInfoDto[]> {
     return commands.main.getInstances();
   },
 
@@ -63,7 +63,7 @@ export const api = {
     return commands.main.getInstanceLangs(uuid);
   },
 
-  async getJavaList(): Promise<JavaInfo[]> {
+  async getJavaList(): Promise<JavaInfoDto[]> {
     return commands.main.getJavaList();
   },
 
@@ -78,16 +78,16 @@ export const api = {
   },
 
   /** 扫描系统已安装的 Java（耗时查询）并返回最新列表 */
-  async scanJava(): Promise<JavaInfo[]> {
+  async scanJava(): Promise<JavaInfoDto[]> {
     return commands.main.scanJava();
   },
 
-  async getVersions(): Promise<VersionInfo[]> {
+  async getVersions(): Promise<VersionInfoDto[]> {
     return commands.main.getVersions();
   },
 
   /** 强制刷新版本列表（清空后端缓存重新拉取） */
-  async refreshVersions(): Promise<VersionInfo[]> {
+  async refreshVersions(): Promise<VersionInfoDto[]> {
     return commands.main.refreshVersions();
   },
 
@@ -341,7 +341,7 @@ export const api = {
     name: string,
     version: string,
     opts?: CreateInstanceOpts,
-  ): Promise<InstanceInfo> {
+  ): Promise<InstanceInfoDto> {
     return commands.main.createInstance(name, version, opts?.loader ?? null, opts?.loaderVersion ?? null, opts?.group ?? null, opts?.modpackType ?? null, opts?.source ?? null);
   },
 
@@ -349,18 +349,18 @@ export const api = {
     return commands.main.renameInstance(uuid, name);
   },
 
-  /** 更新实例元信息（补丁式，Partial<InstanceInfo>） */
-  async updateInstance(uuid: string, patch: Partial<InstanceInfo>): Promise<boolean> {
+  /** 更新实例元信息（补丁式，Partial<InstanceInfoDto>） */
+  async updateInstance(uuid: string, patch: Partial<InstanceInfoDto>): Promise<boolean> {
     return commands.main.updateInstance(uuid, patch);
   },
 
   /** 获取实例启动参数（核心实例读配置，遗留数据读内存缓存） */
-  async getInstanceArgs(uuid: string): Promise<InstanceArgs> {
+  async getInstanceArgs(uuid: string): Promise<InstanceArgsDto> {
     return commands.main.getInstanceArgs(uuid);
   },
 
   /** 更新实例启动参数（核心实例写配置并保存） */
-  async updateInstanceArgs(uuid: string, args: InstanceArgs): Promise<boolean> {
+  async updateInstanceArgs(uuid: string, args: InstanceArgsDto): Promise<boolean> {
     return commands.main.updateInstanceArgs(uuid, args);
   },
 

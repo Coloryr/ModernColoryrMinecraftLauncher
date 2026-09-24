@@ -1,9 +1,9 @@
 // 多选模式逻辑：右键分组全选进入多选、勾选切换、强制展开分组并居中滚动
 import { nextTick, ref, type Ref } from "vue";
-import type { InstanceInfo } from "../lib/bindings";
+import type { InstanceInfoDto } from "../lib/bindings";
 
 interface MultiDeps {
-  selected: Ref<InstanceInfo | null>;
+  selected: Ref<InstanceInfoDto | null>;
   newsActive: Ref<boolean>;
   collapsedGroups: Ref<Record<string, boolean>>;
   /** 退出多选时回调（例如关闭右键菜单） */
@@ -38,7 +38,7 @@ export function useMultiSelect(deps: MultiDeps) {
     deps.onExit?.();
   }
 
-  function toggleSelect(inst: InstanceInfo) {
+  function toggleSelect(inst: InstanceInfoDto) {
     const s = new Set(selectedIds.value);
     const adding = !s.has(inst.uuid);
     if (adding) s.add(inst.uuid);

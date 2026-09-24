@@ -92,31 +92,31 @@ export const commands = {
     blockSkinAdd: (input: string) => invoke<string>("main_block_skin_add", { input }),
     blockSkinRemove: (name: string) => invoke<void>("main_block_skin_remove", { name }),
     blockStatus: () => invoke<BlockStatusDto>("main_block_status"),
-    createInstance: (name: string, version: string, loader: string | null, loaderVersion: string | null, group: string | null, modpackType: string | null, source: string | null) => invoke<InstanceInfo>("main_create_instance", { name, version, loader, loaderVersion, group, modpackType, source }),
+    createInstance: (name: string, version: string, loader: string | null, loaderVersion: string | null, group: string | null, modpackType: string | null, source: string | null) => invoke<InstanceInfoDto>("main_create_instance", { name, version, loader, loaderVersion, group, modpackType, source }),
     deleteInstance: (uuid: string) => invoke<boolean>("main_delete_instance", { uuid }),
     getGameLog: (uuid: string) => invoke<LogLine[]>("main_get_game_log", { uuid }),
     getGroups: () => invoke<string[]>("main_get_groups"),
-    getInstanceArgs: (uuid: string) => invoke<InstanceArgs>("main_get_instance_args", { uuid }),
+    getInstanceArgs: (uuid: string) => invoke<InstanceArgsDto>("main_get_instance_args", { uuid }),
     getInstanceLangs: (uuid: string) => invoke<string[]>("main_get_instance_langs", { uuid }),
-    getInstances: () => invoke<InstanceInfo[]>("main_get_instances"),
-    getJavaList: () => invoke<JavaInfo[]>("main_get_java_list"),
+    getInstances: () => invoke<InstanceInfoDto[]>("main_get_instances"),
+    getJavaList: () => invoke<JavaInfoDto[]>("main_get_java_list"),
     getNews: (page: number | null) => invoke<NewsItem[]>("main_get_news", { page }),
     getRunning: () => invoke<string[]>("main_get_running"),
-    getVersions: () => invoke<VersionInfo[]>("main_get_versions"),
+    getVersions: () => invoke<VersionInfoDto[]>("main_get_versions"),
     imageBaseUrl: () => invoke<string>("main_image_base_url"),
     launchGame: (uuid: string, userName: string) => invoke<void>("main_launch_game", { uuid, userName }),
     loadState: () => invoke<LoadState>("main_load_state"),
     moveGroup: (name: string, index: number) => invoke<boolean>("main_move_group", { name, index }),
     moveInstance: (uuid: string, group: string | null, index: number) => invoke<boolean>("main_move_instance", { uuid, group, index }),
     openUrl: (url: string) => invoke<void>("main_open_url", { url }),
-    refreshVersions: () => invoke<VersionInfo[]>("main_refresh_versions"),
+    refreshVersions: () => invoke<VersionInfoDto[]>("main_refresh_versions"),
     removeGroup: (name: string) => invoke<boolean>("main_remove_group", { name }),
     removeJava: (name: string) => invoke<void>("main_remove_java", { name }),
     renameInstance: (uuid: string, name: string) => invoke<boolean>("main_rename_instance", { uuid, name }),
-    scanJava: () => invoke<JavaInfo[]>("main_scan_java"),
+    scanJava: () => invoke<JavaInfoDto[]>("main_scan_java"),
     stopGame: (uuid: string) => invoke<void>("main_stop_game", { uuid }),
     updateInstance: (uuid: string, patch: InstancePatch) => invoke<boolean>("main_update_instance", { uuid, patch }),
-    updateInstanceArgs: (uuid: string, args: InstanceArgs) => invoke<boolean>("main_update_instance_args", { uuid, args }),
+    updateInstanceArgs: (uuid: string, args: InstanceArgsDto) => invoke<boolean>("main_update_instance_args", { uuid, args }),
   },
   resource: {
     backupSave: (uuid: string, dir: string) => invoke<string>("resource_backup_save", { uuid, dir }),
@@ -333,6 +333,41 @@ export type ResourceStatusDto = {
   tasks: ResourceTaskDto[],
 };
 
+export type EnvVarLineDto = {
+  key: string,
+  value: string,
+};
+
+export type InstanceArgsDto = {
+  memory: number,
+  minMemory: number,
+  fullscreen: boolean,
+  width: number,
+  height: number,
+  javaName: string,
+  javaPath: string,
+  gc: string,
+  gcCustom: string,
+  mainClass: string,
+  jvmArgs: string[],
+  gameArgs: string[],
+  classPath: string[],
+  envVars: EnvVarLineDto[],
+  lang: string,
+  logEncoding: string,
+  preEnabled: boolean,
+  preCmd: string,
+  postEnabled: boolean,
+  postCmd: string,
+  proxyIp: string,
+  proxyPort: number,
+  proxyUser: string,
+  proxyPass: string,
+  serverIp: string,
+  serverPort: number,
+  joinServer: boolean,
+};
+
 export type CollectItemDto = {
   uuid: string,
   name: string,
@@ -415,6 +450,34 @@ export type GuiConfigDto = {
   mainWindow: MainWindowConfigDto,
   head: HeadConfigDto,
   collect: CollectConfigDto,
+};
+
+export type InstanceInfoDto = {
+  uuid: string,
+  name: string,
+  group: string | null,
+  version: string,
+  versionType: string | null,
+  loader: string,
+  loaderVersion: string | null,
+  dir: string,
+  running: boolean,
+  modpackType: string | null,
+  pid: string | null,
+  fid: string | null,
+  serverUrl: string | null,
+  lang: string | null,
+  logEncoding: string | null,
+  source: string | null,
+};
+
+export type JavaInfoDto = {
+  name: string,
+  path: string,
+  version: string,
+  major: number,
+  javaType: string,
+  arch: string,
 };
 
 export type LoadState = {
@@ -576,6 +639,11 @@ export type DataPackItemDto = {
   enable: boolean | null,
 };
 
+export type VersionInfoDto = {
+  id: string,
+  versionType: string,
+};
+
 export type Theme = "Dark" | "Light";
 
 export type WindowMode = "Multi" | "Single";
@@ -585,72 +653,4 @@ export type SidebarSide = "Left" | "Right";
 export type ViewMode = "list" | "group" | "grid";
 
 export type HeadType = "Head2DA" | "Head3DA" | "Head3DB" | "Head2DB";
-
-export type EnvVarLine = {
-  key: string,
-  value: string,
-};
-
-export type InstanceArgs = {
-  memory: number,
-  minMemory: number,
-  fullscreen: boolean,
-  width: number,
-  height: number,
-  javaName: string,
-  javaPath: string,
-  gc: string,
-  gcCustom: string,
-  mainClass: string,
-  jvmArgs: string[],
-  gameArgs: string[],
-  classPath: string[],
-  envVars: EnvVarLine[],
-  lang: string,
-  logEncoding: string,
-  preEnabled: boolean,
-  preCmd: string,
-  postEnabled: boolean,
-  postCmd: string,
-  proxyIp: string,
-  proxyPort: number,
-  proxyUser: string,
-  proxyPass: string,
-  serverIp: string,
-  serverPort: number,
-  joinServer: boolean,
-};
-
-export type InstanceInfo = {
-  uuid: string,
-  name: string,
-  group: string | null,
-  version: string,
-  versionType: string | null,
-  loader: string,
-  loaderVersion: string | null,
-  dir: string,
-  running: boolean,
-  modpackType: string | null,
-  pid: string | null,
-  fid: string | null,
-  serverUrl: string | null,
-  lang: string | null,
-  logEncoding: string | null,
-  source: string | null,
-};
-
-export type JavaInfo = {
-  name: string,
-  path: string,
-  version: string,
-  major: number,
-  javaType: string,
-  arch: string,
-};
-
-export type VersionInfo = {
-  id: string,
-  versionType: string,
-};
 

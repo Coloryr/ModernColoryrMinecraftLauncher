@@ -96,7 +96,7 @@ pub struct InstanceChangeEvent {
     pub r#type: String,
 }
 
-/// 实例更新补丁（前端 Partial<InstanceInfo> 的 IPC 形态）
+/// 实例更新补丁（前端 Partial<InstanceInfoDto> 的 IPC 形态）
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InstancePatch {
