@@ -1,3 +1,5 @@
+//! Fabric 加载器安装
+
 use mml_base::{
     file_item::{FileHash, FileItemObj, LaterRun},
     serialize_tools,
@@ -14,6 +16,10 @@ use crate::{
 /// 获取Fabric下载项目
 /// - `mc`: 游戏版本号
 /// - `version`: fabric版本号
+///
+/// # 返回值
+///
+/// 返回运行库下载项列表；版本不存在返回 `DataNotFound`
 pub async fn get_fabric_libs(mc: &str, version: Option<&str>) -> CoreResult<Vec<FileItemObj>> {
     let meta = fabric_api::get_meta().await?;
 
@@ -40,6 +46,10 @@ pub async fn get_fabric_libs(mc: &str, version: Option<&str>) -> CoreResult<Vec<
 
 impl FabricLoaderObj {
     /// 生成运行库列表
+    ///
+    /// # 返回值
+    ///
+    /// 返回各运行库的下载项
     pub fn make_libs(&self) -> Vec<FileItemObj> {
         let mut list = Vec::new();
 
@@ -60,6 +70,10 @@ impl FabricLoaderObj {
 
 impl InstanceSettingObj {
     /// 获取fabric的所有运行库
+    ///
+    /// # 返回值
+    ///
+    /// 返回运行库下载项列表（本地已有版本 JSON 时直接读取）
     pub async fn get_fabric_libs(&self) -> CoreResult<Vec<FileItemObj>> {
         let fabric =
             version_path::get_fabric(&self.version, &self.loader_version.as_ref().unwrap());

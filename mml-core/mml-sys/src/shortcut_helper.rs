@@ -1,8 +1,19 @@
+//! 快捷方式创建（指向启动器的实例启动链接）
+
 use std::path::{Path, PathBuf};
 
 use mml_names::i18_items::error_type::{CoreResult, ErrorType, FileSystemErrorData};
 
 /// 创建快捷方式
+///
+/// - `uuid`: 实例UUID（快捷方式启动参数）
+/// - `icon`: 图标文件路径（缺省用启动器默认图标）
+/// - `work`: 工作目录
+/// - `file`: 快捷方式目标路径（Windows 为 .lnk）
+///
+/// # 返回值
+///
+/// 返回快捷方式路径，创建失败时返回相应错误
 #[inline(always)]
 pub fn create_shortcut<P: AsRef<Path>>(
     uuid: &str,

@@ -86,12 +86,25 @@ impl Default for SchematicObj {
 
 impl SchematicObj {
     /// 删除
+    ///
+    /// # 返回值
+    ///
+    /// 成功返回 `Ok(())`；删除失败返回对应错误
     pub fn delete(&self) -> CoreResult<()> {
         path_helper::move_to_trash(&self.path)
     }
 }
 
 impl SchematicType {
+    /// 按扩展名判断结构文件类型
+    ///
+    /// # 参数
+    ///
+    /// - `ext`: 文件扩展名
+    ///
+    /// # 返回值
+    ///
+    /// 返回对应的结构文件类型；无法识别返回原版
     fn from_ext(ext: &str) -> Self {
         if ext.eq_ignore_ascii_case(names::LITEMATIC_EXT) {
             SchematicType::Litematic
@@ -121,6 +134,14 @@ fn read_dimensions_short(nbt: &NbtCompound, obj: &mut SchematicObj) {
 }
 
 /// 根据 palette 大小计算打包所需的位数（整数运算）
+///
+/// # 参数
+///
+/// - `palette_size`: 方块调色板大小
+///
+/// # 返回值
+///
+/// 返回每个方块占用的位数
 fn bits_per_entry(palette_size: usize) -> usize {
     if palette_size <= 1 {
         1
@@ -129,6 +150,15 @@ fn bits_per_entry(palette_size: usize) -> usize {
     }
 }
 
+/// 读取投影模组（Litematic）结构文件
+///
+/// # 参数
+///
+/// - `nbt`: 结构文件 NBT 数据
+///
+/// # 返回值
+///
+/// 返回解析出的结构信息；格式不符返回 `DataNotFound`
 fn read_litematic(nbt: NbtFile) -> CoreResult<SchematicObj> {
     if let Some(nbt) = nbt.nbt.as_compound()
         && let Some(meta) = nbt.get_compound("Metadata")
@@ -215,6 +245,15 @@ fn read_litematic(nbt: NbtFile) -> CoreResult<SchematicObj> {
     }
 }
 
+/// 读取原版结构文件
+///
+/// # 参数
+///
+/// - `nbt`: 结构文件 NBT 数据
+///
+/// # 返回值
+///
+/// 返回解析出的结构信息；格式不符返回 `DataNotFound`
 fn read_schematic(nbt: NbtFile) -> CoreResult<SchematicObj> {
     if let Some(nbt) = nbt.nbt.as_compound() {
         let mut obj = SchematicObj {
@@ -229,10 +268,27 @@ fn read_schematic(nbt: NbtFile) -> CoreResult<SchematicObj> {
 }
 
 /// 去除方块名中的属性部分，如 "minecraft:stone[axis=y]" → "minecraft:stone"
+///
+/// # 参数
+///
+/// - `input`: 方块名
+///
+/// # 返回值
+///
+/// 返回去属性后的方块名
 fn base_name(input: &str) -> &str {
     input.find('[').map_or(input, |pos| &input[..pos])
 }
 
+/// 读取创世神模组（WorldEdit）结构文件
+///
+/// # 参数
+///
+/// - `nbt`: 结构文件 NBT 数据
+///
+/// # 返回值
+///
+/// 返回解析出的结构信息；格式不符返回 `DataNotFound`
 fn read_schem(nbt: NbtFile) -> CoreResult<SchematicObj> {
     if let Some(nbt) = nbt.nbt.as_compound() {
         let mut obj = SchematicObj {
@@ -279,6 +335,15 @@ fn read_schem(nbt: NbtFile) -> CoreResult<SchematicObj> {
     }
 }
 
+/// 读取机械动力蓝图（Create）结构文件
+///
+/// # 参数
+///
+/// - `nbt`: 结构文件 NBT 数据
+///
+/// # 返回值
+///
+/// 返回解析出的结构信息；格式不符返回 `DataNotFound`
 fn read_nbt(nbt: NbtFile) -> CoreResult<SchematicObj> {
     if let Some(data) = nbt.nbt.as_compound() {
         let mut obj = SchematicObj {
@@ -341,6 +406,15 @@ fn read_nbt(nbt: NbtFile) -> CoreResult<SchematicObj> {
 }
 
 /// 读取结构文件
+///
+/// # 参数
+///
+/// - `stream`: 结构文件数据流
+/// - `schematic_type`: 结构文件类型
+///
+/// # 返回值
+///
+/// 返回解析出的结构信息；读取或解析失败返回对应错误
 pub fn read_schematic_file<R: Read + Seek>(
     stream: &mut R,
     schematic_type: SchematicType,
@@ -356,6 +430,10 @@ pub fn read_schematic_file<R: Read + Seek>(
 
 impl InstanceSettingObj {
     /// 获取结构文件列表
+    ///
+    /// # 返回值
+    ///
+    /// 返回结构文件列表（读取失败的文件标记 `fail`）
     pub async fn get_schematics(&self) -> Vec<SchematicObj> {
         let dir = self.get_schematics_path();
         let files = path_helper::get_all_files(&dir);
@@ -388,6 +466,14 @@ impl InstanceSettingObj {
     }
 
     /// 导入结构文件
+    ///
+    /// # 参数
+    ///
+    /// - `files`: 待导入的文件列表（重名自动加序号后缀）
+    ///
+    /// # 返回值
+    ///
+    /// 成功返回 `Ok(())`；复制失败返回对应错误
     pub fn import_schematic(&self, files: Vec<PathBuf>) -> CoreResult<()> {
         let path = self.get_schematics_path();
         path_helper::create_dir_all(&path)?;

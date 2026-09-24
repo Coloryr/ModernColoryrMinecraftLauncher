@@ -1,8 +1,12 @@
+//! Mojang 版本清单 DTO
+
 use serde::{Deserialize, Serialize};
 
+/// 最新版本信息
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct LastestObj {
+    /// 最新正式版
     pub release: String,
 }
 
@@ -14,13 +18,18 @@ impl Default for LastestObj {
     }
 }
 
+/// 单个版本条目
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct VersionsObj {
+    /// 版本 ID
     pub id: String,
+    /// 版本类型（release / snapshot / old_beta / old_alpha）
     #[serde(rename = "type")]
     pub version_type: String,
+    /// 版本 JSON 下载地址
     pub url: String,
+    /// 版本 JSON 校验值
     pub sha1: String,
 }
 

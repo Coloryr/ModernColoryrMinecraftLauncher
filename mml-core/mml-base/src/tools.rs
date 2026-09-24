@@ -24,6 +24,10 @@ pub fn check_is_word(input: &str) -> bool {
 }
 
 /// 截取字符串
+///
+/// - `input`: 输入内容
+/// - `start`: 起始标记
+/// - `end`: 结束标记
 pub fn get_string(input: &str, start: &str, end: &str) -> String {
     if let Some(start_byte) = input.find(start) {
         let start_end_byte = start_byte + start.len();
@@ -60,13 +64,17 @@ pub fn build_vec_string(vec: &Vec<String>) -> String {
 }
 
 pub struct PathPart {
+    /// 父目录路径
     pub parent: String,
+    /// 文件名
     pub file: String,
 }
 
 /// 将输入路径拆分
 ///
 /// 例如输入home/user/text.txt，则输出home/user和text.txt
+///
+/// - `input`: 输入路径
 pub fn get_path_part(input: &str) -> PathPart {
     let path = Path::new(input);
 

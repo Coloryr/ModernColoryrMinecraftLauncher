@@ -17,6 +17,10 @@ pub struct ScreenshotObj {
 
 impl ScreenshotObj {
     /// 删除截图
+    ///
+    /// # 返回值
+    ///
+    /// 成功返回 `Ok(())`（移入回收站）；失败返回对应错误
     pub fn delete(&self) -> CoreResult<()> {
         path_helper::move_to_trash(&self.file)
     }
@@ -24,6 +28,10 @@ impl ScreenshotObj {
 
 impl InstanceSettingObj {
     /// 获取实例的所有截图
+    ///
+    /// # 返回值
+    ///
+    /// 返回截图目录下的 PNG 文件列表
     pub fn get_screenshots(&self) -> Vec<ScreenshotObj> {
         let dir = self.get_screenshots_path();
         let mut list = Vec::new();
@@ -44,6 +52,10 @@ impl InstanceSettingObj {
     }
 
     /// 删除所有截图
+    ///
+    /// # 返回值
+    ///
+    /// 成功返回 `Ok(())`；任一文件删除失败返回对应错误
     pub fn clear_screenshots(&self) -> CoreResult<()> {
         let dir = self.get_screenshots_path();
         for item in path_helper::get_files(dir).iter() {

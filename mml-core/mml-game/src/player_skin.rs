@@ -21,6 +21,7 @@ struct MinecraftTexturesObj {
     /// 档案所属玩家名（皮肤方块的显示名来源）
     #[serde(rename = "profileName")]
     profile_name: Option<String>,
+    /// 纹理数据
     textures: TexturesObj,
 }
 
@@ -28,8 +29,10 @@ struct MinecraftTexturesObj {
 #[derive(Debug, Deserialize, Default)]
 #[serde(default)]
 struct TexturesObj {
+    /// 皮肤
     #[serde(rename = "SKIN")]
     skin: Option<TextureObj>,
+    /// 披风
     #[serde(rename = "CAPE")]
     cape: Option<TextureObj>,
 }
@@ -38,7 +41,9 @@ struct TexturesObj {
 #[derive(Debug, Deserialize, Default)]
 #[serde(default)]
 struct TextureObj {
+    /// 下载地址
     url: String,
+    /// 元数据
     metadata: Option<TextureMetadataObj>,
 }
 
@@ -46,6 +51,7 @@ struct TextureObj {
 #[derive(Debug, Deserialize, Default)]
 #[serde(default)]
 struct TextureMetadataObj {
+    /// 皮肤模型
     model: String,
 }
 
@@ -63,6 +69,14 @@ pub struct DownloadSkinRes {
 /// 下载皮肤与披风
 ///
 /// 按认证类型查询对应的会话服务器，取回皮肤 / 披风文件并缓存到本地皮肤目录。
+///
+/// # 参数
+///
+/// - `obj`: 账户信息
+///
+/// # 返回值
+///
+/// 返回下载结果；查询失败返回空结果
 pub async fn download_skin(obj: &LoginObj) -> DownloadSkinRes {
     let url = match obj.auth_type {
         AuthType::Offline | AuthType::OAuth => None,
@@ -118,6 +132,15 @@ pub async fn download_skin(obj: &LoginObj) -> DownloadSkinRes {
 }
 
 /// 查询档案并解析皮肤数据
+///
+/// # 参数
+///
+/// - `obj`: 账户信息
+/// - `url`: 会话服务器地址（`None` 时用官方服务器）
+///
+/// # 返回值
+///
+/// 返回解析出的皮肤数据；查询或解析失败返回 `None`
 async fn load_textures(obj: &LoginObj, url: Option<&str>) -> Option<MinecraftTexturesObj> {
     let res = mojang_api::get_user_profile(&obj.uuid, url).await.ok()?;
     let value = res.properties.first()?.value.clone();
@@ -126,6 +149,14 @@ async fn load_textures(obj: &LoginObj, url: Option<&str>) -> Option<MinecraftTex
 }
 
 /// 输入是否为UUID（带/不带横线均可）
+///
+/// # 参数
+///
+/// - `input`: 待检查的字符串
+///
+/// # 返回值
+///
+/// 返回是否为合法 UUID 格式
 fn is_uuid(input: &str) -> bool {
     let plain = input.replace('-', "");
     plain.len() == 32 && plain.chars().all(|c| c.is_ascii_hexdigit())
@@ -134,8 +165,15 @@ fn is_uuid(input: &str) -> bool {
 /// 按用户名或UUID取玩家皮肤（走官方会话服务器）
 ///
 /// 输入是UUID（带/不带横线）时直接查档案，否则先经Mojang API按名查UUID。
-/// 玩家不存在 / 档案没有皮肤 / 皮肤下载失败都报DataNotFound。
-/// 返回（玩家名，皮肤文件缓存路径）；名字以档案里的profileName为准
+///
+/// # 参数
+///
+/// - `input`: 玩家名或 UUID
+///
+/// # 返回值
+///
+/// 返回（玩家名，皮肤文件缓存路径），名字以档案里的profileName为准；
+/// 玩家不存在 / 档案没有皮肤 / 皮肤下载失败都报DataNotFound
 pub async fn fetch_skin_by_input(input: &str) -> CoreResult<(String, PathBuf)> {
     let input = input.trim();
     let not_found = || ErrorType::SkinBlockError(SkinBlockErrorData::PlayerNotFound);
@@ -166,6 +204,14 @@ pub async fn fetch_skin_by_input(input: &str) -> CoreResult<(String, PathBuf)> {
 }
 
 /// 解析 profile 属性（base64 后的 JSON）里的皮肤数据
+///
+/// # 参数
+///
+/// - `value`: base64 编码的属性值
+///
+/// # 返回值
+///
+/// 返回解析出的皮肤数据；解码或解析失败返回 `None`
 fn parse_textures(value: &str) -> Option<MinecraftTexturesObj> {
     let data = hash_helper::de_base64(value).ok()?;
 
@@ -173,6 +219,14 @@ fn parse_textures(value: &str) -> Option<MinecraftTexturesObj> {
 }
 
 /// 取回单个皮肤 / 披风文件，已缓存则直接返回位置
+///
+/// # 参数
+///
+/// - `url`: 纹理下载地址
+///
+/// # 返回值
+///
+/// 返回本地文件位置；下载或写入失败返回 `None`
 async fn load_texture(url: &str) -> Option<PathBuf> {
     if url.trim().is_empty() {
         return None;

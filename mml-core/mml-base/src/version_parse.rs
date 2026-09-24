@@ -1,17 +1,19 @@
-/// Minecraft 版本号解析模块
-/// 支持所有 Minecraft 版本格式：
-/// - 旧格式正式版: 1.20.4, 1.7.10
-/// - 旧格式快照: 24w13a, 25w08a
-/// - 旧格式预发布: 1.20.4-pre1, 1.20.4-pre4
-/// - 旧格式 RC: 1.20.4-rc1
-/// - 新格式正式版: 26.1, 26.1.1 (2026年起)
-/// - 新格式快照: 26.1-snapshot-1
-/// - 新格式预发布: 26.1-pre-1
-/// - 新格式 RC: 26.1-rc-2
-/// - 远古版本: a1.0.16, b1.7.3, rd-160052
+//! Minecraft 版本号解析模块
+//! 支持所有 Minecraft 版本格式：
+//! - 旧格式正式版: 1.20.4, 1.7.10
+//! - 旧格式快照: 24w13a, 25w08a
+//! - 旧格式预发布: 1.20.4-pre1, 1.20.4-pre4
+//! - 旧格式 RC: 1.20.4-rc1
+//! - 新格式正式版: 26.1, 26.1.1 (2026年起)
+//! - 新格式快照: 26.1-snapshot-1
+//! - 新格式预发布: 26.1-pre-1
+//! - 新格式 RC: 26.1-rc-2
+//! - 远古版本: a1.0.16, b1.7.3, rd-160052
 
 /// 将 Minecraft 版本号转换为可比较的元组
 /// 返回 None 表示无法解析
+///
+/// - `version`: 版本号字符串
 pub fn parse_game_version(version: &str) -> Option<Vec<i32>> {
     let v = version.trim();
 
@@ -296,6 +298,9 @@ fn parse_ancient_version(s: &str) -> Option<Vec<i32>> {
 
 /// 比较两个 Minecraft 版本号
 /// 返回 true 如果 version1 > version2
+///
+/// - `v1`: 版本号字符串
+/// - `v2`: 版本号字符串
 pub fn is_game_version_greater(v1: &str, v2: &str) -> bool {
     let parts1 = parse_game_version(v1);
     let parts2 = parse_game_version(v2);
@@ -308,18 +313,24 @@ pub fn is_game_version_greater(v1: &str, v2: &str) -> bool {
 
 /// 比较两个 Minecraft 版本号
 /// 返回 true 如果 version1 == version2
+///
+/// - `v1`: 版本号字符串
+/// - `v2`: 版本号字符串
 pub fn is_game_version_equal(v1: &str, v2: &str) -> bool {
     let parts1 = parse_game_version(v1);
     let parts2 = parse_game_version(v2);
 
     match (parts1, parts2) {
-        (Some(p1), Some(p2)) => p1 > p2,
+        (Some(p1), Some(p2)) => p1 == p2,
         _ => false,
     }
 }
 
 /// 比较两个 Minecraft 版本号
 /// 返回 true 如果 version1 >= version2
+///
+/// - `v1`: 版本号字符串
+/// - `v2`: 版本号字符串
 pub fn is_game_version_greater_equal(v1: &str, v2: &str) -> bool {
     let parts1 = parse_game_version(v1);
     let parts2 = parse_game_version(v2);

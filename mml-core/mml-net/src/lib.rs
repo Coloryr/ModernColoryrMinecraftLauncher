@@ -18,12 +18,16 @@
 //! |------|------|
 //! | [`mojang_api`] | Mojang 官方 API |
 //! | [`curseforge_api`] | CurseForge API |
+//! | [`modrinth_api`] | Modrinth API |
 //! | [`fabric_api`] / [`quilt_api`] | 模组加载器 API |
 //! | [`optifine_api`] | OptiFine 下载 |
 //! | [`authlib_api`] | Authlib-Injector 下载 |
 //! | [`adoptium_api`] | Adoptium Java 下载 |
 //! | [`nide8_api`] | 统一通行证 API |
 //! | [`liteloader_api`] | LiteLoader API |
+//! | [`openfrp_api`] / [`sakurafrp_api`] | 联机平台（OpenFrp / SakuraFrp）节点列表 |
+//! | [`chunkbase_api`] | Chunkbase 相关接口 |
+//! | [`coloryr_api`] | ColorYr 自有服务接口 |
 //! | [`urls`] | URL 常量定义 |
 //! | [`url_helper`] | URL 构建辅助函数 |
 //! | [`maven_utils`] | Maven 坐标工具 |
@@ -108,6 +112,8 @@ impl RateLimiter {
     }
 
     /// 更新最大请求数限制
+    ///
+    /// - `max_requests`: 每分钟允许的最大请求数
     fn update_limit(&mut self, max_requests: u32) {
         self.max_requests = max_requests;
     }

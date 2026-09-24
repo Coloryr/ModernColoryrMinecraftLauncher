@@ -1,4 +1,5 @@
-/// 局域网游戏相关
+//! 局域网游戏相关（组播发现）
+
 use std::{
     mem::MaybeUninit,
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, SocketAddrV4, SocketAddrV6},
@@ -21,14 +22,27 @@ use mml_names::{
 };
 use socket2::{Domain, Protocol, SockAddr, Socket, Type};
 
+/// 组播端口
 const PORT: u16 = 4445;
 
+/// IPv4 组播地址
 const IPV4: &str = "224.0.2.60";
+/// IPv6 组播地址
 const IPV6: &str = "FF75:230::60";
 
+/// 局域网广播信息解析正则
 static LAN_INFO_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"\[MOTD\](.*?)\[/MOTD\]\[AD\](.*?)\[/AD\]").unwrap());
 
+/// 从广播文本解析 MOTD
+///
+/// # 参数
+///
+/// - `text`: 广播文本
+///
+/// # 返回值
+///
+/// 返回解析出的 MOTD；格式不符返回 `None`
 fn get_motd(text: &str) -> Option<GameMotd> {
     let caps = LAN_INFO_RE.captures(text)?;
 
@@ -43,26 +57,51 @@ fn get_motd(text: &str) -> Option<GameMotd> {
     })
 }
 
+/// 构建 MOTD 广播文本
+///
+/// # 参数
+///
+/// - `motd`: MOTD 信息
+///
+/// # 返回值
+///
+/// 返回广播文本
 fn build_motd(motd: GameMotd) -> String {
     format!("[MOTD]{}[/MOTD][AD]{}[/AD]", motd.motd, motd.port)
 }
 
+/// 局域网组播收发器
 pub struct GameLan {
+    /// IPv4 组播 socket
     socket_v4: Arc<Socket>,
+    /// IPv6 组播 socket（本机无 IPv6 时为 `None`）
     socket_v6: Arc<Option<Socket>>,
+    /// 是否运行中
     is_run: Arc<AtomicBool>,
+    /// 接收回调（仅客户端）
     events: Option<Arc<EventArgHandler<GameMotd>>>,
+    /// IPv4 发送地址（仅服务端）
     send_v4: Option<SockAddr>,
+    /// IPv6 发送地址（仅服务端）
     send_v6: Option<SockAddr>,
 }
 
+/// 局域网广播信息
 pub struct GameMotd {
+    /// 服务器描述
     pub motd: String,
+    /// 服务器端口
     pub port: String,
+    /// 发送方地址
     pub addr: Option<SocketAddr>,
 }
 
 impl GameLan {
+    /// 创建局域网客户端（接收组播）
+    ///
+    /// # 返回值
+    ///
+    /// 返回组播收发器；创建 socket 失败返回对应错误
     pub fn new_client() -> CoreResult<Self> {
         let interfaces = if_addrs::get_if_addrs().map_err(|err| {
             ErrorType::SocketError(ErrorData {
@@ -177,6 +216,11 @@ impl GameLan {
         })
     }
 
+    /// 创建局域网服务端（发送组播）
+    ///
+    /// # 返回值
+    ///
+    /// 返回组播收发器；创建 socket 失败返回对应错误
     pub fn new_server() -> CoreResult<Self> {
         let interfaces = if_addrs::get_if_addrs().map_err(|err| {
             ErrorType::SocketError(ErrorData {
@@ -274,6 +318,14 @@ impl GameLan {
     }
 
     /// 添加接受回调
+    ///
+    /// # 参数
+    ///
+    /// - `handler`: 收到广播时的回调
+    ///
+    /// # 返回值
+    ///
+    /// 返回回调 ID；非客户端返回 `u64::MAX`
     pub fn add_event_handler<F>(&self, handler: F) -> u64
     where
         F: Fn(&GameMotd) + Send + Sync + 'static,
@@ -285,6 +337,10 @@ impl GameLan {
     }
 
     /// 删除接受回调
+    ///
+    /// # 参数
+    ///
+    /// - `id`: 回调 ID
     pub fn remove_event_handler(&self, id: u64) {
         if let Some(handle) = self.events.as_ref() {
             handle.remove_handel(id);
@@ -292,6 +348,14 @@ impl GameLan {
     }
 
     /// 启动发送组播（服务端）
+    ///
+    /// # 参数
+    ///
+    /// - `motd`: 广播的服务器信息
+    ///
+    /// # 返回值
+    ///
+    /// 成功返回 `Ok(())`；未按服务端创建或线程创建失败返回对应错误
     pub fn start_send(&self, motd: GameMotd) -> CoreResult<()> {
         self.is_run.store(true, Ordering::Release);
 
@@ -345,6 +409,10 @@ impl GameLan {
     }
 
     /// 启动接收组播（客户端）
+    ///
+    /// # 返回值
+    ///
+    /// 成功返回 `Ok(())`；线程创建失败返回对应错误
     pub fn start_read(&self) -> CoreResult<()> {
         self.is_run.store(true, Ordering::Release);
 
@@ -441,6 +509,7 @@ impl GameLan {
         Ok(())
     }
 
+    /// 停止组播收发
     pub fn stop(&self) {
         self.is_run.store(false, Ordering::Release);
     }

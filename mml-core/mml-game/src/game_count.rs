@@ -27,6 +27,7 @@ use uuid::Uuid;
 
 use crate::{get_instance, get_instances, launcher::game_time_obj::GameTimeObj};
 
+/// 统计数据共享句柄
 pub type GameCountObj = Arc<RwLock<CountObj>>;
 
 /// 统计数据文件路径
@@ -106,6 +107,8 @@ pub struct LaunchLogData {
 
 /// 初始化游戏统计
 ///
+/// # 参数
+///
 /// - `dir`: 运行路径
 pub fn init<P: AsRef<Path>>(dir: P) {
     let _ = COUNT_FILE.get_or_init(|| dir.as_ref().join(names::COUNT_DATA_FILE));
@@ -129,11 +132,19 @@ pub fn stop() {
 }
 
 /// 获取统计数据
+///
+/// # 返回值
+///
+/// 返回统计数据共享句柄
 pub fn get_count() -> GameCountObj {
     COUNT.clone()
 }
 
 /// 读取统计数据
+///
+/// # 返回值
+///
+/// 成功返回 `Ok(())`；读取或解析失败返回对应错误（内部已记录日志）
 fn read() {
     let Some(file) = COUNT_FILE.get().cloned() else {
         return;
@@ -424,7 +435,9 @@ fn save() {
 }
 
 /// 游戏实例启动完毕
-/// 
+///
+/// # 参数
+///
 /// - `uuid`: 游戏实例标识
 pub fn launch_done(uuid: &Uuid) {
     let now = Local::now();
@@ -466,7 +479,9 @@ pub fn launch_done(uuid: &Uuid) {
 }
 
 /// 启动失败
-/// 
+///
+/// # 参数
+///
 /// - `uuid`: 游戏实例标识
 pub fn launch_error(uuid: &Uuid) {
     let now = Local::now();
@@ -487,7 +502,9 @@ pub fn launch_error(uuid: &Uuid) {
 }
 
 /// 游戏实例关闭
-/// 
+///
+/// # 参数
+///
 /// - `uuid`: 游戏实例标识
 pub fn game_close(uuid: &Uuid) {
     let now = Local::now();
@@ -539,6 +556,15 @@ fn copy_game_time(data: &GameTimeObj) -> GameTimeObj {
     }
 }
 
+/// 将 .NET 刻度数转换为本地时间
+///
+/// # 参数
+///
+/// - `ticks`: .NET 刻度数（100 纳秒为单位）
+///
+/// # 返回值
+///
+/// 返回本地时间；无效值返回默认时间
 fn ticks_to_date(ticks: i64) -> DateTime<Local> {
     let mut secs = ticks / 10_000_000 - 62135596800;
     let mut nanos = (ticks % 10_000_000) * 100;
@@ -551,14 +577,41 @@ fn ticks_to_date(ticks: i64) -> DateTime<Local> {
         .with_timezone(&Local)
 }
 
+/// 将本地时间转换为 .NET 刻度数
+///
+/// # 参数
+///
+/// - `date`: 本地时间
+///
+/// # 返回值
+///
+/// 返回 .NET 刻度数（100 纳秒为单位）
 fn date_to_ticks(date: DateTime<Local>) -> i64 {
     (date.timestamp() + 62135596800) * 10_000_000 + date.timestamp_subsec_nanos() as i64 / 100
 }
 
+/// 将时长转换为 .NET 刻度数
+///
+/// # 参数
+///
+/// - `duration`: 时长
+///
+/// # 返回值
+///
+/// 返回 .NET 刻度数（100 纳秒为单位）
 fn duration_to_ticks(duration: TimeDelta) -> i64 {
     duration.num_seconds().saturating_mul(10_000_000) + (duration.subsec_nanos() as i64) / 100
 }
 
+/// 将 .NET 刻度数转换为时长
+///
+/// # 参数
+///
+/// - `ticks`: .NET 刻度数（100 纳秒为单位）
+///
+/// # 返回值
+///
+/// 返回时长；负数或溢出返回零时长
 fn duration_from_ticks(ticks: i64) -> TimeDelta {
     if ticks < 0 {
         return TimeDelta::zero();

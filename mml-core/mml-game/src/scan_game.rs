@@ -10,7 +10,13 @@ use crate::{add_game::PackType, other_launcher};
 
 /// 扫描文件夹下的游戏版本
 ///
-/// 然后返回可以导入的游戏实例
+/// # 参数
+///
+/// - `path`: 待扫描的目录（连同一级子目录一起检查）
+///
+/// # 返回值
+///
+/// 返回可导入的游戏实例路径列表
 pub fn scan_game_from_path<P: AsRef<Path>>(path: P) -> Vec<PathBuf> {
     let mut list = Vec::new();
     let mut dirs = path_helper::get_dirs(&path);
@@ -57,6 +63,14 @@ pub fn scan_game_from_path<P: AsRef<Path>>(path: P) -> Vec<PathBuf> {
 }
 
 /// 检测压缩包类型
+///
+/// # 参数
+///
+/// - `path`: 压缩包路径
+///
+/// # 返回值
+///
+/// 返回识别出的包类型；打不开或无法识别返回 `None`
 pub fn test_archive_type<P: AsRef<Path>>(path: P) -> Option<PackType> {
     if let Some(ext) = path.as_ref().extension()
         && ext == names::MRPACK_EXT

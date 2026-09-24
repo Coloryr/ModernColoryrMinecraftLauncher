@@ -1,3 +1,18 @@
+//! Modrinth API
+//!
+//! 提供从 Modrinth 搜索与获取内容的功能：整合包 / 模组 / 资源包 / 光影包 /
+//! 数据包的项目列表、项目详情、版本与文件、团队成员、分类标签，
+//! 以及按文件哈希反查项目版本。
+//!
+//! # 子模块
+//!
+//! | 模块 | 用途 |
+//! |------|------|
+//! | [`project_obj`] | 项目详情 DTO |
+//! | [`search_obj`] | 搜索结果 DTO |
+//! | [`team_obj`] | 团队成员 DTO |
+//! | [`version_obj`] | 版本与文件 DTO |
+
 use std::collections::HashMap;
 
 use mml_names::{
@@ -19,17 +34,25 @@ pub mod search_obj;
 pub mod team_obj;
 pub mod version_obj;
 
+/// 项目类型：整合包
 pub const CLASS_MODPACK: &str = "modpack";
+/// 项目类型：模组
 pub const CLASS_MOD: &str = "mod";
+/// 项目类型：资源包
 pub const CLASS_RESOURCEPACK: &str = "resourcepack";
+/// 项目类型：光影包
 pub const CLASS_SHADERPACK: &str = "shader";
+/// 数据包分类标签
 pub const CATEGORIES_DATA_PACK: &str = "datapack";
 
+/// Modrinth API 每分钟请求上限
 const LIMITE_PER_MIN: u32 = 300;
 
-/// 类型分类器
+/// 搜索 facets 过滤条件（同组内为 OR，组间为 AND）
 pub struct FacetsObj {
+    /// 过滤字段名（categories / versions / project_type）
     pub data: String,
+    /// 该字段允许的取值列表
     pub values: Vec<String>,
 }
 
@@ -55,6 +78,10 @@ impl Default for ModrinthSortType {
 
 impl ModrinthSortType {
     /// 获取排序方式名称
+    ///
+    /// # 返回值
+    ///
+    /// 返回 API 的 `index` 参数取值
     pub fn to_string(&self) -> String {
         String::from(match self {
             ModrinthSortType::Relevance => "relevance",
@@ -65,6 +92,13 @@ impl ModrinthSortType {
         })
     }
 
+    /// 按名称解析排序方式
+    ///
+    /// - `id`: 排序方式名称
+    ///
+    /// # 返回值
+    ///
+    /// 返回对应的排序方式；未知名称返回 `None`
     pub fn from_string(id: &str) -> Option<ModrinthSortType> {
         match id {
             "relevance" => Some(ModrinthSortType::Relevance),
@@ -109,6 +143,13 @@ impl Default for ModrinthSearchArg {
     }
 }
 
+/// 构建 facets 查询参数 JSON
+///
+/// - `list`: 过滤条件列表
+///
+/// # 返回值
+///
+/// 返回形如 `[["versions:1.20.4"],["categories:forge"]]` 的 JSON 字符串
 fn build_facets(list: Vec<FacetsObj>) -> String {
     let mut str = String::new();
 
@@ -130,6 +171,13 @@ fn build_facets(list: Vec<FacetsObj>) -> String {
     str
 }
 
+/// 构建分类过滤条件
+///
+/// - `values`: 分类名列表
+///
+/// # 返回值
+///
+/// 返回 categories 过滤条件
 fn build_categories(values: Vec<String>) -> FacetsObj {
     FacetsObj {
         data: "categories".to_string(),
@@ -137,6 +185,13 @@ fn build_categories(values: Vec<String>) -> FacetsObj {
     }
 }
 
+/// 构建游戏版本过滤条件
+///
+/// - `values`: 游戏版本号列表
+///
+/// # 返回值
+///
+/// 返回 versions 过滤条件
 fn build_versions(values: Vec<String>) -> FacetsObj {
     FacetsObj {
         data: "versions".to_string(),
@@ -144,6 +199,13 @@ fn build_versions(values: Vec<String>) -> FacetsObj {
     }
 }
 
+/// 构建项目类型过滤条件
+///
+/// - `values`: 项目类型列表
+///
+/// # 返回值
+///
+/// 返回 project_type 过滤条件
 fn build_project_type(values: Vec<String>) -> FacetsObj {
     FacetsObj {
         data: "project_type".to_string(),
@@ -152,6 +214,16 @@ fn build_project_type(values: Vec<String>) -> FacetsObj {
 }
 
 /// 搜索内容
+///
+/// - `query`: 搜索词
+/// - `index`: 排序方式
+/// - `offset`: 结果偏移量
+/// - `limit`: 单页数量
+/// - `facets`: 过滤条件列表
+///
+/// # 返回值
+///
+/// 返回搜索结果（带速率限制）
 async fn search(
     query: &str,
     index: ModrinthSortType,
@@ -177,6 +249,12 @@ async fn search(
 /// 获取整合包列表
 ///
 /// 需要的参数page_size verions category query sort page
+///
+/// - `arg`: 搜索参数
+///
+/// # 返回值
+///
+/// 返回整合包搜索结果
 pub async fn get_modpack_list(arg: ModrinthSearchArg) -> CoreResult<ModrinthSearchObj> {
     let page_size = arg.page_size.unwrap_or(20);
     let mut facets = Vec::new();
@@ -202,6 +280,12 @@ pub async fn get_modpack_list(arg: ModrinthSearchArg) -> CoreResult<ModrinthSear
 }
 
 /// 获取模组列表
+///
+/// - `arg`: 搜索参数
+///
+/// # 返回值
+///
+/// 返回模组搜索结果
 pub async fn get_mod_list(arg: ModrinthSearchArg) -> CoreResult<ModrinthSearchObj> {
     let page_size = arg.page_size.unwrap_or(20);
     let mut facets = Vec::new();
@@ -235,6 +319,12 @@ pub async fn get_mod_list(arg: ModrinthSearchArg) -> CoreResult<ModrinthSearchOb
 }
 
 /// 获取资源包列表
+///
+/// - `arg`: 搜索参数
+///
+/// # 返回值
+///
+/// 返回资源包搜索结果
 pub async fn get_resourcepack_list(arg: ModrinthSearchArg) -> CoreResult<ModrinthSearchObj> {
     let page_size = arg.page_size.unwrap_or(20);
     let mut facets = Vec::new();
@@ -260,6 +350,12 @@ pub async fn get_resourcepack_list(arg: ModrinthSearchArg) -> CoreResult<Modrint
 }
 
 /// 获取光影包列表
+///
+/// - `arg`: 搜索参数
+///
+/// # 返回值
+///
+/// 返回光影包搜索结果
 pub async fn get_shaderpack_list(arg: ModrinthSearchArg) -> CoreResult<ModrinthSearchObj> {
     let page_size = arg.page_size.unwrap_or(20);
     let mut facets = Vec::new();
@@ -285,6 +381,12 @@ pub async fn get_shaderpack_list(arg: ModrinthSearchArg) -> CoreResult<ModrinthS
 }
 
 /// 获取数据包列表
+///
+/// - `arg`: 搜索参数
+///
+/// # 返回值
+///
+/// 返回数据包搜索结果
 pub async fn get_datapack_list(arg: ModrinthSearchArg) -> CoreResult<ModrinthSearchObj> {
     let page_size = arg.page_size.unwrap_or(20);
     let mut facets = Vec::new();
@@ -317,6 +419,10 @@ pub async fn get_datapack_list(arg: ModrinthSearchArg) -> CoreResult<ModrinthSea
 ///
 /// - `id`: 项目编号
 /// - `version`: 版本号
+///
+/// # 返回值
+///
+/// 返回该版本的信息（含文件列表）
 pub async fn get_version(id: &str, version: &str) -> CoreResult<ModrinthVersionObj> {
     let url = format!("{}project/{id}/version/{version}", urls::MODRINTH_API);
 
@@ -328,6 +434,10 @@ pub async fn get_version(id: &str, version: &str) -> CoreResult<ModrinthVersionO
 /// 根据版本号获取项目信息
 ///
 /// - `ids`: 版本号
+///
+/// # 返回值
+///
+/// 返回各版本的信息列表
 pub async fn get_versions(ids: Vec<String>) -> CoreResult<Vec<ModrinthVersionObj>> {
     // 用紧凑 JSON + URL 编码：`json_to_string` 输出 pretty 多行格式，
     // 直接拼进 URL 会带换行与缩进（服务端解析失败或必须依赖 reqwest 兜底清理）
@@ -348,6 +458,10 @@ pub async fn get_versions(ids: Vec<String>) -> CoreResult<Vec<ModrinthVersionObj
 /// 获取团队列表
 ///
 /// - `id`: 项目编号
+///
+/// # 返回值
+///
+/// 返回项目团队成员列表
 pub async fn get_team(id: &str) -> CoreResult<Vec<ModrinthTeamObj>> {
     let url = format!("{}project/{id}/members", urls::MODRINTH_API);
 
@@ -359,6 +473,10 @@ pub async fn get_team(id: &str) -> CoreResult<Vec<ModrinthTeamObj>> {
 /// 获取指定项目的内容
 ///
 /// - `id`: 项目编号
+///
+/// # 返回值
+///
+/// 返回项目详情
 pub async fn get_project(id: &str) -> CoreResult<ModrinthProjectObj> {
     let url = format!("{}project/{id}", urls::MODRINTH_API);
 
@@ -372,6 +490,10 @@ pub async fn get_project(id: &str) -> CoreResult<ModrinthProjectObj> {
 /// - `id`: 项目编号
 /// - `version`: 游戏版本
 /// - `loader`: 加载器版本
+///
+/// # 返回值
+///
+/// 返回符合条件的版本文件列表
 pub async fn get_file_versions(
     id: &str,
     version: Option<&str>,
@@ -406,9 +528,11 @@ pub async fn get_file_versions(
         .await
 }
 
+/// 游戏版本标签
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct ModrinthGameVersionObj {
+    /// 游戏版本号
     pub version: String,
 }
 
@@ -421,6 +545,10 @@ impl Default for ModrinthGameVersionObj {
 }
 
 /// 获取所有游戏版本
+///
+/// # 返回值
+///
+/// 返回 Modrinth 支持的所有游戏版本
 pub async fn get_game_versions() -> CoreResult<Vec<ModrinthGameVersionObj>> {
     let url = format!("{}tag/game_version", urls::MODRINTH_API);
 
@@ -429,12 +557,17 @@ pub async fn get_game_versions() -> CoreResult<Vec<ModrinthGameVersionObj>> {
         .await
 }
 
+/// 分类标签
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(default)]
 pub struct ModrinthCategoriesObj {
+    /// 分类图标 URL
     pub icon: String,
+    /// 分类名称
     pub name: String,
+    /// 所属项目类型
     pub project_type: String,
+    /// 所属分组（categories / loaders 等标头）
     pub header: String,
 }
 
@@ -450,6 +583,10 @@ impl Default for ModrinthCategoriesObj {
 }
 
 /// 获取所有类型
+///
+/// # 返回值
+///
+/// 返回 Modrinth 的所有分类标签
 pub async fn get_categories() -> CoreResult<Vec<ModrinthCategoriesObj>> {
     let url = format!("{}tag/category", urls::MODRINTH_API);
 
@@ -458,10 +595,13 @@ pub async fn get_categories() -> CoreResult<Vec<ModrinthCategoriesObj>> {
         .await
 }
 
+/// 按哈希反查版本的请求体
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 struct VersionHashObj {
+    /// 文件哈希列表
     pub hashes: Vec<String>,
+    /// 哈希算法（sha1 / sha512）
     pub algorithm: String,
 }
 
@@ -477,6 +617,10 @@ impl Default for VersionHashObj {
 /// 从文件Sha1获取项目
 ///
 /// - `sha1`: 文件sha1
+///
+/// # 返回值
+///
+/// 返回（哈希 → 版本信息）映射
 pub async fn get_version_from_sha1(
     sha1: Vec<String>,
 ) -> CoreResult<HashMap<String, ModrinthVersionObj>> {
@@ -497,6 +641,10 @@ pub async fn get_version_from_sha1(
 /// 从文件Sha512获取项目
 ///
 /// - `sha512`: 文件sha512
+///
+/// # 返回值
+///
+/// 返回（哈希 → 版本信息）映射
 pub async fn get_version_from_sha512(
     sha512: Vec<String>,
 ) -> CoreResult<HashMap<String, ModrinthVersionObj>> {

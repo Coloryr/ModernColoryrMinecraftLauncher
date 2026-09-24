@@ -23,12 +23,18 @@ static REGEX_LOG: LazyLock<Regex> =
 static REGEX_LOG_OLD: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"\[(.*?)\] \[(.*?)(?:\/(.*?))?\]:?").unwrap());
 
+/// 日志级别
 #[derive(Clone)]
 pub enum LogLevel {
+    /// 未识别
     None,
+    /// 信息
     Info,
+    /// 警告
     Warn,
+    /// 错误
     Error,
+    /// 调试
     Debug,
 }
 
@@ -45,12 +51,18 @@ impl LogLevel {
     }
 }
 
+/// 单条游戏日志
 #[derive(Clone)]
 pub struct GameLogObj {
+    /// 日志内容
     pub log: String,
+    /// 日志时间
     pub time: String,
+    /// 线程名
     pub thread: String,
+    /// 日志级别
     pub level: LogLevel,
+    /// 日志分类
     pub category: String,
 }
 
@@ -105,6 +117,11 @@ pub struct InstanceRuntimeLog {
 }
 
 impl InstanceRuntimeLog {
+    /// 创建空的日志处理器
+    ///
+    /// # 返回值
+    ///
+    /// 返回新建的日志处理器
     pub fn new() -> Self {
         Self {
             logs: RwLock::new(Arc::new(VecDeque::new())),
@@ -113,6 +130,15 @@ impl InstanceRuntimeLog {
     }
 
     /// 从文件读取日志
+    ///
+    /// # 参数
+    ///
+    /// - `file`: 日志文件（.log / .txt / .log.gz）
+    /// - `encoding`: 日志编码
+    ///
+    /// # 返回值
+    ///
+    /// 返回日志处理器（读取失败时内容为空）
     pub fn from_file<P: AsRef<Path>>(file: P, encoding: LogEncoding) -> Self {
         let mut log = Self {
             logs: RwLock::new(Arc::new(VecDeque::new())),
@@ -166,6 +192,14 @@ impl InstanceRuntimeLog {
     }
 
     /// 添加游戏输出的日志
+    ///
+    /// # 参数
+    ///
+    /// - `log`: 单行日志文本
+    ///
+    /// # 返回值
+    ///
+    /// 返回解析并入库的日志项
     pub fn add_game_log(&mut self, log: &str) -> GameLogItemObj {
         let temp = log.trim();
         let obj = if let Some(captures) = REGEX_LOG.captures(temp)
@@ -199,6 +233,14 @@ impl InstanceRuntimeLog {
     ///
     /// 与[`InstanceRuntimeLog::add_game_log`]同一套正则；解析不出的行
     /// thread / category / time 为空、级别为None。GUI据此填充筛选字段。
+    ///
+    /// # 参数
+    ///
+    /// - `log`: 单行日志文本
+    ///
+    /// # 返回值
+    ///
+    /// 返回解析出的日志对象
     pub fn parse_game_log_line(log: &str) -> GameLogObj {
         let temp = log.trim();
         if let Some(captures) = REGEX_LOG.captures(temp)
@@ -233,6 +275,14 @@ impl InstanceRuntimeLog {
     }
 
     /// 添加日志
+    ///
+    /// # 参数
+    ///
+    /// - `log`: 日志内容
+    ///
+    /// # 返回值
+    ///
+    /// 返回入库的日志项
     pub fn add_log_item(&mut self, log: GameLog) -> GameLogItemObj {
         let mut logs = self.logs.write().unwrap();
         let logs = Arc::make_mut(&mut logs);
@@ -250,6 +300,15 @@ impl InstanceRuntimeLog {
     }
 }
 
+/// 按日志文本解析级别
+///
+/// # 参数
+///
+/// - `level`: 日志级别文本
+///
+/// # 返回值
+///
+/// 返回对应的日志级别；无法识别返回 `None`
 fn get_level(level: &str) -> LogLevel {
     match level.to_lowercase().as_str() {
         "info" => LogLevel::Info,
@@ -263,6 +322,10 @@ fn get_level(level: &str) -> LogLevel {
 
 impl InstanceSettingObj {
     /// 获取游戏日志文件列表
+    ///
+    /// # 返回值
+    ///
+    /// 返回日志目录与崩溃报告目录下的日志文件列表
     pub fn get_log_files(&self) -> Vec<PathBuf> {
         fn is_log_file(path: &Path) -> bool {
             if let Some(ext) = path.extension() {
@@ -300,7 +363,14 @@ impl InstanceSettingObj {
     }
 
     /// 获取最新的崩溃日志
+    ///
+    /// # 参数
+    ///
     /// - `sec`: 和最新时间最大差值
+    ///
+    /// # 返回值
+    ///
+    /// 返回最新的崩溃日志文件；目录不存在或文件太旧返回 `None`
     pub fn get_last_crash_report(&self, sec: Option<u32>) -> Option<PathBuf> {
         let dir = self.get_crash_path();
         if !dir.exists() || !dir.is_dir() {
@@ -329,6 +399,14 @@ impl InstanceSettingObj {
     }
 
     /// 读取日志
+    ///
+    /// # 参数
+    ///
+    /// - `path`: 相对日志目录的文件名
+    ///
+    /// # 返回值
+    ///
+    /// 返回日志处理器；文件不存在返回 `None`
     pub fn read_log<P: AsRef<Path>>(&self, path: P) -> Option<InstanceRuntimeLog> {
         let path = self.get_logs_path().join(path.as_ref());
 

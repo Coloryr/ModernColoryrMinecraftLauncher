@@ -1,3 +1,8 @@
+//! 头像的 3D 立方体渲染
+//!
+//! 把皮肤贴图的 12 个面（6 个基础面 + 6 个 1.125 倍头顶层）投影到
+//! 屏幕空间逐三角形填充，最后超采样降采样得到抗锯齿结果。
+
 use std::f32::consts::PI;
 
 use glam::{Mat4, Vec3, Vec4};
@@ -75,6 +80,7 @@ static SOURCE_VERTICES: [[f32; 2]; 48] = [
     [1.0, 1.0], [0.0, 1.0], [0.0, 0.0], [1.0, 0.0], // 前面
 ];
 
+/// 创建固定角度（水平 45°、俯视 30°）的模型变换矩阵
 fn create_tran() -> Mat4 {
     let roty = Mat4::from_rotation_y(45.0 * PI / 180.0);
     let rotx = Mat4::from_rotation_x(-30.0 * PI / 180.0);
@@ -86,6 +92,10 @@ fn create_tran() -> Mat4 {
     tran * scale * rotx * roty
 }
 
+/// 创建可指定角度的模型变换矩阵
+///
+/// - `x`: 俯仰角（度，负号在实现中处理）
+/// - `y`: 偏航角（度）
 fn create_tran_rotate(x: f32, y: f32) -> Mat4 {
     let roty = Mat4::from_rotation_y(y * PI / 180.0);
     let rotx = Mat4::from_rotation_x(-x * PI / 180.0);
@@ -202,6 +212,13 @@ fn fill_triangle(
     pixmap.fill_path(&path, &paint, FillRule::Winding, Transform::identity(), None);
 }
 
+/// 把立方体全部面投影并逐三角形绘制到目标位图
+///
+/// - `pixmap`: 目标位图（超采样尺寸）
+/// - `texture`: 皮肤贴图
+/// - `tran`: 模型变换矩阵
+/// - `enable_z`: 是否启用伪透视（按深度缩放）
+/// - `scale`: 超采样倍数
 fn draw_texture_faces(pixmap: &mut Pixmap, texture: &Pixmap, tran: &Mat4, enable_z: bool, scale: f32) {
     let face_count = CUBE_INDICES.len() / 4;
 
@@ -286,10 +303,26 @@ fn draw_head(image: &Pixmap, tran: &Mat4, enable_z: bool) -> Option<Pixmap> {
     downsample(&pixmap, SUPERSAMPLE)
 }
 
+/// 渲染固定角度的 3D 头像（无伪透视）
+///
+/// - `image`: 皮肤贴图
+///
+/// # 返回值
+///
+/// 返回 `SIZE` x `SIZE` 的渲染结果，分配失败时返回 `None`
 pub fn draw_head_3d_typea(image: &Pixmap) -> Option<Pixmap> {
     draw_head(image, &create_tran(), false)
 }
 
+/// 渲染可指定角度的 3D 头像（带伪透视）
+///
+/// - `image`: 皮肤贴图
+/// - `x`: 俯仰角（度）
+/// - `y`: 偏航角（度）
+///
+/// # 返回值
+///
+/// 返回 `SIZE` x `SIZE` 的渲染结果，分配失败时返回 `None`
 pub fn draw_head_3d_typeb(image: &Pixmap, x: f32, y: f32) -> Option<Pixmap> {
     draw_head(image, &create_tran_rotate(x, y), true)
 }

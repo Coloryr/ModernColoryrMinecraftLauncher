@@ -1,3 +1,5 @@
+//! 运行库目录与运行库文件路径
+
 use std::{
     collections::HashMap,
     fs,
@@ -32,15 +34,25 @@ static LIB_DIR: OnceLock<PathBuf> = OnceLock::new();
 /// 资源文件路径
 static NATIVE_DIR: OnceLock<PathBuf> = OnceLock::new();
 
+/// AuthlibInjector 下载项缓存
 static AUTHLIB_FILE: LazyLock<RwLock<Option<FileItemObj>>> = LazyLock::new(|| RwLock::new(None));
+/// Nide8 下载项缓存
 static NIDE8_FILE: LazyLock<RwLock<Option<FileItemObj>>> = LazyLock::new(|| RwLock::new(None));
 
-/// 获取基础路径
+/// 获取运行库根目录
+///
+/// # 返回值
+///
+/// 返回运行库根目录
 pub fn get_lib_dir() -> PathBuf {
     LIB_DIR.get().unwrap().clone()
 }
 
 /// 获取外部登陆jar
+///
+/// # 返回值
+///
+/// 返回 AuthlibInjector jar 位置；未初始化返回 `None`
 pub fn get_authlib_file() -> Option<PathBuf> {
     let guard = AUTHLIB_FILE.read().unwrap();
     let data = guard.as_ref()?;
@@ -48,6 +60,10 @@ pub fn get_authlib_file() -> Option<PathBuf> {
 }
 
 /// 获取统一通行证jar
+///
+/// # 返回值
+///
+/// 返回 Nide8 jar 位置；未初始化返回 `None`
 pub fn get_nide8_file() -> Option<PathBuf> {
     let guard = NIDE8_FILE.read().unwrap();
     let data = guard.as_ref()?;
@@ -84,6 +100,15 @@ impl std::hash::Hash for LibVersionObj {
 }
 
 impl LibVersionObj {
+    /// 从 Maven 坐标解析运行库信息
+    ///
+    /// # 参数
+    ///
+    /// - `name`: Maven 坐标（`包:名:版本[:额外]`）
+    ///
+    /// # 返回值
+    ///
+    /// 返回解析结果；格式不完整时仅填 `name` 字段
     pub fn new(name: &str) -> Self {
         let arg: Vec<&str> = name.split(':').collect();
 
@@ -112,17 +137,37 @@ impl LibVersionObj {
     }
 
     /// 判断运行库是否除了版本都一样
+    ///
+    /// # 参数
+    ///
+    /// - `obj`: 对比对象
+    ///
+    /// # 返回值
+    ///
+    /// 返回包名 / 名字 / 额外信息是否一致
     pub fn eq_without_version(&self, obj: &LibVersionObj) -> bool {
         self.pack.eq(&obj.pack) && self.name.eq(&obj.name) && self.extr.eq(&obj.extr)
     }
 
+    /// 获取去版本的键（包名 / 名字 / 额外信息）
+    ///
+    /// # 返回值
+    ///
+    /// 返回三元组键
     pub fn key_without_version(&self) -> (String, String, String) {
         (self.pack.clone(), self.name.clone(), self.extr.clone())
     }
 }
 
-/// 初始化版本路径
+/// 初始化运行库路径
+///
+/// # 参数
+///
 /// - `dir`: 运行路径
+///
+/// # 返回值
+///
+/// 成功返回 `Ok(())`；创建目录失败返回对应错误
 pub(crate) fn init<P: AsRef<Path>>(dir: P) -> CoreResult<()> {
     let dir = LIB_DIR.get_or_init(|| dir.as_ref().join(names::LIBRARIES_DIR));
 
@@ -145,7 +190,14 @@ pub(crate) fn init<P: AsRef<Path>>(dir: P) -> CoreResult<()> {
 }
 
 /// 获取Native文件夹
-/// - `version`: 游戏版本
+///
+/// # 参数
+///
+/// - `version`: 游戏版本（`Some` 时创建对应子目录）
+///
+/// # 返回值
+///
+/// 返回 Native 目录
 pub fn get_native_dir(version: Option<&str>) -> PathBuf {
     match version {
         Some(version) => {
@@ -161,7 +213,14 @@ pub fn get_native_dir(version: Option<&str>) -> PathBuf {
 }
 
 /// 获取游戏核心路径
+///
+/// # 参数
+///
 /// - `version`: 游戏版本
+///
+/// # 返回值
+///
+/// 返回游戏核心 jar 路径
 pub fn get_game_file(version: &str) -> PathBuf {
     LIB_DIR
         .get()
@@ -174,7 +233,14 @@ pub fn get_game_file(version: &str) -> PathBuf {
 }
 
 /// 获取游戏核心路径
+///
+/// # 参数
+///
 /// - `custom`: 自定义版本号
+///
+/// # 返回值
+///
+/// 返回游戏核心 jar 路径
 pub fn get_game_file_with_custom(custom: &str) -> PathBuf {
     LIB_DIR
         .get()
@@ -186,8 +252,15 @@ pub fn get_game_file_with_custom(custom: &str) -> PathBuf {
 }
 
 /// 获取OptiFine路径
+///
+/// # 参数
+///
 /// - `mc`: 游戏版本
 /// - `version`: optifine版本
+///
+/// # 返回值
+///
+/// 返回 OptiFine 安装包路径
 pub fn get_optifine_file(mc: &str, version: &str) -> PathBuf {
     LIB_DIR
         .get()
@@ -209,7 +282,14 @@ impl InstanceSettingObj {
     }
 
     /// 获取所有运行库
+    ///
+    /// # 参数
+    ///
     /// - `arg`: 启动参数
+    ///
+    /// # 返回值
+    ///
+    /// 返回去重后的运行库路径列表（冲突时优先保留加载器库）
     pub fn get_libs(&self, arg: &GameLaunchObj) -> Vec<PathBuf> {
         let mut game_list = Vec::new();
         for item in &arg.game_libs {
@@ -294,6 +374,12 @@ impl InstanceSettingObj {
 }
 
 /// 删除冲突的库
+///
+/// # 参数
+///
+/// - `map`: 运行库表
+/// - `key`: 新的运行库键
+/// - `value`: 新的运行库路径
 fn add_or_update_lib_kv(
     map: &mut HashMap<LibVersionObj, PathBuf>,
     key: LibVersionObj,
@@ -304,7 +390,14 @@ fn add_or_update_lib_kv(
 }
 
 /// 创建AuthlibInjector下载实例
+///
+/// # 参数
+///
 /// - `obj`: AuthlibInjector信息
+///
+/// # 返回值
+///
+/// 返回下载项
 pub fn build_authlib_injector_item(obj: &AuthlibInjectorObj) -> FileItemObj {
     FileItemObj {
         name: format!("moe.yushi:authlibinjector:{}", obj.version),
@@ -323,6 +416,10 @@ pub fn build_authlib_injector_item(obj: &AuthlibInjectorObj) -> FileItemObj {
 }
 
 /// 读取authlibinjector是否存在
+///
+/// # 返回值
+///
+/// 返回缺失或校验不符的下载项；已存在返回 `None`
 async fn read_authlib_injector() -> CoreResult<Option<FileItemObj>> {
     let obj = authlib_api::get_obj().await?;
     let item = build_authlib_injector_item(&obj);
@@ -342,6 +439,10 @@ async fn read_authlib_injector() -> CoreResult<Option<FileItemObj>> {
 }
 
 /// 初始化AuthlibInjector，不存在返回下载项目
+///
+/// # 返回值
+///
+/// 返回需要下载的下载项；已就绪返回 `None`
 pub async fn ready_authlib_injector() -> CoreResult<Option<FileItemObj>> {
     let guard = AUTHLIB_FILE.read().unwrap();
     match guard.as_ref() {
@@ -363,7 +464,14 @@ pub async fn ready_authlib_injector() -> CoreResult<Option<FileItemObj>> {
 }
 
 /// 创建Nide8Injector下载实例
+///
+/// # 参数
+///
 /// - `obj`: 下载信息
+///
+/// # 返回值
+///
+/// 返回下载项
 pub fn build_nide8_item(obj: &Nide8Obj) -> FileItemObj {
     FileItemObj {
         name: format!("com.nide8.login2:nide8auth:{}", obj.jar_version),
@@ -383,6 +491,10 @@ pub fn build_nide8_item(obj: &Nide8Obj) -> FileItemObj {
 }
 
 /// 读取nide8是否存在
+///
+/// # 返回值
+///
+/// 返回缺失或校验不符的下载项；已存在返回 `None`
 async fn read_nide8() -> CoreResult<Option<FileItemObj>> {
     let obj = nide8_api::get_obj().await?;
     let item = build_nide8_item(&obj);
@@ -402,6 +514,10 @@ async fn read_nide8() -> CoreResult<Option<FileItemObj>> {
 }
 
 /// 初始化Nide8Injector，不存在返回下载项目
+///
+/// # 返回值
+///
+/// 返回需要下载的下载项；已就绪返回 `None`
 pub async fn ready_nide8() -> CoreResult<Option<FileItemObj>> {
     let guard = NIDE8_FILE.read().unwrap();
     match guard.as_ref() {
@@ -423,7 +539,14 @@ pub async fn ready_nide8() -> CoreResult<Option<FileItemObj>> {
 }
 
 /// 检查外置登陆jar是否存在
+///
+/// # 参数
+///
 /// - `auth`: 账户类型
+///
+/// # 返回值
+///
+/// 返回需要下载的下载项；已就绪返回 `None`
 pub async fn check_authlib(auth: &AuthType) -> CoreResult<Option<FileItemObj>> {
     match auth {
         AuthType::Nide8 => ready_nide8().await,

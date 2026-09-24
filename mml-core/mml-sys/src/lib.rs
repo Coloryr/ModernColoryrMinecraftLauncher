@@ -1,3 +1,18 @@
+//! 系统交互模块（平台相关的进程 / 路径 / 内存 / 剪贴板等封装）
+//!
+//! # 子模块
+//!
+//! | 模块 | 用途 |
+//! |------|------|
+//! | [`clipboard_helper`] | 剪贴板操作 |
+//! | [`java_scan_helper`] | Java 运行时扫描 |
+//! | [`memory_helper`] | 物理内存查询 |
+//! | [`open_helper`] | 浏览器 / 资源管理器 / 默认程序打开 |
+//! | [`path_helper`] | 路径与文件操作工具 |
+//! | [`process_helper`] | 进程查询与命令执行 |
+//! | [`protocol_helper`] | URL 协议注册 |
+//! | [`shortcut_helper`] | 快捷方式创建 |
+
 use core::fmt;
 use std::sync::LazyLock;
 
@@ -109,7 +124,6 @@ pub fn get_system_info() -> SystemInfo {
 ///
 /// 解析 `/etc/os-release` 中的 `ID=` 字段。
 fn get_linux_distribution() -> String {
-    // 读取 /etc/os-release
     let content = std::fs::read_to_string("/etc/os-release").ok();
     if content.is_some() {
         let content = content.unwrap();

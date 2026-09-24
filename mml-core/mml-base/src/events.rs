@@ -3,7 +3,6 @@
 //! 提供基于回调的发布-订阅事件机制，支持带参数和无参数两种模式。
 //! 使用 `RwLock<HashMap<u64, Box<dyn Fn>>>` 存储回调，原子自增 ID 管理。
 
-/// 通用事件
 use std::{
     collections::HashMap,
     sync::{
@@ -30,6 +29,8 @@ impl<E> EventArgHandler<E> {
     /// 添加事件处理器
     ///
     /// - `handler`: 回调函数
+    ///
+    /// 返回处理器编号，用于 [`remove_handel`](Self::remove_handel) 移除。
     pub fn add_handler<F>(&self, handler: F) -> u64
     where
         F: Fn(&E) + Send + Sync + 'static,
@@ -79,6 +80,8 @@ impl EventHandler {
     /// 添加事件处理器
     ///
     /// - `handler`: 回调函数
+    ///
+    /// 返回处理器编号，用于 [`remove_handle`](Self::remove_handle) 移除。
     pub fn add_handler<F>(&self, handler: F) -> u64
     where
         F: Fn() + Send + Sync + 'static,

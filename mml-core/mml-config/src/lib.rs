@@ -57,8 +57,7 @@ static FILE: OnceLock<PathBuf> = OnceLock::new();
 ///
 /// # 返回值
 ///
-/// `true` — 首次创建配置（文件原先不存在）
-/// `false` — 从已有文件加载配置
+/// 成功创建或加载配置返回 `Ok(())`；文件创建失败时返回相应错误
 pub fn init<P: AsRef<Path>>(dir: P) -> CoreResult<()> {
     FILE.get_or_init(|| dir.as_ref().join(names::CONFIG_FILE));
     load(FILE.get().unwrap())
@@ -111,8 +110,8 @@ pub fn save() {
 ///
 /// # 返回值
 ///
-/// `true` — 首次创建（文件不存在）
-/// `false` — 从文件加载成功或读取失败
+/// 成功加载或创建默认配置返回 `Ok(())`；文件不存在且创建失败、
+/// 或 JSON 解析失败时返回相应错误
 pub fn load<P: AsRef<Path>>(file: P) -> CoreResult<()> {
     let config = CONFIG.get_or_init(|| RwLock::new(Default::default()));
 

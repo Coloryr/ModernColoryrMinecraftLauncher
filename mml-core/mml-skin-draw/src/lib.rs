@@ -1,13 +1,32 @@
+//! 皮肤/披风 2D 与 3D 头像渲染模块
+//!
+//! # 子模块
+//!
+//! | 模块 | 用途 |
+//! |------|------|
+//! | [`skin_draw`] | 像素级绘制基元（复制/混合/缩放/填充） |
+//! | [`skin_2d_draw`] | 皮肤整体 2D 展开（TypeA/TypeB） |
+//! | [`head_2d_draw`] | 2D 头像渲染 |
+//! | [`head_3d_draw`] | 3D 头像渲染 |
+//! | [`cape_2d_draw`] | 披风 2D 渲染 |
+
 pub mod cape_2d_draw;
 pub mod head_2d_draw;
 pub mod head_3d_draw;
 pub mod skin_2d_draw;
 
+/// 像素级绘制基元
+///
+/// 所有函数直接按预乘 RGBA8 字节操作（行间无填充），
+/// 绘制失败（越界等）统一返回 `None`。
 pub mod skin_draw {
     use tiny_skia::Pixmap;
 
+    /// TypeA 头像的放大倍数（8x8 → 128x128）
     pub const SCALE_TYPEA: usize = 16;
+    /// TypeB 头像/皮肤的放大倍数
     pub const SCALE_TYPEB: usize = 2;
+    /// TypeA 皮肤的放大倍数（16x32 → 128x256）
     pub const SCALE_TYPEC: usize = 8;
 
     /// 每像素字节数（预乘 RGBA8，行间无填充）
@@ -19,6 +38,17 @@ pub mod skin_draw {
         image.width() as usize * BPP
     }
 
+    /// 按行复制源区域像素到目标位置
+    ///
+    /// - `dest`: 目标位图
+    /// - `source`: 源位图
+    /// - `dest_x` / `dest_y`: 目标区域左上角
+    /// - `src_x` / `src_y`: 源区域左上角
+    /// - `width` / `height`: 区域尺寸
+    ///
+    /// # 返回值
+    ///
+    /// 越界返回 `None`，尺寸为 0 视为无操作返回 `Some(())`
     pub fn draw(
         dest: &mut Pixmap,
         source: &Pixmap,
@@ -29,7 +59,6 @@ pub mod skin_draw {
         width: i32,
         height: i32,
     ) -> Option<()> {
-        // 参数验证
         if width <= 0 || height <= 0 {
             return Some(());
         }
@@ -49,7 +78,6 @@ pub mod skin_draw {
         let src_row_bytes = row_bytes(source);
         let dst_row_bytes = row_bytes(dest);
 
-        // 批量复制每行数据
         for y in 0..height {
             let src_offset = (src_y + y) as usize * src_row_bytes + src_x as usize * BPP;
             let dst_offset = (dest_y + y) as usize * dst_row_bytes + dest_x as usize * BPP;
@@ -80,6 +108,17 @@ pub mod skin_draw {
         out
     }
 
+    /// 复制源区域像素到目标位置，并与目标已有像素做 alpha 混合
+    ///
+    /// - `dest`: 目标位图
+    /// - `source`: 源位图
+    /// - `dest_x` / `dest_y`: 目标区域左上角
+    /// - `src_x` / `src_y`: 源区域左上角
+    /// - `width` / `height`: 区域尺寸
+    ///
+    /// # 返回值
+    ///
+    /// 越界返回 `None`，尺寸为 0 视为无操作返回 `Some(())`
     pub fn draw_mix(
         dest: &mut Pixmap,
         source: &Pixmap,
@@ -90,7 +129,6 @@ pub mod skin_draw {
         width: i32,
         height: i32,
     ) -> Option<()> {
-        // 参数验证
         if width <= 0 || height <= 0 {
             return Some(());
         }
@@ -110,7 +148,6 @@ pub mod skin_draw {
         let src_row_bytes = row_bytes(source);
         let dst_row_bytes = row_bytes(dest);
 
-        // 执行混合
         for j in 0..height {
             for i in 0..width {
                 let src_offset = (src_y + j) as usize * src_row_bytes + (src_x + i) as usize * BPP;
@@ -131,16 +168,22 @@ pub mod skin_draw {
         Some(())
     }
 
+    /// 最近邻整数倍放大
+    ///
+    /// - `source`: 源位图
+    /// - `scale`: 放大倍数（每个源像素复制为 scale x scale 块）
+    ///
+    /// # 返回值
+    ///
+    /// 返回放大后的位图，分配失败返回 `None`
     pub fn scale(source: &Pixmap, scale: usize) -> Option<Pixmap> {
         let src_width = source.width() as usize;
         let src_height = source.height() as usize;
         let dst_width = src_width * scale;
         let dst_height = src_height * scale;
 
-        // 获取源像素数据
         let src_row_bytes = row_bytes(source);
 
-        // 创建目标位图
         let mut dst = Pixmap::new(dst_width as u32, dst_height as u32)?;
 
         let dst_row_bytes = row_bytes(&dst);
@@ -154,13 +197,11 @@ pub mod skin_draw {
                 let dst_y = src_y * scale + repeat_y;
                 let dst_row_offset = dst_y * dst_row_bytes;
 
-                // 处理当前行的每个像素
                 for src_x in 0..src_width {
                     let src_offset = src_row_offset + src_x * BPP;
                     let mut color = [0u8; 4];
                     color.copy_from_slice(&source.data()[src_offset..src_offset + BPP]);
 
-                    // 每个源像素重复 scale 次
                     for repeat_x in 0..scale {
                         let dst_x = src_x * scale + repeat_x;
                         let dst_offset = dst_row_offset + dst_x * BPP;
@@ -175,6 +216,15 @@ pub mod skin_draw {
     }
 
     /// 在指定区域填充颜色（`pix` 按内存顺序原样写入）
+    ///
+    /// - `dest`: 目标位图
+    /// - `x` / `y`: 区域左上角
+    /// - `width` / `height`: 区域尺寸
+    /// - `pix`: 填充颜色
+    ///
+    /// # 返回值
+    ///
+    /// 越界返回 `None`，尺寸为 0 视为无操作返回 `Some(())`
     pub fn fill_image(
         dest: &mut Pixmap,
         x: i32,
@@ -209,6 +259,15 @@ pub mod skin_draw {
     }
 
     /// 带混合的填充
+    ///
+    /// - `dest`: 目标位图
+    /// - `x` / `y`: 区域左上角
+    /// - `width` / `height`: 区域尺寸
+    /// - `pix`: 填充颜色（作为源色与目标像素混合）
+    ///
+    /// # 返回值
+    ///
+    /// 越界返回 `None`，尺寸为 0 视为无操作返回 `Some(())`
     pub fn fill_image_mix(
         dest: &mut Pixmap,
         x: i32,
@@ -248,7 +307,18 @@ pub mod skin_draw {
         Some(())
     }
 
-    /// 复制像素到指定区域，同时每个像素都以填充方式填充
+    /// 把源区域的每个源像素放大填充为 width x height 的色块
+    ///
+    /// - `dest`: 目标位图
+    /// - `source`: 源位图
+    /// - `x` / `y`: 目标区域左上角
+    /// - `sx` / `sy`: 源区域左上角
+    /// - `swidth` / `sheight`: 源区域尺寸（每像素对应一个色块）
+    /// - `width` / `height`: 单个色块尺寸
+    ///
+    /// # 返回值
+    ///
+    /// 越界返回 `None`，尺寸为 0 视为无操作返回 `Some(())`
     pub fn draw_with_fill_image(
         dest: &mut Pixmap,
         source: &Pixmap,
@@ -282,13 +352,11 @@ pub mod skin_draw {
 
         for i in 0..swidth {
             for j in 0..sheight {
-                // 读取源像素
                 let src_offset =
                     (sy + j) as usize * src_row_bytes + (sx + i) as usize * BPP;
                 let mut color = [0u8; 4];
                 color.copy_from_slice(&source.data()[src_offset..src_offset + BPP]);
 
-                // 在目标区域填充 width x height 块
                 let dest_x = i * width + x;
                 let dest_y = j * height + y;
                 for fy in 0..height {
@@ -306,7 +374,18 @@ pub mod skin_draw {
         Some(())
     }
 
-    /// 复制像素到指定区域，同时每个像素都以填充方式填充混合
+    /// 把源区域的每个源像素放大填充为 width x height 的色块，并与目标像素混合
+    ///
+    /// - `dest`: 目标位图
+    /// - `source`: 源位图
+    /// - `x` / `y`: 目标区域左上角
+    /// - `sx` / `sy`: 源区域左上角
+    /// - `swidth` / `sheight`: 源区域尺寸（每像素对应一个色块）
+    /// - `width` / `height`: 单个色块尺寸
+    ///
+    /// # 返回值
+    ///
+    /// 越界返回 `None`，尺寸为 0 视为无操作返回 `Some(())`
     pub fn draw_with_fill_image_mix(
         dest: &mut Pixmap,
         source: &Pixmap,
@@ -340,13 +419,11 @@ pub mod skin_draw {
 
         for i in 0..swidth {
             for j in 0..sheight {
-                // 读取源像素
                 let src_offset =
                     (sy + j) as usize * src_row_bytes + (sx + i) as usize * BPP;
                 let mut src_px = [0u8; 4];
                 src_px.copy_from_slice(&source.data()[src_offset..src_offset + BPP]);
 
-                // 在目标区域填充混合 width x height 块
                 let dest_x = i * width + x;
                 let dest_y = j * height + y;
                 for fy in 0..height {

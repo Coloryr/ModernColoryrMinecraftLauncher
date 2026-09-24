@@ -157,6 +157,14 @@ fn archive_cfg_name(archive: &BaseArchive) -> String {
 /// `manifest.json`，所以 CurseForge 的判定放在 HMCL 之后）；无元数据时按
 /// `.minecraft` 目录判启动器包，否则视为直接解压。名字取元数据里的
 /// `name`（MMC 读 `instance.cfg`），取不到用文件名去扩展名。
+///
+/// # 参数
+///
+/// - `file`: 压缩包路径
+///
+/// # 返回值
+///
+/// 返回检测结果，压缩包无法打开返回对应错误。
 pub fn detect_pack<P: AsRef<Path>>(file: P) -> CoreResult<DetectedPack> {
     let file = file.as_ref();
     let archive = BaseArchive::open(file)?;
@@ -207,6 +215,20 @@ pub fn detect_pack<P: AsRef<Path>>(file: P) -> CoreResult<DetectedPack> {
 }
 
 /// 导入文件夹
+///
+/// # 参数
+///
+/// - `dir`: 游戏文件夹
+/// - `name`: 实例名（覆盖原名字）
+/// - `group`: 实例分组
+/// - `unselect`: 不复制的文件列表
+/// - `instance_gui`: 实例创建界面回调
+/// - `progress_gui`: 复制进度回调
+/// - `cancel`: 取消令牌
+///
+/// # 返回值
+///
+/// 返回新实例，路径不存在、无实例名或创建失败返回对应错误。
 pub async fn add_game_folder<P: AsRef<Path>>(
     dir: P,
     name: Option<String>,
@@ -283,6 +305,22 @@ pub async fn add_game_folder<P: AsRef<Path>>(
 }
 
 /// 从整合包添加实例
+///
+/// # 参数
+///
+/// - `file`: 整合包压缩包
+/// - `source`: 整合包类型
+/// - `name`: 实例名（覆盖包内元数据里的名字）
+/// - `group`: 实例分组
+/// - `unselect`: 不导入的文件列表
+/// - `instance_gui`: 实例创建界面回调
+/// - `pack_gui`: 安装进度回调
+/// - `archive_gui`: 解压进度回调
+/// - `cancel`: 取消令牌
+///
+/// # 返回值
+///
+/// 返回新实例 uuid，路径不存在、元数据缺失或中途取消返回对应错误。
 async fn modpack<P: AsRef<Path>>(
     file: P,
     source: ModPackType,
@@ -391,10 +429,17 @@ async fn modpack<P: AsRef<Path>>(
 
 /// 解压整合包压缩包到实例目录，统一处理压缩包整体套一层文件夹的情况。
 ///
-/// * `output_dir` — 解压目标目录（实例基础目录）。
-/// * `unselect` — 按压缩包内完整条目名排除的文件列表。
-/// * `strip_dir` — 压缩包整体套的顶层目录名（不剥时传 `None`）。
-/// * `gui` — 可选的进度回调。
+/// # 参数
+///
+/// - `archive`: 已打开的压缩包
+/// - `output_dir`: 解压目标目录（实例基础目录）
+/// - `unselect`: 按压缩包内完整条目名排除的文件列表
+/// - `strip_dir`: 压缩包整体套的顶层目录名（不剥时传 `None`）
+/// - `archive_gui`: 可选的进度回调
+///
+/// # 返回值
+///
+/// 返回是否成功，解压失败返回对应错误。
 fn extract_pack<P: AsRef<Path>>(
     archive: &BaseArchive,
     output_dir: P,
@@ -406,6 +451,23 @@ fn extract_pack<P: AsRef<Path>>(
 }
 
 /// 直接解压
+///
+/// 压缩包内为本启动器导出的实例包（含 `game.json`）。
+///
+/// # 参数
+///
+/// - `file`: 压缩包
+/// - `name`: 实例名（覆盖 `game.json` 里的名字）
+/// - `group`: 实例分组
+/// - `unselect`: 不导入的文件列表
+/// - `instance_gui`: 实例创建界面回调
+/// - `pack_gui`: 安装进度回调
+/// - `archive_gui`: 解压进度回调
+/// - `cancel`: 取消令牌
+///
+/// # 返回值
+///
+/// 返回新实例 uuid，路径不存在或 `game.json` 缺失返回对应错误。
 async fn archive<P: AsRef<Path>>(
     file: P,
     name: Option<String>,
@@ -486,6 +548,21 @@ async fn archive<P: AsRef<Path>>(
 }
 
 /// 导入MMC压缩包
+///
+/// # 参数
+///
+/// - `file`: 压缩包
+/// - `name`: 实例名（覆盖包内元数据里的名字）
+/// - `group`: 实例分组
+/// - `unselect`: 不导入的文件列表
+/// - `instance_gui`: 实例创建界面回调
+/// - `pack_gui`: 安装进度回调
+/// - `archive_gui`: 解压进度回调
+/// - `cancel`: 取消令牌
+///
+/// # 返回值
+///
+/// 返回新实例 uuid，路径不存在或 MMC 元数据缺失返回对应错误。
 async fn mmc_archive<P: AsRef<Path>>(
     file: P,
     name: Option<String>,
@@ -604,6 +681,21 @@ async fn mmc_archive<P: AsRef<Path>>(
 }
 
 /// HMCL压缩包
+///
+/// # 参数
+///
+/// - `file`: 压缩包
+/// - `name`: 实例名（覆盖包内元数据里的名字）
+/// - `group`: 实例分组
+/// - `unselect`: 不导入的文件列表
+/// - `instance_gui`: 实例创建界面回调
+/// - `pack_gui`: 安装进度回调
+/// - `archive_gui`: 解压进度回调
+/// - `cancel`: 取消令牌
+///
+/// # 返回值
+///
+/// 返回新实例 uuid，路径不存在或 HMCL 元数据缺失返回对应错误。
 async fn hmcl_archive<P: AsRef<Path>>(
     file: P,
     name: Option<String>,
@@ -724,6 +816,21 @@ async fn hmcl_archive<P: AsRef<Path>>(
 }
 
 /// HMCL服务器包
+///
+/// # 参数
+///
+/// - `file`: 压缩包
+/// - `name`: 实例名（覆盖包内元数据里的名字）
+/// - `group`: 实例分组
+/// - `unselect`: 不导入的文件列表
+/// - `instance_gui`: 实例创建界面回调
+/// - `pack_gui`: 安装进度回调
+/// - `archive_gui`: 解压进度回调
+/// - `cancel`: 取消令牌
+///
+/// # 返回值
+///
+/// 返回新实例 uuid，路径不存在或服务器清单缺失返回对应错误。
 async fn hmcl_server_archive<P: AsRef<Path>>(
     file: P,
     name: Option<String>,
@@ -883,6 +990,14 @@ pub struct LauncherVersion {
 /// 查找压缩包内 `.minecraft` 文件夹所在目录前缀（含末尾分隔符）。
 ///
 /// 兼容压缩包整体套一层文件夹的情况，如 `mygame/.minecraft/...` 返回 `mygame/.minecraft/`。
+///
+/// # 参数
+///
+/// - `entries`: 压缩包条目列表
+///
+/// # 返回值
+///
+/// 返回 `.minecraft` 所在目录前缀（含末尾分隔符），找不到返回 `None`。
 pub fn find_minecraft_prefix(entries: &[ArchiveEntryInfo]) -> Option<String> {
     for entry in entries {
         if entry.is_dir {
@@ -900,6 +1015,15 @@ pub fn find_minecraft_prefix(entries: &[ArchiveEntryInfo]) -> Option<String> {
 /// 扫描 `.minecraft` 下可解析为官方版本 json 的文件。
 ///
 /// 版本 json 位于 `versions/{name}/` 下视为开启了版本隔离。
+///
+/// # 参数
+///
+/// - `archive`: 已打开的压缩包
+/// - `mc_prefix`: `.minecraft` 目录前缀（含末尾分隔符）
+///
+/// # 返回值
+///
+/// 返回扫描到的版本列表。
 pub fn scan_versions(archive: &BaseArchive, mc_prefix: &str) -> Vec<LauncherVersion> {
     let mut versions = Vec::new();
     for entry in archive.entries() {
@@ -945,6 +1069,16 @@ pub fn scan_versions(archive: &BaseArchive, mc_prefix: &str) -> Vec<LauncherVers
 ///
 /// 版本隔离开启时游戏资源存放在该文件夹内；若只有版本 json/jar 说明
 /// 仍是未隔离的常规 `.minecraft` 布局（游戏资源在 `.minecraft` 根目录）。
+///
+/// # 参数
+///
+/// - `archive`: 已打开的压缩包
+/// - `mc_prefix`: `.minecraft` 目录前缀（含末尾分隔符）
+/// - `name`: 版本文件夹名
+///
+/// # 返回值
+///
+/// 返回该版本文件夹内是否有除版本 json/jar 以外的游戏资源。
 pub fn version_folder_has_data(archive: &BaseArchive, mc_prefix: &str, name: &str) -> bool {
     let folder = format!("{mc_prefix}versions/{name}/");
     archive.entries().iter().any(|entry| {
@@ -960,6 +1094,15 @@ pub fn version_folder_has_data(archive: &BaseArchive, mc_prefix: &str, name: &st
 }
 
 /// 读取官方启动器 `launcher_profiles.json` 中记录的版本号。
+///
+/// # 参数
+///
+/// - `archive`: 已打开的压缩包
+/// - `mc_prefix`: `.minecraft` 目录前缀（含末尾分隔符）
+///
+/// # 返回值
+///
+/// 返回记录的版本号列表，文件或字段缺失返回 `None`。
 fn read_last_version_ids(archive: &BaseArchive, mc_prefix: &str) -> Option<Vec<String>> {
     let target = format!("{mc_prefix}{}", names::LAUNCHER_PROFILES_FILE);
     let entry = archive
@@ -986,6 +1129,17 @@ fn read_last_version_ids(archive: &BaseArchive, mc_prefix: &str) -> Option<Vec<S
 }
 
 /// 选择要导入的版本，返回其在列表中的下标。
+///
+/// # 参数
+///
+/// - `archive`: 已打开的压缩包
+/// - `mc_prefix`: `.minecraft` 目录前缀（含末尾分隔符）
+/// - `versions`: 扫描到的版本列表
+///
+/// # 返回值
+///
+/// 返回选中版本的下标（优先官方启动器最后使用的版本，其次开启版本
+/// 隔离且文件夹内有游戏资源的版本），列表为空返回 `None`。
 pub fn pick_primary(
     archive: &BaseArchive,
     mc_prefix: &str,
@@ -1026,6 +1180,21 @@ pub fn pick_primary(
 /// 通过扫描其中可解析为 [`OfficialObj`] 的版本 json 判断游戏版本与版本隔离：
 /// - 版本 json 直接位于 `.minecraft` 下 → 未开启版本隔离，直接导入 `.minecraft` 内的游戏资源；
 /// - 版本 json 位于 `.minecraft/versions/{name}/` 下 → 开启了版本隔离，将该版本文件夹内的资源导入。
+///
+/// # 参数
+///
+/// - `file`: 压缩包
+/// - `name`: 实例名（覆盖版本 json 解析出的名字）
+/// - `group`: 实例分组
+/// - `unselect`: 不导入的文件列表
+/// - `instance_gui`: 实例创建界面回调
+/// - `pack_gui`: 安装进度回调
+/// - `archive_gui`: 解压进度回调
+/// - `cancel`: 取消令牌
+///
+/// # 返回值
+///
+/// 返回新实例 uuid，路径不存在或找不到 `.minecraft` 目录返回对应错误。
 async fn launcher_pack<P: AsRef<Path>>(
     file: P,
     name: Option<String>,
@@ -1179,6 +1348,22 @@ async fn launcher_pack<P: AsRef<Path>>(
 }
 
 /// 从文件路径安装压缩包
+///
+/// # 参数
+///
+/// - `file`: 压缩包
+/// - `name`: 实例名（覆盖包内元数据里的名字）
+/// - `group`: 实例分组
+/// - `unselect`: 不导入的文件列表
+/// - `instance_gui`: 实例创建界面回调
+/// - `pack_gui`: 安装进度回调
+/// - `archive_gui`: 解压进度回调
+/// - `pack_type`: 压缩包类型
+/// - `cancel`: 取消令牌
+///
+/// # 返回值
+///
+/// 返回新实例 uuid，路径不存在或元数据缺失返回对应错误。
 pub async fn install_archive_from_file<P: AsRef<Path>>(
     file: P,
     name: Option<String>,
@@ -1288,6 +1473,22 @@ pub async fn install_archive_from_file<P: AsRef<Path>>(
 }
 
 /// 从在线网址安装整合包
+///
+/// # 参数
+///
+/// - `url`: 压缩包下载地址
+/// - `name`: 实例名（覆盖包内元数据里的名字）
+/// - `group`: 实例分组
+/// - `unselect`: 不导入的文件列表
+/// - `instance_gui`: 实例创建界面回调
+/// - `pack_gui`: 安装进度回调
+/// - `archive_gui`: 解压进度回调
+/// - `pack_type`: 压缩包类型
+/// - `cancel`: 取消令牌
+///
+/// # 返回值
+///
+/// 返回新实例 uuid，下载失败或安装失败返回对应错误。
 pub async fn install_archive_from_url(
     url: &str,
     name: Option<String>,
@@ -1329,6 +1530,20 @@ pub async fn install_archive_from_url(
 }
 
 /// 安装modrinth整合包
+///
+/// # 参数
+///
+/// - `data`: Modrinth 版本信息
+/// - `group`: 实例分组
+/// - `icon`: 图标地址（下载失败仅记录错误）
+/// - `instance_gui`: 实例创建界面回调
+/// - `pack_gui`: 安装进度回调
+/// - `archive_gui`: 解压进度回调
+/// - `cancel`: 取消令牌
+///
+/// # 返回值
+///
+/// 返回新实例 uuid，下载或安装失败返回对应错误。
 pub async fn install_modrinth(
     data: &ModrinthVersionObj,
     group: Option<String>,
@@ -1377,6 +1592,20 @@ pub async fn install_modrinth(
 }
 
 /// 安装curseforge整合包
+///
+/// # 参数
+///
+/// - `data`: CurseForge 文件信息（安装成功后回填项目与文件 ID）
+/// - `group`: 实例分组
+/// - `icon`: 图标地址（下载失败仅记录错误）
+/// - `instance_gui`: 实例创建界面回调
+/// - `pack_gui`: 安装进度回调
+/// - `archive_gui`: 解压进度回调
+/// - `cancel`: 取消令牌
+///
+/// # 返回值
+///
+/// 返回新实例 uuid，下载或安装失败返回对应错误。
 pub async fn install_curseforge(
     data: &mut CurseForgeFileDataObj,
     group: Option<String>,

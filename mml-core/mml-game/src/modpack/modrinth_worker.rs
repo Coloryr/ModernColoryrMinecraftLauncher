@@ -1,3 +1,5 @@
+//! Modrinth 整合包安装器
+
 use std::path::Path;
 
 use async_trait::async_trait;
@@ -34,6 +36,14 @@ pub struct ModrinthPackWorker {
 
 impl ModrinthPackWorker {
     /// 创建 Modrinth 整合包安装器
+    ///
+    /// # 参数
+    ///
+    /// - `base`: 基础安装器
+    ///
+    /// # 返回值
+    ///
+    /// 返回新建的安装器
     pub fn new(base: BaseModPackWorker) -> Self {
         Self { info: None, base }
     }
@@ -100,6 +110,15 @@ impl ModPackWorker for ModrinthPackWorker {
     }
 
     /// 创建游戏实例
+    ///
+    /// # 参数
+    ///
+    /// - `name`: 实例名（`None` 时用整合包名）
+    /// - `group`: 分组名
+    ///
+    /// # 返回值
+    ///
+    /// 返回新实例的 UUID；创建失败返回对应错误
     async fn create_instance(
         &self,
         name: Option<String>,
@@ -133,6 +152,14 @@ impl ModPackWorker for ModrinthPackWorker {
     ///
     /// `overrides/` 下的文件去除前缀后写入游戏根目录；其余文件直接
     /// 写入游戏路径。
+    ///
+    /// # 参数
+    ///
+    /// - `unselect`: 不解压的文件列表
+    ///
+    /// # 返回值
+    ///
+    /// 成功返回 `Ok(())`；解压失败返回对应错误
     async fn extract(&self, unselect: Option<Vec<String>>) -> CoreResult<()> {
         self.base.extract_pack_files(names::OVERRIDE_DIR, unselect)
     }
@@ -141,6 +168,10 @@ impl ModPackWorker for ModrinthPackWorker {
     ///
     /// 批量解析 manifest 中的文件列表，构建下载项并存入
     /// `base.downloads`，后续由 [`download`] 统一下载。
+    ///
+    /// # 返回值
+    ///
+    /// 返回是否成功取得全部模组信息；查询失败返回对应错误
     async fn get_info(&self) -> CoreResult<bool> {
         let Some(info) = &self.info else {
             return Err(ErrorType::DataNotFound(DataNotFoundData::Info));
@@ -206,6 +237,10 @@ impl ModPackWorker for ModrinthPackWorker {
     /// - 无旧 manifest：通过 API 获取文件信息后按 mod_id 比对
     ///
     /// 最终将需要下载的文件存入 `base.downloads`。
+    ///
+    /// # 返回值
+    ///
+    /// 成功返回 `Ok(())`；读取失败返回对应错误
     async fn check_upgrade(&self) -> CoreResult<()> {
         let Some(info) = &self.info else {
             return Err(ErrorType::DataNotFound(DataNotFoundData::Info));
@@ -387,6 +422,10 @@ impl ModPackWorker for ModrinthPackWorker {
 }
 
 /// 删除文件，若文件已被禁用（追加了 `.disable`/`.disabled` 后缀）则一并删除。
+///
+/// # 参数
+///
+/// - `file`: 文件路径
 fn delete_with_disabled<P: AsRef<Path>>(file: P) {
     let file = file.as_ref();
     // `delete` 在文件不存在时是无操作

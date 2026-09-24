@@ -27,14 +27,20 @@ use crate::{
     urls,
 };
 
+/// BMCLAPI 返回的 OptiFine 版本条目
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct OptifineListObj {
+    /// 对应的 Minecraft 版本
     pub mcversion: String,
+    /// OptiFine 补丁版本
     pub patch: String,
+    /// 版本类型（HD_U 等）
     #[serde(rename = "type")]
     pub rtype: String,
+    /// 下载文件名
     pub filename: String,
+    /// 兼容的 Forge 版本
     pub forge: String,
 }
 
@@ -63,17 +69,22 @@ pub struct GetOptifineObj {
     pub file_name: String,
     /// 日期
     pub date: String,
-    /// 附加信息
+    /// 下载地址（官方源为下载页 / 镜像源为 JAR 地址）
     pub url1: Option<String>,
-    /// 附加信息
+    /// 镜像下载地址（仅官方源有，用于二次解析）
     pub url2: Option<String>,
     /// 下载源
     pub source: SourceLocal,
 }
 
+/// 已支持 OptiFine 的游戏版本缓存
 static OPTIFINE_MC_VERSION: OnceLock<HashSet<String>> = OnceLock::new();
 
 /// 获取高清修复版本
+///
+/// # 返回值
+///
+/// 返回所有可用的 OptiFine 版本；官方源解析不出条目时返回 `DataNotFound`
 pub async fn get_optifine_version() -> CoreResult<Vec<GetOptifineObj>> {
     let url = url_helper::get_optifine_meta();
     let mut list = Vec::<GetOptifineObj>::new();
@@ -194,7 +205,13 @@ pub async fn get_optifine_version() -> CoreResult<Vec<GetOptifineObj>> {
 
 /// 获取Optifine下载地址
 ///
-/// - `obj`: 下载项目
+/// - `source`: 下载源
+/// - `url1`: 一级地址（见 [`GetOptifineObj::url1`]）
+/// - `url2`: 二级地址（见 [`GetOptifineObj::url2`]）
+///
+/// # 返回值
+///
+/// 返回 JAR 文件直接下载地址；官方源解析不到链接时返回 `None`
 pub async fn get_optifine_download(
     source: &SourceLocal,
     url1: &Option<String>,
@@ -233,6 +250,10 @@ pub async fn get_optifine_download(
 }
 
 /// 获取支持的游戏版本
+///
+/// # 返回值
+///
+/// 返回支持 OptiFine 的 Minecraft 版本集合（首次查询后缓存）
 pub async fn get_support_version() -> CoreResult<Option<HashSet<String>>> {
     match OPTIFINE_MC_VERSION.get() {
         Some(data) => Ok(Some(data.clone())),

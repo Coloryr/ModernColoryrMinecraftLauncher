@@ -1,10 +1,20 @@
+//! 物理内存查询
+
 /// 获取内存大小
+///
+/// # 返回值
+///
+/// 返回物理内存总量（单位 MiB），查询失败时返回 `u64::MAX`
 #[inline(always)]
 pub fn get_memory_size() -> u64 {
     get_memory_size_inner()
 }
 
 /// 获取剩余内存大小
+///
+/// # 返回值
+///
+/// 返回可用物理内存（单位 MiB），查询失败时返回 `u64::MAX`
 #[inline(always)]
 pub fn get_memory_free() -> u64 {
     get_memory_free_inner()

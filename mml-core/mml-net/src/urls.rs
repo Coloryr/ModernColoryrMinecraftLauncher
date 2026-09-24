@@ -135,26 +135,33 @@ pub const CURSEFORGE: &str = "https://api.curseforge.com/v1/";
 // Modrinth API
 // ============================================================================
 
+/// Modrinth 官网地址
 pub const MODRINTH: &str = "https://modrinth.com/";
+/// Modrinth REST API
 pub const MODRINTH_API: &str = "https://api.modrinth.com/v2/";
+/// Modrinth 文件下载 CDN
 pub const MODRINTH_DOWNLOAD: &str = "https://cdn.modrinth.com/";
 
 // ============================================================================
 // chunkbase API
 // ============================================================================
 
+/// Chunkbase 种子地图页面地址
 pub const CHUNKBASE: &str = "https://www.chunkbase.com/apps/seed-map#";
 
 // ============================================================================
 // OpenFrp API
 // ============================================================================
 
+/// OpenFrp 开发者 API
 pub const OPENFRP: &str = "https://of-dev-api.bfsea.com/api";
+/// OpenFrp 软件下载配置地址
 pub const OPENFRP_DOWNLOAD: &str = "https://console.openfrp.net/web/commonQuery/get?key=software";
 
 // ============================================================================
 // SakuraFrp API
 // ============================================================================
 
+/// SakuraFrp（樱花内网穿透）API
 pub const SAKURA_FRP: &str = "https://api.natfrp.com/v4/";
 

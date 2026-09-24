@@ -49,20 +49,25 @@ impl Read for OutputStream {
 
 /// 进程启动结果
 ///
-/// 统一普通启动和提权启动的返回结构：
-/// - `child`: 进程句柄（普通启动=目标进程，提权启动=启动器进程）
-/// - `is_admin`: 是否为提权启动（通过外部启动器启动，非直接子进程）
-/// - `pid`: 目标进程 PID（仅 Windows 提权时用于 taskkill 强制结束）
-/// - `stdout` / `stderr`: 目标进程输出流（普通启动=管道，提权=命名管道/pkexec转发）
+/// 统一普通启动和提权启动的返回结构
 pub struct LaunchResult {
+    /// 进程句柄（普通启动=目标进程，提权启动=启动器进程）
     pub child: Child,
+    /// 是否为提权启动（通过外部启动器启动，非直接子进程）
     pub is_admin: bool,
+    /// 目标进程 PID（仅 Windows 提权时用于 taskkill 强制结束）
     pub pid: Option<u32>,
+    /// 目标进程 stdout（普通启动=管道，提权=命名管道/pkexec转发）
     pub stdout: Option<OutputStream>,
+    /// 目标进程 stderr（合并策略同 stdout）
     pub stderr: Option<OutputStream>,
 }
 
 /// 检查当前进程是否以管理员/root 权限运行
+///
+/// # 返回值
+///
+/// 当前进程具有管理员 / root 权限时返回 true
 pub fn is_run_as_admin() -> bool {
     #[cfg(target_os = "windows")]
     {
@@ -89,6 +94,10 @@ pub fn is_run_as_admin() -> bool {
 /// - `env`: 环境变量
 /// - `working_dir`: 工作目录
 /// - `admin`: 是否请求管理员权限
+///
+/// # 返回值
+///
+/// 返回启动结果，进程创建失败时返回相应错误
 pub fn launch<P: AsRef<Path>>(
     path: P,
     args: Vec<String>,
@@ -135,6 +144,12 @@ pub fn launch<P: AsRef<Path>>(
 /// Windows: 使用命名管道捕获提权进程的 stdout/stderr，PowerShell Wait-Process 保持存活
 /// macOS: 使用 osascript 提权，启动器在目标进程运行期间保持存活
 /// Linux: 使用 pkexec 提权，启动器在目标进程运行期间保持存活
+///
+/// 参数含义同 [`launch`]。
+///
+/// # 返回值
+///
+/// 返回启动结果，提权启动失败时返回相应错误
 fn launch_with_elevation<P: AsRef<Path>>(
     path: P,
     args: Vec<String>,
@@ -225,6 +240,13 @@ fn launch_with_elevation<P: AsRef<Path>>(
 // Windows 提权 + 命名管道实现
 // ============================================================================
 
+/// Windows 提权实现：PowerShell RunAs 起提权 helper，helper 经命名管道回传目标进程输出
+///
+/// 参数含义同 [`launch`]。
+///
+/// # 返回值
+///
+/// 返回启动结果（`child` 为初始 PowerShell，`pid` 为 helper PID）
 #[cfg(target_os = "windows")]
 pub fn launch_with_elevation_windows<P: AsRef<Path>>(
     path: P,
@@ -392,6 +414,12 @@ const PIPE_READMODE_BYTE: u32 = 0x00000000;
 const PIPE_WAIT: u32 = 0x00000000;
 
 /// 创建一个命名管道服务器并返回原始 HANDLE
+///
+/// - `name`: 管道名（不含 `\\.\pipe\` 前缀）
+///
+/// # 返回值
+///
+/// 返回管道句柄，创建失败时返回相应错误
 #[cfg(target_os = "windows")]
 pub fn create_named_pipe(name: &str) -> Result<windows::Win32::Foundation::HANDLE, ErrorType> {
     use windows::Win32::Foundation::INVALID_HANDLE_VALUE;
@@ -435,6 +463,13 @@ pub fn create_named_pipe(name: &str) -> Result<windows::Win32::Foundation::HANDL
 ///
 /// 接收 `OwnedHandle`（保证 Send），内部提取原始 HANDLE 进行操作，
 /// 连接成功后转移所有权给 `File`
+///
+/// - `handle`: 管道服务器句柄
+/// - `timeout_ms`: 等待连接的超时（毫秒）
+///
+/// # 返回值
+///
+/// 返回可读取的管道文件，超时或失败时返回相应错误
 #[cfg(target_os = "windows")]
 pub fn connect_named_pipe_with_timeout(
     handle: windows::Win32::Foundation::HANDLE,
@@ -528,6 +563,10 @@ pub fn connect_named_pipe_with_timeout(
 /// 对应 C# 的 `ProcessUtils.LaunchAdmin(string[])`。
 ///
 /// - `args`: 启动参数
+///
+/// # 返回值
+///
+/// 启动器进程创建或等待失败时返回相应错误，成功返回 `Ok(())`
 pub fn launch_admin(args: &[String]) -> CoreResult<()> {
     let current_exe = std::env::current_exe().map_err(|err| {
         ErrorType::ProcessError(ErrorData {
@@ -601,6 +640,12 @@ pub fn launch_admin(args: &[String]) -> CoreResult<()> {
 }
 
 /// 执行命令并返回输出行列表
+///
+/// - `command`: 命令名
+///
+/// # 返回值
+///
+/// 返回按行拆分、去空的 stdout；命令启动失败报错，非零退出码返回空列表
 pub fn run_command(command: &str) -> CoreResult<Vec<String>> {
     let output = Command::new(command).output().map_err(|err| {
         ErrorType::ProcessError(ErrorData {
@@ -621,6 +666,13 @@ pub fn run_command(command: &str) -> CoreResult<Vec<String>> {
 }
 
 /// 执行命令并返回输出行列表
+///
+/// - `command`: 命令名
+/// - `args`: 命令参数
+///
+/// # 返回值
+///
+/// 返回按行拆分、去空的 stdout；命令启动失败报错，非零退出码返回空列表
 pub fn run_command_arg<I, S>(command: &str, args: I) -> CoreResult<Vec<String>>
 where
     I: IntoIterator<Item = S>,

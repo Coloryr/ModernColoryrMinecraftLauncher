@@ -1,3 +1,20 @@
+//! 皮肤 3D 渲染模块
+//!
+//! 提供渲染器公共状态与交互逻辑基类 [`BaseSkinRender`]（指针交互、
+//! 部件矩阵计算、动画、FPS 统计），由 [`renders`] 中的具体渲染后端
+//! （如 OpenGL）组合实现。
+//!
+//! # 子模块
+//!
+//! | 模块 | 用途 |
+//! |------|------|
+//! | [`cube`] | 立方体几何基元 |
+//! | [`cube_model`] | 立方体模型数据结构 |
+//! | [`model`] | 史蒂夫模型生成 |
+//! | [`renders`] | 渲染后端实现（OpenGL） |
+//! | [`skin_animation`] | 部件动画演算 |
+//! | [`texture`] | 模型贴图 UV 生成 |
+
 pub mod cube;
 pub mod cube_model;
 pub mod model;
@@ -16,104 +33,153 @@ use std::sync::{Arc, Mutex};
 
 use crate::skin_animation::SkinAnimation;
 
-/// 错误类型
+/// 渲染错误类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ErrorType {
+    /// 皮肤贴图无效（宽度不是 64 等格式错误）
     InvalidSkin,
+    /// 无法识别的皮肤类型
     UnknownSkin,
+    /// 渲染过程出错
     RenderError,
+    /// 贴图处理出错
     TextureError,
 }
 
-/// 状态类型
+/// 渲染器状态类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StateType {
+    /// 已初始化
     Initialized,
+    /// 皮肤贴图已加载
     SkinLoaded,
+    /// 披风贴图已加载
     CapeLoaded,
+    /// 渲染已开始
     RenderStarted,
+    /// 渲染已完成
     RenderCompleted,
+    /// 已释放资源
     Disposed,
 }
 
-/// 按键类型
+/// 鼠标按键类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum KeyType {
+    /// 左键（拖拽旋转模型）
     Left,
+    /// 右键（拖拽平移模型）
     Right,
+    /// 中键
     Middle,
 }
 
 /// 模型部件类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ModelPartType {
+    /// 头部
     Head,
+    /// 身体
     Body,
+    /// 左臂
     LeftArm,
+    /// 右臂
     RightArm,
+    /// 左腿
     LeftLeg,
+    /// 右腿
     RightLeg,
+    /// 披风
     Cape,
+    /// 投影矩阵
     Proj,
+    /// 视图矩阵
     View,
+    /// 整体模型矩阵
     Model,
 }
 
 /// 抽象皮肤渲染器基类
+///
+/// 持有渲染器公共状态（交互输入、动画、回调、画布尺寸等），
+/// 具体渲染后端持有此结构并根据标志位（`switch_*`）刷新资源。
 pub struct BaseSkinRender {
-    // 标志位
+    /// 是否渲染披风
     pub enable_cape: bool,
+    /// 是否渲染第二层（顶层）
     pub enable_top: bool,
+    /// 模型已变化，需要重新加载模型数据
     pub switch_model: bool,
+    /// 贴图已变化，需要重新上传贴图
     pub switch_skin: bool,
+    /// 渲染类型已变化
     pub switch_type: bool,
+    /// 背景色已变化
     pub switch_back: bool,
+    /// 是否播放动画
     pub animation: bool,
 
+    /// 背景色（RGBA）
     pub back_color: Vec4,
+    /// 皮肤类型（决定模型与贴图布局）
     pub skin_type: SkinType,
 
-    // 贴图
+    /// 皮肤贴图
     pub skin_tex: Option<Pixmap>,
+    /// 披风贴图
     pub cape: Option<Pixmap>,
 
-    // 时间和性能
+    /// FPS 统计累计时间（秒）
     pub time: f64,
+    /// 当前 FPS 计数
     pub fps: i32,
 
-    // 位置和旋转
+    /// 模型视距（缩放距离）
     pub distance: f32,
+    /// 待应用的旋转增量（度，`tick` 时累积到变换矩阵）
     pub rot_xy: Vec2,
+    /// 左键拖拽的基准点
     pub diff_xy: Vec2,
+    /// 模型平移位置
     pub xy: Vec2,
+    /// 右键松开时保存的平移位置
     pub save_xy: Vec2,
+    /// 右键按下的起点
     pub last_xy: Vec2,
 
-    // 变换矩阵
+    /// 用户累积旋转的变换矩阵
     pub last: Mat4,
 
-    // 动画
+    /// 行走动画
     pub skin_animation: SkinAnimation,
 
-    // 状态
+    /// 是否已加载披风
     pub have_cape: bool,
+    /// 是否已加载皮肤
     pub have_skin: bool,
 
-    // 旋转角度
+    /// 手臂旋转角度（度）
     pub arm_rotate: Vec3,
+    /// 腿部旋转角度（度）
     pub leg_rotate: Vec3,
+    /// 头部旋转角度（度）
     pub head_rotate: Vec3,
 
+    /// 错误回调
     pub error_callback: Option<Arc<Mutex<dyn Fn(ErrorType) + Send + Sync>>>,
+    /// 状态变更回调
     pub state_callback: Option<Arc<Mutex<dyn Fn(StateType) + Send + Sync>>>,
+    /// FPS 更新回调
     pub fps_callback: Option<Arc<Mutex<dyn Fn(i32) + Send + Sync>>>,
 
-    // 画布尺寸
+    /// 画布宽度（像素）
     pub width: i32,
+    /// 画布高度（像素）
     pub height: i32,
 }
 
 impl BaseSkinRender {
+    /// 创建渲染器基类（默认画布 800x600，黑色背景）
     pub fn new() -> Self {
         Self {
             enable_cape: false,
@@ -150,6 +216,10 @@ impl BaseSkinRender {
         }
     }
 
+    /// 指针按下：记录拖拽基准点
+    ///
+    /// - `key_type`: 按下的按键类型
+    /// - `point`: 指针位置
     pub fn pointer_pressed(&mut self, key_type: KeyType, point: Vec2) {
         match key_type {
             KeyType::Left => {
@@ -164,6 +234,10 @@ impl BaseSkinRender {
         }
     }
 
+    /// 指针松开：右键松开时保存当前平移位置
+    ///
+    /// - `key_type`: 松开的按键类型
+    /// - `_point`: 指针位置（未使用）
     pub fn pointer_released(&mut self, key_type: KeyType, _point: Vec2) {
         if let KeyType::Right = key_type {
             self.save_xy.x = self.xy.x;
@@ -171,6 +245,10 @@ impl BaseSkinRender {
         }
     }
 
+    /// 指针移动：左键拖拽计算旋转增量，右键拖拽计算平移位置
+    ///
+    /// - `key_type`: 按住的按键类型
+    /// - `point`: 指针位置
     pub fn pointer_moved(&mut self, key_type: KeyType, point: Vec2) {
         match key_type {
             KeyType::Left => {
@@ -189,6 +267,9 @@ impl BaseSkinRender {
         }
     }
 
+    /// 滚轮滚动：调整模型视距
+    ///
+    /// - `is_post`: `true` 表示向前滚动（拉远），`false` 表示向后滚动（拉近）
     pub fn pointer_wheel_changed(&mut self, is_post: bool) {
         if is_post {
             self.distance += 0.1;
@@ -197,20 +278,38 @@ impl BaseSkinRender {
         }
     }
 
+    /// 追加模型旋转增量（度，`tick` 时累积到变换矩阵）
+    ///
+    /// - `x`: x 轴增量
+    /// - `y`: y 轴增量
     pub fn rotate(&mut self, x: f32, y: f32) {
         self.rot_xy.x += x;
         self.rot_xy.y += y;
     }
 
+    /// 追加模型平移偏移
+    ///
+    /// - `x`: x 轴偏移
+    /// - `y`: y 轴偏移
     pub fn position(&mut self, x: f32, y: f32) {
         self.xy.x += x;
         self.xy.y += y;
     }
 
+    /// 追加视距增量
+    ///
+    /// - `x`: 视距增量
     pub fn add_distance(&mut self, x: f32) {
         self.distance += x;
     }
 
+    /// 设置皮肤贴图
+    ///
+    /// - `skin`: 皮肤贴图，传 `None` 表示清除皮肤
+    ///
+    /// # 返回值
+    ///
+    /// 贴图宽度不是 64 时返回 `Err(ErrorType::InvalidSkin)`，其余情况返回 `Ok(())`
     pub fn set_skin_tex(&mut self, skin: Option<Pixmap>) -> Result<(), ErrorType> {
         if let Some(skin_tex) = skin {
             if skin_tex.width() != 64 {
@@ -218,8 +317,6 @@ impl BaseSkinRender {
             }
 
             self.skin_tex = Some(skin_tex.clone());
-            // 需要访问皮肤类型检测器
-            // self.skin_type = skin_type_checker::get_text_type(&skin_tex);
             self.switch_skin = true;
             self.have_skin = true;
 
@@ -231,6 +328,13 @@ impl BaseSkinRender {
         }
     }
 
+    /// 设置披风贴图
+    ///
+    /// - `cape`: 披风贴图，传 `None` 表示清除披风
+    ///
+    /// # 返回值
+    ///
+    /// 总是返回 `Ok(())`
     pub fn set_cape_tex(&mut self, cape: Option<Pixmap>) -> Result<(), ErrorType> {
         if let Some(cape_tex) = cape {
             self.cape = Some(cape_tex);
@@ -245,6 +349,7 @@ impl BaseSkinRender {
         }
     }
 
+    /// 重置位置状态（视距、平移、旋转矩阵恢复默认值）
     pub fn reset_position(&mut self) {
         self.distance = 1.0;
         self.diff_xy = Vec2::new(0.0, 0.0);
@@ -254,11 +359,13 @@ impl BaseSkinRender {
         self.last = Mat4::default();
     }
 
+    /// 帧驱动：推进动画、把旋转增量累积到变换矩阵、统计 FPS
+    ///
+    /// - `time`: 距上帧的时间（秒）
     pub fn tick(&mut self, time: f64) {
         if self.animation {
             self.skin_animation.tick(time);
 
-            // 同步动画旋转到当前旋转值
             if self.animation {
                 self.head_rotate = self.skin_animation.head;
                 self.arm_rotate = self.skin_animation.arm;
@@ -283,6 +390,9 @@ impl BaseSkinRender {
         }
     }
 
+    /// 触发错误回调（未设置回调时无操作）
+    ///
+    /// - `error`: 错误类型
     pub fn on_error(&self, error: ErrorType) {
         if let Some(callback) = &self.error_callback {
             if let Ok(cb) = callback.lock() {
@@ -291,6 +401,9 @@ impl BaseSkinRender {
         }
     }
 
+    /// 触发状态变更回调（未设置回调时无操作）
+    ///
+    /// - `state`: 新状态
     pub fn on_state_change(&self, state: StateType) {
         if let Some(callback) = &self.state_callback {
             if let Ok(cb) = callback.lock() {
@@ -299,6 +412,9 @@ impl BaseSkinRender {
         }
     }
 
+    /// 触发 FPS 更新回调（未设置回调时无操作）
+    ///
+    /// - `fps`: 当前 FPS
     pub fn on_fps_update(&self, fps: i32) {
         if let Some(callback) = &self.fps_callback {
             if let Ok(cb) = callback.lock() {
@@ -307,6 +423,14 @@ impl BaseSkinRender {
         }
     }
 
+    /// 计算指定部件的变换矩阵
+    ///
+    /// - `part_type`: 部件类型（普通部件取动画或手动旋转角度，
+    ///   `Proj` / `View` / `Model` 返回对应的投影 / 视图 / 模型矩阵）
+    ///
+    /// # 返回值
+    ///
+    /// 返回该部件的世界变换矩阵
     pub fn get_matrix(&self, part_type: ModelPartType) -> Mat4 {
         let enable = self.animation;
         let is_slim = self.skin_type == SkinType::NewSlim;
@@ -412,15 +536,22 @@ impl BaseSkinRender {
         }
     }
 
+    /// 设置是否播放动画
+    ///
+    /// - `value`: `true` 表示播放
     pub fn set_animation(&mut self, value: bool) {
         self.skin_animation.run = value;
         self.animation = value;
     }
 
+    /// 获取是否正在播放动画
     pub fn get_animation(&self) -> bool {
         self.animation
     }
 
+    /// 设置皮肤类型（类型变化时标记需要重新加载模型）
+    ///
+    /// - `value`: 皮肤类型
     pub fn set_skin_type(&mut self, value: SkinType) {
         if self.skin_type != value {
             self.skin_animation.skin_type = value;
@@ -429,65 +560,92 @@ impl BaseSkinRender {
         }
     }
 
+    /// 获取当前皮肤类型
     pub fn get_skin_type(&self) -> SkinType {
         self.skin_type
     }
 
+    /// 设置背景色
+    ///
+    /// - `color`: 背景色（RGBA）
     pub fn set_back_color(&mut self, color: Vec4) {
         self.back_color = color;
         self.switch_back = true;
     }
 
+    /// 获取背景色
     pub fn get_back_color(&self) -> Vec4 {
         self.back_color
     }
 
+    /// 设置是否渲染披风
+    ///
+    /// - `value`: `true` 表示渲染
     pub fn set_enable_cape(&mut self, value: bool) {
         self.enable_cape = value;
         self.switch_type = true;
     }
 
+    /// 获取是否渲染披风
     pub fn get_enable_cape(&self) -> bool {
         self.enable_cape
     }
 
+    /// 设置是否渲染第二层（顶层）
+    ///
+    /// - `value`: `true` 表示渲染
     pub fn set_enable_top(&mut self, value: bool) {
         self.enable_top = value;
         self.switch_type = true;
     }
 
+    /// 获取是否渲染第二层（顶层）
     pub fn get_enable_top(&self) -> bool {
         self.enable_top
     }
 
+    /// 设置手臂旋转角度（度）
+    ///
+    /// - `rotate`: 旋转角度
     pub fn set_arm_rotate(&mut self, rotate: Vec3) {
         self.arm_rotate = rotate;
     }
 
+    /// 获取手臂旋转角度（度）
     pub fn get_arm_rotate(&self) -> Vec3 {
         self.arm_rotate
     }
 
+    /// 设置腿部旋转角度（度）
+    ///
+    /// - `rotate`: 旋转角度
     pub fn set_leg_rotate(&mut self, rotate: Vec3) {
         self.leg_rotate = rotate;
     }
 
+    /// 获取腿部旋转角度（度）
     pub fn get_leg_rotate(&self) -> Vec3 {
         self.leg_rotate
     }
 
+    /// 设置头部旋转角度（度）
+    ///
+    /// - `rotate`: 旋转角度
     pub fn set_head_rotate(&mut self, rotate: Vec3) {
         self.head_rotate = rotate;
     }
 
+    /// 获取头部旋转角度（度）
     pub fn get_head_rotate(&self) -> Vec3 {
         self.head_rotate
     }
 
+    /// 是否已加载披风
     pub fn have_cape(&self) -> bool {
         self.have_cape
     }
 
+    /// 是否已加载皮肤
     pub fn have_skin(&self) -> bool {
         self.have_skin
     }

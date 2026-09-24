@@ -1,3 +1,13 @@
+//! 其他启动器实例导入
+//!
+//! 子模块:
+//!
+//! | 模块 | 职责 |
+//! | --- | --- |
+//! | `hmcl_obj` | HMCL 配置 DTO |
+//! | `mmc_obj` | MMC 配置 DTO |
+//! | `official_obj` | 官方启动器版本 DTO |
+
 use std::path::Path;
 
 use mml_base::{serialize_tools::MiniJsonObj, tools};
@@ -25,6 +35,14 @@ pub mod mmc_obj;
 pub mod official_obj;
 
 /// 检测是否为MMC实例
+///
+/// # 参数
+///
+/// - `dir`: 实例目录
+///
+/// # 返回值
+///
+/// 返回是否为 MMC 实例
 pub fn is_mmc_version<P: AsRef<Path>>(dir: P) -> bool {
     let file = dir.as_ref().join(names::MMCJSON_FILE);
     let file1 = dir.as_ref().join(names::MMCCFG_FILE);
@@ -33,6 +51,14 @@ pub fn is_mmc_version<P: AsRef<Path>>(dir: P) -> bool {
 }
 
 /// 检测是否为官方实例
+///
+/// # 参数
+///
+/// - `dir`: 实例目录
+///
+/// # 返回值
+///
+/// 返回是否为官方启动器实例
 pub fn is_minecraft_version<P: AsRef<Path>>(dir: P) -> bool {
     let files = path_helper::get_files(dir);
 
@@ -64,6 +90,14 @@ pub fn is_minecraft_version<P: AsRef<Path>>(dir: P) -> bool {
 
 impl MMCObj {
     /// 转换为实例信息
+    ///
+    /// # 参数
+    ///
+    /// - `cfg`: MMC 配置选项
+    ///
+    /// # 返回值
+    ///
+    /// 返回转换后的实例信息
     pub fn to_instance(self, cfg: InstanceCfg) -> InstanceSettingObj {
         let mut instance = InstanceSettingObj::default();
 
@@ -193,6 +227,10 @@ impl MMCObj {
 
 impl OfficialObj {
     /// 转换为实例信息
+    ///
+    /// # 返回值
+    ///
+    /// 返回转换后的实例信息
     pub fn to_instance(self) -> InstanceSettingObj {
         let mut instance = InstanceSettingObj {
             name: self.id.clone(),
@@ -245,7 +283,7 @@ impl OfficialObj {
                 } else if item.name.contains(names::QUILT_MC_KEY) {
                     let args: Vec<&str> = item.name.split(':').collect();
                     if args.len() >= 3 && args[1] == names::QUILT_LOADER_KEY {
-                        instance.loader = LoaderType::Fabric;
+                        instance.loader = LoaderType::Quilt;
                         instance.loader_version = Some(args[2].to_string());
                         break;
                     }
@@ -277,6 +315,10 @@ impl OfficialObj {
 
 impl HMCLObj {
     /// 转换为实例信息
+    ///
+    /// # 返回值
+    ///
+    /// 返回转换后的实例信息
     pub fn to_instance(self) -> InstanceSettingObj {
         let mut obj = InstanceSettingObj {
             name: self.name,
@@ -361,6 +403,10 @@ impl HMCLObj {
 
 impl HMCLServerObj {
     /// 转换为实例信息
+    ///
+    /// # 返回值
+    ///
+    /// 返回转换后的实例信息
     pub fn to_instance(&self) -> InstanceSettingObj {
         let mut obj = InstanceSettingObj {
             name: self.name.clone(),

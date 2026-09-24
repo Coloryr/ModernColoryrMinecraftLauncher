@@ -1,4 +1,4 @@
-/// 游戏实例启动参数相关生成
+//! 游戏实例启动参数相关生成
 use std::{
     collections::{HashMap, HashSet},
     io::Cursor,
@@ -86,7 +86,14 @@ const V1_JVM_ARG: [&str; 3] = [
 ];
 
 /// 创建V1游戏启动参数
-/// - `game`: 游戏启动参数
+///
+/// # 参数
+///
+/// - `game`: 游戏版本数据
+///
+/// # 返回值
+///
+/// 返回游戏启动参数列表（无参数时为空列表）。
 fn make_v1_game_arg(game: &GameArgObj) -> Vec<String> {
     match &game.minecraft_arguments {
         None => Vec::new(),
@@ -95,7 +102,14 @@ fn make_v1_game_arg(game: &GameArgObj) -> Vec<String> {
 }
 
 /// 创建V2游戏启动参数
-/// - `game`: 游戏启动参数
+///
+/// # 参数
+///
+/// - `game`: 游戏版本数据
+///
+/// # 返回值
+///
+/// 返回游戏启动参数列表（仅取无条件参数，条件参数被忽略）。
 fn make_v2_game_arg(game: &GameArgObj) -> Vec<String> {
     game.arguments.as_ref().map_or(Vec::new(), |args| {
         args.game
@@ -109,8 +123,15 @@ fn make_v2_game_arg(game: &GameArgObj) -> Vec<String> {
 }
 
 /// 创建V1加载器启动参数
-/// - `obj`: 游戏启动参数
-/// - `game`: 游戏启动参数
+///
+/// # 参数
+///
+/// - `obj`: 游戏实例
+/// - `game`: 游戏版本数据（部分加载器会在此基础上追加参数）
+///
+/// # 返回值
+///
+/// 返回加载器附加的游戏启动参数列表。
 fn make_loader_v1_game_arg(obj: &InstanceSettingObj, game: &GameArgObj) -> Vec<String> {
     match obj.loader {
         LoaderType::Forge | LoaderType::NeoForge => {
@@ -159,7 +180,14 @@ fn make_loader_v1_game_arg(obj: &InstanceSettingObj, game: &GameArgObj) -> Vec<S
 }
 
 /// 创建V2加载器启动参数
-/// - `obj`: 游戏启动参数
+///
+/// # 参数
+///
+/// - `obj`: 游戏实例
+///
+/// # 返回值
+///
+/// 返回加载器附加的游戏启动参数列表。
 fn make_loader_v2_game_arg(obj: &InstanceSettingObj) -> Vec<String> {
     match obj.loader {
         LoaderType::Forge | LoaderType::NeoForge => {
@@ -192,6 +220,14 @@ fn make_loader_v2_game_arg(obj: &InstanceSettingObj) -> Vec<String> {
 }
 
 /// 创建V2游戏Jvm参数
+///
+/// # 参数
+///
+/// - `game`: 游戏版本数据
+///
+/// # 返回值
+///
+/// 返回Jvm启动参数列表（条件参数按规则过滤后展开）。
 fn make_v2_jvm_arg(game: &GameArgObj) -> Vec<String> {
     let Some(data) = &game.arguments else {
         return Vec::new();
@@ -215,8 +251,15 @@ fn make_v2_jvm_arg(game: &GameArgObj) -> Vec<String> {
 }
 
 /// 创建加载器Jvm参数
+///
+/// # 参数
+///
 /// - `v2`: 是否为V2版本
 /// - `obj`: 游戏实例
+///
+/// # 返回值
+///
+/// 返回加载器附加的Jvm启动参数列表。
 async fn make_loader_jvm_arg(v2: bool, obj: &InstanceSettingObj) -> Vec<String> {
     match obj.loader {
         LoaderType::Normal => Vec::new(),
@@ -290,7 +333,14 @@ async fn make_loader_jvm_arg(v2: bool, obj: &InstanceSettingObj) -> Vec<String> 
 
 impl InstanceSettingObj {
     /// 创建游戏启动参数
-    /// - `world`: 自动加入的存档
+    ///
+    /// # 参数
+    ///
+    /// - `auto`: 自动加入的目标（存档 / 服务器）
+    ///
+    /// # 返回值
+    ///
+    /// 返回游戏启动参数列表（窗口尺寸、代理、自动加入、自定义参数）。
     pub fn make_game_arg(&self, auto: &AutoJoinType) -> Vec<String> {
         let mut args = Vec::new();
 
@@ -381,9 +431,16 @@ impl InstanceSettingObj {
     }
 
     /// 创建Jvm参数
-    /// - `login`: 登陆使用的账户
+    ///
+    /// # 参数
+    ///
+    /// - `auth`: 登陆使用的账户
     /// - `java`: 使用的JAVA主版本号
     /// - `mixin`: 外部注入使用的端口号
+    ///
+    /// # 返回值
+    ///
+    /// 返回Jvm启动参数列表，刷新失败且用户拒绝离线模式返回对应错误。
     async fn make_jvm_arg(
         &self,
         auth: &LoginObj,
@@ -524,7 +581,10 @@ impl InstanceSettingObj {
         Ok(args)
     }
 
-    /// 替换启动参数
+    /// 替换启动参数中的占位符
+    ///
+    /// # 参数
+    ///
     /// - `auth`: 使用的账户
     /// - `args`: 需要替换的参数列表
     /// - `classpath`: 运行库列表
@@ -607,6 +667,16 @@ impl InstanceSettingObj {
     }
 
     /// 创建启动参数
+    ///
+    /// # 参数
+    ///
+    /// - `arg`: 启动配置（账户、语言等）
+    /// - `obj`: 已生成的启动内容
+    /// - `check`: 是否校验运行库文件存在（缺失的将被跳过）
+    ///
+    /// # 返回值
+    ///
+    /// 返回完整命令行参数（Jvm参数 + 主类 + 游戏参数）。
     pub fn make_run_arg(
         &self,
         arg: &GameLaunchArg,
@@ -683,6 +753,11 @@ impl InstanceSettingObj {
         args
     }
 
+    /// 获取启动主类
+    ///
+    /// # 返回值
+    ///
+    /// 返回主类名，游戏版本不存在返回对应错误。
     fn make_mainclass(&self) -> CoreResult<String> {
         if let Some(arg) = &self.advance_jvm
             && let Some(main) = &arg.main_class
@@ -713,7 +788,17 @@ impl InstanceSettingObj {
         })
     }
 
-    /// 替换参数
+    /// 替换参数中的占位符
+    ///
+    /// # 参数
+    ///
+    /// - `jvm`: 使用的JAVA路径
+    /// - `arg`: JVM参数列表（用于替换 `{java_args}` 类占位符）
+    /// - `item`: 待替换的参数
+    ///
+    /// # 返回值
+    ///
+    /// 返回替换后的参数。
     pub fn replace_arg(&self, jvm: &Path, arg: &Vec<String>, item: &str) -> String {
         item.replace(names::ARG_GAME_NAME, &self.name)
             .replace(names::ARG_GAME_UUID, &self.uuid.to_string())
@@ -727,6 +812,16 @@ impl InstanceSettingObj {
     }
 
     /// 创建常规启动内容
+    ///
+    /// # 参数
+    ///
+    /// - `arg`: 启动配置
+    /// - `obj`: 待填充的启动内容
+    /// - `game_args`: 启动器自定义游戏参数
+    ///
+    /// # 返回值
+    ///
+    /// 返回是否成功，游戏版本不存在或运行库路径不存在返回对应错误。
     async fn make_normal_arg(
         &self,
         arg: &GameLaunchArg,
@@ -881,6 +976,17 @@ impl InstanceSettingObj {
         Ok(())
     }
 
+    /// 创建自定义json启动内容（MMC整合包格式）
+    ///
+    /// # 参数
+    ///
+    /// - `arg`: 启动配置
+    /// - `obj`: 待填充的启动内容
+    /// - `game_args`: 启动器自定义游戏参数
+    ///
+    /// # 返回值
+    ///
+    /// 返回是否成功，资源文件缺失返回对应错误。
     async fn make_custom_arg(
         &self,
         arg: &GameLaunchArg,
@@ -1048,6 +1154,14 @@ impl InstanceSettingObj {
     }
 
     /// 创建游戏完整启动内容
+    ///
+    /// # 参数
+    ///
+    /// - `arg`: 启动配置
+    ///
+    /// # 返回值
+    ///
+    /// 返回启动内容（运行库、参数、主类等），游戏版本不存在返回对应错误。
     pub async fn make_game_launch_obj(&self, arg: &GameLaunchArg) -> CoreResult<GameLaunchObj> {
         let mut obj = GameLaunchObj::default();
 
@@ -1074,7 +1188,16 @@ impl InstanceSettingObj {
     }
 }
 
-/// 辅助函数：处理运行库项
+/// 处理单个运行库项
+///
+/// # 参数
+///
+/// - `item`: 运行库项
+/// - `game_libs`: 游戏运行库列表（有效项追加到其中）
+///
+/// # 返回值
+///
+/// 返回是否成功，本地库解包失败返回对应错误。
 fn do_lib_item(item: &FileItemObj, game_libs: &mut Vec<FileItemObj>) -> CoreResult<()> {
     if !item.file.as_os_str().is_empty() {
         game_libs.push(item.clone());

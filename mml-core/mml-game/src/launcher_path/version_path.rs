@@ -1,3 +1,5 @@
+//! 版本目录与版本数据（版本 json / 各加载器 json）管理
+
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
@@ -35,40 +37,65 @@ use crate::{
     },
 };
 
+/// 版本根目录
 static BASE_DIR: OnceLock<PathBuf> = OnceLock::new();
+/// Forge 目录
 static FORGE_DIR: OnceLock<PathBuf> = OnceLock::new();
+/// Fabric 目录
 static FABRIC_DIR: OnceLock<PathBuf> = OnceLock::new();
+/// Quilt 目录
 static QUILT_DIR: OnceLock<PathBuf> = OnceLock::new();
+/// NeoForge 目录
 static NEOFORGE_DIR: OnceLock<PathBuf> = OnceLock::new();
 
+/// 高清修复版本信息文件路径
 static OPTIFINE_FILE: OnceLock<PathBuf> = OnceLock::new();
+/// LiteLoader 版本信息文件路径
 static LITELOADER_FILE: OnceLock<PathBuf> = OnceLock::new();
 
+/// Mojang 版本列表缓存
 static VERSION: LazyLock<RwLock<Option<Arc<VersionObj>>>> = LazyLock::new(|| RwLock::new(None));
 
+/// 高清修复版本信息缓存（版本号 → 信息）
 static OPTIFINE_LOADER: LazyLock<RwLock<HashMap<String, Arc<OptifineObj>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
+/// 游戏版本参数缓存（版本号 → 启动参数）
 static GAME_ARGS: LazyLock<RwLock<HashMap<String, Arc<GameArgObj>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
+/// Forge 安装信息缓存
 static FORGE_INSTALLS: LazyLock<RwLock<HashMap<LoaderKey, Arc<ForgeInstallObj>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
+/// NeoForge 安装信息缓存
 static NEOFORGE_INSTALLS: LazyLock<RwLock<HashMap<LoaderKey, Arc<ForgeInstallObj>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
+/// Forge 启动信息缓存
 static FORGE_LAUNCHS: LazyLock<RwLock<HashMap<LoaderKey, Arc<ForgeLaunchObj>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
+/// NeoForge 启动信息缓存
 static NEOFORGE_LAUNCHS: LazyLock<RwLock<HashMap<LoaderKey, Arc<ForgeLaunchObj>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
+/// Fabric 加载器信息缓存
 static FABRIC_LOADERS: LazyLock<RwLock<HashMap<LoaderKey, Arc<FabricLoaderObj>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
+/// Quilt 加载器信息缓存
 static QUILT_LOADERS: LazyLock<RwLock<HashMap<LoaderKey, Arc<QuiltLoaderObj>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
+/// 自定义加载器信息缓存（实例 → 加载器）
 static CUSTOM_LOADERS: LazyLock<RwLock<HashMap<Uuid, Arc<CustomLoaderType>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
+/// LiteLoader 版本信息缓存（游戏版本 → 信息）
 static LITE_LOADER: LazyLock<RwLock<HashMap<String, Arc<LiteloaderVersionObj>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 
 /// 初始化版本路径
+///
+/// # 参数
+///
 /// - `dir`: 运行路径
+///
+/// # 返回值
+///
+/// 成功返回 `Ok(())`；创建目录失败返回对应错误
 pub(crate) fn init<P: AsRef<Path>>(dir: P) -> CoreResult<()> {
     let dir = BASE_DIR.get_or_init(|| dir.as_ref().join(names::VERSION_DIR));
 
@@ -112,11 +139,17 @@ pub(crate) fn load() {
 }
 
 /// 获取目录
+///
+/// # 返回值
+///
+/// 返回版本根目录
 pub fn get_version_dir() -> PathBuf {
     BASE_DIR.get().unwrap().clone()
 }
 
 /// 加载高清修复版本信息
+///
+/// 从文件读取并填充缓存；文件不存在时忽略，解析失败记录日志
 fn load_optifine() {
     let local = OPTIFINE_FILE.get().unwrap();
     if !local.exists() || !local.is_file() {
@@ -139,6 +172,8 @@ fn load_optifine() {
 }
 
 /// 保存高清修复版本信息
+///
+/// 将缓存写回文件；写盘失败仅记录错误，不影响调用方
 fn save_optifine() {
     let file = OPTIFINE_FILE.get().unwrap();
     let list = OPTIFINE_LOADER.read().unwrap();
@@ -151,6 +186,8 @@ fn save_optifine() {
 }
 
 /// 加载liteloader版本信息
+///
+/// 从文件读取并填充缓存；文件不存在时忽略，解析失败记录日志
 fn load_liteloader() {
     let local = LITELOADER_FILE.get().unwrap();
     if !local.exists() || !local.is_file() {
@@ -173,6 +210,8 @@ fn load_liteloader() {
 }
 
 /// 保存liteloader版本信息
+///
+/// 将缓存写回文件；写盘失败仅记录错误，不影响调用方
 fn save_liteloader() {
     let file = LITELOADER_FILE.get().unwrap();
     let list = LITE_LOADER.read().unwrap();
@@ -185,6 +224,12 @@ fn save_liteloader() {
 }
 
 /// 从在线获取版本信息
+///
+/// 优先使用默认源，失败后回退官方源再取一次。
+///
+/// # 返回值
+///
+/// 成功返回 `Ok(())`；两次请求或解析失败返回对应错误
 async fn get_version_from_online() -> CoreResult<()> {
     fn save_versions(data: &Vec<u8>) {
         let file = BASE_DIR.get().unwrap().join(names::VERSION_FILE);
@@ -218,6 +263,10 @@ async fn get_version_from_online() -> CoreResult<()> {
 
 /// 从文件读取版本信息
 /// 如果文件不存在就去在线读取
+///
+/// # 返回值
+///
+/// 成功返回 `Ok(())`；在线读取失败返回对应错误
 async fn read_version() -> CoreResult<()> {
     let local = BASE_DIR.get().unwrap().join(names::VERSION_FILE);
     if local.exists()
@@ -235,6 +284,10 @@ async fn read_version() -> CoreResult<()> {
 }
 
 /// 获取最新版本
+///
+/// # 返回值
+///
+/// 返回最新正式版版本号；无缓存返回内置默认版本号
 pub fn get_latest_version() -> String {
     let read = VERSION.read().unwrap();
     let versions = read.as_ref();
@@ -244,7 +297,15 @@ pub fn get_latest_version() -> String {
     }
 }
 
-/// 获取游戏版本列表
+/// 判断游戏版本是否存在
+///
+/// # 参数
+///
+/// - `version`: 游戏版本号
+///
+/// # 返回值
+///
+/// 返回该版本是否存在于版本列表中；无缓存返回 `false`
 pub fn have_version(version: &str) -> bool {
     let read = VERSION.read().unwrap();
     let versions = read.as_ref();
@@ -260,6 +321,10 @@ pub fn have_version(version: &str) -> bool {
 
 /// 获取游戏版本列表
 /// 不存在就去读取文件
+///
+/// # 返回值
+///
+/// 返回版本列表；读取失败返回对应错误
 pub async fn get_version_obj_online() -> CoreResult<Arc<VersionObj>> {
     if let Some(v) = VERSION.read().unwrap().as_ref() {
         return Ok(v.clone());
@@ -270,12 +335,23 @@ pub async fn get_version_obj_online() -> CoreResult<Arc<VersionObj>> {
 }
 
 /// 是否存在版本信息
+///
+/// # 返回值
+///
+/// 返回版本信息是否已加载
 pub async fn is_have_version_info() -> bool {
     VERSION.read().unwrap().is_some()
 }
 
 /// 添加版本信息
+///
+/// # 参数
+///
 /// - `obj`: 游戏数据
+///
+/// # 返回值
+///
+/// 返回解析出的启动参数；下载或解析失败返回对应错误
 pub async fn add_game(obj: &VersionsObj) -> CoreResult<Arc<GameArgObj>> {
     let mut url = obj.url.clone();
     url_helper::change_source(&mut url);
@@ -293,8 +369,17 @@ pub async fn add_game(obj: &VersionsObj) -> CoreResult<Arc<GameArgObj>> {
 }
 
 /// 保存Fabric-Loader信息
+///
+/// # 参数
+///
+/// - `obj`: Fabric 加载器数据
+/// - `data`: json 文本
 /// - `mc`: 游戏版本
 /// - `version`: 加载器版本
+///
+/// # 返回值
+///
+/// 返回缓存的加载器信息
 pub fn add_fabric(
     obj: FabricLoaderObj,
     data: &Vec<u8>,
@@ -313,7 +398,18 @@ pub fn add_fabric(
 }
 
 /// 添加Forge启动信息
-/// - `obj`: 信息
+///
+/// # 参数
+///
+/// - `obj`: 启动信息
+/// - `data`: json 文本
+/// - `mc`: 游戏版本
+/// - `version`: 加载器版本
+/// - `neo`: 是否为NeoForge
+///
+/// # 返回值
+///
+/// 返回缓存的启动信息
 pub fn add_forge(
     obj: ForgeLaunchObj,
     data: &Vec<u8>,
@@ -347,8 +443,18 @@ pub fn add_forge(
 }
 
 /// 添加Forge安装信息
-/// - `obj`: 信息
-/// - `data`: 文本
+///
+/// # 参数
+///
+/// - `obj`: 安装信息
+/// - `data`: json 文本
+/// - `mc`: 游戏版本
+/// - `version`: 加载器版本
+/// - `neo`: 是否为NeoForge
+///
+/// # 返回值
+///
+/// 返回缓存的安装信息
 pub fn add_forge_install(
     obj: ForgeInstallObj,
     data: &Vec<u8>,
@@ -377,10 +483,17 @@ pub fn add_forge_install(
 }
 
 /// 添加Quilt信息
+///
+/// # 参数
+///
 /// - `obj`: Quilt加载器数据
-/// - `data`: 文本
+/// - `data`: json 文本
 /// - `mc`: 游戏版本
 /// - `version`: 加载器版本
+///
+/// # 返回值
+///
+/// 返回缓存的加载器信息
 pub fn add_quilt(
     obj: QuiltLoaderObj,
     data: &Vec<u8>,
@@ -399,15 +512,25 @@ pub fn add_quilt(
 }
 
 /// 添加自定义加载器信息
+///
+/// # 参数
+///
 /// - `obj`: 自定义加载器
-/// - `uuid`: 游戏实例
+/// - `uuid`: 游戏实例标识
 pub fn add_custom_loader(obj: CustomLoaderType, uuid: Uuid) {
     let mut list = CUSTOM_LOADERS.write().unwrap();
     list.insert(uuid, Arc::new(obj));
 }
 
 /// 添加高清修复信息
+///
+/// # 参数
+///
 /// - `obj`: 高清修复信息
+///
+/// # 返回值
+///
+/// 返回缓存的高清修复信息
 pub fn add_optifine(obj: OptifineObj) -> Arc<OptifineObj> {
     let mut list = OPTIFINE_LOADER.write().unwrap();
     let info = Arc::new(obj);
@@ -419,6 +542,10 @@ pub fn add_optifine(obj: OptifineObj) -> Arc<OptifineObj> {
 }
 
 /// 保存liteloader信息
+///
+/// # 参数
+///
+/// - `obj`: LiteLoader 版本元数据
 pub fn add_liteloader(obj: LiteloaderMetaObj) {
     let mut list = LITE_LOADER.write().unwrap();
     list.extend(obj.versions.into_iter().map(|(k, v)| (k, Arc::new(v))));
@@ -427,7 +554,14 @@ pub fn add_liteloader(obj: LiteloaderMetaObj) {
 }
 
 /// 获取版本信息
+///
+/// # 参数
+///
 /// - `version`: 游戏版本
+///
+/// # 返回值
+///
+/// 返回启动参数；本地文件缺失或解析失败返回对应错误
 pub fn get_version(version: &str) -> CoreResult<Arc<GameArgObj>> {
     // 先查缓存。读锁必须在块内释放：同线程读锁未放再取写锁会自死锁
     // （std RwLock 不可升级），缓存未命中时正是这个顺序导致主线程永久卡死。
@@ -453,7 +587,14 @@ pub fn get_version(version: &str) -> CoreResult<Arc<GameArgObj>> {
 }
 
 /// 检查游戏版本更新
+///
+/// # 参数
+///
 /// - `version`: 游戏版本
+///
+/// # 返回值
+///
+/// 返回最新的启动参数；在线无此版本或下载失败返回对应错误
 pub async fn check_update(mc: &str) -> CoreResult<Arc<GameArgObj>> {
     // 直接从在线更新数据
     get_version_from_online().await?;
@@ -488,6 +629,17 @@ pub async fn check_update(mc: &str) -> CoreResult<Arc<GameArgObj>> {
 }
 
 /// 获取json名字
+///
+/// # 参数
+///
+/// - `mc`: 游戏版本
+/// - `version`: 加载器版本
+/// - `neo`: 是否为NeoForge
+/// - `install`: 是否为安装信息
+///
+/// # 返回值
+///
+/// 返回 json 文件名
 pub fn get_forge_json_name(mc: &str, version: &str, neo: bool, install: bool) -> String {
     if neo {
         let v222 = version_parse::is_game_version_1202(&mc);
@@ -540,8 +692,15 @@ pub fn get_forge_json_name(mc: &str, version: &str, neo: bool, install: bool) ->
 }
 
 /// 获取NeoForge安装数据
+///
+/// # 参数
+///
 /// - `mc`: 游戏版本
 /// - `version`: 加载器版本
+///
+/// # 返回值
+///
+/// 返回安装数据；文件缺失或解析失败返回 `None`
 pub fn get_neoforge_install_obj(mc: &str, version: &str) -> Option<Arc<ForgeInstallObj>> {
     let key = LoaderKey::new(mc, version);
 
@@ -572,8 +731,15 @@ pub fn get_neoforge_install_obj(mc: &str, version: &str) -> Option<Arc<ForgeInst
 }
 
 /// 获取NeoForge启动数据
+///
+/// # 参数
+///
 /// - `mc`: 游戏版本
 /// - `version`: 加载器版本
+///
+/// # 返回值
+///
+/// 返回启动数据；文件缺失或解析失败返回 `None`
 pub fn get_neoforge(mc: &str, version: &str) -> Option<Arc<ForgeLaunchObj>> {
     let key = LoaderKey::new(mc, version);
 
@@ -604,8 +770,15 @@ pub fn get_neoforge(mc: &str, version: &str) -> Option<Arc<ForgeLaunchObj>> {
 }
 
 /// 获取Forge安装数据
+///
+/// # 参数
+///
 /// - `mc`: 游戏版本
 /// - `version`: 加载器版本
+///
+/// # 返回值
+///
+/// 返回安装数据；文件缺失或解析失败返回 `None`
 pub fn get_forge_install_obj(mc: &str, version: &str) -> Option<Arc<ForgeInstallObj>> {
     let key = LoaderKey::new(mc, version);
 
@@ -636,8 +809,15 @@ pub fn get_forge_install_obj(mc: &str, version: &str) -> Option<Arc<ForgeInstall
 }
 
 /// 获取Forge启动数据
+///
+/// # 参数
+///
 /// - `mc`: 游戏版本
 /// - `version`: 加载器版本
+///
+/// # 返回值
+///
+/// 返回启动数据；文件缺失或解析失败返回 `None`
 pub fn get_forge(mc: &str, version: &str) -> Option<Arc<ForgeLaunchObj>> {
     let key = LoaderKey::new(mc, version);
 
@@ -668,8 +848,15 @@ pub fn get_forge(mc: &str, version: &str) -> Option<Arc<ForgeLaunchObj>> {
 }
 
 /// 获取Fabric加载器数据
+///
+/// # 参数
+///
 /// - `mc`: 游戏版本
 /// - `version`: 加载器版本
+///
+/// # 返回值
+///
+/// 返回加载器数据；文件缺失或解析失败返回 `None`
 pub fn get_fabric(mc: &str, version: &str) -> Option<Arc<FabricLoaderObj>> {
     let key = LoaderKey::new(mc, version);
     // 读锁先释放：读锁未放再取写锁会自死锁（std RwLock 不可升级）
@@ -701,8 +888,15 @@ pub fn get_fabric(mc: &str, version: &str) -> Option<Arc<FabricLoaderObj>> {
 }
 
 /// 获取Quilt加载器数据
+///
+/// # 参数
+///
 /// - `mc`: 游戏版本
 /// - `version`: 加载器版本
+///
+/// # 返回值
+///
+/// 返回加载器数据；文件缺失或解析失败返回 `None`
 pub fn get_quilt(mc: &str, version: &str) -> Option<Arc<QuiltLoaderObj>> {
     let key = LoaderKey::new(mc, version);
     // 读锁先释放：读锁未放再取写锁会自死锁（std RwLock 不可升级）
@@ -710,9 +904,9 @@ pub fn get_quilt(mc: &str, version: &str) -> Option<Arc<QuiltLoaderObj>> {
     if let Some(data) = hit {
         return Some(data);
     }
-    let local = FABRIC_DIR.get().unwrap().join(format!(
+    let local = QUILT_DIR.get().unwrap().join(format!(
         "{}-{}-{}{}",
-        names::FABRIC_LOADER_KEY,
+        names::QUILT_LOADER_KEY,
         version,
         mc,
         names::JSON_DOT_EXT
@@ -734,14 +928,28 @@ pub fn get_quilt(mc: &str, version: &str) -> Option<Arc<QuiltLoaderObj>> {
 }
 
 /// 获取高清修复信息
+///
+/// # 参数
+///
 /// - `version`: 版本号
+///
+/// # 返回值
+///
+/// 返回高清修复信息；不存在返回 `None`
 pub fn get_optifine(version: &str) -> Option<Arc<OptifineObj>> {
     let list = OPTIFINE_LOADER.read().unwrap();
     Some(list.get(version)?.clone())
 }
 
 /// 获取liteloader信息
+///
+/// # 参数
+///
 /// - `version`: 游戏版本号
+///
+/// # 返回值
+///
+/// 返回 LiteLoader 版本信息；不存在返回 `None`
 pub fn get_liteloader(version: &str) -> Option<Arc<LiteloaderVersionObj>> {
     let list = LITE_LOADER.read().unwrap();
     Some(list.get(version)?.clone())
@@ -749,6 +957,10 @@ pub fn get_liteloader(version: &str) -> Option<Arc<LiteloaderVersionObj>> {
 
 impl InstanceSettingObj {
     /// 获取游戏版本类型
+    ///
+    /// # 返回值
+    ///
+    /// 返回版本类型（release / snapshot / old_beta 等）；无信息返回空串
     pub fn get_version_type(&self) -> String {
         let temp = VERSION.read().unwrap();
 
@@ -770,7 +982,11 @@ impl InstanceSettingObj {
         }
     }
 
-    /// 获取neoforge加载器信息
+    /// 获取Forge加载器信息
+    ///
+    /// # 返回值
+    ///
+    /// 返回启动数据；无加载器版本或加载失败返回 `None`
     pub fn get_forge(&self) -> Option<Arc<ForgeLaunchObj>> {
         match &self.loader_version {
             None => None,
@@ -778,7 +994,11 @@ impl InstanceSettingObj {
         }
     }
 
-    /// 获取neoforge加载器信息
+    /// 获取NeoForge加载器信息
+    ///
+    /// # 返回值
+    ///
+    /// 返回启动数据；无加载器版本或加载失败返回 `None`
     pub fn get_neoforge(&self) -> Option<Arc<ForgeLaunchObj>> {
         match &self.loader_version {
             None => None,
@@ -787,6 +1007,10 @@ impl InstanceSettingObj {
     }
 
     /// 获取Fabric加载器数据
+    ///
+    /// # 返回值
+    ///
+    /// 返回加载器数据；无加载器版本或加载失败返回 `None`
     pub fn get_fabric(&self) -> Option<Arc<FabricLoaderObj>> {
         match &self.loader_version {
             None => None,
@@ -795,6 +1019,10 @@ impl InstanceSettingObj {
     }
 
     /// 获取Quilt加载器数据
+    ///
+    /// # 返回值
+    ///
+    /// 返回加载器数据；无加载器版本或加载失败返回 `None`
     pub fn get_quilt(&self) -> Option<Arc<QuiltLoaderObj>> {
         match &self.loader_version {
             None => None,
@@ -803,12 +1031,20 @@ impl InstanceSettingObj {
     }
 
     /// 获取自定义加载器数据
+    ///
+    /// # 返回值
+    ///
+    /// 返回自定义加载器数据；未添加返回 `None`
     pub fn get_custom_loader(&self) -> Option<Arc<CustomLoaderType>> {
         let list = CUSTOM_LOADERS.read().unwrap();
         Some(list.get(&self.uuid)?.clone())
     }
 
     /// 获取高清修复信息
+    ///
+    /// # 返回值
+    ///
+    /// 返回高清修复信息；非高清修复实例或不存在返回 `None`
     pub fn get_optifine(&self) -> Option<Arc<OptifineObj>> {
         if self.loader != LoaderType::OptiFine || self.loader_version.is_none() {
             None
@@ -818,6 +1054,10 @@ impl InstanceSettingObj {
     }
 
     /// 更新游戏版本json
+    ///
+    /// # 返回值
+    ///
+    /// 返回最新的启动参数；在线无此版本或下载失败返回对应错误
     pub async fn check_version_update(&self) -> CoreResult<Arc<GameArgObj>> {
         check_update(&self.version).await
     }

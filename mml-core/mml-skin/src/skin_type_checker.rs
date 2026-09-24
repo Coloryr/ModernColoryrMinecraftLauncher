@@ -6,6 +6,12 @@ use crate::SkinType;
 const TRANSPARENT: [u8; 4] = [0, 0, 0, 0];
 
 /// 获取皮肤类型
+///
+/// - `image`: 皮肤位图
+///
+/// # 返回值
+///
+/// 返回按尺寸与纤细标记区域判定的皮肤类型
 pub fn get_skin_type(image: &Pixmap) -> SkinType {
     let width = image.width() as i32;
     let height = image.height() as i32;
@@ -24,6 +30,8 @@ pub fn get_skin_type(image: &Pixmap) -> SkinType {
 }
 
 /// 是否为1.8新版皮肤（纤细手臂）
+///
+/// - `image`: 皮肤位图
 fn is_slim_skin(image: &Pixmap) -> bool {
     let scale = image.width() as i32 / 64;
 
@@ -40,8 +48,14 @@ fn is_slim_skin(image: &Pixmap) -> bool {
 /// 检查像素区域是否所有像素都匹配指定颜色
 ///
 /// `colors` 里给的是**预乘** RGBA 字节（不透明颜色两者相同）
+///
+/// - `image`: 皮肤位图
+/// - `x`: 区域左上角横坐标
+/// - `y`: 区域左上角纵坐标
+/// - `w`: 区域宽度
+/// - `h`: 区域高度
+/// - `colors`: 允许的颜色列表
 fn check_pixel_area(image: &Pixmap, x: i32, y: i32, w: i32, h: i32, colors: &[[u8; 4]]) -> bool {
-    // 边界检查
     if x < 0 || y < 0 || x + w > image.width() as i32 || y + h > image.height() as i32 {
         return false;
     }

@@ -1,4 +1,12 @@
 //! 方块渲染：图标表、数据、渲染管线
+//!
+//! # 子模块
+//!
+//! | 模块 | 用途 |
+//! |------|------|
+//! | [`icons`] | 创造模式图标表（方块ID / 分类 / 渲染规格） |
+//! | [`obj`] | 渲染结果数据结构（BlocksObj / ItemsObj） |
+//! | [`skin`] | 皮肤方块注册 |
 pub mod icons;
 pub mod obj;
 pub mod skin;
@@ -36,6 +44,12 @@ pub(crate) const BIRCH_TINT: [u8; 3] = [128, 167, 85]; // #80A755
 pub(crate) const SPRUCE_TINT: [u8; 3] = [97, 153, 97]; // #619961
 
 /// 解码贴图数据（预乘 RGBA8）
+///
+/// - `data`: PNG 文件字节
+///
+/// # 返回值
+///
+/// 返回解码后的位图，解码失败时返回 `None`
 pub fn decode_png(data: &[u8]) -> Option<Pixmap> {
     Pixmap::decode_png(data).ok()
 }
@@ -43,6 +57,12 @@ pub fn decode_png(data: &[u8]) -> Option<Pixmap> {
 /// 预乘 RGBA 转 straight alpha（边界处给 GL / PNG 用）
 ///
 /// 换算与旧实现一致：按 a 归一化后就近取整（`.5` 取偶，与 skia 在此处的取值仅个别半值差 1）。
+///
+/// - `data`: 预乘 RGBA 像素
+///
+/// # 返回值
+///
+/// 返回 straight-alpha RGBA 像素
 pub(crate) fn to_straight_rgba(data: &[u8]) -> Vec<u8> {
     let mut out = data.to_vec();
 
@@ -67,6 +87,13 @@ pub(crate) fn to_straight_rgba(data: &[u8]) -> Vec<u8> {
 }
 
 /// 从竖排动画贴图中取出一帧
+///
+/// - `tex`: 竖排帧条带（帧为正方形，帧高 = 宽）
+/// - `index`: 帧号（从 0 起）
+///
+/// # 返回值
+///
+/// 返回该帧位图，帧越界时返回 `None`
 fn extract_frame(tex: &Pixmap, index: usize) -> Option<Pixmap> {
     let size = tex.width();
     let top = index as u32 * size;
@@ -86,12 +113,23 @@ fn extract_frame(tex: &Pixmap, index: usize) -> Option<Pixmap> {
 /// 动画时间线：源帧 + 展开后的帧序列，按刻惰性取帧。
 /// 取帧时才做克隆/插值混合，避免物化整条逐刻帧序列（frametime大时可达上千帧位图）
 struct AnimTimeline {
+    /// 源帧位图（按条带顺序切出）
     src: Vec<Pixmap>,
+    /// 展开后的帧序列（帧号 → 持续刻数）
     entries: Vec<(u32, u32)>,
+    /// 帧之间是否平滑插值
     interpolate: bool,
 }
 
 impl AnimTimeline {
+    /// 由原始帧条带 + mcmeta 元数据构建时间线
+    ///
+    /// - `tex`: 竖排帧条带
+    /// - `meta`: 动画配置（mcmeta）
+    ///
+    /// # 返回值
+    ///
+    /// 返回时间线，条带切帧失败时返回 `None`
     fn build(tex: &Pixmap, meta: &AnimMeta) -> Option<Self> {
         let count = (tex.height() / tex.width()).max(1) as usize;
         let src: Vec<Pixmap> = (0..count)
@@ -112,11 +150,18 @@ impl AnimTimeline {
         })
     }
 
+    /// 整条时间线的总时长（刻）
     fn total_ticks(&self) -> u32 {
         self.entries.iter().map(|&(_, time)| time).sum()
     }
 
     /// 取逐刻时间线上第tick刻的帧；interpolate时向序列下一帧线性过渡
+    ///
+    /// - `tick`: 游戏刻（按 total_ticks 取模后由调用方处理）
+    ///
+    /// # 返回值
+    ///
+    /// 返回该刻的帧位图，时间线为空时返回 `None`
     fn frame_at(&self, tick: u32) -> Option<Pixmap> {
         let mut acc = 0u32;
         for (i, &(idx, time)) in self.entries.iter().enumerate() {
@@ -125,7 +170,6 @@ impl AnimTimeline {
                 if !self.interpolate {
                     return Some(frame.clone());
                 }
-                // 向序列下一帧线性过渡（与游戏内平滑动画一致）
                 let next = self.entries[(i + 1) % self.entries.len()].0 as usize;
                 let f = (tick - acc) as f32 / time as f32;
                 return blend_bitmap(frame, &self.src[next], f);
@@ -137,6 +181,14 @@ impl AnimTimeline {
 }
 
 /// 按比例混合两张贴图（RGBA线性插值）
+///
+/// - `a`: 起始帧（f=0 时的结果）
+/// - `b`: 目标帧（f=1 时的结果）
+/// - `f`: 混合比例（0..1）
+///
+/// # 返回值
+///
+/// 返回混合后的位图，尺寸不一致或分配失败时返回 `None`
 fn blend_bitmap(a: &Pixmap, b: &Pixmap, f: f32) -> Option<Pixmap> {
     if a.width() != b.width() || a.height() != b.height() {
         return None;
@@ -159,6 +211,13 @@ fn blend_bitmap(a: &Pixmap, b: &Pixmap, f: f32) -> Option<Pixmap> {
 }
 
 /// RGBA像素编码为PNG（尺寸size×size，直通alpha）
+///
+/// - `size`: 输出边长（像素）
+/// - `rgba`: RGBA 像素（长度 = size²×4）
+///
+/// # 返回值
+///
+/// 返回 PNG 字节，编码失败时返回 `None`
 fn encode_png(size: u32, rgba: &[u8]) -> Option<Vec<u8>> {
     let mut cursor = Cursor::new(Vec::new());
     {
@@ -173,6 +232,13 @@ fn encode_png(size: u32, rgba: &[u8]) -> Option<Vec<u8>> {
 }
 
 /// 合并成APNG（每帧附带显示时长，单位：刻，1刻 = FRAME_RATE分之一秒）
+///
+/// - `size`: 输出边长（像素）
+/// - `frames`:（帧 RGBA 像素，持续刻数）列表
+///
+/// # 返回值
+///
+/// 返回 APNG 字节，编码失败时返回 `None`
 fn encode_apng(size: u32, frames: Vec<(Vec<u8>, u16)>) -> Option<Vec<u8>> {
     let mut cursor = Cursor::new(Vec::new());
     {
@@ -215,11 +281,18 @@ fn encode_apng(size: u32, frames: Vec<(Vec<u8>, u16)>) -> Option<Vec<u8>> {
 #[derive(Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum TextureRefObj {
+    /// 老版：直接是贴图引用值
     Plain(String),
+    /// 新版：对象形式（只取 sprite 字段，如glass的force_translucent）
     Object { sprite: String },
 }
 
 impl TextureRefObj {
+    /// 取引用值字符串
+    ///
+    /// # 返回值
+    ///
+    /// 返回贴图引用值（如 `block/stone`），两种形态都总有值
     pub(crate) fn value(&self) -> Option<&str> {
         match self {
             Self::Plain(value) => Some(value),
@@ -275,6 +348,12 @@ impl RenderProfile {
 /// 摆放照 SkullBlockRenderer：绕 X 轴 180° 翻转（模型 y 轴向下）后平移到方块中心，
 /// 头落在方块内 4..12 / 0..8 / 4..12 像素处（下半格、水平居中）。
 /// 180° 是纯旋转（行列式 +1），顶点绕序仍与法线一致，无需重排 winding
+///
+/// - `quads`: 输出 quad 列表（就地追加）
+/// - `tex`: 头颅贴图（皮肤头部展开布局）
+/// - `path`: 贴图相对路径（写入 quad）
+/// - `tex_off`: 该层贴图在图上的偏移（像素，基础层 (0,0)、帽子层 (32,0)）
+/// - `grow`: 外扩距离（帽子层 0.25 像素，基础层 0）
 fn push_head_cube(quads: &mut Vec<Quad>, tex: &Pixmap, path: &str, tex_off: [f32; 2], grow: f32) {
     let (tw, th) = (tex.width() as f32, tex.height() as f32);
     let min = [-4.0 - grow, -8.0 - grow, -4.0 - grow];
@@ -315,7 +394,6 @@ fn push_head_cube(quads: &mut Vec<Quad>, tex: &Pixmap, path: &str, tex_off: [f32
             [right, bottom],
         ];
         let pos = verts.map(|p| {
-            // 180°绕X翻转（模型y向下→方块空间y向上）后平移到方块中心，像素→方块
             [p[0] / 16.0 + 0.5, -p[1] / 16.0, -p[2] / 16.0 + 0.5]
         });
         let uv = corners.map(|c| [c[0] / tw, c[1] / th]);
@@ -344,6 +422,15 @@ fn push_head_cube(quads: &mut Vec<Quad>, tex: &Pixmap, path: &str, tex_off: [f32
 /// `hat`：是否带帽子层（玩家头/僵尸头，贴图须为 64×64）。
 /// gui 变换取 item/template_skull 的 display.gui（30/45/0、平移 0/3/0、缩放1）——
 /// 头颅图标在创造栏就是这个视角；模型空间已居中，无需再适配画布
+///
+/// - `archive`: 客户端 jar 归档（读取头颅贴图）
+/// - `tex_rel`: jar 内贴图相对路径（如 `entity/zombie/zombie`）
+/// - `hat`: 是否带帽子层（玩家头/僵尸头，贴图须为 64×64）
+/// - `tex_cache`: 跨模型复用的贴图缓存（路径 → 解码位图）
+///
+/// # 返回值
+///
+/// 返回（烘焙产物，用到的贴图），贴图读取失败时返回 `None`
 fn bake_head(
     archive: &BaseArchive,
     tex_rel: &str,
@@ -369,6 +456,14 @@ fn bake_head(
 }
 
 /// 头颅烘焙核心：从已加载的贴图直接出模型（外部皮肤文件的图标渲染也走这里）
+///
+/// - `tex`: 头颅贴图
+/// - `hat`: 是否带帽子层
+/// - `path`: 贴图相对路径（写入 quad）
+///
+/// # 返回值
+///
+/// 返回烘焙产物（基础层 6 面 + 帽子层 6 面）
 fn bake_head_model(tex: Pixmap, hat: bool, path: &str) -> BakedModel {
     let mut quads = Vec::new();
     push_head_cube(&mut quads, &tex, path, [0.0, 0.0], 0.0);
@@ -399,6 +494,12 @@ fn bake_head_model(tex: Pixmap, hat: bool, path: &str) -> BakedModel {
 /// - Skip：实体渲染（箱子/旗帜/潜影盒等），跳过
 ///
 /// 返回（方块ID, 输出文件名）
+///
+/// - `gpu`: GPU 上下文（`None` 时由 render_baked 内部回退）
+/// - `archive`: 客户端 jar 归档（只读）
+/// - `tex_cache`: 跨模型复用的贴图缓存（路径 → 解码位图）
+/// - `id_rel`: 表条目ID（带命名空间，如 `minecraft:stone`）
+/// - `spec`: 渲染规格
 fn render_icon(
     gpu: Option<&GpuCtx>,
     archive: &BaseArchive,
@@ -461,12 +562,6 @@ fn render_icon(
     Some((id.to_string(), out_name))
 }
 
-/// 渲染烘焙模型出图：贴图带动画（h>w竖排条带）时按时间线逐帧渲染合成APNG，
-/// 静态模型单帧出图。动画帧的APNG延迟规则同前（等距采样，相同帧合并延迟）
-/// 渲染烘焙模型出图：贴图带动画（h>w竖排条带）时按时间线逐帧渲染合成APNG，
-/// 静态模型单帧出图。动画帧的APNG延迟规则同前（等距采样，相同帧合并延迟）
-///
-/// `glint`：Some(贴图)时叠加附魔光效（仅GPU路径，CPU回退忽略）
 /// 把动画贴图条带换成首帧
 ///
 /// quad 的 uv 是**单帧**空间（16×16），而带 mcmeta 的贴图是竖排帧条带
@@ -475,6 +570,8 @@ fn render_icon(
 ///
 /// 图标管线 `render_baked` 内部会调用；**测试或其它直接调渲染器的调用方同样要调用**，
 /// 否则渲染结果不代表实际图标。
+///
+/// - `textures`: 模型用到的贴图（路径 → 解码位图，就地替换竖排条带为首帧）
 pub fn use_first_frame(textures: &mut HashMap<String, Pixmap>) {
     for path in textures.keys().cloned().collect::<Vec<_>>() {
         let Some(strip) = textures.get(&path) else {
@@ -487,6 +584,20 @@ pub fn use_first_frame(textures: &mut HashMap<String, Pixmap>) {
     }
 }
 
+/// 渲染烘焙模型出图：贴图带动画（h>w竖排条带）时按时间线逐帧渲染合成APNG，
+/// 静态模型单帧出图（等距采样，相同帧合并延迟）。
+///
+/// `glint`：Some(贴图)时叠加附魔光效
+///
+/// - `gpu`: GPU 上下文（`None` 时返回 `None`，单帧渲染仅 GPU 一条路径）
+/// - `archive`: 客户端 jar 归档（读取动画 mcmeta）
+/// - `model`: 烘焙后的模型
+/// - `textures`: 模型用到的贴图（路径 → 解码位图）
+/// - `glint`: 附魔光效贴图（无则 `None`）
+///
+/// # 返回值
+///
+/// 返回 PNG / APNG 字节，渲染或编码失败时返回 `None`
 pub(crate) fn render_baked(
     gpu: Option<&GpuCtx>,
     archive: &BaseArchive,
@@ -507,7 +618,6 @@ pub(crate) fn render_baked(
     // 渲染上传用首帧（quad 的 uv 是单帧空间）
     use_first_frame(&mut textures);
     if timelines.is_empty() {
-        // 静态模型：渲染出的RGBA像素编码为PNG
         return encode_png(BLOCK_SIZE as u32, &render_once(gpu, &model, &textures, glint)?);
     }
 
@@ -526,7 +636,6 @@ pub(crate) fn render_baked(
             textures.insert(path.clone(), frame);
         }
         let img = render_once(gpu, &model, &textures, None)?;
-        // 该帧在逐刻时间线上代表的刻数，即APNG显示时长
         let ticks = stride.min(total - k) as u16;
         match frames.last_mut() {
             // 渲染结果与上一帧相同：并入其显示时长，不重复存帧
@@ -541,6 +650,10 @@ pub(crate) fn render_baked(
 /// 多格拼合模型（床等）适配画布：按合并后quad的投影包围盒等比缩放居中（等效旧FitMode::Own）。
 /// 单格模型不改gui变换（游戏图标按完整方块尺度渲染，半砖等矮模型不放大）
 /// composite part 变换：绕Y轴旋转（门板朝向镜头）后平移；法线同角旋转
+///
+/// - `model`: 待变换的烘焙产物（就地修改顶点与法线）
+/// - `tr`: 平移（0..1 模型空间，1.0 = 1方块）
+/// - `yaw_deg`: 绕Y轴旋转角（度）
 fn transform_composite_part(model: &mut BakedModel, tr: [f32; 3], yaw_deg: f32) {
     let (s, c) = yaw_deg.to_radians().sin_cos();
     for quad in &mut model.quads {
@@ -556,6 +669,10 @@ fn transform_composite_part(model: &mut BakedModel, tr: [f32; 3], yaw_deg: f32) 
     }
 }
 
+/// 多格拼合模型（床等）适配画布：按合并后quad的投影包围盒等比缩放居中（等效旧FitMode::Own）。
+/// 单格模型不改gui变换（游戏图标按完整方块尺度渲染，半砖等矮模型不放大）
+///
+/// - `model`: 待适配的烘焙产物（就地修改 gui 变换）
 pub(crate) fn fit_composite(model: &mut BakedModel) {
     const MARGIN: f32 = 2.0;
     let slot = BLOCK_SIZE as f32;
@@ -594,6 +711,15 @@ pub(crate) fn fit_composite(model: &mut BakedModel) {
 /// 不再提供 CPU 软件光栅化回退：那条路径用画家算法排序，遇到互相穿插的几何
 /// （如篝火的火焰斜插在原木之间）前后关系会错，结果与 GPU 明显不一致，
 /// 与其产出错的图标不如在无 GPU 时直接报错。
+///
+/// - `gpu`: GPU 上下文（`None` 时直接失败）
+/// - `model`: 烘焙后的模型
+/// - `textures`: 模型用到的贴图（路径 → 解码位图）
+/// - `glint`: 附魔光效贴图（无则 `None`）
+///
+/// # 返回值
+///
+/// 返回 straight-alpha RGBA 像素，无 GPU 或渲染失败时返回 `None`
 fn render_once(
     gpu: Option<&GpuCtx>,
     model: &BakedModel,
@@ -613,6 +739,13 @@ fn render_once(
 /// 与跨方块复用的贴图缓存，完成后单线程汇总写入方块状态
 ///
 /// `gui`可选：按已处理的表条目数上报进度（约每1%一次）
+///
+/// - `archive`: 客户端 jar 归档（只读）
+/// - `gui`: 进度回调（传 `None` 不上报）
+///
+/// # 返回值
+///
+/// 输出目录未初始化或 GPU 不可用时返回相应错误，成功返回 `Ok(())`
 pub fn render_blocks(archive: &BaseArchive, gui: ProgressGui) -> CoreResult<()> {
     let render_start = std::time::Instant::now();
     // 输出目录未初始化时报错（各图标写盘前也各自取一次）
@@ -684,7 +817,6 @@ pub fn render_blocks(archive: &BaseArchive, gui: ProgressGui) -> CoreResult<()> 
         })
         .collect();
 
-    // 分阶段耗时统计（MML_RENDER_PROFILE=1 时打印）
     PROFILE.print(render_start.elapsed());
 
     // 完成时补一次100%，避免进度停在最后一个step前
@@ -692,7 +824,6 @@ pub fn render_blocks(archive: &BaseArchive, gui: ProgressGui) -> CoreResult<()> 
         gui.set_progress_now(total, Some(total));
     }
 
-    // 单线程汇总写入方块状态
     let mut blocks = crate::blocks_write();
     for (id, out_name, cat) in rendered.into_iter().flatten() {
         blocks.tex.insert(id.clone(), out_name);
@@ -719,25 +850,38 @@ pub struct AnimMeta {
 /// 帧序列的一项（帧号 + 该帧持续刻数，缺省时长为frametime）
 #[derive(Clone, Copy)]
 pub struct AnimFrame {
+    /// 帧号（从 0 起，越界按帧数取模）
     pub index: u32,
+    /// 该帧持续刻数
     pub time: u32,
 }
 
-/// 动画贴图配置
+/// mcmeta 文件顶层（JSON 镜像）
 #[derive(Serialize, Deserialize, Default)]
 struct TextureMetaObj {
+    /// animation 节点（非动画贴图没有）
     animation: Option<TextureAnimationObj>,
 }
 
+/// mcmeta 的 animation 节点（JSON 镜像）
 #[derive(Serialize, Deserialize, Default)]
 struct TextureAnimationObj {
+    /// 帧间隔（单位：刻）
     frametime: Option<u32>,
+    /// 帧之间是否平滑插值
     interpolate: Option<bool>,
     /// 自定义帧序列：数字项为帧号，对象项为{index, time}
     frames: Option<Vec<serde_json::Value>>,
 }
 
 /// 读取动画贴图配置（帧间隔、是否插值、自定义帧序列）
+///
+/// - `archive`: 客户端 jar 归档（读取 `.mcmeta`）
+/// - `tex_path`: jar 内贴图路径
+///
+/// # 返回值
+///
+/// 返回动画配置；无 mcmeta / 解析失败时返回缺省配置（frametime=1、不插值）
 pub fn read_anim_meta(archive: &BaseArchive, tex_path: &str) -> AnimMeta {
     let fallback = AnimMeta {
         frametime: 1,

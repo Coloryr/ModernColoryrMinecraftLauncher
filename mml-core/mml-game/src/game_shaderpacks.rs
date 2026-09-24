@@ -37,11 +37,21 @@ impl Default for ShaderpackObj {
 
 impl ShaderpackObj {
     /// 删除
+    ///
+    /// # 返回值
+    ///
+    /// 成功返回 `Ok(())`；删除失败返回对应错误
     pub fn delete(&self) -> CoreResult<()> {
         path_helper::move_to_trash(&self.file)
     }
 }
 
+/// 从光影包语言文件读取名字与说明
+///
+/// # 参数
+///
+/// - `stream`: 语言文件数据流
+/// - `obj`: 写入目标
 fn read_data<R: Read>(stream: R, obj: &mut ShaderpackObj) {
     // 从语言文件中读取名字，可能会有更多
     let options = game_options::read_options(stream, Some('='));
@@ -65,6 +75,15 @@ fn read_data<R: Read>(stream: R, obj: &mut ShaderpackObj) {
     }
 }
 
+/// 读取光影包信息
+///
+/// # 参数
+///
+/// - `path`: 光影包文件路径（zip）
+///
+/// # 返回值
+///
+/// 返回光影包信息；不是 zip 文件返回 `ArgError`
 pub fn read_shaderpacks<P: AsRef<Path>>(path: P) -> CoreResult<ShaderpackObj> {
     if let Some(ext) = path.as_ref().extension() {
         if ext.eq_ignore_ascii_case(names::ZIP_EXT) {
@@ -111,6 +130,10 @@ pub fn read_shaderpacks<P: AsRef<Path>>(path: P) -> CoreResult<ShaderpackObj> {
 
 impl InstanceSettingObj {
     /// 获取光影包列表
+    ///
+    /// # 返回值
+    ///
+    /// 返回光影包列表（读取失败的文件会记录日志并跳过）
     pub async fn get_shaderpacks(&self) -> Vec<ShaderpackObj> {
         let path = self.get_shaderpacks_path();
         let files = path_helper::get_files(path);

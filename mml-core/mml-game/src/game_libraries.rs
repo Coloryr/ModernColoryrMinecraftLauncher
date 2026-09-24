@@ -1,4 +1,5 @@
-/// 游戏实例运行库相关
+//! 游戏实例运行库相关
+
 use std::{
     collections::{HashMap, HashSet},
     path::Path,
@@ -25,8 +26,14 @@ use crate::{
 
 impl GameArgObj {
     /// 创建游戏运行库项目
+    ///
+    /// # 参数
+    ///
     /// - `native`: 本地库路径
     /// - `game`: 游戏实例
+    ///
+    /// # 返回值
+    ///
     /// 返回需要下载的文件列表
     pub async fn build_game_libraries(
         &self,
@@ -167,6 +174,16 @@ impl GameArgObj {
 }
 
 /// 处理单个库项目
+///
+/// # 参数
+///
+/// - `item`: 运行库信息
+/// - `list`: 下载项列表（并发写入）
+/// - `keys`: 已处理运行库的 SHA1 集合（去重）
+/// - `natives`: 原生库键集合
+/// - `natives_arm`: ARM 原生库键列表
+/// - `native`: 原生库解压路径
+/// - `game`: 游戏实例（目录回退查找用）
 fn process_one_library(
     item: &GameLibrariesObj,
     list: &Mutex<Vec<FileItemObj>>,

@@ -1,3 +1,5 @@
+//! 服务器整合包信息 DTO
+
 use mml_config::config_obj::{RunArgObj, WindowSettingObj};
 use serde::{Deserialize, Serialize};
 
@@ -10,6 +12,7 @@ use crate::{
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct ServerPackObj {
+    /// 实例名
     #[serde(rename = "Name")]
     pub name: String,
     /// 游戏版本
@@ -82,8 +85,10 @@ pub struct ServerArchiveItemObj {
     /// 下载地址
     #[serde(rename = "Url")]
     pub url: String,
+    /// SHA1 校验
     #[serde(rename = "Sha1")]
     pub sha1: Option<String>,
+    /// SHA256 校验
     #[serde(rename = "Sha256")]
     pub sha256: Option<String>,
 }
@@ -116,10 +121,10 @@ pub struct ServerItemObj {
     /// 下载地址
     #[serde(rename = "Url")]
     pub url: Option<String>,
-    /// 文件校验
+    /// SHA1 校验
     #[serde(rename = "Sha1")]
     pub sha1: Option<String>,
-    /// 文件校验
+    /// SHA256 校验
     #[serde(rename = "Sha256")]
     pub sha256: Option<String>,
 }

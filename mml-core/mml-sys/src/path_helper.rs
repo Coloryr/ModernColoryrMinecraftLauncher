@@ -31,6 +31,10 @@ use mml_names::i18_items::error_type::{CoreResult, ErrorData, ErrorType, FileSys
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
 
 /// 提升权限
+///
+/// # 返回值
+///
+/// 命令执行成功返回 `Ok(())`，失败时返回相应错误
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 pub fn chmod(path: &str) -> io::Result<()> {
     let mut child = Command::new("sh")
@@ -50,6 +54,10 @@ pub fn chmod(path: &str) -> io::Result<()> {
 }
 
 /// 提升Java文件夹权限
+///
+/// # 返回值
+///
+/// 命令执行成功返回 `Ok(())`，失败时返回相应错误
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 pub fn per_java_chmod(path: &str) -> io::Result<()> {
     let mut child = Command::new("sh")
@@ -75,6 +83,10 @@ pub fn per_java_chmod(path: &str) -> io::Result<()> {
 }
 
 /// 获取回收站路径
+///
+/// # 返回值
+///
+/// 返回回收站 files 目录路径（不存在时自动创建）
 #[cfg(target_os = "linux")]
 fn get_trash_files_path() -> PathBuf {
     let data_home = env::var("XDG_DATA_HOME")
@@ -90,6 +102,10 @@ fn get_trash_files_path() -> PathBuf {
 }
 
 /// 获取回收站路径
+///
+/// # 返回值
+///
+/// 返回回收站 info 目录路径（不存在时自动创建）
 #[cfg(target_os = "linux")]
 fn get_trash_info_path() -> PathBuf {
     let data_home = env::var("XDG_DATA_HOME")
@@ -105,6 +121,10 @@ fn get_trash_info_path() -> PathBuf {
 }
 
 /// 将文件夹挪到回收站
+///
+/// # 返回值
+///
+/// 路径不存在时直接返回 `Ok(())`；挪入回收站成功返回 `Ok(())`，失败返回相应错误
 pub fn move_to_trash<P: AsRef<Path>>(dir: P) -> CoreResult<()> {
     // 检查路径是否存在
     if !dir.as_ref().exists() {
@@ -133,6 +153,10 @@ pub fn move_to_trash<P: AsRef<Path>>(dir: P) -> CoreResult<()> {
 }
 
 /// 将文件夹挪到回收站
+///
+/// # 返回值
+///
+/// 移动成功返回 `Ok(true)`，IO 失败时返回相应错误
 #[cfg(target_os = "linux")]
 fn move_to_trash_linux(dir: &str) -> io::Result<bool> {
     use std::time::SystemTime;
@@ -192,6 +216,10 @@ fn move_to_trash_linux(dir: &str) -> io::Result<bool> {
 }
 
 /// 将文件夹挪到回收站
+///
+/// # 返回值
+///
+/// osascript 执行成功返回 `Ok(true)`，失败返回 `Ok(false)` 或相应错误
 #[cfg(target_os = "macos")]
 fn move_to_trash_macos(dir: &str) -> io::Result<bool> {
     let escaped_dir = dir
@@ -214,6 +242,10 @@ fn move_to_trash_macos(dir: &str) -> io::Result<bool> {
 }
 
 /// 将文件夹挪到回收站
+///
+/// # 返回值
+///
+/// 成功返回 `Ok(())`，用户取消返回 `ErrorType::TaskCancel`，其他失败返回相应错误
 #[cfg(target_os = "windows")]
 fn move_to_trash_windows<P: AsRef<Path>>(dir: P) -> CoreResult<()> {
     use std::os::windows::ffi::OsStrExt;
@@ -275,6 +307,10 @@ fn move_to_trash_windows<P: AsRef<Path>>(dir: P) -> CoreResult<()> {
 /// 检查非法名字
 ///
 /// - `name`: 需要检查的名字
+///
+/// # 返回值
+///
+/// 名字非法（空、全点号、超 80 字节或含非法字符）返回 true
 pub fn file_has_invalid_chars(name: &str) -> bool {
     if name.is_empty() || name.chars().all(|c| c == '.') {
         return true;
@@ -290,6 +326,10 @@ pub fn file_has_invalid_chars(name: &str) -> bool {
 /// 获取所有文件
 ///
 /// - `path`: 需要计算的路径
+///
+/// # 返回值
+///
+/// 返回递归收集的文件路径列表
 pub fn get_all_files<P: AsRef<Path>>(local: P) -> Vec<PathBuf> {
     let mut files = Vec::new();
 
@@ -310,6 +350,10 @@ pub fn get_all_files<P: AsRef<Path>>(local: P) -> Vec<PathBuf> {
 /// 获取当前目录所有文件
 ///
 /// - `path`: 需要获取的路径
+///
+/// # 返回值
+///
+/// 返回当前目录下的文件路径列表（不含子目录）
 pub fn get_files<P: AsRef<Path>>(path: P) -> Vec<PathBuf> {
     let mut files = Vec::new();
 
@@ -327,6 +371,10 @@ pub fn get_files<P: AsRef<Path>>(path: P) -> Vec<PathBuf> {
 /// 获取文件夹下面最后写入的文件
 ///
 /// - `path`: 获取的目录
+///
+/// # 返回值
+///
+/// 返回最近写入的文件路径，目录为空时返回 `Ok(None)`
 pub fn get_last_written_file<P: AsRef<Path>>(path: P) -> CoreResult<Option<PathBuf>> {
     let entries = fs::read_dir(&path).map_err(|err| {
         ErrorType::FileSystemError(FileSystemErrorData {
@@ -367,6 +415,10 @@ pub fn get_last_written_file<P: AsRef<Path>>(path: P) -> CoreResult<Option<PathB
 /// 获取目录占用大小
 ///
 /// - `path`: 需要获取的路径
+///
+/// # 返回值
+///
+/// 返回目录总大小（字节）
 pub fn get_folder_size<P: AsRef<Path>>(path: P) -> u64 {
     let mut size = 0;
 
@@ -387,6 +439,10 @@ pub fn get_folder_size<P: AsRef<Path>>(path: P) -> u64 {
 /// 获取当前目录所有目录
 ///
 /// - `path`: 需要获取的路径
+///
+/// # 返回值
+///
+/// 返回当前目录下的子目录路径列表
 pub fn get_dirs<P: AsRef<Path>>(path: P) -> Vec<PathBuf> {
     let mut dirs = Vec::new();
 
@@ -406,6 +462,10 @@ pub fn get_dirs<P: AsRef<Path>>(path: P) -> Vec<PathBuf> {
 ///
 /// - `input`: 目标文件
 /// - `output`: 输出文件
+///
+/// # 返回值
+///
+/// 复制成功返回 `Ok(())`，失败返回相应错误
 pub fn copy_file<P: AsRef<Path>>(input: P, output: P) -> CoreResult<()> {
     fs::copy(&input, output).map_err(|err| {
         ErrorType::FileSystemError(FileSystemErrorData {
@@ -420,6 +480,10 @@ pub fn copy_file<P: AsRef<Path>>(input: P, output: P) -> CoreResult<()> {
 ///
 /// - `input`: 目标文件
 /// - `output`: 输出文件
+///
+/// # 返回值
+///
+/// 复制成功返回 `Ok(())`，失败返回相应错误
 pub async fn copy_file_async<P: AsRef<Path>>(input: P, output: P) -> CoreResult<()> {
     tfs::copy(&input, output).await.map_err(|err| {
         ErrorType::FileSystemError(FileSystemErrorData {
@@ -434,6 +498,10 @@ pub async fn copy_file_async<P: AsRef<Path>>(input: P, output: P) -> CoreResult<
 ///
 /// - `input`: 目标文件
 /// - `output`: 输出文件
+///
+/// # 返回值
+///
+/// 移动成功返回 `Ok(())`（跨设备时自动回退为复制+删除），失败返回相应错误
 pub fn move_file<P: AsRef<Path>>(input: P, output: P) -> CoreResult<()> {
     if let Some(parent) = output.as_ref().parent() {
         create_dir_all(parent)?;
@@ -459,6 +527,10 @@ pub fn move_file<P: AsRef<Path>>(input: P, output: P) -> CoreResult<()> {
 ///
 /// - `input`: 目标文件
 /// - `output`: 输出文件
+///
+/// # 返回值
+///
+/// 移动成功返回 `Ok(())`（跨设备时自动回退为复制+删除），失败返回相应错误
 pub async fn move_file_async<P: AsRef<Path>>(input: P, output: P) -> CoreResult<()> {
     if let Some(parent) = output.as_ref().parent() {
         create_dir_all(parent)?;
@@ -484,6 +556,10 @@ pub async fn move_file_async<P: AsRef<Path>>(input: P, output: P) -> CoreResult<
 ///
 /// - `input`: 目标目录
 /// - `output`: 输出目录
+///
+/// # 返回值
+///
+/// 复制成功返回 `Ok(())`，失败返回相应错误
 pub fn copy_dir<P: AsRef<Path>>(input: P, output: P) -> CoreResult<()> {
     create_dir_all(&output)?;
 
@@ -515,6 +591,10 @@ pub fn copy_dir<P: AsRef<Path>>(input: P, output: P) -> CoreResult<()> {
 ///
 /// - `input`: 目标目录
 /// - `output`: 输出目录
+///
+/// # 返回值
+///
+/// 复制成功返回 `Ok(())`，失败返回相应错误
 pub async fn copy_dir_async<P: AsRef<Path>>(from: P, to: P) -> CoreResult<()> {
     create_dir_all(&to)?;
 
@@ -554,6 +634,10 @@ pub async fn copy_dir_async<P: AsRef<Path>>(from: P, to: P) -> CoreResult<()> {
 ///
 /// - `path`: 查找的目录
 /// - `name`: 查找的文件名
+///
+/// # 返回值
+///
+/// 返回首个同名文件的路径，未找到时返回 `None`
 pub fn search_file<P: AsRef<Path>>(path: P, name: &str) -> Option<PathBuf> {
     let files = get_all_files(path);
     files.into_iter().find(|f| f.file_name().unwrap() == name)
@@ -562,6 +646,10 @@ pub fn search_file<P: AsRef<Path>>(path: P, name: &str) -> Option<PathBuf> {
 /// 读文件
 ///
 /// - `file`: 文件路径
+///
+/// # 返回值
+///
+/// 返回只读文件句柄，打开失败返回相应错误
 pub fn open_read<P: AsRef<Path>>(file: P) -> CoreResult<fs::File> {
     match fs::File::open(&file) {
         Ok(ok) => Ok(ok),
@@ -575,6 +663,10 @@ pub fn open_read<P: AsRef<Path>>(file: P) -> CoreResult<fs::File> {
 /// 以读写方式打开已存在的文件（不创建、不截断）
 ///
 /// - `file`: 文件路径
+///
+/// # 返回值
+///
+/// 返回读写文件句柄，打开失败返回相应错误
 pub fn open_read_write<P: AsRef<Path>>(file: P) -> CoreResult<fs::File> {
     match fs::OpenOptions::new().read(true).write(true).open(&file) {
         Ok(ok) => Ok(ok),
@@ -585,9 +677,13 @@ pub fn open_read_write<P: AsRef<Path>>(file: P) -> CoreResult<fs::File> {
     }
 }
 
-/// 异步读文件
+/// 异步打开只读文件
 ///
 /// - `file`: 文件路径
+///
+/// # 返回值
+///
+/// 返回异步只读文件句柄，打开失败返回相应错误
 pub async fn open_read_async<P: AsRef<Path>>(file: P) -> CoreResult<tfs::File> {
     match tfs::File::open(&file).await {
         Ok(ok) => Ok(ok),
@@ -601,6 +697,10 @@ pub async fn open_read_async<P: AsRef<Path>>(file: P) -> CoreResult<tfs::File> {
 /// 写文件
 ///
 /// - `file`: 文件路径
+///
+/// # 返回值
+///
+/// 返回写入文件句柄（父目录自动创建、写前截断），打开失败返回相应错误
 pub fn open_write<P: AsRef<Path>>(file: P) -> CoreResult<fs::File> {
     if let Some(parent) = file.as_ref().parent() {
         if let Err(err) = fs::create_dir_all(parent) {
@@ -630,6 +730,10 @@ pub fn open_write<P: AsRef<Path>>(file: P) -> CoreResult<fs::File> {
 /// 异步写文件
 ///
 /// - `file`: 文件路径
+///
+/// # 返回值
+///
+/// 返回写入文件句柄（父目录自动创建、写前截断），打开失败返回相应错误
 pub async fn open_write_async<P: AsRef<Path>>(file: P) -> CoreResult<tfs::File> {
     if let Some(parent) = file.as_ref().parent() {
         create_dir_all(parent)?;
@@ -654,6 +758,10 @@ pub async fn open_write_async<P: AsRef<Path>>(file: P) -> CoreResult<tfs::File> 
 /// 创建所有目录
 ///
 /// - `path`: 目录
+///
+/// # 返回值
+///
+/// 创建成功（含已存在）返回 `Ok(())`，失败返回相应错误
 pub fn create_dir_all<P: AsRef<Path>>(path: P) -> CoreResult<()> {
     match fs::create_dir_all(&path) {
         Ok(_) => Ok(()),
@@ -667,6 +775,10 @@ pub fn create_dir_all<P: AsRef<Path>>(path: P) -> CoreResult<()> {
 /// 继续写文件
 ///
 /// - `file`: 文件路径
+///
+/// # 返回值
+///
+/// 返回追加写文件句柄（父目录自动创建、不存在则创建），打开失败返回相应错误
 pub fn open_append<P: AsRef<Path>>(file: P) -> CoreResult<fs::File> {
     if let Some(parent) = file.as_ref().parent() {
         create_dir_all(parent)?;
@@ -687,6 +799,10 @@ pub fn open_append<P: AsRef<Path>>(file: P) -> CoreResult<fs::File> {
 ///
 /// - `file`: 文件路径
 /// - `text`: 文本内容
+///
+/// # 返回值
+///
+/// 写入成功返回 `Ok(())`，失败返回相应错误
 pub fn write_text<P: AsRef<Path>>(file: P, text: &str) -> CoreResult<()> {
     let mut stream = open_write(&file)?;
     stream.write_all(text.as_bytes()).map_err(|err| {
@@ -703,6 +819,10 @@ pub fn write_text<P: AsRef<Path>>(file: P, text: &str) -> CoreResult<()> {
 ///
 /// - `file`: 文件路径
 /// - `text`: 文本内容
+///
+/// # 返回值
+///
+/// 写入成功返回 `Ok(())`，失败返回相应错误
 pub async fn write_text_async<P: AsRef<Path>>(file: P, text: String) -> CoreResult<()> {
     let mut stream = open_write_async(&file).await?;
 
@@ -719,6 +839,10 @@ pub async fn write_text_async<P: AsRef<Path>>(file: P, text: String) -> CoreResu
 /// 读文本
 ///
 /// - `file`: 文件路径
+///
+/// # 返回值
+///
+/// 返回文件文本内容，读取失败返回相应错误
 pub fn read_text<P: AsRef<Path>>(file: P) -> CoreResult<String> {
     let mut stream = open_read(&file)?;
     let mut content = String::new();
@@ -734,6 +858,10 @@ pub fn read_text<P: AsRef<Path>>(file: P) -> CoreResult<String> {
 /// 异步读文件
 ///
 /// - `file`: 文件路径
+///
+/// # 返回值
+///
+/// 返回文件文本内容，读取失败返回相应错误
 pub async fn read_text_async<P: AsRef<Path>>(file: P) -> CoreResult<String> {
     let mut stream = open_read_async(&file).await?;
     let mut content = String::new();
@@ -749,6 +877,10 @@ pub async fn read_text_async<P: AsRef<Path>>(file: P) -> CoreResult<String> {
 /// 读取byte数据
 ///
 /// - `file`: 文件路径
+///
+/// # 返回值
+///
+/// 返回文件字节内容，读取失败返回相应错误
 pub fn read_byte<P: AsRef<Path>>(file: P) -> CoreResult<Vec<u8>> {
     let mut stream = open_read(&file)?;
     let mut buffer = Vec::new();
@@ -764,6 +896,10 @@ pub fn read_byte<P: AsRef<Path>>(file: P) -> CoreResult<Vec<u8>> {
 /// 异步读取byte数据
 ///
 /// - `file`: 文件路径
+///
+/// # 返回值
+///
+/// 返回文件字节内容，读取失败返回相应错误
 pub async fn read_byte_async<P: AsRef<Path>>(file: P) -> CoreResult<Vec<u8>> {
     let mut stream = open_read(&file)?;
     let mut buffer = Vec::new();
@@ -779,6 +915,10 @@ pub async fn read_byte_async<P: AsRef<Path>>(file: P) -> CoreResult<Vec<u8>> {
 /// 删除文件
 ///
 /// - `file`: 文件路径
+///
+/// # 返回值
+///
+/// 目标是文件时删除并返回 `Ok(())`（目录不做任何事），删除失败返回相应错误
 pub fn delete<P: AsRef<Path>>(file: P) -> CoreResult<()> {
     if file.as_ref().is_file() {
         fs::remove_file(&file).map_err(|err| {
@@ -794,6 +934,10 @@ pub fn delete<P: AsRef<Path>>(file: P) -> CoreResult<()> {
 /// 异步删除文件
 ///
 /// - `file`: 文件路径
+///
+/// # 返回值
+///
+/// 目标是文件时删除并返回 `Ok(())`（目录不做任何事），删除失败返回相应错误
 pub async fn delete_async<P: AsRef<Path>>(file: P) -> CoreResult<()> {
     if file.as_ref().is_file() {
         tfs::remove_file(&file).await.map_err(|err| {
@@ -810,6 +954,10 @@ pub async fn delete_async<P: AsRef<Path>>(file: P) -> CoreResult<()> {
 ///
 /// - `file`: 文件路径
 /// - `data`: 数据
+///
+/// # 返回值
+///
+/// 写入成功返回 `Ok(())`，失败返回相应错误
 pub fn write_bytes<P: AsRef<Path>>(file: P, data: &[u8]) -> CoreResult<()> {
     let mut stream = open_write(&file)?;
     stream.write_all(data).map_err(|err| {
@@ -824,6 +972,10 @@ pub fn write_bytes<P: AsRef<Path>>(file: P, data: &[u8]) -> CoreResult<()> {
 ///
 /// - `file`: 文件路径
 /// - `data`: 数据
+///
+/// # 返回值
+///
+/// 写入成功返回 `Ok(())`，失败返回相应错误
 pub async fn write_bytes_async<P: AsRef<Path>>(file: P, data: &[u8]) -> CoreResult<()> {
     let mut stream = open_write_async(&file).await?;
     stream.write_all(data).await.map_err(|err| {
@@ -838,6 +990,10 @@ pub async fn write_bytes_async<P: AsRef<Path>>(file: P, data: &[u8]) -> CoreResu
 ///
 /// - `file`: 文件路径
 /// - `reader`: 数据流
+///
+/// # 返回值
+///
+/// 写入成功返回 `Ok(())`，失败返回相应错误
 pub fn write_stream<P: AsRef<Path>, R: Read>(file: P, mut reader: R) -> CoreResult<()> {
     let mut stream = open_write(&file)?;
     io::copy(&mut reader, &mut stream).map_err(|err| {
@@ -853,6 +1009,10 @@ pub fn write_stream<P: AsRef<Path>, R: Read>(file: P, mut reader: R) -> CoreResu
 ///
 /// - `file`: 文件路径
 /// - `reader`: 数据流
+///
+/// # 返回值
+///
+/// 写入成功返回 `Ok(())`，失败返回相应错误
 pub async fn write_stream_async<P: AsRef<Path>, R: AsyncRead + Unpin>(
     path: P,
     mut reader: R,
@@ -870,11 +1030,19 @@ pub async fn write_stream_async<P: AsRef<Path>, R: AsyncRead + Unpin>(
 }
 
 /// 替换文件名非法字符
+///
+/// # 返回值
+///
+/// 返回非法字符（`<>:"/\|?*\0`）替换为 `_` 后的名字
 pub fn replace_file_name(name: &str) -> String {
     name.replace(|c: char| "<>:\"/\\|?*\0".contains(c), "_")
 }
 
 /// 替换文件名非法字符
+///
+/// # 返回值
+///
+/// 返回替换后的路径名（Windows 额外替换 `<>:"/\|?*`，其他平台仅替换 `\0`）
 pub fn replace_path_name(name: &str) -> String {
     #[cfg(not(windows))]
     let invalid_chars: Vec<char> = vec!['\0'];

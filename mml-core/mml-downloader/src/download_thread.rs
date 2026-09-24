@@ -351,6 +351,10 @@ fn download(index: u32, mut obj: DownloadObj) {
 /// - `obj`: 下载项目
 /// - `resp`: HTTP 响应流
 /// - `file`: 目标文件句柄
+///
+/// # 返回值
+///
+/// 写入与校验成功返回 `Ok(())`；任务被取消、写入失败或大小/哈希校验不通过时返回相应错误
 async fn write_file(
     index: u32,
     obj: &mut DownloadObj,
@@ -378,7 +382,6 @@ async fn write_file(
         match resp.chunk().await {
             Ok(None) => break,
             Ok(Some(data)) => {
-                // 写入文件
                 file.write_all(&data).map_err(|err| {
                     StreamError(ErrorData {
                         error: err.to_string(),
@@ -433,6 +436,10 @@ async fn write_file(
 /// - `file`: 文件路径
 /// - `hash`: 期望的哈希值
 /// - `stream`: 文件读取流
+///
+/// # 返回值
+///
+/// 校验通过返回 `Ok(())`；不匹配或哈希计算失败时返回相应错误
 fn check_hash<R: Read + Seek>(file: &PathBuf, hash: &FileHash, stream: &mut R) -> CoreResult<()> {
     match hash {
         FileHash::None => Ok(()),

@@ -1,3 +1,18 @@
+//! 方块 / 物品贴图离线渲染模块
+//!
+//! 从 Minecraft 客户端 jar 提取模型与贴图，离线渲染出创造模式物品栏
+//! 使用的方块（等轴测 3D）与物品（平面精灵）图标 PNG，并提供图标路径、
+//! 创造分组、语言翻译等查询接口。
+//!
+//! # 子模块
+//!
+//! | 模块 | 用途 |
+//! |------|------|
+//! | [`block`] | 方块图标渲染（等轴测 3D） |
+//! | [`gpu`] | GPU 渲染支持 |
+//! | [`item`] | 物品图标渲染（平面） |
+//! | [`model`] | 游戏模型解析 |
+
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
@@ -79,6 +94,13 @@ static LANGS: LazyLock<RwLock<HashMap<Lang, HashMap<String, String>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 
 /// 读取方块语言翻译（数据来自blocks/langs下的语言文件，随load_blocks从客户端jar提取）
+///
+/// - `lang`: 目标语言
+/// - `key`: 语言键（如 `block.minecraft.stone`）
+///
+/// # 返回值
+///
+/// 返回翻译文本，语言键不存在或语言文件未提取时返回 `None`
 pub fn get_lang(lang: Lang, key: &str) -> Option<String> {
     // 命中缓存
     if let Some(map) = LANGS.read().unwrap().get(&lang) {
@@ -109,6 +131,12 @@ static BLOCKS: LazyLock<RwLock<BlocksObj>> = LazyLock::new(|| RwLock::new(Blocks
 static ITEMS: LazyLock<RwLock<ItemsObj>> = LazyLock::new(|| RwLock::new(ItemsObj::default()));
 
 /// 初始化
+///
+/// - `path`: 数据根目录，方块 / 语言 / 物品目录及数据文件都创建在其下
+///
+/// # 返回值
+///
+/// 目录创建失败时返回相应错误，成功返回 `Ok(())`
 pub fn init<P: AsRef<Path>>(path: P) -> CoreResult<()> {
     BLOCK_FILE.get_or_init(|| path.as_ref().join(names::BLOCK_FILE));
     ITEM_FILE.get_or_init(|| path.as_ref().join(names::ITEM_FILE));
@@ -199,6 +227,12 @@ pub fn save() -> CoreResult<()> {
 }
 
 /// 获取方块图片路径
+///
+/// - `id`: 方块ID（`minecraft:stone` 或裸 ID `stone`）
+///
+/// # 返回值
+///
+/// 返回图标 PNG 路径，方块未渲染时返回 `None`
 pub fn get_block_path(id: &str) -> Option<PathBuf> {
     let dir = BLOCK_DIR.get().unwrap();
     let binding = BLOCKS.read().unwrap();
@@ -318,6 +352,12 @@ pub(crate) fn blocks_read() -> std::sync::RwLockReadGuard<'static, BlocksObj> {
 }
 
 /// 获取物品图片路径
+///
+/// - `id`: 物品ID（`minecraft:apple` 或裸 ID `apple`）
+///
+/// # 返回值
+///
+/// 返回图标 PNG 路径，物品未渲染时返回 `None`
 pub fn get_item_path(id: &str) -> Option<PathBuf> {
     let dir = ITEM_DIR.get().unwrap();
     let binding = ITEMS.read().unwrap();

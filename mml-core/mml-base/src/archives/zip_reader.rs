@@ -30,6 +30,12 @@ pub(crate) struct ZipReader {
 
 impl ZipReader {
     /// 压缩目录为 zip 文件。
+    ///
+    /// * `archive_file` — 压缩包输出路径。
+    /// * `pack_dir` — 需要打包的源目录。
+    /// * `root_path` — 相对根路径，设置后文件在包内的路径相对于此。
+    /// * `filter` — 可选的排除子串列表，匹配的文件将被跳过。
+    /// * `gui` — 可选的进度回调。
     pub(crate) fn compress(
         archive_file: &Path,
         pack_dir: &Path,
@@ -46,6 +52,10 @@ impl ZipReader {
     }
 
     /// 解压 zip 文件到指定目录。
+    ///
+    /// * `archive_file` — 压缩包文件路径。
+    /// * `output_dir` — 解压输出目录。
+    /// * `gui` — 可选的进度回调。
     pub(crate) fn decompress(
         archive_file: &Path,
         output_dir: &Path,
@@ -56,6 +66,12 @@ impl ZipReader {
     }
 
     /// 压缩实现（带进度）。
+    ///
+    /// * `process` — 进度追踪器。
+    /// * `archive_file` — 压缩包输出路径。
+    /// * `pack_dir` — 需要打包的源目录。
+    /// * `root_path` — 相对根路径，设置后文件在包内的路径相对于此。
+    /// * `filter` — 可选的排除子串列表，匹配的文件将被跳过。
     fn zip(
         process: &ArchiveProcess,
         archive_file: &Path,
@@ -121,6 +137,10 @@ impl ZipReader {
     }
 
     /// 解压实现（带进度）。
+    ///
+    /// * `process` — 进度追踪器。
+    /// * `archive_file` — 压缩包文件路径。
+    /// * `output_dir` — 解压输出目录。
     fn unzip(process: &ArchiveProcess, archive_file: &Path, output_dir: &Path) -> CoreResult<()> {
         let file = path_helper::open_read(archive_file)?;
         let mut archive = ZipArchive::new(file).map_err(|err| {
@@ -272,6 +292,10 @@ impl ZipReader {
         Ok(())
     }
 
+    /// 打开 zip 文件并缓存中央目录。
+    ///
+    /// * `file` — 已打开的 zip 文件句柄。
+    /// * `path` — 压缩包磁盘路径。
     pub(crate) fn new(file: fs::File, path: PathBuf) -> CoreResult<Self> {
         let zip = ZipArchive::new(file.try_clone().map_err(|err| {
             ErrorType::FileSystemError(FileSystemErrorData {
@@ -478,6 +502,7 @@ impl ArchiveHandle for ZipReader {
     }
 }
 
+/// 将 zip 时间字段转换为 chrono 时间（字段无效时返回 `None`）
 fn generate_chrono_datetime(time: &DateTime) -> Option<chrono::NaiveDateTime> {
     if let Some(chrono_date) =
         chrono::NaiveDate::from_ymd_opt(time.year().into(), time.month().into(), time.day().into())
@@ -492,6 +517,7 @@ fn generate_chrono_datetime(time: &DateTime) -> Option<chrono::NaiveDateTime> {
     None
 }
 
+/// 将 zip 时间字段转换为系统时间（字段无效时返回 `None`）
 fn datetime_to_systemtime(time: &DateTime) -> Option<std::time::SystemTime> {
     if let Some(chrono_datetime) = generate_chrono_datetime(time) {
         let time = chrono::DateTime::<chrono::Utc>::from_naive_utc_and_offset(
@@ -504,6 +530,9 @@ fn datetime_to_systemtime(time: &DateTime) -> Option<std::time::SystemTime> {
 }
 
 /// 创建符号链接（跨平台）
+///
+/// * `target_path` — 符号链接的创建路径。
+/// * `link_target` — 链接目标。
 #[cfg(unix)]
 fn make_symlink(target_path: &Path, link_target: &str) -> io::Result<()> {
     std::os::unix::fs::symlink(link_target, target_path)
@@ -534,6 +563,9 @@ fn make_symlink(target_path: &Path, link_target: &str) -> io::Result<()> {
 }
 
 /// 设置文件/目录的 Unix 权限（仅 Unix）
+///
+/// * `path` — 目标文件/目录路径。
+/// * `mode` — 权限位（如 `0o644`）。
 #[cfg(unix)]
 fn set_perms(path: &Path, mode: u32) -> io::Result<()> {
     use std::os::unix::fs::PermissionsExt;

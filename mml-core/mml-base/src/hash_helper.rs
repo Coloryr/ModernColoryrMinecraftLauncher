@@ -17,9 +17,13 @@ use digest::{Digest, DynDigest};
 
 /// 哈希算法类型
 pub enum HashType {
+    /// MD5
     Md5,
+    /// SHA1
     Sha1,
+    /// SHA256
     Sha256,
+    /// SHA512
     Sha512,
 }
 

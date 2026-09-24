@@ -54,6 +54,8 @@ impl NbtEnd {
     }
 
     /// 判断另一个 NBT 标签是否也是 End 类型
+    ///
+    /// - `nbt`: 待比较的 NBT 标签
     pub fn eq(&self, nbt: &NbtType) -> bool {
         matches!(nbt, NbtType::End(_))
     }
@@ -94,11 +96,15 @@ impl Default for NbtByte {
 
 impl NbtByte {
     /// 创建 Byte 标签
+    ///
+    /// - `data`: 字节数据
     pub fn new(data: u8) -> Self {
         Self { data }
     }
 
     /// 判断另一个 NBT 标签是否为 Byte 类型且值相等
+    ///
+    /// - `nbt`: 待比较的 NBT 标签
     pub fn eq(&self, nbt: &NbtType) -> bool {
         match nbt {
             NbtType::Byte(nbt) => nbt.data == self.data,
@@ -150,11 +156,15 @@ impl Default for NbtShort {
 
 impl NbtShort {
     /// 创建 Short 标签
+    ///
+    /// - `data`: 短整型数据
     pub fn new(data: i16) -> Self {
         Self { data }
     }
 
     /// 判断另一个 NBT 标签是否为 Short 类型且值相等
+    ///
+    /// - `nbt`: 待比较的 NBT 标签
     pub fn eq(&self, nbt: &NbtType) -> bool {
         match nbt {
             NbtType::Short(nbt) => nbt.data == self.data,
@@ -206,11 +216,15 @@ impl Default for NbtInt {
 
 impl NbtInt {
     /// 创建 Int 标签
+    ///
+    /// - `data`: 整型数据
     pub fn new(data: i32) -> Self {
         Self { data }
     }
 
     /// 判断另一个 NBT 标签是否为 Int 类型且值相等
+    ///
+    /// - `nbt`: 待比较的 NBT 标签
     pub fn eq(&self, nbt: &NbtType) -> bool {
         match nbt {
             NbtType::Int(nbt) => nbt.data == self.data,
@@ -262,11 +276,15 @@ impl Default for NbtLong {
 
 impl NbtLong {
     /// 创建 Long 标签
+    ///
+    /// - `data`: 长整型数据
     pub fn new(data: i64) -> Self {
         Self { data }
     }
 
     /// 判断另一个 NBT 标签是否为 Long 类型且值相等
+    ///
+    /// - `nbt`: 待比较的 NBT 标签
     pub fn eq(&self, nbt: &NbtType) -> bool {
         match nbt {
             NbtType::Long(nbt) => nbt.data == self.data,
@@ -318,11 +336,15 @@ impl Default for NbtFloat {
 
 impl NbtFloat {
     /// 创建 Float 标签
+    ///
+    /// - `data`: 浮点数据
     pub fn new(data: f32) -> Self {
         Self { data }
     }
 
     /// 判断另一个 NBT 标签是否为 Float 类型且值相等
+    ///
+    /// - `nbt`: 待比较的 NBT 标签
     pub fn eq(&self, nbt: &NbtType) -> bool {
         match nbt {
             NbtType::Float(nbt) => nbt.data == self.data,
@@ -374,11 +396,15 @@ impl Default for NbtDouble {
 
 impl NbtDouble {
     /// 创建 Double 标签
+    ///
+    /// - `data`: 双精度浮点数据
     pub fn new(data: f64) -> Self {
         Self { data }
     }
 
     /// 判断另一个 NBT 标签是否为 Double 类型且值相等
+    ///
+    /// - `nbt`: 待比较的 NBT 标签
     pub fn eq(&self, nbt: &NbtType) -> bool {
         match nbt {
             NbtType::Double(nbt) => nbt.data == self.data,
@@ -431,11 +457,15 @@ impl Default for NbtByteArray {
 
 impl NbtByteArray {
     /// 创建 ByteArray 标签
+    ///
+    /// - `data`: 字节数组数据
     pub fn new(data: Vec<u8>) -> Self {
         Self { data }
     }
 
     /// 判断另一个 NBT 标签是否为 ByteArray 类型且数据相等
+    ///
+    /// - `nbt`: 待比较的 NBT 标签
     pub fn eq(&self, nbt: &NbtType) -> bool {
         match nbt {
             NbtType::ByteArray(nbt) => nbt.data == self.data,
@@ -495,11 +525,15 @@ impl Default for NbtString {
 
 impl NbtString {
     /// 创建 String 标签
+    ///
+    /// - `data`: 字符串数据
     pub fn new(data: String) -> Self {
         Self { data }
     }
 
     /// 判断另一个 NBT 标签是否为 String 类型且值相等
+    ///
+    /// - `nbt`: 待比较的 NBT 标签
     pub fn eq(&self, nbt: &NbtType) -> bool {
         match nbt {
             NbtType::String(nbt) => nbt.data == self.data,
@@ -584,6 +618,8 @@ impl NbtList {
     }
 
     /// 设置列表的元素类型（通过 NbtType 实例），同时清空已有数据
+    ///
+    /// - `nbt_type`: 元素类型实例
     pub fn set_type(&mut self, nbt_type: NbtType) {
         self.nbt_num = nbt_type.get_num();
         self.data.clear();
@@ -592,6 +628,8 @@ impl NbtList {
     /// 设置列表的元素类型（通过类型序号），同时清空已有数据
     ///
     /// 如果序号不在合法范围（0–12）内，则忽略此操作。
+    ///
+    /// - `nbt_num`: 列表元素的 NBT 类型序号（0–12）
     pub fn set_num(&mut self, nbt_num: u8) {
         if is_nbt_num(nbt_num) {
             self.nbt_num = nbt_num;
@@ -600,6 +638,8 @@ impl NbtList {
     }
 
     /// 向列表中添加一个元素
+    ///
+    /// - `nbt`: 待添加的元素
     ///
     /// # 返回值
     ///
@@ -616,11 +656,15 @@ impl NbtList {
     }
 
     /// 移除并返回指定索引的元素
+    ///
+    /// - `index`: 元素索引
     pub fn remove(&mut self, index: usize) -> NbtType {
         self.data.remove(index)
     }
 
     /// 获取指定索引元素的不可变引用
+    ///
+    /// - `index`: 元素索引
     pub fn get_item(&self, index: usize) -> Option<&NbtType> {
         self.data.get(index)
     }
@@ -636,6 +680,8 @@ impl NbtList {
     }
 
     /// 判断另一个 NBT 标签是否为 List 类型且元素类型、数量和值均相等
+    ///
+    /// - `nbt`: 待比较的 NBT 标签
     pub fn eq(&self, nbt: &NbtType) -> bool {
         match nbt {
             NbtType::List(nbt) => {
@@ -759,6 +805,8 @@ impl NbtCompound {
     /// 判断另一个 NBT 标签是否为 Compound 类型且所有键值对一致
     ///
     /// 比较逻辑：先检查键的数量是否相同，再逐个键检查值是否调用各自的 `eq` 方法。
+    ///
+    /// - `nbt`: 待比较的 NBT 标签
     pub fn eq(&self, nbt: &NbtType) -> bool {
         match nbt {
             NbtType::Compound(nbt) => {
@@ -785,16 +833,22 @@ impl NbtCompound {
     }
 
     /// 获取指定键对应的 NBT 标签的不可变引用
+    ///
+    /// - `key`: 键名
     pub fn get(&self, key: &str) -> Option<&NbtType> {
         self.data.get(key)
     }
 
     /// 获取指定键对应的 NBT 标签的可变引用
+    ///
+    /// - `key`: 键名
     pub fn get_mut(&mut self, key: &str) -> Option<&mut NbtType> {
         self.data.get_mut(key)
     }
 
     /// 从 Compound 中提取 `&NbtByteArray`，自动进行类型匹配
+    ///
+    /// - `key`: 键名
     pub fn get_byte_array(&self, key: &str) -> Option<&NbtByteArray> {
         match self.get(key) {
             Some(NbtType::ByteArray(v)) => Some(v),
@@ -803,6 +857,8 @@ impl NbtCompound {
     }
 
     /// 从 Compound 中提取 `&mut NbtByteArray`，自动进行类型匹配
+    ///
+    /// - `key`: 键名
     pub fn get_byte_array_mut(&mut self, key: &str) -> Option<&mut NbtByteArray> {
         match self.get_mut(key) {
             Some(NbtType::ByteArray(v)) => Some(v),
@@ -811,6 +867,8 @@ impl NbtCompound {
     }
 
     /// 从 Compound 中提取 `&NbtLongArray`，自动进行类型匹配
+    ///
+    /// - `key`: 键名
     pub fn get_long_array(&self, key: &str) -> Option<&NbtLongArray> {
         match self.get(key) {
             Some(NbtType::LongArray(v)) => Some(v),
@@ -819,6 +877,8 @@ impl NbtCompound {
     }
 
     /// 从 Compound 中提取 `&mut NbtLongArray`，自动进行类型匹配
+    ///
+    /// - `key`: 键名
     pub fn get_long_array_mut(&mut self, key: &str) -> Option<&mut NbtLongArray> {
         match self.get_mut(key) {
             Some(NbtType::LongArray(v)) => Some(v),
@@ -827,6 +887,8 @@ impl NbtCompound {
     }
 
     /// 从 Compound 中提取 `&NbtCompound`（嵌套 Compound），自动进行类型匹配
+    ///
+    /// - `key`: 键名
     pub fn get_compound(&self, key: &str) -> Option<&NbtCompound> {
         match self.get(key) {
             Some(NbtType::Compound(v)) => Some(v),
@@ -835,6 +897,8 @@ impl NbtCompound {
     }
 
     /// 从 Compound 中提取 `&mut NbtCompound`（嵌套 Compound），自动进行类型匹配
+    ///
+    /// - `key`: 键名
     pub fn get_compound_mut(&mut self, key: &str) -> Option<&mut NbtCompound> {
         match self.get_mut(key) {
             Some(NbtType::Compound(v)) => Some(v),
@@ -843,6 +907,8 @@ impl NbtCompound {
     }
 
     /// 从 Compound 中提取 `i64` 值（TAG_Long 的数据部分）
+    ///
+    /// - `key`: 键名
     pub fn get_long(&self, key: &str) -> Option<i64> {
         match self.get(key) {
             Some(NbtType::Long(v)) => Some(v.data),
@@ -851,6 +917,8 @@ impl NbtCompound {
     }
 
     /// 从 Compound 中提取 `i16` 值（TAG_Short 的数据部分）
+    ///
+    /// - `key`: 键名
     pub fn get_short(&self, key: &str) -> Option<i16> {
         match self.get(key) {
             Some(NbtType::Short(v)) => Some(v.data),
@@ -859,6 +927,8 @@ impl NbtCompound {
     }
 
     /// 从 Compound 中提取 `i32` 值（TAG_Int 的数据部分）
+    ///
+    /// - `key`: 键名
     pub fn get_int(&self, key: &str) -> Option<i32> {
         match self.get(key) {
             Some(NbtType::Int(v)) => Some(v.data),
@@ -867,6 +937,8 @@ impl NbtCompound {
     }
 
     /// 从 Compound 中提取 `u8` 值（TAG_Byte 的数据部分）
+    ///
+    /// - `key`: 键名
     pub fn get_byte(&self, key: &str) -> Option<u8> {
         match self.get(key) {
             Some(NbtType::Byte(v)) => Some(v.data),
@@ -875,6 +947,8 @@ impl NbtCompound {
     }
 
     /// 从 Compound 中提取 `String` 值（TAG_String 的数据部分，克隆返回）
+    ///
+    /// - `key`: 键名
     pub fn get_string(&self, key: &str) -> Option<String> {
         match self.get(key) {
             Some(NbtType::String(v)) => Some(v.data.clone()),
@@ -883,6 +957,8 @@ impl NbtCompound {
     }
 
     /// 从 Compound 中提取 `&NbtList`，自动进行类型匹配
+    ///
+    /// - `key`: 键名
     pub fn get_list(&self, key: &str) -> Option<&NbtList> {
         match self.get(key) {
             Some(NbtType::List(v)) => Some(v),
@@ -891,6 +967,8 @@ impl NbtCompound {
     }
 
     /// 从 Compound 中提取 `&mut NbtList`，自动进行类型匹配
+    ///
+    /// - `key`: 键名
     pub fn get_list_mut(&mut self, key: &str) -> Option<&mut NbtList> {
         match self.get_mut(key) {
             Some(NbtType::List(v)) => Some(v),
@@ -995,11 +1073,15 @@ impl Default for NbtIntArray {
 
 impl NbtIntArray {
     /// 创建 IntArray 标签
+    ///
+    /// - `data`: 32 位整数数组数据
     pub fn new(data: Vec<i32>) -> Self {
         Self { data }
     }
 
     /// 判断另一个 NBT 标签是否为 IntArray 类型且数据相等
+    ///
+    /// - `nbt`: 待比较的 NBT 标签
     pub fn eq(&self, nbt: &NbtType) -> bool {
         match nbt {
             NbtType::IntArray(nbt) => nbt.data == self.data,
@@ -1069,11 +1151,15 @@ impl Default for NbtLongArray {
 
 impl NbtLongArray {
     /// 创建 LongArray 标签
+    ///
+    /// - `data`: 64 位整数数组数据
     pub fn new(data: Vec<i64>) -> Self {
         Self { data }
     }
 
     /// 判断另一个 NBT 标签是否为 LongArray 类型且数据相等
+    ///
+    /// - `nbt`: 待比较的 NBT 标签
     pub fn eq(&self, nbt: &NbtType) -> bool {
         match nbt {
             NbtType::LongArray(nbt) => nbt.data == self.data,
@@ -1129,36 +1215,50 @@ pub fn end() -> NbtEnd {
 }
 
 /// 创建 NbtByte 实例
+///
+/// - `data`: 字节数据
 pub fn byte(data: u8) -> NbtByte {
     NbtByte::new(data)
 }
 
 /// 创建 NbtShort 实例
+///
+/// - `data`: 短整型数据
 pub fn short(data: i16) -> NbtShort {
     NbtShort::new(data)
 }
 
 /// 创建 NbtInt 实例
+///
+/// - `data`: 整型数据
 pub fn int(data: i32) -> NbtInt {
     NbtInt::new(data)
 }
 
 /// 创建 NbtLong 实例
+///
+/// - `data`: 长整型数据
 pub fn long(data: i64) -> NbtLong {
     NbtLong::new(data)
 }
 
 /// 创建 NbtFloat 实例
+///
+/// - `data`: 浮点数据
 pub fn float(data: f32) -> NbtFloat {
     NbtFloat::new(data)
 }
 
 /// 创建 NbtDouble 实例
+///
+/// - `data`: 双精度浮点数据
 pub fn double(data: f64) -> NbtDouble {
     NbtDouble::new(data)
 }
 
 /// 创建 NbtByteArray 实例
+///
+/// - `data`: 字节数组数据
 pub fn byte_array(data: Vec<u8>) -> NbtByteArray {
     NbtByteArray::new(data)
 }
@@ -1166,11 +1266,15 @@ pub fn byte_array(data: Vec<u8>) -> NbtByteArray {
 /// 创建 NbtString 实例
 ///
 /// 注意：传入的 `&str` 会被转换为 `String` 后再存储。
+///
+/// - `data`: 字符串数据
 pub fn string(data: &str) -> NbtString {
     NbtString::new(String::from(data))
 }
 
 /// 创建指定元素类型的空 NbtList 实例
+///
+/// - `nbt_num`: 列表元素的 NBT 类型序号（0–12）
 pub fn list(nbt_num: u8) -> NbtList {
     NbtList::new(nbt_num)
 }
@@ -1181,11 +1285,15 @@ pub fn compound() -> NbtCompound {
 }
 
 /// 创建 NbtIntArray 实例
+///
+/// - `data`: 32 位整数数组数据
 pub fn int_array(data: Vec<i32>) -> NbtIntArray {
     NbtIntArray::new(data)
 }
 
 /// 创建 NbtLongArray 实例
+///
+/// - `data`: 64 位整数数组数据
 pub fn long_array(data: Vec<i64>) -> NbtLongArray {
     NbtLongArray::new(data)
 }

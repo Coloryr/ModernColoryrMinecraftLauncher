@@ -7,6 +7,10 @@ use crate::skin_draw::{
 };
 
 /// 读取指定像素的原始 4 字节
+///
+/// - `image`: 源位图
+/// - `x`: 像素横坐标
+/// - `y`: 像素纵坐标
 fn get_pixel(image: &Pixmap, x: i32, y: i32) -> [u8; 4] {
     let offset = y as usize * row_bytes(image) + x as usize * BPP;
     let mut out = [0u8; 4];
@@ -15,6 +19,11 @@ fn get_pixel(image: &Pixmap, x: i32, y: i32) -> [u8; 4] {
 }
 
 /// 写入指定像素的原始 4 字节
+///
+/// - `image`: 目标位图
+/// - `x`: 像素横坐标
+/// - `y`: 像素纵坐标
+/// - `color`: 预乘 RGBA 颜色
 fn set_pixel(image: &mut Pixmap, x: i32, y: i32, color: [u8; 4]) {
     let offset = y as usize * row_bytes(image) + x as usize * BPP;
     image.data_mut()[offset..offset + BPP].copy_from_slice(&color);

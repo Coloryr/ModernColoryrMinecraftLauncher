@@ -1,21 +1,36 @@
+//! 皮肤部件动画模块
+//!
+//! 以 120 帧为一个循环（每帧 0.01 秒）演算行走动画，
+//! 输出手臂、腿部、头部、披风的旋转角度。
+
 use glam::Vec3;
 use mml_skin::SkinType;
 
 /// 皮肤的动画
 #[derive(Debug, Clone)]
 pub struct SkinAnimation {
+    /// 当前动画帧（0–119）
     frame: i32,
+    /// 不足一帧的剩余时间累计（秒）
     count: f64,
+    /// 是否已被关闭（关闭后 `tick` 返回 `false`）
     close: bool,
+    /// 是否正在播放
     pub run: bool,
+    /// 皮肤类型（影响头部摆动的轴）
     pub skin_type: SkinType,
+    /// 手臂旋转角度（x/z 侧摆、y 前后摆）
     pub arm: Vec3,
+    /// 腿部旋转角度
     pub leg: Vec3,
+    /// 头部旋转角度
     pub head: Vec3,
+    /// 披风摆动角度
     pub cape: f32,
 }
 
 impl SkinAnimation {
+    /// 创建动画（初始手臂抬起 40 度）
     pub fn new() -> Self {
         Self {
             frame: 0,
@@ -38,6 +53,12 @@ impl SkinAnimation {
 
     /// 进行动画演算
     /// 返回 false 表示动画已关闭
+    ///
+    /// - `time`: 本次推进的时间（秒），每累计 0.01 秒推进一帧
+    ///
+    /// # 返回值
+    ///
+    /// 动画未关闭返回 `true`，已关闭返回 `false`
     pub fn tick(&mut self, time: f64) -> bool {
         if self.run {
             self.count += time;

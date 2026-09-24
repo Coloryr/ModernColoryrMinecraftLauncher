@@ -101,6 +101,8 @@ impl DownloadItem {
     }
 
     /// 设置是否覆盖已存在文件（构建器模式）
+    ///
+    /// - `overwrite`: `true` 表示下载时覆盖已存在的文件
     pub fn set_overwrite(mut self, overwrite: bool) -> Self {
         self.overwrite = overwrite;
         self

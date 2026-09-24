@@ -1,7 +1,18 @@
+//! 游戏时长统计 DTO
+
 use chrono::{DateTime, Duration, FixedOffset, Local, TimeDelta};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-// 序列化：将 Duration 转换为统一格式（支持天）
+/// 序列化：将 Duration 转换为统一格式（支持天）
+///
+/// # 参数
+///
+/// - `duration`: 时长
+/// - `serializer`: 序列化器
+///
+/// # 返回值
+///
+/// 返回序列化结果（`天.HH:MM:SS.fff` 或 `HH:MM:SS.fff`）
 fn serialize_duration<S>(duration: &Duration, serializer: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
@@ -33,6 +44,15 @@ where
     serializer.serialize_str(&formatted)
 }
 
+/// 移除小数末尾多余的 0（至少保留 1 位小数）
+///
+/// # 参数
+///
+/// - `s`: 数字字符串
+///
+/// # 返回值
+///
+/// 返回处理后的字符串
 fn trim_trailing_zeros(s: &str) -> String {
     if let Some(dot_pos) = s.find('.') {
         let integer_part = &s[..dot_pos];
@@ -51,7 +71,15 @@ fn trim_trailing_zeros(s: &str) -> String {
     }
 }
 
-// 反序列化：支持多种格式
+/// 反序列化：支持多种格式
+///
+/// # 参数
+///
+/// - `deserializer`: 反序列化器
+///
+/// # 返回值
+///
+/// 返回解析出的时长；格式不支持返回错误
 fn deserialize_duration<'de, D>(deserializer: D) -> Result<Duration, D::Error>
 where
     D: Deserializer<'de>,
@@ -60,6 +88,15 @@ where
     parse_duration_flexible(&s).map_err(serde::de::Error::custom)
 }
 
+/// 解析时长字符串（支持带天与不带天两种格式）
+///
+/// # 参数
+///
+/// - `time_str`: 时长字符串
+///
+/// # 返回值
+///
+/// 返回解析出的时长；格式不支持返回错误说明
 fn parse_duration_flexible(time_str: &str) -> Result<Duration, String> {
     let time_str = time_str.trim();
 
@@ -84,6 +121,15 @@ fn parse_duration_flexible(time_str: &str) -> Result<Duration, String> {
     Err(format!("Unsupported time format: {}", time_str))
 }
 
+/// 解析 `HH:MM:SS.fff` 时间段
+///
+/// # 参数
+///
+/// - `time_str`: 时间段字符串
+///
+/// # 返回值
+///
+/// 返回解析出的时长；格式或数值非法返回错误说明
 fn parse_time_part(time_str: &str) -> Result<Duration, String> {
     let parts: Vec<&str> = time_str.split(':').collect();
     if parts.len() != 3 {
@@ -166,7 +212,7 @@ pub struct GameTimeObj {
         deserialize_with = "deserialize_duration"
     )]
     pub game_time: Duration,
-    /// 游戏统计
+    /// 上次运行时长
     #[serde(rename = "LastPlay")]
     #[serde(
         serialize_with = "serialize_duration",
@@ -187,6 +233,11 @@ impl Default for GameTimeObj {
 }
 
 impl GameTimeObj {
+    /// 创建统计对象（添加时间为当前时间）
+    ///
+    /// # 返回值
+    ///
+    /// 返回新建的统计对象
     pub fn new() -> Self {
         Self {
             add_time: Local::now().fixed_offset(),

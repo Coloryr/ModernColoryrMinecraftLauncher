@@ -1,7 +1,11 @@
+//! 系统打开操作（浏览器 / 资源管理器 / 默认程序）
+
 use std::path::Path;
 use std::process::Command;
 
 /// 在浏览器打开网址
+///
+/// - `url`: 目标网址
 #[inline(always)]
 pub fn open_url(url: &str) {
     open_url_inner(url);
@@ -25,7 +29,9 @@ fn open_url_inner(url: &str) {
     Command::new("open").arg(url).spawn().unwrap();
 }
 
-/// 在资源管理器打开文件
+/// 在资源管理器打开文件（定位并选中该文件）
+///
+/// - `path`: 目标文件路径
 #[inline(always)]
 pub fn open_file_with_explorer<P: AsRef<Path>>(path: P) {
     open_file_with_explorer_inner(path);
@@ -66,6 +72,8 @@ fn open_file_with_explorer_inner<P: AsRef<Path>>(path: P) {
 }
 
 /// 以系统默认方式打开文件
+///
+/// - `path`: 目标文件路径
 #[inline(always)]
 pub fn open_file<P: AsRef<Path>>(path: P) {
     open_url_inner(&path.as_ref().to_string_lossy());

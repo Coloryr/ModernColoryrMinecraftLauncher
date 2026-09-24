@@ -55,6 +55,8 @@ static JVM_CHANGE_EVENT: LazyLock<EventHandler> = LazyLock::new(|| EventHandler:
 
 /// 注册 Java 列表变更回调
 ///
+/// - `handler`: 回调函数
+///
 /// # 返回值
 ///
 /// 返回回调 ID，可用于 [`remove_jvm_change`] 取消注册
@@ -95,6 +97,10 @@ pub fn init<P: AsRef<Path>>(dir: P) -> CoreResult<()> {
     Ok(())
 }
 
+/// 从配置文件加载 Java 列表（异步逐个测试有效性）
+///
+/// 清空内存列表后按配置重建：有效的 Java 记录真实信息，
+/// 无效的保留占位条目（`major_version = -1`），加载完成后触发变更事件。
 pub fn load() {
     let config = mml_config::read_config();
     let config = &config.java_list;

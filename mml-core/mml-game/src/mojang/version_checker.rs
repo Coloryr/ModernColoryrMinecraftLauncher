@@ -1,3 +1,5 @@
+//! 游戏版本判定辅助
+
 use mml_base::version_parse;
 
 use crate::{

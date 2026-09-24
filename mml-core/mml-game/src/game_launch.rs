@@ -43,6 +43,7 @@ use crate::{
 
 /// 启动后自动操作
 pub enum AutoJoinType {
+    /// 无自动操作
     None,
     /// 进入存档
     Save(Arc<SaveObj>),
@@ -86,9 +87,13 @@ pub struct GameRunObj {
 
 /// 创建启动命令参数
 pub struct LaunchCmd {
+    /// Java路径
     pub java: PathBuf,
+    /// 运行目录
     pub dir: PathBuf,
+    /// 启动参数
     pub arg: Vec<String>,
+    /// 环境变量
     pub env: HashMap<String, String>,
 }
 
@@ -112,7 +117,14 @@ pub(crate) struct InstanceHandle {
 
 impl InstanceHandle {
     /// 创建游戏句柄并启动游戏进程
+    ///
+    /// # 参数
+    ///
     /// - `run`: 游戏运行参数
+    ///
+    /// # 返回值
+    ///
+    /// 返回游戏句柄；启动进程失败返回对应错误
     pub fn new(run: GameRunObj) -> CoreResult<Self> {
         // 创建工作目录
         path_helper::create_dir_all(&run.path)?;
@@ -162,6 +174,10 @@ impl InstanceHandle {
     }
 
     /// 强制结束游戏进程
+    ///
+    /// # 返回值
+    ///
+    /// 无返回值；结束失败时静默忽略
     pub fn kill(&self) {
         // 提权启动时，通过 taskkill 结束目标进程（Windows）
         #[cfg(target_os = "windows")]
@@ -181,6 +197,11 @@ impl InstanceHandle {
         }
     }
 
+    /// 轮询进程状态，退出时标记退出标志
+    ///
+    /// # 返回值
+    ///
+    /// 无返回值；已退出或已标记时忽略
     pub fn tick(&self) {
         // 等待进程退出线程
         let process_clone = self.process.clone();
@@ -204,11 +225,19 @@ impl InstanceHandle {
     }
 
     /// 进程是否已经退出
+    ///
+    /// # 返回值
+    ///
+    /// 返回进程是否已退出
     pub fn is_exit(&self) -> bool {
         self.is_exit.load(Ordering::Relaxed)
     }
 
     /// 进程退出码
+    ///
+    /// # 返回值
+    ///
+    /// 返回进程退出码
     pub fn code(&self) -> i32 {
         self.exit_code
     }
@@ -216,10 +245,16 @@ impl InstanceHandle {
 
 /// 读取进程输出流并转发到游戏日志
 ///
+/// # 参数
+///
 /// - `reader`: 缓冲读取器
 /// - `uuid`: 游戏实例 UUID
 /// - `encoding`: 日志编码（UTF-8 或 GBK）
 /// - `exit_flag`: 退出标志，用于停止读取
+///
+/// # 返回值
+///
+/// 无返回值；流关闭或收到退出标志后结束
 fn read_process_stream<R: std::io::Read>(
     reader: R,
     uuid: Uuid,
@@ -257,7 +292,16 @@ fn read_process_stream<R: std::io::Read>(
 
 impl InstanceSettingObj {
     /// 尝试刷新账户，若失败则询问是否离线模式
+    ///
+    /// # 参数
+    ///
     /// - `arg`: 启动参数
+    /// - `gui`: 启动界面回调
+    /// - `cancel`: 取消令牌
+    ///
+    /// # 返回值
+    ///
+    /// 成功返回 `Ok(())`；刷新失败且用户拒绝离线模式返回对应错误
     async fn auth_login(
         &self,
         arg: &mut GameLaunchArg,
@@ -302,7 +346,16 @@ impl InstanceSettingObj {
     }
 
     /// 检查缺失的文件，自动下载，完成后返回启动配置
+    ///
+    /// # 参数
+    ///
     /// - `arg`: 启动参数
+    /// - `gui`: 启动界面回调
+    /// - `cancel`: 取消令牌
+    ///
+    /// # 返回值
+    ///
+    /// 返回启动配置；检查或下载失败返回对应错误
     async fn check_game_file(
         &self,
         arg: &mut GameLaunchArg,
@@ -335,7 +388,7 @@ impl InstanceSettingObj {
             let download = if mml_config::read_config().http.auto_download == false
                 && let Some(gui) = &gui
             {
-                gui.requesst_download_file().await
+                gui.request_download_file().await
             } else {
                 true
             };
@@ -360,6 +413,10 @@ impl InstanceSettingObj {
     }
 
     /// 创建环境变量
+    ///
+    /// # 返回值
+    ///
+    /// 返回启动进程使用的环境变量表
     fn make_env_arg(&self) -> HashMap<String, String> {
         let mut env = HashMap::new();
         let envstr = self
@@ -386,6 +443,15 @@ impl InstanceSettingObj {
     }
 
     /// 检查服务器包更新
+    ///
+    /// # 参数
+    ///
+    /// - `gui`: 启动界面回调
+    /// - `cancel`: 取消令牌
+    ///
+    /// # 返回值
+    ///
+    /// 成功返回 `Ok(())`；检查或更新失败返回对应错误
     async fn server_pack_update(
         &self,
         gui: LaunchGui,
@@ -449,6 +515,15 @@ impl InstanceSettingObj {
     }
 
     /// 获取启动使用的java
+    ///
+    /// # 参数
+    ///
+    /// - `obj`: 启动配置
+    /// - `gui`: 启动界面回调
+    ///
+    /// # 返回值
+    ///
+    /// 返回 Java 路径；找不到可用的 Java 返回 `None`
     fn get_java(&self, obj: &GameLaunchObj, gui: LaunchGui) -> Option<PathBuf> {
         if let Some(data) = &self.jvm_local {
             let path = PathBuf::from(data);
@@ -493,10 +568,17 @@ impl InstanceSettingObj {
     }
 
     /// 执行指令
+    ///
+    /// # 参数
+    ///
     /// - `cmd`: 命令行（换行分隔的指令）
     /// - `env`: 环境变量
     /// - `wait_run`: 是否等待执行完成
     /// - `admin`: 是否以管理员方式启动
+    ///
+    /// # 返回值
+    ///
+    /// 成功返回 `Ok(())`；程序不存在或启动失败返回对应错误
     fn cmd_run(
         &self,
         cmd: &str,
@@ -576,7 +658,16 @@ impl InstanceSettingObj {
     }
 
     /// 生成游戏启动参数，不用于启动
+    ///
+    /// # 参数
+    ///
     /// - `arg`: 启动参数
+    /// - `cancel`: 取消令牌
+    /// - `gui`: 启动界面回调
+    ///
+    /// # 返回值
+    ///
+    /// 返回启动命令参数；版本号缺失、登录失败或找不到 Java 返回对应错误
     pub async fn create_game_cmd(
         &self,
         arg: &mut GameLaunchArg,
@@ -645,8 +736,15 @@ impl InstanceSettingObj {
 
     /// 启动游戏实例
     ///
+    /// # 参数
+    ///
     /// - `arg`: 启动参数
+    /// - `gui`: 启动界面回调
     /// - `cancel`: 取消令牌
+    ///
+    /// # 返回值
+    ///
+    /// 成功返回 `Ok(())`；登录失败、文件检查失败或启动失败返回对应错误
     pub async fn start_game(
         &self,
         arg: &mut GameLaunchArg,
@@ -818,7 +916,7 @@ impl InstanceSettingObj {
         if post_run && !post_run_cmd.is_empty() {
             let mut can_run = true;
             if let Some(gui) = &gui {
-                can_run = gui.launch_process(ProcessRunType::PreLaunch);
+                can_run = gui.launch_process(ProcessRunType::PostLaunch);
             }
 
             if can_run {

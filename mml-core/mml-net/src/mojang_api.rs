@@ -21,6 +21,12 @@ use serde::{Deserialize, Serialize};
 use crate::{WORK_CLIENT, url_helper, urls};
 
 /// 直接下载资源
+///
+/// - `url`: 资源下载地址
+///
+/// # 返回值
+///
+/// 返回资源内容字节
 pub async fn get_assets(url: &String) -> CoreResult<Vec<u8>> {
     WORK_CLIENT.get().unwrap().get_bytes(url).await
 }
@@ -39,6 +45,10 @@ pub struct AssetCheckResponse {
 ///
 /// - 服务器 304 → `not_modified = true`，`data` 为空，本地缓存可以继续用
 /// - 服务器 200 → 返回新内容与新的 ETag，本地缓存应更新
+///
+/// # 返回值
+///
+/// 返回缓存校验结果（是否未变更、新 ETag、响应体）
 pub async fn get_assets_with_check(
     url: &String,
     etag: Option<&str>,
@@ -69,15 +79,24 @@ pub async fn get_assets_with_check(
 }
 
 /// 获取主版本列表
+///
+/// - `source`: 下载源（`None` 时取当前配置）
+///
+/// # 返回值
+///
+/// 返回版本清单 JSON 原文字节
 pub async fn get_versions(source: Option<SourceLocal>) -> CoreResult<Vec<u8>> {
     let url = url_helper::game_version(source);
     WORK_CLIENT.get().unwrap().get_bytes(&url).await
 }
 
+/// Minecraft 玩家档案
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct MinecraftProfileObj {
+    /// 玩家 UUID
     pub id: String,
+    /// 玩家名
     pub name: String,
 }
 
@@ -90,9 +109,11 @@ impl Default for MinecraftProfileObj {
     }
 }
 
+/// 用户档案属性项
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct UserProfilePropertiesObj {
+    /// 属性值（Base64 编码的皮肤 / 披风纹理信息）
     pub value: String,
 }
 
@@ -104,9 +125,11 @@ impl Default for UserProfilePropertiesObj {
     }
 }
 
+/// 用户档案（含纹理属性）
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct UserProfileObj {
+    /// 档案属性列表
     pub properties: Vec<UserProfilePropertiesObj>,
 }
 
@@ -120,6 +143,10 @@ impl Default for UserProfileObj {
 
 /// 获取账户信息
 /// - `token`: 登陆Token
+///
+/// # 返回值
+///
+/// 返回当前账号的 Minecraft 档案（UUID 与玩家名）
 pub async fn get_minecraft_profile(token: &str) -> CoreResult<MinecraftProfileObj> {
     let client = crate::get_login_client();
     let mut req = Request::new(Method::GET, Url::parse(urls::MINECRAFT_SERVICES).unwrap());
@@ -134,8 +161,12 @@ pub async fn get_minecraft_profile(token: &str) -> CoreResult<MinecraftProfileOb
 }
 
 /// 获取皮肤信息
-/// - `uuid`:
-/// - `url`: 网址
+/// - `uuid`: 玩家 UUID
+/// - `url`: 查询地址（`None` 时用官方会话服务器）
+///
+/// # 返回值
+///
+/// 返回用户档案（属性中含皮肤 / 披风纹理）
 pub async fn get_user_profile(uuid: &str, url: Option<&str>) -> CoreResult<UserProfileObj> {
     let url = match url {
         Some(data) => data.to_string(),
@@ -147,6 +178,12 @@ pub async fn get_user_profile(uuid: &str, url: Option<&str>) -> CoreResult<UserP
 }
 
 /// 按玩家名查UUID档案（查不到玩家时接口返回204，这里同样报DataNotFound）
+///
+/// - `name`: 玩家名
+///
+/// # 返回值
+///
+/// 返回玩家档案（UUID 与玩家名）
 pub async fn get_profile_by_name(name: &str) -> CoreResult<MinecraftProfileObj> {
     let url = format!("{}/{name}", urls::MINECRAFT_PROFILE_API);
     crate::get_login_client()
@@ -154,9 +191,11 @@ pub async fn get_profile_by_name(name: &str) -> CoreResult<MinecraftProfileObj> 
         .await
 }
 
+/// Minecraft Token 请求体
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct MinecraftTokenObj {
+    /// Xbox 身份令牌（`XBL3.0 x=<uhs>;<token>`）
     #[serde(rename = "identityToken")]
     pub identity_token: String,
 }
@@ -169,10 +208,13 @@ impl Default for MinecraftTokenObj {
     }
 }
 
+/// Minecraft Token 响应
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct MinecraftTokenResObj {
+    /// 访问令牌
     pub access_token: String,
+    /// 有效期（秒）
     pub expires_in: i64,
 }
 
@@ -186,6 +228,13 @@ impl Default for MinecraftTokenResObj {
 }
 
 /// 从XBOX登陆获取账户认证
+///
+/// - `uhs`: Xbox 用户哈希（uhs）
+/// - `token`: Xbox Live 令牌
+///
+/// # 返回值
+///
+/// 返回 Minecraft 访问令牌；令牌无效时返回 `AuthTokenTimeout`
 pub async fn get_minecraft_token(uhs: &str, token: &str) -> CoreResult<String> {
     let obj = MinecraftTokenObj {
         identity_token: format!("XBL3.0 x={uhs};{token}"),
@@ -202,12 +251,16 @@ pub async fn get_minecraft_token(uhs: &str, token: &str) -> CoreResult<String> {
     }
 }
 
+/// 新闻配图
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct ImageObj {
+    /// 图片类型
     pub content_type: String,
+    /// 图片 URL
     #[serde(rename = "imageURL")]
     pub image_url: String,
+    /// 图片说明
     pub alt: String,
 }
 
@@ -221,12 +274,17 @@ impl Default for ImageObj {
     }
 }
 
+/// 新闻卡片
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct DefaultTileObj {
+    /// 新闻标题
     pub title: String,
+    /// 副标题
     pub sub_header: String,
+    /// 卡片尺寸
     pub tile_size: String,
+    /// 卡片配图
     pub image: ImageObj,
 }
 
@@ -241,11 +299,15 @@ impl Default for DefaultTileObj {
     }
 }
 
+/// 单条新闻
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct ArticleGridObj {
+    /// 新闻卡片内容
     pub default_tile: DefaultTileObj,
+    /// 主分类
     pub primary_category: String,
+    /// 新闻页 URL
     pub article_url: String,
 }
 
@@ -259,9 +321,11 @@ impl Default for ArticleGridObj {
     }
 }
 
+/// Minecraft 官方新闻
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct MinecraftNewsObj {
+    /// 新闻列表
     pub article_grid: Vec<ArticleGridObj>,
 }
 
@@ -274,6 +338,12 @@ impl Default for MinecraftNewsObj {
 }
 
 /// 获取Minecraft新闻
+///
+/// - `page`: 新闻页码
+///
+/// # 返回值
+///
+/// 返回该页新闻列表
 pub async fn get_minecraft_news(page: u32) -> CoreResult<MinecraftNewsObj> {
     let url = format!("{}{page}.json", urls::MINECRAFT_NEWS);
 

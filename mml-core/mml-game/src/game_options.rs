@@ -1,4 +1,5 @@
 //! 游戏实例配置相关
+
 use std::{
     collections::HashMap,
     io::{BufRead, BufReader, Read, Write},
@@ -10,8 +11,19 @@ use mml_sys::path_helper;
 
 use crate::launcher::instance_setting_obj::InstanceSettingObj;
 
+/// 配置选项表（键 → 值）
 pub type InstanceCfg = HashMap<String, String>;
 
+/// 从配置文件读取选项
+///
+/// # 参数
+///
+/// - `file`: 配置文件路径
+/// - `sp`: 键值分隔符（`None` 时为 `:`）
+///
+/// # 返回值
+///
+/// 返回配置选项表；打开文件失败返回对应错误
 pub fn read_options_from_file<P: AsRef<Path>>(
     file: P,
     sp: Option<char>,
@@ -20,6 +32,16 @@ pub fn read_options_from_file<P: AsRef<Path>>(
     read_options(file, sp)
 }
 
+/// 从数据流读取选项（忽略 `#` 注释行与行内注释）
+///
+/// # 参数
+///
+/// - `buffer`: 数据流
+/// - `sp`: 键值分隔符（`None` 时为 `:`）
+///
+/// # 返回值
+///
+/// 返回配置选项表；读取失败返回对应错误
 pub fn read_options<R: Read>(buffer: R, sp: Option<char>) -> CoreResult<InstanceCfg> {
     let mut reader = BufReader::new(buffer);
     let mut data = HashMap::new();
@@ -66,6 +88,10 @@ pub fn read_options<R: Read>(buffer: R, sp: Option<char>) -> CoreResult<Instance
 
 impl InstanceSettingObj {
     /// 读取配置文件
+    ///
+    /// # 返回值
+    ///
+    /// 返回配置选项表；文件不存在返回空表，读取失败返回对应错误
     pub fn get_options(&self) -> CoreResult<HashMap<String, String>> {
         let file = self.get_optifine_file();
         if file.exists() {
@@ -77,7 +103,15 @@ impl InstanceSettingObj {
     }
 
     /// 保存配置文件
+    ///
+    /// # 参数
+    ///
     /// - `list`: 配置选项
+    /// - `sp`: 键值分隔符（`None` 时为 `:`）
+    ///
+    /// # 返回值
+    ///
+    /// 成功返回 `Ok(())`；写入失败返回对应错误
     pub fn save_options(&self, list: &HashMap<String, String>, sp: Option<char>) -> CoreResult<()> {
         let file = self.get_optifine_file();
         let mut stream = path_helper::open_write(file)?;
@@ -102,6 +136,10 @@ impl InstanceSettingObj {
     }
 
     /// 读取游戏配置文件（options.txt，`=` 分隔；文件不存在时返回空表）
+    ///
+    /// # 返回值
+    ///
+    /// 返回配置选项表；读取失败返回对应错误
     pub fn get_minecraft_options(&self) -> CoreResult<InstanceCfg> {
         let file = self.get_option_file();
         if file.exists() {
@@ -112,7 +150,14 @@ impl InstanceSettingObj {
     }
 
     /// 保存游戏配置文件（options.txt，`=` 分隔）
+    ///
+    /// # 参数
+    ///
     /// - `list`: 配置选项
+    ///
+    /// # 返回值
+    ///
+    /// 成功返回 `Ok(())`；写入失败返回对应错误
     pub fn save_minecraft_options(&self, list: &InstanceCfg) -> CoreResult<()> {
         let file = self.get_option_file();
         let mut stream = path_helper::open_write(file)?;

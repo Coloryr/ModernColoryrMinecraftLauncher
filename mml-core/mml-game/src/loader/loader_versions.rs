@@ -32,8 +32,14 @@ static QUILT_LIST: LazyLock<RwLock<Option<Vec<String>>>> = LazyLock::new(|| RwLo
 
 /// 获取加载器的可用版本列表（新版本在前）
 ///
+/// # 参数
+///
 /// - `loader`: 加载器类型
 /// - `mc`: 游戏版本号（Forge 的 BMCLAPI 源、OptiFine / LiteLoader 按版本过滤需要）
+///
+/// # 返回值
+///
+/// 返回版本号列表（新版本在前）；加载器类型不支持返回 `DataNotFound`
 pub async fn get_loader_versions(loader: &LoaderType, mc: &str) -> CoreResult<Vec<String>> {
     match loader {
         LoaderType::Forge => forge_versions(mc).await,
@@ -60,6 +66,15 @@ pub async fn get_loader_versions(loader: &LoaderType, mc: &str) -> CoreResult<Ve
 ///
 /// 六种加载器的数据源并发查询；每查完一个加载器通过 `gui` 回调一次
 /// （已完成步数，总步数 [`SUPPORT_LOAD_STEPS`]），进度按完成顺序递增。
+///
+/// # 参数
+///
+/// - `mc`: 游戏版本号
+/// - `gui`: 进度条界面回调
+///
+/// # 返回值
+///
+/// 返回支持的加载器 ID 列表（原版开头、自定义结尾）
 pub async fn get_support_loaders(mc: &str, gui: ProgressGui) -> CoreResult<Vec<String>> {
     use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -143,6 +158,14 @@ pub async fn get_support_loaders(mc: &str, gui: ProgressGui) -> CoreResult<Vec<S
 pub const SUPPORT_LOAD_STEPS: usize = 6;
 
 /// LiteLoader 是否支持该版本：meta 的 versions 键为游戏版本前缀（如 "1.12"）
+///
+/// # 参数
+///
+/// - `mc`: 游戏版本号
+///
+/// # 返回值
+///
+/// 返回是否有可用的 LiteLoader 版本
 async fn liteloader_supports(mc: &str) -> bool {
     match liteloader_versions(mc).await {
         Ok(list) => !list.is_empty(),
@@ -151,6 +174,15 @@ async fn liteloader_supports(mc: &str) -> bool {
 }
 
 /// 版本号比较：a >= b（按 `.` 分段数值比较）
+///
+/// # 参数
+///
+/// - `a`: 左侧版本号
+/// - `b`: 右侧版本号
+///
+/// # 返回值
+///
+/// 返回 `a` 是否大于等于 `b`
 fn version_ge(a: &str, b: &str) -> bool {
     fn parts(v: &str) -> Vec<u64> {
         v.split('.')
@@ -170,6 +202,14 @@ fn version_ge(a: &str, b: &str) -> bool {
 
 /// Forge：官方源为 maven-metadata.xml（全量，按 `{mc}-` 前缀筛选并去前缀），
 /// BMCLAPI 源为按游戏版本的 JSON 数组（直接是构建号）；两者都取新版本在前
+///
+/// # 参数
+///
+/// - `mc`: 游戏版本号
+///
+/// # 返回值
+///
+/// 返回构建号列表；下载或解析失败返回对应错误
 async fn forge_versions(mc: &str) -> CoreResult<Vec<String>> {
     if mml_net::url_helper::get_source() == SourceLocal::Offical {
         // 命中缓存：只做前缀过滤
@@ -206,6 +246,15 @@ async fn forge_versions(mc: &str) -> CoreResult<Vec<String>> {
 /// 从 Forge 全量版本列表中筛出指定游戏版本的构建号
 ///
 /// 元数据条目形如 `1.20.1-47.1.0`（旧版本可能带分支后缀），去掉 `{mc}-` 前缀。
+///
+/// # 参数
+///
+/// - `all`: 全量版本条目
+/// - `mc`: 游戏版本号
+///
+/// # 返回值
+///
+/// 返回该游戏版本的构建号列表
 fn forge_of_mc(all: &[String], mc: &str) -> Vec<String> {
     let prefix = format!("{mc}-");
     all.iter()
@@ -217,6 +266,15 @@ fn forge_of_mc(all: &[String], mc: &str) -> Vec<String> {
 /// 解析 NeoForge 官方源全量列表：把每个版本号归入对应的游戏版本分组
 ///
 /// 数据为 JSON `{"versions": [...]}`，全量按游戏版本分组缓存，返回指定游戏版本的构建号。
+///
+/// # 参数
+///
+/// - `mc`: 游戏版本号
+/// - `data`: 官方源版本列表 JSON
+///
+/// # 返回值
+///
+/// 返回该游戏版本的构建号列表；解析失败返回 `DataNotFound`
 async fn parse_neoforge_offical(mc: &str, data: &str) -> CoreResult<Vec<String>> {
     // 命中缓存：不再重复解析
     if let Some(all) = NEOFORGE_META_ALL.read().unwrap().as_ref() {
@@ -251,6 +309,14 @@ async fn parse_neoforge_offical(mc: &str, data: &str) -> CoreResult<Vec<String>>
 /// - 新方案（主版本 ≥ 26）：`26.2.0.0-beta` → `26.2`，`26.1.1.x` → `26.1.1`，
 ///   带 `+snapshot-x` 的映射到对应快照版本
 /// - 以 `0` 开头的愚人节版本返回 `None`（如 `0.25w14craftmine.3-beta`）
+///
+/// # 参数
+///
+/// - `version`: NeoForge 版本号
+///
+/// # 返回值
+///
+/// 返回所属的游戏版本号；无法推断返回 `None`
 fn neoforge_mc_version(version: &str) -> Option<String> {
     if version.starts_with('0') {
         return None;
@@ -283,6 +349,14 @@ fn neoforge_mc_version(version: &str) -> Option<String> {
 ///
 /// 配置为官方源时只走官方源（全量列表按游戏版本过滤）；
 /// 配置为 BMCLAPI 镜像时镜像按游戏版本返回，镜像不可达时回退官方源。
+///
+/// # 参数
+///
+/// - `mc`: 游戏版本号
+///
+/// # 返回值
+///
+/// 返回版本号列表；下载或解析失败返回对应错误
 async fn neoforge_versions(mc: &str) -> CoreResult<Vec<String>> {
     let client = mml_net::get_work_client();
     let official = format!(
@@ -320,6 +394,10 @@ async fn neoforge_versions(mc: &str) -> CoreResult<Vec<String>> {
 }
 
 /// Fabric：meta 的 loader 数组（stable 优先）
+///
+/// # 返回值
+///
+/// 返回版本号列表；下载或解析失败返回对应错误
 async fn fabric_versions() -> CoreResult<Vec<String>> {
     // 命中缓存：meta 是通用列表，直接返回
     if let Some(list) = FABRIC_LIST.read().unwrap().as_ref() {
@@ -346,6 +424,10 @@ async fn fabric_versions() -> CoreResult<Vec<String>> {
 }
 
 /// Quilt：meta 的 loader 数组（meta 从旧到新，倒转为新在前）
+///
+/// # 返回值
+///
+/// 返回版本号列表；下载或解析失败返回对应错误
 async fn quilt_versions() -> CoreResult<Vec<String>> {
     // 命中缓存：meta 是通用列表，直接返回
     if let Some(list) = QUILT_LIST.read().unwrap().as_ref() {
@@ -363,6 +445,14 @@ async fn quilt_versions() -> CoreResult<Vec<String>> {
 }
 
 /// OptiFine：按游戏版本过滤（官方源版本号形如 `HD_U_I6`）
+///
+/// # 参数
+///
+/// - `mc`: 游戏版本号
+///
+/// # 返回值
+///
+/// 返回版本号列表；下载失败返回对应错误
 async fn optifine_versions(mc: &str) -> CoreResult<Vec<String>> {
     let list = mml_net::optifine_api::get_optifine_version().await?;
     Ok(list
@@ -374,6 +464,14 @@ async fn optifine_versions(mc: &str) -> CoreResult<Vec<String>> {
 
 /// LiteLoader：versions.json 形如 `{"versions": {"1.12": {"1.12.2-SNAPSHOT": {...}}}}`，
 /// 按游戏版本前缀取内层版本名
+///
+/// # 参数
+///
+/// - `mc`: 游戏版本号
+///
+/// # 返回值
+///
+/// 返回版本名列表；下载或解析失败返回对应错误
 async fn liteloader_versions(mc: &str) -> CoreResult<Vec<String>> {
     let meta = mml_net::liteloader_api::get_meta().await?;
     let obj: serde_json::Value = serde_json::from_slice(&meta)
@@ -397,6 +495,14 @@ async fn liteloader_versions(mc: &str) -> CoreResult<Vec<String>> {
 }
 
 /// 从 JSON 值提取版本号列表：元素为对象取 `version` 字段，为字符串直接取
+///
+/// # 参数
+///
+/// - `value`: JSON 数组值
+///
+/// # 返回值
+///
+/// 返回版本号列表
 fn value_versions(value: &serde_json::Value) -> Vec<String> {
     let Some(arr) = value.as_array() else {
         return Vec::new();

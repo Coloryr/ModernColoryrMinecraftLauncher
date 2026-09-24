@@ -1,3 +1,5 @@
+//! OptiFine 安装信息（实例目录内保存的版本）
+
 use mml_config::config_obj::SourceLocal;
 use mml_net::optifine_api::GetOptifineObj;
 use serde::{Deserialize, Serialize};
@@ -21,8 +23,10 @@ pub struct OptifineObj {
     /// 日期
     #[serde(rename = "Date")]
     pub date: String,
+    /// 下载地址（官方源为下载页 / 镜像源为 JAR 地址）
     #[serde(rename = "Url1")]
     pub url1: Option<String>,
+    /// 镜像下载地址（仅官方源有）
     #[serde(rename = "Url2")]
     pub url2: Option<String>,
     /// 下载源

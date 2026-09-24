@@ -1,7 +1,13 @@
+//! 模型贴图 UV 生成模块
+//!
+//! 内置各部件在皮肤贴图上的 UV 布局，按皮肤类型（新版 64x64 / 旧版 64x32）
+//! 偏移并归一化后生成模型各部件的贴图坐标。
+
 use mml_skin::SkinType;
 
 use crate::cube_model::SteveTexture;
 
+/// 头部 UV 布局（8x8 一个面）
 const HEAD_TEX: [f32; 48] = [
     // 背面
     32.0, 8.0, 32.0, 16.0, 24.0, 16.0, 24.0, 8.0, // 前面
@@ -12,6 +18,7 @@ const HEAD_TEX: [f32; 48] = [
     24.0, 0.0, 24.0, 8.0, 16.0, 8.0, 16.0, 0.0,
 ];
 
+/// 手臂 / 腿部 UV 布局（4x12 一个面）
 const LEG_ARM_TEX: [f32; 48] = [
     // 背面
     12.0, 4.0, 12.0, 16.0, 16.0, 16.0, 16.0, 4.0, // 前面
@@ -22,6 +29,7 @@ const LEG_ARM_TEX: [f32; 48] = [
     12.0, 0.0, 12.0, 4.0, 8.0, 4.0, 8.0, 0.0,
 ];
 
+/// 纤细手臂 UV 布局（3x12 一个面）
 const SLIM_ARM_TEX: [f32; 48] = [
     // 背面
     11.0, 4.0, 11.0, 16.0, 14.0, 16.0, 14.0, 4.0, // 前面
@@ -32,6 +40,7 @@ const SLIM_ARM_TEX: [f32; 48] = [
     10.0, 0.0, 10.0, 4.0, 7.0, 4.0, 7.0, 0.0,
 ];
 
+/// 身体 UV 布局（8x12 一个面）
 const BODY_TEX: [f32; 48] = [
     // 背面
     24.0, 4.0, 24.0, 16.0, 16.0, 16.0, 16.0, 4.0, // 前面
@@ -42,6 +51,7 @@ const BODY_TEX: [f32; 48] = [
     20.0, 0.0, 20.0, 4.0, 12.0, 4.0, 12.0, 0.0,
 ];
 
+/// 披风 UV 布局
 const CAPE_TEX: [f32; 48] = [
     // 背面
     11.0, 1.0, 11.0, 17.0, 1.0, 17.0, 1.0, 1.0, // 前面
@@ -53,6 +63,15 @@ const CAPE_TEX: [f32; 48] = [
 ];
 
 /// 获取UV
+///
+/// - `input`: 部件的原始 UV 布局数据
+/// - `skin_type`: 皮肤类型（旧版按 64x32 归一化，新版按 64x64 归一化）
+/// - `offset_u`: U 方向偏移（像素）
+/// - `offset_v`: V 方向偏移（像素）
+///
+/// # 返回值
+///
+/// 偏移并归一化到 0..1 的 UV 坐标数组
 pub fn get_tex(input: &[f32], skin_type: SkinType, offset_u: f32, offset_v: f32) -> Vec<f32> {
     let mut temp = vec![0.0; input.len()];
 
@@ -74,6 +93,12 @@ pub fn get_tex(input: &[f32], skin_type: SkinType, offset_u: f32, offset_v: f32)
 }
 
 /// 获取披风UV
+///
+/// - `input`: 披风的原始 UV 布局数据
+///
+/// # 返回值
+///
+/// 归一化到 0..1 的 UV 坐标数组（u 除以 64，v 除以 32）
 pub fn get_cap_tex(input: &[f32]) -> Vec<f32> {
     let mut temp = vec![0.0; input.len()];
 
@@ -90,6 +115,12 @@ pub fn get_cap_tex(input: &[f32]) -> Vec<f32> {
 }
 
 /// 顶层数据
+///
+/// - `skin_type`: 皮肤类型（旧版皮肤只有顶层头部）
+///
+/// # 返回值
+///
+/// 返回顶层各部件的 UV 数据（无数据的部件为空数组，顶层无披风）
 pub fn get_steve_texture_top(skin_type: SkinType) -> SteveTexture {
     let mut tex = SteveTexture::new();
     tex.head = get_tex(&HEAD_TEX, skin_type, 32.0, 0.0);
@@ -112,6 +143,12 @@ pub fn get_steve_texture_top(skin_type: SkinType) -> SteveTexture {
 }
 
 /// 本体数据
+///
+/// - `skin_type`: 皮肤类型（决定手臂贴图布局与归一化方式）
+///
+/// # 返回值
+///
+/// 返回本体各部件（含披风）的 UV 数据
 pub fn get_steve_texture(skin_type: SkinType) -> SteveTexture {
     let mut tex = SteveTexture::new();
     tex.head = get_tex(&HEAD_TEX, skin_type, 0.0, 0.0);

@@ -1,3 +1,5 @@
+//! Forge / NeoForge 加载器安装与运行库下载项构建
+
 use std::{collections::HashMap, io::Read};
 
 use mml_base::{
@@ -29,7 +31,14 @@ use crate::{
 };
 
 /// 根据名字构建运行库信息
-/// - `name`: 运行库名字
+///
+/// # 参数
+///
+/// - `name`: 运行库名字（Maven 坐标）
+///
+/// # 返回值
+///
+/// 返回运行库信息；不在已知的旧版 Forge 内置运行库中返回 `None`
 pub fn make_forge_libraries(name: &str) -> Option<ForgeLibrariesObj> {
     let args: Vec<&str> = name.split(':').collect();
     if args.len() < 2 {
@@ -214,9 +223,17 @@ pub fn make_forge_libraries(name: &str) -> Option<ForgeLibrariesObj> {
 }
 
 /// 创建Forge下载项目
+///
+/// # 参数
+///
 /// - `mc`: 游戏版本号
 /// - `version`: forge版本号
-/// - `jar`: 类型
+/// - `jar_type`: jar 类型（installer / universal / client / launcher）
+/// - `hash`: 是否联网获取文件哈希
+///
+/// # 返回值
+///
+/// 返回下载项
 async fn build_forge_item(mc: &str, version: &str, jar_type: &str, hash: bool) -> FileItemObj {
     let mut version = String::from(version);
     version.push_str(&url_helper::forge_url_fix(&mc));
@@ -243,10 +260,18 @@ async fn build_forge_item(mc: &str, version: &str, jar_type: &str, hash: bool) -
     }
 }
 
-/// 创建Forge下载项目
+/// 创建NeoForge下载项目
+///
+/// # 参数
+///
 /// - `mc`: 游戏版本号
 /// - `version`: forge版本号
-/// - `jar`: 类型
+/// - `jar`: jar 类型（installer / universal / client）
+/// - `hash`: 是否联网获取文件哈希
+///
+/// # 返回值
+///
+/// 返回下载项
 async fn build_neoforge_item(mc: &str, version: &str, jar: &str, hash: bool) -> FileItemObj {
     let v2222 = version_parse::is_game_version_1202(mc);
     let name = if v2222 {
@@ -284,29 +309,61 @@ async fn build_neoforge_item(mc: &str, version: &str, jar: &str, hash: bool) -> 
 }
 
 /// 创建Forge安装器下载项目
+///
+/// # 参数
+///
 /// - `mc`: 游戏版本号
 /// - `version`: forge版本号
+/// - `hash`: 是否联网获取文件哈希
+///
+/// # 返回值
+///
+/// 返回下载项
 pub async fn build_forge_installer(mc: &str, version: &str, hash: bool) -> FileItemObj {
     build_forge_item(mc, version, names::FILE_INSTALLER, hash).await
 }
 
-/// 创建Forge安装器下载项目
+/// 创建Forge universal 包下载项目
+///
+/// # 参数
+///
 /// - `mc`: 游戏版本号
 /// - `version`: forge版本号
+/// - `hash`: 是否联网获取文件哈希
+///
+/// # 返回值
+///
+/// 返回下载项
 pub async fn build_forge_universal(mc: &str, version: &str, hash: bool) -> FileItemObj {
     build_forge_item(mc, version, names::FILE_UNIVERSAL, hash).await
 }
 
-/// 创建Forge安装器下载项目
+/// 创建Forge client 包下载项目
+///
+/// # 参数
+///
 /// - `mc`: 游戏版本号
 /// - `version`: forge版本号
+/// - `hash`: 是否联网获取文件哈希
+///
+/// # 返回值
+///
+/// 返回下载项
 pub async fn build_forge_client(mc: &str, version: &str, hash: bool) -> FileItemObj {
     build_forge_item(mc, version, names::FILE_CLIENT, hash).await
 }
 
-/// 创建Forge安装器下载项目
+/// 创建Forge launcher 包下载项目
+///
+/// # 参数
+///
 /// - `mc`: 游戏版本号
 /// - `version`: forge版本号
+/// - `hash`: 是否联网获取文件哈希
+///
+/// # 返回值
+///
+/// 返回下载项
 pub async fn build_forge_launcher(mc: &str, version: &str, hash: bool) -> FileItemObj {
     let mut item = build_forge_item(mc, version, names::FILE_LAUNCHER, hash).await;
     item.url = format!(
@@ -318,33 +375,64 @@ pub async fn build_forge_launcher(mc: &str, version: &str, hash: bool) -> FileIt
 }
 
 /// 创建NeoForge安装器下载项目
+///
+/// # 参数
+///
 /// - `mc`: 游戏版本号
 /// - `version`: forge版本号
+/// - `hash`: 是否联网获取文件哈希
+///
+/// # 返回值
+///
+/// 返回下载项
 pub async fn build_neoforge_installer(mc: &str, version: &str, hash: bool) -> FileItemObj {
     build_neoforge_item(mc, version, names::FILE_INSTALLER, hash).await
 }
 
-/// 创建NeoForge下载项目
+/// 创建NeoForge universal 包下载项目
+///
+/// # 参数
+///
 /// - `mc`: 游戏版本号
 /// - `version`: forge版本号
+/// - `hash`: 是否联网获取文件哈希
+///
+/// # 返回值
+///
+/// 返回下载项
 pub async fn build_neoforge_universal(mc: &str, version: &str, hash: bool) -> FileItemObj {
     build_neoforge_item(mc, version, names::FILE_UNIVERSAL, hash).await
 }
 
-/// 创建NeoForge下载项目
+/// 创建NeoForge client 包下载项目
+///
+/// # 参数
+///
 /// - `mc`: 游戏版本号
 /// - `version`: forge版本号
+/// - `hash`: 是否联网获取文件哈希
+///
+/// # 返回值
+///
+/// 返回下载项
 pub async fn build_neoforge_client(mc: &str, version: &str, hash: bool) -> FileItemObj {
     build_neoforge_item(mc, version, names::FILE_CLIENT, hash).await
 }
 
 /// 构建Forge运行库下载项目列表
+///
+/// # 参数
+///
 /// - `info`: 运行库列表
 /// - `mc`: 游戏版本号
 /// - `version`: forge版本号
 /// - `neo`: 是否为NeoForge
 /// - `v2`: 是否为1.13以上
 /// - `install`: 是否为安装器
+///
+/// # 返回值
+///
+/// 返回去重后的运行库下载项列表（缺失的 universal / installer / launcher 包自动补齐）
 pub async fn build_forge_libs(
     info: &Vec<ForgeLibrariesObj>,
     mc: &str,
@@ -441,6 +529,19 @@ pub struct ForgeGetFilesObj {
     pub installs: Vec<FileItemObj>,
 }
 
+/// 获取Forge运行库下载项
+///
+/// 需要时先下载安装器，再从安装器内解析运行库列表。
+///
+/// # 参数
+///
+/// - `mc`: 游戏版本号
+/// - `version`: forge版本号
+/// - `neo`: 是否为NeoForge
+///
+/// # 返回值
+///
+/// 返回加载器与安装器各自的下载项列表；下载或解析失败返回对应错误
 async fn get_forge_libs(mc: &str, version: &str, neo: bool) -> CoreResult<ForgeGetFilesObj> {
     let ver = version_path::get_version(mc)?;
     let v2 = ver.is_game_version_v2();
@@ -557,11 +658,18 @@ async fn get_forge_libs(mc: &str, version: &str, neo: bool) -> CoreResult<ForgeG
 
 impl ForgeLaunchObj {
     /// 从启动信息构建Forge运行库下载项目列表
+    ///
+    /// # 参数
+    ///
     /// - `mc`: 游戏版本号
     /// - `version`: forge版本号
     /// - `neo`: 是否为NeoForge
     /// - `v2`: 是否为1.13以上
     /// - `install`: 是否为安装器
+    ///
+    /// # 返回值
+    ///
+    /// 返回运行库下载项列表
     pub async fn build_forge_libs(
         &self,
         mc: &str,
@@ -576,11 +684,18 @@ impl ForgeLaunchObj {
 
 impl ForgeInstallObj {
     /// 从安装信息构建Forge运行库下载项目列表
+    ///
+    /// # 参数
+    ///
     /// - `mc`: 游戏版本号
     /// - `version`: forge版本号
     /// - `neo`: 是否为NeoForge
     /// - `v2`: 是否为1.13以上
     /// - `install`: 是否为安装器
+    ///
+    /// # 返回值
+    ///
+    /// 返回运行库下载项列表
     pub async fn build_forge_libs(
         &self,
         mc: &str,
@@ -595,6 +710,10 @@ impl ForgeInstallObj {
 
 impl InstanceSettingObj {
     /// 获取Forge下载项目
+    ///
+    /// # 返回值
+    ///
+    /// 返回加载器与安装器各自的下载项列表；下载或解析失败返回对应错误
     pub async fn get_forge_libs(&self) -> CoreResult<ForgeGetFilesObj> {
         get_forge_libs(
             &self.version,
@@ -605,31 +724,79 @@ impl InstanceSettingObj {
     }
 
     /// 创建Forge安装器下载项目
+    ///
+    /// # 参数
+    ///
+    /// - `hash`: 是否联网获取文件哈希
+    ///
+    /// # 返回值
+    ///
+    /// 返回下载项
     pub async fn build_forge_installer(&self, hash: bool) -> FileItemObj {
         build_forge_installer(&self.version, &self.loader_version.as_ref().unwrap(), hash).await
     }
 
-    /// 创建Forge安装器下载项目
+    /// 创建Forge universal 包下载项目
+    ///
+    /// # 参数
+    ///
+    /// - `hash`: 是否联网获取文件哈希
+    ///
+    /// # 返回值
+    ///
+    /// 返回下载项
     pub async fn build_forge_universal(&self, hash: bool) -> FileItemObj {
         build_forge_universal(&self.version, &self.loader_version.as_ref().unwrap(), hash).await
     }
 
-    /// 创建Forge安装器下载项目
+    /// 创建Forge client 包下载项目
+    ///
+    /// # 参数
+    ///
+    /// - `hash`: 是否联网获取文件哈希
+    ///
+    /// # 返回值
+    ///
+    /// 返回下载项
     pub async fn build_forge_client(&self, hash: bool) -> FileItemObj {
         build_forge_client(&self.version, &self.loader_version.as_ref().unwrap(), hash).await
     }
 
     /// 创建NeoForge安装器下载项目
+    ///
+    /// # 参数
+    ///
+    /// - `hash`: 是否联网获取文件哈希
+    ///
+    /// # 返回值
+    ///
+    /// 返回下载项
     pub async fn build_neoforge_installer(&self, hash: bool) -> FileItemObj {
         build_neoforge_installer(&self.version, &self.loader_version.as_ref().unwrap(), hash).await
     }
 
-    /// 创建NeoForge下载项目
+    /// 创建NeoForge universal 包下载项目
+    ///
+    /// # 参数
+    ///
+    /// - `hash`: 是否联网获取文件哈希
+    ///
+    /// # 返回值
+    ///
+    /// 返回下载项
     pub async fn build_neoforge_universal(&self, hash: bool) -> FileItemObj {
         build_neoforge_universal(&self.version, &self.loader_version.as_ref().unwrap(), hash).await
     }
 
-    /// 创建NeoForge下载项目
+    /// 创建NeoForge client 包下载项目
+    ///
+    /// # 参数
+    ///
+    /// - `hash`: 是否联网获取文件哈希
+    ///
+    /// # 返回值
+    ///
+    /// 返回下载项
     pub async fn build_neoforge_client(&self, hash: bool) -> FileItemObj {
         build_neoforge_client(&self.version, &self.loader_version.as_ref().unwrap(), hash).await
     }
