@@ -148,6 +148,10 @@ pub fn find_java_inner(java_paths: &mut HashSet<PathBuf>) {
 /// - `java_paths`: 搜索的结果
 #[cfg(target_os = "linux")]
 pub(crate) fn find_java_inner(java_paths: &mut HashSet<PathBuf>) {
+    use std::path::Path;
+
+    use crate::process_helper;
+
     fn resolve_symlink(path: &str) -> Result<PathBuf, std::io::Error> {
         let path = Path::new(path);
         if path.is_symlink() {
@@ -160,7 +164,7 @@ pub(crate) fn find_java_inner(java_paths: &mut HashSet<PathBuf>) {
     /// Arch Linux 查找 Java
     fn find_java_on_arch(java_paths: &mut HashSet<PathBuf>) {
         // 查询已安装的 JDK/JRE 包
-        if let Ok(packages) = get_list("pacman", &["-Qs", "jre|jdk"]) {
+        if let Ok(packages) = process_helper::run_command_arg("pacman", &["-Qs", "jre|jdk"]) {
             for package_line in packages {
                 let parts: Vec<&str> = package_line.split_whitespace().collect();
                 if parts.is_empty() {
@@ -169,7 +173,8 @@ pub(crate) fn find_java_inner(java_paths: &mut HashSet<PathBuf>) {
                 let package_name = parts[0];
 
                 // 查询包文件列表
-                if let Ok(files) = get_list("pacman", &["-Ql", package_name]) {
+                if let Ok(files) = process_helper::run_command_arg("pacman", &["-Ql", package_name])
+                {
                     for file in files {
                         if file.ends_with("/bin/java") {
                             let parts: Vec<&str> = file.split_whitespace().collect();
@@ -201,7 +206,7 @@ pub(crate) fn find_java_inner(java_paths: &mut HashSet<PathBuf>) {
         }
     }
 
-    if let Ok(paths) = get_list("which", &["java"]) {
+    if let Ok(paths) = process_helper::run_command_arg("which", &["java"]) {
         for path in paths {
             if let Ok(resolved) = resolve_symlink(&path) {
                 java_paths.insert(resolved);
@@ -209,11 +214,13 @@ pub(crate) fn find_java_inner(java_paths: &mut HashSet<PathBuf>) {
         }
     }
 
-    let system_info = get_system_info();
+    let system_info = crate::get_system_info();
 
     match system_info.distribution.as_str() {
         "ubuntu" | "debian" => {
-            if let Ok(paths) = get_list("update-alternatives", &["--list", "java"]) {
+            if let Ok(paths) =
+                process_helper::run_command_arg("update-alternatives", &["--list", "java"])
+            {
                 for path in paths {
                     if let Ok(resolved) = resolve_symlink(&path) {
                         java_paths.insert(resolved);
@@ -234,9 +241,14 @@ pub(crate) fn find_java_inner(java_paths: &mut HashSet<PathBuf>) {
 
 /// 搜索Java
 ///
+/// # 参数
+///
 /// - `java_paths`: 搜索的结果
 #[cfg(target_os = "macos")]
-pub(crate) fn find_java(java_paths: &mut HashSet<PathBuf>) {
+pub(crate) fn find_java_inner(java_paths: &mut HashSet<PathBuf>) {
+    use std::path::Path;
+    use std::process::Command;
+
     // 使用 /usr/libexec/java_home
     if let Ok(output) = Command::new("/usr/libexec/java_home").arg("-V").output() {
         let stderr = String::from_utf8_lossy(&output.stderr);

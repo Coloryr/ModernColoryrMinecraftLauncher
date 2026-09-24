@@ -6,7 +6,9 @@ use serde::Serialize;
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DownloadTaskEvent {
+    /// 事件类型：add / remove / update
     pub r#type: String,
+    /// 任务 ID
     pub id: u64,
     /// 任务进度（0.0–100.0，add / remove 事件为 0）
     pub progress: f64,
@@ -28,6 +30,7 @@ pub struct DownloadItemEvent {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DownloadTaskDto {
+    /// 任务 ID
     pub id: u64,
     /// 文件总数
     pub total: usize,

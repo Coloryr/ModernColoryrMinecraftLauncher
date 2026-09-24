@@ -17,7 +17,7 @@ use crate::{
     GameInstance,
     curseforge::pack_obj::CurseForgePackObj,
     data_res::{DownloadItemRes, ItemPathRes},
-    gui_hook::{AddModPackGui, AddModPackState, BaseArchiveGui},
+    gui_hook::{AddModPackGui, AddModPackState},
     launcher::{
         FileType, file_online_info_obj::OnlineInfoObj, instance_setting_obj::InstanceSettingObj,
     },
@@ -25,8 +25,7 @@ use crate::{
     modpack::{BaseModPackWorker, ModPackWorker, curseforge_worker::CurseForgeWorker},
 };
 use mml_base::{
-    archives::BaseArchive,
-    file_item::{FileHash, FileItemObj, LaterRun},
+    archives::{BaseArchive, BaseArchiveGui}, file_item::{FileHash, FileItemObj, LaterRun},
 };
 use mml_names::{
     i18_items::error_type::{CoreResult, ErrorType},

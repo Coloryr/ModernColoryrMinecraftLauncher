@@ -5,15 +5,23 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InstanceInfoDto {
+    /// 实例 UUID
     pub uuid: String,
+    /// 实例名
     pub name: String,
+    /// 分组名
     pub group: Option<String>,
+    /// 游戏版本号
     pub version: String,
     /// 游戏版本类型：release / snapshot / other
     pub version_type: Option<String>,
+    /// 加载器类型
     pub loader: String,
+    /// 加载器版本号
     pub loader_version: Option<String>,
+    /// 实例目录名
     pub dir: String,
+    /// 是否正在运行
     pub running: bool,
     /// 整合包平台：CurseForge / Modrinth / McMod / 本地压缩包 / 文件夹
     pub modpack_type: Option<String>,

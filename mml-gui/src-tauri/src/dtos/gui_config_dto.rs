@@ -41,6 +41,7 @@ pub struct MainWindowConfigDto {
     pub selected_instance: String,
 }
 
+/// 收藏界面设置（前端 wire：camelCase，字段即 `collect`）
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase", default)]
 pub struct CollectConfigDto {
@@ -73,6 +74,7 @@ pub struct GuiConfigDto {
 }
 
 impl From<GuiConfig> for GuiConfigDto {
+    /// 磁盘配置 → 前端 wire 形态
     fn from(c: GuiConfig) -> Self {
         Self {
             theme: c.theme,
@@ -100,6 +102,7 @@ impl From<GuiConfig> for GuiConfigDto {
 }
 
 impl From<GuiConfigDto> for GuiConfig {
+    /// 前端 wire 形态 → 磁盘配置
     fn from(d: GuiConfigDto) -> Self {
         Self {
             theme: d.theme,

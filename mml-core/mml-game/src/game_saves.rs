@@ -4,12 +4,12 @@ use std::{
     collections::HashMap,
     io::{Read, Seek},
     path::{Path, PathBuf},
-    sync::{Arc, Mutex},
+    sync::Mutex,
 };
 
 use chrono::{Datelike, Local, Timelike};
 use mml_base::{
-    archives::{ArchiveType, BaseArchive, IBaseArchiveGui},
+    archives::{ArchiveType, BaseArchive, BaseArchiveGui},
     serialize_tools::{self, MiniJsonObj},
 };
 use mml_config::config_save;
@@ -29,7 +29,7 @@ use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use serde::{Deserialize, Serialize};
 use zip::ZipArchive;
 
-use crate::{GameInstance, launcher::instance_setting_obj::InstanceSettingObj};
+use crate::launcher::instance_setting_obj::InstanceSettingObj;
 
 /// 存档备份信息
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -103,7 +103,7 @@ impl Default for SaveObj {
             icon: Default::default(),
             broken: Default::default(),
             last_played: Default::default(),
-            nbt: Default::default()
+            nbt: Default::default(),
         }
     }
 }
@@ -225,7 +225,7 @@ impl InstanceSettingObj {
         &self,
         info: &SaveBackupObj,
         file: &str,
-        gui: Option<Arc<dyn IBaseArchiveGui>>,
+        gui: BaseArchiveGui,
     ) -> CoreResult<()> {
         let dir = self.get_backup_path();
         let path = dir.join(info.dir.clone());
@@ -345,7 +345,7 @@ impl SaveObj {
         &self,
         path: P,
         archive_type: ArchiveType,
-        gui: Option<Arc<dyn IBaseArchiveGui>>,
+        gui: BaseArchiveGui,
     ) -> CoreResult<()> {
         BaseArchive::compress(
             archive_type,
@@ -368,11 +368,7 @@ impl SaveObj {
     /// # 返回值
     ///
     /// 返回备份文件名（level_name_年_月_日_时_分_秒.zip）；压缩或保存备份信息失败返回对应错误
-    pub fn backup(
-        &self,
-        instance: &InstanceSettingObj,
-        gui: Option<Arc<dyn IBaseArchiveGui>>,
-    ) -> CoreResult<String> {
+    pub fn backup(&self, instance: &InstanceSettingObj, gui: BaseArchiveGui) -> CoreResult<String> {
         let path = instance.get_backup_path();
         path_helper::create_dir_all(&path)?;
 
@@ -708,7 +704,11 @@ impl SaveObj {
     ///
     /// - `version`: 游戏版本
     pub fn open_world_seed(&self, version: &str) {
-        let url = chunkbase_api::gen_url(version, self.random_seed, self.generator_name == "minecraft:large_biomes");
+        let url = chunkbase_api::gen_url(
+            version,
+            self.random_seed,
+            self.generator_name == "minecraft:large_biomes",
+        );
         mml_sys::open_helper::open_url(&url);
     }
 }

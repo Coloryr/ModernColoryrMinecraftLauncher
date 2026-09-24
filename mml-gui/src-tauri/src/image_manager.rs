@@ -1,3 +1,10 @@
+//! 图像管理：`mml-image` 自定义协议的后端
+//!
+//! 前端用 `image_base_url()` 拼地址，请求经 [`url_image`] 按首段路由：
+//! `instance`（实例图标）/ `skin`（头像）/ `skin2d` / `skinraw` / `cape2d` / `caperaw`
+//! （账户皮肤与披风）/ `icon`（远程图片，带内存 + 磁盘 + ETag 缓存）/
+//! `block`（方块贴图）/ `screenshot`（实例截图）。
+
 use std::{
     collections::HashMap,
     fs,
@@ -28,20 +35,28 @@ use crate::{
     gui_config::{self, HeadType},
 };
 
+/// 实例图标内存缓存
 static INSTANCE_IMAGE: LazyLock<RwLock<HashMap<Uuid, Vec<u8>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
+/// 账户皮肤原图缓存（未使用，保留供后续扩展）
 static SKIN_IMAGE: LazyLock<RwLock<HashMap<UserKeyObj, Vec<u8>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
+/// 账户头像（按配置类型渲染）内存缓存
 static HEAD_IMAGE: LazyLock<RwLock<HashMap<UserKeyObj, Vec<u8>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
+/// 账户皮肤全身 2D 图内存缓存（键带皮肤类型段）
 static SKIN2D_IMAGE: LazyLock<RwLock<HashMap<(UserKeyObj, String), Vec<u8>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
+/// 账户皮肤原图 PNG 内存缓存
 static SKINRAW_IMAGE: LazyLock<RwLock<HashMap<UserKeyObj, Vec<u8>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
+/// 账户披风原图 PNG 内存缓存
 static CAPERAW_IMAGE: LazyLock<RwLock<HashMap<UserKeyObj, Vec<u8>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
+/// 账户披风 2D 图内存缓存
 static CAPE2D_IMAGE: LazyLock<RwLock<HashMap<UserKeyObj, Vec<u8>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
+/// 远程图标内存缓存（键为请求名 = 网址 sha256）
 static ICON_IMAGE: LazyLock<RwLock<HashMap<String, IconCache>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 /// 图标磁盘缓存目录（`<运行目录>/image`）
@@ -78,6 +93,7 @@ fn split_path(path: &str) -> Vec<&str> {
     path.split('/').filter(|item| !item.is_empty()).collect()
 }
 
+/// 以 `image/png` 响应
 fn send_png(res: UriSchemeResponder, data: Vec<u8>) {
     res.respond(
         Response::builder()
@@ -88,16 +104,7 @@ fn send_png(res: UriSchemeResponder, data: Vec<u8>) {
     );
 }
 
-// fn send_jpeg(res: UriSchemeResponder, data: Vec<u8>) {
-//     res.respond(
-//         Response::builder()
-//             .status(StatusCode::OK)
-//             .header("Content-Type", "image/jpeg")
-//             .body(data)
-//             .unwrap(),
-//     );
-// }
-
+/// 以 400 响应（参数不合法 / 资源不存在）
 fn send_bad(res: UriSchemeResponder) {
     res.respond(
         Response::builder()
@@ -162,10 +169,20 @@ fn send_icon(res: UriSchemeResponder, icon: &IconBytes) {
     );
 }
 
+/// 读文件并解码转 PNG
+///
+/// # 参数
+///
+/// - `file`: 图片文件路径
+///
+/// # 返回值
+///
+/// 返回 PNG 数据；读取或解码失败返回 `None`
 fn read_as_png<P: AsRef<Path>>(file: P) -> Option<Vec<u8>> {
     decode_as_png(&fs::read(file).ok()?)
 }
 
+/// 实例图标（`instance/<uuid>`）：内存缓存命中直接回，未命中读实例图标文件
 fn load_instance_image(uri: &[&str], res: UriSchemeResponder) {
     if uri.len() != 2 {
         send_bad(res);
@@ -210,6 +227,7 @@ fn load_instance_image(uri: &[&str], res: UriSchemeResponder) {
     send_png(res, image);
 }
 
+/// 账户头像（`skin/<账户类型>/<uuid>`）：按配置的头像类型渲染
 async fn load_skin_image(uri: &[&str], res: UriSchemeResponder) {
     if uri.len() != 3 {
         send_bad(res);
@@ -463,6 +481,10 @@ fn gen_head_image(bitmap: &Pixmap) -> Option<Pixmap> {
     }
 }
 
+/// 远程图标（`icon/<请求名>`）：内存 → 磁盘 → 网络三级缓存
+///
+/// 磁盘过期时不直接删掉重下，而是带 ETag 回源校验，304 续用本地；
+/// 网络失败时有过期的本地副本就先用着
 async fn load_icon_image(uri: &[&str], res: UriSchemeResponder) {
     if uri.len() != 2 {
         send_bad(res);
@@ -711,6 +733,12 @@ fn write_icon_file(file: &Path, data: &[u8]) {
     let _ = path_helper::write_bytes(file, data);
 }
 
+/// `mml-image` 协议入口：按 URI 首段路由到各加载函数
+///
+/// # 参数
+///
+/// - `req`: 协议请求
+/// - `res`: 响应回写句柄
 pub async fn url_image(req: Request<Vec<u8>>, res: UriSchemeResponder) {
     let uri = split_path(req.uri().path());
     let image_type = uri.first().copied().unwrap_or_default();

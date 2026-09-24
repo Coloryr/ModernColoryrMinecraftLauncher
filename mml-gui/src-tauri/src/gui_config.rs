@@ -20,24 +20,30 @@ use serde::{Deserialize, Serialize};
 /// 主题（serde 按变体名序列化，与前端同名）
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub enum Theme {
+    /// 深色（默认）
     #[default]
     Dark,
+    /// 浅色
     Light,
 }
 
 /// 窗口模式：多窗口 / 单窗口
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub enum WindowMode {
+    /// 多窗口（默认）
     #[default]
     Multi,
+    /// 单窗口
     Single,
 }
 
 /// 侧栏位置
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub enum SidebarSide {
+    /// 左侧（默认）
     #[default]
     Left,
+    /// 右侧
     Right,
 }
 
@@ -118,6 +124,7 @@ impl Default for MainWindowConfig {
     }
 }
 
+/// 收藏界面设置
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct CollectConfig {
@@ -173,12 +180,18 @@ impl Default for GuiConfig {
     }
 }
 
+/// 配置文件路径（init 时设置）
 static FILE: OnceLock<PathBuf> = OnceLock::new();
+/// 内存配置缓存（init 时设置）
 static CONFIG: OnceLock<Arc<RwLock<GuiConfig>>> = OnceLock::new();
 /// 启动时没有配置文件（用户还没做过任何显式设置，默认值应跟随系统主题）
 static FRESH_CONFIG: AtomicBool = AtomicBool::new(false);
 
 /// 读取配置（启动时调用）
+///
+/// # 参数
+///
+/// - `path`: 运行路径（配置文件放在其下）
 pub fn init<P: AsRef<Path>>(path: P) {
     let file = FILE.get_or_init(|| path.as_ref().join(names::GUI_CONFIG_FILE));
 
@@ -195,11 +208,19 @@ pub fn init<P: AsRef<Path>>(path: P) {
 }
 
 /// 启动时是否没有配置文件（前端据此让默认主题跟随系统）
+///
+/// # 返回值
+///
+/// 无配置文件返回 `true`
 pub fn is_fresh() -> bool {
     FRESH_CONFIG.load(Ordering::Acquire)
 }
 
 /// 当前配置
+///
+/// # 返回值
+///
+/// 返回配置快照；未初始化返回默认值
 pub fn get() -> GuiConfig {
     CONFIG
         .get()
@@ -208,6 +229,10 @@ pub fn get() -> GuiConfig {
 }
 
 /// 更新配置并保存
+///
+/// # 参数
+///
+/// - `config`: 新配置
 pub fn set(config: GuiConfig) {
     if let Some(c) = CONFIG.get() {
         *c.write().unwrap() = config;
@@ -217,7 +242,7 @@ pub fn set(config: GuiConfig) {
     save();
 }
 
-/// 保存配置（异步写入 gui_config.json）
+/// 保存配置（异步写入 gui_config.json；未初始化时忽略）
 pub fn save() {
     let Some(file) = FILE.get() else {
         return;

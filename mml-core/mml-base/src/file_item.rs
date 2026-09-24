@@ -81,6 +81,19 @@ impl FileHash {
             FileHash::Sha1Sha512(sha1, _) => Some(sha1.clone()),
         }
     }
+
+    /// 获取SHA512
+    pub fn get_sha512(&self) -> Option<String> {
+        match self {
+            FileHash::None => None,
+            FileHash::Md5(_) => None,
+            FileHash::Sha1(_) => None,
+            FileHash::Sha256(_) => None,
+            FileHash::Sha512(sha512) => Some(sha512.clone()),
+            FileHash::Sha1Sha256(_, _) => None,
+            FileHash::Sha1Sha512(_, sha512) => Some(sha512.clone()),
+        }
+    }
 }
 
 /// 一个文件项目
@@ -275,10 +288,7 @@ mod tests {
         assert!(make_item(file.clone(), FileHash::None).check_hash());
         // MD5 正确（大小写不敏感）
         assert!(make_item(file.clone(), FileHash::Md5(HELLO_MD5.into())).check_hash());
-        assert!(
-            make_item(file.clone(), FileHash::Md5(HELLO_MD5.to_uppercase()))
-                .check_hash()
-        );
+        assert!(make_item(file.clone(), FileHash::Md5(HELLO_MD5.to_uppercase())).check_hash());
         // MD5 错误
         assert!(!make_item(file.clone(), FileHash::Md5("deadbeef".into())).check_hash());
         // SHA1 / SHA256 正确
@@ -302,11 +312,7 @@ mod tests {
         );
         // 组合哈希 SHA1 错
         assert!(
-            !make_item(
-                file.clone(),
-                FileHash::Sha1Sha512("bad".into(), "x".into())
-            )
-            .check_hash()
+            !make_item(file.clone(), FileHash::Sha1Sha512("bad".into(), "x".into())).check_hash()
         );
 
         // 文件不存在

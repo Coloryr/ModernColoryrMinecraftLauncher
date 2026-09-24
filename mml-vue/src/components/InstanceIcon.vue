@@ -1,4 +1,6 @@
 <script setup lang="ts">
+// 实例图标：优先 mml-image 协议加载真图，缺失 / 失败时回退为
+// 按 uuid 取色的渐变底 + 实例名首字母
 import { computed, onUnmounted, ref, watch } from "vue";
 import { getImageBaseUrl, onInstanceChange } from "../lib/api";
 

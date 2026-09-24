@@ -23,7 +23,7 @@ use crate::{
     game_log::GameLog,
     launcher::instance_setting_obj::InstanceSettingObj,
     launcher_path::{self, assets_path, libraries_path, version_path},
-    loader::LoaderType,
+    loader::{LoaderType, liteloader::find_loader_obj},
     mojang::{
         self,
         assets_obj::AssetsObj,
@@ -175,7 +175,19 @@ fn make_loader_v1_game_arg(obj: &InstanceSettingObj, game: &GameArgObj) -> Vec<S
             args
         }
         LoaderType::Custom => obj.get_custom_loader_game_args(),
-        LoaderType::LiteLoader => todo!(),
+        LoaderType::LiteLoader => {
+            if let Some(data) = version_path::get_liteloader(&obj.version)
+                && let Some(loader) =
+                    find_loader_obj(&data, obj.loader_version.as_deref().unwrap_or(""))
+            {
+                let mut args = make_v1_game_arg(game);
+                args.push("--tweakClass".to_string());
+                args.push(loader.tweak_class.clone());
+                args
+            } else {
+                Vec::new()
+            }
+        }
     }
 }
 
@@ -215,7 +227,8 @@ fn make_loader_v2_game_arg(obj: &InstanceSettingObj) -> Vec<String> {
             "optifine.OptiFineTweaker".to_string(),
         ],
         LoaderType::Custom => obj.get_custom_loader_game_args(),
-        LoaderType::LiteLoader => todo!(),
+        // 1.13+ 无 LiteLoader，V2 分支走不到
+        LoaderType::LiteLoader => Vec::new(),
     }
 }
 
@@ -327,7 +340,7 @@ async fn make_loader_jvm_arg(v2: bool, obj: &InstanceSettingObj) -> Vec<String> 
             list
         }
         LoaderType::Custom => obj.get_custom_loader_game_args(),
-        LoaderType::LiteLoader => todo!(),
+        LoaderType::LiteLoader => Vec::new(),
     }
 }
 
@@ -770,7 +783,8 @@ impl InstanceSettingObj {
         let v2 = version.is_game_version_v2();
 
         Ok(match self.loader {
-            LoaderType::Normal => version.main_class.clone(),
+            // LiteLoader 走 tweak class 机制，不改主类
+            LoaderType::Normal | LoaderType::LiteLoader => version.main_class.clone(),
             LoaderType::Forge | LoaderType::NeoForge => {
                 if v2 {
                     "io.github.zekerzhayard.forgewrapper.installer.Main".to_string()
@@ -893,7 +907,9 @@ impl InstanceSettingObj {
                     loader_libs = Some(res.libs);
                 }
                 LoaderType::Normal => {}
-                LoaderType::LiteLoader => todo!(),
+                LoaderType::LiteLoader => {
+                    loader_libs = Some(self.get_liteloader_libs().await?);
+                }
             }
 
             if let Some(loader) = loader_libs {

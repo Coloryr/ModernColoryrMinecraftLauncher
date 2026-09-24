@@ -7,6 +7,7 @@
 
 use proc_macro::TokenStream;
 
+/// 事件发射函数标记（属性宏，原样返回 item，不改动函数）
 #[proc_macro_attribute]
 pub fn emit(_attr: TokenStream, item: TokenStream) -> TokenStream {
     item

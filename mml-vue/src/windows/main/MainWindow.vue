@@ -1,4 +1,6 @@
 <script setup lang="ts">
+// 主窗口：实例列表（分组 / 平铺 / 搜索）、实例详情与设置、启动流程与日志、启动器主页
+// 子组件在 topbar / sidebar / ctxmenu/；拖拽、多选、文件拖放逻辑在 composables/
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import {
   api,
@@ -418,7 +420,6 @@ watch(
 // 修改后防抖写回后端（每个按键都保存会产生大量写盘）
 let argsSaveTimer: ReturnType<typeof setTimeout> | null = null;
 
-/** 自动加入服务器信息（按实例存储） */
 function patchArgs(patch: Partial<InstanceArgsDto>) {
   if (selected.value) updateArgs({ ...argsOf(selected.value.uuid), ...patch });
 }
@@ -435,7 +436,7 @@ function onServerJoin(checked: boolean) {
   patchArgs({ joinServer: checked });
 }
 
-// 累计游戏时间（模拟数据）
+// 累计游戏时间（TEMP 模拟数据，接入后端统计接口后移除）
 const PLAY_HOURS: Record<string, number> = {
   "11111111-1111-4111-8111-111111111111": 18.5,
   "22222222-2222-4222-8222-222222222222": 6.8,
@@ -941,6 +942,7 @@ const groupError = ref("");
 const groupAdding = ref(false);
 
 // ================= 服务器 MOTD 悬浮卡片 =================
+// TEMP 模拟数据：在线人数 / 延迟为随机值，接入真实 MOTD 查询后替换
 
 const motdNow = ref(128);
 const motdPing = ref(32);

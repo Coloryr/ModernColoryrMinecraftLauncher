@@ -17,6 +17,7 @@ use uuid::Uuid;
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(default)]
 pub struct CollectItemObj {
+    /// 收藏项 uuid（加载时由 `CollectObj::items` 的 key 回填，不落盘）
     #[serde(skip)]
     pub uuid: String,
     /// 下载源
@@ -74,7 +75,9 @@ impl Default for CollectObj {
     }
 }
 
+/// 收藏文件路径（init 时设置）
 static FILE: OnceLock<PathBuf> = OnceLock::new();
+/// 内存收藏数据
 static COLLECT: LazyLock<RwLock<CollectObj>> = LazyLock::new(|| RwLock::new(Default::default()));
 
 /// 记录收藏文件路径（启动时调用）；实际读取见 [`load`]
@@ -87,6 +90,13 @@ pub fn get() -> CollectObj {
     COLLECT.read().unwrap().clone()
 }
 
+/// 从文件读取收藏数据
+///
+/// 回填各条目的 uuid，并剔除分组里指向已不存在条目的悬空引用。
+///
+/// # 返回值
+///
+/// 成功返回 `Ok(())`；文件解析失败返回对应错误
 pub fn load() -> CoreResult<()> {
     let file = FILE.get().unwrap();
     let mut obj: CollectObj = if file.exists() {
@@ -108,6 +118,7 @@ pub fn load() -> CoreResult<()> {
     Ok(())
 }
 
+/// 保存收藏数据（异步落盘）
 pub fn save() {
     config_save::save(
         uuids::COLLECT_UUID,
@@ -116,6 +127,11 @@ pub fn save() {
     );
 }
 
+/// 删除收藏条目（按下载源 + 项目 ID 匹配，并从所有分组移除）
+///
+/// # 参数
+///
+/// - `obj`: 待删除的收藏条目（用 source + pid 匹配，uuid 无关）
 pub fn remove_item(obj: CollectItemObj) {
     {
         let mut collect = COLLECT.write().unwrap();
@@ -139,6 +155,11 @@ pub fn remove_item(obj: CollectItemObj) {
     save();
 }
 
+/// 按 uuid 删除收藏条目（并从所有分组移除）
+///
+/// # 参数
+///
+/// - `uuid`: 收藏条目 uuid
 pub fn remove_uuid(uuid: &str) {
     {
         let mut collect = COLLECT.write().unwrap();
@@ -153,6 +174,11 @@ pub fn remove_uuid(uuid: &str) {
     save();
 }
 
+/// 添加收藏条目（同下载源同项目 ID 已存在时忽略）
+///
+/// # 参数
+///
+/// - `obj`: 收藏条目（uuid 自动生成）
 pub fn add_item(obj: CollectItemObj) {
     {
         let mut collect = COLLECT.write().unwrap();
@@ -173,6 +199,11 @@ pub fn add_item(obj: CollectItemObj) {
     save();
 }
 
+/// 添加收藏分组（同名已存在时忽略）
+///
+/// # 参数
+///
+/// - `name`: 分组名
 pub fn add_group(name: &str) {
     {
         let mut collect = COLLECT.write().unwrap();
@@ -187,6 +218,11 @@ pub fn add_group(name: &str) {
     save();
 }
 
+/// 删除收藏分组（分组内条目保留，仅脱离分组）
+///
+/// # 参数
+///
+/// - `name`: 分组名
 pub fn remove_group(name: &str) {
     {
         let mut collect = COLLECT.write().unwrap();
@@ -254,9 +290,15 @@ pub fn set_group_items(group: &str, uuids: &[String]) {
     save();
 }
 
+/// 项目是否已收藏（`items` 以收藏条目 uuid 为键，这里按 pid 匹配值里的项目 ID）
+///
+/// # 参数
+///
+/// - `pid`: 项目 ID
+///
+/// # 返回值
+///
+/// 已收藏返回 `true`
 pub fn is_star(pid: &str) -> bool {
-    let data = COLLECT.read().unwrap();
-
-    // items 以收藏条目的 uuid 为键，按 pid 匹配值里的项目ID
-    data.items.values().any(|item| item.pid == pid)
+    COLLECT.read().unwrap().items.values().any(|item| item.pid == pid)
 }

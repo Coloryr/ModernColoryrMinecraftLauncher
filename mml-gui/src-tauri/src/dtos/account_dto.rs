@@ -11,7 +11,9 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AccountStoreViewDto {
+    /// 全部账户
     pub accounts: Vec<AccountStoreDto>,
+    /// 当前选中账户 UUID
     pub current_uuid: Option<String>,
 }
 
@@ -63,6 +65,14 @@ impl AccountStoreDto {
     /// 有皮肤时 `avatar` 应为 `mml-skin-draw` 渲染的头像 data URI（渲染管线见
     /// `windows/account.rs`）；当前 LoginObj 尚未携带皮肤贴图，故为 None，
     /// 前端回退到原来的占位图显示。
+    ///
+    /// # 参数
+    ///
+    /// - `login`: 账户完整凭据
+    ///
+    /// # 返回值
+    ///
+    /// 返回前端显示用 DTO
     pub fn from_login(login: &LoginObj) -> Self {
         let (c1, c2) = palette(&login.uuid);
         Self {
@@ -79,6 +89,14 @@ impl AccountStoreDto {
 }
 
 /// 前端账户类型字符串 → AuthType
+///
+/// # 参数
+///
+/// - `s`: 前端账户类型字符串
+///
+/// # 返回值
+///
+/// 返回对应账户类型，无法识别按离线处理
 pub fn auth_type_from_str(s: &str) -> AuthType {
     match s {
         "microsoft" => AuthType::OAuth,
@@ -90,6 +108,14 @@ pub fn auth_type_from_str(s: &str) -> AuthType {
 }
 
 /// AuthType → 前端账户类型字符串（自建皮肤站并入 littleskin 显示）
+///
+/// # 参数
+///
+/// - `t`: 账户类型
+///
+/// # 返回值
+///
+/// 返回前端账户类型字符串
 fn auth_type_str(t: &AuthType) -> &'static str {
     match t {
         AuthType::Offline => "offline",
@@ -101,6 +127,14 @@ fn auth_type_str(t: &AuthType) -> &'static str {
 }
 
 /// 按 uuid 哈希取配色（无皮肤时的占位色）
+///
+/// # 参数
+///
+/// - `uuid`: 账户 UUID
+///
+/// # 返回值
+///
+/// 返回渐变起点色与终点色（CSS 颜色）
 fn palette(uuid: &str) -> (String, String) {
     const P: [(&str, &str); 6] = [
         ("#3f8cff", "#5f6cff"),

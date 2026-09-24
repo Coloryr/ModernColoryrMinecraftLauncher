@@ -36,6 +36,11 @@ fn main() {
     mml_gui_lib::run()
 }
 
+/// 获取兜底运行路径（系统数据目录下的 M²L 目录）
+///
+/// # 返回值
+///
+/// 返回运行路径
 fn get_save_path() -> PathBuf {
     let dir = dirs::data_dir()
         .or(dirs::data_local_dir())
@@ -45,6 +50,11 @@ fn get_save_path() -> PathBuf {
     dir.join(names::MML_DIR).to_path_buf()
 }
 
+/// 调试构建：取 exe 同目录下的 M²L 目录
+///
+/// # 返回值
+///
+/// 返回运行路径
 #[cfg(debug_assertions)]
 fn get_run_path() -> PathBuf {
     use mml_names::names;
@@ -56,6 +66,11 @@ fn get_run_path() -> PathBuf {
     exe_dir.join(names::MML_DIR)
 }
 
+/// 发布构建：读数据目录下 `run` 文件里记录的运行路径（路径需存在才有效）
+///
+/// # 返回值
+///
+/// 返回记录的运行路径；文件缺失或路径无效返回 `None`
 #[cfg(not(debug_assertions))]
 fn get_config_path() -> Option<PathBuf> {
     use std::path::Path;
@@ -75,6 +90,11 @@ fn get_config_path() -> Option<PathBuf> {
     None
 }
 
+/// 发布构建（Windows）：取 `run` 文件记录的路径，取不到用 exe 同目录
+///
+/// # 返回值
+///
+/// 返回运行路径
 #[cfg(not(debug_assertions))]
 #[cfg(target_os = "windows")]
 fn get_run_path() -> PathBuf {
@@ -89,6 +109,11 @@ fn get_run_path() -> PathBuf {
     })
 }
 
+/// 发布构建（Linux）：取 `run` 文件记录的路径，取不到用家目录下的安装目录
+///
+/// # 返回值
+///
+/// 返回运行路径
 #[cfg(not(debug_assertions))]
 #[cfg(target_os = "linux")]
 fn get_run_path() -> PathBuf {
@@ -101,6 +126,11 @@ fn get_run_path() -> PathBuf {
     })
 }
 
+/// 发布构建（macOS）：取 `run` 文件记录的路径，取不到用共享目录
+///
+/// # 返回值
+///
+/// 返回运行路径
 #[cfg(not(debug_assertions))]
 #[cfg(target_os = "macos")]
 fn get_run_path() -> PathBuf {

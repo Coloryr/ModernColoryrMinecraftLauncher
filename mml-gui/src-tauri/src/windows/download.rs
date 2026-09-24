@@ -5,7 +5,7 @@
 //!   （download-task / download-item），同时维护线程状态表（当前文件、状态、速度采样）
 //! - `download_get_status` 查询任务 + 线程 + 总体速度快照（前端按固定间隔轮询）
 //! - `download_pause_all` / `download_resume_all` / `download_cancel_all` 全局控制下载
-//! 窗口本身由 `../window_manager.rs` 统一创建。
+//! 窗口本身由 `windows`（`create_window`）统一创建。
 
 use std::{
     collections::HashMap,
@@ -48,6 +48,7 @@ struct ThreadInfo {
 }
 
 impl ThreadInfo {
+    /// 新建线程状态（速度采样起点取当前进度）
     fn new(item: Arc<DownloadItem>, name: String, state: String) -> Self {
         ThreadInfo {
             sample_bytes: item.get_now_size(),
@@ -96,6 +97,11 @@ pub struct DownloadGuiHook {
 }
 
 impl DownloadGuiHook {
+    /// 创建回调桥接
+    ///
+    /// # 参数
+    ///
+    /// - `app`: 应用句柄（事件经它转发到前端）
     pub fn new(app: AppHandle) -> Self {
         DownloadGuiHook {
             app,
@@ -115,6 +121,7 @@ impl DownloadGuiHook {
             .unwrap_or_default()
     }
 
+    /// 下载项状态 → 前端状态 ID
     fn state_id(state: DownloadItemState) -> String {
         match state {
             DownloadItemState::Wait => "wait",
@@ -156,6 +163,7 @@ impl DownloadGuiHook {
 }
 
 impl mml_downloader::IDownloadGui for DownloadGuiHook {
+    /// 单文件状态回调：刷新线程状态表 → 转发资源下载进度 → 去重后发事件
     fn update(&self, thread: u32, file: &Arc<DownloadItem>) {
         let name = Self::item_name(file);
         let state = file.get_state();
@@ -191,6 +199,7 @@ impl mml_downloader::IDownloadGui for DownloadGuiHook {
         );
     }
 
+    /// 任务列表变化回调：任务增删 / 进度更新转发为事件
     fn update_task(&self, state: DownloadTaskState) {
         let event = match state {
             DownloadTaskState::AddTask(id) => DownloadTaskEvent {

@@ -5,7 +5,9 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VersionInfoDto {
+    /// 版本号
     pub id: String,
+    /// 版本类型（release / snapshot / old_beta 等）
     pub version_type: String,
 }
 

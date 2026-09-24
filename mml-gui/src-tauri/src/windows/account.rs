@@ -1,4 +1,7 @@
-//! 账户窗口
+//! 账户窗口：账户列表 + 微软设备码登录 + Token 刷新
+//!
+//! 数据由 `mml_auth::auths` 持有（`accounts.json`），这里只做命令与事件转发。
+
 use std::fmt::Display;
 use std::sync::RwLock;
 
@@ -14,6 +17,7 @@ use crate::dtos::account_dto::{
 };
 use crate::listens;
 
+/// 进行中的微软登录轮询取消句柄（None = 无登录进行中）
 static OAUTH_NOW: RwLock<Option<CancellationToken>> = RwLock::new(None);
 
 /// 账户变更事件（跨窗口同步刷新列表）

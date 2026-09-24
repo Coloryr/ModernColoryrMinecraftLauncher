@@ -7,7 +7,6 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use mml_auth::LoginObj;
-use mml_base::archives::IBaseArchiveGui;
 
 use crate::{GameInstance, launcher::instance_setting_obj::InstanceSettingObj};
 
@@ -19,8 +18,6 @@ pub type AddInstanceGui = Option<Arc<dyn IAddInstanceGui>>;
 pub type AddModPackGui = Option<Arc<dyn IAddModPackGui>>;
 /// 进度条界面回调
 pub type ProgressGui = Option<Arc<dyn IProgressGui>>;
-/// 压缩包操作界面回调
-pub type BaseArchiveGui = Option<Arc<dyn IBaseArchiveGui>>;
 
 /// 项目安装状态
 pub enum AddModPackState {

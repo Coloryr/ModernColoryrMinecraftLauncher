@@ -3,14 +3,9 @@
 //! 每个窗口一个 rs 文件，包含：
 //! - 窗口规格（模型）：标签 / 标题 / 尺寸常量
 //! - 窗口专属数据模型与方法（账户 / 新闻 / 游戏事件等）
-//! - 窗口创建操作：`open(app)` 创建（或聚焦）对应窗口
 //! - 窗口按钮调用的方法（IPC 命令，如 list_dir）
-//! 通用数据模型见 `../models/`。
 //!
-//! 窗口的创建 / 聚焦 / 关闭统一由 `../window_manager.rs` 处理，
-//! 各窗口的 `open` 只负责传入自己的规格（标签 / 标题 / 尺寸）。
-//!
-//! 所有窗口的创建、聚焦、关闭统一在这里处理：
+//! 所有窗口的创建、聚焦、关闭统一在本模块处理：
 //! - 主窗口在 `setup` 阶段通过 [`show_main_window`] 创建（并恢复上次几何）
 //! - 功能窗口通过 [`create_window`] 创建或聚焦；`window_open_window` / `window_close_window`
 //!   命令供前端调用（多窗口模式），参数为窗口 kind（与前端 `registry.ts` 对应）
@@ -55,9 +50,13 @@ use crate::dtos::GuiConfigDto;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct WindowState {
+    /// 外框 X（`outer_position()`）
     pub x: i32,
+    /// 外框 Y（`outer_position()`）
     pub y: i32,
+    /// 客户区宽（`inner_size()`）
     pub width: u32,
+    /// 客户区高（`inner_size()`）
     pub height: u32,
 }
 
@@ -93,33 +92,42 @@ const COLLECT_WINDOW_UUID: Uuid = uuid!("00000000-0000-0000-0000-00000000000c");
 
 /// 窗口注册表条目
 struct WindowEntry {
+    /// 窗口标签（`mml-<kind>`，与前端 kind 对应）
     label: &'static str,
+    /// 最小宽度（= 无历史几何时的默认宽度）
     min_width: f64,
+    /// 最小高度（= 无历史几何时的默认高度）
     min_height: f64,
 }
 
 /// 通用窗口最小尺寸（= 无历史几何时的默认尺寸）
 const MIN_WIDTH: f64 = 640.0;
+/// 通用窗口最小高度
 const MIN_HEIGHT: f64 = 480.0;
 
-/// 主窗口最小尺寸
+/// 主窗口最小宽度
 const MAIN_MIN_WIDTH: f64 = 920.0;
+/// 主窗口最小高度
 const MAIN_MIN_HEIGHT: f64 = 600.0;
 
-/// 账户窗口最小尺寸
+/// 账户窗口最小宽度
 const ACCOUNT_MIN_WIDTH: f64 = 770.0;
+/// 账户窗口最小高度
 const ACCOUNT_MIN_HEIGHT: f64 = 480.0;
 
-/// 添加实例窗口最小尺寸
+/// 添加实例窗口最小宽度
 const ADD_MIN_WIDTH: f64 = 700.0;
+/// 添加实例窗口最小高度
 const ADD_MIN_HEIGHT: f64 = 585.0;
 
-/// 下载窗口最小尺寸
+/// 下载窗口最小宽度
 const DOWNLOAD_MIN_WIDTH: f64 = 670.0;
+/// 下载窗口最小高度
 const DOWNLOAD_MIN_HEIGHT: f64 = 470.0;
 
-/// 下载整合包窗口最小尺寸
+/// 下载整合包窗口最小宽度
 const ADD_MODPACK_MIN_WIDTH: f64 = 920.0;
+/// 下载整合包窗口最小高度
 const ADD_MODPACK_MIN_HEIGHT: f64 = 600.0;
 
 /// 窗口注册表：uuid → 窗口信息

@@ -9,6 +9,14 @@ use serde::{Deserialize, Serialize};
 ///
 /// 配合 `#[serde(default)]`：字段缺失 -> `None`（不改），
 /// `null` -> `Some(None)`（清空），有值 -> `Some(Some(v))`（更新）。
+///
+/// # 参数
+///
+/// - `de`: serde 反序列化器
+///
+/// # 返回值
+///
+/// 返回反序列化结果
 fn double_option<'de, T, D>(de: D) -> Result<Option<T>, D::Error>
 where
     T: Deserialize<'de>,
@@ -17,11 +25,13 @@ where
     Deserialize::deserialize(de).map(Some)
 }
 
-/// Minecraft 新闻条目
+/// 核心数据加载完成事件
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LoadState {
+    /// 是否加载成功
     pub ok: bool,
+    /// 失败文案（成功为 None）
     pub error: Option<String>,
 }
 
@@ -29,10 +39,15 @@ pub struct LoadState {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NewsItem {
+    /// 条目 ID
     pub id: i64,
+    /// 标题
     pub title: String,
+    /// 日期
     pub date: String,
+    /// 分类标签
     pub tag: String,
+    /// 配图地址
     pub image: String,
     /// 原文链接（点击卡片用系统浏览器打开）
     pub url: String,
@@ -45,12 +60,19 @@ pub struct NewsItem {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LogEvent {
+    /// 实例 UUID
     pub uuid: String,
+    /// 时间
     pub time: String,
+    /// 日志原文
     pub text: String,
+    /// 线程名（解析不出为空串）
     pub thread: String,
+    /// 级别（解析不出为空串）
     pub level: String,
+    /// 分类（解析不出为空串）
     pub category: String,
+    /// 是否清空日志（前端清屏）
     pub clear: bool,
 }
 
@@ -58,10 +80,15 @@ pub struct LogEvent {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LogLine {
+    /// 时间
     pub time: String,
+    /// 日志原文
     pub text: String,
+    /// 线程名（解析不出为空串）
     pub thread: String,
+    /// 级别（解析不出为空串）
     pub level: String,
+    /// 分类（解析不出为空串）
     pub category: String,
 }
 
@@ -69,7 +96,9 @@ pub struct LogLine {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct StateEvent {
+    /// 实例 UUID
     pub uuid: String,
+    /// 状态标识
     pub state: String,
 }
 
@@ -77,7 +106,9 @@ pub struct StateEvent {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExitEvent {
+    /// 实例 UUID
     pub uuid: String,
+    /// 进程退出码
     pub code: i32,
 }
 
@@ -85,7 +116,9 @@ pub struct ExitEvent {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ErrorEvent {
+    /// 实例 UUID（启动前错误为 None）
     pub uuid: Option<String>,
+    /// 错误文案
     pub message: String,
 }
 
@@ -93,29 +126,44 @@ pub struct ErrorEvent {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InstanceChangeEvent {
+    /// 变更类型：add / edit / remove / group
     pub r#type: String,
 }
 
 /// 实例更新补丁（前端 Partial<InstanceInfoDto> 的 IPC 形态）
+///
+/// 字段缺失 = 不改；`null` = 清空（仅标注 `double_option` 的字段支持）。
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InstancePatch {
+    /// 分组名
     pub group: Option<Option<String>>,
+    /// 实例名
     pub name: Option<String>,
+    /// 游戏版本号
     pub version: Option<String>,
+    /// 游戏版本类型
     pub version_type: Option<String>,
+    /// 加载器类型
     pub loader: Option<String>,
+    /// 加载器版本号
     #[serde(default, deserialize_with = "double_option")]
     pub loader_version: Option<Option<String>>,
+    /// 整合包平台
     #[serde(default, deserialize_with = "double_option")]
     pub modpack_type: Option<Option<String>>,
+    /// 整合包项目 ID
     #[serde(default, deserialize_with = "double_option")]
     pub pid: Option<Option<String>>,
+    /// 整合包文件 ID
     #[serde(default, deserialize_with = "double_option")]
     pub fid: Option<Option<String>>,
+    /// 在线整合包地址
     #[serde(default, deserialize_with = "double_option")]
     pub server_url: Option<Option<String>>,
+    /// 游戏内语言
     pub lang: Option<String>,
+    /// 日志编码：utf8 / gbk
     pub log_encoding: Option<String>,
 }
 

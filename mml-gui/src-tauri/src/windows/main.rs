@@ -42,11 +42,17 @@ pub fn emit_load_done(app: &AppHandle, data: Option<String>) {
 
 /// 主窗口数据存储：实例 / 启动参数 / 分组 / 运行状态 / 日志
 pub struct MainWindowModel {
+    /// 实例列表（遗留数据的兜底存储；核心实例以 mml-game 为准）
     pub instances: Vec<InstanceInfoDto>,
+    /// 遗留实例的启动参数（uuid → 参数）
     pub args: HashMap<String, InstanceArgsDto>,
+    /// 手动创建的空分组（不含实例自带分组）
     pub extra_groups: Vec<String>,
+    /// 分组显示顺序（新建分组按出现顺序追加在末尾）
     pub group_order: Vec<String>,
+    /// 运行中的实例 uuid
     pub running: HashSet<String>,
+    /// 实例游戏日志（uuid → 日志行，`main_get_game_log` 查询）
     pub logs: HashMap<String, Vec<LogLine>>,
 }
 
@@ -105,6 +111,7 @@ fn java_list() -> Vec<JavaInfoDto> {
         .collect()
 }
 
+/// 当前时间（`时:分:秒.毫秒`，日志行时间戳）
 fn now_time() -> String {
     let d = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -122,7 +129,7 @@ fn now_time() -> String {
 
 // ================= IPC 命令 =================
 
-/// 取主窗口模型（模型跟随主窗口生命周期，开窗创建、关窗销毁，见 window_manager）
+/// 取主窗口模型（模型跟随主窗口生命周期，开窗创建、关窗销毁，见 `windows`）
 ///
 /// 这些命令只会由主窗口 webview 调用；模型缺失属异常情形（主窗口未创建），
 /// 返回 Err / 空列表由调用方降级，不 panic。
@@ -1008,6 +1015,7 @@ struct BlockRenderState {
     error: Mutex<Option<String>>,
 }
 
+/// 方块贴图渲染进度状态（内存态，`main_block_status` 查询 / 事件推送共用）
 static BLOCK_RENDER: LazyLock<BlockRenderState> = LazyLock::new(|| BlockRenderState {
     running: AtomicBool::new(false),
     now: AtomicU32::new(0),
@@ -1036,11 +1044,13 @@ struct BlockRenderGui {
 }
 
 impl IProgressGui for BlockRenderGui {
+    /// 更新进度文字并广播
     fn set_progress_text(&self, text: Option<String>) {
         *BLOCK_RENDER.text.lock().unwrap() = text;
         emit_main_block_render(&self.app, block_status());
     }
 
+    /// 更新步数进度并广播
     fn set_progress_now(&self, value: usize, all: Option<usize>) {
         BLOCK_RENDER.now.store(value as u32, Ordering::Release);
         if let Some(all) = all {

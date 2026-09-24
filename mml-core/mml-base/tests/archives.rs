@@ -515,7 +515,7 @@ fn add_files_data_inplace() {
         .unwrap();
     assert_eq!(base.read("extra.txt").unwrap(), b"extra");
     assert_eq!(base.read("a.txt").unwrap(), b"a");
-    base.add_data("data.bin", &[1u8, 2, 3], None).unwrap();
+    base.add_data("data.bin", &[1u8, 2, 3]).unwrap();
     assert_eq!(base.read("data.bin").unwrap(), vec![1u8, 2, 3]);
 
     // Tar 就地追加
@@ -526,7 +526,7 @@ fn add_files_data_inplace() {
         .add_files(&[(extra.clone(), PathBuf::from("extra.txt"))], None)
         .unwrap();
     assert_eq!(base2.read("extra.txt").unwrap(), b"extra");
-    base2.add_data("data.bin", &[9u8], None).unwrap();
+    base2.add_data("data.bin", &[9u8]).unwrap();
     assert_eq!(base2.read("data.bin").unwrap(), vec![9u8]);
 
     fs::remove_dir_all(file).ok();

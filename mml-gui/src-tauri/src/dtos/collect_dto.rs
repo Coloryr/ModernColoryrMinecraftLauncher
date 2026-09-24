@@ -31,7 +31,16 @@ pub struct CollectItemDto {
 }
 
 impl CollectItemDto {
+    /// 由磁盘收藏项构造
+    ///
+    /// # 参数
+    ///
     /// - `uuid`: `CollectObj::items` 里的 key
+    /// - `data`: 磁盘收藏项
+    ///
+    /// # 返回值
+    ///
+    /// 返回转换后的 DTO
     pub fn new(uuid: &str, data: &CollectItemObj) -> Self {
         Self {
             uuid: uuid.to_string(),
@@ -56,6 +65,13 @@ pub struct CollectDataDto {
 }
 
 impl From<CollectObj> for CollectDataDto {
+    /// # 参数
+    ///
+    /// - `obj`: 磁盘收藏数据
+    ///
+    /// # 返回值
+    ///
+    /// 返回转换后的 DTO（收藏项与各分组的 uuid 列表均按名字 / 值排序）
     fn from(obj: CollectObj) -> Self {
         let mut items: Vec<CollectItemDto> = obj
             .items

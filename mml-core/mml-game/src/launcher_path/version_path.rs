@@ -952,7 +952,11 @@ pub fn get_optifine(version: &str) -> Option<Arc<OptifineObj>> {
 /// 返回 LiteLoader 版本信息；不存在返回 `None`
 pub fn get_liteloader(version: &str) -> Option<Arc<LiteloaderVersionObj>> {
     let list = LITE_LOADER.read().unwrap();
-    Some(list.get(version)?.clone())
+    // 缓存键为版本前缀（如 1.12 / 1.7.10），取能匹配游戏版本的最长前缀
+    list.iter()
+        .filter(|(key, _)| version.starts_with(key.as_str()))
+        .max_by_key(|(key, _)| key.len())
+        .map(|(_, value)| value.clone())
 }
 
 impl InstanceSettingObj {

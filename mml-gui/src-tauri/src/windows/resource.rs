@@ -24,12 +24,19 @@ use crate::dtos::{
 
 /// 实例资源目录类别（open_folder 的 kind 入参）
 const KIND_MODS: &str = "mods";
+/// 材质包目录
 const KIND_RESOURCEPACKS: &str = "resourcepacks";
+/// 存档目录
 const KIND_SAVES: &str = "saves";
+/// 截图目录
 const KIND_SCREENSHOTS: &str = "screenshots";
+/// 光影包目录
 const KIND_SHADERPACKS: &str = "shaderpacks";
+/// 结构文件目录
 const KIND_SCHEMATICS: &str = "schematics";
+/// 服务器（打开游戏根目录）
 const KIND_SERVERS: &str = "servers";
+/// 数据包（存档子页，需配合 parent = 存档目录名）
 const KIND_DATAPACKS: &str = "datapacks";
 
 /// 解析实例 uuid

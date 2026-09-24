@@ -5,7 +5,9 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct EnvVarLineDto {
+    /// 变量名
     pub key: String,
+    /// 变量值
     pub value: String,
 }
 
@@ -17,8 +19,11 @@ pub struct InstanceArgsDto {
     pub memory: i64,
     /// 最小内存（MB）
     pub min_memory: i64,
+    /// 是否全屏
     pub fullscreen: bool,
+    /// 窗口宽度
     pub width: i64,
+    /// 窗口高度
     pub height: i64,
     /// 使用的 Java 名；"custom" 表示自定义路径
     pub java_name: String,
@@ -44,18 +49,25 @@ pub struct InstanceArgsDto {
     pub log_encoding: String,
     /// 启动前执行
     pub pre_enabled: bool,
+    /// 启动前执行的命令
     pub pre_cmd: String,
     /// 启动后执行
     pub post_enabled: bool,
+    /// 启动后执行的命令
     pub post_cmd: String,
     /// 游戏内代理
     pub proxy_ip: String,
+    /// 代理端口
     pub proxy_port: i64,
+    /// 代理用户名
     pub proxy_user: String,
+    /// 代理密码
     pub proxy_pass: String,
     /// 自动加入服务器
     pub server_ip: String,
+    /// 服务器端口
     pub server_port: i64,
+    /// 是否自动加入服务器
     pub join_server: bool,
 }
 

@@ -620,6 +620,16 @@ pub fn delete_instance(uuid: &Uuid) -> CoreResult<()> {
     // 先删实例文件（回收站），失败则保留实例数据，避免 UI 消失但文件还在
     instance.read().unwrap().delete_files()?;
 
+    remove_instance_record(uuid);
+    Ok(())
+}
+
+/// 从实例列表移除记录（不删除文件，实例目录监视用）
+///
+/// # 参数
+///
+/// - `uuid`: 实例 UUID
+pub(crate) fn remove_instance_record(uuid: &Uuid) {
     {
         let mut groups = GROUPS.write().unwrap();
         let mut instances = INSTANCES.write().unwrap();
@@ -633,7 +643,6 @@ pub fn delete_instance(uuid: &Uuid) -> CoreResult<()> {
     }
 
     invoke_change(InstanceChange::RemoveInstance(*uuid));
-    Ok(())
 }
 
 /// 重命名实例（名字与实例目录一起改）

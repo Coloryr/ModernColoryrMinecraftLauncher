@@ -3,7 +3,7 @@
 // 两套样式：`windows`（右端三个方按钮）/ `macos`（左端红黄绿圆点）。
 // 4 月 1 日对调两套样式（愚人节彩蛋）。
 //
-// 窗口动作都走应用自己的 Rust 命令（见 window_manager.rs 末尾），不走 JS 的
+// 窗口动作都走应用自己的 Rust 命令（见 src-tauri 的 windows/mod.rs 末尾），不走 JS 的
 // `getCurrentWindow()`，省得往 capabilities/default.json 加窗口权限。
 // 唯一的例外是「关闭」——它复用 windowManager 的 closeWindow()，那条链路才会跑
 // 关闭保护（下载中 / 查询中拒关）与几何保存。

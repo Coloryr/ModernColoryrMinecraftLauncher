@@ -48,30 +48,26 @@ fn register_protocol_handler_inner(id: &str) {
 
 /// 取消协议注册的 Windows 实现
 ///
+/// # 参数
+///
 /// - `id`: 协议名
 #[cfg(target_os = "windows")]
 fn delete_protocol_handler_inner(id: &str) {
     use winreg::{RegKey, enums::HKEY_CLASSES_ROOT};
 
+    /// 递归删除子键（注册的协议键带 DefaultIcon / shell\open\command 子键，
+    /// 直接删会因子键非空失败）；键不存在视为已删除
+    fn delete_tree(key: &RegKey, name: &str) {
+        if let Ok(sub) = key.open_subkey(name) {
+            for child in sub.enum_keys().flatten() {
+                delete_tree(&sub, &child);
+            }
+        }
+        let _ = key.delete_subkey(name);
+    }
+
     let hklm = RegKey::predef(HKEY_CLASSES_ROOT);
-    hklm.open_subkey(id)
-        .and_then(|data| {
-            data.set_value("", &"URL:M²L Protocol").unwrap();
-            data.set_value("URL Protocol", &"").unwrap();
-
-            let file = std::env::current_exe().unwrap();
-
-            let (key, _) = data.create_subkey("DefaultIcon").unwrap();
-            key.set_value("", &format!("\"{}\",1", file.to_string_lossy()))
-                .unwrap();
-
-            let (key, _) = data.create_subkey("shell\\open\\command").unwrap();
-            key.set_value("", &format!("\"{}\" \"%1\"", file.to_string_lossy()))
-                .unwrap();
-
-            Ok(())
-        })
-        .unwrap();
+    delete_tree(&hklm, id);
 }
 
 #[cfg(not(target_os = "windows"))]

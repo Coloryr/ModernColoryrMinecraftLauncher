@@ -1,3 +1,4 @@
+// 应用入口：禁用默认右键菜单，加载 GUI 配置后挂载根组件
 import { createApp } from "vue";
 import "./styles/index.css";
 import App from "./App.vue";

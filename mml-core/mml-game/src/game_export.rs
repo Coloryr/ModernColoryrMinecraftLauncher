@@ -1,28 +1,33 @@
 //! 实例导出为整合包
 
-use std::{collections::HashMap, path::PathBuf, sync::Arc};
+use std::{collections::HashMap, path::PathBuf};
 
 use mml_base::{
-    archives::{IBaseArchiveGui, ArchiveType, BaseArchive},
+    archives::{ArchiveType, BaseArchive, BaseArchiveGui},
     file_item::FileHash,
     serialize_tools,
 };
 use mml_names::{i18_items::error_type::CoreResult, names};
 
-use mml_net::curseforge_api::list_obj::CurseForgeListDataObj;
+use mml_net::{
+    curseforge_api::{self, list_obj::AuthorsObj},
+    modrinth_api::version_obj::HasheObj,
+};
 
 use crate::{
-    curseforge::{
-        pack_obj::{CurseForgePackObj, FilesObj, MinecraftObj, ModLoadersObj},
+    curseforge::pack_obj::{CurseForgePackObj, FilesObj, MinecraftObj, ModLoadersObj},
+    launcher::{
+        self, file_online_info_obj::OnlineInfoObj, get_source_type,
+        instance_setting_obj::InstanceSettingObj, project_save_obj::MmlProjectSaveObj,
     },
-    launcher::{file_online_info_obj::OnlineInfoObj, instance_setting_obj::InstanceSettingObj},
     loader::LoaderType,
+    modrinth::pack_obj::{ModrinthPackFileObj, ModrinthPackObj},
 };
 
 /// 导出压缩包类型
 pub enum ExportPackType {
-    /// ColorMC 格式
-    ColorMC,
+    /// MML 格式
+    MML,
     /// CurseForge 格式
     CurseForge,
     /// Modrinth 格式
@@ -72,7 +77,7 @@ pub struct ExportArg {
     /// 说明
     pub summary: String,
     /// 压缩进度条
-    pub gui: Option<Arc<dyn IBaseArchiveGui>>,
+    pub gui: BaseArchiveGui,
 }
 
 impl InstanceSettingObj {
@@ -85,11 +90,11 @@ impl InstanceSettingObj {
     /// # 返回值
     ///
     /// 成功返回 `Ok(())`；打包失败返回对应错误
-    pub async fn export(&self, data: ExportArg) -> CoreResult<()> {
-        match data.pack {
-            ExportPackType::ColorMC => colormc(self, data),
-            ExportPackType::CurseForge => curseforge(self, data),
-            ExportPackType::Modrinth => todo!(),
+    pub async fn export(&self, arg: ExportArg) -> CoreResult<()> {
+        match arg.pack {
+            ExportPackType::MML => colormc(self, arg),
+            ExportPackType::CurseForge => curseforge(self, arg).await,
+            ExportPackType::Modrinth => modrinth(self, arg).await,
             ExportPackType::Zip => todo!(),
         }
     }
@@ -104,7 +109,7 @@ impl InstanceSettingObj {
 /// # 返回值
 ///
 /// 返回拼接后的作者名；空列表返回空串
-fn get_author_string(author: &Vec<CurseForgeListDataObj>) -> String {
+fn get_author_string(author: &Vec<AuthorsObj>) -> String {
     if author.is_empty() {
         String::new()
     } else {
@@ -155,7 +160,6 @@ fn colormc(game: &InstanceSettingObj, data: ExportArg) -> CoreResult<()> {
     archive.add_data(
         names::MOD_INFO_FILE,
         &serialize_tools::json_to_bytes(&list1)?,
-        data.gui,
     )?;
 
     Ok(())
@@ -171,11 +175,11 @@ fn colormc(game: &InstanceSettingObj, data: ExportArg) -> CoreResult<()> {
 /// # 返回值
 ///
 /// 成功返回 `Ok(())`；打包失败返回对应错误
-fn curseforge(game: &InstanceSettingObj, data: ExportArg) -> CoreResult<()> {
+async fn curseforge(game: &InstanceSettingObj, arg: ExportArg) -> CoreResult<()> {
     let mut obj = CurseForgePackObj {
-        name: data.name,
-        author: data.author,
-        version: data.version,
+        name: arg.name,
+        author: arg.author,
+        version: arg.version,
         manifest_type: "minecraftModpack".to_string(),
         manifest_version: 1,
         overrides: names::OVERRIDE_DIR.to_string(),
@@ -197,12 +201,141 @@ fn curseforge(game: &InstanceSettingObj, data: ExportArg) -> CoreResult<()> {
         });
     }
 
-    for item in data.mods {
+    for item in arg.mods {
         if let Some(info) = item.info {
             obj.files.push(FilesObj {
                 file_id: info.fileid.parse::<u64>().unwrap_or_default(),
                 project_id: info.modid.parse::<u64>().unwrap_or_default(),
                 required: true,
+            });
+        }
+    }
+
+    let data =
+        curseforge_api::get_mods_info(obj.files.iter().map(|item| item.project_id).collect())
+            .await?;
+    let mut html = String::from("<ul>");
+    for item in data.data {
+        html.push_str(&format!(
+            "<li><a href=\"{}\"{} (by {})</a></li>",
+            item.links.website_url,
+            item.name,
+            get_author_string(&item.authors)
+        ));
+    }
+    html.push_str("</ul>");
+
+    let mut zip = BaseArchive::create_empty(ArchiveType::Zip, &arg.file)?;
+
+    if let Some(gui) = &arg.gui {
+        gui.start(arg.select.len() + 2);
+    }
+
+    if let Some(gui) = &arg.gui {
+        gui.update(Some(names::MANIFEST_FILE.to_string()), 0);
+    }
+
+    zip.add_data(names::MANIFEST_FILE, &serialize_tools::json_to_bytes(&obj)?)?;
+
+    if let Some(gui) = &arg.gui {
+        gui.update(Some(names::MOD_LIST_FILE.to_string()), 0);
+    }
+
+    zip.add_data(names::MOD_LIST_FILE, &html.as_bytes())?;
+
+    let path = game.get_game_path();
+    let mut index = 0;
+
+    for item in arg.select {
+        let rel = match item.strip_prefix(&path) {
+            Ok(p) => p,
+            Err(_) => continue,
+        };
+
+        let rel_str = rel.to_string_lossy().replace('\\', "/");
+
+        let name = if rel_str.starts_with('/') {
+            format!("{}{}", names::OVERRIDE_DIR, rel_str)
+        } else {
+            format!("{}/{}", names::OVERRIDE_DIR, rel_str)
+        };
+
+        if let Some(gui) = &arg.gui {
+            gui.update(Some(name.clone()), 2 + index);
+        }
+
+        zip.add_file(&name, &item)?;
+        index += 1;
+    }
+
+    Ok(())
+}
+
+async fn modrinth(game: &InstanceSettingObj, arg: ExportArg) -> CoreResult<()> {
+    let mut obj = ModrinthPackObj {
+        format_version: 1,
+        version_id: arg.version,
+        name: arg.name,
+        summary: arg.summary,
+        files: Vec::new(),
+        dependencies: HashMap::new(),
+    };
+
+    obj.dependencies
+        .insert(String::from(names::MINECRAFT_KEY), game.version.clone());
+    match game.loader {
+        LoaderType::Forge => {
+            obj.dependencies.insert(
+                String::from(names::FORGE_KEY),
+                game.loader_version.clone().unwrap_or_default(),
+            );
+        }
+        LoaderType::Fabric => {
+            obj.dependencies.insert(
+                String::from(names::FABRIC_KEY),
+                game.loader_version.clone().unwrap_or_default(),
+            );
+        }
+        LoaderType::Quilt => {
+            obj.dependencies.insert(
+                String::from(names::QUILT_KEY),
+                game.loader_version.clone().unwrap_or_default(),
+            );
+        }
+        LoaderType::NeoForge => {
+            obj.dependencies.insert(
+                String::from(names::NEOFORGE_KEY),
+                game.loader_version.clone().unwrap_or_default(),
+            );
+        }
+        _ => {}
+    }
+
+    let path = game.get_game_path();
+
+    for item in arg.mods {
+        if let Some(info) = item.info {
+            let rel = match item.file.strip_prefix(&path) {
+                Ok(p) => p,
+                Err(_) => continue,
+            };
+
+            obj.files.push(ModrinthPackFileObj {
+                path: rel.to_string_lossy().to_string(),
+                hashes: HasheObj {
+                    sha1: item.hash.get_sha1().unwrap_or_default(),
+                    sha512: item.hash.get_sha512().unwrap_or_default(),
+                },
+                downloads: vec![item.url],
+                file_size: item.size as u64,
+                project: Some(MmlProjectSaveObj {
+                    source_type: launcher::get_source_type(
+                        &info.modid,
+                        &info.fileid,
+                    ),
+                    pid: info.modid.clone(),
+                    fid: info.fileid.clone(),
+                }),
             });
         }
     }

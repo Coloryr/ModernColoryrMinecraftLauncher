@@ -1,8 +1,13 @@
+//! 致命错误弹窗
+
 use mml_names::{i18, i18_items::error_type::ErrorType};
 
-/// 致命错误：弹系统错误框并退出程序（核心初始化失败等）
+/// 弹系统错误框并退出程序（核心初始化失败等）
+///
+/// # 参数
+///
+/// - `e`: 错误信息（经 i18n 转为本地化文本显示）
 pub fn fatal_error(e: ErrorType) -> ! {
-    // names 提供的 i18n 方法：ErrorType -> 本地化字符串
     let msg = i18::get_error(e);
     eprintln!("{msg}");
 
@@ -15,7 +20,11 @@ pub fn fatal_error(e: ErrorType) -> ! {
     std::process::exit(1)
 }
 
-/// 致命错误：弹系统错误框并退出程序
+/// 弹系统错误框并退出程序
+///
+/// # 参数
+///
+/// - `text`: 直接显示的错误文本（不经 i18n）
 pub fn fatal_error_text(text: &str) -> ! {
     eprintln!("{text}");
 

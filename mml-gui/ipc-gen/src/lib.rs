@@ -64,8 +64,11 @@ pub struct GenConfig {
 /// 生成结果：三份文本，调用方自己决定往哪写
 #[derive(Debug, Clone)]
 pub struct Generated {
+    /// `mml-vue/src/lib/bindings.ts`：类型定义 + 类型化命令包装
     pub bindings_ts: String,
+    /// `mml-vue/src/lib/listens.ts`：事件名常量
     pub listens_ts: String,
+    /// `$OUT_DIR/invokes_gen.rs`：`tauri_commands!` 注册宏 + `listens` 常量
     pub invokes_gen_rs: String,
 }
 

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// 主窗口顶栏的账户切换器：当前账户按钮 + 下拉账户菜单（含「管理账户」入口）
 import { computed, ref } from "vue";
 import { t } from "../lib/i18n";
 import { openWindow } from "../windows/windowManager";

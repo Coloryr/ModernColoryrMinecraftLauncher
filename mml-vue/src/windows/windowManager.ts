@@ -1,7 +1,7 @@
 // 窗口管理器：负责窗口打开 / 关闭、单窗口 / 多窗口模式切换
 //
 // 多窗口模式：
-// - Tauri 环境：统一调用 Rust 窗口管理器（window_manager.rs）的
+// - Tauri 环境：统一调用 Rust 窗口管理器（src-tauri 的 windows/mod.rs）的
 //   open_window / close_window 命令创建 / 关闭真实窗口（创建/关闭逻辑都在 Rust 侧）；
 //   命令失败时回退到官方 JS API new WebviewWindow()，再失败回退应用内切换。
 // - 浏览器环境：用新标签页模拟独立窗口
@@ -73,7 +73,7 @@ export function openWindow(kind: WindowKind) {
   });
 
   if (isTauri()) {
-    // 统一走 Rust 窗口管理器：创建 / 聚焦在 window_manager.rs 处理。
+    // 统一走 Rust 窗口管理器：创建 / 聚焦在 src-tauri 的 windows/mod.rs 处理。
     // open_window 是 async 命令（不在 Windows 主线程创建窗口，避免冻结）。
     // 命令失败（例如窗口创建被拒）时回退到官方 JS API。
     commands.windows.openWindow(kind).catch((e) => {
@@ -124,7 +124,7 @@ function createViaJs(kind: WindowKind) {
 /** 关闭当前窗口（单窗口模式的返回按钮触发：切回主页面） */
 export function closeWindow() {
   if (isTauri() && multiWindow.value) {
-    // 多窗口：走 Rust 窗口管理器关闭当前真实窗口（kind → 标签映射在 window_manager.rs）。
+    // 多窗口：走 Rust 窗口管理器关闭当前真实窗口（kind → 标签映射在 windows/mod.rs）。
     // 命令失败时回退到官方 JS API 关闭当前窗口。
     const kind = currentKind.value;
     commands.windows.closeWindow(kind).catch((e) => {
