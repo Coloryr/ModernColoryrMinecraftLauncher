@@ -31,6 +31,7 @@ use zip::ZipArchive;
 
 use crate::{GameInstance, launcher::instance_setting_obj::InstanceSettingObj};
 
+/// 存档备份信息
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(default)]
 pub struct SaveBackupObj {
@@ -109,7 +110,13 @@ impl Default for SaveObj {
 
 /// 读取存档文件
 ///
+/// # 参数
+///
 /// - `stream`: 存档文件流
+///
+/// # 返回值
+///
+/// 返回存档信息；格式不符时标记 `broken` 并返回原始 NBT
 fn read_save<R: Read + Seek>(stream: &mut R) -> CoreResult<SaveObj> {
     let nbt_file = NbtFile::read(stream)?;
     let mut obj = SaveObj::default();
@@ -163,6 +170,10 @@ fn read_save<R: Read + Seek>(stream: &mut R) -> CoreResult<SaveObj> {
 
 impl InstanceSettingObj {
     /// 获取实例存档列表
+    ///
+    /// # 返回值
+    ///
+    /// 返回存档列表（读取失败的存档被跳过）
     pub async fn get_saves(&self) -> Vec<SaveObj> {
         let dir = self.get_saves_path();
         let dirs = path_helper::get_dirs(dir);
@@ -200,6 +211,16 @@ impl InstanceSettingObj {
     }
 
     /// 还原备份
+    ///
+    /// # 参数
+    ///
+    /// - `info`: 备份信息
+    /// - `file`: 备份文件名
+    /// - `gui`: 压缩进度回调
+    ///
+    /// # 返回值
+    ///
+    /// 成功返回 `Ok(())`；删除旧目录或解压失败返回对应错误
     pub fn restore_backup(
         &self,
         info: &SaveBackupObj,
@@ -218,6 +239,10 @@ impl InstanceSettingObj {
     }
 
     /// 获取备份文件列表
+    ///
+    /// # 返回值
+    ///
+    /// 返回存档名到备份信息的映射；文件不存在返回空表，读取失败返回对应错误
     pub fn get_backups(&self) -> CoreResult<HashMap<String, SaveBackupObj>> {
         let file = self.get_backup_file();
         if file.exists() && file.is_file() {
@@ -229,12 +254,24 @@ impl InstanceSettingObj {
     }
 
     /// 保存备份信息
+    ///
+    /// # 参数
+    ///
+    /// - `info`: 存档名到备份信息的映射
     pub fn save_backups(&self, info: &HashMap<String, SaveBackupObj>) {
         let file = self.get_backup_file();
         config_save::save(uuids::mix_uuid(uuids::BACKUP_UUID, self.uuid), info, &file);
     }
 
     /// 导入存档
+    ///
+    /// # 参数
+    ///
+    /// - `file`: 存档压缩包路径
+    ///
+    /// # 返回值
+    ///
+    /// 成功返回 `Ok(())`；打开或解压失败返回对应错误
     pub fn import_save<P: AsRef<Path>>(&self, file: P) -> CoreResult<()> {
         let saves_dir = self.get_saves_path();
         if !saves_dir.exists() {
@@ -267,21 +304,43 @@ impl InstanceSettingObj {
 
 impl SaveObj {
     /// 获取数据包文件夹
+    ///
+    /// # 返回值
+    ///
+    /// 返回数据包目录路径
     pub fn get_datapack_path(&self) -> PathBuf {
         self.path.join(names::GAME_DATAPACK_DIR)
     }
 
     /// 获取存档信息文件
+    ///
+    /// # 返回值
+    ///
+    /// 返回 level.dat 文件路径
     pub fn get_level_file(&self) -> PathBuf {
         self.path.join(names::LEVEL_FILE)
     }
 
     /// 删除存档
+    ///
+    /// # 返回值
+    ///
+    /// 成功返回 `Ok(())`；删除失败返回对应错误
     pub fn delete(&self) -> CoreResult<()> {
         path_helper::move_to_trash(&self.path)
     }
 
     /// 导出存档
+    ///
+    /// # 参数
+    ///
+    /// - `path`: 导出保存位置
+    /// - `archive_type`: 压缩类型
+    /// - `gui`: 压缩进度回调
+    ///
+    /// # 返回值
+    ///
+    /// 成功返回 `Ok(())`；压缩失败返回对应错误
     pub fn export<P: AsRef<Path>>(
         &self,
         path: P,
@@ -301,7 +360,14 @@ impl SaveObj {
 
     /// 备份存档
     ///
-    /// 返回备份文件名（level_name_年_月_日_时_分_秒.zip）
+    /// # 参数
+    ///
+    /// - `instance`: 所属实例
+    /// - `gui`: 压缩进度回调
+    ///
+    /// # 返回值
+    ///
+    /// 返回备份文件名（level_name_年_月_日_时_分_秒.zip）；压缩或保存备份信息失败返回对应错误
     pub fn backup(
         &self,
         instance: &InstanceSettingObj,
@@ -351,6 +417,10 @@ impl SaveObj {
     }
 
     /// 保存 NBT 数据到文件
+    ///
+    /// # 返回值
+    ///
+    /// 成功返回 `Ok(())`；写入失败返回对应错误
     fn save_nbt(&self) -> CoreResult<()> {
         let file = self.get_level_file();
         let mut stream = path_helper::open_write(file)?;
@@ -361,6 +431,10 @@ impl SaveObj {
     }
 
     /// 获取数据包列表
+    ///
+    /// # 返回值
+    ///
+    /// 返回数据包列表（含启用状态）；目录不存在返回空列表，读取失败返回对应错误
     pub fn get_datapacks(&self) -> CoreResult<Vec<SaveDataPackObj>> {
         let path = self.get_datapack_path();
         if !path.exists() || !path.is_dir() {
@@ -453,6 +527,14 @@ impl SaveObj {
     }
 
     /// 修改数据包启用状态
+    ///
+    /// # 参数
+    ///
+    /// - `list`: 需要变更状态的数据包列表
+    ///
+    /// # 返回值
+    ///
+    /// 成功返回 `Ok(())`；NBT 结构缺失或写入失败返回对应错误
     pub fn change_data_pack(&mut self, list: &Vec<SaveDataPackObj>) -> CoreResult<()> {
         let Some(data) = self
             .nbt
@@ -540,6 +622,14 @@ impl SaveObj {
     }
 
     /// 删除数据包
+    ///
+    /// # 参数
+    ///
+    /// - `list`: 待删除的数据包列表
+    ///
+    /// # 返回值
+    ///
+    /// 成功返回 `Ok(())`；NBT 结构缺失或写入失败返回对应错误
     pub fn delete_datapack(&mut self, list: &Vec<SaveDataPackObj>) -> CoreResult<()> {
         let Some(data) = self
             .nbt
@@ -613,19 +703,28 @@ impl SaveObj {
     }
 
     /// 打开种子信息网站
+    ///
+    /// # 参数
+    ///
+    /// - `version`: 游戏版本
     pub fn open_world_seed(&self, version: &str) {
         let url = chunkbase_api::gen_url(version, self.random_seed, self.generator_name == "minecraft:large_biomes");
-
-        
+        mml_sys::open_helper::open_url(&url);
     }
 }
 
 /// 读取数据包信息
 ///
+/// # 参数
+///
 /// - `path`: 数据包路径
 /// - `ens`: 已启用的数据包列表
 /// - `dis`: 已禁用的数据包列表
 /// - `data`: 数据包元数据
+///
+/// # 返回值
+///
+/// 返回数据包信息；元数据格式不符返回 `None`
 fn read_pack(
     path: PathBuf,
     ens: Option<&NbtList>,

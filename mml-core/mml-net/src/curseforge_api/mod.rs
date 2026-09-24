@@ -81,6 +81,10 @@ pub enum CurseForgeSortType {
 
 impl CurseForgeSortType {
     /// 获取排序方式对应编号
+    ///
+    /// # 返回值
+    ///
+    /// 返回 API 的 `sortField` 取值
     fn to_id(&self) -> u32 {
         match self {
             CurseForgeSortType::Featured => 1,
@@ -92,6 +96,10 @@ impl CurseForgeSortType {
     }
 
     /// 根据排序方式获取排序方向编号
+    ///
+    /// # 返回值
+    ///
+    /// 返回 API 的 `sortOrder` 取值（1=降序，0=字母序）
     fn to_order_index(&self) -> u32 {
         match self {
             CurseForgeSortType::Featured
@@ -102,6 +110,11 @@ impl CurseForgeSortType {
         }
     }
 
+    /// 获取排序方式名称
+    ///
+    /// # 返回值
+    ///
+    /// 返回排序方式名称
     pub fn to_string(&self) -> String {
         String::from(match self {
             CurseForgeSortType::Popularity => "popularity",
@@ -112,6 +125,13 @@ impl CurseForgeSortType {
         })
     }
 
+    /// 按名称解析排序方式
+    ///
+    /// - `id`: 排序方式名称
+    ///
+    /// # 返回值
+    ///
+    /// 返回对应的排序方式；未知名称返回 `None`
     pub fn from_string(id: &str) -> Option<CurseForgeSortType> {
         match id {
             "popularity" => Some(CurseForgeSortType::Popularity),
@@ -190,6 +210,21 @@ async fn send<T: DeserializeOwned>(mut req: reqwest::Request) -> CoreResult<T> {
     crate::handle_response(res).await
 }
 
+/// 发送项目搜索请求（各类列表的公共实现）
+///
+/// - `classid`: 分类 ID
+/// - `version`: 游戏版本
+/// - `page`: 页码（从 0 起）
+/// - `sort`: 排序字段编号
+/// - `filter`: 搜索过滤词
+/// - `page_size`: 页大小
+/// - `sort_order`: 排序方向编号
+/// - `category`: 分类 ID（空串表示不限）
+/// - `mod_loader_type`: 加载器类型（0 表示不限）
+///
+/// # 返回值
+///
+/// 返回分页的项目列表
 async fn get_list(
     classid: u32,
     version: &str,
@@ -220,6 +255,12 @@ async fn get_list(
 /// 获取整合包列表
 /// 
 /// 需要version page sort filter page_size category
+///
+/// - `arg`: 搜索参数
+///
+/// # 返回值
+///
+/// 返回整合包分页列表
 pub async fn get_modpack_list(arg: CurseFogreArg) -> CoreResult<CurseForgeListPageObj> {
     get_list(
         CLASS_MODPACK,
@@ -236,6 +277,12 @@ pub async fn get_modpack_list(arg: CurseFogreArg) -> CoreResult<CurseForgeListPa
 }
 
 /// 获取模组列表
+///
+/// - `arg`: 搜索参数
+///
+/// # 返回值
+///
+/// 返回模组分页列表
 pub async fn get_mod_list(arg: CurseFogreArg) -> CoreResult<CurseForgeListPageObj> {
     get_list(
         CLASS_MOD,
@@ -252,6 +299,12 @@ pub async fn get_mod_list(arg: CurseFogreArg) -> CoreResult<CurseForgeListPageOb
 }
 
 /// 获取存档列表
+///
+/// - `arg`: 搜索参数
+///
+/// # 返回值
+///
+/// 返回存档分页列表
 pub async fn get_save_list(arg: CurseFogreArg) -> CoreResult<CurseForgeListPageObj> {
     get_list(
         CLASS_SAVES,
@@ -268,6 +321,12 @@ pub async fn get_save_list(arg: CurseFogreArg) -> CoreResult<CurseForgeListPageO
 }
 
 /// 获取资源包列表
+///
+/// - `arg`: 搜索参数
+///
+/// # 返回值
+///
+/// 返回资源包分页列表
 pub async fn get_resourcepack_list(arg: CurseFogreArg) -> CoreResult<CurseForgeListPageObj> {
     get_list(
         CLASS_RESOURCEPACKS,
@@ -284,6 +343,12 @@ pub async fn get_resourcepack_list(arg: CurseFogreArg) -> CoreResult<CurseForgeL
 }
 
 /// 获取数据包列表
+///
+/// - `arg`: 搜索参数
+///
+/// # 返回值
+///
+/// 返回数据包分页列表
 pub async fn get_datapacks_list(arg: CurseFogreArg) -> CoreResult<CurseForgeListPageObj> {
     get_list(
         CLASS_RESOURCEPACKS,
@@ -300,6 +365,12 @@ pub async fn get_datapacks_list(arg: CurseFogreArg) -> CoreResult<CurseForgeList
 }
 
 /// 获取光影包列表
+///
+/// - `arg`: 搜索参数
+///
+/// # 返回值
+///
+/// 返回光影包分页列表
 pub async fn get_shaders_list(arg: CurseFogreArg) -> CoreResult<CurseForgeListPageObj> {
     get_list(
         CLASS_SHADERPACKS,
@@ -319,6 +390,10 @@ pub async fn get_shaders_list(arg: CurseFogreArg) -> CoreResult<CurseForgeListPa
 ///
 /// - `pid`: 项目编号
 /// - `fid`: 文件编号
+///
+/// # 返回值
+///
+/// 返回该文件的详细信息
 pub async fn get_mod(pid: &str, fid: &str) -> CoreResult<CurseForgeFileObj> {
     let url = format!("{}mods/{pid}/files/{fid}", urls::CURSEFORGE);
 
@@ -327,13 +402,23 @@ pub async fn get_mod(pid: &str, fid: &str) -> CoreResult<CurseForgeFileObj> {
     send(req).await
 }
 
+/// 批量查询文件的请求体
 #[derive(Serialize, Debug)]
 #[serde(default)]
 struct CurseForgeGetFilesObj {
+    /// 文件 ID 列表
     #[serde(rename = "fileIds")]
     pub file_ids: Vec<u64>,
 }
 
+/// 把序列化后的 JSON 写进请求体
+///
+/// - `req`: 目标请求
+/// - `json`: 请求体对象
+///
+/// # 返回值
+///
+/// 成功返回 `Ok(())`；序列化失败返回 `SerializerError`
 pub fn json<T: Serialize>(req: &mut reqwest::Request, json: &T) -> CoreResult<()> {
     match serde_json::to_vec(json) {
         Ok(body) => {
@@ -351,6 +436,12 @@ pub fn json<T: Serialize>(req: &mut reqwest::Request, json: &T) -> CoreResult<()
 }
 
 /// 获取文件列表
+///
+/// - `ids`: 文件 ID 列表
+///
+/// # 返回值
+///
+/// 返回各文件的详细信息
 pub async fn get_files(ids: Vec<u64>) -> CoreResult<Vec<CurseForgeFileDataObj>> {
     let obj = CurseForgeGetFilesObj { file_ids: ids };
 
@@ -364,6 +455,10 @@ pub async fn get_files(ids: Vec<u64>) -> CoreResult<Vec<CurseForgeFileDataObj>> 
 }
 
 /// 获取分类信息
+///
+/// # 返回值
+///
+/// 返回 Minecraft 下所有分类
 pub async fn get_categories() -> CoreResult<CurseForgeCategoriesObj> {
     let url = format!("{}categories?gameId={}", urls::CURSEFORGE, GAME_ID);
 
@@ -373,6 +468,10 @@ pub async fn get_categories() -> CoreResult<CurseForgeCategoriesObj> {
 }
 
 /// 获取版本信息
+///
+/// # 返回值
+///
+/// 返回 Minecraft 的游戏版本分组列表
 pub async fn get_version() -> CoreResult<CurseForgeVersionObj> {
     let url = format!("{}games/{}/versions", urls::CURSEFORGE, GAME_ID);
 
@@ -382,6 +481,10 @@ pub async fn get_version() -> CoreResult<CurseForgeVersionObj> {
 }
 
 /// 获取版本信息
+///
+/// # 返回值
+///
+/// 返回 Minecraft 的版本类型列表
 pub async fn get_version_type() -> CoreResult<CurseForgeVersionTypeObj> {
     let url = format!("{}games/{}/version-types", urls::CURSEFORGE, GAME_ID);
 
@@ -390,7 +493,13 @@ pub async fn get_version_type() -> CoreResult<CurseForgeVersionTypeObj> {
     send(req).await
 }
 
-/// 获取版本信息
+/// 获取模组项目信息
+///
+/// - `id`: 项目编号
+///
+/// # 返回值
+///
+/// 返回项目详情
 pub async fn get_mod_info(id: &str) -> CoreResult<CurseForgeListObj> {
     let url = format!("{}mods/{id}", urls::CURSEFORGE);
 
@@ -399,16 +508,25 @@ pub async fn get_mod_info(id: &str) -> CoreResult<CurseForgeListObj> {
     send(req).await
 }
 
+/// 批量查询项目的请求体
 #[derive(Serialize, Debug)]
 #[serde(default)]
 struct CurseForgeModsInfoObj {
+    /// 项目 ID 列表
     #[serde(rename = "modIds")]
     pub mod_ids: Vec<u64>,
+    /// 是否仅保留 PC 可用项目
     #[serde(rename = "filterPcOnly")]
     pub filter: bool,
 }
 
-/// 获取版本信息
+/// 批量获取项目信息
+///
+/// - `ids`: 项目 ID 列表
+///
+/// # 返回值
+///
+/// 返回各项目的详情分页结果
 pub async fn get_mods_info(ids: Vec<u64>) -> CoreResult<CurseForgeListPageObj> {
     let obj = CurseForgeModsInfoObj {
         mod_ids: ids,
@@ -427,6 +545,12 @@ pub async fn get_mods_info(ids: Vec<u64>) -> CoreResult<CurseForgeListPageObj> {
 /// 获取文件列表
 ///
 /// 使用参数 page_size id page version loader
+///
+/// - `arg`: 查询参数
+///
+/// # 返回值
+///
+/// 返回该项目的文件分页列表
 pub async fn get_files_page(arg: CurseFogreArg) -> CoreResult<CurseFogreFilePageObj> {
     let page_size = arg.page_size.unwrap_or(50);
 
@@ -449,6 +573,10 @@ pub async fn get_files_page(arg: CurseFogreArg) -> CoreResult<CurseFogreFilePage
 
 impl CurseForgeFileDataObj {
     /// 修正下载地址
+    ///
+    /// # 返回值
+    ///
+    /// 无返回值，`download_url` 缺失时就地按 CDN 规则补齐
     pub fn fix_download_url(&mut self) {
         if self.download_url.is_none() {
             self.download_url = Some(format!(
@@ -462,6 +590,10 @@ impl CurseForgeFileDataObj {
     }
 
     /// 提取 SHA1 哈希值
+    ///
+    /// # 返回值
+    ///
+    /// 返回 SHA1 哈希；没有时返回空字符串
     #[inline]
     pub fn sha1_hash(&self) -> String {
         self.hashes

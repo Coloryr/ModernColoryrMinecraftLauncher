@@ -38,22 +38,31 @@ use mml_sys::path_helper;
 /// 压缩包类型
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ArchiveType {
+    /// Zip 压缩包（含 .jar / .mrpack）
     Zip,
+    /// 7z 压缩包
     R7Z,
+    /// 未压缩 tar 包
     Tar,
+    /// gzip 压缩的 tar 包
     TarGz,
+    /// xz 压缩的 tar 包
     TarXz,
 }
 
 /// 压缩模式
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TarMode {
+    /// gzip 压缩
     Gz,
+    /// xz 压缩
     Xz,
 }
 
 impl TarMode {
     /// 根据文件名后缀自动判断（不返回 Result，失败时返回 None）
+    ///
+    /// - `path`: 待判断的文件路径
     pub fn try_from_path(path: &Path) -> Option<Self> {
         let file_name = path.file_name()?.to_string_lossy().to_lowercase();
 
@@ -115,6 +124,8 @@ impl ArchiveProcess {
     /// 检查条目名是否含非法字符，非法时替换为 `_`，并询问 GUI 是否同意替换。
     ///
     /// 返回替换后的条目名；名字合法时返回原名。GUI 不同意替换时返回 `TaskCancel`。
+    ///
+    /// - `name`: 待检查的条目名
     pub fn check_name(&self, name: &str) -> CoreResult<String> {
         if name
             .split(['/', '\\'])
@@ -141,10 +152,18 @@ pub(crate) trait ArchiveHandle: Send {
     /// 读取所有条目
     fn read_entries(&mut self) -> CoreResult<Vec<ArchiveEntryInfo>>;
     /// 读取单个条目内容到内存
+    ///
+    /// - `name`: 条目在压缩包内的名称/路径
     fn read(&mut self, name: &str) -> CoreResult<Vec<u8>>;
     /// 流式读取单个条目
+    ///
+    /// - `name`: 条目在压缩包内的名称/路径
     fn read_stream(&mut self, name: &str) -> CoreResult<Box<dyn Read>>;
     /// 提取单个条目到指定路径
+    ///
+    /// - `name`: 条目在压缩包内的名称/路径
+    /// - `output_path`: 目标磁盘路径
+    /// - `gui`: 可选的进度回调
     fn extract_file(
         &mut self,
         name: &str,
@@ -152,10 +171,15 @@ pub(crate) trait ArchiveHandle: Send {
         gui: Option<&dyn IBaseArchiveGui>,
     ) -> CoreResult<()>;
     /// 就地追加文件（仅支持随机可写的格式；其余返回 `InvalidOperation`）
+    ///
+    /// - `files`: `(磁盘源路径, 压缩包内路径)` 对
     fn add_files(&mut self, _files: &[(PathBuf, PathBuf)]) -> CoreResult<()> {
         Err(ErrorType::InvalidOperation)
     }
     /// 就地追加内存数据（仅支持随机可写的格式；其余返回 `InvalidOperation`）
+    ///
+    /// - `name`: 条目在压缩包内的名称/路径
+    /// - `data`: 文件内容的原始字节
     fn add_data(&mut self, _name: &str, _data: &[u8]) -> CoreResult<()> {
         Err(ErrorType::InvalidOperation)
     }
@@ -179,11 +203,16 @@ pub trait IBaseArchiveGui: Send + Sync {
 }
 
 /// 归一化路径分隔符为 `/`
+///
+/// - `path`: 待归一化的路径
 fn normalize_path(path: &Path) -> String {
-    path.to_string_lossy().to_string().replace('\\', "/") // Windows \ 转换为 /
+    path.to_string_lossy().to_string().replace('\\', "/")
 }
 
 /// 检查路径是否匹配任一排除规则
+///
+/// - `path`: 待检查的文件路径
+/// - `patterns`: 排除规则（子串匹配）
 fn should_exclude(path: &Path, patterns: &[String]) -> bool {
     let normalized_path = normalize_path(path);
     patterns.iter().any(|pattern| {
@@ -193,6 +222,8 @@ fn should_exclude(path: &Path, patterns: &[String]) -> bool {
 }
 
 /// 替换条目名中的非法字符为 `_`（按路径段处理，保留目录结构）。
+///
+/// - `name`: 待替换的条目名
 pub(crate) fn replace_invalid_name(name: &str) -> String {
     name.split(['/', '\\'])
         .map(|seg| path_helper::replace_file_name(seg))
@@ -201,6 +232,13 @@ pub(crate) fn replace_invalid_name(name: &str) -> String {
 }
 
 /// 压缩文件（委托给 [`BaseArchive::compress`]，忽略返回的句柄）。
+///
+/// * `archive_type` — 压缩包格式。
+/// * `archive_file` — 压缩包输出路径。
+/// * `pack_dir` — 需要打包的源目录。
+/// * `root_path` — 相对根路径，设置后文件在包内的路径相对于此。
+/// * `filter` — 可选的排除子串列表，匹配的文件将被跳过。
+/// * `gui` — 可选的进度回调。
 pub fn compress<P: AsRef<Path>>(
     archive_type: ArchiveType,
     archive_file: P,
@@ -214,6 +252,11 @@ pub fn compress<P: AsRef<Path>>(
 }
 
 /// 解压文件（委托给 [`BaseArchive::decompress`]）。
+///
+/// * `archive_type` — 压缩包格式。
+/// * `archive_file` — 压缩包文件路径。
+/// * `output_dir` — 解压输出目录。
+/// * `gui` — 可选的进度回调。
 pub fn decompress<P: AsRef<Path>>(
     archive_type: ArchiveType,
     archive_file: P,

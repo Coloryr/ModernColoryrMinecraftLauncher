@@ -1,3 +1,17 @@
+//! 模组加载器安装
+//!
+//! 子模块:
+//!
+//! | 模块 | 职责 |
+//! | --- | --- |
+//! | `custom` | 自定义加载器 |
+//! | `fabric` / `fabric_loader_obj` / `fabric_meta_obj` | Fabric 安装与元数据 |
+//! | `forge` / `forge_install_obj` / `forge_launch_obj` | Forge / NeoForge 安装与启动数据 |
+//! | `liteloader` / `liteloader_meta_obj` | LiteLoader 安装与元数据 |
+//! | `optifine` / `optifine_obj` | OptiFine 安装与元数据 |
+//! | `quilt` / `quilt_loader_obj` / `quilt_meta_obj` | Quilt 安装与元数据 |
+//! | `loader_versions` | 各加载器可用版本查询 |
+
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 
@@ -17,13 +31,22 @@ pub mod quilt;
 pub mod quilt_loader_obj;
 pub mod quilt_meta_obj;
 
+/// 加载器版本键
 #[derive(Hash, Eq, PartialEq, Debug, Clone)]
 pub struct LoaderKey {
+    /// 游戏版本
     pub mc: String,
+    /// 加载器版本
     pub version: String,
 }
 
 impl LoaderKey {
+    /// 创建版本键
+    ///
+    /// # 参数
+    ///
+    /// - `mc`: 游戏版本
+    /// - `version`: 加载器版本
     pub fn new(mc: &str, version: &str) -> Self {
         LoaderKey {
             mc: String::from(mc),
@@ -32,10 +55,13 @@ impl LoaderKey {
     }
 }
 
+/// 运行库下载信息
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct LibrariesObj {
+    /// Maven 坐标
     pub name: String,
+    /// 下载源地址
     pub url: String,
 }
 

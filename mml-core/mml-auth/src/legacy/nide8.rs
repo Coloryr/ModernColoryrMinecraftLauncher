@@ -12,7 +12,7 @@ use crate::{
     legacy::{self},
 };
 
-/// 统一通行证登录认证
+/// 统一通行证登录认证；返回已认证的 [`LoginObj`]（`text1` 保存服务器 UUID）
 ///
 /// # 参数
 ///
@@ -20,11 +20,6 @@ use crate::{
 /// - `user`: 用户名
 /// - `password`: 密码
 /// - `server`: Nide8 服务器 UUID，用于构建认证 URL（`{NIDE8_URL}{server}`）
-///
-/// # 返回值
-///
-/// 返回已认证的 `LoginObj`，其 `auth_type` 为 `Nide8`，
-/// `text1` 保存服务器 UUID
 pub async fn authenticate(
     client_token: String,
     user: String,
@@ -43,13 +38,15 @@ pub async fn authenticate(
 }
 
 impl LoginObj {
-    /// 刷新统一通行证登录令牌
-    ///
-    /// 先验证令牌有效性，有效则刷新，无效则返回超时错误。
+    /// 刷新统一通行证登录令牌：先验证有效性，无效则返回超时错误
     ///
     /// # 参数
     ///
     /// - `cancel`: 取消令牌
+    ///
+    /// # 返回值
+    ///
+    /// 刷新成功返回 `Ok(())`（账户凭据已被更新），令牌失效返回 `ErrorType::AuthTokenTimeout`，被取消时返回取消错误
     pub async fn refresh_nide8(&mut self, cancel: CancellationToken) -> CoreResult<()> {
         let server = String::from(urls::NIDE8_URL) + &self.text1.clone().unwrap();
 

@@ -89,7 +89,6 @@ static HANDLE: Mutex<Option<JoinHandle<()>>> = Mutex::new(None);
 /// - `file`: 目标文件路径
 pub fn save<T: Serialize>(uuid: Uuid, obj: &T, file: impl AsRef<Path>) {
     let mut queue = QUEUE.lock().unwrap();
-    // 移除所有同名的旧任务
     queue.retain(|obj| obj.uuid != uuid);
     queue.push(ConfigSaveObj::new(obj, file.as_ref().to_path_buf(), uuid).unwrap());
 

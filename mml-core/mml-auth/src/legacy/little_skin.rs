@@ -17,10 +17,9 @@ use crate::{
     legacy::{self, GuiSelectHandel},
 };
 
-/// LittleSkin 皮肤站登录认证
-///
-/// 支持官方 LittleSkin 站和自建皮肤站两种模式。
-/// 自动处理服务器地址规范化和 API 路径拼接。
+/// LittleSkin 皮肤站登录认证，支持官方站和自建站两种模式。
+/// `server` 为 `None` 时使用官方 LittleSkin；返回已认证并刷新令牌的
+/// [`LoginObj`]，`auth_type` 为 `LittleSkin` 或 `SelfLittleSkin`
 ///
 /// # 参数
 ///
@@ -29,11 +28,6 @@ use crate::{
 /// - `password`: 密码
 /// - `server`: 自建皮肤站地址（`None` 表示使用官方 LittleSkin）
 /// - `gui`: 可选的角色选择回调
-///
-/// # 返回值
-///
-/// 返回已认证并刷新令牌的 `LoginObj`，其 `auth_type` 为
-/// `LittleSkin` 或 `SelfLittleSkin`
 pub async fn authenticate(
     client_token: String,
     user: String,
@@ -68,7 +62,6 @@ pub async fn authenticate(
 
     let mut auth = obj.auth;
 
-    // 处理多角色选择
     if let Some(list) = obj.logins {
         match gui {
             Some(gui) => {
@@ -102,6 +95,10 @@ impl LoginObj {
     /// # 参数
     ///
     /// - `cancel`: 取消令牌
+    ///
+    /// # 返回值
+    ///
+    /// 刷新成功返回 `Ok(())`（账户凭据已被更新），令牌失效返回 `ErrorType::AuthTokenTimeout`，被取消时返回取消错误
     pub async fn refresh_littleskin(&mut self, cancel: CancellationToken) -> CoreResult<()> {
         let mut server = if self.auth_type == AuthType::LittleSkin {
             String::from(urls::LITTLE_SKIN_URL)
@@ -121,7 +118,7 @@ impl LoginObj {
         }
     }
 
-    /// 获取 LittleSkin 皮肤站启动参数所需的 Yggdrasil 元数据
+    /// 获取启动参数所需的 Yggdrasil 元数据
     ///
     /// # 返回值
     ///

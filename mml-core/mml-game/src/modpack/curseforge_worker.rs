@@ -1,3 +1,5 @@
+//! CurseForge 整合包安装器
+
 use std::{collections::HashMap, path::Path, sync::Mutex};
 
 use async_trait::async_trait;
@@ -39,6 +41,14 @@ pub struct CurseForgeWorker {
 
 impl CurseForgeWorker {
     /// 创建 CurseForge 整合包安装器
+    ///
+    /// # 参数
+    ///
+    /// - `base`: 基础安装器
+    ///
+    /// # 返回值
+    ///
+    /// 返回安装器实例
     pub fn new(base: BaseModPackWorker) -> Self {
         Self { info: None, base }
     }
@@ -46,6 +56,15 @@ impl CurseForgeWorker {
 
 /// 批量解析文件 ID 为 `CurseForgeFileDataObj`。
 /// 优先批量接口，失败则逐文件查询。
+///
+/// # 参数
+///
+/// - `file_ids`: 文件 ID 列表
+/// - `cancel`: 取消令牌
+///
+/// # 返回值
+///
+/// 返回解析成功的文件信息列表（失败项被跳过）
 async fn resolve_files(
     file_ids: &[u64],
     cancel: &Option<CancellationToken>,
@@ -297,6 +316,19 @@ impl ModPackWorker for CurseForgeWorker {
 /// 3. 仅在新 manifest 中 → 新增
 /// 4. 仅在旧 manifest 中 → 删除
 /// 5. 对每个需要下载的文件调用 API 解析，构建下载项并更新在线信息
+///
+/// # 参数
+///
+/// - `new_info`: 新版整合包信息
+/// - `old_info`: 旧版整合包信息
+/// - `game`: 目标实例
+/// - `downloads`: 下载列表（写入需要下载的文件）
+/// - `pack_gui`: 整合包安装界面回调
+/// - `cancel`: 取消令牌
+///
+/// # 返回值
+///
+/// 成功返回 `Ok(())`；取消或查询失败返回对应错误
 async fn check_upgrade_with_old_manifest(
     new_info: &CurseForgePackObj,
     old_info: &CurseForgePackObj,
@@ -444,6 +476,18 @@ async fn check_upgrade_with_old_manifest(
 /// 3. 与现有 `online_info` 比对：同 mod_id 但 fileid/sha1 不同 → 变更
 /// 4. 仅在在线信息中不存在 → 新增
 /// 5. 删除旧文件，构建下载列表
+///
+/// # 参数
+///
+/// - `new_info`: 新版整合包信息
+/// - `game`: 目标实例
+/// - `downloads`: 下载列表（写入需要下载的文件）
+/// - `pack_gui`: 整合包安装界面回调
+/// - `cancel`: 取消令牌
+///
+/// # 返回值
+///
+/// 成功返回 `Ok(())`；取消或查询失败返回对应错误
 async fn check_upgrade_sha1(
     new_info: &CurseForgePackObj,
     game: &GameInstance,
@@ -585,6 +629,10 @@ async fn check_upgrade_sha1(
 }
 
 /// 删除文件，若文件已被禁用（追加了 `.disable`/`.disabled` 后缀）则一并删除。
+///
+/// # 参数
+///
+/// - `file`: 待删除的文件路径
 fn delete_with_disabled<P: AsRef<Path>>(file: P) {
     let file = file.as_ref();
     // `delete` 在文件不存在时是无操作

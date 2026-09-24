@@ -1,3 +1,5 @@
+//! Modrinth 内容查询与整合包安装
+
 use std::{
     collections::{HashMap, HashSet},
     path::Path,
@@ -37,9 +39,20 @@ use crate::{
 
 pub mod pack_obj;
 
+/// 分类信息缓存
 static CATEGORISE: OnceLock<Vec<ModrinthCategoriesObj>> = OnceLock::new();
+/// 游戏版本列表缓存
 static GAME_VERSIONS: OnceLock<Vec<String>> = OnceLock::new();
 
+/// 转换为 Modrinth 的加载器 ID
+///
+/// # 参数
+///
+/// - `loader`: 加载器类型
+///
+/// # 返回值
+///
+/// 返回加载器 ID；该加载器不被 Modrinth 支持返回 `None`
 pub fn to_loader_id(loader: &LoaderType) -> Option<String> {
     match loader {
         LoaderType::Forge => Some(loader.to_string().to_string()),
@@ -51,6 +64,15 @@ pub fn to_loader_id(loader: &LoaderType) -> Option<String> {
 }
 
 /// 创建下载项目
+///
+/// # 参数
+///
+/// - `obj`: Modrinth 版本信息
+/// - `path`: 保存目录
+///
+/// # 返回值
+///
+/// 返回主文件下载项
 pub fn make_download_obj<P: AsRef<Path>>(obj: &ModrinthVersionObj, path: P) -> FileItemObj {
     let file = obj
         .files
@@ -67,7 +89,16 @@ pub fn make_download_obj<P: AsRef<Path>>(obj: &ModrinthVersionObj, path: P) -> F
     }
 }
 
-/// 创建下载项目
+/// 创建下载项目（整合包内文件）
+///
+/// # 参数
+///
+/// - `obj`: 整合包文件信息
+/// - `path`: 保存目录
+///
+/// # 返回值
+///
+/// 返回下载项
 pub fn make_pack_download_obj<P: AsRef<Path>>(obj: &ModrinthPackFileObj, path: P) -> FileItemObj {
     FileItemObj {
         url: obj.downloads[0].clone(),
@@ -79,6 +110,15 @@ pub fn make_pack_download_obj<P: AsRef<Path>>(obj: &ModrinthPackFileObj, path: P
 }
 
 /// 创建在线文件信息
+///
+/// # 参数
+///
+/// - `obj`: Modrinth 版本信息
+/// - `path`: 实例内相对目录
+///
+/// # 返回值
+///
+/// 返回在线文件信息
 pub fn make_file_online_obj(obj: &ModrinthVersionObj, path: &str) -> OnlineInfoObj {
     let file = obj
         .files
@@ -97,6 +137,15 @@ pub fn make_file_online_obj(obj: &ModrinthVersionObj, path: &str) -> OnlineInfoO
     }
 }
 
+/// 获取分类图标地址
+///
+/// # 参数
+///
+/// - `name`: 分类名
+///
+/// # 返回值
+///
+/// 返回图标地址；分类不存在返回 `None`
 pub async fn get_categories_icon(name: &str) -> Option<String> {
     let cap = match CATEGORISE.get() {
         Some(cap) => cap,
@@ -118,6 +167,14 @@ pub async fn get_categories_icon(name: &str) -> Option<String> {
 }
 
 /// 获取分组
+///
+/// # 参数
+///
+/// - `file_type`: 项目文件类型
+///
+/// # 返回值
+///
+/// 返回分类名映射表；查询失败返回对应错误
 pub async fn get_categories(file_type: FileType) -> CoreResult<HashMap<String, String>> {
     let cap = match CATEGORISE.get() {
         Some(cap) => cap,
@@ -144,6 +201,10 @@ pub async fn get_categories(file_type: FileType) -> CoreResult<HashMap<String, S
 }
 
 /// 获取所有游戏版本
+///
+/// # 返回值
+///
+/// 返回游戏版本列表（首位为空串表示不限）；查询失败返回对应错误
 pub async fn get_game_versions() -> CoreResult<Vec<String>> {
     match GAME_VERSIONS.get() {
         Some(versions) => Ok(versions.clone()),
@@ -159,6 +220,17 @@ pub async fn get_game_versions() -> CoreResult<Vec<String>> {
 }
 
 /// 获取整合包模组信息
+///
+/// # 参数
+///
+/// - `path`: 整合包解压目录
+/// - `info`: 整合包信息
+/// - `pack_gui`: 整合包安装界面回调
+/// - `cancel`: 取消令牌
+///
+/// # 返回值
+///
+/// 返回文件下载项列表与在线信息表；取消返回 `TaskCancel`
 pub async fn get_mod_info<P: AsRef<Path>>(
     path: P,
     info: &ModrinthPackObj,
@@ -276,9 +348,15 @@ pub struct ModrinthModDependenciesRes {
 
 /// 获取模组依赖
 ///
-/// - `obj`: Modrinth文件信息
+/// # 参数
+///
+/// - `obj`: Modrinth 文件信息
 /// - `version`: 游戏版本
 /// - `loader`: 加载器类型
+///
+/// # 返回值
+///
+/// 返回依赖列表（含递归解析出的子依赖，已去重）
 pub async fn get_mod_dependencies(
     obj: &ModrinthVersionObj,
     version: &str,
@@ -296,6 +374,19 @@ pub async fn get_mod_dependencies(
     .unwrap()
 }
 
+/// 递归解析模组依赖
+///
+/// # 参数
+///
+/// - `dependencies`: 依赖列表
+/// - `version`: 游戏版本
+/// - `loader`: 加载器类型
+/// - `ids`: 已解析的项目 ID 集合（避免重复解析）
+/// - `handle`: 用于并发查询的运行时句柄
+///
+/// # 返回值
+///
+/// 返回新解析出的依赖列表
 fn get_mod_dependencies_inner(
     dependencies: &Vec<DependencieObj>,
     version: &str,
@@ -383,6 +474,18 @@ fn get_mod_dependencies_inner(
 }
 
 /// 升级整合包
+///
+/// # 参数
+///
+/// - `game`: 目标实例
+/// - `data`: 新版本的文件信息
+/// - `pack_gui`: 整合包安装界面回调
+/// - `archive_gui`: 压缩包操作界面回调
+/// - `cancel`: 取消令牌
+///
+/// # 返回值
+///
+/// 成功返回 `Ok(())`；下载 / 解包 / 检查升级失败返回对应错误
 pub async fn upgrade_modpack(
     game: &GameInstance,
     data: &mut ModrinthVersionObj,
@@ -466,7 +569,13 @@ pub async fn upgrade_modpack(
 impl InstanceSettingObj {
     /// 自动标记模组
     ///
+    /// # 参数
+    ///
     /// - `over`: 是否覆盖已经标记的模组
+    ///
+    /// # 返回值
+    ///
+    /// 成功返回 `Ok(())`；查询或保存失败返回对应错误
     pub async fn auto_mark(&self, over: bool) -> CoreResult<()> {
         let list = self.read_mod_fast().await;
         let mut online = self.read_online_info();

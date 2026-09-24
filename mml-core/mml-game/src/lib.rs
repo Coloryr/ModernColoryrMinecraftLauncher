@@ -1,3 +1,56 @@
+//! 游戏实例管理模块
+//!
+//! 本 crate 是启动器的游戏实例层，负责实例的创建 / 管理 / 启动，以及
+//! 实例内各类资源（模组、资源包、光影包、存档、截图、结构文件等）的读写。
+//!
+//! # 核心概念
+//!
+//! - **实例** — 一个可启动的 Minecraft 游戏环境（版本 + 加载器 + 独立游戏目录），
+//!   对应 [`launcher::instance_setting_obj::InstanceSettingObj`]，
+//!   全局以 [`GameInstance`]（`Arc<RwLock<...>>`）形式共享
+//! - **分组** — 实例的分组展示，组名到实例 UUID 的映射保存在内存
+//! - **运行句柄** — 启动后的实例由 [`game_launch::InstanceHandle`] 跟踪，
+//!   后台线程每秒轮询退出状态并触发 [`InstanceExit`] 事件
+//! - **事件** — 实例退出 / 变更 / 运行日志分别通过
+//!   [`add_exit`] / [`add_change`] / [`add_run_log`] 订阅
+//!
+//! # 子模块
+//!
+//! | 模块 | 用途 |
+//! |------|------|
+//! | [`add_game`] | 添加游戏实例（导入版本 / 文件夹 / 压缩包） |
+//! | [`class_scan`] | 模组 Side 扫描（1.12.2 时代 mod 的 client/server 判定） |
+//! | [`curseforge`] | CurseForge 整合包下载安装 |
+//! | [`data_res`] | 实例内资源下载位置与类型切换（资源包 / 光影包 / 存档 / 数据包） |
+//! | [`game_arg`] | 启动参数生成 |
+//! | [`game_check`] | 实例文件校验 |
+//! | [`game_count`] | 启动与游戏时长统计 |
+//! | [`game_export`] | 实例导出 |
+//! | [`game_lan`] | 局域网联机 |
+//! | [`game_launch`] | 游戏实例启动 |
+//! | [`game_libraries`] | 实例运行库处理 |
+//! | [`game_log`] | 实例日志（运行日志与过往日志） |
+//! | [`game_mods`] | 实例模组管理 |
+//! | [`game_options`] | options.txt 配置读写 |
+//! | [`game_resourcepacks`] | 实例资源包管理 |
+//! | [`game_saves`] | 实例存档管理（含存档内数据包） |
+//! | [`game_schematics`] | 结构文件读取 |
+//! | [`game_screenshots`] | 实例截图管理 |
+//! | [`game_server`] | 实例服务器管理 |
+//! | [`game_shaderpacks`] | 实例光影包管理 |
+//! | [`gui_hook`] | GUI 回调钩子（启动 / 安装进度等界面交互） |
+//! | [`launcher`] | 实例设置与运行配置 |
+//! | [`launcher_path`] | 各类目录路径管理（版本 / 库 / 资源 / 实例） |
+//! | [`loader`] | 加载器安装（Forge / Fabric / Quilt / OptiFine / LiteLoader / 自定义） |
+//! | [`modpack`] | 整合包安装框架（Modrinth / CurseForge worker） |
+//! | [`modrinth`] | Modrinth 整合包下载安装 |
+//! | [`mojang`] | Mojang 版本数据处理（版本清单 / 下载项） |
+//! | [`other_launcher`] | 其他启动器实例导入（HMCL / PCL / 官方 / MMC） |
+//! | [`path_watch`] | 实例目录文件监视 |
+//! | [`player_skin`] | 玩家皮肤获取 |
+//! | [`scan_game`] | 扫描游戏版本 |
+//! | [`serverpack`] | 服务端整合包生成 |
+
 use std::{
     collections::{HashMap, VecDeque},
     path::{Path, PathBuf},
@@ -61,11 +114,14 @@ pub mod player_skin;
 pub mod scan_game;
 pub mod serverpack;
 
+/// 实例共享句柄（全局以 `Arc<RwLock>` 形式持有实例设置）
 pub type GameInstance = Arc<RwLock<InstanceSettingObj>>;
 
 /// 实例结束运行事件
 pub struct InstanceExit {
+    /// 实例 UUID
     pub uuid: Uuid,
+    /// 进程退出码
     pub code: i32,
 }
 
@@ -81,13 +137,17 @@ pub enum InstanceChange {
 
 /// 实例日志事件参数
 pub enum InstanceLogType {
+    /// 新增一条日志
     AddLog(GameLogItemObj),
+    /// 清空日志
     ClearLog,
 }
 
-/// 实例日志
+/// 实例日志事件
 pub struct InstanceLog {
+    /// 实例 UUID
     pub uuid: Uuid,
+    /// 日志内容
     pub log: InstanceLogType,
 }
 
@@ -119,6 +179,13 @@ static CHANGE_EVENT: LazyLock<EventArgHandler<InstanceChange>> =
 /// 实例运行日志事件
 static LOG_EVENT: LazyLock<EventArgHandler<InstanceLog>> = LazyLock::new(|| EventArgHandler::new());
 
+/// 订阅实例退出事件
+///
+/// - `handler`: 事件回调
+///
+/// # 返回值
+///
+/// 返回回调 ID（`remove_exit` 用）
 pub fn add_exit<F>(handler: F) -> u64
 where
     F: Fn(&InstanceExit) + Send + Sync + 'static,
@@ -126,6 +193,13 @@ where
     EXIT_EVENT.add_handler(handler)
 }
 
+/// 订阅实例变更事件
+///
+/// - `handler`: 事件回调
+///
+/// # 返回值
+///
+/// 返回回调 ID（`remove_change` 用）
 pub fn add_change<F>(handler: F) -> u64
 where
     F: Fn(&InstanceChange) + Send + Sync + 'static,
@@ -133,6 +207,13 @@ where
     CHANGE_EVENT.add_handler(handler)
 }
 
+/// 订阅实例运行日志事件
+///
+/// - `handler`: 事件回调
+///
+/// # 返回值
+///
+/// 返回回调 ID（`remove_run_log` 用）
 pub fn add_run_log<F>(handler: F) -> u64
 where
     F: Fn(&InstanceLog) + Send + Sync + 'static,
@@ -140,14 +221,23 @@ where
     LOG_EVENT.add_handler(handler)
 }
 
+/// 取消订阅实例退出事件
+///
+/// - `id`: `add_exit` 返回的回调 ID
 pub fn remove_exit(id: u64) {
     EXIT_EVENT.remove_handel(id);
 }
 
+/// 取消订阅实例变更事件
+///
+/// - `id`: `add_change` 返回的回调 ID
 pub fn remove_change(id: u64) {
     CHANGE_EVENT.remove_handel(id);
 }
 
+/// 取消订阅实例运行日志事件
+///
+/// - `id`: `add_run_log` 返回的回调 ID
 pub fn remove_run_log(id: u64) {
     LOG_EVENT.remove_handel(id);
 }
@@ -166,11 +256,22 @@ pub(crate) fn invoke_run_log(uuid: Uuid, log: InstanceLogType) {
 
 /// 初始化
 /// - `dir`: 运行路径
+///
+/// # 返回值
+///
+/// 成功返回 `Ok(())`；路径初始化失败返回对应错误
 pub fn init<P: AsRef<Path>>(dir: P) -> CoreResult<()> {
     launcher_path::init(dir)
 }
 
 /// 开始加载数据
+///
+/// 加载版本目录、启动目录监视线程与实例退出轮询线程，
+/// 并把已存在的实例目录载入实例列表。
+///
+/// # 返回值
+///
+/// 成功返回 `Ok(())`；实例目录加载失败返回对应错误
 pub fn load() -> CoreResult<()> {
     version_path::load();
 
@@ -219,6 +320,10 @@ pub fn load() -> CoreResult<()> {
 }
 
 /// 获取所有实例
+///
+/// # 返回值
+///
+/// 返回实例列表
 pub fn get_instances() -> Vec<GameInstance> {
     let mut list = Vec::new();
 
@@ -230,6 +335,12 @@ pub fn get_instances() -> Vec<GameInstance> {
 }
 
 /// 从uuid获取实例
+///
+/// - `uuid`: 实例 UUID
+///
+/// # 返回值
+///
+/// 返回实例；不存在返回 `None`
 pub fn get_instance(uuid: &Uuid) -> Option<GameInstance> {
     let list = INSTANCES.read().unwrap();
 
@@ -239,6 +350,12 @@ pub fn get_instance(uuid: &Uuid) -> Option<GameInstance> {
 /// 获取实例的游戏内语言列表（从资源索引文件里查 minecraft/lang/*.json）
 ///
 /// 资源索引未下载 / 版本数据缺失时返回空列表，由前端回退默认语言（中文 / 英文）。
+///
+/// - `uuid`: 实例 UUID
+///
+/// # 返回值
+///
+/// 返回排序后的语言代码列表
 pub fn get_instance_langs(uuid: &Uuid) -> Vec<String> {
     let Some(instance) = get_instance(uuid) else {
         return Vec::new();
@@ -267,6 +384,10 @@ pub fn get_instance_langs(uuid: &Uuid) -> Vec<String> {
 }
 
 /// 获取所有分组名字
+///
+/// # 返回值
+///
+/// 返回分组名列表
 pub fn get_group_keys() -> Vec<String> {
     let mut list = Vec::new();
 
@@ -281,12 +402,20 @@ pub fn get_group_keys() -> Vec<String> {
 ///
 /// 返回独立 ID：release / snapshot / old_beta / old_alpha，
 /// 显示名由前端 i18n 翻译。
+///
+/// # 返回值
+///
+/// 返回版本类型 ID 列表
 pub fn get_version_types() -> Vec<&'static str> {
     vec!["release", "snapshot", "old_beta", "old_alpha"]
 }
 
 /// 从分组名字获取对应的实例
 /// - `key`: 分组名字
+///
+/// # 返回值
+///
+/// 返回该分组下的实例列表
 pub fn get_group(key: &str) -> Vec<GameInstance> {
     let mut list = Vec::new();
 
@@ -304,6 +433,10 @@ pub fn get_group(key: &str) -> Vec<GameInstance> {
 
 /// 添加分组
 /// - `name`: 分组名
+///
+/// # 返回值
+///
+/// 添加成功返回 `true`；分组已存在返回 `false`
 pub fn add_group(name: &str) -> bool {
     let mut groups = GROUPS.write().unwrap();
     if groups.contains_key(name) {
@@ -316,6 +449,10 @@ pub fn add_group(name: &str) -> bool {
 
 /// 删除分组
 /// - `name`: 分组名
+///
+/// # 返回值
+///
+/// 删除成功返回 `true`（组内实例移入默认分组）；分组不存在返回 `false`
 pub fn remove_group(name: &str) -> bool {
     let mut groups = GROUPS.write().unwrap();
     let items = groups.remove(name);
@@ -332,6 +469,10 @@ pub fn remove_group(name: &str) -> bool {
 /// 移动分组
 /// - `list`: 需要移动的列表
 /// - `new`: 新分组名字
+///
+/// # 返回值
+///
+/// 无返回值；移动完成后保存各实例并发 `MoveGroup` 事件
 pub fn move_group(list: Vec<Uuid>, new: Option<String>) {
     let mut changes: Vec<(Uuid, Option<String>)> = Vec::new();
 
@@ -386,6 +527,10 @@ pub fn move_group(list: Vec<Uuid>, new: Option<String>) {
 
 /// 从实例名字获取实例
 /// - `name`: 实例名字
+///
+/// # 返回值
+///
+/// 返回实例；不存在返回 `None`
 pub fn get_instance_by_name(name: &str) -> Option<GameInstance> {
     let list = INSTANCES.read().unwrap();
     let temp = list
@@ -398,6 +543,10 @@ pub fn get_instance_by_name(name: &str) -> Option<GameInstance> {
 
 /// 是否存在这个名字的实例
 /// - `name`: 实例名字
+///
+/// # 返回值
+///
+/// 存在返回 `true`
 pub fn have_instance_name(name: &str) -> bool {
     let list = INSTANCES.read().unwrap();
     let temp = list
@@ -408,6 +557,14 @@ pub fn have_instance_name(name: &str) -> bool {
 }
 
 /// 将实例添加到分组中
+///
+/// UUID 为空或冲突时自动重新生成。
+///
+/// - `obj`: 实例设置
+///
+/// # 返回值
+///
+/// 返回加入列表后的实例句柄
 fn add_to_group(mut obj: InstanceSettingObj) -> GameInstance {
     while obj.uuid.is_nil() || matches!(get_instance(&obj.uuid), Some(_)) {
         obj.uuid = Uuid::new_v4();
@@ -451,6 +608,12 @@ fn add_to_group(mut obj: InstanceSettingObj) -> GameInstance {
 }
 
 /// 删除实例
+///
+/// - `uuid`: 实例 UUID
+///
+/// # 返回值
+///
+/// 成功返回 `Ok(())`（实例文件移入回收站）；实例不存在或删除失败返回对应错误
 pub fn delete_instance(uuid: &Uuid) -> CoreResult<()> {
     let instance = get_instance(uuid).ok_or(ErrorType::ArgEmpty(ArgEmptyData::UUID))?;
 
@@ -476,6 +639,13 @@ pub fn delete_instance(uuid: &Uuid) -> CoreResult<()> {
 /// 重命名实例（名字与实例目录一起改）
 ///
 /// 新名字与其他实例重复时拒绝；成功后发 `MoveGroup` 事件刷新前端列表。
+///
+/// - `uuid`: 实例 UUID
+/// - `name`: 新名字
+///
+/// # 返回值
+///
+/// 成功返回 `Ok(())`；名字为空 / 重复或目录改名失败返回对应错误
 pub fn rename_instance(uuid: &Uuid, name: &str) -> CoreResult<()> {
     let name = name.trim();
     if name.is_empty() {
@@ -518,6 +688,9 @@ pub fn rename_instance(uuid: &Uuid, name: &str) -> CoreResult<()> {
 }
 
 /// 添加运行日志
+///
+/// - `uuid`: 实例 UUID
+/// - `data`: 日志原文
 pub(crate) fn add_game_log(uuid: &Uuid, data: &str) {
     let mut logs = RUNTIME_LOGS.write().unwrap();
     if let Some(log) = logs.get_mut(uuid) {
@@ -533,6 +706,9 @@ pub(crate) fn add_game_log(uuid: &Uuid, data: &str) {
 }
 
 /// 添加运行日志
+///
+/// - `uuid`: 实例 UUID
+/// - `data`: 已解析的日志项
 pub(crate) fn add_game_log_item(uuid: &Uuid, data: GameLog) {
     let mut logs = RUNTIME_LOGS.write().unwrap();
     if let Some(log) = logs.get_mut(uuid) {
@@ -547,6 +723,8 @@ pub(crate) fn add_game_log_item(uuid: &Uuid, data: GameLog) {
 }
 
 /// 清理日志
+///
+/// - `uuid`: 实例 UUID
 pub(crate) fn clear_game_log(uuid: &Uuid) {
     let mut logs = RUNTIME_LOGS.write().unwrap();
     if let Some(log) = logs.get_mut(uuid) {
@@ -560,22 +738,36 @@ pub(crate) fn clear_game_log(uuid: &Uuid) {
 }
 
 /// 添加启动的游戏实例
+///
+/// - `handel`: 实例运行句柄
 pub(crate) fn add_run_game(handel: InstanceHandle) {
     let mut games = HANDELS.write().unwrap();
     games.insert(handel.uuid, handel);
 }
 
 /// 获取正在运行的实例UUID列表
+///
+/// # 返回值
+///
+/// 返回运行中实例的 UUID 列表
 pub fn get_running_instances() -> Vec<Uuid> {
     HANDELS.read().unwrap().keys().cloned().collect()
 }
 
 /// 判断实例是否正在运行
+///
+/// - `uuid`: 实例 UUID
+///
+/// # 返回值
+///
+/// 正在运行返回 `true`
 pub fn is_running(uuid: &Uuid) -> bool {
     HANDELS.read().unwrap().contains_key(uuid)
 }
 
 /// 强制结束正在运行的实例
+///
+/// - `uuid`: 实例 UUID
 pub fn stop_game(uuid: &Uuid) {
     if let Some(handle) = HANDELS.read().unwrap().get(uuid) {
         handle.kill();
@@ -584,6 +776,14 @@ pub fn stop_game(uuid: &Uuid) {
 
 impl InstanceSettingObj {
     /// 创建实例
+    ///
+    /// 重名实例经 GUI 询问覆盖或改名；创建实例目录结构并保存设置。
+    ///
+    /// - `gui`: 添加实例界面回调（无界面时重名实例自动改名）
+    ///
+    /// # 返回值
+    ///
+    /// 返回新实例句柄；名字为空或用户取消返回对应错误
     pub async fn create_instance(mut self, gui: AddInstanceGui) -> CoreResult<GameInstance> {
         path_watch::stop_watch();
 
@@ -656,6 +856,10 @@ impl InstanceSettingObj {
     }
 
     /// 删除实例文件
+    ///
+    /// # 返回值
+    ///
+    /// 成功返回 `Ok(())`（实例目录移入回收站）；失败返回对应错误
     pub fn delete_files(&self) -> CoreResult<()> {
         path_helper::move_to_trash(self.get_base_path())
     }
@@ -694,6 +898,11 @@ impl InstanceSettingObj {
 
     /// 复制数据到新的实例
     /// - `name`: 新的实例名字
+    /// - `gui`: 添加实例界面回调
+    ///
+    /// # 返回值
+    ///
+    /// 返回新实例句柄
     pub async fn copy_to_other(&self, name: &str, gui: AddInstanceGui) -> CoreResult<GameInstance> {
         let mut instance = self.copy_self();
         instance.name = name.to_string();
@@ -710,6 +919,8 @@ impl InstanceSettingObj {
     }
 
     /// 更新在线文件信息
+    ///
+    /// 清理掉磁盘上已不存在的文件记录（`.jar.disabled` 的视作仍存在）。
     pub async fn update_online(&self) {
         let mut online = self.read_online_info();
         let dir = self.get_game_path();
@@ -735,6 +946,15 @@ impl InstanceSettingObj {
     }
 
     /// 将文件复制到其他地方
+    ///
+    /// - `path`: 目标目录
+    /// - `skip`: 需要跳过的相对路径列表
+    /// - `is_base`: `true` 复制实例整个目录，`false` 只复制游戏目录
+    /// - `gui`: 进度界面回调
+    ///
+    /// # 返回值
+    ///
+    /// 成功返回 `Ok(())`；复制失败返回对应错误
     pub async fn copy_files<P: AsRef<Path>>(
         &self,
         path: P,
@@ -785,12 +1005,22 @@ impl InstanceSettingObj {
     }
 
     /// 设置图标
+    ///
+    /// - `icon`: 图标文件输入源
+    ///
+    /// # 返回值
+    ///
+    /// 成功返回 `Ok(())`；保存失败返回对应错误
     pub async fn set_icon(&mut self, icon: InputFile) -> CoreResult<()> {
         let file = self.get_icon_file();
         icon.save_file(file).await
     }
 
     /// 获取运行中的日志
+    ///
+    /// # 返回值
+    ///
+    /// 返回当前运行日志快照；没有运行日志返回 `None`
     pub fn get_runtime_log(&self) -> Option<Arc<VecDeque<GameLogItemObj>>> {
         let logs = RUNTIME_LOGS.read().unwrap();
         logs.get(&self.uuid)

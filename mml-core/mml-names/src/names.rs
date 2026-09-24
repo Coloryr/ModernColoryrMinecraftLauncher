@@ -1,3 +1,11 @@
+//! 启动器使用的路径、文件名与参数常量
+//!
+//! 常量按用途分组：
+//! - 目录名 / 文件名常量 —— 磁盘相对路径片段，用 [`Path::join`](std::path::Path::join) 拼接
+//! - 扩展名常量 —— 不带点（`ZIP_EXT`）与带点（`ZIP_DOT_EXT`）两种写法一一对应
+//! - jar 内部路径（如 `META-INF/mods.toml`）—— 使用 `/` 分隔，不是磁盘路径
+//! - JVM 参数、命令行参数、启动参数占位符、GC 参数等
+
 pub const DOWNLOAD_DIR: &str = "download";
 pub const OVERRIDE_DIR: &str = "overrides";
 pub const LIBRARIES_DIR: &str = "libraries";

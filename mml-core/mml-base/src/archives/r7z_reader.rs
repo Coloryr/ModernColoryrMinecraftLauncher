@@ -21,11 +21,17 @@ use crate::archives::{self, ArchiveEntryInfo, ArchiveHandle, ArchiveProcess, IBa
 /// `ArchiveReader` 不可复用，每次操作从持有的文件句柄克隆出独立文件描述符再重建读取器。
 /// 同时提供静态的压缩/解压批处理入口。
 pub(crate) struct R7zReader {
+    /// 读写的文件句柄
     file: fs::File,
+    /// 压缩包磁盘路径
     path: PathBuf,
 }
 
 impl R7zReader {
+    /// 打开 7z 文件。
+    ///
+    /// * `file` — 已打开的压缩包文件句柄。
+    /// * `path` — 压缩包磁盘路径。
     pub(crate) fn new(file: fs::File, path: PathBuf) -> CoreResult<Self> {
         Ok(Self { file, path })
     }
@@ -55,6 +61,12 @@ impl R7zReader {
     }
 
     /// 压缩目录为 7z 文件。
+    ///
+    /// * `archive_file` — 压缩包输出路径。
+    /// * `pack_dir` — 需要打包的源目录。
+    /// * `root_path` — 相对根路径，设置后文件在包内的路径相对于此。
+    /// * `filter` — 可选的排除子串列表，匹配的文件将被跳过。
+    /// * `gui` — 可选的进度回调。
     pub(crate) fn compress(
         archive_file: &Path,
         pack_dir: &Path,
@@ -71,6 +83,10 @@ impl R7zReader {
     }
 
     /// 解压 7z 文件到指定目录。
+    ///
+    /// * `archive_file` — 压缩包文件路径。
+    /// * `output_dir` — 解压输出目录。
+    /// * `gui` — 可选的进度回调。
     pub(crate) fn decompress(
         archive_file: &Path,
         output_dir: &Path,
@@ -81,6 +97,12 @@ impl R7zReader {
     }
 
     /// 压缩实现（带进度）。
+    ///
+    /// * `process` — 进度追踪器。
+    /// * `archive_file` — 压缩包输出路径。
+    /// * `pack_dir` — 需要打包的源目录。
+    /// * `root_path` — 相对根路径，设置后文件在包内的路径相对于此。
+    /// * `filter` — 可选的排除子串列表，匹配的文件将被跳过。
     fn r7z_compress(
         process: &ArchiveProcess,
         archive_file: &Path,
@@ -136,6 +158,10 @@ impl R7zReader {
     }
 
     /// 解压实现（带进度）。
+    ///
+    /// * `process` — 进度追踪器。
+    /// * `archive_file` — 压缩包文件路径。
+    /// * `output_dir` — 解压输出目录。
     fn r7z_decompress(
         process: &ArchiveProcess,
         archive_file: &Path,

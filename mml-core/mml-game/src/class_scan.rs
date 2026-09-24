@@ -35,6 +35,15 @@ mod constant_tags {
 type ConstantPool = Vec<Option<String>>;
 
 /// 从常量池索引获取 UTF8 字符串引用
+///
+/// # 参数
+///
+/// - `cp`: 常量池
+/// - `idx`: 常量池索引
+///
+/// # 返回值
+///
+/// 返回对应的字符串引用；索引无效返回 `None`
 fn cp_get<'a>(cp: &'a ConstantPool, idx: usize) -> Option<&'a str> {
     cp.get(idx).and_then(|opt| opt.as_deref())
 }
@@ -59,17 +68,29 @@ pub struct JarScanResult {
 
 /// 类的注解扫描结果
 struct ClassAnnotationInfo {
+    /// 类的物理端类型
     side: LoadSideType,
+    /// 类级 `@Mod` 注解信息
     mod_info: Option<ModAnnotation>,
 }
 
 /// @Mod 注解信息
 struct ModAnnotation {
+    /// Mod ID
     modid: String,
+    /// 物理端类型
     side: LoadSideType,
 }
 
 /// 扫描单个模组 jar 文件，返回所有 Mod 的信息
+///
+/// # 参数
+///
+/// - `path`: jar 文件路径
+///
+/// # 返回值
+///
+/// 返回扫描结果；打开或读取失败返回对应错误
 pub fn scan_jar<P: AsRef<Path>>(path: P) -> Result<JarScanResult, Box<dyn std::error::Error>> {
     let file = File::open(path.as_ref())?;
     let mut archive = ZipArchive::new(file)?;
@@ -136,6 +157,14 @@ pub fn scan_jar<P: AsRef<Path>>(path: P) -> Result<JarScanResult, Box<dyn std::e
 }
 
 /// 扫描单个 class 文件
+///
+/// # 参数
+///
+/// - `bytes`: class 文件字节流
+///
+/// # 返回值
+///
+/// 返回注解扫描结果；非 class 文件或无相关注解返回 `None`
 fn scan_class_for_annotations(
     bytes: &[u8],
 ) -> Result<Option<ClassAnnotationInfo>, Box<dyn std::error::Error>> {
@@ -198,6 +227,14 @@ fn scan_class_for_annotations(
 /// Java 的 Modified UTF-8 与标准 UTF-8 有两个区别：
 /// 1. U+0000 被编码为 0xC0 0x80（而非 0x00）
 /// 2. U+10000 以上的字符用代理对编码后分别 UTF-8
+///
+/// # 参数
+///
+/// - `data`: Modified UTF-8 字节流
+///
+/// # 返回值
+///
+/// 返回转换后的字符串；编码非法返回对应错误
 fn from_modified_utf8(data: &[u8]) -> Result<String, Box<dyn std::error::Error>> {
     let mut result = Vec::with_capacity(data.len());
     let mut i = 0;
@@ -257,6 +294,14 @@ fn from_modified_utf8(data: &[u8]) -> Result<String, Box<dyn std::error::Error>>
 }
 
 /// 解析常量池，返回按常量池索引直接访问的 UTF8 字符串数组
+///
+/// # 参数
+///
+/// - `bytes`: class 文件字节流
+///
+/// # 返回值
+///
+/// 返回常量池与其结束偏移；解析越界返回对应错误
 fn parse_constant_pool(bytes: &[u8]) -> Result<(ConstantPool, usize), Box<dyn std::error::Error>> {
     let pool_count = read_u16(bytes, 8)? as usize;
     // 索引 0 保留，实际条目从 1 到 pool_count-1
@@ -318,6 +363,16 @@ fn parse_constant_pool(bytes: &[u8]) -> Result<(ConstantPool, usize), Box<dyn st
 }
 
 /// 扫描字段
+///
+/// # 参数
+///
+/// - `bytes`: class 文件字节流
+/// - `offset`: 当前读取偏移（扫描后推进到字段区末尾）
+/// - `cp`: 常量池
+///
+/// # 返回值
+///
+/// 返回注解扫描结果；无相关注解返回 `None`
 fn scan_fields(
     bytes: &[u8],
     offset: &mut usize,
@@ -356,6 +411,16 @@ fn scan_fields(
 }
 
 /// 扫描方法
+///
+/// # 参数
+///
+/// - `bytes`: class 文件字节流
+/// - `offset`: 当前读取偏移（扫描后推进到方法区末尾）
+/// - `cp`: 常量池
+///
+/// # 返回值
+///
+/// 返回注解扫描结果；无相关注解返回 `None`
 fn scan_methods(
     bytes: &[u8],
     offset: &mut usize,
@@ -394,6 +459,16 @@ fn scan_methods(
 }
 
 /// 扫描类属性
+///
+/// # 参数
+///
+/// - `bytes`: class 文件字节流
+/// - `offset`: 当前读取偏移（扫描后推进到属性区末尾）
+/// - `cp`: 常量池
+///
+/// # 返回值
+///
+/// 返回注解扫描结果；无相关注解返回 `None`
 fn scan_class_attributes(
     bytes: &[u8],
     offset: &mut usize,
@@ -426,6 +501,16 @@ fn scan_class_attributes(
 }
 
 /// 处理单个属性
+///
+/// # 参数
+///
+/// - `bytes`: class 文件字节流
+/// - `offset`: 当前读取偏移（处理后推进到该属性末尾）
+/// - `cp`: 常量池
+///
+/// # 返回值
+///
+/// 返回注解扫描结果；非注解属性返回 `None`
 fn process_attribute(
     bytes: &[u8],
     offset: &mut usize,
@@ -460,6 +545,15 @@ fn process_attribute(
 }
 
 /// 检查注解
+///
+/// # 参数
+///
+/// - `data`: 注解属性数据
+/// - `cp`: 常量池
+///
+/// # 返回值
+///
+/// 返回 `@SideOnly` / `@Mod` 注解的扫描结果；无相关注解返回 `None`
 fn check_annotations(
     data: &[u8],
     cp: &ConstantPool,
@@ -512,6 +606,15 @@ fn check_annotations(
 }
 
 /// 跳过注解的 num_pairs 和所有元素对
+///
+/// # 参数
+///
+/// - `data`: 注解属性数据
+/// - `offset`: 当前读取偏移（跳过后推进到末尾）
+///
+/// # 返回值
+///
+/// 成功返回 `Ok(())`；解析失败返回对应错误
 fn skip_annotation_pairs(
     data: &[u8],
     offset: &mut usize,
@@ -541,6 +644,16 @@ fn skip_annotation_pairs(
 }
 
 /// 解析 @SideOnly 注解
+///
+/// # 参数
+///
+/// - `data`: 注解属性数据
+/// - `offset`: 当前读取偏移（解析后推进到注解末尾）
+/// - `cp`: 常量池
+///
+/// # 返回值
+///
+/// 返回物理端类型；未能解析返回 `None`
 fn parse_side_only(
     data: &[u8],
     offset: &mut usize,
@@ -587,6 +700,16 @@ fn parse_side_only(
 }
 
 /// 解析 @Mod 注解
+///
+/// # 参数
+///
+/// - `data`: 注解属性数据
+/// - `offset`: 当前读取偏移（解析后推进到注解末尾）
+/// - `cp`: 常量池
+///
+/// # 返回值
+///
+/// 返回 `@Mod` 注解信息；无 `modid` 返回 `None`
 fn parse_mod_annotation(
     data: &[u8],
     offset: &mut usize,
@@ -667,6 +790,16 @@ fn parse_mod_annotation(
 }
 
 /// 跳过注解值
+///
+/// # 参数
+///
+/// - `data`: 注解属性数据
+/// - `offset`: 当前读取偏移（跳过后推进到值末尾）
+/// - `tag`: 值类型标记
+///
+/// # 返回值
+///
+/// 成功返回 `Ok(())`；解析失败返回对应错误
 fn skip_annotation_value(
     data: &[u8],
     offset: &mut usize,
@@ -716,6 +849,15 @@ fn skip_annotation_value(
 }
 
 /// 检查参数注解
+///
+/// # 参数
+///
+/// - `data`: 注解属性数据
+/// - `cp`: 常量池
+///
+/// # 返回值
+///
+/// 返回 `@SideOnly` 注解的扫描结果；无相关注解返回 `None`
 fn check_parameter_annotations(
     data: &[u8],
     cp: &ConstantPool,
@@ -757,7 +899,16 @@ fn check_parameter_annotations(
     Ok(None)
 }
 
-/// 辅助函数：读取 u16
+/// 读取 u16（大端）
+///
+/// # 参数
+///
+/// - `bytes`: 字节流
+/// - `offset`: 读取偏移
+///
+/// # 返回值
+///
+/// 返回读取的值；越界返回对应错误
 fn read_u16(bytes: &[u8], offset: usize) -> Result<u16, Box<dyn std::error::Error>> {
     if offset + 1 >= bytes.len() {
         return Err(format!("read_u16超出边界: offset={offset}, len={}", bytes.len()).into());
@@ -765,7 +916,16 @@ fn read_u16(bytes: &[u8], offset: usize) -> Result<u16, Box<dyn std::error::Erro
     Ok(u16::from_be_bytes([bytes[offset], bytes[offset + 1]]))
 }
 
-/// 辅助函数：读取 u32
+/// 读取 u32（大端）
+///
+/// # 参数
+///
+/// - `bytes`: 字节流
+/// - `offset`: 读取偏移
+///
+/// # 返回值
+///
+/// 返回读取的值；越界返回对应错误
 fn read_u32(bytes: &[u8], offset: usize) -> Result<u32, Box<dyn std::error::Error>> {
     if offset + 3 >= bytes.len() {
         return Err(format!("read_u32超出边界: offset={offset}, len={}", bytes.len()).into());

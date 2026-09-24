@@ -1,3 +1,8 @@
+//! 实例目录文件监视
+//!
+//! 监听实例根目录的创建 / 删除事件（`notify` crate），
+//! 供实例列表在目录被外部改动时刷新。
+
 use std::{
     sync::{
         atomic::{AtomicBool, Ordering},
@@ -15,8 +20,14 @@ use notify::{
 
 use crate::launcher_path::instance_path;
 
+/// 监听是否生效开关
 static ENABLE_WATCHER: AtomicBool = AtomicBool::new(false);
 
+/// 初始化实例目录监视
+///
+/// # 返回值
+///
+/// 成功返回 `Ok(())`；创建监听器失败返回对应错误
 pub(crate) fn init_watch() -> CoreResult<()> {
     let (tx, rx) = mpsc::channel();
 
@@ -72,12 +83,12 @@ pub(crate) fn init_watch() -> CoreResult<()> {
     Ok(())
 }
 
-/// 开始监听
+/// 开始监听（实例创建 / 删除期间暂停，完成后恢复）
 pub(crate) fn start_watch() {
     ENABLE_WATCHER.store(true, Ordering::Release);
 }
 
 /// 停止监听
 pub(crate) fn stop_watch() {
-    ENABLE_WATCHER.store(true, Ordering::Release);
+    ENABLE_WATCHER.store(false, Ordering::Release);
 }

@@ -183,7 +183,7 @@ impl Default for XBoxLoginResObj {
 /// Xbox Live 认证成功后提取的结果
 ///
 /// 包含后续步骤所需的令牌和用户哈希。
-pub struct XBoxLiveRes {
+pub struct XBoxLiveResObj {
     /// XBL 或 XSTS 令牌
     pub xbl_token: String,
     /// 用户哈希（UHS），用于 Minecraft 服务认证
@@ -270,7 +270,7 @@ mod tests {
     /// XBoxLiveRes 字段透传
     #[test]
     fn test_xbox_live_res_fields() {
-        let res = XBoxLiveRes {
+        let res = XBoxLiveResObj {
             xbl_token: "fake-token".to_string(),
             xbl_uhs: "fake-uhs".to_string(),
         };

@@ -15,9 +15,15 @@ use crate::{
 };
 
 /// 检查文件是否需要添加到下载列表
+///
+/// # 参数
+///
 /// - `item`: 需要检查的文件
 /// - `check_sha1`: 是否校验SHA1
-/// - 返回true表示文件缺失或校验失败，需要重新下载
+///
+/// # 返回值
+///
+/// 返回true表示文件缺失或校验失败，需要重新下载
 fn check_to_add(item: &FileItemObj, check_sha1: bool) -> bool {
     if check_sha1 {
         !item.check_hash()
@@ -27,8 +33,15 @@ fn check_to_add(item: &FileItemObj, check_sha1: bool) -> bool {
 }
 
 /// 检查单个文件的SHA1是否匹配
+///
+/// # 参数
+///
 /// - `file`: 文件路径
 /// - `sha1`: 期望的SHA1值
+///
+/// # 返回值
+///
+/// 返回文件存在且SHA1匹配
 fn check_file_sha1<P: AsRef<Path>>(file: P, sha1: &str) -> bool {
     if !file.as_ref().exists() || !file.as_ref().is_file() {
         return false;
@@ -43,8 +56,14 @@ fn check_file_sha1<P: AsRef<Path>>(file: P, sha1: &str) -> bool {
 
 impl InstanceSettingObj {
     /// 检查游戏文件
-    /// 返回缺失的文件列表
+    ///
+    /// # 参数
+    ///
     /// - `obj`: 启动配置
+    ///
+    /// # 返回值
+    ///
+    /// 返回缺失的文件列表；构建下载项失败返回对应错误
     pub async fn get_lost_game_file(&self, obj: &GameLaunchObj) -> CoreResult<Vec<FileItemObj>> {
         let (
             check_core,

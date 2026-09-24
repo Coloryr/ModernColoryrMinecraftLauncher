@@ -171,6 +171,9 @@ pub fn set_gui_handel(gui: Box<dyn IDownloadGui + Sync + Send>) {
 }
 
 /// 通知 UI：文件下载进度更新
+///
+/// - `thread`: 下载线程序号
+/// - `file`: 当前正在下载的文件信息
 pub(crate) fn update(thread: u32, file: &Arc<DownloadItem>) {
     if let Some(gui) = DOWNLOAD_GUI.get() {
         gui.as_ref().update(thread, file);
@@ -178,6 +181,9 @@ pub(crate) fn update(thread: u32, file: &Arc<DownloadItem>) {
 }
 
 /// 通知 UI：任务进度更新
+///
+/// - `id`: 任务编号
+/// - `progress`: 任务进度（0.0–100.0）
 pub(crate) fn update_task(id: u64, progress: f64) {
     if let Some(gui) = DOWNLOAD_GUI.get() {
         gui.as_ref()
@@ -186,6 +192,8 @@ pub(crate) fn update_task(id: u64, progress: f64) {
 }
 
 /// 通知 UI：新任务已添加
+///
+/// - `id`: 任务编号
 pub(crate) fn add_task(id: u64) {
     if let Some(gui) = DOWNLOAD_GUI.get() {
         gui.as_ref().update_task(DownloadTaskState::AddTask(id));
@@ -193,6 +201,8 @@ pub(crate) fn add_task(id: u64) {
 }
 
 /// 通知 UI：任务已移除
+///
+/// - `id`: 任务编号
 pub(crate) fn remove_task(id: u64) {
     if let Some(gui) = DOWNLOAD_GUI.get() {
         gui.as_ref().update_task(DownloadTaskState::RemoveTask(id));
@@ -228,6 +238,8 @@ pub(crate) fn get_item() -> Option<DownloadObj> {
 }
 
 /// 标记任务完成并从队列中移除
+///
+/// - `task`: 已完成的任务
 pub(crate) fn task_done(task: &DownloadTask) {
     let mut tasks = TASKS.write().unwrap();
     let id = task.id;
@@ -431,6 +443,9 @@ pub async fn start_download_task(items: Vec<FileItemObj>) -> bool {
 /// 创建新下载任务并开始下载，外部可通过 `cancel` 取消
 ///
 /// 取消后任务被移出队列（在途文件自然结束），返回 `false`
+///
+/// - `items`: 需要下载的文件列表
+/// - `cancel`: 外部取消令牌
 pub async fn start_download_task_cancellable(
     items: Vec<FileItemObj>,
     cancel: CancellationToken,

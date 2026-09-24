@@ -1,3 +1,14 @@
+//! 实例相关目录 / 文件路径
+//!
+//! 子模块:
+//!
+//! | 模块 | 职责 |
+//! | --- | --- |
+//! | `assets_path` | 资源文件目录 |
+//! | `instance_path` | 实例目录 |
+//! | `libraries_path` | 运行库目录 |
+//! | `version_path` | 版本目录 |
+
 use std::{
     path::{Path, PathBuf},
     sync::LazyLock,
@@ -12,8 +23,10 @@ pub mod instance_path;
 pub mod libraries_path;
 pub mod version_path;
 
+/// 内置的 ColorASM jar 数据
 const COLORASM_FILE: &[u8] = include_bytes!("../../assets/ColorASM-1.1-all.jar");
 
+/// ColorASM jar 的存放位置
 static COLORASM: LazyLock<PathBuf> = LazyLock::new(|| {
     let local = libraries_path::get_lib_dir()
         .join("com")
@@ -25,8 +38,10 @@ static COLORASM: LazyLock<PathBuf> = LazyLock::new(|| {
     local
 });
 
+/// 内置的 ForgeWrapper jar 数据
 const WRAPPER_FILE: &[u8] = include_bytes!("../../assets/ForgeWrapper-prism-2025-12-07.jar");
 
+/// ForgeWrapper jar 的存放位置
 static FORGE_WRAPPER: LazyLock<PathBuf> = LazyLock::new(|| {
     let local = libraries_path::get_lib_dir()
         .join("io")
@@ -38,8 +53,10 @@ static FORGE_WRAPPER: LazyLock<PathBuf> = LazyLock::new(|| {
     local
 });
 
+/// 内置的 OptiFine Wrapper jar 数据
 const OPTIFINE_FILE: &[u8] = include_bytes!("../../assets/OptifineWrapper-1.1.jar");
 
+/// OptiFine Wrapper jar 的存放位置
 static OPTIFINE_WRAPPER: LazyLock<PathBuf> = LazyLock::new(|| {
     let local = libraries_path::get_lib_dir()
         .join("com")
@@ -52,7 +69,14 @@ static OPTIFINE_WRAPPER: LazyLock<PathBuf> = LazyLock::new(|| {
 });
 
 /// 初始化文件夹
+///
+/// # 参数
+///
 /// - `dir`: 工作的目录
+///
+/// # 返回值
+///
+/// 成功返回 `Ok(())`；创建目录失败返回对应错误
 pub(crate) fn init<P: AsRef<Path>>(dir: P) -> CoreResult<()> {
     let dir = dir.as_ref().join(names::MINECRAFT_DIR);
     if !dir.exists() {
@@ -68,6 +92,10 @@ pub(crate) fn init<P: AsRef<Path>>(dir: P) -> CoreResult<()> {
 }
 
 /// 准备ForgeWrapper jar
+///
+/// # 返回值
+///
+/// 成功返回 `Ok(())`；写出文件失败返回对应错误
 pub fn ready_forge_wrapper() -> CoreResult<()> {
     let local = FORGE_WRAPPER.clone();
 
@@ -78,6 +106,11 @@ pub fn ready_forge_wrapper() -> CoreResult<()> {
     Ok(())
 }
 
+/// 准备 ColorASM jar
+///
+/// # 返回值
+///
+/// 成功返回 `Ok(())`；写出文件失败返回对应错误
 pub fn ready_colorasm() -> CoreResult<()> {
     let local = COLORASM.clone();
 
@@ -88,6 +121,11 @@ pub fn ready_colorasm() -> CoreResult<()> {
     Ok(())
 }
 
+/// 准备 OptiFine Wrapper jar
+///
+/// # 返回值
+///
+/// 成功返回 `Ok(())`；写出文件失败返回对应错误
 pub fn ready_optifine_wrapper() -> CoreResult<()> {
     let local = OPTIFINE_WRAPPER.clone();
 
@@ -98,6 +136,11 @@ pub fn ready_optifine_wrapper() -> CoreResult<()> {
     Ok(())
 }
 
+/// 获取 ColorASM 运行库下载项
+///
+/// # 返回值
+///
+/// 返回对应的下载项
 pub fn get_colorasm() -> FileItemObj {
     FileItemObj {
         name: String::from("com.coloryr.colormc:colormcasm:1.1:all"),
@@ -108,6 +151,11 @@ pub fn get_colorasm() -> FileItemObj {
     }
 }
 
+/// 获取 ForgeWrapper 运行库下载项
+///
+/// # 返回值
+///
+/// 返回对应的下载项
 pub fn get_forge_wrapper() -> FileItemObj {
     FileItemObj {
         name: String::from("io.github.zekerzhayard:ForgeWrapper:prism-2025-12-07"),
@@ -118,6 +166,11 @@ pub fn get_forge_wrapper() -> FileItemObj {
     }
 }
 
+/// 获取 OptiFine Wrapper 运行库下载项
+///
+/// # 返回值
+///
+/// 返回对应的下载项
 pub fn get_optifine_wrapper() -> FileItemObj {
     FileItemObj {
         name: String::from("com.coloryr:optifinewrapper:1.1"),

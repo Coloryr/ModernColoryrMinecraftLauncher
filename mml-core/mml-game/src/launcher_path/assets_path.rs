@@ -1,4 +1,5 @@
-/// 游戏资源路径
+//! 游戏资源（assets）目录
+
 use std::{
     fs::File,
     io::Cursor,
@@ -29,7 +30,14 @@ static INDEX_DIR: OnceLock<PathBuf> = OnceLock::new();
 static SKIN_DIR: OnceLock<PathBuf> = OnceLock::new();
 
 /// 初始化
+///
+/// # 参数
+///
 /// - `dir`: 运行目录
+///
+/// # 返回值
+///
+/// 成功返回 `Ok(())`；创建目录失败返回对应错误
 pub(crate) fn init<P: AsRef<Path>>(dir: P) -> CoreResult<()> {
     let dir = BASE_DIR.get_or_init(|| dir.as_ref().join(names::GAME_ASSETS_DIR));
     if !dir.exists() {
@@ -55,18 +63,29 @@ pub(crate) fn init<P: AsRef<Path>>(dir: P) -> CoreResult<()> {
 }
 
 /// 获取资源文件夹
+///
+/// # 返回值
+///
+/// 返回资源根目录
 pub fn get_assets_dir() -> PathBuf {
     BASE_DIR.get().unwrap().clone()
 }
 
-/// 获取路径
+/// 获取对象文件目录
+///
+/// # 返回值
+///
+/// 返回资源对象文件目录
 pub fn get_obj_dir() -> PathBuf {
     OBJECTS_DIR.get().unwrap().clone()
 }
 
 /// 添加资源数据
 ///
-/// - `data`: 资源文件
+/// # 参数
+///
+/// - `obj`: 版本数据
+/// - `data`: 资源索引文件数据
 pub fn add_index(obj: &GameArgObj, data: &mut Cursor<Vec<u8>>) {
     let index = obj.asset_index.as_ref().unwrap();
     let file = INDEX_DIR.get().unwrap().join(format!("{}.json", index.id));
@@ -74,7 +93,14 @@ pub fn add_index(obj: &GameArgObj, data: &mut Cursor<Vec<u8>>) {
 }
 
 /// 获取资源数据
-/// - `obj`：版本数据资源
+///
+/// # 参数
+///
+/// - `obj`: 版本数据资源
+///
+/// # 返回值
+///
+/// 返回解析出的资源索引；读取或解析失败返回对应错误
 pub fn get_index(obj: &GameAssetIndexObj) -> CoreResult<AssetsObj> {
     let file = INDEX_DIR.get().unwrap().join(format!("{}.json", obj.id));
     let obj = serialize_tools::json_from_file::<AssetsObj>(&file)?;
@@ -82,6 +108,9 @@ pub fn get_index(obj: &GameAssetIndexObj) -> CoreResult<AssetsObj> {
 }
 
 /// 保存皮肤图片
+///
+/// # 参数
+///
 /// - `obj`: 保存的账户
 /// - `file`: 需要导入的文件
 pub fn save_skin(obj: LoginObj, file: PathBuf) {
@@ -93,8 +122,14 @@ pub fn save_skin(obj: LoginObj, file: PathBuf) {
 }
 
 /// 获取url的皮肤位置
+///
+/// # 参数
+///
 /// - `url`: 网页地址，以UUID结尾
-/// 没有返回 UUID(0)的文件位置
+///
+/// # 返回值
+///
+/// 返回皮肤文件位置；地址解析失败时返回 UUID(0) 的文件位置
 pub fn get_skin_from_url(url: String) -> PathBuf {
     let name = if let Ok(url) = Url::parse(&url)
         && let Some(filename) = url.path().split('/').last()
@@ -110,7 +145,14 @@ pub fn get_skin_from_url(url: String) -> PathBuf {
 }
 
 /// 读取资源文件
+///
+/// # 参数
+///
 /// - `hash`: 资源文件SHA1值
+///
+/// # 返回值
+///
+/// 返回文件文本内容；读取失败记录日志并返回 `None`
 pub fn read_assets_text(hash: String) -> Option<String> {
     let dir: String = hash.chars().take(2).collect();
     let local = Path::new(&OBJECTS_DIR.get().unwrap())
@@ -129,7 +171,14 @@ pub fn read_assets_text(hash: String) -> Option<String> {
 }
 
 /// 读取资源文件
+///
+/// # 参数
+///
 /// - `hash`: 资源文件SHA1值
+///
+/// # 返回值
+///
+/// 返回文件读取流；读取失败记录日志并返回 `None`
 pub fn read_assets_stream(hash: String) -> Option<File> {
     let dir: String = hash.chars().take(2).collect();
     let local = Path::new(&OBJECTS_DIR.get().unwrap())

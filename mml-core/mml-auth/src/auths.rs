@@ -28,19 +28,18 @@ use serde::{Deserialize, Serialize};
 
 use crate::{AuthType, LoginObj, UserKeyObj};
 
-/// 全局账户存储
-///
-/// 使用 `LazyLock` 实现惰性初始化的全局单例，通过 `RwLock` 保证多线程安全。
-/// 键为 `UserKeyObj`（UUID + 认证类型），值为 `LoginObj`（完整账户信息）。
+/// 全局账户存储（键 = UUID + 认证类型）
 static AUTHS: LazyLock<RwLock<HashMap<UserKeyObj, LoginObj>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 
 /// 当前使用的账户 UUID（内存态；重启后由前端回退到默认选中第一个）
 static CURRENT_USER: LazyLock<RwLock<Option<UserKeyObj>>> = LazyLock::new(|| RwLock::new(None));
 
+/// 选中账户的持久化结构
 #[derive(Serialize, Deserialize)]
 #[serde(default)]
 struct SelectUserObj {
+    /// 当前选中的账户键（无选中时为 `None`）
     pub user: Option<UserKeyObj>,
 }
 
@@ -67,6 +66,9 @@ fn load<P: AsRef<Path>>(path: P) {
     }
 }
 
+/// 从磁盘加载选中的账户
+///
+/// - `path`: 选中账户数据文件的路径
 fn load_select<P: AsRef<Path>>(path: P) {
     let json = serialize_tools::json_from_file::<SelectUserObj>(path);
     if let Err(err) = json {
@@ -79,24 +81,20 @@ fn load_select<P: AsRef<Path>>(path: P) {
 }
 
 /// 将内存中所有账户持久化到磁盘
-///
-/// 数据以 `Vec<LoginObj>` 格式序列化为 JSON 文件。
 fn save() {
     let auths: Vec<LoginObj> = AUTHS.read().unwrap().values().cloned().collect();
     let file = inner_path::get_inner_path().join(names::AUTH_FILE);
     config_save::save(uuids::AUTH_UUID, &auths, &file);
 }
 
+/// 保存选中的账户
 fn save_select() {
     let user = CURRENT_USER.read().unwrap().clone();
     let file = inner_path::get_inner_path().join(names::AUTH_SELECT_FILE);
     config_save::save(uuids::AUTH_SELECT_UUID, &user, &file);
 }
 
-/// 初始化账户存储
-///
-/// 在启动器启动时调用。如果磁盘上已有账户数据文件则加载，
-/// 否则创建空文件。此函数应仅在程序初始化阶段调用一次。
+/// 初始化账户存储，仅在程序启动阶段调用一次
 pub fn init() {
     let local = inner_path::get_inner_path().join(names::AUTH_FILE);
 
@@ -182,6 +180,8 @@ pub fn get_current() -> Option<UserKeyObj> {
 }
 
 /// 设置当前使用的账户
+///
+/// - `user`: 要选中的账户键，传 `None` 表示取消选中
 pub fn set_current(user: Option<UserKeyObj>) {
     *CURRENT_USER.write().unwrap() = user;
 
@@ -189,12 +189,10 @@ pub fn set_current(user: Option<UserKeyObj>) {
 }
 
 impl LoginObj {
-    /// 将当前账户保存到全局存储并持久化到磁盘
-    ///
-    /// 如果已存在相同键（UUID + 认证类型）的账户，则覆盖更新。
+    /// 将当前账户保存到全局存储并持久化到磁盘（相同键覆盖更新）
     pub fn save(&self) {
         let key = self.get_key();
-        // 先释放写锁再落盘：save() 内部要拿读锁，同线程写锁未释放时重入会死锁
+        // 同 clear_auths：先释放写锁再落盘，防重入死锁
         {
             let mut auths = AUTHS.write().unwrap();
             auths.insert(key, self.clone());
@@ -207,7 +205,7 @@ impl LoginObj {
     pub fn delete(&self) {
         let key = self.get_key();
 
-        // 先释放写锁再落盘：save() 内部要拿读锁，同线程写锁未释放时重入会死锁
+        // 同 clear_auths：先释放写锁再落盘，防重入死锁
         {
             let mut auths = AUTHS.write().unwrap();
             auths.remove(&key);

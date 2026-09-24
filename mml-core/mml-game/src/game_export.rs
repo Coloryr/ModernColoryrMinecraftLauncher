@@ -1,3 +1,5 @@
+//! 实例导出为整合包
+
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use mml_base::{
@@ -19,9 +21,13 @@ use crate::{
 
 /// 导出压缩包类型
 pub enum ExportPackType {
+    /// ColorMC 格式
     ColorMC,
+    /// CurseForge 格式
     CurseForge,
+    /// Modrinth 格式
     Modrinth,
+    /// 纯压缩包
     Zip,
 }
 
@@ -72,7 +78,13 @@ pub struct ExportArg {
 impl InstanceSettingObj {
     /// 导出整合包
     ///
+    /// # 参数
+    ///
     /// - `data`: 导出参数
+    ///
+    /// # 返回值
+    ///
+    /// 成功返回 `Ok(())`；打包失败返回对应错误
     pub async fn export(&self, data: ExportArg) -> CoreResult<()> {
         match data.pack {
             ExportPackType::ColorMC => colormc(self, data),
@@ -84,6 +96,14 @@ impl InstanceSettingObj {
 }
 
 /// 将作者列表拼接为字符串
+///
+/// # 参数
+///
+/// - `author`: 作者列表
+///
+/// # 返回值
+///
+/// 返回拼接后的作者名；空列表返回空串
 fn get_author_string(author: &Vec<CurseForgeListDataObj>) -> String {
     if author.is_empty() {
         String::new()
@@ -99,6 +119,15 @@ fn get_author_string(author: &Vec<CurseForgeListDataObj>) -> String {
 }
 
 /// 导出为 ColorMC 整合包格式
+///
+/// # 参数
+///
+/// - `game`: 目标实例
+/// - `data`: 导出参数
+///
+/// # 返回值
+///
+/// 成功返回 `Ok(())`；打包失败返回对应错误
 fn colormc(game: &InstanceSettingObj, data: ExportArg) -> CoreResult<()> {
     let mut list = data.unselect;
     list.push(game.get_online_info_file());
@@ -133,6 +162,15 @@ fn colormc(game: &InstanceSettingObj, data: ExportArg) -> CoreResult<()> {
 }
 
 /// 导出为 CurseForge 整合包格式
+///
+/// # 参数
+///
+/// - `game`: 目标实例
+/// - `data`: 导出参数
+///
+/// # 返回值
+///
+/// 成功返回 `Ok(())`；打包失败返回对应错误
 fn curseforge(game: &InstanceSettingObj, data: ExportArg) -> CoreResult<()> {
     let mut obj = CurseForgePackObj {
         name: data.name,

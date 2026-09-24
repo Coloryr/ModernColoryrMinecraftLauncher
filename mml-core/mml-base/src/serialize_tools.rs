@@ -9,7 +9,6 @@
 //! - [`MiniJsonObj`] / [`MiniJsonMap`] — JSON 值的类型安全访问
 //! - [`MiniTomlObj`] / [`MiniTomlMap`] — TOML 值的类型安全访问
 
-/// 序列化操作
 use std::{
     cmp,
     collections::{HashMap, hash_map},
@@ -199,6 +198,8 @@ pub struct MiniTomlObj {
 
 impl MiniTomlObj {
     /// 从 toml 值创建
+    ///
+    /// - `value`: toml 值
     pub fn from_value(value: toml::Value) -> Self {
         Self { value }
     }
@@ -257,6 +258,8 @@ pub struct MiniTomlMap {
 
 impl MiniTomlMap {
     /// 从键值对中创建
+    ///
+    /// - `table`: toml 键值对
     pub fn from_table(table: toml::Table) -> Self {
         MiniTomlMap {
             table: table
@@ -267,6 +270,8 @@ impl MiniTomlMap {
     }
 
     /// 从流中读取
+    ///
+    /// - `stream`: 输入数据流
     pub fn from_stream<R: Read>(stream: &mut R) -> CoreResult<Self> {
         let mut toml = String::new();
         stream.read_to_string(&mut toml).map_err(|err| {

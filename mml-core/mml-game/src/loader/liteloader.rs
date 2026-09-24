@@ -1,3 +1,5 @@
+//! LiteLoader 加载器安装
+
 use mml_base::{file_item::FileItemObj, serialize_tools};
 use mml_names::i18_items::error_type::{CoreResult};
 use mml_net::liteloader_api;
@@ -6,6 +8,11 @@ use crate::{
     launcher::instance_setting_obj::InstanceSettingObj, loader::liteloader_meta_obj::LiteloaderMetaObj,
 };
 
+/// 获取 LiteLoader 元数据
+///
+/// # 返回值
+///
+/// 返回解析后的元数据
 pub async fn get_liteloader_meta() -> CoreResult<LiteloaderMetaObj> {
     let data = liteloader_api::get_meta().await?;
     let obj = serialize_tools::json_from_bytes::<LiteloaderMetaObj>(&data)?;

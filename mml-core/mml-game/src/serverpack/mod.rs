@@ -1,3 +1,5 @@
+//! 服务器整合包管理
+
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
@@ -29,11 +31,19 @@ pub mod serverpack_obj;
 
 impl InstanceSettingObj {
     /// 将服务器实例信息标记为旧版
+    ///
+    /// # 返回值
+    ///
+    /// 成功返回 `Ok(())`；移动失败返回对应错误
     pub fn move_serverpack_to_old(&self) -> CoreResult<()> {
         path_helper::move_file(self.get_server_pack_file(), self.get_server_pack_old_file())
     }
 
     /// 读取旧版服务器实例信息
+    ///
+    /// # 返回值
+    ///
+    /// 返回旧版服务器包信息；文件不存在返回 `None`，解析失败返回对应错误
     fn get_old_serverpack(&self) -> CoreResult<Option<ServerPackObj>> {
         let file = self.get_server_pack_old_file();
         if !file.exists() || file.is_dir() {
@@ -45,6 +55,10 @@ impl InstanceSettingObj {
     }
 
     /// 保存服务器包信息
+    ///
+    /// # 参数
+    ///
+    /// - `pack`: 服务器包信息
     pub fn save_serverpack(&self, pack: &ServerPackObj) {
         config_save::save(
             uuids::mix_uuid(self.uuid, uuids::SERVERPACK_FILE_UUID),
@@ -57,6 +71,15 @@ impl InstanceSettingObj {
     ///
     /// 对比旧版服务器包信息，删除已移除的文件，下载并解压新增的文件，
     /// 最后保存新版本信息并清理旧文件。
+    ///
+    /// # 参数
+    ///
+    /// - `new_pack`: 新版服务器包信息
+    /// - `cancel`: 取消令牌
+    ///
+    /// # 返回值
+    ///
+    /// 成功返回 `Ok(())`；下载 / 解压失败或被取消返回对应错误
     pub async fn upgrade_serverpack(
         &self,
         new_pack: ServerPackObj,
@@ -178,11 +201,28 @@ impl InstanceSettingObj {
 }
 
 /// 模组身份标识：优先使用项目编号，否则回退到文件名
+///
+/// # 参数
+///
+/// - `item`: 在线文件信息
+///
+/// # 返回值
+///
+/// 返回身份标识字符串
 fn mod_key(item: &ServerItemObj) -> String {
     item.pid.clone().unwrap_or_else(|| item.file.clone())
 }
 
 /// 根据校验值构建下载哈希
+///
+/// # 参数
+///
+/// - `sha1`: SHA1 校验值
+/// - `sha256`: SHA256 校验值
+///
+/// # 返回值
+///
+/// 返回对应的哈希类型（都缺失为 `FileHash::None`）
 fn make_hash(sha1: &Option<String>, sha256: &Option<String>) -> FileHash {
     match (sha1, sha256) {
         (Some(sha1), Some(sha256)) => FileHash::Sha1Sha256(sha1.clone(), sha256.clone()),
@@ -193,6 +233,10 @@ fn make_hash(sha1: &Option<String>, sha256: &Option<String>) -> FileHash {
 }
 
 /// 删除文件，若文件已被禁用（追加了 `.disable`/`.disabled` 后缀）则一并删除。
+///
+/// # 参数
+///
+/// - `file`: 文件路径
 fn delete_with_disabled<P: AsRef<Path>>(file: P) {
     let file = file.as_ref();
     // `delete` 在文件不存在时是无操作
@@ -205,6 +249,15 @@ fn delete_with_disabled<P: AsRef<Path>>(file: P) {
 ///
 /// 按编号格式判断来源：纯数字为 CurseForge，否则为 Modrinth。
 /// 优先批量获取，失败或缺失的文件再逐文件降级，返回 `fid → url` 映射。
+///
+/// # 参数
+///
+/// - `items`: 缺少下载地址的文件列表
+/// - `cancel`: 取消令牌
+///
+/// # 返回值
+///
+/// 返回 `fid → url` 映射
 async fn resolve_download_urls(
     items: &[&ServerItemObj],
     cancel: &CancellationToken,
@@ -282,6 +335,14 @@ async fn resolve_download_urls(
 }
 
 /// 判断文件来源：CurseForge 的项目/文件编号是纯数字，Modrinth 是 base62 字符串
+///
+/// # 参数
+///
+/// - `item`: 在线文件信息
+///
+/// # 返回值
+///
+/// 返回是否来自 CurseForge
 fn is_curseforge(item: &ServerItemObj) -> bool {
     let Some(pid) = &item.pid else {
         return item
@@ -293,6 +354,14 @@ fn is_curseforge(item: &ServerItemObj) -> bool {
 }
 
 /// 取 Modrinth 版本的主文件下载地址（无 primary 标记时取第一个）
+///
+/// # 参数
+///
+/// - `version`: Modrinth 版本信息
+///
+/// # 返回值
+///
+/// 返回下载地址；版本没有文件返回 `None`
 fn modrinth_file_url(version: &ModrinthVersionObj) -> Option<String> {
     version
         .files

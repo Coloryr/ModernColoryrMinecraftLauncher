@@ -108,12 +108,19 @@ static IPC_ARG_EVENT: LazyLock<EventArgHandler<Vec<String>>> =
 /// 服务器信息
 #[derive(Clone, Debug)]
 pub struct ServerInfo {
+    /// 服务器地址
     pub ip: String,
+    /// 服务器端口
     pub port: String,
-    pub motd: String
+    /// 服务器 MOTD 信息
+    pub motd: String,
 }
 
 /// 注册启动显示事件回调（新启动实例请求显示主窗口时触发）
+///
+/// - `handler`: 回调函数
+///
+/// 返回处理器编号，用于 [`remove_ipc_event`] 移除。
 pub fn register_ipc_event<F>(handler: F) -> u64
 where
     F: Fn() + Send + Sync + 'static,
@@ -122,11 +129,17 @@ where
 }
 
 /// 移除启动显示事件回调
+///
+/// - `id`: 处理器编号
 pub fn remove_ipc_event(id: u64) {
     IPC_EVENT.remove_handle(id);
 }
 
 /// 注册启动参数事件回调（新启动实例传入启动参数时触发）
+///
+/// - `handler`: 回调函数
+///
+/// 返回处理器编号，用于 [`remove_ipc_arg_event`] 移除。
 pub fn register_ipc_arg_event<F>(handler: F) -> u64
 where
     F: Fn(&Vec<String>) + Send + Sync + 'static,
@@ -135,6 +148,8 @@ where
 }
 
 /// 移除启动参数事件回调
+///
+/// - `id`: 处理器编号
 pub fn remove_ipc_arg_event(id: u64) {
     IPC_ARG_EVENT.remove_handel(id);
 }
@@ -145,11 +160,23 @@ pub fn get_run_arg() -> Vec<String> {
 }
 
 /// 获取游戏上报的鼠标状态
+///
+/// - `uuid`: 游戏实例 ID
+///
+/// # 返回值
+///
+/// 返回该实例最近一次上报的状态，未上报过返回 `None`
 pub fn get_mouse_state(uuid: Uuid) -> Option<bool> {
     MOUSE_STATES.read().unwrap().get(&uuid).copied()
 }
 
 /// 获取游戏上报的窗口大小（宽, 高）
+///
+/// - `uuid`: 游戏实例 ID
+///
+/// # 返回值
+///
+/// 返回该实例最近一次上报的窗口大小，未上报过返回 `None`
 pub fn get_window_size(uuid: Uuid) -> Option<(i32, i32)> {
     WINDOW_SIZES.read().unwrap().get(&uuid).copied()
 }
@@ -168,6 +195,9 @@ pub fn clear_servers() {
 ///
 /// 消息体只含标题（与 ColorMC 一致，游戏实例由 `uuid` 对应通道定位）。
 /// 返回是否发送成功（游戏实例未注册通道时返回 `false`）。
+///
+/// - `uuid`: 游戏实例 ID
+/// - `title`: 要设置的标题
 pub fn set_title(uuid: Uuid, title: &str) -> bool {
     let mut content = BytesMut::new();
     content.put_i32(TYPE_SET_TITLE);
@@ -184,6 +214,9 @@ pub fn set_title(uuid: Uuid, title: &str) -> bool {
 ///
 /// 返回 `true` 表示已通知成功（当前进程应退出，由已有实例接管）；
 /// 返回 `false` 表示没有可连接的实例（端口错误或服务未运行）。
+///
+/// - `port`: 已运行实例的监听端口
+/// - `args`: 本进程的启动参数（为空则发送「启动显示」）
 pub fn notify_existing(port: u16, args: Vec<String>) -> bool {
     use std::io::Write;
 
@@ -194,7 +227,6 @@ pub fn notify_existing(port: u16, args: Vec<String>) -> bool {
         return false;
     }
 
-    // 只发送一条消息：无参数 -> LAUNCH_SHOW(3)，有参数 -> LAUNCH_ARG(4)
     // 协议无总长度前缀（与 ColorMC 一致），消息体自定界
     let mut content = BytesMut::new();
     if args.is_empty() {
@@ -222,6 +254,8 @@ pub fn notify_existing(port: u16, args: Vec<String>) -> bool {
 /// 已通知已运行实例，本进程应立即退出。
 ///
 /// 本进程已启动过服务时，重复调用直接返回第一次绑定的端口。
+///
+/// - `port`: 已运行启动器实例记录的端口（无已运行实例时为 `None`）
 pub fn init(port: Option<u16>) -> CoreResult<Option<u16>> {
     // 串行化服务启动：并发调用时只有一个线程真正启动服务并设置 IPC_PORT，
     // 其余线程等待锁后直接复用同一端口（否则各自绑定端口会返回不同端口）
@@ -267,6 +301,8 @@ pub fn init(port: Option<u16>) -> CoreResult<Option<u16>> {
 }
 
 /// 在独立线程上运行 IPC 服务（阻塞直到线程结束）
+///
+/// - `port_tx`: 回传绑定端口的通道
 fn run_server(port_tx: std::sync::mpsc::Sender<u16>) {
     let runtime = match tokio::runtime::Builder::new_current_thread()
         .enable_all()
@@ -438,6 +474,9 @@ fn message_len(buf: &[u8]) -> Option<usize> {
 }
 
 /// 处理一条消息
+///
+/// - `data`: 消息体（不含类型头，读完即消费）
+/// - `client_tx`: 该连接的出站通道（注册游戏通道时使用）
 async fn process_message(
     data: &mut BytesMut,
     client_tx: &mpsc::UnboundedSender<BytesMut>,
@@ -531,6 +570,8 @@ fn cleanup() {
 }
 
 /// 广播消息给所有客户端
+///
+/// - `msg`: 完整消息（类型头 + 消息体）
 fn broadcast(msg: BytesMut) {
     cleanup();
     for tx in CLIENTS.read().unwrap().iter() {
@@ -539,6 +580,9 @@ fn broadcast(msg: BytesMut) {
 }
 
 /// 发送消息给指定游戏实例，返回是否发送成功
+///
+/// - `uuid`: 游戏实例 ID
+/// - `msg`: 完整消息（类型头 + 消息体）
 fn send_to_game(uuid: Uuid, msg: BytesMut) -> bool {
     cleanup();
     if let Some(tx) = GAME_CHANNELS.read().unwrap().get(&uuid) {

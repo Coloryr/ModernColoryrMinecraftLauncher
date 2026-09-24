@@ -47,8 +47,10 @@ const GLINT_IDS: [&str; 2] = ["enchanted_book", "enchanted_golden_apple"];
 
 /// ===== items/*.json 定义解析 =====
 
+/// items/*.json 顶层定义
 #[derive(Deserialize)]
 struct ItemDefJson {
+    /// 图标模型定义（类型分派根节点）
     #[serde(default)]
     model: Option<ItemModelJson>,
 }
@@ -89,10 +91,13 @@ struct ItemModelJson {
     transformation: Option<TransformDefJson>,
 }
 
+/// select 的一个分支
 #[derive(Deserialize)]
 struct CaseJson {
+    /// 条件属性取值（含 "gui" 才选中）
     #[serde(default)]
     when: Option<SelectWhen>,
+    /// 命中时使用的模型
     #[serde(default)]
     model: Option<ItemModelJson>,
 }
@@ -100,8 +105,10 @@ struct CaseJson {
 /// range_dispatch 的一个分派条目（阈值 + 模型）
 #[derive(Deserialize)]
 struct EntryJson {
+    /// 阈值命中时使用的模型
     #[serde(default)]
     model: Option<ItemModelJson>,
+    /// 分派阈值（≤0 的最后一个生效）
     #[serde(default)]
     threshold: f64,
 }
@@ -114,8 +121,10 @@ enum SelectWhen {
     Many(Vec<String>),
 }
 
+/// tint 定义
 #[derive(Deserialize)]
 struct TintJson {
+    /// 类型：minecraft:constant / grass / dye / firework 等
     #[serde(rename = "type", default)]
     kind: Option<String>,
     /// minecraft:constant 的颜色
@@ -129,15 +138,19 @@ struct TintJson {
 /// 节点 transformation（ItemTransform 语义，quaternion 为 [x,y,z,w]）
 #[derive(Deserialize)]
 struct TransformDefJson {
+    /// 平移（模型空间单位）
     #[serde(default)]
     translation: Option<Vec<f32>>,
+    /// 左旋转四元数 [x,y,z,w]
     #[serde(default)]
     left_rotation: Option<Vec<f32>>,
     /// 欧拉角（度）
     #[serde(default)]
     rotation: Option<Vec<f32>>,
+    /// 缩放系数
     #[serde(default)]
     scale: Option<Vec<f32>>,
+    /// 右旋转四元数 [x,y,z,w]
     #[serde(default)]
     right_rotation: Option<Vec<f32>>,
 }
@@ -153,6 +166,12 @@ struct ChildModel {
 }
 
 /// 解析 model 节点为可渲染子模型列表；special/empty/未知类型返回 None（跳过该物品）
+///
+/// - `node`: items/*.json 的 model 节点（递归展开 composite 分派）
+///
+/// # 返回值
+///
+/// 返回展平后的子模型列表，类型不可渲染或引用缺失时返回 `None`
 fn resolve_item_models(node: &ItemModelJson) -> Option<Vec<ChildModel>> {
     match node.kind.as_deref() {
         None | Some("minecraft:model") => {
@@ -210,6 +229,12 @@ fn resolve_item_models(node: &ItemModelJson) -> Option<Vec<ChildModel>> {
 }
 
 /// 去掉 "minecraft:" 命名空间前缀
+///
+/// - `name`: 模型名（可带命名空间前缀）
+///
+/// # 返回值
+///
+/// 返回去前缀后的相对名
 fn strip_ns(name: &str) -> String {
     name.strip_prefix("minecraft:").unwrap_or(name).to_string()
 }
@@ -228,6 +253,12 @@ enum ModelRef {
 }
 
 /// tint 节点 → RGB（grass 类型按平原群系常量色，其余取 ARGB int）
+///
+/// - `t`: tint 定义
+///
+/// # 返回值
+///
+/// 返回 RGB 染色（0..255）
 fn tint_color(t: &TintJson) -> [u8; 3] {
     match t.kind.as_deref() {
         Some("minecraft:grass") => GRASS_TINT,
@@ -236,12 +267,24 @@ fn tint_color(t: &TintJson) -> [u8; 3] {
 }
 
 /// ARGB int（可为负）→ [r, g, b]
+///
+/// - `v`: ARGB 色值（i64，可为负如 -1 = 白）
+///
+/// # 返回值
+///
+/// 返回 RGB 分量（0..255）
 fn argb_rgb(v: i64) -> [u8; 3] {
     let u = v as u32;
     [(u >> 16) as u8, (u >> 8) as u8, u as u8]
 }
 
 /// 节点 transformation → 矩阵（照 ItemTransform 语义：T·leftRot·R(euler度)·S·rightRot）
+///
+/// - `t`: transformation 定义
+///
+/// # 返回值
+///
+/// 返回组合后的变换矩阵
 fn transform_matrix(t: &TransformDefJson) -> Mat4 {
     let take = |v: &Option<Vec<f32>>, i: usize, d: f32| {
         v.as_ref().and_then(|v| v.get(i).copied()).unwrap_or(d)
@@ -276,6 +319,15 @@ fn transform_matrix(t: &TransformDefJson) -> Mat4 {
 /// bakeQuad 核心（无元素旋转，照 FaceBakery.bakeQuad）：FaceInfo 角选点/16 → uv 角映射
 /// （Quadrant.R0）→ calculateFacing 量化 + 规范角序重排。
 /// from/to 可为退化/翻转盒（extrude 裙边即是），照反编译原样传入即可
+///
+/// - `from`: 盒子最小角（0..16 坐标）
+/// - `to`: 盒子最大角（0..16 坐标）
+/// - `facing`: 面索引（0=down..5=east）
+/// - `uvs`: uv 矩形（[u0,v0,u1,v1]，0..16 像素）
+///
+/// # 返回值
+///
+/// 返回（4 顶点位置，4 顶点 uv，法线）（0..1 模型空间）
 fn bake_face(
     from: &[f32; 3],
     to: &[f32; 3],
@@ -311,6 +363,15 @@ fn bake_face(
 /// extrude 挤出烘焙（照反编译 ItemModelGenerator）：
 /// layer0..layer4 依次叠加遇缺失即止（layer0 缺失整体失败）；每层
 /// front/back 全幅面 + 不透明像素边界裙边（动画贴图各帧并集）
+///
+/// - `archive`: 客户端 jar 归档（读取贴图与动画元数据）
+/// - `textures`: 父链合并后的贴图引用表（取 layer0..layer4）
+/// - `tex_cache`: 跨模型复用的贴图缓存（路径 → 解码位图）
+/// - `tints`: tint 表（tintIndex = 层号）
+///
+/// # 返回值
+///
+/// 返回全部层的 quad，layer0 缺失时返回 `None`
 fn bake_generated(
     archive: &BaseArchive,
     textures: &HashMap<String, crate::block::TextureRefObj>,
@@ -476,6 +537,16 @@ fn bake_generated(
 /// 只走2D平面物品（generated 链 → extrude）；引用3D模型的物品形态
 /// （items/stone.json → block/stone 等）由方块表渲染，这里跳过。
 /// `extra`：节点 transformation（composite 子模型拼合用），烘焙期直接作用于顶点
+///
+/// - `archive`: 客户端 jar 归档
+/// - `rel`: 模型文件相对路径（models/ 下的相对名）
+/// - `tex_cache`: 跨模型复用的贴图缓存（路径 → 解码位图）
+/// - `tints`: tint 表（extrude 按层号索引）
+/// - `extra`: 节点 transformation 矩阵（无则 `None`）
+///
+/// # 返回值
+///
+/// 返回（烘焙产物，本次用到的贴图），非 generated 链或烘焙失败时返回 `None`
 pub(crate) fn bake_item_model(
     archive: &BaseArchive,
     rel: &str,
@@ -545,6 +616,13 @@ pub(crate) fn items_id() -> String {
 /// 与贴图缓存；GPU优先逐图标回退CPU。物品定义解析失败（special/empty/引用缺失）即跳过
 ///
 /// `gui`可选：按已处理的物品数上报进度（约每1%一次）
+///
+/// - `archive`: 客户端 jar 归档（只读枚举与渲染）
+/// - `gui`: 进度回调（传 `None` 不上报）
+///
+/// # 返回值
+///
+/// 输出目录未初始化或 GPU 不可用时返回相应错误，成功返回 `Ok(())`
 pub fn render_items(archive: &BaseArchive, gui: ProgressGui) -> CoreResult<()> {
     // 输出目录未初始化时报错
     crate::get_item_dir().ok_or(ErrorType::DownloadFileFail)?;
@@ -630,6 +708,15 @@ pub fn render_items(archive: &BaseArchive, gui: ProgressGui) -> CoreResult<()> {
 /// 渲染单个物品图标，返回（物品ID, 输出文件名）
 ///
 /// 公开供单物品诊断渲染（tests/render_one.rs）与render_items复用
+///
+/// - `gpu`: GPU 上下文（`None` 时由 render_baked 内部回退 CPU 路径）
+/// - `archive`: 客户端 jar 归档
+/// - `tex_cache`: 跨模型复用的贴图缓存（路径 → 解码位图）
+/// - `id`: 物品ID（不带命名空间，如 `apple`）
+///
+/// # 返回值
+///
+/// 返回（物品ID，输出文件名），定义不可渲染或渲染失败时返回 `None`
 pub fn render_item(
     gpu: Option<&GpuCtx>,
     archive: &BaseArchive,

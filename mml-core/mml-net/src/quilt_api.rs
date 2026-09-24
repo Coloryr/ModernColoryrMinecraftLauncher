@@ -13,6 +13,10 @@ use crate::{WORK_CLIENT, url_helper};
 ///
 /// - `mc`: Minecraft 游戏版本
 /// - `version`: Quilt Loader 版本
+///
+/// # 返回值
+///
+/// 返回 profile JSON 原文字节（可直接作为版本 JSON 的内容合并）
 pub async fn get_loader(mc: &str, version: &str) -> CoreResult<Vec<u8>> {
     let url = format!(
         "{}/loader/{mc}/{version}/profile/json",
@@ -23,6 +27,10 @@ pub async fn get_loader(mc: &str, version: &str) -> CoreResult<Vec<u8>> {
 }
 
 /// 获取 Quilt 元数据（可用版本列表）
+///
+/// # 返回值
+///
+/// 返回元数据 JSON 原文字节
 pub async fn get_meta() -> CoreResult<Vec<u8>> {
     let url = url_helper::get_quilt_meta();
 

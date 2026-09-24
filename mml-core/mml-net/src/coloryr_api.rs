@@ -1,3 +1,7 @@
+//! ColorYr 自有服务接口（MCMod 查询）
+//!
+//! 服务端尚未启用，代码整体保留为注释，恢复时直接解开即可。
+
 // use std::collections::HashMap;
 
 // use mml_names::i18_items::error_type::ErrorType;

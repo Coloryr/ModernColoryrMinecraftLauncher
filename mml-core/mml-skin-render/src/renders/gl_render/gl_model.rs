@@ -1,13 +1,24 @@
+//! OpenGL 模型缓冲对象模块
+//!
+//! 封装角色模型各部件的 VAO/VBO 缓冲与顶点布局。
+
 use glam::{Vec2, Vec3};
 use glow::{Context, HasContext, Buffer, VertexArray};
 
+/// 一个部件的顶点缓冲对象集合
 pub struct VaoItem {
+    /// 顶点坐标缓冲
     pub vertex_buffer_object: Buffer,
+    /// 三角面索引缓冲
     pub index_buffer_object: Buffer,
+    /// 顶点数组对象
     pub vertex_array_object: VertexArray,
 }
 
 impl VaoItem {
+    /// 创建缓冲对象
+    ///
+    /// - `gl`: OpenGL 上下文
     pub fn new(gl: &Context) -> Self {
         VaoItem {
             vertex_buffer_object: unsafe { gl.create_buffer().unwrap() },
@@ -16,6 +27,9 @@ impl VaoItem {
         }
     }
 
+    /// 删除缓冲对象
+    ///
+    /// - `gl`: OpenGL 上下文
     pub fn delete(&self, gl: &Context) {
         unsafe {
             gl.delete_vertex_array(self.vertex_array_object);
@@ -25,17 +39,28 @@ impl VaoItem {
     }
 }
 
+/// 一个模型的全部部件缓冲
 pub struct ModelVao {
+    /// 头部
     pub head: VaoItem,
+    /// 身体
     pub body: VaoItem,
+    /// 左臂
     pub left_arm: VaoItem,
+    /// 右臂
     pub right_arm: VaoItem,
+    /// 左腿
     pub left_leg: VaoItem,
+    /// 右腿
     pub right_leg: VaoItem,
+    /// 披风
     pub cape: VaoItem,
 }
 
 impl ModelVao {
+    /// 创建全部部件的缓冲对象
+    ///
+    /// - `gl`: OpenGL 上下文
     pub fn new(gl: &Context) -> Self {
         ModelVao {
             head: VaoItem::new(gl),
@@ -48,6 +73,9 @@ impl ModelVao {
         }
     }
 
+    /// 删除全部部件的缓冲对象
+    ///
+    /// - `gl`: OpenGL 上下文
     pub fn delete(&self, gl: &Context) {
         self.head.delete(gl);
         self.body.delete(gl);
@@ -59,9 +87,13 @@ impl ModelVao {
     }
 }
 
+/// 上传到 OpenGL 的顶点布局（与着色器中的 attrib 布局对应）
 #[repr(C)]
 pub struct VertexOpenGL {
+    /// 顶点坐标
     pub pos: Vec3,
+    /// 贴图 UV
     pub uv: Vec2,
+    /// 顶点法线
     pub normal: Vec3
 }

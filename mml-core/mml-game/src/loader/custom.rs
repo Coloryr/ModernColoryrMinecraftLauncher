@@ -1,3 +1,5 @@
+//! 自定义加载器安装（分析 Forge 型 jar）
+
 use std::{io::Read, path::Path};
 
 use mml_base::{
@@ -23,23 +25,39 @@ use crate::{
     },
 };
 
-pub struct CutsomLoaderRes {
+/// 自定义加载器分析结果
+pub struct CutsomLoaderResObj {
+    /// 加载器名称
     pub name: String,
+    /// 需要下载的运行库列表
     pub libs: Vec<FileItemObj>,
 }
 
 impl InstanceSettingObj {
-    /// 分析jar
-    pub async fn decode_loader_jar(&self) -> CoreResult<CutsomLoaderRes> {
+    /// 分析加载器 jar
+    ///
+    /// # 返回值
+    ///
+    /// 返回分析结果；读取或解析失败返回对应错误
+    pub async fn decode_loader_jar(&self) -> CoreResult<CutsomLoaderResObj> {
         self.decode_loader_jar_with_path(self.get_loader_file())
             .await
     }
 
-    /// 分析jar
+    /// 分析加载器 jar
+    ///
+    /// # 参数
+    ///
+    /// - `path`: 加载器 jar 路径
+    ///
+    /// # 返回值
+    ///
+    /// 返回分析结果（加载器名与缺失的运行库）；文件不是合法的
+    /// Forge 型加载器返回 `DataNotFound`
     pub async fn decode_loader_jar_with_path<P: AsRef<Path>>(
         &self,
         path: P,
-    ) -> CoreResult<CutsomLoaderRes> {
+    ) -> CoreResult<CutsomLoaderResObj> {
         let path = path.as_ref();
         let mut stream = path_helper::open_read(path)?;
         let mut zip = ZipArchive::new(&mut stream).map_err(|err| {
@@ -148,10 +166,14 @@ impl InstanceSettingObj {
         // 保存自定义加载器信息
         version_path::add_custom_loader(CustomLoaderType::ForgeLaunch(obj1), self.uuid);
 
-        Ok(CutsomLoaderRes { name, libs: list })
+        Ok(CutsomLoaderResObj { name, libs: list })
     }
 
     /// 获取自定义加载器游戏参数
+    ///
+    /// # 返回值
+    ///
+    /// 返回游戏参数列表；未设置自定义加载器返回空列表
     pub fn get_custom_loader_game_args(&self) -> Vec<String> {
         if let Some(data) = self.get_custom_loader() {
             match data.as_ref() {
@@ -179,6 +201,10 @@ impl InstanceSettingObj {
     }
 
     /// 获取自定义加载器的JVM启动参数
+    ///
+    /// # 返回值
+    ///
+    /// 返回 JVM 参数列表；未设置自定义加载器返回空列表
     pub fn get_custom_loader_jvm_args(&self) -> Vec<String> {
         if let Some(data) = self.get_custom_loader() {
             match data.as_ref() {
@@ -200,6 +226,10 @@ impl InstanceSettingObj {
     }
 
     /// 获取自定义加载器主类
+    ///
+    /// # 返回值
+    ///
+    /// 返回主类名；未设置自定义加载器返回空串
     pub fn get_custom_loader_mainclass(&self) -> String {
         if let Some(data) = self.get_custom_loader() {
             match data.as_ref() {

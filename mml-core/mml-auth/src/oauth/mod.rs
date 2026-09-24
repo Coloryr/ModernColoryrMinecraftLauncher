@@ -26,7 +26,7 @@
 //!
 //! # 子模块
 //!
-//! - [`oauth_res`] — OAuth 请求/响应的数据结构
+//! - [`oauth_obj`] — OAuth 请求/响应的数据结构
 //! - [`xbox_obj`] — Xbox Live/XSTS 认证的数据结构
 //!
 //! # 认证状态
@@ -45,23 +45,19 @@ use tokio_util::sync::CancellationToken;
 use crate::{
     LoginObj,
     oauth::{
-        oauth_res::{OAuthGetCodeObj, OAuthGetCodeRes, OAuthObj},
+        oauth_obj::{OAuthGetCodeObj, OAuthGetCodeResObj, OAuthObj},
         xbox_obj::{
-            XBoxLiveRes, XBoxLoginObj, XBoxLoginPropertiesObj, XBoxLoginResObj, XSTSLoginObj,
+            XBoxLiveResObj, XBoxLoginObj, XBoxLoginPropertiesObj, XBoxLoginResObj, XSTSLoginObj,
             XSTSLoginPropertiesObj,
         },
     },
 };
 
-/// OAuth 请求/响应数据结构
-pub mod oauth_res;
-/// Xbox Live/XSTS 认证数据结构
+pub mod oauth_obj;
 pub mod xbox_obj;
 
-/// OAuth 客户端密钥（Azure 应用程序 ID）
-///
-/// 全局单例，通过 `set_key()` 在启动时设置。
-pub static KEY: OnceLock<String> = OnceLock::new();
+/// OAuth 客户端密钥（Azure 应用程序 ID），启动时通过 `set_key()` 设置
+static KEY: OnceLock<String> = OnceLock::new();
 
 /// 微软认证流程中的当前阶段
 ///
@@ -102,19 +98,17 @@ fn have_key() -> CoreResult<String> {
     }
 }
 
-/// 发起 OAuth 设备码授权——第一步：获取登录码
-///
-/// 向 Microsoft 设备授权端点请求设备码和验证 URL。
-/// 用户需要在浏览器中打开返回的 URL 并输入设备码来完成授权。
+/// 发起 OAuth 设备码授权——第一步：获取设备码与验证网址，
+/// 用户在浏览器中打开网址并输入设备码完成授权
 ///
 /// # 返回值
 ///
-/// 返回 `OAuthGetCodeRes`，包含：
+/// 返回 `OAuthGetCodeResObj`，包含：
 /// - `code`: 用户需要输入的设备码
 /// - `url`: 用户需要访问的验证网址
 /// - `device_code`: 后续轮询用的设备码
 /// - `expires_in`: 设备码的有效期（秒）
-pub async fn get_code() -> CoreResult<OAuthGetCodeRes> {
+pub async fn get_code() -> CoreResult<OAuthGetCodeResObj> {
     let key = have_key()?;
 
     let obj: &[(&str, &str)] = &[
@@ -128,7 +122,7 @@ pub async fn get_code() -> CoreResult<OAuthGetCodeRes> {
 
     match data.error {
         Some(err) => Err(ErrorType::OAuthGetTokenError(ErrorData { error: err })),
-        None => Ok(OAuthGetCodeRes {
+        None => Ok(OAuthGetCodeResObj {
             code: data.user_code,
             url: data.verification_uri,
             device_code: data.device_code,
@@ -137,26 +131,19 @@ pub async fn get_code() -> CoreResult<OAuthGetCodeRes> {
     }
 }
 
-/// 轮询等待用户完成设备码授权——第二步：获取 Microsoft Token
-///
-/// 此函数会循环轮询 Microsoft 令牌端点，直到用户完成授权、超时或被取消。
+/// 轮询等待用户完成设备码授权——第二步：获取 Microsoft Token，
+/// 直到用户完成授权、超时或被取消（初始间隔 2 秒，收到 slow_down 加 5 秒）
 ///
 /// # 参数
 ///
 /// - `res`: 第一步返回的设备码信息
 /// - `cancel`: 取消令牌，用于用户主动终止等待
 ///
-/// # 轮询策略
-///
-/// - 初始间隔 2 秒
-/// - 收到 `slow_down` 错误时递增 5 秒
-/// - 超过 `expires_in` 后返回超时错误
-///
 /// # 返回值
 ///
 /// 成功时返回包含 `access_token` 和 `refresh_token` 的 `OAuthGetCodeObj`
 pub async fn run_get_code(
-    res: &OAuthGetCodeRes,
+    res: &OAuthGetCodeResObj,
     cancel: &CancellationToken,
 ) -> CoreResult<OAuthGetCodeObj> {
     let key = have_key()?;
@@ -187,10 +174,8 @@ pub async fn run_get_code(
 
         if let Some(error) = data.error {
             if error == "authorization_pending" {
-                // 用户尚未完成授权，继续等待
                 continue;
             } else if error == "slow_down" {
-                // 服务器要求降低轮询频率
                 delay += 5;
             } else if error == "expired_token" {
                 return Err(ErrorType::OAuthGetTokenError(ErrorData { error }));
@@ -201,10 +186,7 @@ pub async fn run_get_code(
     }
 }
 
-/// 使用 refresh_token 刷新 Microsoft 令牌
-///
-/// 当 access_token 过期后，用上次保存的 refresh_token 获取新令牌，
-/// 无需用户重新授权。
+/// 用保存的 refresh_token 换取新令牌，无需用户重新授权
 ///
 /// # 参数
 ///
@@ -232,7 +214,7 @@ pub async fn refresh_oauth_token(token: &str) -> CoreResult<OAuthGetCodeObj> {
     }
 }
 
-/// Xbox Live 认证——第三步：用 Microsoft Token 换取 XBL Token
+/// Xbox Live 认证——第三步：用 Microsoft Token 换取 XBL Token 与用户哈希（UHS）
 ///
 /// # 参数
 ///
@@ -240,8 +222,8 @@ pub async fn refresh_oauth_token(token: &str) -> CoreResult<OAuthGetCodeObj> {
 ///
 /// # 返回值
 ///
-/// 返回 `XBoxLiveRes`，包含 XBL token 和用户哈希（UHS）
-pub async fn get_xbox(token: &str) -> CoreResult<XBoxLiveRes> {
+/// 成功时返回 XBL Token 与用户哈希（UHS），令牌为空时返回 `ErrorType::OAuthGetTokenEmpty`
+pub async fn get_xbox(token: &str) -> CoreResult<XBoxLiveResObj> {
     let obj = XBoxLoginObj {
         properties: XBoxLoginPropertiesObj {
             auth_method: "RPS".to_string(),
@@ -262,17 +244,14 @@ pub async fn get_xbox(token: &str) -> CoreResult<XBoxLiveRes> {
     if token.is_empty() || uhs.is_empty() {
         Err(ErrorType::OAuthGetTokenEmpty)
     } else {
-        Ok(XBoxLiveRes {
+        Ok(XBoxLiveResObj {
             xbl_token: token,
             xbl_uhs: uhs,
         })
     }
 }
 
-/// XSTS 认证——第四步：用 XBL Token 换取 XSTS Token
-///
-/// XSTS（Xbox Secure Token Service）是访问 Minecraft 服务所需的
-/// 安全令牌服务。
+/// XSTS 认证——第四步：用 XBL Token 换取 XSTS Token 与用户哈希（UHS）
 ///
 /// # 参数
 ///
@@ -280,8 +259,8 @@ pub async fn get_xbox(token: &str) -> CoreResult<XBoxLiveRes> {
 ///
 /// # 返回值
 ///
-/// 返回 `XBoxLiveRes`，包含 XSTS token 和用户哈希
-pub async fn get_xsts(token: &str) -> CoreResult<XBoxLiveRes> {
+/// 成功时返回 XSTS Token 与用户哈希（UHS），令牌为空时返回 `ErrorType::OAuthGetTokenEmpty`
+pub async fn get_xsts(token: &str) -> CoreResult<XBoxLiveResObj> {
     let obj = XSTSLoginObj {
         properties: XSTSLoginPropertiesObj {
             sandbox_id: "RETAIL".to_string(),
@@ -301,7 +280,7 @@ pub async fn get_xsts(token: &str) -> CoreResult<XBoxLiveRes> {
     if token.is_empty() || uhs.is_empty() {
         Err(ErrorType::OAuthGetTokenEmpty)
     } else {
-        Ok(XBoxLiveRes {
+        Ok(XBoxLiveResObj {
             xbl_token: token,
             xbl_uhs: uhs,
         })
@@ -309,23 +288,22 @@ pub async fn get_xsts(token: &str) -> CoreResult<XBoxLiveRes> {
 }
 
 impl LoginObj {
-    /// 微软正版账户的刷新流程
-    ///
-    /// 执行完整的认证链刷新：
-    /// 1. 先尝试用现有 Minecraft Token 获取 Profile（快速验证）
-    /// 2. 失败则执行完整刷新链：refresh_token → Xbox → XSTS → Minecraft Token → Profile
+    /// 微软正版账户的刷新流程：先用现有 Minecraft Token 快速验证，
+    /// 失败则走完整刷新链（refresh_token → Xbox → XSTS → Minecraft Token → Profile）
     ///
     /// # 参数
     ///
     /// - `cancel`: 取消令牌，用于中断异步操作
+    ///
+    /// # 返回值
+    ///
+    /// 刷新成功返回 `Ok(())`（账户凭据已被更新），认证链任一步失败或被取消时返回相应错误
     pub async fn refresh_oauth(&mut self, cancel: CancellationToken) -> CoreResult<()> {
-        // 快速路径：尝试用现有 token 获取 profile
         let profile = mojang_api::get_minecraft_profile(&self.access_token).await;
         if profile.is_ok() {
             return Ok(());
         }
 
-        // 完整刷新链
         let oauth = refresh_oauth_token(&self.text1.clone().unwrap()).await?;
         if cancel.is_cancelled() {
             return Err(ErrorType::TaskCancel);
@@ -344,7 +322,6 @@ impl LoginObj {
         }
         let profile = mojang_api::get_minecraft_profile(&token).await?;
 
-        // 更新本地账户信息
         self.user_name = profile.name;
         self.uuid = profile.id;
         self.text1 = Some(oauth.refresh_token);

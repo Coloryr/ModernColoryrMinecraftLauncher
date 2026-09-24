@@ -26,7 +26,7 @@ pub struct Quad {
     pub normal: [f32; 3],
     /// 4 个顶点色（tint 后 RGBA，0..1）
     pub color: [[f32; 4]; 4],
-    /// 蕐要使用的贴图相对路径
+    /// 需要使用的贴图相对路径
     pub tex: String,
     /// uv 矩形内含半透明像素 → translucent pass
     pub translucent: bool,
@@ -36,6 +36,7 @@ pub struct Quad {
 
 /// 一个完整模型的烘焙产物
 pub struct BakedModel {
+    /// 渲染 quad 列表
     pub quads: Vec<Quad>,
     /// gui_light：true=side → ITEMS_3D 光照；false=front → ITEMS_FLAT
     pub gui_light_3d: bool,
@@ -46,8 +47,11 @@ pub struct BakedModel {
 /// gui display 变换参数（照 ItemTransform 语义，translation 已 ×0.0625）
 #[derive(Clone, Copy)]
 pub struct GuiTransform {
+    /// 旋转角度（度，绕 x/y/z 轴）
     pub rotation: [f32; 3],
+    /// 平移（模型空间单位，已 ×0.0625 并 clamp ±5）
     pub translation: [f32; 3],
+    /// 缩放系数（clamp ±4，未写时为 1）
     pub scale: [f32; 3],
 }
 
@@ -62,7 +66,6 @@ impl Default for GuiTransform {
     }
 }
 
-/// FaceInfo：六个面的 4 个顶点角（extent 枚举：0..5 = MIN_X..MAX_Z）
 /// FaceInfo：六个面的 4 个顶点角，坐标选择器 0=MIN_X 1=MIN_Y 2=MIN_Z 3=MAX_X 4=MAX_Y 5=MAX_Z
 /// （照抄 net.minecraft.client.renderer.FaceInfo 的六个枚举常量）
 pub(crate) const FACE_INFO: [[(u8, u8, u8); 4]; 6] = [
@@ -91,6 +94,14 @@ const FACE_INDEX: [(&str, usize); 6] = [
 ];
 
 /// defaultFaceUV（照 FaceBakery.defaultFaceUV）：面无显式 uv 时从盒子边界投影
+///
+/// - `facing`: 面索引（0=down..5=east）
+/// - `from`: 盒子最小角（0..16 坐标）
+/// - `to`: 盒子最大角（0..16 坐标）
+///
+/// # 返回值
+///
+/// 返回 `[u0, v0, u1, v1]`（0..16 像素坐标）
 fn default_face_uv(facing: usize, from: &[f32], to: &[f32]) -> [f32; 4] {
     match facing {
         0 => [from[0], 16.0 - to[2], to[0], 16.0 - from[2]],   // down
@@ -104,6 +115,15 @@ fn default_face_uv(facing: usize, from: &[f32], to: &[f32]) -> [f32; 4] {
 
 /// 元素 rotation 的变换矩阵（照 CuboidRotation）：绕 origin 旋转（origin 已 /16），
 /// rescale 时每轴缩放 1/max|R·axis|（先缩放后旋转：M = R·S）
+///
+/// - `origin`: 旋转原点（模型空间，已 /16）
+/// - `axis`: 旋转轴（0=x 1=y 2=z）
+/// - `angle_deg`: 旋转角度（度）
+/// - `rescale`: 是否按游戏规则做 rescale 缩放
+///
+/// # 返回值
+///
+/// 返回绕原点旋转的变换矩阵
 fn element_rotation_matrix(origin: [f32; 3], axis: usize, angle_deg: f32, rescale: bool) -> Mat4 {
     let angle = angle_deg.to_radians();
     let rot = match axis {
@@ -132,14 +152,19 @@ fn element_rotation_matrix(origin: [f32; 3], axis: usize, angle_deg: f32, rescal
 
 /// ===== 模型 JSON 结构（自带完整 display 解析，26.3 语义） =====
 
+/// 模型 JSON 顶层结构
 #[derive(Deserialize)]
 struct ModelJson {
+    /// 父模型路径（沿链向上合并）
     #[serde(default)]
     parent: Option<String>,
+    /// 贴图引用表（"#side" → 路径或引用）
     #[serde(default)]
     textures: HashMap<String, TextureRefObj>,
+    /// 元素集（父模板链上第一个带定义的生效）
     #[serde(default)]
     elements: Option<Vec<ElementJson>>,
+    /// 各视角 display 变换（只用 gui）
     #[serde(default)]
     display: Option<DisplayJson>,
     /// gui_light：side（默认，双灯3D）/ front（单面平光）
@@ -147,8 +172,10 @@ struct ModelJson {
     gui_light: Option<String>,
 }
 
+/// display 定义（只用 gui 视角）
 #[derive(Deserialize)]
 struct DisplayJson {
+    /// gui（物品栏）视角变换
     #[serde(default)]
     gui: Option<TransformJson>,
 }
@@ -156,10 +183,13 @@ struct DisplayJson {
 /// gui display 变换（ItemTransform 反序列化语义：translation×0.0625后clamp±5，scale clamp±4）
 #[derive(Deserialize)]
 struct TransformJson {
+    /// 旋转角度（度，绕 x/y/z 轴）
     #[serde(default)]
     rotation: Vec<f32>,
+    /// 平移（原始 JSON 单位，resolved 时 ×0.0625）
     #[serde(default)]
     translation: Vec<f32>,
+    /// 缩放系数（未写整体为 1）
     #[serde(default)]
     scale: Vec<f32>,
 }
@@ -192,14 +222,19 @@ impl TransformJson {
     }
 }
 
+/// 模型 JSON 的 elements 元素（0..16 坐标）
 #[derive(Clone, Deserialize)]
 pub(crate) struct ElementJson {
+    /// 最小角（0..16，缺省 [0,0,0]）
     #[serde(default = "d_from")]
     from: Vec<f32>,
+    /// 最大角（0..16，缺省 [16,16,16]）
     #[serde(default = "d_to")]
     to: Vec<f32>,
+    /// 六个面的定义（面名 → face）
     #[serde(default)]
     faces: Option<HashMap<String, FaceJson>>,
+    /// 元素整体旋转
     #[serde(default)]
     rotation: Option<RotationJson>,
 }
@@ -212,14 +247,19 @@ fn d_to() -> Vec<f32> {
     vec![16.0, 16.0, 16.0]
 }
 
+/// 元素 rotation 定义
 #[derive(Clone, Deserialize)]
 struct RotationJson {
+    /// 旋转原点（0..16 坐标，缺省 [8,8,8]）
     #[serde(default = "d_rot_origin")]
     origin: Vec<f32>,
+    /// 旋转轴（x/y/z，缺省 y）
     #[serde(default)]
     axis: Option<String>,
+    /// 旋转角度（度，合法值 ±22.5/±45，缺省 0）
     #[serde(default)]
     angle: Option<f32>,
+    /// 是否按 1/max|R·axis| 缩放补偿
     #[serde(default)]
     rescale: Option<bool>,
 }
@@ -228,15 +268,19 @@ fn d_rot_origin() -> Vec<f32> {
     vec![8.0, 8.0, 8.0]
 }
 
+/// 单个面的定义
 #[derive(Clone, Deserialize)]
 struct FaceJson {
+    /// 贴图引用（"#side" 之类，指向 textures 表）
     #[serde(default)]
     texture: Option<String>,
+    /// uv 矩形（[u0,v0,u1,v1]，0..16 像素，缺省走 defaultFaceUV 投影）
     #[serde(default)]
     uv: Option<Vec<f32>>,
-    /// 0/90/180/270
+    /// 贴图旋转角（0/90/180/270）
     #[serde(default)]
     rotation: Option<u32>,
+    /// 染色索引（索引 items/*.json 的 tint 表或群系常量色）
     #[serde(default)]
     tintindex: Option<u32>,
 }
@@ -246,9 +290,13 @@ struct FaceJson {
 
 /// 父链解析产物：合并后的贴图表、元素集、gui display、gui_light
 pub(crate) struct Resolved {
+    /// 父链逐层合并后的贴图引用表（子优先）
     pub(crate) textures: HashMap<String, TextureRefObj>,
+    /// 第一个带定义的祖先的元素集
     pub(crate) elements: Vec<ElementJson>,
+    /// display.gui 变换（取离当前模型最近的祖先）
     pub(crate) transform: GuiTransform,
+    /// gui_light：true=side → 3D 光照；false=front → 平面光照
     pub(crate) gui_light_3d: bool,
     /// 链终止于 builtin/generated（平面物品，无模型文件，走extrude挤出）
     pub(crate) generated: bool,
@@ -257,6 +305,13 @@ pub(crate) struct Resolved {
 /// 沿 parent 链向上收集：textures 逐层合并（子优先）、elements 取第一个带定义的祖先、
 /// display.gui 与 gui_light 取离当前模型最近的祖先
 /// （findTop 走完整条链：block/block 的 gui 旋转在 cube 找到 elements 之后仍在更上层）
+///
+/// - `archive`: 客户端 jar 归档
+/// - `rel`: 模型文件相对路径（如 `block/stone.json`）
+///
+/// # 返回值
+///
+/// 返回解析产物，任一环节的模型文件读不到 / JSON 无效时返回 `None`
 pub(crate) fn resolve(archive: &BaseArchive, rel: &str) -> Option<Resolved> {
     let mut textures: HashMap<String, TextureRefObj> = HashMap::new();
     let mut transform: Option<GuiTransform> = None;
@@ -313,6 +368,13 @@ pub(crate) fn resolve(archive: &BaseArchive, rel: &str) -> Option<Resolved> {
 }
 
 /// 解析贴图引用链（"#side" -> textures值，值可能还是引用）
+///
+/// - `textures`: 父链合并后的贴图引用表
+/// - `r`: 贴图引用（"#side" 或直接路径值）
+///
+/// # 返回值
+///
+/// 返回贴图引用值（如 `block/stone`），引用链断裂或过长时返回 `None`
 fn resolve_ref(textures: &HashMap<String, TextureRefObj>, r: &str) -> Option<String> {
     let mut r = r;
     for _ in 0..8 {
@@ -327,6 +389,12 @@ fn resolve_ref(textures: &HashMap<String, TextureRefObj>, r: &str) -> Option<Str
 }
 
 /// 贴图引用值 -> jar内路径
+///
+/// - `value`: 贴图引用值（`block/stone` 或 `minecraft:block/stone`）
+///
+/// # 返回值
+///
+/// 返回 jar 内路径（`assets/minecraft/textures/…​.png`），非 minecraft 命名空间时返回 `None`
 pub(crate) fn texture_path(value: &str) -> Option<String> {
     let (ns, path) = value.split_once(':').unwrap_or(("minecraft", value));
     if ns != "minecraft" {
@@ -337,6 +405,14 @@ pub(crate) fn texture_path(value: &str) -> Option<String> {
 
 
 /// 加载贴图（带缓存），返回 RGBA 位图
+///
+/// - `archive`: 客户端 jar 归档
+/// - `cache`: 跨模型复用的贴图缓存（路径 → 解码位图）
+/// - `path`: jar 内贴图路径
+///
+/// # 返回值
+///
+/// 返回解码后的位图，读取或 PNG 解码失败时返回 `None`
 pub(crate) fn load_texture(
     archive: &BaseArchive,
     cache: &mut HashMap<String, Pixmap>,
@@ -352,6 +428,12 @@ pub(crate) fn load_texture(
 }
 
 /// 读取位图为 straight-alpha RGBA
+///
+/// - `tex`: 解码后的位图
+///
+/// # 返回值
+///
+/// 返回（RGBA 数据，行字节数，宽，高）
 pub(crate) fn bitmap_rgba(tex: &Pixmap) -> Option<(Vec<u8>, usize, usize, usize)> {
     let (w, h) = (tex.width() as usize, tex.height() as usize);
 
@@ -361,6 +443,14 @@ pub(crate) fn bitmap_rgba(tex: &Pixmap) -> Option<(Vec<u8>, usize, usize, usize)
 /// 按 NativeImage.computeTransparency 扫 uv 矩形：仅当含 1..254 之间的 alpha
 /// 才算 translucent（alpha==0 只是镂空，仍走cutout管线）；
 /// x0=floor(u0·w) y0=floor(v0·h) x1=ceil(u1·w) y1=ceil(v1·h)，动画贴图所有唯一帧合并判定
+///
+/// - `tex`: 解码后的位图
+/// - `anim`: 动画元数据（动画贴图按方形帧竖向堆叠判定）
+/// - `uv`: uv 矩形（0..1，单帧归一化）
+///
+/// # 返回值
+///
+/// uv 矩形内含半透明像素返回 true，否则 false
 pub(crate) fn rect_translucent(tex: &Pixmap, anim: Option<&AnimMeta>, uv: &[f32; 4]) -> bool {
     let Some((base, stride, w, h_total)) = bitmap_rgba(tex) else {
         return false;
@@ -420,6 +510,12 @@ pub(crate) fn rect_translucent(tex: &Pixmap, anim: Option<&AnimMeta>, uv: &[f32;
 }
 
 /// tintindex -> 染色（灰度贴图按群系色，与游戏平原群系常量色一致）
+///
+/// - `path`: 贴图相对路径（按路径关键词选群系色）
+///
+/// # 返回值
+///
+/// 返回 RGB 染色（0..255）
 fn tint_for_path(path: &str) -> [u8; 3] {
     if path.contains("birch_leaves") {
         BIRCH_TINT
@@ -436,6 +532,14 @@ fn tint_for_path(path: &str) -> [u8; 3] {
 /// ===== bake：照 FaceBakery.bakeQuad 逐条对应 =====
 
 /// 取盒子边界分量（extent 枚举 -> from/to 的分量）
+///
+/// - `extent`: 坐标选择器（0=MIN_X 1=MIN_Y 2=MIN_Z 3=MAX_X 4=MAX_Y 5=MAX_Z）
+/// - `from`: 盒子最小角
+/// - `to`: 盒子最大角
+///
+/// # 返回值
+///
+/// 返回对应的分量值
 pub(crate) fn select_extent(extent: u8, from: &[f32], to: &[f32]) -> f32 {
     match extent {
         0 => from[0],
@@ -448,6 +552,12 @@ pub(crate) fn select_extent(extent: u8, from: &[f32], to: &[f32]) -> f32 {
 }
 
 /// 面索引 -> 法线轴（与 FACE_INDEX 一致：down=0..east=5）
+///
+/// - `i`: 面索引（0=down..5=east）
+///
+/// # 返回值
+///
+/// 返回该面的外向法线单位向量
 pub(crate) fn face_normal(i: usize) -> Vec3 {
     match i {
         0 => Vec3::NEG_Y,
@@ -460,12 +570,24 @@ pub(crate) fn face_normal(i: usize) -> Vec3 {
 }
 
 /// 法线 -> 面索引（点积最接近1的轴）
+///
+/// - `dir`: 轴向单位向量
+///
+/// # 返回值
+///
+/// 返回匹配的面索引（0=down..5=east），非轴向向量返回 `None`
 pub(crate) fn face_index_of(dir: Vec3) -> Option<usize> {
     (0..6).find(|&i| dir.dot(face_normal(i)) > 0.999)
 }
 
 /// calculateFacing：由前三顶点叉积求几何法线，量化到点积最大的正向坐标轴；
 /// 退化面返回 None（游戏回退 Direction.UP，等价零法线）
+///
+/// - `pos`: 4 个顶点位置（0..1 模型空间）
+///
+/// # 返回值
+///
+/// 返回量化的轴向单位向量，退化面返回 `None`
 pub(crate) fn calculate_facing(pos: &[[f32; 3]; 4]) -> Option<[f32; 3]> {
     let p0 = Vec3::from(pos[0]);
     let p1 = Vec3::from(pos[1]);
@@ -487,6 +609,10 @@ pub(crate) fn calculate_facing(pos: &[[f32; 3]; 4]) -> Option<[f32; 3]> {
 }
 
 /// recalculateWinding：把顶点顺序换成该朝向 FaceInfo 的规范角序（uv随之同步交换）
+///
+/// - `pos`: 顶点位置（就地重排）
+/// - `uv`: 顶点 uv（随 pos 同步交换）
+/// - `facing`: 目标面索引（0=down..5=east）
 pub(crate) fn recalculate_winding(pos: &mut [[f32; 3]; 4], uv: &mut [[f32; 2]; 4], facing: usize) {
     let mut min = [999.0f32; 3];
     let mut max = [-999.0f32; 3];
@@ -517,8 +643,16 @@ pub(crate) fn recalculate_winding(pos: &mut [[f32; 3]; 4], uv: &mut [[f32; 2]; 4
 
 /// 烘焙一个元素的全部面 -> quad 列表
 ///
-/// `item_tints`：None=方块路径（tintindex按贴图路径取群系常量色）；
-/// Some=物品路径（tintindex索引items/*.json的tint表，越界/无tintindex为白色，与游戏一致）
+/// - `element`: 模型元素（0..16 坐标）
+/// - `textures`: 父链合并后的贴图引用表
+/// - `archive`: 客户端 jar 归档（读取贴图与动画元数据）
+/// - `tex_cache`: 跨模型复用的贴图缓存（路径 → 解码位图）
+/// - `item_tints`: None=方块路径（tintindex按贴图路径取群系常量色）；
+///   Some=物品路径（tintindex索引items/*.json的tint表，越界/无tintindex为白色，与游戏一致）
+///
+/// # 返回值
+///
+/// 返回该元素全部可烘焙面（贴图解析失败的面跳过）
 pub(crate) fn bake_element(
     element: &ElementJson,
     textures: &HashMap<String, TextureRefObj>,
@@ -637,13 +771,23 @@ pub(crate) fn bake_element(
 }
 
 
-/// 烘焙一个模型为 quad 列表（含贴图缓存），供 GPU/CPU 两种后端共用
 /// 自发光贴图：篝火/灵魂篝火的火焰，渲染时不做方向光衰减
+///
+/// - `path`: 贴图相对路径（带 .png 后缀）
 fn is_fullbright_tex(path: &str) -> bool {
-    // 路径带.png后缀；soul_campfire_fire 也包含 campfire_fire
+    // soul_campfire_fire 也包含 campfire_fire
     path.contains("campfire_fire")
 }
 
+/// 烘焙一个模型为 quad 列表（含贴图缓存），供 GPU/CPU 两种后端共用
+///
+/// - `archive`: 客户端 jar 归档（读取模型 JSON 与贴图）
+/// - `rel`: 模型文件相对路径（如 `block/stone.json`）
+/// - `tex_cache`: 跨模型复用的贴图缓存（路径 → 解码位图）
+///
+/// # 返回值
+///
+/// 返回（烘焙产物，本次新加载的贴图缓存），模型解析失败时返回 `None`
 pub fn bake_model(
     archive: &BaseArchive,
     rel: &str,

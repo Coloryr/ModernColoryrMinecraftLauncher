@@ -71,16 +71,23 @@ const VERTEX_LAYOUT: wgpu::VertexBufferLayout<'static> = wgpu::VertexBufferLayou
 };
 
 
+/// wgpu 渲染上下文（离屏管线 + 采样器）
 pub struct GpuCtx {
+    /// 逻辑设备
     device: wgpu::Device,
+    /// 命令队列
     queue: wgpu::Queue,
+    /// 不透明 / cutout 管线（深度写入、背面剔除）
     pipeline_cutout: wgpu::RenderPipeline,
+    /// 半透明管线（SrcAlpha 混合、深度只读）
     pipeline_translucent: wgpu::RenderPipeline,
     /// glint（附魔光效）管线：depth EQUAL、加色混合、无背面剔除
     pipeline_glint: wgpu::RenderPipeline,
     /// glint 贴图 REPEAT 采样器（光纹平铺）
     sampler_repeat: wgpu::Sampler,
+    /// 共用绑定组布局（uniform + sampler + texture）
     bind_layout: wgpu::BindGroupLayout,
+    /// 贴图 NEAREST 采样器（ClampToEdge）
     sampler: wgpu::Sampler,
 }
 
@@ -89,6 +96,10 @@ impl GpuCtx {
     /// - Windows：DX12 → VK → GL
     /// - macOS：Metal → VK → GL
     /// - Linux/其他Unix：VK → GL
+    ///
+    /// # 返回值
+    ///
+    /// 返回初始化成功的上下文，全部后端失败时返回 `None`
     #[cfg(windows)]
     pub fn try_new() -> Option<GpuCtx> {
         block_on(Self::try_new_async(&[
@@ -121,10 +132,24 @@ impl GpuCtx {
     }
 
     /// 指定单一后端初始化（测试/调试用）
+    ///
+    /// - `name`: 后端显示名（日志用）
+    /// - `backends`: wgpu 后端位
+    ///
+    /// # 返回值
+    ///
+    /// 返回初始化成功的上下文，失败时返回 `None`
     pub fn try_new_backend(name: &str, backends: wgpu::Backends) -> Option<GpuCtx> {
         block_on(Self::try_new_async(&[(name, backends)]))
     }
 
+    /// 按回退链逐个尝试初始化（独显优先）
+    ///
+    /// - `chain`: 回退链（显示名 → wgpu 后端位，按优先级排列）
+    ///
+    /// # 返回值
+    ///
+    /// 返回首个成功的上下文，全部失败时返回 `None`
     async fn try_new_async(chain: &[(&str, wgpu::Backends)]) -> Option<GpuCtx> {
         for (name, backends) in chain {
             let mut desc = wgpu::InstanceDescriptor::new_without_display_handle();
@@ -160,6 +185,14 @@ impl GpuCtx {
         None
     }
 
+    /// 创建着色器与三条渲染管线（cutout / translucent / glint）
+    ///
+    /// - `device`: 逻辑设备
+    /// - `queue`: 命令队列
+    ///
+    /// # 返回值
+    ///
+    /// 返回组装完成的上下文
     fn build(device: wgpu::Device, queue: wgpu::Queue) -> GpuCtx {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("mml-tex-draw"),
@@ -305,7 +338,7 @@ impl GpuCtx {
         );
 
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
-            label: Some("mml-tetx-draw"),
+            label: Some("mml-tex-draw"),
             mag_filter: wgpu::FilterMode::Nearest,
             min_filter: wgpu::FilterMode::Nearest,
             mipmap_filter: wgpu::MipmapFilterMode::Nearest,
@@ -341,6 +374,12 @@ impl GpuCtx {
 }
 
 /// gui display 变换矩阵（照 ItemTransform.apply：translate·rotationXYZ·scale·translate(-0.5)）
+///
+/// - `t`: gui display 变换参数
+///
+/// # 返回值
+///
+/// 返回 0..1 模型空间 → 以原点为中心的变换矩阵
 pub fn item_transform_matrix(t: &crate::model::GuiTransform) -> Mat4 {
     let rot = t.rotation.map(|deg| deg.to_radians());
     Mat4::from_translation(Vec3::from(t.translation))
@@ -352,6 +391,12 @@ pub fn item_transform_matrix(t: &crate::model::GuiTransform) -> Mat4 {
 }
 
 /// 光照方向（照 Lighting.java：ITEMS_3D / ITEMS_FLAT 两个UBO槽位）
+///
+/// - `item3d`: true=ITEMS_3D（gui_light=side），false=ITEMS_FLAT（gui_light=front）
+///
+/// # 返回值
+///
+/// 返回（light0，light1）两条方向光（xyz=方向单位向量，w=0）
 pub fn light_dirs(item3d: bool) -> ([f32; 4], [f32; 4]) {
     let l0 = Vec3::new(0.2, 1.0, -0.7).normalize();
     let l1 = Vec3::new(-0.2, 1.0, 0.7).normalize();
@@ -376,8 +421,16 @@ pub fn light_dirs(item3d: bool) -> ([f32; 4], [f32; 4]) {
 }
 
 impl GpuCtx {
-    /// 渲染一个烘焙模型到 size×size RGBA，返回 straight-alpha 像素（未成功返回 None）
-    /// `glint`：Some(贴图)时在物品像素上叠加附魔光效（REPEAT采样、加色混合）
+    /// 渲染一个烘焙模型到 size×size RGBA
+    ///
+    /// - `model`: 烘焙后的模型（quad 列表 + gui 变换）
+    /// - `textures`: 模型用到的贴图（路径 → 解码位图，缺贴图视为失败）
+    /// - `glint`: Some(贴图)时在物品像素上叠加附魔光效（REPEAT采样、加色混合）
+    /// - `size`: 输出边长（像素）
+    ///
+    /// # 返回值
+    ///
+    /// 返回 straight-alpha RGBA 像素，贴图缺失或 GPU 读回失败时返回 `None`
     pub fn render(
         &self,
         model: &BakedModel,

@@ -1,3 +1,5 @@
+//! CurseForge 内容查询与整合包安装
+
 use std::{
     cmp::Reverse,
     collections::{HashMap, HashSet},
@@ -39,22 +41,37 @@ use mml_net::curseforge_api::{
 
 pub mod pack_obj;
 
+/// 分类信息缓存
 static CATEGORIES: OnceLock<CurseForgeCategoriesObj> = OnceLock::new();
+/// 游戏版本列表缓存
 static GAME_VERSION: OnceLock<Vec<String>> = OnceLock::new();
 
 /// 排序编号
 pub enum CurseForgeSortField {
+    /// 精选
     Featured,
+    /// 热度
     Popularity,
+    /// 最后更新
     LastUpdated,
+    /// 名字
     Name,
+    /// 作者
     Author,
+    /// 下载量
     TotalDownloads,
+    /// 分类
     Category,
+    /// 游戏版本
     GameVersion,
 }
 
 impl CurseForgeSortField {
+    /// 获取排序编号
+    ///
+    /// # 返回值
+    ///
+    /// 返回 CurseForge API 对应的排序 ID
     pub fn get_id(&self) -> u32 {
         match self {
             CurseForgeSortField::Featured => 1,
@@ -69,6 +86,15 @@ impl CurseForgeSortField {
     }
 }
 
+/// 转换为 CurseForge 的加载器 ID
+///
+/// # 参数
+///
+/// - `loader`: 加载器类型
+///
+/// # 返回值
+///
+/// 返回加载器 ID；该加载器不被 CurseForge 支持返回 `None`
 pub fn to_loader_id(loader: &LoaderType) -> Option<u32> {
     match loader {
         LoaderType::Forge => Some(1),
@@ -80,6 +106,15 @@ pub fn to_loader_id(loader: &LoaderType) -> Option<u32> {
 }
 
 /// 创建下载项目
+///
+/// # 参数
+///
+/// - `obj`: CurseForge 文件信息
+/// - `path`: 保存目录
+///
+/// # 返回值
+///
+/// 返回主文件下载项
 pub fn make_file_item_obj<P: AsRef<Path>>(obj: &mut CurseForgeFileDataObj, path: P) -> FileItemObj {
     obj.fix_download_url();
 
@@ -93,6 +128,15 @@ pub fn make_file_item_obj<P: AsRef<Path>>(obj: &mut CurseForgeFileDataObj, path:
 }
 
 /// 创建在线文件信息
+///
+/// # 参数
+///
+/// - `obj`: CurseForge 文件信息
+/// - `path`: 实例内相对目录
+///
+/// # 返回值
+///
+/// 返回在线文件信息
 pub fn make_file_online_info_obj(obj: &mut CurseForgeFileDataObj, path: &str) -> OnlineInfoObj {
     obj.fix_download_url();
 
@@ -121,9 +165,15 @@ pub struct CurseForgeModDependenciesRes {
 
 /// 获取模组依赖
 ///
-/// - `obj`: CurseForge文件信息
+/// # 参数
+///
+/// - `obj`: CurseForge 文件信息
 /// - `version`: 游戏版本
 /// - `loader`: 加载器类型
+///
+/// # 返回值
+///
+/// 返回依赖列表（含递归解析出的子依赖，已去重）
 pub async fn get_mod_dependencies(
     obj: &CurseForgeFileDataObj,
     version: &str,
@@ -141,6 +191,19 @@ pub async fn get_mod_dependencies(
     .unwrap()
 }
 
+/// 递归解析模组依赖
+///
+/// # 参数
+///
+/// - `dependencies`: 依赖列表
+/// - `version`: 游戏版本
+/// - `loader`: 加载器类型
+/// - `ids`: 已解析的项目 ID 集合（避免重复解析）
+/// - `handle`: 用于并发查询的运行时句柄
+///
+/// # 返回值
+///
+/// 返回新解析出的依赖列表
 fn get_mod_dependencies_inner(
     dependencies: &Option<Vec<DependenciesObj>>,
     version: &str,
@@ -232,6 +295,15 @@ fn sort_version_types(
     new_list
 }
 
+/// 获取文件类型对应的 class ID
+///
+/// # 参数
+///
+/// - `file_type`: 项目文件类型
+///
+/// # 返回值
+///
+/// 返回 CurseForge API 对应的 class ID；无对应项返回 0
 fn get_classid(file_type: FileType) -> u32 {
     match file_type {
         FileType::Mod => curseforge_api::CLASS_MOD,
@@ -243,6 +315,14 @@ fn get_classid(file_type: FileType) -> u32 {
 }
 
 /// 获取分组数据
+///
+/// # 参数
+///
+/// - `file_type`: 项目文件类型
+///
+/// # 返回值
+///
+/// 返回分类 ID 到分类名的映射表；查询失败返回对应错误
 pub async fn get_categories(file_type: FileType) -> CoreResult<HashMap<String, String>> {
     let temp = match CATEGORIES.get() {
         Some(data) => data,
@@ -269,6 +349,10 @@ pub async fn get_categories(file_type: FileType) -> CoreResult<HashMap<String, S
 }
 
 /// 获取支持的游戏版本
+///
+/// # 返回值
+///
+/// 返回游戏版本列表（首位为空串表示不限）；查询失败返回对应错误
 pub async fn get_game_versions() -> CoreResult<Vec<String>> {
     if let Some(data) = GAME_VERSION.get() {
         return Ok(data.clone());
@@ -365,6 +449,16 @@ async fn build_results(
 }
 
 /// 获取整合包模组信息
+///
+/// # 参数
+///
+/// - `game`: 目标实例
+/// - `obj`: 整合包信息
+/// - `gui`: 整合包安装界面回调
+///
+/// # 返回值
+///
+/// 返回文件下载项列表与在线信息表；任一文件查询失败返回空结果
 pub async fn get_modpack_info(
     game: &GameInstance,
     obj: &CurseForgePackObj,
@@ -510,6 +604,18 @@ fn apply_class_id(class_id: u32, item: &mut ItemPathRes, instance: &InstanceSett
 }
 
 /// 升级整合包
+///
+/// # 参数
+///
+/// - `game`: 目标实例
+/// - `data`: 新版本的文件信息
+/// - `pack_gui`: 整合包安装界面回调
+/// - `archive_gui`: 压缩包操作界面回调
+/// - `cancel`: 取消令牌
+///
+/// # 返回值
+///
+/// 成功返回 `Ok(())`；下载 / 解包 / 检查升级失败返回对应错误
 pub async fn upgrade_modpack(
     game: &GameInstance,
     data: &mut CurseForgeFileDataObj,

@@ -14,10 +14,15 @@ use crate::launcher::instance_setting_obj::InstanceSettingObj;
 
 /// 服务器储存
 pub struct ServerInfoObj {
+    /// 服务器地址
     pub ip: String,
+    /// 服务器名
     pub name: String,
+    /// 服务器图标（Base64）
     pub icon: Option<String>,
+    /// 是否接受服务器资源包
     pub accept_textures: bool,
+    /// 所属实例
     pub instance: Arc<InstanceSettingObj>,
 }
 
@@ -35,6 +40,10 @@ impl Default for ServerInfoObj {
 
 impl InstanceSettingObj {
     /// 获取服务器存储
+    ///
+    /// # 返回值
+    ///
+    /// 返回服务器列表；文件不存在返回空列表，读取失败返回对应错误
     pub fn get_server_infos(&self) -> CoreResult<Vec<ServerInfoObj>> {
         let file = self.get_servers_file();
         let mut list = Vec::new();
@@ -72,6 +81,14 @@ impl InstanceSettingObj {
     }
 
     /// 保存服务器列表
+    ///
+    /// # 参数
+    ///
+    /// - `list`: 服务器列表
+    ///
+    /// # 返回值
+    ///
+    /// 成功返回 `Ok(())`；写入失败返回对应错误
     pub fn save_servers(&self, list: &Vec<ServerInfoObj>) -> CoreResult<()> {
         let mut list1 = NbtList::new(NbtType::compound().get_num());
         for item in list.iter() {
@@ -105,9 +122,16 @@ impl InstanceSettingObj {
         nbt_file.write(stream)
     }
 
-    /// 添加服务器地址  
+    /// 添加服务器地址
+    ///
+    /// # 参数
+    ///
     /// - `name`: 名字
     /// - `ip`: 地址
+    ///
+    /// # 返回值
+    ///
+    /// 成功返回 `Ok(())`；写入失败返回对应错误
     pub fn add_server(&self, name: &str, ip: &str) -> CoreResult<()> {
         let mut list = self.get_server_infos()?;
         list.push(ServerInfoObj {
@@ -120,8 +144,15 @@ impl InstanceSettingObj {
     }
 
     /// 删除服务器地址
+    ///
+    /// # 参数
+    ///
     /// - `name`: 名字
     /// - `ip`: 地址
+    ///
+    /// # 返回值
+    ///
+    /// 成功返回 `Ok(())`；写入失败返回对应错误
     pub fn remove_server(&self, name: &str, ip: &str) -> CoreResult<()> {
         let mut list = self.get_server_infos()?;
         list.retain(|item| !(item.name == name && item.ip == ip));

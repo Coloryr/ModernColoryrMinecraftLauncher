@@ -1,3 +1,14 @@
+//! Mojang 版本清单与启动数据
+//!
+//! 子模块:
+//!
+//! | 模块 | 职责 |
+//! | --- | --- |
+//! | `assets_obj` | 资源索引 DTO |
+//! | `game_arg_obj` | 版本启动参数 DTO |
+//! | `version_checker` | 版本清单检查 |
+//! | `version_obj` | 版本清单 DTO |
+
 use mml_base::file_item::{FileHash, FileItemObj};
 use mml_net::url_helper;
 use mml_sys::Os;
@@ -19,8 +30,11 @@ pub mod version_obj;
 pub enum VersionType {
     /// 发布版
     Release,
+    /// 测试版
     Snapshot,
+    /// 其他
     Other,
+    /// 全部
     All,
 }
 
@@ -53,7 +67,14 @@ impl VersionType {
 }
 
 /// 检查规则是否适用
+///
+/// # 参数
+///
 /// - `list`: 规则列表
+///
+/// # 返回值
+///
+/// 返回规则是否允许当前系统
 pub fn check_allow(list: &Vec<GameRulesObj>) -> bool {
     let mut allow = true;
     let sys = mml_sys::get_system_info();
@@ -101,7 +122,14 @@ pub fn check_allow(list: &Vec<GameRulesObj>) -> bool {
 }
 
 /// 安全Log4j文件
+///
+/// # 参数
+///
 /// - `obj`: 游戏数据
+///
+/// # 返回值
+///
+/// 返回 log4j2 配置文件下载项
 pub fn build_log4j_item(obj: &LoggingObj) -> FileItemObj {
     FileItemObj {
         name: String::from("log4j2-xml"),
@@ -115,8 +143,15 @@ pub fn build_log4j_item(obj: &LoggingObj) -> FileItemObj {
 }
 
 /// 创建游戏资源下载项目
+///
+/// # 参数
+///
 /// - `name`: 名字
 /// - `hash`: 校验值
+///
+/// # 返回值
+///
+/// 返回资源文件下载项
 pub fn build_assets_item(name: &str, hash: &str) -> FileItemObj {
     let dir: String = hash.chars().take(2).collect();
     FileItemObj {
@@ -129,7 +164,14 @@ pub fn build_assets_item(name: &str, hash: &str) -> FileItemObj {
 }
 
 /// 创建游戏本体下载项目
+///
+/// # 参数
+///
 /// - `version`: 游戏版本号
+///
+/// # 返回值
+///
+/// 返回游戏本体下载项（版本不存在时 panic）
 pub fn build_game_item(version: &str) -> FileItemObj {
     version_path::get_version(version)
         .unwrap()
@@ -138,6 +180,10 @@ pub fn build_game_item(version: &str) -> FileItemObj {
 
 impl GameArgObj {
     /// 创建游戏本体下载项目
+    ///
+    /// # 返回值
+    ///
+    /// 返回游戏本体下载项
     pub fn build_game_item(&self) -> FileItemObj {
         FileItemObj {
             name: format!("minecraft-clinet-{}.jar", self.id),

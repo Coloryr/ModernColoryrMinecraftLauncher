@@ -22,7 +22,7 @@ use zip::ZipArchive;
 
 use crate::{class_scan, launcher::instance_setting_obj::InstanceSettingObj, loader::LoaderType};
 
-/// 加载测
+/// 加载侧类型
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum LoadSideType {
     /// 未知
@@ -69,7 +69,7 @@ pub struct ModItemObj {
     pub icon: Option<Vec<u8>>,
     /// 支持的加载器
     pub loaders: LoaderType,
-    /// 加载测
+    /// 加载侧
     pub side: LoadSideType,
 }
 
@@ -128,8 +128,11 @@ impl Default for ModObj {
 /// 字符串引号状态
 #[derive(PartialEq)]
 enum Quote {
+    /// 不在字符串内
     None,
+    /// 双引号字符串
     Double,
+    /// 单引号字符串
     Single,
 }
 
@@ -137,6 +140,14 @@ enum Quote {
 /// - 单引号字符串：`'value'` → `"value"`
 /// - 数组内未加引号的标识符：`[mod_minecraftForge]` → `["mod_minecraftForge"]`
 /// - 字符串内未转义的控制字符：换行符 → `\n`，回车符 → `\r`，制表符 → `\t`
+///
+/// # 参数
+///
+/// - `json`: 原始 json 文本
+///
+/// # 返回值
+///
+/// 返回容错处理后的 json 文本
 fn sanitize_mcmod_json(json: &str) -> String {
     let mut result = String::with_capacity(json.len() + 64);
     let chars: Vec<char> = json.chars().collect();
@@ -283,6 +294,16 @@ fn sanitize_mcmod_json(json: &str) -> String {
     result
 }
 
+/// 读取 Forge 的 mcmod.info
+///
+/// # 参数
+///
+/// - `reader`: mcmod.info 文件流
+/// - `mod_info`: 模组信息（解析结果追加到其中）
+///
+/// # 返回值
+///
+/// 成功返回 `Ok(())`；读取或解析失败返回对应错误
 fn read_forge_json(mut reader: impl Read, mod_info: &mut ModObj) -> CoreResult<()> {
     let mut json = String::new();
     reader.read_to_string(&mut json).map_err(|err| {
@@ -345,6 +366,17 @@ fn read_forge_json(mut reader: impl Read, mod_info: &mut ModObj) -> CoreResult<(
     Ok(())
 }
 
+/// 读取 Forge / NeoForge 的 mods.toml
+///
+/// # 参数
+///
+/// - `reader`: mods.toml 文件流
+/// - `loader`: 加载器类型
+/// - `mod_info`: 模组信息（解析结果追加到其中）
+///
+/// # 返回值
+///
+/// 成功返回 `Ok(())`；读取或解析失败返回对应错误
 fn read_forge_toml(
     mut reader: impl Read,
     loader: LoaderType,
@@ -427,6 +459,16 @@ fn read_forge_toml(
     Ok(())
 }
 
+/// 读取 Fabric 的 fabric.mod.json
+///
+/// # 参数
+///
+/// - `reader`: fabric.mod.json 文件流
+/// - `mod_info`: 模组信息（解析结果追加到其中）
+///
+/// # 返回值
+///
+/// 成功返回 `Ok(())`；读取或解析失败返回对应错误
 fn read_fabric_json(reader: impl Read, mod_info: &mut ModObj) -> CoreResult<()> {
     let obj = MiniJsonObj::from_stream(reader)?;
 
@@ -487,6 +529,16 @@ fn read_fabric_json(reader: impl Read, mod_info: &mut ModObj) -> CoreResult<()> 
     Ok(())
 }
 
+/// 读取 Quilt 的 quilt.mod.json
+///
+/// # 参数
+///
+/// - `reader`: quilt.mod.json 文件流
+/// - `mod_info`: 模组信息（解析结果追加到其中）
+///
+/// # 返回值
+///
+/// 成功返回 `Ok(())`；读取或解析失败返回对应错误
 fn read_quilt_json(reader: impl Read, mod_info: &mut ModObj) -> CoreResult<()> {
     let obj = MiniJsonObj::from_stream(reader)?;
 
@@ -528,6 +580,15 @@ fn read_quilt_json(reader: impl Read, mod_info: &mut ModObj) -> CoreResult<()> {
     Ok(())
 }
 
+/// 解析 MANIFEST.MF 内容
+///
+/// # 参数
+///
+/// - `content`: MANIFEST.MF 文本
+///
+/// # 返回值
+///
+/// 返回键值对映射（支持续行）
 fn parse_manifest(content: &str) -> HashMap<String, String> {
     let mut map = HashMap::new();
     let mut current_key = String::new();
@@ -556,6 +617,16 @@ fn parse_manifest(content: &str) -> HashMap<String, String> {
     map
 }
 
+/// 读取 core mod 信息（通过 MANIFEST.MF 识别）
+///
+/// # 参数
+///
+/// - `archive`: 模组压缩包
+/// - `mod_info`: 模组信息（解析结果追加到其中）
+///
+/// # 返回值
+///
+/// 成功返回 `Ok(())`；读取失败返回对应错误（无 MANIFEST.MF 时忽略）
 fn read_core_mod(
     archive: &mut ZipArchive<impl Read + Seek>,
     mod_info: &mut ModObj,
@@ -607,8 +678,15 @@ fn read_core_mod(
 }
 
 /// 读取jarinjar
+///
+/// # 参数
+///
 /// - `archive`: 压缩包
-/// - `mod_info`: 模组信息
+/// - `mod_info`: 模组信息（内置模组追加到其中）
+///
+/// # 返回值
+///
+/// 成功返回 `Ok(())`；读取失败返回对应错误
 fn read_jar_in_jar(
     archive: &mut ZipArchive<impl Read + Seek>,
     mod_info: &mut ModObj,
@@ -666,7 +744,14 @@ fn read_jar_in_jar(
 }
 
 /// 从任意可读的 ZIP 归档中解析模组信息（核心解析逻辑）
+///
+/// # 参数
+///
 /// - `archive`: 压缩包
+///
+/// # 返回值
+///
+/// 返回解析出的模组信息；读取或解析失败返回对应错误
 fn parse_mod_archive(archive: &mut ZipArchive<impl Read + Seek>) -> CoreResult<ModObj> {
     let mut mod_info = ModObj::default();
 
@@ -723,7 +808,14 @@ fn parse_mod_archive(archive: &mut ZipArchive<impl Read + Seek>) -> CoreResult<M
 }
 
 /// 读取模组信息
-/// - `path`: 路径
+///
+/// # 参数
+///
+/// - `path`: 模组文件路径
+///
+/// # 返回值
+///
+/// 返回解析出的模组信息；打开或解析失败返回对应错误
 pub fn read_mod_info<P: AsRef<Path>>(path: P) -> CoreResult<ModObj> {
     let file = path_helper::open_read(&path)?;
     let mut zip = ZipArchive::new(file).map_err(|err| {
@@ -753,8 +845,15 @@ pub fn read_mod_info<P: AsRef<Path>>(path: P) -> CoreResult<ModObj> {
 }
 
 /// 读模组
-/// - `path`: 路径
+///
+/// # 参数
+///
+/// - `path`: 模组文件路径
 /// - `sha256`: 是否计算sha256
+///
+/// # 返回值
+///
+/// 返回模组信息（含哈希）；读取失败返回对应错误
 fn read_mod<P: AsRef<Path>>(path: P, sha256: bool) -> CoreResult<ModObj> {
     let sha1 = hash_helper::gen_hash_from_file(HashType::Sha1, path.as_ref())?;
 
@@ -777,13 +876,28 @@ const MOD_UUID_NAMESPACE: Uuid = Uuid::from_u128(0x9d1a_2f3e_4c5b_6a70_8192_a3b4
 /// 模组的稳定标识：文件完整路径的 uuid v5
 ///
 /// 同一文件每次扫描得到同一个 uuid，启用 / 禁用 / 删除按它定位
+///
+/// # 参数
+///
+/// - `path`: 模组文件完整路径
+///
+/// # 返回值
+///
+/// 返回模组的稳定标识
 fn gen_mod_uuid(path: &Path) -> Uuid {
     Uuid::new_v5(&MOD_UUID_NAMESPACE, path.to_string_lossy().as_bytes())
 }
 
 /// 扫描文件列表
+///
+/// # 参数
+///
 /// - `files`: 文件列表
 /// - `process_fn`: 处理的函数
+///
+/// # 返回值
+///
+/// 返回扫描出的模组列表（读取失败的文件标记 `fail`）
 fn scan_mod_files<F>(files: Vec<PathBuf>, process_fn: F) -> Vec<ModObj>
 where
     F: Fn(&PathBuf) -> CoreResult<ModObj> + Send + Sync,
@@ -824,6 +938,15 @@ where
     list.into_inner().unwrap()
 }
 
+/// 为文件追加禁用后缀
+///
+/// # 参数
+///
+/// - `path`: 模组文件路径
+///
+/// # 返回值
+///
+/// 成功返回 `Ok(())`；重命名失败返回对应错误
 pub fn add_disable_suffix(path: &Path) -> CoreResult<()> {
     let file_name = path
         .file_name()
@@ -836,6 +959,15 @@ pub fn add_disable_suffix(path: &Path) -> CoreResult<()> {
     path_helper::move_file(path, &new_path)
 }
 
+/// 移除文件的禁用后缀
+///
+/// # 参数
+///
+/// - `path`: 模组文件路径
+///
+/// # 返回值
+///
+/// 成功返回 `Ok(())`；重命名失败返回对应错误（无后缀时无操作）
 pub fn remove_disable_suffix(path: &Path) -> CoreResult<()> {
     let file_name = path
         .file_name()
@@ -860,11 +992,19 @@ pub fn remove_disable_suffix(path: &Path) -> CoreResult<()> {
 
 impl ModObj {
     /// 删除
+    ///
+    /// # 返回值
+    ///
+    /// 成功返回 `Ok(())`；删除失败返回对应错误
     pub fn delete(&self) -> CoreResult<()> {
         path_helper::move_to_trash(&self.file)
     }
 
     /// 禁用模组
+    ///
+    /// # 返回值
+    ///
+    /// 成功返回 `Ok(())`；已禁用、文件不存在或重命名失败返回对应错误
     pub fn disable(&self) -> CoreResult<()> {
         if self.disable || !self.file.exists() {
             return Err(ErrorType::InvalidOperation);
@@ -874,6 +1014,10 @@ impl ModObj {
     }
 
     /// 启用模组
+    ///
+    /// # 返回值
+    ///
+    /// 成功返回 `Ok(())`；未禁用、文件不存在或重命名失败返回对应错误
     pub fn enable(&self) -> CoreResult<()> {
         if !self.disable || !self.file.exists() {
             return Err(ErrorType::InvalidOperation);
@@ -885,6 +1029,10 @@ impl ModObj {
 
 impl InstanceSettingObj {
     /// 扫描模组
+    ///
+    /// # 返回值
+    ///
+    /// 返回模组列表（仅哈希，不解析模组信息；失败文件标记 `fail`）
     pub async fn read_mod_fast(&self) -> Vec<ModObj> {
         let dir = self.get_mods_path();
         let files = path_helper::get_files(dir);
@@ -904,7 +1052,14 @@ impl InstanceSettingObj {
     }
 
     /// 读取模组列表
+    ///
+    /// # 参数
+    ///
     /// - `sha256`: 是否计算SHA256
+    ///
+    /// # 返回值
+    ///
+    /// 返回模组列表（含解析出的模组信息；失败文件标记 `fail`）
     pub async fn read_mod(&self, sha256: bool) -> Vec<ModObj> {
         let dir = self.get_mods_path();
         let files = path_helper::get_files(dir);

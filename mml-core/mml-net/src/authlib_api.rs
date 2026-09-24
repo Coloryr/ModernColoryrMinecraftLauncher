@@ -10,10 +10,13 @@ use serde::{Deserialize, Serialize};
 
 use crate::{WORK_CLIENT, url_helper};
 
+/// Authlib-Injector 元数据
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct AuthlibInjectorMetaObj {
+    /// 最新构建号
     pub latest_build_number: i32,
+    /// 各版本构建产物列表
     pub artifacts: Vec<ArtifactsObj>,
 }
 
@@ -26,9 +29,11 @@ impl Default for AuthlibInjectorMetaObj {
     }
 }
 
+/// 单个构建产物
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct ArtifactsObj {
+    /// 构建号
     pub build_number: i32,
 }
 
@@ -40,12 +45,17 @@ impl Default for ArtifactsObj {
     }
 }
 
+/// Authlib-Injector 下载信息
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct AuthlibInjectorObj {
+    /// 构建号
     pub build_number: i32,
+    /// 版本号
     pub version: String,
+    /// 下载 URL
     pub download_url: String,
+    /// 校验值
     pub checksums: ChecksumsObj,
 }
 
@@ -60,9 +70,11 @@ impl Default for AuthlibInjectorObj {
     }
 }
 
+/// 校验值集合
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct ChecksumsObj {
+    /// SHA-256 哈希
     pub sha256: String,
 }
 
@@ -74,6 +86,7 @@ impl Default for ChecksumsObj {
     }
 }
 
+/// 内置的 Authlib-Injector 兜底版本（元数据接口不可用时使用）
 pub static LOCAL_AUTHLIB: LazyLock<AuthlibInjectorObj> = LazyLock::new(|| AuthlibInjectorObj {
     build_number: 55,
     version: String::from("1.2.7"),
@@ -86,6 +99,10 @@ pub static LOCAL_AUTHLIB: LazyLock<AuthlibInjectorObj> = LazyLock::new(|| Authli
 });
 
 /// 获取最新AuthlibInjector信息
+///
+/// # 返回值
+///
+/// 返回最新构建的下载信息；找不到对应构建号时返回 `DataNotFound`
 pub async fn get_obj() -> CoreResult<AuthlibInjectorObj> {
     let url = url_helper::get_authlib_injector_meta();
     let meta = WORK_CLIENT

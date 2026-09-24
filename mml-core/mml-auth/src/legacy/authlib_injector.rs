@@ -20,17 +20,16 @@ use crate::{
 
 /// 外置登录认证
 ///
+/// `gui` 为 `None` 时自动选择第一个角色；返回已认证并刷新令牌的
+/// [`LoginObj`]（服务器地址存入 `text1`）
+///
 /// # 参数
 ///
 /// - `client_token`: 客户端标识令牌
 /// - `user`: 用户名
 /// - `password`: 密码
 /// - `server`: 认证服务器地址（完整 URL）
-/// - `gui`: 可选的角色选择回调，为 `None` 时自动选择第一个角色
-///
-/// # 返回值
-///
-/// 返回已认证并刷新令牌的 `LoginObj`，其 `auth_type` 为 `AuthlibInjector`
+/// - `gui`: 可选的角色选择回调
 pub async fn authenticate(
     client_token: String,
     user: String,
@@ -57,7 +56,6 @@ pub async fn authenticate(
                 }
             }
             None => {
-                // 无 GUI 回调时自动选择第一个角色
                 let item = &list[0];
                 auth.uuid = item.uuid.clone();
                 auth.user_name = item.user_name.clone();
@@ -65,19 +63,20 @@ pub async fn authenticate(
         };
     }
 
-    // 刷新令牌确保有效性
     legacy::refresh(&server, &mut auth, need_select).await?;
     Ok(auth)
 }
 
 impl LoginObj {
-    /// 刷新 Authlib-Injector 登录令牌
-    ///
-    /// 先验证令牌有效性，有效则刷新，无效则返回超时错误。
+    /// 刷新 Authlib-Injector 登录令牌：先验证有效性，无效则返回超时错误
     ///
     /// # 参数
     ///
     /// - `cancel`: 取消令牌
+    ///
+    /// # 返回值
+    ///
+    /// 刷新成功返回 `Ok(())`（账户凭据已被更新），令牌失效返回 `ErrorType::AuthTokenTimeout`，被取消时返回取消错误
     pub async fn refresh_authlib(&mut self, cancel: CancellationToken) -> CoreResult<()> {
         let server = self.text1.clone().unwrap();
         if legacy::validate(&server, self).await? {
@@ -91,7 +90,7 @@ impl LoginObj {
         }
     }
 
-    /// 获取 Authlib-Injector 启动参数所需的 Yggdrasil 服务器元数据
+    /// 获取启动参数所需的 Yggdrasil 服务器元数据
     ///
     /// 访问认证服务器根路径获取 JSON 元信息，用于设置游戏启动参数。
     ///

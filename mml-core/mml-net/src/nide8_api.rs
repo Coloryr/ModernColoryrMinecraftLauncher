@@ -32,6 +32,10 @@ impl Default for Nide8Obj {
 /// 获取 Nide8 认证 JAR 的最新版本信息和哈希
 ///
 /// 向 Nide8 服务器查询最新 JAR 版本，用于下载和校验。
+///
+/// # 返回值
+///
+/// 返回 JAR 版本号与哈希
 pub async fn get_obj() -> CoreResult<Nide8Obj> {
     WORK_CLIENT
         .get()

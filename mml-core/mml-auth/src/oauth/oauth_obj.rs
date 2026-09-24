@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 ///
 /// 包含用户完成浏览器授权所需的信息。
 #[derive(Clone)]
-pub struct OAuthGetCodeRes {
+pub struct OAuthGetCodeResObj {
     /// 用户需要在浏览器中输入的设备码
     pub code: String,
     /// 用户需要访问的验证网址（如 `https://microsoft.com/link`）
@@ -192,7 +192,7 @@ mod tests {
     /// 设备码流程第一步的返回结构字段透传
     #[test]
     fn test_oauth_get_code_res_fields() {
-        let res = OAuthGetCodeRes {
+        let res = OAuthGetCodeResObj {
             code: "ABCD-EFGH".to_string(),
             url: "https://microsoft.com/link".to_string(),
             device_code: "DEV".to_string(),

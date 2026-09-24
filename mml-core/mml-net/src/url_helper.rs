@@ -18,6 +18,10 @@ use crate::{
 };
 
 /// 获取当前配置的下载源
+///
+/// # 返回值
+///
+/// 返回当前配置的下载源
 pub fn get_source() -> SourceLocal {
     let config = mml_config::read_config();
 
@@ -25,6 +29,12 @@ pub fn get_source() -> SourceLocal {
 }
 
 /// 游戏版本
+///
+/// - `source`: 指定下载源（`None` 时取当前配置）
+///
+/// # 返回值
+///
+/// 返回版本清单 URL
 pub fn game_version(source: Option<SourceLocal>) -> String {
     let source = match source {
         None => get_source(),
@@ -41,6 +51,12 @@ pub fn game_version(source: Option<SourceLocal>) -> String {
 }
 
 /// 获取minecraft资源下载地址
+///
+/// - `hash`: 资源文件哈希（前两位作目录）
+///
+/// # 返回值
+///
+/// 返回资源文件下载 URL
 pub fn get_download_assets(hash: &str) -> String {
     let prefix: String = hash.chars().take(2).collect();
 
@@ -52,7 +68,12 @@ pub fn get_download_assets(hash: &str) -> String {
 
 /// 获取其他下载源的Minecraft下载地址
 /// 
+/// - `url`: 官方下载地址
 /// - `version`: 游戏版本
+///
+/// # 返回值
+///
+/// 返回客户端 JAR 下载 URL（镜像源下替换为 BMCLAPI 地址）
 pub fn get_minecraft_client(url: &str, version: &str) -> String {
     if get_source() == SourceLocal::Bmclapi {
         format!("{}version/{}/client", urls::BMCLAPI, version)
@@ -63,6 +84,10 @@ pub fn get_minecraft_client(url: &str, version: &str) -> String {
 
 /// 下载地址转换
 /// - `url`: 原始下载地址
+///
+/// # 返回值
+///
+/// 无返回值，镜像源下直接把传入地址里的 Mojang 域名替换为 BMCLAPI
 pub fn change_source(url: &mut String) {
     if get_source() != SourceLocal::Bmclapi {
         return;
@@ -76,6 +101,10 @@ pub fn change_source(url: &mut String) {
 /// 获取forge版本信息获取网址
 /// 
 /// - `version`: 游戏版本
+///
+/// # 返回值
+///
+/// 返回 Forge 版本列表 URL
 pub fn get_forge_versions(version: &str) -> String {
     match get_source() {
         SourceLocal::Offical => {
@@ -86,6 +115,12 @@ pub fn get_forge_versions(version: &str) -> String {
 }
 
 /// 获取neoforge信息获取网址
+///
+/// - `version`: 游戏版本
+///
+/// # 返回值
+///
+/// 返回 NeoForge 版本列表 URL
 pub fn get_neoforge_meta(version: &str) -> String {
     match get_source() {
         SourceLocal::Offical => {
@@ -99,6 +134,10 @@ pub fn get_neoforge_meta(version: &str) -> String {
 }
 
 /// 获取fabric信息获取网址
+///
+/// # 返回值
+///
+/// 返回 Fabric 版本列表 URL
 pub fn get_fabric_meta() -> String {
     match get_source() {
         SourceLocal::Offical => format!("{}v2/versions", urls::FABRIC_META),
@@ -107,6 +146,10 @@ pub fn get_fabric_meta() -> String {
 }
 
 /// 获取quilt信息获取网址
+///
+/// # 返回值
+///
+/// 返回 Quilt 版本列表 URL
 pub fn get_quilt_meta() -> String {
     // match get_source() {
     //     SourceLocal::Offical => format!("{}v2/versions", urls::FABRIC_META),
@@ -117,6 +160,10 @@ pub fn get_quilt_meta() -> String {
 }
 
 /// 获取外置登录信息地址
+///
+/// # 返回值
+///
+/// 返回 Authlib-Injector 元数据 URL
 pub fn get_authlib_injector_meta() -> String {
     match get_source() {
         SourceLocal::Offical => format!("{}artifacts.json", urls::AUTHLIB),
@@ -125,6 +172,10 @@ pub fn get_authlib_injector_meta() -> String {
 }
 
 /// 获取高清修复信息地址
+///
+/// # 返回值
+///
+/// 返回 OptiFine 版本列表 URL
 pub fn get_optifine_meta() -> String {
     match get_source() {
         SourceLocal::Offical => format!("{}downloads", urls::OPTIFINE),
@@ -136,6 +187,10 @@ pub fn get_optifine_meta() -> String {
 /// 
 /// - `mc`: 游戏版本
 /// - `version`: forge版本
+///
+/// # 返回值
+///
+/// 返回 Forge 安装文件所在目录 URL
 pub fn get_forge_jar(mc: &str, version: &str) -> String {
     match get_source() {
         SourceLocal::Offical => format!("{}net/minecraftforge/forge/{mc}-{version}/", urls::FORGE),
@@ -150,7 +205,11 @@ pub fn get_forge_jar(mc: &str, version: &str) -> String {
 /// 
 /// - `v2222`: 是否为1.20.2以上版本
 /// - `mc`: 游戏版本
-/// - `version`: forge版本
+/// - `version`: NeoForge 版本
+///
+/// # 返回值
+///
+/// 返回 NeoForge 安装文件所在目录 URL
 pub fn get_neoforge_jar(v2222: bool, mc: &str, version: &str) -> String {
     // 内层路径不带结尾斜杠，外层拼接时会补上，避免出现双斜杠
     let url = if v2222 {
@@ -168,6 +227,10 @@ pub fn get_neoforge_jar(v2222: bool, mc: &str, version: &str) -> String {
 /// 外置登录地址
 /// 
 /// - `obj`: 登陆地址
+///
+/// # 返回值
+///
+/// 返回对应构建产物的元数据 JSON URL
 pub fn get_authlib_injector(obj: &ArtifactsObj) -> String {
     match get_source() {
         SourceLocal::Offical => format!("{}artifact/{}.json", urls::AUTHLIB, obj.build_number),
@@ -182,6 +245,10 @@ pub fn get_authlib_injector(obj: &ArtifactsObj) -> String {
 /// 外置登录地址
 /// 
 /// - `obj`: 登陆地址
+///
+/// # 返回值
+///
+/// 返回 Authlib-Injector JAR 下载 URL
 pub fn get_authlib_injector_jar(obj: &AuthlibInjectorObj) -> String {
     match get_source() {
         SourceLocal::Offical => format!(
@@ -202,6 +269,10 @@ pub fn get_authlib_injector_jar(obj: &AuthlibInjectorObj) -> String {
 /// 获取高清修复下载地址
 /// 
 /// - `obj`: 高清修复信息
+///
+/// # 返回值
+///
+/// 返回 OptiFine JAR 下载 URL（固定走 BMCLAPI）
 pub fn get_optifine_jar(obj: &OptifineListObj) -> String {
     format!(
         "{}optifine/{}/{}/{}",
@@ -215,6 +286,10 @@ pub fn get_optifine_jar(obj: &OptifineListObj) -> String {
 /// 替换运行库下载地址
 /// 
 /// - `url`: 运行库地址
+///
+/// # 返回值
+///
+/// 返回替换后的地址（官方源原样返回）
 pub fn replace_minecraft_libraries(url: &str) -> String {
     match get_source() {
         SourceLocal::Offical => String::from(url),
@@ -228,6 +303,10 @@ pub fn replace_minecraft_libraries(url: &str) -> String {
 /// 替换运行库下载地址
 /// 
 /// - `url`: 运行库地址
+///
+/// # 返回值
+///
+/// 返回替换后的地址（官方源原样返回）
 pub fn replace_forge_libraries(url: &str) -> String {
     match get_source() {
         SourceLocal::Offical => String::from(url),
@@ -238,14 +317,24 @@ pub fn replace_forge_libraries(url: &str) -> String {
 /// 替换运行库下载地址
 /// 
 /// - `url`: 运行库地址
+///
+/// # 返回值
+///
+/// 返回替换后的地址（官方源原样返回）
 pub fn replace_neoforge_libraries(url: &str) -> String {
     match get_source() {
         SourceLocal::Offical => String::from(url),
-        SourceLocal::Bmclapi => url.replace(urls::FORGE, &format!("{}maven/", urls::BMCLAPI)),
+        SourceLocal::Bmclapi => url.replace(urls::NEOFORGE, &format!("{}maven/", urls::BMCLAPI)),
     }
 }
 
 /// 替换fabric库下载地址
+///
+/// - `url`: 库文件地址
+///
+/// # 返回值
+///
+/// 返回替换后的地址（官方源原样返回）
 pub fn replace_fabric_libraries(url: &str) -> String {
     match get_source() {
         SourceLocal::Offical => String::from(url),
@@ -255,7 +344,11 @@ pub fn replace_fabric_libraries(url: &str) -> String {
 
 /// 修正Forge下载地址
 /// 
-/// - `url`:
+/// - `version`: 游戏版本
+///
+/// # 返回值
+///
+/// 返回拼接下载地址时使用的版本后缀
 pub fn forge_url_fix(version: &str) -> String {
     if version.eq_ignore_ascii_case("1.7.2") {
         String::from("-mc172")

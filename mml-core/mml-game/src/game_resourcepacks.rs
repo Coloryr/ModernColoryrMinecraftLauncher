@@ -24,26 +24,32 @@ use crate::launcher::instance_setting_obj::InstanceSettingObj;
 /// pack.mcmeta 的反序列化结构体
 #[derive(Deserialize)]
 struct PackMeta {
+    /// pack 信息段
     pack: PackInfo,
 }
 
+/// pack 信息段
 #[derive(Deserialize)]
 struct PackInfo {
+    /// 资源包格式版本
     #[serde(
         default,
         deserialize_with = "serialize_tools::deserialize_number_or_max"
     )]
     pack_format: i64,
+    /// 支持的最小格式版本
     #[serde(
         default,
         deserialize_with = "serialize_tools::deserialize_number_or_min"
     )]
     min_format: i64,
+    /// 支持的最大格式版本
     #[serde(
         default,
         deserialize_with = "serialize_tools::deserialize_number_or_max"
     )]
     max_format: i64,
+    /// 简介文字
     #[serde(default)]
     description: String,
 }
@@ -84,6 +90,14 @@ impl Default for ResourcepackObj {
 }
 
 /// 解析材质包
+///
+/// # 参数
+///
+/// - `path`: 材质包文件路径（zip）
+///
+/// # 返回值
+///
+/// 返回材质包信息；打开或读取失败返回对应错误
 pub fn process_resourcepack<P: AsRef<Path>>(path: P) -> CoreResult<ResourcepackObj> {
     let file = path_helper::open_read(&path)?;
     let mut zip = ZipArchive::new(file).map_err(|err| {
@@ -133,6 +147,10 @@ pub fn process_resourcepack<P: AsRef<Path>>(path: P) -> CoreResult<ResourcepackO
 
 impl ResourcepackObj {
     /// 删除
+    ///
+    /// # 返回值
+    ///
+    /// 成功返回 `Ok(())`；删除失败返回对应错误
     pub fn remove(&self) -> CoreResult<()> {
         path_helper::move_to_trash(&self.path)
     }
@@ -140,6 +158,10 @@ impl ResourcepackObj {
 
 impl InstanceSettingObj {
     /// 获取资源包列表
+    ///
+    /// # 返回值
+    ///
+    /// 返回资源包列表（读取失败的文件会记录日志并标记 `fail`）
     pub async fn get_resourcepacks(&self) -> Vec<ResourcepackObj> {
         let dir = self.get_resourcepacks_path();
         if !dir.exists() || !dir.is_dir() {

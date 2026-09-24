@@ -14,12 +14,19 @@ use crate::hash_helper::{self, HashType};
 /// 文件校验
 #[derive(Debug, Clone)]
 pub enum FileHash {
+    /// 不校验
     None,
+    /// MD5 校验值
     Md5(String),
+    /// SHA1 校验值
     Sha1(String),
+    /// SHA256 校验值
     Sha256(String),
+    /// SHA512 校验值
     Sha512(String),
+    /// SHA1 + SHA256 组合校验，任一匹配即可
     Sha1Sha256(String, String),
+    /// SHA1 + SHA512 组合校验，任一匹配即可
     Sha1Sha512(String, String),
 }
 
@@ -32,6 +39,7 @@ impl Default for FileHash {
 /// 下载后运行
 #[derive(Debug, Clone)]
 pub enum LaterRun {
+    /// 不执行后续操作
     None,
     /// 解压
     UnpackNative(PathBuf),

@@ -22,7 +22,6 @@
 //! - [`nide8`] — 统一通行证登录实现
 //! - [`little_skin`] — LittleSkin 皮肤站登录实现
 
-/// 旧版账户验证
 use chrono::Local;
 use mml_names::i18_items::error_type::{CoreResult, ErrorType};
 use reqwest::StatusCode;
@@ -34,13 +33,9 @@ use crate::{
     },
 };
 
-/// 认证请求/响应数据结构
 pub mod authenticate_obj;
-/// Authlib-Injector 外置登录
 pub mod authlib_injector;
-/// LittleSkin 皮肤站登录
 pub mod little_skin;
-/// 统一通行证（Nide8）登录
 pub mod nide8;
 
 /// GUI 账户选择回调接口
@@ -72,7 +67,8 @@ pub struct LegacyLoginRes {
 
 /// 向 Yggdrasil 认证服务器发起登录请求
 ///
-/// 这是旧版认证协议的通用登录实现，被外置登录、皮肤站和统一通行证共用。
+/// 旧版认证协议的通用登录实现，被外置登录、皮肤站和统一通行证共用。
+/// 成功时返回 [`LegacyLoginRes`]（多角色时带可选列表），无角色时返回错误
 ///
 /// # 参数
 ///
@@ -81,17 +77,6 @@ pub struct LegacyLoginRes {
 /// - `user`: 用户名（通常是邮箱）
 /// - `password`: 密码
 /// - `use_minecraft`: 是否使用 Minecraft 官方启动器的 Agent 标识
-///
-/// # 返回值
-///
-/// 成功时返回 `LegacyLoginRes`，其中可能包含多个可选角色
-///
-/// # 处理逻辑
-///
-/// 1. 单个角色 → 直接返回包含完整信息的 `LoginObj`
-/// 2. 多个角色 → 返回令牌和角色列表，由调用方引导用户选择
-/// 3. 无角色 → 返回错误
-/// 4. 用户名匹配的角色优先自动选中
 pub async fn authenticate(
     server: &String,
     client_token: String,
@@ -177,15 +162,18 @@ pub async fn authenticate(
     }
 }
 
-/// 刷新 Yggdrasil 认证令牌
-///
-/// 当 access token 即将过期时，通过 refresh token 获取新的令牌。
+/// 刷新 Yggdrasil 认证令牌（提交现有 access token 换取新令牌）。
+/// `select` 为 `true` 时附带选定角色；成功后更新 `login` 的账户字段
 ///
 /// # 参数
 ///
 /// - `server`: 认证服务器地址
 /// - `login`: 待刷新的账户（可变引用，成功后字段会被更新）
 /// - `select`: 是否需要在刷新时选定角色（`true` 时附带 `selected_profile`）
+///
+/// # 返回值
+///
+/// 刷新成功返回 `Ok(())`（`login` 的字段已被更新），服务器返回错误或无角色时返回相应错误
 pub async fn refresh(server: &String, login: &mut LoginObj, select: bool) -> CoreResult<()> {
     let obj = if select {
         RefreshObj {
@@ -240,9 +228,7 @@ pub async fn refresh(server: &String, login: &mut LoginObj, select: bool) -> Cor
     }
 }
 
-/// 验证 Yggdrasil 令牌是否仍然有效
-///
-/// 向认证服务器发送验证请求，不刷新令牌，仅检查当前令牌是否可用。
+/// 验证 Yggdrasil 令牌是否仍然有效（仅检查，不刷新）
 ///
 /// # 参数
 ///

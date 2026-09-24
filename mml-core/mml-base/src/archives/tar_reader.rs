@@ -25,12 +25,20 @@ use crate::archives::{
 /// tar 读取器是流式的、不可复用，每次操作从持有的文件句柄克隆出独立文件描述符再重建读取器。
 /// 同时提供静态的压缩/解压批处理入口（`mode=None` 表示纯 tar）。
 pub(crate) struct TarReader {
+    /// 读写的文件句柄（追加/读取用）
     file: fs::File,
+    /// 压缩包类型（决定读取器是否套解压流）
     archive_type: ArchiveType,
+    /// 压缩包磁盘路径
     path: PathBuf,
 }
 
 impl TarReader {
+    /// 打开 tar/tar.gz/tar.xz 文件。
+    ///
+    /// * `file` — 已打开的压缩包文件句柄。
+    /// * `archive_type` — 压缩包类型（Tar / TarGz / TarXz）。
+    /// * `path` — 压缩包磁盘路径。
     pub(crate) fn new(
         file: fs::File,
         archive_type: ArchiveType,
@@ -74,6 +82,13 @@ impl TarReader {
     }
 
     /// 压缩目录为 tar/tar.gz/tar.xz 文件。
+    ///
+    /// * `mode` — 压缩模式（`None` 表示纯 tar）。
+    /// * `archive_file` — 压缩包输出路径。
+    /// * `pack_dir` — 需要打包的源目录。
+    /// * `root_path` — 相对根路径，设置后文件在包内的路径相对于此。
+    /// * `filter` — 可选的排除子串列表，匹配的文件将被跳过。
+    /// * `gui` — 可选的进度回调。
     pub(crate) fn compress(
         mode: Option<TarMode>,
         archive_file: &Path,
@@ -91,6 +106,11 @@ impl TarReader {
     }
 
     /// 解压 tar/tar.gz/tar.xz 文件到指定目录。
+    ///
+    /// * `mode` — 压缩模式（`None` 表示纯 tar）。
+    /// * `archive_file` — 压缩包文件路径。
+    /// * `output_dir` — 解压输出目录。
+    /// * `gui` — 可选的进度回调。
     pub(crate) fn decompress(
         mode: Option<TarMode>,
         archive_file: &Path,
@@ -102,6 +122,13 @@ impl TarReader {
     }
 
     /// 压缩实现（带进度）。
+    ///
+    /// * `process` — 进度追踪器。
+    /// * `archive_file` — 压缩包输出路径。
+    /// * `pack_dir` — 需要打包的源目录。
+    /// * `root_path` — 相对根路径，设置后文件在包内的路径相对于此。
+    /// * `filter` — 可选的排除子串列表，匹配的文件将被跳过。
+    /// * `mode` — 压缩模式（`None` 表示纯 tar）。
     fn tar(
         process: &ArchiveProcess,
         archive_file: &Path,
@@ -173,6 +200,11 @@ impl TarReader {
     }
 
     /// 解压实现（带进度）。
+    ///
+    /// * `process` — 进度追踪器。
+    /// * `archive_file` — 压缩包文件路径。
+    /// * `output_dir` — 解压输出目录。
+    /// * `mode` — 压缩模式（`None` 表示纯 tar）。
     fn un_tar(
         process: &ArchiveProcess,
         archive_file: &Path,

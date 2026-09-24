@@ -1,3 +1,5 @@
+//! 实例目录与实例内文件路径
+
 use std::{
     collections::HashMap,
     fs::{self},
@@ -18,13 +20,23 @@ use crate::launcher::{
     game_time_obj::GameTimeObj, instance_setting_obj::InstanceSettingObj,
 };
 
+/// 在线文件信息表（mod_id → 信息）
 pub type OnlineInfoList = HashMap<String, OnlineInfoObj>;
+/// 自定义启动配置表（文件名 → 配置）
 pub type CustomGameArgList = HashMap<String, CustomGameArgObj>;
 
+/// 实例根目录
 static BASE_DIR: OnceLock<PathBuf> = OnceLock::new();
 
-/// 初始化版本路径
+/// 初始化实例路径
+///
+/// # 参数
+///
 /// - `dir`: 运行路径
+///
+/// # 返回值
+///
+/// 成功返回 `Ok(())`；创建目录失败返回对应错误
 pub(crate) fn init<P: AsRef<Path>>(dir: P) -> CoreResult<()> {
     let dir = BASE_DIR.get_or_init(|| dir.as_ref().join(names::INSTANCE_DIR));
 
@@ -36,11 +48,19 @@ pub(crate) fn init<P: AsRef<Path>>(dir: P) -> CoreResult<()> {
 }
 
 /// 获取实例目录
+///
+/// # 返回值
+///
+/// 返回实例根目录
 pub fn get_instance_dir() -> PathBuf {
     BASE_DIR.get().unwrap().clone()
 }
 
 /// 读取所有实例
+///
+/// # 返回值
+///
+/// 返回实例列表；读取目录失败返回对应错误
 pub(crate) fn load_instance_dir() -> CoreResult<Vec<InstanceSettingObj>> {
     let dir = BASE_DIR.get().unwrap();
     let dirs = fs::read_dir(dir).map_err(|err| {
@@ -64,7 +84,14 @@ pub(crate) fn load_instance_dir() -> CoreResult<Vec<InstanceSettingObj>> {
 }
 
 /// 从文件夹路径加载实例
-/// - `dir`: 路径
+///
+/// # 参数
+///
+/// - `dir`: 实例目录
+///
+/// # 返回值
+///
+/// 返回实例信息；目录或配置文件不存在返回 `None`
 pub(crate) fn load_instance<P: AsRef<Path>>(dir: P) -> Option<InstanceSettingObj> {
     let file = dir.as_ref();
     if !file.is_dir() {
@@ -110,7 +137,7 @@ impl InstanceSettingObj {
             .join(names::BACKUP_DIR)
     }
 
-    /// 获取存档备份路径
+    /// 获取临时文件路径
     pub fn get_temp_path(&self) -> PathBuf {
         BASE_DIR
             .get()
@@ -128,7 +155,7 @@ impl InstanceSettingObj {
             .join(names::CACHE_DIR)
     }
 
-    /// 获取自定义加载器路径
+    /// 获取自定义启动配置目录
     pub fn get_json_path(&self) -> PathBuf {
         BASE_DIR
             .get()
@@ -347,6 +374,10 @@ impl InstanceSettingObj {
     }
 
     /// 读取在线文件信息
+    ///
+    /// # 返回值
+    ///
+    /// 返回在线文件信息表；文件不存在或解析失败返回空表
     pub fn read_online_info(&self) -> OnlineInfoList {
         let file = self.get_online_info_file();
         if file.exists() && file.is_file() {
@@ -360,6 +391,10 @@ impl InstanceSettingObj {
     }
 
     /// 保存在线文件信息
+    ///
+    /// # 参数
+    ///
+    /// - `info`: 在线文件信息表
     pub fn save_online_info(&self, info: &OnlineInfoList) {
         config_save::save(
             uuids::mix_uuid(self.uuid, uuids::ONLINE_FILE_UUID),
@@ -369,6 +404,10 @@ impl InstanceSettingObj {
     }
 
     /// 读取自定义游戏启动配置
+    ///
+    /// # 返回值
+    ///
+    /// 返回配置表；目录不存在时返回空表
     pub fn read_custom_json(&self) -> CustomGameArgList {
         let file = self.get_json_path();
         let mut list = HashMap::new();
@@ -390,6 +429,14 @@ impl InstanceSettingObj {
     }
 
     /// 保存自定义启动配置
+    ///
+    /// # 参数
+    ///
+    /// - `info`: 配置表（键为文件名）
+    ///
+    /// # 返回值
+    ///
+    /// 成功返回 `Ok(())`；写入失败返回对应错误
     pub fn save_custom_json(&self, info: &CustomGameArgList) -> CoreResult<()> {
         let dir = self.get_json_path();
         path_helper::create_dir_all(&dir)?;
@@ -401,6 +448,10 @@ impl InstanceSettingObj {
     }
 
     /// 读取启动统计数据
+    ///
+    /// # 返回值
+    ///
+    /// 返回统计数据；文件不存在或解析失败返回默认值
     pub fn read_launch_count_data(&self) -> GameTimeObj {
         let file = self.get_launch_file();
         if file.exists() && file.is_file() {
@@ -414,6 +465,10 @@ impl InstanceSettingObj {
     }
 
     /// 保存启动统计数据
+    ///
+    /// # 参数
+    ///
+    /// - `obj`: 统计数据
     pub fn save_launch_count_data(&self, obj: &GameTimeObj) {
         config_save::save(
             uuids::mix_uuid(self.uuid, uuids::LAUNCH_COUNT_DATA_FILE_UUID),

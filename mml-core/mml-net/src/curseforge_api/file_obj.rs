@@ -1,11 +1,16 @@
+//! CurseForge 文件 DTO
+
 use serde::{Deserialize, Serialize};
 
 use crate::curseforge_api::list_obj::CurseForgeListPaginationObj;
 
+/// CurseForge 文件分页结果
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct CurseFogreFilePageObj {
+    /// 文件列表
     pub data: Vec<CurseForgeFileDataObj>,
+    /// 分页信息
     pub pagination: CurseForgeListPaginationObj,
 }
 
@@ -18,10 +23,11 @@ impl Default for CurseFogreFilePageObj {
     }
 }
 
-/// 模组信息
+/// 模组文件查询结果
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct CurseForgeFileObj {
+    /// 文件数据
     pub data: CurseForgeFileDataObj,
 }
 
@@ -33,26 +39,37 @@ impl Default for CurseForgeFileObj {
     }
 }
 
+/// 单个文件信息
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct CurseForgeFileDataObj {
+    /// 文件 ID
     pub id: u64,
+    /// 所属模组 ID
     #[serde(rename = "modId")]
     pub mod_id: u64,
+    /// 显示名称
     #[serde(rename = "displayName")]
     pub display_name: String,
+    /// 文件名
     #[serde(rename = "fileName")]
     pub file_name: String,
+    /// 文件哈希列表
     #[serde(rename = "hashes")]
     pub hashes: Vec<HashesObj>,
+    /// 上传时间
     #[serde(rename = "fileDate")]
     pub file_date: String,
+    /// 文件大小（字节）
     #[serde(rename = "fileLength")]
     pub file_length: u64,
+    /// 下载量
     #[serde(rename = "downloadCount")]
     pub download_count: u64,
+    /// 下载 URL
     #[serde(rename = "downloadUrl")]
     pub download_url: Option<String>,
+    /// 依赖文件列表
     pub dependencies: Option<Vec<DependenciesObj>>,
 }
 
@@ -73,10 +90,13 @@ impl Default for CurseForgeFileDataObj {
     }
 }
 
+/// 文件哈希
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct HashesObj {
+    /// 哈希值
     pub value: String,
+    /// 哈希算法（1=SHA-1，2=MD5）
     pub algo: i32,
 }
 
@@ -89,11 +109,14 @@ impl Default for HashesObj {
     }
 }
 
+/// 依赖文件信息
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(default)]
 pub struct DependenciesObj {
+    /// 依赖的模组 ID
     #[serde(rename = "modId")]
     pub mod_id: u64,
+    /// 依赖关系类型（1=嵌入，2=可选，3=必选，4=工具，5=不兼容）
     #[serde(rename = "relationType")]
     pub relation_type: i32,
 }

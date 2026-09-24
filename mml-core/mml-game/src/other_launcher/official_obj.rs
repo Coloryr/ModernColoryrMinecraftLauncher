@@ -1,3 +1,5 @@
+//! 官方启动器版本 JSON（version.json）DTO
+
 use std::io::Read;
 use std::path::Path;
 
@@ -7,10 +9,15 @@ use mml_sys::path_helper;
 
 /// 官方实例信息
 pub struct OfficialObj {
+    /// 版本 ID
     pub id: String,
+    /// 继承的版本 ID
     pub inherits_from: String,
+    /// 补丁列表（拆分式版本）
     pub patches: Vec<PatchObj>,
+    /// 依赖库列表
     pub libraries: Vec<LibrarieObj>,
+    /// 启动参数
     pub arguments: ArgumentsObj,
 }
 
@@ -26,16 +33,23 @@ impl Default for OfficialObj {
     }
 }
 
+/// 补丁信息
 pub struct PatchObj {
+    /// 补丁 ID（如 `game` / `net.minecraft`）
     pub id: String,
+    /// 补丁版本
     pub version: String,
 }
 
+/// 依赖库信息
 pub struct LibrarieObj {
+    /// Maven 坐标
     pub name: String,
 }
 
+/// 启动参数
 pub struct ArgumentsObj {
+    /// 游戏参数（字符串或键值对象）
     pub game: Vec<MiniJsonObj>,
 }
 
@@ -50,7 +64,13 @@ impl Default for ArgumentsObj {
 impl OfficialObj {
     /// 从读取流解析信息
     ///
+    /// # 参数
+    ///
     /// - `stream`: 数据流（文件、内存字节等）
+    ///
+    /// # 返回值
+    ///
+    /// 返回解析出的实例信息；JSON 不是对象返回 `ArgEmpty`
     pub fn from_reader<R: Read>(mut stream: R) -> CoreResult<Self> {
         let json = MiniJsonObj::from_stream(&mut stream)?;
 
@@ -94,7 +114,13 @@ impl OfficialObj {
 
     /// 从文件读取信息
     ///
+    /// # 参数
+    ///
     /// - `file`: 文件位置
+    ///
+    /// # 返回值
+    ///
+    /// 返回解析出的实例信息；读取或解析失败返回对应错误
     pub fn read_from_file<P: AsRef<Path>>(file: P) -> CoreResult<Self> {
         let stream = path_helper::open_read(file)?;
         Self::from_reader(stream)

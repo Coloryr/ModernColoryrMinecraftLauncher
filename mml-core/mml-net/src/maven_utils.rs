@@ -29,6 +29,9 @@ use crate::{url_helper, urls};
 /// version_name_to_path("com.example:artifact:1.0:sources");
 /// // -> "com/example/artifact/1.0/artifact-1.0-sources.jar"
 /// ```
+/// # 返回值
+///
+/// 返回 Maven 仓库内的相对路径
 pub fn version_name_to_path(name: &str) -> String {
     let parts: Vec<&str> = name.split(':').collect();
     if parts.len() < 3 {
@@ -55,14 +58,21 @@ pub fn version_name_to_path(name: &str) -> String {
     }
 }
 
+/// Maven 文件的哈希与下载地址
 pub struct UrlHashObj {
+    /// 文件校验值
     pub hash: FileHash,
+    /// 文件下载 URL
     pub url: String,
 }
 
 /// 测试这个jar文件是否能从网上下载
-/// 
+///
 /// - `dir`: jar文件路径
+///
+/// # 返回值
+///
+/// 返回（校验值，完整下载 URL）；所有校验文件都拿不到时返回 `None`
 pub async fn test_hash(dir: &str) -> Option<UrlHashObj> {
     let url = match url_helper::get_source() {
         SourceLocal::Offical => urls::MAVEN,
@@ -80,6 +90,14 @@ pub async fn test_hash(dir: &str) -> Option<UrlHashObj> {
 }
 
 /// 尝试获取校验值
+///
+/// 依次尝试 `.sha256` / `.sha512` / `.sha1` 同名校验文件。
+///
+/// - `url`: 文件 URL
+///
+/// # 返回值
+///
+/// 返回第一个能拿到的校验值；全部拿不到时返回 [`FileHash::None`]
 pub async fn try_get_hash(url: &str) -> FileHash {
     let sha1_url = url.to_string() + names::SHA1_DOT_EXT;
     let sha256_url = url.to_string() + names::SHA256_DOT_EXT;

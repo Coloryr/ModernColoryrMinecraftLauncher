@@ -1,3 +1,7 @@
+//! SakuraFrp（樱花内网穿透）API
+//!
+//! 提供通道列表查询、frpc 配置生成与 frpc 客户端下载信息。
+
 use mml_base::file_item::{FileHash, FileItemObj, LaterRun};
 use mml_names::i18_items::error_type::{CoreResult, ErrorType};
 use mml_sys::Os;
@@ -5,13 +9,18 @@ use serde::{Deserialize, Serialize};
 
 use crate::urls;
 
+/// 单个通道
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct SakuraFrpChannelObj {
+    /// 通道 ID
     pub id: i32,
+    /// 通道名称
     pub name: String,
+    /// 通道协议类型
     #[serde(rename = "type")]
     pub c_type: String,
+    /// 远程访问地址
     pub remote: String,
 }
 
@@ -26,9 +35,11 @@ impl Default for SakuraFrpChannelObj {
     }
 }
 
+/// 通道配置查询请求体
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct SakuraFrpGetChannelObj {
+    /// 查询的通道 ID
     pub query: i32,
 }
 
@@ -40,9 +51,11 @@ impl Default for SakuraFrpGetChannelObj {
     }
 }
 
+/// frpc 客户端下载信息
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct SakuraFrpDownloadObj {
+    /// 各架构下载项
     pub frpc: SakuraFrpDownloadItemObj,
 }
 
@@ -54,10 +67,13 @@ impl Default for SakuraFrpDownloadObj {
     }
 }
 
+/// frpc 各架构下载信息
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct SakuraFrpDownloadItemObj {
+    /// 各平台架构的下载项
     pub archs: ArchsObj,
+    /// frpc 版本号
     pub ver: String,
 }
 
@@ -70,6 +86,7 @@ impl Default for SakuraFrpDownloadItemObj {
     }
 }
 
+/// 各平台架构的下载项集合
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct ArchsObj {
@@ -94,11 +111,15 @@ impl Default for ArchsObj {
     }
 }
 
+/// 单个架构的下载项
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct ArchItemObj {
+    /// 架构标题
     pub title: String,
+    /// 下载 URL
     pub url: String,
+    /// 文件哈希
     pub hash: String,
 }
 
@@ -115,6 +136,10 @@ impl Default for ArchItemObj {
 /// 获取通道列表
 ///
 /// - `key`: 账户密钥
+///
+/// # 返回值
+///
+/// 返回账户下所有通道
 pub async fn get_channel(key: &str) -> CoreResult<Vec<SakuraFrpChannelObj>> {
     let client = crate::get_work_client();
     let url = format!("{}tunnels?token={key}", urls::SAKURA_FRP);
@@ -127,6 +152,10 @@ pub async fn get_channel(key: &str) -> CoreResult<Vec<SakuraFrpChannelObj>> {
 /// - `key`: 账户密钥
 /// - `id`: 通道ID
 /// - `version`: 版本号
+///
+/// # 返回值
+///
+/// 返回该通道的 frpc 配置文本
 pub async fn get_channel_config(key: &str, id: i32, version: &str) -> CoreResult<String> {
     let client = crate::get_work_client();
     let url = format!(
@@ -140,6 +169,10 @@ pub async fn get_channel_config(key: &str, id: i32, version: &str) -> CoreResult
 }
 
 /// 获取下载列表
+///
+/// # 返回值
+///
+/// 返回 frpc 各架构的下载信息
 pub async fn get_download() -> CoreResult<SakuraFrpDownloadObj> {
     let client = crate::get_work_client();
     let url = format!("{}system/clients", urls::SAKURA_FRP);
@@ -148,6 +181,10 @@ pub async fn get_download() -> CoreResult<SakuraFrpDownloadObj> {
 }
 
 /// 创建Frp下载项目
+///
+/// # 返回值
+///
+/// 返回与当前系统架构匹配的 frpc 下载任务；不支持的系统返回 `InvalidOperation`
 pub async fn build_download_item() -> CoreResult<FileItemObj> {
     let obj = get_download().await?;
 

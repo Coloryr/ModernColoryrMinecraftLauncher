@@ -1,3 +1,7 @@
+//! 史蒂夫模型生成模块
+//!
+//! 按皮肤类型（宽臂 / 纤细 / 旧版）生成本体模型与第二层（顶层）模型。
+
 use mml_skin::SkinType;
 
 use crate::{
@@ -6,6 +10,12 @@ use crate::{
 };
 
 /// 生成一个模型
+///
+/// - `skin_type`: 皮肤类型（决定手臂宽度，纤细模型手臂为 0.375）
+///
+/// # 返回值
+///
+/// 返回按 Minecraft 标准比例拼装的模型
 pub fn get_steve(skin_type: SkinType) -> SteveModel {
     let is_slim = skin_type == SkinType::NewSlim;
 
@@ -46,6 +56,14 @@ pub fn get_steve(skin_type: SkinType) -> SteveModel {
 }
 
 /// 生成第二层模型
+///
+/// 所有存在的部件均放大 1.125 倍；旧版（1.7）皮肤只有顶层头部。
+///
+/// - `skin_type`: 皮肤类型
+///
+/// # 返回值
+///
+/// 返回顶层模型（旧版皮肤下无数据的部件为空数组）
 pub fn get_steve_top(skin_type: SkinType) -> SteveModel {
     let is_slim = skin_type == SkinType::NewSlim;
     let is_old = skin_type == SkinType::Old;

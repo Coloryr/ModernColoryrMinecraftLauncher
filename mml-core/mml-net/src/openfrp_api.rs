@@ -1,3 +1,7 @@
+//! OpenFrp 联机平台 API
+//!
+//! 提供通道列表查询、通道配置查询与 frpc 客户端下载信息。
+
 use std::collections::HashMap;
 
 use mml_base::file_item::{FileHash, FileItemObj, LaterRun};
@@ -7,9 +11,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::urls;
 
+/// 通道列表
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct OpenFrpChannelObj {
+    /// 通道列表
     pub data: Vec<OpenFrpChannelData>,
 }
 
@@ -21,10 +27,13 @@ impl Default for OpenFrpChannelObj {
     }
 }
 
+/// 通道分组
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct OpenFrpChannelData {
+    /// 分组名称
     pub name: String,
+    /// 组内节点列表
     pub proxies: Vec<ProxieObj>,
 }
 
@@ -37,13 +46,18 @@ impl Default for OpenFrpChannelData {
     }
 }
 
+/// 单个节点
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct ProxieObj {
+    /// 节点名称
     pub name: String,
+    /// 节点 ID
     pub id: i32,
+    /// 节点协议类型
     #[serde(rename = "type")]
     pub p_type: String,
+    /// 远程访问地址
     pub remote: String,
 }
 
@@ -58,9 +72,11 @@ impl Default for ProxieObj {
     }
 }
 
+/// 通道配置信息
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct OpenFrpChannelInfoObj {
+    /// 配置键值对
     pub proxies: HashMap<String, String>,
 }
 
@@ -72,9 +88,11 @@ impl Default for OpenFrpChannelInfoObj {
     }
 }
 
+/// frpc 客户端下载信息
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct OpenFrpDownloadObj {
+    /// 下载配置
     pub data: OpenFrpDownloadItemObj,
 }
 
@@ -86,11 +104,15 @@ impl Default for OpenFrpDownloadObj {
     }
 }
 
+/// frpc 下载配置
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct OpenFrpDownloadItemObj {
+    /// 最新版本号
     pub latest: String,
+    /// 最新完整版本号
     pub latest_full: String,
+    /// 下载源列表
     pub source: Vec<SourceObj>,
 }
 
@@ -104,9 +126,11 @@ impl Default for OpenFrpDownloadItemObj {
     }
 }
 
+/// 下载源
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
 pub struct SourceObj {
+    /// 源地址前缀
     pub value: String,
 }
 
@@ -121,6 +145,10 @@ impl Default for SourceObj {
 /// 获取通道列表
 ///
 /// - `key`: 账户密钥
+///
+/// # 返回值
+///
+/// 返回账户下所有节点分组
 pub async fn get_channel(key: &str) -> CoreResult<OpenFrpChannelObj> {
     let client = crate::get_work_client();
     let url = format!("{}?action=getallproxies&user={key}", urls::OPENFRP);
@@ -132,6 +160,10 @@ pub async fn get_channel(key: &str) -> CoreResult<OpenFrpChannelObj> {
 ///
 /// - `key`: 账户密钥
 /// - `id`: 通道ID
+///
+/// # 返回值
+///
+/// 返回该节点的配置键值对
 pub async fn get_channel_config(key: &str, id: i32) -> CoreResult<OpenFrpChannelInfoObj> {
     let client = crate::get_work_client();
     let url = format!("{}?action=getproxy&proxy={id}&user={key}", urls::OPENFRP);
@@ -140,6 +172,10 @@ pub async fn get_channel_config(key: &str, id: i32) -> CoreResult<OpenFrpChannel
 }
 
 /// 获取下载列表
+///
+/// # 返回值
+///
+/// 返回 frpc 各版本的下载源信息
 pub async fn get_download() -> CoreResult<OpenFrpDownloadObj> {
     let client = crate::get_work_client();
 
@@ -147,6 +183,10 @@ pub async fn get_download() -> CoreResult<OpenFrpDownloadObj> {
 }
 
 /// 创建Frp下载项目
+///
+/// # 返回值
+///
+/// 返回与当前系统架构匹配的 frpc 下载任务；不支持的系统返回 `InvalidOperation`
 pub async fn build_download_item() -> CoreResult<FileItemObj> {
     let data = get_download().await?;
 

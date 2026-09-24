@@ -38,6 +38,8 @@ pub struct ArchiveEntryInfo {
 impl ArchiveType {
     /// 根据文件路径后缀自动检测压缩包类型。
     ///
+    /// * `path` — 待检测的文件路径。
+    ///
     /// 后缀不受支持时返回 `None`。
     pub fn try_from_path(path: &Path) -> Option<Self> {
         let file_name = path.file_name()?.to_string_lossy().to_lowercase();
@@ -102,6 +104,8 @@ pub struct BaseArchive {
 impl BaseArchive {
     /// 打开压缩包文件，根据文件扩展名自动检测类型。
     ///
+    /// * `path` — 压缩包文件路径。
+    ///
     /// # 错误
     ///
     /// 文件无法打开、格式不支持或压缩包损坏时返回错误。
@@ -131,6 +135,8 @@ impl BaseArchive {
     ///
     /// 与[`open`](Self::open)等价，但句柄不带写权限：
     /// 并发打开同一文件时不受写模式打开的杀软扫描影响，适合多线程各自持有一份句柄的场景。
+    ///
+    /// * `path` — 压缩包文件路径。
     pub fn open_readonly<P: AsRef<Path>>(path: P) -> CoreResult<Self> {
         let path = path.as_ref().to_path_buf();
         let archive_type = ArchiveType::try_from_path(&path).ok_or_else(|| {
@@ -209,6 +215,11 @@ impl BaseArchive {
     }
 
     /// 解压压缩包到指定目录，无需构造 [`BaseArchive`] 实例。
+    ///
+    /// * `archive_type` — 压缩包格式。
+    /// * `archive_file` — 压缩包文件路径。
+    /// * `output_dir` — 解压输出目录。
+    /// * `gui` — 可选的进度回调。
     pub fn decompress<P: AsRef<Path>>(
         archive_type: ArchiveType,
         archive_file: P,
@@ -231,6 +242,13 @@ impl BaseArchive {
     }
 
     /// 内部辅助：仅执行压缩写入磁盘，不打开结果文件。
+    ///
+    /// * `archive_type` — 压缩包格式。
+    /// * `output_file` — 压缩包输出路径。
+    /// * `source_dir` — 需要打包的源目录。
+    /// * `root_path` — 相对根路径，设置后文件在包内的路径相对于此。
+    /// * `filter` — 可选的排除子串列表，匹配的文件将被跳过。
+    /// * `gui` — 可选的进度回调。
     fn compress_inner(
         archive_type: ArchiveType,
         output_file: &Path,
@@ -269,6 +287,10 @@ impl BaseArchive {
     }
 
     /// 根据压缩包类型创建对应的读取句柄。
+    ///
+    /// * `archive_type` — 压缩包格式。
+    /// * `path` — 压缩包磁盘路径。
+    /// * `file` — 已打开的压缩包文件句柄。
     fn make_handle(
         archive_type: ArchiveType,
         path: &Path,
@@ -284,6 +306,8 @@ impl BaseArchive {
     }
 
     /// 在磁盘上创建一个空的 zip 文件（仅含中央目录，零条目）。
+    ///
+    /// * `path` — 输出文件路径。
     fn create_empty_zip(path: &Path) -> CoreResult<()> {
         use zip::ZipWriter;
 
@@ -305,6 +329,8 @@ impl BaseArchive {
     }
 
     /// 在磁盘上创建一个空的 tar 文件（头 + 两个零块 EOF 标记）。
+    ///
+    /// * `path` — 输出文件路径。
     fn create_empty_tar(path: &Path) -> CoreResult<()> {
         use tar::Builder;
 
@@ -343,6 +369,8 @@ impl BaseArchive {
     }
 
     /// 检查压缩包中是否存在指定名称的条目。
+    ///
+    /// * `name` — 条目名（与包内路径完全匹配）。
     pub fn contains(&self, name: &str) -> bool {
         self.entries.iter().any(|e| e.name == name)
     }
@@ -421,6 +449,10 @@ impl BaseArchive {
     /// 解析最终输出路径：文件名非法时替换非法字符为 `_`，并询问 GUI 是否同意。
     ///
     /// 仅替换目标路径的最后一个名称段；GUI 不同意替换时返回 `TaskCancel`。
+    ///
+    /// * `name` — 条目在压缩包内的名称/路径。
+    /// * `output` — 原始目标磁盘路径。
+    /// * `gui` — 可选的重命名确认回调。
     fn resolve_output_path(
         &self,
         name: &str,
@@ -454,6 +486,10 @@ impl BaseArchive {
     }
 
     /// 提取单个条目到已解析的目标路径（创建父目录）。
+    ///
+    /// * `name` — 条目在压缩包内的名称/路径。
+    /// * `output_path` — 已解析的目标磁盘路径。
+    /// * `gui` — 可选的进度回调。
     fn extract_resolved(
         &self,
         name: &str,
@@ -470,6 +506,9 @@ impl BaseArchive {
     }
 
     /// 顺序提取一组条目。
+    ///
+    /// * `tasks` — `(条目名, 目标路径)` 任务列表。
+    /// * `gui` — 可选的进度回调（按每个已提取文件触发）。
     fn extract_tasks_sequential(
         &self,
         tasks: &[(String, PathBuf)],
@@ -487,6 +526,9 @@ impl BaseArchive {
     }
 
     /// 并行提取一组条目（仅 Zip：每个线程持有独立的读取句柄随机访问）。
+    ///
+    /// * `tasks` — `(条目名, 目标路径)` 任务列表。
+    /// * `gui` — 可选的进度回调（按每个已提取文件触发）。
     fn extract_tasks_parallel(
         &self,
         tasks: &[(String, PathBuf)],
@@ -677,6 +719,9 @@ impl BaseArchive {
     }
 
     /// 7z / tar.gz / tar.xz 的后备路径：解压到临时目录，写入文件后重压缩。
+    ///
+    /// * `files` — `(磁盘源路径, 压缩包内路径)` 对。
+    /// * `gui` — 可选的进度回调（仅在重压缩时使用）。
     fn add_files_extract_recompress<P: AsRef<Path>>(
         &mut self,
         files: &[(P, P)],
@@ -777,6 +822,10 @@ impl BaseArchive {
     }
 
     /// 7z / tar.gz / tar.xz 的后备路径：解压到临时目录，写入数据后重压缩。
+    ///
+    /// * `name` — 条目在压缩包内的路径（如 `"subdir/readme.txt"`）。
+    /// * `data` — 文件内容的原始字节。
+    /// * `gui` — 可选的进度回调（仅在重压缩时使用）。
     fn add_data_extract_recompress(
         &mut self,
         name: &str,
@@ -863,6 +912,9 @@ impl BaseArchive {
 ///
 /// 例如 `dir/file.txt` 去掉 `dir` 后 → `file.txt`（兼容 `\` 分隔的条目名）。
 /// 条目不在该目录下、或本身就是 `dir`（没有更深路径段）时保持原名，避免误剥。
+///
+/// * `name` — 条目名。
+/// * `dir` — 要去掉的顶层包裹目录名。
 fn strip_dir_prefix(name: &str, dir: &str) -> String {
     name.strip_prefix(&format!("{dir}/"))
         .or_else(|| name.strip_prefix(&format!("{dir}\\")))

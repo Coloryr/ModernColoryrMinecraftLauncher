@@ -1,3 +1,20 @@
+//! 启动器基础命名与国际化模块
+//!
+//! # 核心功能
+//!
+//! - **国际化（i18n）** — 加载语言包并按当前语言返回文案、线程名、错误描述
+//! - **路径/文件名常量** — 启动器使用的目录、文件、扩展名、参数常量
+//! - **保留 UUID** — 各配置文件保存任务的固定 UUID
+//!
+//! # 子模块
+//!
+//! | 模块 | 用途 |
+//! |------|------|
+//! | [`i18`] | 语言包加载与文案获取 |
+//! | [`i18_items`] | 文案条目类型定义（信息/错误/严重错误/线程/GUI） |
+//! | [`names`] | 路径、文件名与参数常量 |
+//! | [`uuids`] | 配置文件保留 UUID |
+
 pub mod i18;
 pub mod i18_items;
 pub mod names;
@@ -26,10 +43,13 @@ pub const DATE: &str = "20260831";
 /// 启动器版本号
 pub const VERSION: LazyLock<String> = LazyLock::new(|| format!("1.{}.{DATE}", VERSION_NUM));
 
+/// 启动器界面语言
 #[allow(non_camel_case_types)]
 #[derive(Clone, Copy, Serialize, Deserialize, Debug, PartialEq, Eq, Hash)]
 pub enum Lang {
+    /// 简体中文
     zh_cn,
+    /// 英语（美国）
     en_us,
 }
 
@@ -79,6 +99,12 @@ pub fn get_lang(lang: Lang) -> &'static str {
 }
 
 /// 从字符串判断语言类型
+///
+/// - `data`: 语言字符串（如 `zh_CN`、`en_US`）
+///
+/// # 返回值
+///
+/// 返回识别出的语言，无法识别时回退为 [`Lang::zh_cn`]
 fn check_lang(data: &String) -> Lang {
     if data.eq(LANG_ZH_CN) {
         return Lang::zh_cn;
@@ -160,7 +186,6 @@ pub fn set_lang(lang: Lang) -> CoreResult<()> {
 
 /// 初始化语言
 pub fn init<P: AsRef<Path>>(path: P) -> CoreResult<()> {
-    // 读取文件语言
     let file = path.as_ref().with_file_name(names::LANG_FILE);
     let file = FILE.get_or_init(|| file);
 

@@ -812,6 +812,8 @@ pub const ITEM_ICONS: &[(&str, &str)] = &[
 ];
 
 /// 物品的创造分组（itemGroup lang键尾段），不在任何分组的物品返回None
+///
+/// - `id`: 物品ID（不带命名空间）
 pub(crate) fn item_cat(id: &str) -> Option<&'static str> {
     ITEM_ICONS
         .iter()

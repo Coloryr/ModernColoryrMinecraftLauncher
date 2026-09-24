@@ -1,3 +1,13 @@
+//! NBT（Named Binary Tag）读写模块
+//!
+//! # 子模块
+//!
+//! | 模块 | 用途 |
+//! |------|------|
+//! | [`chunk`] | 区块（Chunk）数据的读写 |
+//! | [`nbt_file`] | NBT 文件的整体读写 |
+//! | [`nbt_types`] | NBT 各类型标签的数据结构定义 |
+
 use std::fmt;
 use std::io::{Read, Write};
 
@@ -8,11 +18,8 @@ use crate::nbt_types::{
     NbtLong, NbtLongArray, NbtShort, NbtString,
 };
 
-/// 区块（Chunk）数据的读写模块
 pub mod chunk;
-/// NBT 文件的整体读写模块
 pub mod nbt_file;
-/// NBT 各类型标签的数据结构定义模块
 pub mod nbt_types;
 
 /// NBT 标签结束标记（TAG_End）的类型序号

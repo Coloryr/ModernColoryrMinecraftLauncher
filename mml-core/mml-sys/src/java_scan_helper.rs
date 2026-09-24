@@ -1,3 +1,5 @@
+//! Java 运行时扫描（注册表 / 包管理器 / 常见安装目录）
+
 use std::{collections::HashSet, path::PathBuf};
 
 /// 搜索Java
@@ -35,6 +37,7 @@ pub fn find_java_inner(java_paths: &mut HashSet<PathBuf>) {
         Ok(paths)
     }
 
+    /// Eclipse Adoptium（读取子键 `...\hotspot\MSI` 的 Path 值）
     fn get_adoptium_java_from_registry(key_path: &str) -> CoreResult<Vec<PathBuf>> {
         let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
         let subkey = hklm.open_subkey(key_path).map_err(|_| {
@@ -57,6 +60,7 @@ pub fn find_java_inner(java_paths: &mut HashSet<PathBuf>) {
         Ok(paths)
     }
 
+    /// Azul Zulu（读取子键的 InstallationPath 值）
     fn get_zulu_java_from_registry(key_path: &str) -> CoreResult<Vec<PathBuf>> {
         let hklm = RegKey::predef(HKEY_LOCAL_MACHINE);
         let subkey = hklm.open_subkey(key_path).map_err(|_| {
@@ -158,7 +162,6 @@ pub(crate) fn find_java_inner(java_paths: &mut HashSet<PathBuf>) {
         // 查询已安装的 JDK/JRE 包
         if let Ok(packages) = get_list("pacman", &["-Qs", "jre|jdk"]) {
             for package_line in packages {
-                // 提取包名
                 let parts: Vec<&str> = package_line.split_whitespace().collect();
                 if parts.is_empty() {
                     continue;
@@ -239,7 +242,6 @@ pub(crate) fn find_java(java_paths: &mut HashSet<PathBuf>) {
         let stderr = String::from_utf8_lossy(&output.stderr);
         for line in stderr.lines() {
             if line.contains("Java SE") || line.contains("JDK") {
-                // 提取路径
                 if let Some(path_start) = line.find('/') {
                     let path = &line[path_start..];
                     if let Some(path_end) = path.find(".jdk") {

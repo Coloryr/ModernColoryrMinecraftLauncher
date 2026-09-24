@@ -25,18 +25,14 @@
 //! 包括用户名、UUID、access token、client token、认证类型等。
 //! 账户通过 [`UserKeyObj`]（UUID + 认证类型）作为唯一键进行索引。
 
-/// 游戏账户
 use chrono::{DateTime, FixedOffset, Local};
 use mml_names::i18_items::error_type::CoreResult;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
 use tokio_util::sync::CancellationToken;
 
-/// 旧版 Yggdrasil 认证协议模块
 pub mod auths;
-/// 旧版 Yggdrasil 认证协议（外置登录、皮肤站、统一通行证）
 pub mod legacy;
-/// Microsoft OAuth 2.0 认证协议
 pub mod oauth;
 
 /// 账户认证类型
@@ -68,6 +64,13 @@ impl Default for AuthType {
 }
 
 impl AuthType {
+    /// 从字符串解析认证类型
+    ///
+    /// - `str`: 认证类型名称（如 `Offline`、`OAuth`、`Nide8`）
+    ///
+    /// # 返回值
+    ///
+    /// 返回对应的认证类型，无法识别时回退为 [`AuthType::Offline`]
     pub fn from_str(str: &str) -> AuthType {
         if str == "Offline" {
             AuthType::Offline
@@ -219,6 +222,10 @@ impl LoginObj {
     /// # 参数
     ///
     /// - `cancel`: 取消令牌，用于中断异步操作
+    ///
+    /// # 返回值
+    ///
+    /// 刷新成功返回 `Ok(())`，认证失败或被取消时返回相应错误
     pub async fn refresh(&mut self, cancel: CancellationToken) -> CoreResult<()> {
         match &self.auth_type {
             AuthType::OAuth => self.refresh_oauth(cancel).await,
@@ -232,7 +239,6 @@ impl LoginObj {
     }
 }
 
-/// LoginObj 的默认值：空账户
 impl Default for LoginObj {
     fn default() -> Self {
         Self {
