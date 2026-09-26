@@ -137,6 +137,19 @@ pub fn init<P: AsRef<Path>>(dir: P) -> CoreResult<()> {
     let dir = DOWNLOAD_PATH.get_or_init(|| dir.as_ref().join(names::DOWNLOAD_DIR));
     if !dir.exists() {
         path_helper::create_dir_all(dir)?;
+    } else {
+        // 启动时清空下载临时目录：此时没有任何下载任务，目录里只会有
+        // 上次运行残留的临时文件（崩溃 / 断电 / 任务被强杀留下），不清会一直占空间
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    let _ = std::fs::remove_dir_all(path);
+                } else {
+                    let _ = std::fs::remove_file(path);
+                }
+            }
+        }
     }
 
     Ok(())

@@ -37,6 +37,13 @@ pub struct AccountStoreDto {
     pub token_status: String,
     /// 皮肤头像（mml-skin-draw 渲染的 data URI PNG）；无皮肤为 None
     pub avatar: Option<String>,
+    /// 服务器地址（重登预填用：littleskin/authlib 为服务器 URL，nide8 为服务器 ID；
+    /// offline 没有，微软的 text1 存的是 refresh_token，绝不能下发给前端）
+    pub server: Option<String>,
+    /// 自定义字段 1（详情页展示；微软的 text1 是 refresh_token，仅本地显示）
+    pub ext1: Option<String>,
+    /// 自定义字段 2（详情页展示）
+    pub ext2: Option<String>,
 }
 
 /// OAuth登录开始
@@ -84,6 +91,12 @@ impl AccountStoreDto {
             skin: c1,
             token_status: "valid".to_string(),
             avatar: None,
+            server: match login.auth_type {
+                AuthType::OAuth | AuthType::Offline => None,
+                _ => login.text1.clone(),
+            },
+            ext1: login.text1.clone(),
+            ext2: login.text2.clone(),
         }
     }
 }

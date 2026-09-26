@@ -20,6 +20,7 @@ gui-ipc-gen = { path = "../ipc-gen" }
 
 [dependencies]
 tauri = { version = "~2.11.5", features = [] }
+base64.workspace = true
 tauri-plugin-dialog = "~2.7.2"
 async-trait = "~0.1.92"
 gui-macros = { path = "../macros" }
@@ -33,6 +34,7 @@ mml-jvms = { path = "../../mml-core/mml-jvms" }
 mml-downloader = { path = "../../mml-core/mml-downloader" }
 mml-sys = { path = "../../mml-core/mml-sys" }
 mml-net = { path = "../../mml-core/mml-net" }
+font-kit = "0.14"
 mml-log = { path = "../../mml-core/mml-log" }
 mml-base = { path = "../../mml-core/mml-base" }
 mml-auth = { path = "../../mml-core/mml-auth" }

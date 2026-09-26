@@ -51,6 +51,9 @@ impl I18Lang for EnUs {
             ErrorType::AuthTokenTimeout => {
                 String::from("Account token expired, please sign in again")
             }
+            ErrorType::AuthServerNull => {
+                String::from("Account is missing its server address, please re-add it")
+            }
             ErrorType::OAuthGetTokenError(data) => {
                 format!("OAuth token request failed: {}", data.error)
             }

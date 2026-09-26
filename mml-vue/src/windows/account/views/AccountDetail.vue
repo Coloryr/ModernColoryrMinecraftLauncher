@@ -2,12 +2,12 @@
 // 账户详情视图：全账户表格，操作按钮在左侧
 import { t } from "../../../lib/i18n";
 import AccountActions from "../../../components/AccountActions.vue";
+import AccountTypeBadge from "../../../components/AccountTypeBadge.vue";
 import type { AccountStoreDto } from "../../../lib/bindings";
 
 const props = defineProps<{
   accounts: AccountStoreDto[];
   currentUuid: string;
-  typeLabel: (acc: AccountStoreDto) => string;
   tokenLabel: (acc: AccountStoreDto) => string;
 }>();
 
@@ -15,6 +15,7 @@ const emit = defineEmits<{
   (e: "switch", acc: AccountStoreDto): void;
   (e: "refresh", acc: AccountStoreDto): void;
   (e: "relogin", acc: AccountStoreDto): void;
+  (e: "edit", acc: AccountStoreDto): void;
   (e: "delete", acc: AccountStoreDto): void;
 }>();
 
@@ -25,8 +26,9 @@ function isCurrent(acc: AccountStoreDto): boolean {
 
 <template>
   <div class="acc-detail">
-    <table class="detail-table wide">
-      <thead>
+    <div class="table-wrap">
+      <table class="detail-table wide">
+        <thead>
         <tr>
           <th class="col-actions">{{ t("account.actions") }}</th>
           <th>{{ t("account.name") }}</th>
@@ -34,7 +36,8 @@ function isCurrent(acc: AccountStoreDto): boolean {
           <th>{{ t("account.type") }}</th>
           <th>{{ t("account.lastLogin") }}</th>
           <th>{{ t("account.tokenStatus") }}</th>
-          <th>{{ t("account.capeName") }}</th>
+          <th>{{ t("account.ext1") }}</th>
+          <th>{{ t("account.ext2") }}</th>
         </tr>
       </thead>
       <tbody>
@@ -45,26 +48,29 @@ function isCurrent(acc: AccountStoreDto): boolean {
           @dblclick="emit('switch', acc)"
         >
           <td class="col-actions">
-            <AccountActions
+            <AccountActions :auth-type="acc.authType"
               @refresh="emit('refresh', acc)"
               @relogin="emit('relogin', acc)"
+              @edit="emit('edit', acc)"
               @delete="emit('delete', acc)"
             />
           </td>
-          <td class="cell-name">
+          <td class="cell-name" :title="acc.userName">
             {{ acc.userName }}
             <span v-if="isCurrent(acc)" class="current-tag">{{ t("account.current") }}</span>
           </td>
           <td class="mono">{{ acc.uuid }}</td>
-          <td>{{ typeLabel(acc) }}</td>
+          <td><AccountTypeBadge :auth-type="acc.authType" /></td>
           <td>{{ acc.loginTime }}</td>
           <td>
             <span class="token-tag" :class="acc.tokenStatus">{{ tokenLabel(acc) }}</span>
           </td>
-          <td>{{ acc.avatar ? acc.userName + "_cape" : t("account.noSkin") }}</td>
+          <td class="cell-ext" :title="acc.ext1 ?? ''">{{ acc.ext1 ?? "—" }}</td>
+          <td class="cell-ext" :title="acc.ext2 ?? ''">{{ acc.ext2 ?? "—" }}</td>
         </tr>
       </tbody>
-    </table>
+      </table>
+    </div>
     <div v-if="accounts.length === 0" class="empty-tip">{{ t("account.searchEmpty") }}</div>
   </div>
 </template>
@@ -74,14 +80,23 @@ function isCurrent(acc: AccountStoreDto): boolean {
   display: flex;
   flex-direction: column;
   gap: 14px;
+  /* 占满视图区剩余高度：工具栏留在外面，上下滚动发生在表格容器里 */
+  flex: 1;
+  min-height: 0;
+}
+
+/* 表格在容器内滚动：上下滚动看行，左右滚动看列（列都是 nowrap，长内容不压缩） */
+.table-wrap {
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--bg-card);
+  flex: 1;
+  min-height: 0;
 }
 
 .detail-table.wide {
   border-collapse: collapse;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  overflow: hidden;
   width: 100%;
 }
 
@@ -115,6 +130,19 @@ function isCurrent(acc: AccountStoreDto): boolean {
 
 .cell-name {
   font-weight: 700;
+  /* 名字过长省略显示，不把表格撑出横向滚动条；悬停 title 看全名 */
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 自定义字段（微软 ext1 是 refresh_token，很长）同样省略，悬停看全文 */
+.cell-ext {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: "Cascadia Code", Consolas, monospace;
+  font-size: 11.5px;
 }
 
 .current-tag {

@@ -13,7 +13,9 @@
   padding: 10px 12px;
   border-radius: 9px;
   border: 1px solid var(--border);
-  background: var(--bg);
+  /* 背景图模式下 var(--bg) 是半透明的，下拉框必须不透明（--bg-solid 见 themes.css 的 has-bg）；
+     无背景图时用 --bg-card 提亮一档，和窗口底色区分开 */
+  background: var(--bg-solid, var(--bg-card));
   color: var(--text);
   font-size: 14px;
   /* 定死行高：<select>（含 appearance: base-select 的页面内渲染）与借用此类的
@@ -63,7 +65,8 @@
   select.field-select::picker(select) {
     margin-top: 4px;
     padding: 5px;
-    background: var(--bg-card);
+    /* 弹层不透明：半透明会透出下层内容 */
+    background: var(--bg-solid, var(--bg-card));
     border: 1px solid var(--border);
     border-radius: 10px;
     box-shadow: var(--shadow-lg);

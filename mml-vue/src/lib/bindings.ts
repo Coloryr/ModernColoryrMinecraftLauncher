@@ -9,6 +9,7 @@ export const commands = {
   windows: {
     closeWindow: (kind: string) => invoke<void>("window_close_window", { kind }),
     getGuiConfig: () => invoke<GuiConfigDto>("window_get_gui_config"),
+    getWindowSizes: () => invoke<WindowSizeDto[]>("window_get_window_sizes"),
     isMaximized: () => invoke<boolean>("window_is_maximized"),
     minimize: () => invoke<void>("window_minimize"),
     openWindow: (kind: string) => invoke<void>("window_open_window", { kind }),
@@ -18,8 +19,9 @@ export const commands = {
     toggleMaximize: () => invoke<boolean>("window_toggle_maximize"),
   },
   account: {
-    addAccount: (name: string, accountType: string) => invoke<AccountStoreDto>("account_add_account", { name, accountType }),
+    addAccount: (name: string, accountType: string, server: string | null, password: string | null) => invoke<AccountStoreDto>("account_add_account", { name, accountType, server, password }),
     cancelOAuth: () => invoke<void>("account_cancel_oauth"),
+    editOffline: (uuid: string, newName: string, newUuid: string) => invoke<void>("account_edit_offline", { uuid, newName, newUuid }),
     getAccounts: () => invoke<AccountStoreViewDto>("account_get_accounts"),
     openBrowser: (url: string) => invoke<void>("account_open_browser", { url }),
     refreshAccountToken: (uuid: string) => invoke<boolean>("account_refresh_account_token", { uuid }),
@@ -63,6 +65,14 @@ export const commands = {
     sourceType: () => invoke<string[]>("add_resource_source_type"),
     status: () => invoke<ResourceStatusDto>("add_resource_status"),
   },
+  block: {
+    list: (lang: string) => invoke<BlockItemDto[]>("block_list", { lang }),
+    renderStart: (force: boolean) => invoke<boolean>("block_render_start", { force }),
+    setIcon: (uuid: string, id: string) => invoke<boolean>("block_set_icon", { uuid, id }),
+    skinAdd: (input: string) => invoke<string>("block_skin_add", { input }),
+    skinRemove: (name: string) => invoke<void>("block_skin_remove", { name }),
+    status: () => invoke<BlockStatusDto>("block_status"),
+  },
   collect: {
     addGroup: (name: string) => invoke<void>("collect_add_group", { name }),
     clear: (group: string | null) => invoke<void>("collect_clear", { group }),
@@ -78,20 +88,9 @@ export const commands = {
     pauseAll: () => invoke<number>("download_pause_all"),
     resumeAll: () => invoke<number>("download_resume_all"),
   },
-  log: {
-    errors: () => invoke<string>("log_read_errors"),
-    history: () => invoke<string>("log_read_history"),
-    runtime: () => invoke<string>("log_read_runtime"),
-  },
   main: {
     addGroup: (name: string) => invoke<boolean>("main_add_group", { name }),
     addJava: (name: string, path: string) => invoke<boolean>("main_add_java", { name, path }),
-    blockList: (lang: string) => invoke<BlockItemDto[]>("main_block_list", { lang }),
-    blockRenderStart: (force: boolean) => invoke<boolean>("main_block_render_start", { force }),
-    blockSetIcon: (uuid: string, id: string) => invoke<boolean>("main_block_set_icon", { uuid, id }),
-    blockSkinAdd: (input: string) => invoke<string>("main_block_skin_add", { input }),
-    blockSkinRemove: (name: string) => invoke<void>("main_block_skin_remove", { name }),
-    blockStatus: () => invoke<BlockStatusDto>("main_block_status"),
     createInstance: (name: string, version: string, loader: string | null, loaderVersion: string | null, group: string | null, modpackType: string | null, source: string | null) => invoke<InstanceInfoDto>("main_create_instance", { name, version, loader, loaderVersion, group, modpackType, source }),
     deleteInstance: (uuid: string) => invoke<boolean>("main_delete_instance", { uuid }),
     getGameLog: (uuid: string) => invoke<LogLine[]>("main_get_game_log", { uuid }),
@@ -145,6 +144,19 @@ export const commands = {
     serverUpdate: (uuid: string, name: string, ip: string, newName: string, newIp: string, acceptTextures: boolean) => invoke<void>("resource_server_update", { uuid, name, ip, newName, newIp, acceptTextures }),
     shaderSet: (uuid: string, file: string | null) => invoke<void>("resource_shader_set", { uuid, file }),
   },
+  settings: {
+    addJava: (path: string) => invoke<JavaInfoDto>("settings_add_java", { path }),
+    clearBg: () => invoke<void>("settings_clear_bg"),
+    getBg: () => invoke<BgInfoDto | null>("settings_get_bg"),
+    getLaunch: () => invoke<LaunchSettingDto>("settings_get_launch"),
+    getNetwork: () => invoke<NetworkSettingDto>("settings_get_network"),
+    getSystemFonts: () => invoke<string[]>("settings_get_system_fonts"),
+    removeJava: (name: string) => invoke<JavaInfoDto[]>("settings_remove_java", { name }),
+    saveLaunch: (minMemory: number, maxMemory: number, jvmArgs: string, gameArgs: string) => invoke<void>("settings_save_launch", { minMemory, maxMemory, jvmArgs, gameArgs }),
+    saveNetwork: (dto: NetworkSettingDto) => invoke<void>("settings_save_network", { dto }),
+    scanJava: () => invoke<JavaInfoDto[]>("settings_scan_java"),
+    setBg: (source: string, percent: number) => invoke<string>("settings_set_bg", { source, percent }),
+  },
 };
 
 /** 类型 */
@@ -162,6 +174,9 @@ export type AccountStoreDto = {
   skin: string,
   tokenStatus: string,
   avatar: string | null,
+  server: string | null,
+  ext1: string | null,
+  ext2: string | null,
 };
 
 export type AccountOAuthDto = {
@@ -450,6 +465,12 @@ export type GuiConfigDto = {
   mainWindow: MainWindowConfigDto,
   head: HeadConfigDto,
   collect: CollectConfigDto,
+  font: string,
+  skinDisplay: SkinDisplay,
+  bgSource: string,
+  bgOpacity: number,
+  bgBlur: number,
+  bgNativeSize: number,
 };
 
 export type InstanceInfoDto = {
@@ -639,18 +660,76 @@ export type DataPackItemDto = {
   enable: boolean | null,
 };
 
+export type NetworkSettingDto = {
+  source: string,
+  downloadThread: number,
+  proxyIp: string,
+  proxyPort: number,
+  proxyUser: string,
+  proxyPassword: string,
+  workProxy: string,
+  workProxyType: string,
+  loginProxy: string,
+  loginProxyType: string,
+  checkFile: boolean,
+  autoDownload: boolean,
+  dns: DnsSettingDto,
+  check: GameCheckSettingDto,
+};
+
+export type DnsSettingDto = {
+  enable: boolean,
+  https: string[],
+  httpProxy: boolean,
+};
+
+export type GameCheckSettingDto = {
+  core: boolean,
+  lib: boolean,
+  assets: boolean,
+  gameMod: boolean,
+  coreSha1: boolean,
+  libSha1: boolean,
+  assetsSha1: boolean,
+  modSha1: boolean,
+};
+
+export type LaunchSettingDto = {
+  javaList: JavaInfoDto[],
+  minMemory: number,
+  maxMemory: number,
+  jvmArgs: string,
+  gameArgs: string,
+};
+
+export type BgInfoDto = {
+  source: string,
+  dataUrl: string,
+  opacity: number,
+  blur: number,
+  nativeSize: number,
+};
+
 export type VersionInfoDto = {
   id: string,
   versionType: string,
 };
 
-export type Theme = "Dark" | "Light";
+export type WindowSizeDto = {
+  kind: string,
+  width: number,
+  height: number,
+};
+
+export type Theme = "System" | "Light" | "Dark";
 
 export type WindowMode = "Multi" | "Single";
 
 export type SidebarSide = "Left" | "Right";
 
 export type ViewMode = "list" | "group" | "grid";
+
+export type SkinDisplay = "Skin2DA" | "Skin2DB" | "Skin3D";
 
 export type HeadType = "Head2DA" | "Head3DA" | "Head3DB" | "Head2DB";
 

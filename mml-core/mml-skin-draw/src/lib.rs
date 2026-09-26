@@ -6,6 +6,7 @@
 //! |------|------|
 //! | [`skin_draw`] | 像素级绘制基元（复制/混合/缩放/填充） |
 //! | [`skin_2d_draw`] | 皮肤整体 2D 展开（TypeA/TypeB） |
+//! | [`skin_3d_draw`] | 皮肤整体 3D 等距渲染 |
 //! | [`head_2d_draw`] | 2D 头像渲染 |
 //! | [`head_3d_draw`] | 3D 头像渲染 |
 //! | [`cape_2d_draw`] | 披风 2D 渲染 |
@@ -14,6 +15,7 @@ pub mod cape_2d_draw;
 pub mod head_2d_draw;
 pub mod head_3d_draw;
 pub mod skin_2d_draw;
+pub mod skin_3d_draw;
 
 /// 像素级绘制基元
 ///

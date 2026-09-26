@@ -11,7 +11,6 @@ import type { FeatureId } from "../types";
 defineProps<{
   features: Array<{ id: FeatureId; icon: string }>;
   newsActive: boolean;
-  theme: "Dark" | "Light";
   currentAccount: AccountStoreDto | null;
   accounts: AccountStoreDto[];
 }>();
@@ -19,7 +18,6 @@ defineProps<{
 const emit = defineEmits<{
   (e: "toggle-news"): void;
   (e: "feature", id: FeatureId): void;
-  (e: "toggle-theme"): void;
   (e: "update:account", acc: AccountStoreDto): void;
 }>();
 </script>
@@ -66,36 +64,12 @@ const emit = defineEmits<{
         <svg v-else-if="f.icon === 'chart'" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
           <path d="M18 20V10M12 20V4M6 20v-6" />
         </svg>
-        <svg v-else-if="f.icon === 'user'" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
-          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-          <circle cx="12" cy="7" r="4" />
-        </svg>
-        <svg v-else-if="f.icon === 'download'" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-          <path d="m7 10 5 5 5-5" />
-          <path d="M12 15V3" />
-        </svg>
         <svg v-else-if="f.icon === 'star'" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <path d="m12 2.6 2.9 5.9 6.5.95-4.7 4.58 1.1 6.47L12 17.44 6.2 20.5l1.1-6.47-4.7-4.58 6.5-.95z" />
-        </svg>
-        <svg v-else-if="f.icon === 'log'" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M4 5h16M4 12h10M4 19h16" />
-          <path d="M17.5 10.5 20 13l-2.5 2.5" />
         </svg>
         <svg v-else viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
           <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" />
           <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
-        </svg>
-      </button>
-
-      <!-- 主题切换 -->
-      <button class="topbar-icon-btn" :title="theme === 'Dark' ? 'Light' : 'Dark'" @click="emit('toggle-theme')">
-        <svg v-if="theme === 'Dark'" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
-          <circle cx="12" cy="12" r="4.5" />
-          <path d="M12 2v2.5M12 19.5V22M4.9 4.9l1.8 1.8M17.3 17.3l1.8 1.8M2 12h2.5M19.5 12H22M4.9 19.1l1.8-1.8M17.3 6.7l1.8-1.8" />
-        </svg>
-        <svg v-else viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
-          <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />
         </svg>
       </button>
 

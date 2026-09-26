@@ -13,12 +13,12 @@
 
 pub mod account;
 pub mod add;
+pub mod block;
 pub mod add_modpack;
 pub mod add_resource;
 pub mod collect;
 pub mod download;
 pub mod help;
-pub mod log;
 pub mod main;
 pub mod resource;
 pub mod settings;
@@ -44,7 +44,7 @@ use tauri::{
 use crate::listens;
 use uuid::{Uuid, uuid};
 
-use crate::dtos::GuiConfigDto;
+use crate::dtos::{GuiConfigDto, WindowSizeDto};
 
 /// 窗口几何状态（window_save.json）
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -90,6 +90,9 @@ const ADD_RESOURCE_WINDOW_UUID: Uuid = uuid!("00000000-0000-0000-0000-0000000000
 /// 收藏窗口固定 uuid
 const COLLECT_WINDOW_UUID: Uuid = uuid!("00000000-0000-0000-0000-00000000000c");
 
+/// 方块列表窗口固定 uuid
+const BLOCK_WINDOW_UUID: Uuid = uuid!("00000000-0000-0000-0000-00000000000d");
+
 /// 窗口注册表条目
 struct WindowEntry {
     /// 窗口标签（`mml-<kind>`，与前端 kind 对应）
@@ -111,9 +114,9 @@ const MAIN_MIN_WIDTH: f64 = 920.0;
 const MAIN_MIN_HEIGHT: f64 = 600.0;
 
 /// 账户窗口最小宽度
-const ACCOUNT_MIN_WIDTH: f64 = 770.0;
+const ACCOUNT_MIN_WIDTH: f64 = 800.0;
 /// 账户窗口最小高度
-const ACCOUNT_MIN_HEIGHT: f64 = 480.0;
+const ACCOUNT_MIN_HEIGHT: f64 = 650.0;
 
 /// 添加实例窗口最小宽度
 const ADD_MIN_WIDTH: f64 = 700.0;
@@ -129,6 +132,11 @@ const DOWNLOAD_MIN_HEIGHT: f64 = 470.0;
 const ADD_MODPACK_MIN_WIDTH: f64 = 920.0;
 /// 下载整合包窗口最小高度
 const ADD_MODPACK_MIN_HEIGHT: f64 = 600.0;
+
+/// 设置窗口最小宽度（左侧标签导航布局需要的宽度）
+const SETTINGS_MIN_WIDTH: f64 = 850.0;
+/// 设置窗口最小高度
+const SETTINGS_MIN_HEIGHT: f64 = 600.0;
 
 /// 窗口注册表：uuid → 窗口信息
 const WINDOWS_INFO: LazyLock<HashMap<Uuid, WindowEntry>> = LazyLock::new(|| {
@@ -153,8 +161,8 @@ const WINDOWS_INFO: LazyLock<HashMap<Uuid, WindowEntry>> = LazyLock::new(|| {
             uuid!("00000000-0000-0000-0000-000000000003"),
             WindowEntry {
                 label: "mml-settings",
-                min_width: MIN_WIDTH,
-                min_height: MIN_HEIGHT,
+                min_width: SETTINGS_MIN_WIDTH,
+                min_height: SETTINGS_MIN_HEIGHT,
             },
         ),
         (
@@ -169,14 +177,6 @@ const WINDOWS_INFO: LazyLock<HashMap<Uuid, WindowEntry>> = LazyLock::new(|| {
             uuid!("00000000-0000-0000-0000-000000000005"),
             WindowEntry {
                 label: "mml-skin",
-                min_width: MIN_WIDTH,
-                min_height: MIN_HEIGHT,
-            },
-        ),
-        (
-            uuid!("00000000-0000-0000-0000-00000000000d"),
-            WindowEntry {
-                label: "mml-log",
                 min_width: MIN_WIDTH,
                 min_height: MIN_HEIGHT,
             },
@@ -233,6 +233,14 @@ const WINDOWS_INFO: LazyLock<HashMap<Uuid, WindowEntry>> = LazyLock::new(|| {
             COLLECT_WINDOW_UUID,
             WindowEntry {
                 label: "mml-collect",
+                min_width: MIN_WIDTH,
+                min_height: MIN_HEIGHT,
+            },
+        ),
+        (
+            BLOCK_WINDOW_UUID,
+            WindowEntry {
+                label: "mml-block",
                 min_width: MIN_WIDTH,
                 min_height: MIN_HEIGHT,
             },
@@ -392,12 +400,12 @@ fn create_window(app: &AppHandle, label: &str, uuid: &Uuid) -> Result<WebviewWin
         .map(|e| (e.min_width, e.min_height))
         .unwrap_or((600.0, 400.0));
 
+    // webview 铺不透明暗色底，避免加载首帧透出桌面（与暗色主题 --bg 一致）
     let builder = WebviewWindowBuilder::new(app, label, WebviewUrl::App("index.html".into()))
         .title(names::MML)
         .min_inner_size(min_w, min_h)
         // 自绘标题栏：关掉系统装饰，最小化 / 最大化 / 关闭由前端 WindowControls 调下面的命令实现
         .decorations(false)
-        // 原生窗口背景铺暗色底，避免 webview 加载首帧白屏（与暗色主题 --bg 一致）
         .background_color(tauri::window::Color(0x14, 0x16, 0x1a, 0xff));
     let win = match geom {
         Some(g) => builder
@@ -548,6 +556,21 @@ pub fn on_window_event(window: &tauri::Window<tauri::Wry>, event: &tauri::Window
 ///
 /// 注意：必须保持 async：同步命令在 Windows 上跑在主线程，而窗口创建会阻塞
 /// 等待主线程，导致整个应用冻结（新窗口白屏、无法点击）。
+/// 各窗口的默认宽高（无历史几何时创建窗口用的尺寸，与 WINDOWS_INFO 同源）。
+///
+/// 前端 JS 回退路径（`createViaJs`）从这里取尺寸，前端注册表不再自带宽高。
+#[tauri::command]
+pub fn window_get_window_sizes() -> Vec<WindowSizeDto> {
+    WINDOWS_INFO
+        .iter()
+        .map(|(_, e)| WindowSizeDto {
+            kind: e.label.strip_prefix("mml-").unwrap_or(e.label).to_string(),
+            width: e.min_width,
+            height: e.min_height,
+        })
+        .collect()
+}
+
 #[tauri::command]
 pub async fn window_open_window(app: AppHandle, kind: String) -> Result<(), String> {
     let Some(uuid) = uuid_for_kind(&kind) else {
@@ -628,7 +651,9 @@ pub fn window_get_gui_config(window: WebviewWindow) -> GuiConfigDto {
 
 /// 保存 GUI 状态到 gui_config.json（前端 DTO 转内部 GuiConfig）
 #[tauri::command]
-pub fn window_save_gui_config(config: GuiConfigDto) -> Result<(), String> {
-    crate::gui_config::set(config.into());
+pub async fn window_save_gui_config(config: GuiConfigDto) -> Result<(), String> {
+    let new_config: crate::gui_config::GuiConfig = config.into();
+    crate::gui_config::set(new_config);
     Ok(())
 }
+

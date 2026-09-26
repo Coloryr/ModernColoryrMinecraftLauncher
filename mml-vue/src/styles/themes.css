@@ -266,3 +266,40 @@
   --accent-soft: rgba(192, 38, 211, 0.12);
   --accent-border: rgba(192, 38, 211, 0.42);
 }
+
+/* ============================================================
+   背景图模式（<html class="has-bg">，lib/appearance.ts 维护）：
+   主要表面转半透明，透出 App.vue 的 .app-bg 背景层。
+   颜色即上面主题块中的原值加 alpha，主题换色时这里要同步。
+   ============================================================ */
+
+html.has-bg {
+  --bg: rgba(20, 22, 26, 0.62);
+  --bg-side: rgba(26, 29, 35, 0.62);
+  --bg-card: rgba(34, 38, 46, 0.62);
+  --bg-hover: rgba(42, 47, 56, 0.62);
+  --border: rgba(46, 51, 61, 0.72);
+  /* 下拉框等浮层需要不透明底（半透明会透出下层文字） */
+  --bg-solid: #22262e;
+}
+
+html.has-bg[data-theme="Light"] {
+  --bg: rgba(238, 241, 245, 0.66);
+  --bg-side: rgba(247, 248, 250, 0.66);
+  --bg-card: rgba(255, 255, 255, 0.66);
+  --bg-hover: rgba(233, 236, 241, 0.66);
+  --border: rgba(216, 220, 227, 0.78);
+  --bg-solid: #ffffff;
+}
+
+/* 标题栏不参与背景图：保持不透明底色（has-bg 块里对应 --bg-side 的原色）。
+   .frame-head 是子窗口的 WindowFrame 标题栏，.topbar 是主窗口顶栏（兼作标题栏） */
+html.has-bg .frame-head,
+html.has-bg .topbar {
+  background: #1a1d23;
+}
+
+html.has-bg[data-theme="Light"] .frame-head,
+html.has-bg[data-theme="Light"] .topbar {
+  background: #f7f8fa;
+}

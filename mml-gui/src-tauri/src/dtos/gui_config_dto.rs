@@ -11,8 +11,8 @@ use serde::{Deserialize, Serialize};
 use mml_names::Lang;
 
 use crate::gui_config::{
-    CollectConfig, GuiConfig, HeadConfig, HeadType, MainWindowConfig, SidebarSide, Theme, ViewMode,
-    WindowMode,
+    CollectConfig, GuiConfig, HeadConfig, HeadType, MainWindowConfig, SidebarSide, SkinDisplay,
+    Theme, ViewMode, WindowMode,
 };
 
 /// 头像设置（前端 wire：camelCase，字段即 `head`）
@@ -71,6 +71,18 @@ pub struct GuiConfigDto {
     pub head: HeadConfigDto,
     /// 收藏界面设置
     pub collect: CollectConfigDto,
+    /// 界面字体族名（空串 = 默认字体栈）
+    pub font: String,
+    /// 皮肤显示模式：Skin2D / Skin3D
+    pub skin_display: SkinDisplay,
+    /// 背景图来源（文件路径 / 网址，空串 = 无背景图）
+    pub bg_source: String,
+    /// 背景图不透明度（%，5–100）
+    pub bg_opacity: u32,
+    /// 背景图模糊（px，0–40）
+    pub bg_blur: u32,
+    /// 背景图原始分辨率（%，10–100）
+    pub bg_native_size: u32,
 }
 
 impl From<GuiConfig> for GuiConfigDto {
@@ -97,6 +109,12 @@ impl From<GuiConfig> for GuiConfigDto {
                 resource_pack: c.collect.resource_pack,
                 shaderpack: c.collect.shaderpack,
             },
+            font: c.font,
+            skin_display: c.skin_display,
+            bg_source: c.bg_source,
+            bg_opacity: c.bg_opacity,
+            bg_blur: c.bg_blur,
+            bg_native_size: c.bg_native_size,
         }
     }
 }
@@ -125,6 +143,12 @@ impl From<GuiConfigDto> for GuiConfig {
                 resource_pack: d.collect.resource_pack,
                 shaderpack: d.collect.shaderpack,
             },
+            font: d.font,
+            skin_display: d.skin_display,
+            bg_source: d.bg_source,
+            bg_opacity: d.bg_opacity,
+            bg_blur: d.bg_blur,
+            bg_native_size: d.bg_native_size,
         }
     }
 }

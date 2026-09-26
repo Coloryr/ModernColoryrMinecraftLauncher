@@ -51,6 +51,7 @@ impl I18Lang for ZhCn {
             ErrorType::AuthFail(data) => format!("账户操作失败：{}", data),
             ErrorType::AuthNoProfile => String::from("账户操作错误，没有找到账户"),
             ErrorType::AuthTokenTimeout => String::from("账户令牌已过期，请重新登录"),
+            ErrorType::AuthServerNull => String::from("账户缺少服务器地址，请删除后重新添加"),
             ErrorType::OAuthGetTokenError(data) => format!("OAuth获取登录令牌失败：{}", data.error),
             ErrorType::OAuthGetTokenEmpty => String::from("OAuth没有获取到登录令牌"),
 

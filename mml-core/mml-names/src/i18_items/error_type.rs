@@ -126,6 +126,8 @@ pub enum ErrorType {
     AuthNoProfile,
     /// 登录密钥过期
     AuthTokenTimeout,
+    /// 账户缺少服务器地址（旧版数据未保存，需重新添加）
+    AuthServerNull,
 
     /// OAuth获取登录码错误
     OAuthGetTokenError(ErrorData),

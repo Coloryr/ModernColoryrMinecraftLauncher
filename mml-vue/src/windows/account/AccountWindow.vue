@@ -5,7 +5,7 @@ import WindowFrame from "../../components/ui/WindowFrame.vue";
 import BaseButton from "../../components/ui/BaseButton.vue";
 import BaseModal from "../../components/ui/BaseModal.vue";
 import SegmentedTabs from "../../components/ui/SegmentedTabs.vue";
-import { t } from "../../lib/i18n";
+import { t, tErr } from "../../lib/i18n";
 import { showToast } from "../../lib/toast";
 import AccountGrid from "./views/AccountGrid.vue";
 import AccountList from "./views/AccountList.vue";
@@ -20,7 +20,6 @@ import {
   removeAccount,
   refreshAccountToken,
   setCurrentAccount,
-  typeLabelKey,
 } from "../../lib/accountStore";
 import type { AccountStoreDto } from "../../lib/bindings";
 import { listen } from "@tauri-apps/api/event";
@@ -28,6 +27,7 @@ import { AccountOAuth, AccountOAuthState } from "../../lib/listens";
 import { commands } from "../../lib/bindings";
 import type { AccountOAuthDto, AccountOAuthStateDto } from "../../lib/bindings";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { openWindow } from "../windowManager";
 
 // 注意：不能用顶层 await —— 会让 <script setup> 变成 async setup，
 // App.vue 没有 <Suspense> 包裹，Vue 将不渲染该组件（窗口白屏）
@@ -105,17 +105,19 @@ interface AddField {
   key: string;
   labelKey: string;
   password?: boolean;
+  /** 可选字段（如 LittleSkin 的服务器地址：留空即官方站） */
+  optional?: boolean;
 }
 
 const ADD_FIELDS: Record<string, AddField[]> = {
   offline: [{ key: "name", labelKey: "account.name" }],
   microsoft: [],
   littleskin: [
-    { key: "server", labelKey: "account.server" },
     { key: "name", labelKey: "account.username" },
     { key: "pass", labelKey: "account.password", password: true },
   ],
   authlib: [
+    { key: "server", labelKey: "account.server" },
     { key: "name", labelKey: "account.username" },
     { key: "pass", labelKey: "account.password", password: true },
   ],
@@ -137,23 +139,38 @@ function onAddTypeChange(value: string) {
   addFields.value = {};
 }
 
-function confirmAdd() {
+/** 添加弹窗是否在处理中（防止重复提交） */
+const adding = ref(false);
+
+async function confirmAdd() {
+  if (adding.value) return;
   const fields = ADD_FIELDS[addType.value] ?? [];
-  if (fields.some((f) => !addFields.value[f.key]?.trim())) {
+  if (fields.some((f) => !f.optional && !addFields.value[f.key]?.trim())) {
     showToast(t("account.fieldsRequired"));
     return;
   }
 
-  if (addType.value === "microsoft") {
-    // 触发后端设备码流程，弹窗由 account-oauth 事件接管
-    loginMicrosoft();
-    return;
+  adding.value = true;
+  try {
+    if (addType.value === "microsoft") {
+      // 触发后端设备码流程，弹窗由 account-oauth 事件接管；失败提示后弹窗保留
+      await loginMicrosoft();
+    } else {
+      const server = (addFields.value.server ?? addFields.value.serverId)?.trim();
+      await addAccount(
+        addType.value,
+        addFields.value.name!.trim(),
+        server || undefined,
+        addFields.value.pass,
+      );
+      showAdd.value = false;
+      showToast(t("account.added"));
+    }
+  } catch (e) {
+    showToast(String(e));
+  } finally {
+    adding.value = false;
   }
-
-  const name = addFields.value.name?.trim() || "Player";
-  addAccount(addType.value, name);
-  showAdd.value = false;
-  showToast(t("account.added"));
 }
 
 // 微软授权弹窗：打开浏览器并切换到进度窗口
@@ -162,6 +179,30 @@ async function openBrowser() {
   showOauth.value = false;
   showOauthRun.value = true;
   oauthState.value = t("account.oauthState.waiting");
+}
+
+/** 复制到剪贴板：优先异步 Clipboard API，失败回退 execCommand */
+async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand("copy");
+    ta.remove();
+    return ok;
+  }
+}
+
+/** 点击登录码 / 网址复制 */
+async function copyOauthValue(value: string) {
+  if (!value) return;
+  showToast(await copyText(value) ? t("account.copied") : t("account.copyFail"));
 }
 
 /** 双击切换当前账户 */
@@ -183,8 +224,42 @@ function refreshToken(acc: AccountStoreDto) {
   showToast(t("account.refreshed"));
 }
 
+/** 重新登录：微软账户直接走设备码流程；其余类型弹窗重输密码重新认证 */
 function relogin(acc: AccountStoreDto) {
-  showToast(t("actions.wip", { name: acc.userName }));
+  if (acc.authType === "microsoft") {
+    loginMicrosoft().catch((e) => showToast(String(e)));
+    return;
+  }
+  reloginTarget.value = acc;
+  reloginFields.value = { server: acc.server ?? "", name: acc.userName, pass: "" };
+}
+
+const reloginTarget = ref<AccountStoreDto | null>(null);
+const reloginFields = ref({ server: "", name: "", pass: "" });
+
+/** 防止重复提交 */
+const relogining = ref(false);
+
+async function confirmRelogin() {
+  const acc = reloginTarget.value;
+  if (!acc || relogining.value) return;
+  if (!reloginFields.value.name.trim() || !reloginFields.value.pass.trim()) {
+    showToast(t("account.fieldsRequired"));
+    return;
+  }
+
+  relogining.value = true;
+  try {
+    // 同 uuid + 类型会覆盖旧账户数据，等效重新认证
+    const server = reloginFields.value.server.trim();
+    await addAccount(acc.authType, reloginFields.value.name.trim(), server || undefined, reloginFields.value.pass);
+    reloginTarget.value = null;
+    showToast(t("account.reloginOk"));
+  } catch (e) {
+    showToast(String(e));
+  } finally {
+    relogining.value = false;
+  }
 }
 
 // 取消微软登录：通知后端终止轮询并关闭弹窗
@@ -203,14 +278,51 @@ function confirmDelete() {
   deleteTarget.value = null;
 }
 
+// 编辑离线账户：改名 / 改 UUID（UUID 右边可一键随机）
+const editTarget = ref<AccountStoreDto | null>(null);
+const editFields = ref({ name: "", uuid: "" });
+const editing = ref(false);
+
+function openEdit(acc: AccountStoreDto) {
+  editTarget.value = acc;
+  editFields.value = { name: acc.userName, uuid: acc.uuid };
+}
+
+/** 随机 UUID v4（crypto.randomUUID 不可用时手动拼） */
+function randomUuid() {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    editFields.value.uuid = crypto.randomUUID();
+    return;
+  }
+  const hex = (n: number) =>
+    Array.from({ length: n }, () => Math.floor(Math.random() * 16).toString(16)).join("");
+  editFields.value.uuid = `${hex(8)}-${hex(4)}-4${hex(3)}-${hex(4)}-${hex(12)}`;
+}
+
+async function confirmEdit() {
+  const acc = editTarget.value;
+  if (!acc || editing.value) return;
+  if (!editFields.value.name.trim()) {
+    showToast(t("err.nameEmpty"));
+    return;
+  }
+  editing.value = true;
+  try {
+    await commands.account.editOffline(acc.uuid, editFields.value.name, editFields.value.uuid);
+    editTarget.value = null;
+    showToast(t("account.edited"));
+    loadAccounts();
+  } catch (e) {
+    showToast(tErr(e));
+  } finally {
+    editing.value = false;
+  }
+}
+
 const TYPE_OPTIONS = computed(() => [
   { value: "all", label: t("account.all") },
   ...ACCOUNT_TYPES.map((x) => ({ value: x.value, label: t(x.labelKey) })),
 ]);
-
-function typeLabel(acc: AccountStoreDto): string {
-  return t(typeLabelKey(acc.authType));
-}
 
 function tokenLabel(acc: AccountStoreDto): string {
   return acc.tokenStatus === "valid" ? t("account.tokenValid") : t("account.tokenExpired");
@@ -218,7 +330,7 @@ function tokenLabel(acc: AccountStoreDto): string {
 </script>
 
 <template>
-  <WindowFrame :title="t('account.manage')" @close="$emit('close')">
+  <WindowFrame :title="t('account.manage')" :body-fill="view === 'detail'" @close="$emit('close')">
     <!-- 工具栏 -->
     <div class="toolbar">
       <div class="toolbar-left">
@@ -237,23 +349,34 @@ function tokenLabel(acc: AccountStoreDto): string {
       </div>
       <div class="toolbar-right">
         <SegmentedTabs :model-value="view" :options="VIEW_OPTIONS" @update:model-value="view = $event as ViewMode" />
+        <!-- 皮肤查看从账户管理进入（不再放主页面顶栏） -->
+        <BaseButton size="sm" @click="openWindow('skin')">{{ t("account.viewSkin") }}</BaseButton>
         <BaseButton variant="accent" size="sm" @click="openAdd">＋ {{ t("account.add") }}</BaseButton>
       </div>
     </div>
 
-    <!-- 视图：平铺 / 列表 / 详情（见 views/ 目录） -->
-    <AccountGrid v-if="view === 'grid'" :accounts="filtered" :current-uuid="currentAccount?.uuid ?? ''"
-      :type-label="typeLabel" :seed-of="seedOf" @switch="switchAccount" @refresh="refreshToken" @relogin="relogin"
-      @delete="deleteTarget = $event" />
-    <AccountList v-else-if="view === 'list'" :accounts="filtered" :current-uuid="currentAccount?.uuid ?? ''"
-      :type-label="typeLabel" :token-label="tokenLabel" :seed-of="seedOf" @switch="switchAccount"
-      @refresh="refreshToken" @relogin="relogin" @delete="deleteTarget = $event" />
-    <AccountDetail v-else :accounts="filtered" :current-uuid="currentAccount?.uuid ?? ''" :type-label="typeLabel"
-      :token-label="tokenLabel" @switch="switchAccount" @refresh="refreshToken" @relogin="relogin"
-      @delete="deleteTarget = $event" />
+    <!-- 视图：平铺 / 列表 / 详情（见 views/ 目录）；详情模式下视图区自己管理滚动 -->
+    <div class="view-area" :class="{ fill: view === 'detail' }">
+      <AccountGrid v-if="view === 'grid'" :accounts="filtered" :current-uuid="currentAccount?.uuid ?? ''"
+        @switch="switchAccount" @refresh="refreshToken" @relogin="relogin"
+        @edit="openEdit" @delete="deleteTarget = $event" />
+      <AccountList v-else-if="view === 'list'" :accounts="filtered" :current-uuid="currentAccount?.uuid ?? ''"
+        :token-label="tokenLabel" :seed-of="seedOf" @switch="switchAccount"
+        @refresh="refreshToken" @relogin="relogin" @edit="openEdit" @delete="deleteTarget = $event" />
+      <AccountDetail v-else :accounts="filtered" :current-uuid="currentAccount?.uuid ?? ''"
+        :token-label="tokenLabel" @switch="switchAccount" @refresh="refreshToken" @relogin="relogin"
+        @edit="openEdit" @delete="deleteTarget = $event" />
+    </div>
 
-    <!-- 添加账户弹窗（按类型显示不同输入框） -->
-    <BaseModal v-if="showAdd" :title="t('account.addTitle')" :closable="false" @close="showAdd = false">
+    <!-- 添加账户弹窗（按类型显示不同输入框）：不遮标题栏、点空白不关闭 -->
+    <BaseModal
+      v-if="showAdd"
+      :title="t('account.addTitle')"
+      :closable="false"
+      below-titlebar
+      :overlay-close="false"
+      @close="showAdd = false"
+    >
       <label class="field-label">{{ t("account.type") }}</label>
       <select v-model="addType" class="field-select"
         @change="onAddTypeChange(($event.target as HTMLSelectElement).value)">
@@ -275,12 +398,31 @@ function tokenLabel(acc: AccountStoreDto): string {
     </BaseModal>
 
     <!-- 微软登录：请求码 + 地址 + 打开浏览器 / 取消 -->
-    <BaseModal v-if="showOauth" :title="t('account.oauthTitle')" :closable="false" @close="cancelLogin">
+    <BaseModal
+      v-if="showOauth"
+      :title="t('account.oauthTitle')"
+      :closable="false"
+      below-titlebar
+      :overlay-close="false"
+      @close="cancelLogin"
+    >
       <label class="field-label">{{ t("account.oauthCode") }}</label>
-      <div class="oauth-code">{{ oauthCode }}</div>
+      <div class="oauth-code copyable" :title="t('account.copy')" @click="copyOauthValue(oauthCode)">
+        {{ oauthCode }}
+        <svg class="copy-ico" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="9" y="9" width="12" height="12" rx="2" />
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+        </svg>
+      </div>
 
       <label class="field-label">{{ t("account.oauthUrl") }}</label>
-      <div class="oauth-url">{{ oauthUrl }}</div>
+      <div class="oauth-url copyable" :title="t('account.copy')" @click="copyOauthValue(oauthUrl)">
+        <span class="oauth-url-text">{{ oauthUrl }}</span>
+        <svg class="copy-ico" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="9" y="9" width="12" height="12" rx="2" />
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+        </svg>
+      </div>
 
       <p class="hint">{{ t("account.oauthHint") }}</p>
 
@@ -290,7 +432,14 @@ function tokenLabel(acc: AccountStoreDto): string {
       </div>
     </BaseModal>
 
-    <BaseModal v-if="showOauthRun" :title="t('account.oauthTitle')" :closable="false" @close="cancelLogin">
+    <BaseModal
+      v-if="showOauthRun"
+      :title="t('account.oauthTitle')"
+      :closable="false"
+      below-titlebar
+      :overlay-close="false"
+      @close="cancelLogin"
+    >
       <p class="hint">{{ oauthState }}</p>
 
       <div class="modal-actions">
@@ -299,11 +448,67 @@ function tokenLabel(acc: AccountStoreDto): string {
     </BaseModal>
 
     <!-- 删除确认 -->
-    <BaseModal v-if="deleteTarget" :title="t('account.delete')" @close="deleteTarget = null">
+    <BaseModal v-if="deleteTarget" :title="t('account.delete')" below-titlebar @close="deleteTarget = null">
       <p class="delete-tip">{{ t("account.deleteConfirm", { name: deleteTarget.userName }) }}</p>
       <div class="modal-actions">
         <BaseButton @click="deleteTarget = null">{{ t("add.cancel") }}</BaseButton>
         <BaseButton variant="danger" @click="confirmDelete">{{ t("actions.confirm") }}</BaseButton>
+      </div>
+    </BaseModal>
+
+    <!-- 重新登录（非微软账户）：重输密码重新认证，服务器地址预填 -->
+    <BaseModal
+      v-if="reloginTarget"
+      :title="t('account.reloginTitle')"
+      :closable="false"
+      below-titlebar
+      :overlay-close="false"
+      @close="reloginTarget = null"
+    >
+      <template v-if="reloginTarget.authType === 'nide8'">
+        <label class="field-label">{{ t("account.serverId") }}</label>
+        <input v-model="reloginFields.server" class="field-input" spellcheck="false" />
+      </template>
+      <template v-else>
+        <label class="field-label">{{ t("account.server") }}</label>
+        <input v-model="reloginFields.server" class="field-input" spellcheck="false" />
+      </template>
+
+      <label class="field-label">{{ t("account.username") }}</label>
+      <input v-model="reloginFields.name" class="field-input" spellcheck="false" />
+
+      <label class="field-label">{{ t("account.password") }}</label>
+      <input v-model="reloginFields.pass" class="field-input" type="password" @keyup.enter="confirmRelogin" />
+
+      <p class="hint">{{ t("account.reloginHint") }}</p>
+
+      <div class="modal-actions">
+        <BaseButton @click="reloginTarget = null">{{ t("add.cancel") }}</BaseButton>
+        <BaseButton variant="primary" @click="confirmRelogin">{{ t("actions.confirm") }}</BaseButton>
+      </div>
+    </BaseModal>
+
+    <!-- 编辑离线账户：改名 / 改 UUID -->
+    <BaseModal
+      v-if="editTarget"
+      :title="t('account.editOffline')"
+      :closable="false"
+      below-titlebar
+      :overlay-close="false"
+      @close="editTarget = null"
+    >
+      <label class="field-label">{{ t("account.name") }}</label>
+      <input v-model="editFields.name" class="field-input" spellcheck="false" />
+
+      <label class="field-label">{{ t("account.uuid") }}</label>
+      <div class="uuid-row">
+        <input v-model="editFields.uuid" class="field-input grow" spellcheck="false" />
+        <BaseButton size="sm" @click="randomUuid">{{ t("account.randomUuid") }}</BaseButton>
+      </div>
+
+      <div class="modal-actions">
+        <BaseButton @click="editTarget = null">{{ t("add.cancel") }}</BaseButton>
+        <BaseButton variant="primary" @click="confirmEdit">{{ t("actions.confirm") }}</BaseButton>
       </div>
     </BaseModal>
   </WindowFrame>
@@ -319,6 +524,15 @@ function tokenLabel(acc: AccountStoreDto): string {
   margin-bottom: 14px;
 }
 
+/* 详情模式下视图区占满剩余高度，滚动交给表格容器 */
+.view-area.fill {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
 .toolbar-left {
   display: flex;
   align-items: center;
@@ -329,6 +543,13 @@ function tokenLabel(acc: AccountStoreDto): string {
   display: flex;
   align-items: center;
   gap: 10px;
+}
+
+/* UUID 输入 + 随机按钮 */
+.uuid-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .toolbar-select {
@@ -407,6 +628,34 @@ function tokenLabel(acc: AccountStoreDto): string {
   border-radius: 10px;
   padding: 10px 14px;
   word-break: break-all;
+}
+
+/* 登录码 / 网址可点击复制 */
+.copyable {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  cursor: pointer;
+  user-select: text;
+  transition: border-color 0.15s;
+}
+
+.copyable:hover {
+  border-color: var(--accent);
+}
+
+.oauth-url-text {
+  text-align: left;
+}
+
+.copy-ico {
+  flex-shrink: 0;
+  opacity: 0.55;
+}
+
+.copyable:hover .copy-ico {
+  opacity: 1;
 }
 
 .hint {

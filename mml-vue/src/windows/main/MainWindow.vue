@@ -14,7 +14,6 @@ import {
 } from "../../lib/api";
 import { t, tErr } from "../../lib/i18n";
 import { showToast } from "../../lib/toast";
-import { theme, toggleTheme } from "../../lib/theme";
 import { openWindow } from "../windowManager";
 import {
   selectedInstance,
@@ -918,10 +917,7 @@ async function doDelete() {
 const features: Array<{ id: FeatureId; icon: string }> = [
   { id: "settings", icon: "gear" },
   { id: "stats", icon: "chart" },
-  { id: "skin", icon: "user" },
-  { id: "download", icon: "download" },
   { id: "collect", icon: "star" },
-  { id: "log", icon: "log" },
   { id: "help", icon: "book" },
 ];
 
@@ -1212,12 +1208,10 @@ onMounted(async () => {
       <MainTopbar
         :features="features"
         :news-active="newsActive"
-        :theme="theme"
         :current-account="currentAccount"
         :accounts="accounts"
         @toggle-news="toggleNews"
         @feature="openWindow"
-        @toggle-theme="toggleTheme"
         @update:account="onAccountChange"
       />
 
@@ -2166,7 +2160,8 @@ onMounted(async () => {
   left: 50%;
   bottom: 18px;
   transform: translateX(-50%);
-  z-index: 260;
+  /* 低于账户下拉菜单（200）：菜单展开时悬浮卡片不能压住列表 */
+  z-index: 150;
   display: flex;
   align-items: center;
   gap: 12px;

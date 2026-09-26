@@ -530,6 +530,23 @@ impl Client {
             .map_err(map_err)?;
         handle_response(resp).await
     }
+
+    /// 发送 POST 请求，表单请求体，返回原始响应
+    ///
+    /// 用于需要对非 2xx 响应自行解析 body 的场景（如 OAuth 设备码轮询中
+    /// 400 + `authorization_pending` 属正常中间态，不应视为请求失败）
+    pub async fn post_form_get_req(
+        &self,
+        url: &str,
+        params: &[(&str, &str)],
+    ) -> CoreResult<reqwest::Response> {
+        self.inner
+            .post(url)
+            .form(params)
+            .send()
+            .await
+            .map_err(map_err)
+    }
 }
 
 impl Default for Client {

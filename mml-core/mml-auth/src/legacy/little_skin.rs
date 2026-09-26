@@ -103,7 +103,10 @@ impl LoginObj {
         let mut server = if self.auth_type == AuthType::LittleSkin {
             String::from(urls::LITTLE_SKIN_URL)
         } else {
-            self.text1.clone().unwrap()
+            self.text1
+                .clone()
+                .filter(|s| !s.is_empty())
+                .ok_or(ErrorType::AuthServerNull)?
         };
 
         server.push_str("api/yggdrasil");
@@ -127,7 +130,10 @@ impl LoginObj {
         let mut server = if self.auth_type == AuthType::LittleSkin {
             String::from(urls::LITTLE_SKIN_URL)
         } else {
-            self.text1.clone().unwrap()
+            self.text1
+                .clone()
+                .filter(|s| !s.is_empty())
+                .ok_or(ErrorType::AuthServerNull)?
         };
 
         server.push_str("api/yggdrasil");

@@ -42,7 +42,8 @@ pub mod nide8;
 ///
 /// 当认证服务器返回多个可选角色时，通过此 trait 弹窗让用户选择
 /// 要登录的账户。
-pub trait GuiSelectHandel {
+/// `Send` 约束：登录在异步命令里执行，Tauri 要求 future 为 Send。
+pub trait GuiSelectHandel: Send {
     /// 让用户从多个账户中选择一个
     ///
     /// # 参数
@@ -63,6 +64,23 @@ pub struct LegacyLoginRes {
     pub auth: LoginObj,
     /// 可选的账户列表（当服务器返回多个角色时为 `Some`）
     pub logins: Option<Vec<LoginObj>>,
+}
+
+/// 把 Yggdrasil 服务器的 HTTP 错误响应转成可读的登录失败原因
+///
+/// 服务器拒绝时（密码错误等）返回 403/400 + JSON body（含 errorMessage，一般已本地化），
+/// 默认的 HttpError 会把整段 JSON 原文透给界面，这里解析出 errorMessage 单独透出；
+/// body 不是合法的 Yggdrasil 错误结构时保持原错误
+fn map_auth_error(err: ErrorType) -> ErrorType {
+    let ErrorType::HttpError(data) = &err else {
+        return err;
+    };
+    if let Ok(res) = serde_json::from_str::<AuthenticateResObj>(&data.error)
+        && let Some(msg) = res.error_message
+    {
+        return ErrorType::AuthFail(msg);
+    }
+    err
 }
 
 /// 向 Yggdrasil 认证服务器发起登录请求
@@ -101,7 +119,8 @@ pub async fn authenticate(
 
     let obj = mml_net::get_login_client()
         .post_json_get_json::<_, AuthenticateResObj>(&server, &obj)
-        .await?;
+        .await
+        .map_err(map_auth_error)?;
 
     if let Some(data) = obj.error_message {
         Err(ErrorType::AuthFail(data))
@@ -202,7 +221,8 @@ pub async fn refresh(server: &String, login: &mut LoginObj, select: bool) -> Cor
 
     let obj = mml_net::get_login_client()
         .post_json_get_json::<_, AuthenticateResObj>(&server, &obj)
-        .await?;
+        .await
+        .map_err(map_auth_error)?;
 
     if let Some(data) = obj.error_message {
         Err(ErrorType::AuthFail(data))

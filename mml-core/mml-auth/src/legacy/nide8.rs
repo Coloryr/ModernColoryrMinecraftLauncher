@@ -48,7 +48,10 @@ impl LoginObj {
     ///
     /// 刷新成功返回 `Ok(())`（账户凭据已被更新），令牌失效返回 `ErrorType::AuthTokenTimeout`，被取消时返回取消错误
     pub async fn refresh_nide8(&mut self, cancel: CancellationToken) -> CoreResult<()> {
-        let server = String::from(urls::NIDE8_URL) + &self.text1.clone().unwrap();
+        let Some(server_id) = self.text1.clone().filter(|s| !s.is_empty()) else {
+            return Err(ErrorType::AuthServerNull);
+        };
+        let server = String::from(urls::NIDE8_URL) + &server_id;
 
         if legacy::validate(&server, self).await? {
             if cancel.is_cancelled() {

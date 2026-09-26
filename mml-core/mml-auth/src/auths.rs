@@ -188,6 +188,15 @@ pub fn set_current(user: Option<UserKeyObj>) {
     save_select();
 }
 
+/// 检查是否拥有正版登录账户
+pub fn check_online_user() -> bool {
+    AUTHS
+        .read()
+        .unwrap()
+        .iter()
+        .any(|(key, _)| matches!(key.auth_type, AuthType::OAuth))
+}
+
 impl LoginObj {
     /// 将当前账户保存到全局存储并持久化到磁盘（相同键覆盖更新）
     pub fn save(&self) {

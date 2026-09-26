@@ -37,6 +37,7 @@ export async function loadAccounts(): Promise<void> {
   }
 }
 
+
 /** 设置当前使用账户 */
 export async function setCurrentAccount(acc: AccountStoreDto) {
   try {
@@ -72,25 +73,23 @@ export async function refreshAccountToken(uuid: string) {
   if (acc) acc.tokenStatus = "valid";
 }
 
-/** 添加账户（真实由 Rust 创建），返回创建的账户；失败返回 null */
-export async function addAccount(type: string, name: string): Promise<AccountStoreDto | null> {
-  try {
-    const acc = await commands.account.addAccount(name, type);
-    accounts.value.push(acc);
-    if (!currentAccount.value) currentAccount.value = acc;
-    return acc;
-  } catch {
-    return null;
-  }
+/** 添加账户（真实由 Rust 创建），返回创建的账户；失败抛出后端错误文案 */
+export async function addAccount(
+  type: string,
+  name: string,
+  server?: string,
+  password?: string,
+): Promise<AccountStoreDto> {
+  const acc = await commands.account.addAccount(name, type, server ?? null, password ?? null);
+  accounts.value.push(acc);
+  if (!currentAccount.value) currentAccount.value = acc;
+  return acc;
 }
 
-/** 微软登录：触发后端设备码流程；弹窗交互与结果经 account-oauth / account-oauth-state 事件通知 */
+/** 微软登录：触发后端设备码流程；弹窗交互与结果经 account-oauth / account-oauth-state 事件通知。
+ *  失败时抛出后端错误（如网络不通），由调用方提示 */
 export async function loginMicrosoft(): Promise<void> {
-  try {
-    await commands.account.addAccount("", "microsoft");
-  } catch {
-    /* 进度与错误经 account-oauth-state 事件通知 */
-  }
+  await commands.account.addAccount("", "microsoft", null, null);
 }
 
 // 跨窗口同步：某个窗口改了账户后，其它窗口重新加载

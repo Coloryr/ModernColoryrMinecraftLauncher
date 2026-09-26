@@ -1,9 +1,10 @@
 //! 图像管理：`mml-image` 自定义协议的后端
 //!
 //! 前端用 `image_base_url()` 拼地址，请求经 [`url_image`] 按首段路由：
-//! `instance`（实例图标）/ `skin`（头像）/ `skin2d` / `skinraw` / `cape2d` / `caperaw`
-//! （账户皮肤与披风）/ `icon`（远程图片，带内存 + 磁盘 + ETag 缓存）/
-//! `block`（方块贴图）/ `screenshot`（实例截图）。
+//! `instance`（实例图标）/ `skin`（头像）/ `skin2d` / `skin2db` / `skin3d` /
+//! `skinraw` / `cape2d` / `caperaw`（账户皮肤与披风）/
+//! `icon`（远程图片，带内存 + 磁盘 + ETag 缓存）/
+//! `block`（方块贴图）/ `item`（物品贴图）/ `screenshot`（实例截图）。
 
 use std::{
     collections::HashMap,
@@ -21,7 +22,7 @@ use mml_game::player_skin;
 use mml_names::names;
 use mml_net::mojang_api;
 use mml_skin::SkinType;
-use mml_skin_draw::{cape_2d_draw, head_2d_draw, head_3d_draw, skin_2d_draw};
+use mml_skin_draw::{cape_2d_draw, head_2d_draw, head_3d_draw, skin_2d_draw, skin_3d_draw};
 use mml_sys::path_helper;
 use tiny_skia::Pixmap;
 use tauri::{
@@ -42,9 +43,9 @@ static INSTANCE_IMAGE: LazyLock<RwLock<HashMap<Uuid, Vec<u8>>>> =
 static SKIN_IMAGE: LazyLock<RwLock<HashMap<UserKeyObj, Vec<u8>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 /// 账户头像（按配置类型渲染）内存缓存
-static HEAD_IMAGE: LazyLock<RwLock<HashMap<UserKeyObj, Vec<u8>>>> =
+static HEAD_IMAGE: LazyLock<RwLock<HashMap<(UserKeyObj, String), Vec<u8>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
-/// 账户皮肤全身 2D 图内存缓存（键带皮肤类型段）
+/// 账户皮肤全身渲染图内存缓存（键带风格 + 皮肤类型段）
 static SKIN2D_IMAGE: LazyLock<RwLock<HashMap<(UserKeyObj, String), Vec<u8>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 /// 账户皮肤原图 PNG 内存缓存
@@ -244,6 +245,10 @@ async fn load_skin_image(uri: &[&str], res: UriSchemeResponder) {
         return;
     };
 
+    // 缓存键带上头像渲染配置：切换头像模式 / 旋转角度后立即出新图而不是旧缓存
+    let head = gui_config::get().head;
+    let key = (key, format!("{:?}/{}/{}", head.head_type, head.x, head.y));
+
     {
         let image = HEAD_IMAGE.read().unwrap().get(&key).cloned();
         if let Some(data) = image {
@@ -294,10 +299,21 @@ async fn resolve_skin_files(uri: &[&str]) -> Option<SkinFiles> {
     })
 }
 
-/// 皮肤全身2D平面图（skin_2d_draw_typea，128×256）
+/// 皮肤全身渲染风格（路由首段决定）
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum SkinStyle {
+    /// 2D 展开图（TypeA，128×256）
+    Flat2DA,
+    /// 2D 大图（TypeB，272×532）
+    Flat2DB,
+    /// 3D 等距全身图（skin_3d_draw，400×400）
+    Iso3D,
+}
+
+/// 皮肤全身渲染图（skin2d / skin2db / skin3d 路由共用）
 ///
 /// 第4段为皮肤类型：`auto`（自动检测，可省略）/ `old`（1.7旧版）/ `new`（1.8新版）/ `slim`（纤细）
-async fn load_skin2d_image(uri: &[&str], res: UriSchemeResponder) {
+async fn load_skin_render_image(uri: &[&str], res: UriSchemeResponder, style: SkinStyle) {
     if uri.len() != 3 && uri.len() != 4 {
         send_bad(res);
         return;
@@ -312,7 +328,7 @@ async fn load_skin2d_image(uri: &[&str], res: UriSchemeResponder) {
         send_bad(res);
         return;
     };
-    let key = (files.key, skin_type.to_string());
+    let key = (files.key, format!("{style:?}/{skin_type}"));
     let Some(file) = files.skin else {
         send_bad(res);
         return;
@@ -330,8 +346,13 @@ async fn load_skin2d_image(uri: &[&str], res: UriSchemeResponder) {
         send_bad(res);
         return;
     };
-    let Some(image) = skin_2d_draw::skin_2d_draw_typea(&bitmap, parse_skin_type(skin_type).flatten())
-    else {
+    let st = parse_skin_type(skin_type).flatten();
+    let image = match style {
+        SkinStyle::Flat2DA => skin_2d_draw::skin_2d_draw_typea(&bitmap, st),
+        SkinStyle::Flat2DB => skin_2d_draw::skin_2d_draw_typeb(&bitmap, st),
+        SkinStyle::Iso3D => skin_3d_draw::draw_skin_3d_typea(&bitmap, st),
+    };
+    let Some(image) = image else {
         send_bad(res);
         return;
     };
@@ -623,6 +644,24 @@ fn load_block_image(uri: &[&str], res: UriSchemeResponder) {
     }
 }
 
+/// 物品贴图（`mml-image/item/<物品ID>`）：与方块同策略，
+/// PNG 直接读盘透传，不进内存缓存——重渲染后立即生效；
+/// webview 自身的缓存由 URL 上的 `?v=<版本>` 破掉
+fn load_item_image(uri: &[&str], res: UriSchemeResponder) {
+    if uri.len() != 2 {
+        send_bad(res);
+        return;
+    }
+    let Some(file) = mml_tex_draw::get_item_path(uri[1]) else {
+        send_bad(res);
+        return;
+    };
+    match path_helper::read_byte(&file) {
+        Ok(data) => send_png(res, data),
+        Err(_) => send_bad(res),
+    }
+}
+
 /// 实例图标内存缓存失效（实例图标被外部更换后调用，让下次请求重读磁盘）
 pub fn clear_instance_image(uuid: &Uuid) {
     INSTANCE_IMAGE.write().unwrap().remove(uuid);
@@ -748,7 +787,11 @@ pub async fn url_image(req: Request<Vec<u8>>, res: UriSchemeResponder) {
     } else if image_type == "skin" {
         load_skin_image(&uri, res).await;
     } else if image_type == "skin2d" {
-        load_skin2d_image(&uri, res).await;
+        load_skin_render_image(&uri, res, SkinStyle::Flat2DA).await;
+    } else if image_type == "skin2db" {
+        load_skin_render_image(&uri, res, SkinStyle::Flat2DB).await;
+    } else if image_type == "skin3d" {
+        load_skin_render_image(&uri, res, SkinStyle::Iso3D).await;
     } else if image_type == "skinraw" {
         load_skinraw_image(&uri, res).await;
     } else if image_type == "caperaw" {
@@ -759,6 +802,8 @@ pub async fn url_image(req: Request<Vec<u8>>, res: UriSchemeResponder) {
         load_icon_image(&uri, res).await;
     } else if image_type == "block" {
         load_block_image(&uri, res);
+    } else if image_type == "item" {
+        load_item_image(&uri, res);
     } else if image_type == "screenshot" {
         load_screenshot_image(&uri, res);
     } else {
