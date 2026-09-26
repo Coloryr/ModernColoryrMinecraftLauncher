@@ -514,6 +514,7 @@ async function removeJava(name: string) {
               { value: 'Head2DA', label: t('winSettings.headType2DA') },
               { value: 'Head2DB', label: t('winSettings.headType2DB') },
               { value: 'Head3DA', label: t('winSettings.headType3DA') },
+              { value: 'Head3DC', label: t('winSettings.headType3DC') },
               { value: 'Head3DB', label: t('winSettings.headType3DB') },
             ]"
             @update:model-value="(v) => setHeadConfig(v as HeadType)"

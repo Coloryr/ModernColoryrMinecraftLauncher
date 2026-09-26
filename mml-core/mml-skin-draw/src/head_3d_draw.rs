@@ -113,11 +113,11 @@ static SOURCE_VERTICES: [[f32; 2]; 48] = [
     [1.0, 1.0], [0.0, 1.0], [0.0, 0.0], [1.0, 0.0], // 前面
 ];
 
-/// 创建模型旋转矩阵与完整变换矩阵
+/// 创建固定缩放 / 平移、可指定角度的模型变换矩阵
 ///
 /// - `pitch`: 俯仰角（度，负 = 面朝下视角 / 俯视，正 = 面朝上 / 仰视）
 /// - `yaw`: 偏航角（度）
-fn create_tran(pitch: f32, yaw: f32) -> (Mat4, Mat4) {
+fn create_tran(pitch: f32, yaw: f32) -> Mat4 {
     let roty = Mat4::from_rotation_y(yaw * PI / 180.0);
     let rotx = Mat4::from_rotation_x(pitch * PI / 180.0);
 
@@ -125,7 +125,7 @@ fn create_tran(pitch: f32, yaw: f32) -> (Mat4, Mat4) {
 
     let tran = Mat4::from_translation(Vec3::new(200.0, 200.0, 0.0));
 
-    (rotx * roty, tran * scale * rotx * roty)
+    tran * scale * rotx * roty
 }
 
 /// 投影一个顶点到屏幕坐标
@@ -238,7 +238,6 @@ pub(crate) fn fill_triangle(
 /// - `pixmap`: 目标位图（超采样尺寸）
 /// - `texture`: 皮肤贴图
 /// - `indices` / `face_pos`: 面的绘制顺序（几何顶点 + 贴图位置，按远 → 近排列）
-/// - `visible`: 每个面是否参与绘制（背面剔除）
 /// - `tran`: 模型变换矩阵
 /// - `enable_z`: 是否启用伪透视（按深度缩放）
 /// - `texel_eps`: 贴图坐标向块内收缩的纹素量（0 = 不收缩）
@@ -248,7 +247,6 @@ fn draw_texture_faces(
     texture: &Pixmap,
     indices: &[usize; 48],
     face_pos: &[[i32; 2]; 12],
-    visible: &[bool; 12],
     tran: &Mat4,
     enable_z: bool,
     texel_eps: f32,
@@ -260,10 +258,6 @@ fn draw_texture_faces(
     const TRI_ORDER: [usize; 6] = [0, 1, 2, 0, 2, 3];
 
     for face in 0..face_count {
-        if !visible[face] {
-            continue;
-        }
-
         let base = face * 4;
         let pos = face_pos[face];
 
@@ -335,19 +329,15 @@ pub(crate) fn downsample(src: &Pixmap, factor: u32) -> Option<Pixmap> {
 /// 渲染 3D 头像（固定角度），输出 `SIZE` x `SIZE`
 ///
 /// - `indices` / `face_pos`: 面的绘制顺序（几何顶点 + 贴图位置，按远 → 近排列）
-/// - `rot`: 模型旋转矩阵（用于背面剔除）
 /// - `tran`: 模型变换矩阵
-/// - `enable_z`: 是否启用伪透视（用质心法做背面剔除）
-/// - `cull`: 是否剔除背面
+/// - `enable_z`: 是否启用伪透视（按深度缩放）
 /// - `texel_eps`: 贴图坐标向块内收缩的纹素量（0 = 不收缩，保持参考实现输出）
 fn draw_head(
     image: &Pixmap,
     indices: &[usize; 48],
     face_pos: &[[i32; 2]; 12],
-    rot: &Mat4,
     tran: &Mat4,
     enable_z: bool,
-    cull: bool,
     texel_eps: f32,
 ) -> Option<Pixmap> {
     let scale = SUPERSAMPLE as f32;
@@ -356,74 +346,36 @@ fn draw_head(
     // 新建的位图是全透明的，与旧实现 clear(透明) 一致
     let mut pixmap = Pixmap::new(size, size)?;
 
-    // 背面剔除：立方体中心在原点，面质心方向即外法向，旋转后 z < 0 的面朝向
-    // 观察者。被挡的面（含顶层被挡面）不再参与绘制，避免它们从轮廓边缘
-    // 露出形成细线；同时与参考实现行为一致（被挡面本来就会被可见面盖住）
-    let mut visible = [true; 12];
-    if cull {
-        for (face, is_visible) in visible.iter_mut().enumerate() {
-            let base = face * 4;
-            let mut center = Vec3::ZERO;
-            for i in 0..4 {
-                let v = CUBE_VERTICES[indices[base + i]];
-                center += Vec3::from_array(v);
-            }
-            center /= 4.0;
-
-            let normal = *rot * Vec4::new(center.x, center.y, center.z, 0.0);
-            *is_visible = normal.z < 0.0;
-        }
-    }
-
-    draw_texture_faces(
-        &mut pixmap,
-        image,
-        indices,
-        face_pos,
-        &visible,
-        tran,
-        enable_z,
-        texel_eps,
-        scale,
-    );
-
-    // TEMP：输出超采样原始图供排查细线，验证后删除
-    if std::env::var("MML_TEMP_DUMP_SS").is_ok() {
-        std::fs::create_dir_all("../../target/temp").unwrap();
-        pixmap.save_png("../../target/temp/head_ss.png").unwrap();
-    }
+    draw_texture_faces(&mut pixmap, image, indices, face_pos, tran, enable_z, texel_eps, scale);
 
     downsample(&pixmap, SUPERSAMPLE)
 }
 
-/// 渲染固定角度的 3D 头像（无伪透视）
+/// 渲染固定角度的 3D 头像（面朝上 / 仰视，无伪透视）
 ///
 /// 绘制顺序用 `CUBE_INDICES_UP` / `FACE_POS_UP`：与面朝下视角相比
 /// 顶 / 底面的远近对调，被挡的顶面先画、可见的底面后画
 ///
 /// - `image`: 皮肤贴图
-/// - `up`: true = 面朝上视角（仰视），false = 面朝下视角（俯视）
 ///
 /// # 返回值
 ///
 /// 返回 `SIZE` x `SIZE` 的渲染结果，分配失败时返回 `None`
-pub fn draw_head_3d_typea(image: &Pixmap, up: bool) -> Option<Pixmap> {
-    let (rot, tran) = create_tran(if up { 30.0 } else { -30.0 }, 45.0);
-    let (indices, face_pos) = if up {
-        (&CUBE_INDICES_UP, &FACE_POS_UP)
-    } else {
-        (&CUBE_INDICES, &FACE_POS)
-    };
-    draw_head(
-        image,
-        indices,
-        face_pos,
-        &rot,
-        &tran,
-        false,
-        false,
-        if up { 0.001 } else { 0.0 },
-    )
+pub fn draw_head_3d_typea_up(image: &Pixmap) -> Option<Pixmap> {
+    let tran = create_tran(30.0, 45.0);
+    draw_head(image, &CUBE_INDICES_UP, &FACE_POS_UP, &tran, false, 0.001)
+}
+
+/// 渲染固定角度的 3D 头像（面朝下 / 俯视，无伪透视）
+///
+/// - `image`: 皮肤贴图
+///
+/// # 返回值
+///
+/// 返回 `SIZE` x `SIZE` 的渲染结果，分配失败时返回 `None`
+pub fn draw_head_3d_typea_down(image: &Pixmap) -> Option<Pixmap> {
+    let tran = create_tran(-30.0, 45.0);
+    draw_head(image, &CUBE_INDICES, &FACE_POS, &tran, false, 0.0)
 }
 
 /// 渲染可指定角度的 3D 头像（带伪透视）
@@ -436,7 +388,7 @@ pub fn draw_head_3d_typea(image: &Pixmap, up: bool) -> Option<Pixmap> {
 ///
 /// 返回 `SIZE` x `SIZE` 的渲染结果，分配失败时返回 `None`
 pub fn draw_head_3d_typeb(image: &Pixmap, x: f32, y: f32) -> Option<Pixmap> {
-    let (rot, tran) = create_tran(-x, y);
-    draw_head(image, &CUBE_INDICES, &FACE_POS, &rot, &tran, true, false, 0.0)
+    let tran = create_tran(-x, y);
+    draw_head(image, &CUBE_INDICES, &FACE_POS, &tran, true, 0.0)
 }
 

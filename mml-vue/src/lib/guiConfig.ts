@@ -27,7 +27,7 @@ export function normalizeViewMode(value: string | null | undefined): ViewMode {
 
 /** 把任意值规范成合法的头像类型（非法 / 缺省 → Head2DA） */
 export function normalizeHeadType(value: string | null | undefined): HeadType {
-  return value === "Head3DA" || value === "Head3DB" || value === "Head2DB" ? value : "Head2DA";
+  return value === "Head3DA" || value === "Head3DB" || value === "Head3DC" || value === "Head2DB" ? value : "Head2DA";
 }
 
 /** 主窗口配置（对应 Rust MainWindowConfig，wire 为 mainWindow） */
@@ -43,11 +43,11 @@ export interface MainWindowConfig {
 }
 
 /** 头像类型（枚举值即 Rust 变体名） */
-export type HeadType = "Head2DA" | "Head3DA" | "Head3DB" | "Head2DB";
+export type HeadType = "Head2DA" | "Head3DA" | "Head3DB" | "Head3DC" | "Head2DB";
 
 /** 头像设置（对应 Rust HeadConfig，wire 为 head） */
 export interface HeadConfig {
-  /** Head2DA / Head3DA / Head3DB / Head2DB */
+  /** Head2DA / Head3DA / Head3DB / Head3DC / Head2DB */
   headType: HeadType;
   /** 3D 旋转 X */
   x: number;
