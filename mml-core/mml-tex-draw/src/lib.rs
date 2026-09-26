@@ -341,6 +341,16 @@ pub fn block_name_key(id: &str) -> Option<String> {
     BLOCKS.read().unwrap().name.get(id).cloned()
 }
 
+/// 物品数据的渲染版本（未渲染过为空串）
+pub fn item_version() -> String {
+    ITEMS.read().unwrap().id.clone()
+}
+
+/// 物品ID → 语言键（item.minecraft.apple 之类，翻译经 `get_lang`）
+pub fn item_name_key(id: &str) -> Option<String> {
+    ITEMS.read().unwrap().name.get(id).cloned()
+}
+
 /// 锁定方块数据表（内部写入用）
 pub(crate) fn blocks_write() -> std::sync::RwLockWriteGuard<'static, BlocksObj> {
     BLOCKS.write().unwrap()

@@ -37,7 +37,7 @@
 use std::{sync::OnceLock, time::Duration};
 
 use chrono::Local;
-use mml_names::i18_items::error_type::{CoreResult, ErrorData, ErrorType};
+use mml_names::i18_items::error_type::{CoreResult, ErrorData, ErrorType, HttpErrorData};
 use mml_net::{mojang_api, urls};
 use tokio::time::sleep;
 use tokio_util::sync::CancellationToken;
@@ -168,16 +168,31 @@ pub async fn run_get_code(
             return Err(ErrorType::TaskTimeout);
         }
 
-        let data = mml_net::get_login_client()
-            .post_form_get_json::<OAuthGetCodeObj>(urls::OAUTH_TOKEN, obj)
+        // 令牌端点在用户尚未授权时返回 400 + `authorization_pending`，属正常中间态，
+        // 不能用 post_form_get_json（非 2xx 直接报错），须拿原始响应自行解析 body
+        let resp = mml_net::get_login_client()
+            .post_form_get_req(urls::OAUTH_TOKEN, obj)
             .await?;
+        let text = resp.text().await.map_err(|err| {
+            ErrorType::HttpError(HttpErrorData {
+                error: err.to_string(),
+                url: urls::OAUTH_TOKEN.to_string(),
+                status: None,
+            })
+        })?;
+        let data: OAuthGetCodeObj = serde_json::from_str(&text).map_err(|err| {
+            ErrorType::OAuthGetTokenError(ErrorData {
+                error: format!("invalid response: {err}"),
+            })
+        })?;
 
         if let Some(error) = data.error {
             if error == "authorization_pending" {
                 continue;
             } else if error == "slow_down" {
                 delay += 5;
-            } else if error == "expired_token" {
+            } else {
+                // expired_token / invalid_client 等其余错误均终止登录
                 return Err(ErrorType::OAuthGetTokenError(ErrorData { error }));
             }
         } else {
@@ -304,7 +319,11 @@ impl LoginObj {
             return Ok(());
         }
 
-        let oauth = refresh_oauth_token(&self.text1.clone().unwrap()).await?;
+        // 旧数据可能没有 refresh_token，无法走完整刷新链，提示重新登录
+        let Some(refresh_token) = self.text1.clone().filter(|s| !s.is_empty()) else {
+            return Err(ErrorType::AuthTokenTimeout);
+        };
+        let oauth = refresh_oauth_token(&refresh_token).await?;
         if cancel.is_cancelled() {
             return Err(ErrorType::TaskCancel);
         }

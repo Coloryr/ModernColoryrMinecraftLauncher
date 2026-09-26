@@ -5,13 +5,20 @@
 // 枚举值即 Rust 变体名：theme/windowMode/sidebarSide 为 PascalCase，locale 为 zh_cn/en_us。
 import { commands } from "./bindings";
 
-export type Theme = "Dark" | "Light";
+export type Theme = "Dark" | "Light" | "System";
 /** 与 core Lang 变体同名：zh_cn / en_us */
 export type Locale = "zh_cn" | "en_us";
 export type WindowMode = "Multi" | "Single";
 export type SidebarSide = "Left" | "Right";
 /** 实例列表显示模式（默认 list，用户改过后用用户的值） */
 export type ViewMode = "list" | "group" | "grid";
+/** 皮肤显示模式（账户界面皮肤预览形态，枚举值即 Rust 变体名） */
+export type SkinDisplay = "Skin2DA" | "Skin2DB" | "Skin3D";
+
+/** 把任意值规范成合法的皮肤显示模式（非法 / 缺省 → Skin2DA） */
+export function normalizeSkinDisplay(value: string | null | undefined): SkinDisplay {
+  return value === "Skin2DB" || value === "Skin3D" ? value : "Skin2DA";
+}
 
 /** 把任意值规范成合法的显示模式（非法 / 缺省 → list） */
 export function normalizeViewMode(value: string | null | undefined): ViewMode {
@@ -61,7 +68,7 @@ export interface CollectConfig {
 }
 
 export interface GuiConfig {
-  /** Dark / Light */
+  /** Dark / Light / System */
   theme: Theme;
   /** zh_cn / en_us */
   locale: Locale;
@@ -70,6 +77,18 @@ export interface GuiConfig {
   mainWindow: MainWindowConfig;
   head: HeadConfig;
   collect: CollectConfig;
+  /** 界面字体族名（空串 = 默认字体栈） */
+  font: string;
+  /** 皮肤显示模式：Skin2DA / Skin2DB / Skin3D */
+  skinDisplay: SkinDisplay;
+  /** 背景图来源（文件路径 / 网址，空串 = 无背景图） */
+  bgSource: string;
+  /** 背景图不透明度（%，5–100） */
+  bgOpacity: number;
+  /** 背景图模糊（px，0–40） */
+  bgBlur: number;
+  /** 背景图原始分辨率（%，10–100） */
+  bgNativeSize: number;
 }
 
 export interface WindowState {
@@ -99,6 +118,12 @@ export interface GuiConfigPatch {
   mainWindow?: Partial<MainWindowConfig>;
   head?: Partial<HeadConfig>;
   collect?: Partial<CollectConfig>;
+  font?: string;
+  skinDisplay?: SkinDisplay;
+  bgSource?: string;
+  bgOpacity?: number;
+  bgBlur?: number;
+  bgNativeSize?: number;
 }
 
 /** 合并保存 GUI 状态到 gui_config.json（mainWindow 内部做深合并，避免互相覆盖） */
@@ -122,7 +147,7 @@ function defaultConfig(): GuiConfig {
   return {
     // 没有显式选择时跟随系统深浅色（与 theme.ts 的首绘兜底一致）
     theme:
-      stored === "Light" || stored === "Dark"
+      stored === "Light" || stored === "Dark" || stored === "System"
         ? stored
         : matchMedia("(prefers-color-scheme: dark)").matches
           ? "Dark"
@@ -146,5 +171,11 @@ function defaultConfig(): GuiConfig {
       resourcePack: localStorage.getItem("mml.collect.resourcePack") !== "0",
       shaderpack: localStorage.getItem("mml.collect.shaderpack") !== "0",
     },
+    font: localStorage.getItem("mml.font") ?? "",
+    skinDisplay: normalizeSkinDisplay(localStorage.getItem("mml.skinDisplay")),
+    bgSource: "",
+    bgOpacity: Number(localStorage.getItem("mml.bgOpacity")) || 100,
+    bgBlur: Number(localStorage.getItem("mml.bgBlur")) || 0,
+    bgNativeSize: 100,
   };
 }

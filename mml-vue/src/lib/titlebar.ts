@@ -45,7 +45,10 @@ const INTERACTIVE = "button, a, input, select, textarea, label, [data-no-drag]";
 const DOUBLE_CLICK_MS = 400;
 
 function isInteractive(target: EventTarget | null): boolean {
-  return target instanceof HTMLElement && target.closest(INTERACTIVE) !== null;
+  // 注意用 Element 而非 HTMLElement：按钮内是 SVG 图标，
+  // 点击目标是 SVGElement，instanceof HTMLElement 会判定为非交互元素，
+  // 导致 startDragging 吞掉按钮的 click（关闭/最小化按钮失灵的直接原因）
+  return target instanceof Element && target.closest(INTERACTIVE) !== null;
 }
 
 let lastDownAt = 0;

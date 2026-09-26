@@ -17,7 +17,8 @@ body,
    所以中文界面 CJK 字体在前——画字的字体和定基线的字体一致才居中；
    英文界面（lang=en_us）文本以西文为主，反转顺序让西文优先。 */
 body {
-  font-family: "Microsoft YaHei", "PingFang SC", "Segoe UI", system-ui, sans-serif;
+  /* --app-font 由设置窗口的字体选择写入（lib/fonts.ts），未设置时用默认栈 */
+  font-family: var(--app-font, "Microsoft YaHei", "PingFang SC", "Segoe UI", system-ui, sans-serif);
   background: var(--bg);
   color: var(--text);
   overflow: hidden;
@@ -26,7 +27,7 @@ body {
 }
 
 :root[lang="en_us"] body {
-  font-family: "Segoe UI", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif;
+  font-family: var(--app-font-en, "Segoe UI", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif);
 }
 
 /* ---------------- 下拉浮层动效：<Transition name="drop"> ----------------
@@ -42,5 +43,26 @@ body {
 .drop-leave-to {
   opacity: 0;
   transform: translateY(-4px) scaleY(0.94);
+}
+
+/* ---------------- 关闭动画（设置里的动画开关，lib/appearance.ts） ----------------
+   全局禁用过渡与动画，界面瞬时应答 */
+html.no-anim *,
+html.no-anim *::before,
+html.no-anim *::after {
+  transition: none !important;
+  animation: none !important;
+}
+
+/* ---------------- 背景图层（App.vue 渲染，lib/appearance.ts 供参） ----------------
+   z-index: -1 落在所有内容之后、画布底色之前；表面半透明见 themes.css 的 has-bg */
+.app-bg {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
+  pointer-events: none;
 }
 

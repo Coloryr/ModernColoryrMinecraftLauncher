@@ -25,6 +25,8 @@
 //! 包括用户名、UUID、access token、client token、认证类型等。
 //! 账户通过 [`UserKeyObj`]（UUID + 认证类型）作为唯一键进行索引。
 
+use std::{collections::HashSet, sync::{LazyLock, RwLock}};
+
 use chrono::{DateTime, FixedOffset, Local};
 use mml_names::i18_items::error_type::CoreResult;
 use serde::{Deserialize, Serialize};
@@ -264,6 +266,20 @@ pub struct UserKeyObj {
     pub uuid: String,
     /// 账户认证类型
     pub auth_type: AuthType,
+}
+
+static USER_LOCK: LazyLock<RwLock<HashSet<UserKeyObj>>> = LazyLock::new(|| RwLock::new(HashSet::new()));
+
+pub fn have_lock(user: &UserKeyObj) -> bool {
+    USER_LOCK.read().unwrap().contains(user)
+}
+
+pub fn lock_user(user: &UserKeyObj) {
+    USER_LOCK.write().unwrap().insert(user.clone());
+}
+
+pub fn unlock_user(user: &UserKeyObj) {
+    USER_LOCK.write().unwrap().remove(user);
 }
 
 #[cfg(test)]

@@ -108,7 +108,7 @@ fn create_tran_rotate(x: f32, y: f32) -> Mat4 {
 }
 
 /// 投影一个顶点到屏幕坐标
-fn project(tran: &Mat4, point: [f32; 3], enable_z: bool) -> (f32, f32) {
+pub(crate) fn project(tran: &Mat4, point: [f32; 3], enable_z: bool) -> (f32, f32) {
     let mut res = tran * Vec4::new(point[0], point[1], point[2], 1.0);
 
     if res.w != 0.0 {
@@ -127,21 +127,21 @@ fn project(tran: &Mat4, point: [f32; 3], enable_z: bool) -> (f32, f32) {
 }
 
 /// 输出尺寸
-const SIZE: u32 = 400;
+pub(crate) const SIZE: u32 = 400;
 
 /// 超采样倍数
 ///
 /// 不对每个三角形单独开抗锯齿：相邻三角形会在公共边上各贡献一次半覆盖，
 /// 叠加后形成细线（每个面的内部对角线和立方体的棱上都会出现）。
 /// 改为按二进制覆盖绘制、再降采样得到抗锯齿，从根上避开接缝。
-const SUPERSAMPLE: u32 = 2;
+pub(crate) const SUPERSAMPLE: u32 = 2;
 
 /// 用一个纹理三角形填充屏幕三角形
 ///
 /// 三个顶点给出屏幕坐标与纹理坐标的对应关系，据此求出「屏幕 → 纹理」的仿射变换；
 /// `Pattern` 的 transform 是反过来的（纹理 → 屏幕），所以传它的逆。
 /// 屏幕坐标会先乘以 `scale`（超采样）。
-fn fill_triangle(
+pub(crate) fn fill_triangle(
     pixmap: &mut Pixmap,
     texture: &Pixmap,
     triangle: [((f32, f32), (f32, f32)); 3],
@@ -258,7 +258,7 @@ fn draw_texture_faces(pixmap: &mut Pixmap, texture: &Pixmap, tran: &Mat4, enable
 }
 
 /// 整数倍降采样（预乘像素直接求平均即可，不需要还原成直乘）
-fn downsample(src: &Pixmap, factor: u32) -> Option<Pixmap> {
+pub(crate) fn downsample(src: &Pixmap, factor: u32) -> Option<Pixmap> {
     let width = src.width() / factor;
     let height = src.height() / factor;
     let mut out = Pixmap::new(width, height)?;

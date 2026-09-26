@@ -20,11 +20,13 @@ use serde::{Deserialize, Serialize};
 /// 主题（serde 按变体名序列化，与前端同名）
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub enum Theme {
-    /// 深色（默认）
+    /// 跟随系统深浅色
     #[default]
-    Dark,
+    System,
     /// 浅色
     Light,
+    /// 深色
+    Dark,
 }
 
 /// 窗口模式：多窗口 / 单窗口
@@ -60,6 +62,19 @@ pub enum ViewMode {
     Grid,
 }
 
+/// 皮肤显示模式（serde 按变体名序列化，与前端同名）
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub enum SkinDisplay {
+    /// 2D 平面图（TypeA，默认；兼容旧值的 "Skin2D" 别名）
+    #[default]
+    #[serde(alias = "Skin2D")]
+    Skin2DA,
+    /// 2D 大图（TypeB）
+    Skin2DB,
+    /// 3D 等距模型（Rust 侧 skin_3d_draw 渲染）
+    Skin3D,
+}
+
 /// 头像类型（serde 按变体名序列化，与前端同名）
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub enum HeadType {
@@ -90,8 +105,8 @@ impl Default for HeadConfig {
     fn default() -> Self {
         Self {
             head_type: HeadType::default(),
-            x: 0.0,
-            y: 0.0,
+            x: 15.0,
+            y: 65.0,
         }
     }
 }
@@ -165,6 +180,18 @@ pub struct GuiConfig {
     pub head: HeadConfig,
     /// 收藏界面设置
     pub collect: CollectConfig,
+    /// 界面字体族名（空串 = 默认字体栈）
+    pub font: String,
+    /// 皮肤显示模式：Skin2D / Skin3D
+    pub skin_display: SkinDisplay,
+    /// 背景图来源（文件路径 / 网址，空串 = 无背景图）
+    pub bg_source: String,
+    /// 背景图不透明度（%，5–100）
+    pub bg_opacity: u32,
+    /// 背景图模糊（px，0–40）
+    pub bg_blur: u32,
+    /// 背景图原始分辨率（%，10–100，后端按此把源图缩放后落盘）
+    pub bg_native_size: u32,
 }
 
 impl Default for GuiConfig {
@@ -176,6 +203,12 @@ impl Default for GuiConfig {
             main_window: Default::default(),
             head: Default::default(),
             collect: Default::default(),
+            font: String::new(),
+            skin_display: Default::default(),
+            bg_source: String::new(),
+            bg_opacity: 100,
+            bg_blur: 0,
+            bg_native_size: 100,
         }
     }
 }
@@ -226,6 +259,11 @@ pub fn get() -> GuiConfig {
         .get()
         .map(|c| c.read().unwrap().clone())
         .unwrap_or_default()
+}
+
+/// 配置目录（背景图等派生文件放这里；未初始化返回 None）
+pub fn dir() -> Option<PathBuf> {
+    FILE.get().and_then(|p| p.parent()).map(Path::to_path_buf)
 }
 
 /// 更新配置并保存

@@ -8,7 +8,12 @@ import { commands } from "../../lib/bindings";
 import WindowControls from "./WindowControls.vue";
 import { onTitleBarPointerDown, titleBarStyle } from "../../lib/titlebar";
 
-const props = defineProps<{ title: string }>();
+const props = defineProps<{
+  title: string;
+  /** 内容区不整页滚动（overflow hidden + flex 列），滚动交给视图内部的容器，
+   *  详情表格这类"工具栏固定、表格自己滚"的布局用 */
+  bodyFill?: boolean;
+}>();
 
 const emit = defineEmits<{ (e: "close"): void }>();
 
@@ -46,7 +51,7 @@ watch(
       <!-- windows 样式：最小化 / 最大化 / 关闭在右端 -->
       <WindowControls v-if="titleBarStyle === 'windows'" :style="titleBarStyle" />
     </header>
-    <div class="frame-body">
+    <div class="frame-body" :class="{ fill: props.bodyFill }">
       <slot />
     </div>
   </div>
@@ -110,5 +115,11 @@ watch(
   flex: 1;
   overflow-y: auto;
   padding: 22px 26px;
+}
+
+.frame-body.fill {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 </style>

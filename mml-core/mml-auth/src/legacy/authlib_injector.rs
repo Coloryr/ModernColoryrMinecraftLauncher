@@ -78,7 +78,7 @@ impl LoginObj {
     ///
     /// 刷新成功返回 `Ok(())`（账户凭据已被更新），令牌失效返回 `ErrorType::AuthTokenTimeout`，被取消时返回取消错误
     pub async fn refresh_authlib(&mut self, cancel: CancellationToken) -> CoreResult<()> {
-        let server = self.text1.clone().unwrap();
+        let server = self.text1.clone().filter(|s| !s.is_empty()).ok_or(ErrorType::AuthServerNull)?;
         if legacy::validate(&server, self).await? {
             if cancel.is_cancelled() {
                 return Err(ErrorType::TaskCancel);
@@ -98,7 +98,7 @@ impl LoginObj {
     ///
     /// 认证服务器返回的元数据 JSON 文本
     pub async fn get_authlib_key(&self) -> CoreResult<String> {
-        let server = self.text1.clone().unwrap();
+        let server = self.text1.clone().filter(|s| !s.is_empty()).ok_or(ErrorType::AuthServerNull)?;
 
         Ok(mml_net::get_login_client().get_text(&server).await?)
     }

@@ -5,7 +5,7 @@
 use std::fmt::Display;
 use std::sync::RwLock;
 
-use mml_auth::{AuthType, LoginObj, auths, oauth};
+use mml_auth::{AuthType, LoginObj, auths, legacy::{authlib_injector, little_skin, nide8}, oauth};
 use mml_net::mojang_api;
 use mml_sys::open_helper;
 use tauri::{AppHandle, Emitter};
@@ -74,25 +74,67 @@ pub fn account_get_accounts() -> AccountStoreViewDto {
     }
 }
 
-/// 添加账户（离线 / 皮肤站等由前端传账户类型与名称；微软走设备码登录流程）
+/// 添加账户（离线 / 皮肤站等由前端传账户类型与凭据；微软走设备码登录流程）
+///
+/// 皮肤站类（LittleSkin / 外置登录 / 统一通行证）会向对应认证服务器发起真实
+/// Yggdrasil 登录，服务器地址由认证层存入 `LoginObj.text1` 供后续刷新与皮肤拉取；
+/// 离线账户本地直接创建。
 #[tauri::command]
 pub async fn account_add_account(
     app: AppHandle,
     name: String,
     account_type: String,
+    server: Option<String>,
+    password: Option<String>,
 ) -> Result<AccountStoreDto, String> {
     let auth_type = auth_type_from_str(&account_type);
     if auth_type == AuthType::OAuth {
         return microsoft_login(&app).await;
     }
 
-    let n = name.trim().to_string();
-    if n.is_empty() {
-        return Err("err.nameEmpty".to_string());
+    let server = server
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+    let user = name.trim().to_string();
+    let password = password.unwrap_or_default();
+
+    let mut login = match auth_type {
+        AuthType::LittleSkin | AuthType::SelfLittleSkin => {
+            // server 为 None 时使用官方 LittleSkin
+            little_skin::authenticate(Uuid::new_v4().to_string(), user, password, server, None).await
+        }
+        AuthType::AuthlibInjector => {
+            let Some(server) = server else {
+                return Err("err.serverEmpty".to_string());
+            };
+            authlib_injector::authenticate(Uuid::new_v4().to_string(), user, password, server, None)
+                .await
+        }
+        AuthType::Nide8 => {
+            let Some(server) = server else {
+                return Err("err.serverEmpty".to_string());
+            };
+            nide8::authenticate(Uuid::new_v4().to_string(), user, password, server).await
+        }
+        _ => {
+            // 离线账户：本地生成，无凭据
+            if user.is_empty() {
+                return Err("err.nameEmpty".to_string());
+            }
+            Ok(LoginObj::new(
+                user,
+                Uuid::new_v4().to_string(),
+                String::new(),
+                String::new(),
+            ))
+        }
     }
-    let uuid = Uuid::new_v4().to_string();
-    let mut login = LoginObj::new(n, uuid.clone(), String::new(), String::new());
-    login.auth_type = auth_type;
+    .map_err(|e| e.to_string())?;
+
+    // 皮肤站类的 auth_type 与 text1（服务器地址）由认证层设置，此处不覆盖
+    if auth_type == AuthType::Offline {
+        login.auth_type = AuthType::Offline;
+    }
     if auths::get_current().is_none() {
         auths::set_current(Some(login.get_key()));
     }
@@ -106,7 +148,11 @@ pub async fn account_add_account(
 /// 各阶段通过 [`emit_oauth_state`] 通知前端展示进度，
 /// 用户可经 `account_cancel_oauth` 中断等待。
 async fn microsoft_login(app: &AppHandle) -> Result<AccountStoreDto, String> {
-    let code = oauth::get_code().await.map_err(|e| e.to_string())?;
+    // 取设备码失败（网络不通等）也要走 oauth_fail：让前端弹出失败提示而不是无响应
+    let code = match oauth::get_code().await {
+        Ok(code) => code,
+        Err(err) => return Err(oauth_fail(app, err)),
+    };
 
     let cancel = CancellationToken::new();
     *OAUTH_NOW.write().unwrap() = Some(cancel.clone());
@@ -220,4 +266,45 @@ pub fn account_set_current_account(app: AppHandle, uuid: String) -> Result<bool,
     auths::set_current(Some(login.get_key()));
     emit_account_change(&app);
     Ok(true)
+}
+
+/// 编辑离线账户的名字与 UUID
+///
+/// 离线账户没有服务器凭据，改名/改 UUID 就是改账户本身（存储键随之更新）。
+#[tauri::command]
+pub fn account_edit_offline(
+    app: AppHandle,
+    uuid: String,
+    new_name: String,
+    new_uuid: String,
+) -> Result<(), String> {
+    let mut login = auths::get(&uuid, AuthType::Offline).ok_or("err.accountMissing")?;
+
+    let new_name = new_name.trim().to_string();
+    let new_uuid = new_uuid.trim().to_string();
+    if new_name.is_empty() {
+        return Err("err.nameEmpty".to_string());
+    }
+    if new_uuid.is_empty() {
+        return Err("err.uuidEmpty".to_string());
+    }
+    // 新 UUID 不能与其它离线账户冲突（同键会静默覆盖）
+    if new_uuid != uuid && auths::get(&new_uuid, AuthType::Offline).is_some() {
+        return Err("err.uuidConflict".to_string());
+    }
+
+    let was_current = auths::get_current()
+        .map(|k| k.uuid == uuid && k.auth_type == AuthType::Offline)
+        .unwrap_or(false);
+
+    login.delete();
+    login.user_name = new_name;
+    login.uuid = new_uuid;
+    login.save();
+
+    if was_current {
+        auths::set_current(Some(login.get_key()));
+    }
+    emit_account_change(&app);
+    Ok(())
 }

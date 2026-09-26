@@ -275,6 +275,7 @@ async function removeSkin(b: BlockItemDto) {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  flex: 1;
   min-height: 0;
 }
 

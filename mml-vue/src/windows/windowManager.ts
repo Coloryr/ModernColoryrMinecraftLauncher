@@ -72,6 +72,13 @@ export function openWindow(kind: WindowKind) {
     tauri: isTauri(),
   });
 
+  // 单窗口模式（浏览器 / Tauri 一致）：应用内页面切换
+  if (!multiWindow.value) {
+    currentKind.value = kind;
+    if (!isTauri()) window.history.pushState({}, "", urlFor(kind));
+    return;
+  }
+
   if (isTauri()) {
     // 统一走 Rust 窗口管理器：创建 / 聚焦在 src-tauri 的 windows/mod.rs 处理。
     // open_window 是 async 命令（不在 Windows 主线程创建窗口，避免冻结）。
@@ -83,30 +90,28 @@ export function openWindow(kind: WindowKind) {
     return;
   }
 
-  if (multiWindow.value) {
-    // 浏览器：新标签页模拟
-    window.open(urlFor(kind), kind, "noopener");
-  } else {
-    currentKind.value = kind;
-    window.history.pushState({}, "", urlFor(kind));
-  }
+  // 浏览器多窗口：新标签页模拟
+  window.open(urlFor(kind), kind, "noopener");
 }
 
 /** 回退路径：用官方 JS API 创建 / 聚焦真实 WebviewWindow */
 function createViaJs(kind: WindowKind) {
   const label = `mml-${kind}`;
-  WebviewWindow.getByLabel(label).then((existing) => {
+  WebviewWindow.getByLabel(label).then(async (existing) => {
     if (existing) {
       // 窗口已存在则聚焦
       existing.setFocus();
       return;
     }
+    // 尺寸从后端注册表取（与 Rust 建窗同源）；后端不可用时给个兜底值
+    const sizes = await commands.windows.getWindowSizes().catch(() => []);
+    const size = sizes.find((s) => s.kind === kind);
     const info = WINDOW_REGISTRY.find((w) => w.kind === kind);
     const win = new WebviewWindow(label, {
       url: "index.html",
       title: info?.title ?? kind,
-      width: info?.width ?? 1100,
-      height: info?.height ?? 720,
+      width: size?.width ?? 900,
+      height: size?.height ?? 620,
       resizable: true,
     });
     win.once("tauri://created", () => {

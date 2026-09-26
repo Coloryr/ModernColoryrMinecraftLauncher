@@ -170,7 +170,13 @@ pub async fn get_minecraft_profile(token: &str) -> CoreResult<MinecraftProfileOb
 pub async fn get_user_profile(uuid: &str, url: Option<&str>) -> CoreResult<UserProfileObj> {
     let url = match url {
         Some(data) => data.to_string(),
-        None => format!("{}/{uuid}", urls::MINECRAFT_SESSION_SERVER),
+        // 官方会话服务器只认不带连字符的 UUID（带连字符返回400），
+        // 而账户数据里存的是常规带连字符格式，这里统一去掉
+        None => format!(
+            "{}/{}",
+            urls::MINECRAFT_SESSION_SERVER,
+            uuid.replace('-', "")
+        ),
     };
     crate::get_login_client()
         .get_json::<UserProfileObj>(&url)

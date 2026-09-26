@@ -16,7 +16,9 @@ pub mod instance_dto;
 pub mod java_dto;
 pub mod main_dto;
 pub mod resource_dto;
+pub mod settings_dto;
 pub mod version_dto;
+pub mod window_dto;
 
 pub use account_dto::{AccountStoreDto, AccountStoreViewDto};
 pub use args_dto::{EnvVarLineDto, InstanceArgsDto};
@@ -32,10 +34,12 @@ pub use add_resource_dto::{
     ProjectItemDto, ResourceSaveDto, ResourceStatusDto, ResourceTaskDto, SourceTypeDto, TagDto,
 };
 pub use collect_dto::{CollectDataDto, CollectItemDto};
+pub use settings_dto::{BgInfoDto, DnsSettingDto, GameCheckSettingDto, LaunchSettingDto, NetworkSettingDto};
 pub use download_dto::{
     DownloadItemEvent, DownloadStatusDto, DownloadTaskDto, DownloadTaskEvent, DownloadThreadDto,
 };
 pub use gui_config_dto::{GuiConfigDto, MainWindowConfigDto};
+pub use window_dto::WindowSizeDto;
 pub use main_dto::{
     BlockItemDto, BlockStatusDto, ErrorEvent, ExitEvent, InstanceChangeEvent, InstancePatch,
     LogEvent, NewsItem, StateEvent,

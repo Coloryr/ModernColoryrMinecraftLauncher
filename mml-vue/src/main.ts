@@ -7,12 +7,16 @@ import { applyTheme, theme } from "./lib/theme";
 import { applyLocale, locale } from "./lib/i18n";
 import { loadAccounts } from "./lib/accountStore";
 import {
+  restoreHeadConfig,
   restoreSelectedInstance,
+  restoreSkinDisplay,
   sidebarCollapsed,
   sidebarSide,
   viewMode,
 } from "./lib/settings";
+import { restoreBg } from "./lib/appearance";
 import { setMultiWindow } from "./windows/windowManager";
+import { restoreFontFamily } from "./lib/fonts";
 
 // 禁用右键默认菜单（WebView2 / 浏览器自带的“刷新、返回、打印”等）。
 // 文本输入框（input / textarea / contenteditable）保留原生菜单，方便复制粘贴。
@@ -40,7 +44,14 @@ async function bootstrap() {
     viewMode.value = cfg.mainWindow.viewMode;
     restoreSelectedInstance(cfg.mainWindow.selectedInstance);
     setMultiWindow(cfg.windowMode !== "Single");
+    // 字体 / 皮肤与头像显示模式：只同步内存状态，不回写配置
+    restoreFontFamily(cfg.font);
+    restoreSkinDisplay(cfg.skinDisplay);
+    restoreHeadConfig(cfg.head.headType, cfg.head.x, cfg.head.y);
   }
+
+  // 背景图：Tauri 下从后端取（未设置则静默跳过），挂载前就绪避免闪底色
+  await restoreBg();
 
   applyTheme();
   applyLocale();

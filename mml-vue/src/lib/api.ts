@@ -39,7 +39,7 @@ import type {
   StateEvent,
   VersionInfoDto,
 } from "./bindings";
-import { AddLoaderProgress, AddModpackStatus, AddNameConflict, AddPackProgress, AddResourceStatus, CloseBlocked, CollectChange, DownloadItem, DownloadTask, GameExit, GameLog, InstanceChange, JavaChange, LaunchError, LaunchState, MainBlockRender } from "./listens";
+import { AddLoaderProgress, AddModpackStatus, AddNameConflict, AddPackProgress, AddResourceStatus, BlockRender, CloseBlocked, CollectChange, DownloadItem, DownloadTask, GameExit, GameLog, InstanceChange, JavaChange, LaunchError, LaunchState } from "./listens";
 
 export interface CreateInstanceOpts {
   loader?: string;
@@ -550,37 +550,37 @@ export function onCollectChange(cb: () => void): Promise<UnlistenFn> {
 
 /** 获取方块列表（按语言翻译显示名） */
 export function getBlockList(lang: string): Promise<BlockItemDto[]> {
-  return commands.main.blockList(lang);
+  return commands.block.list(lang);
 }
 
 /** 获取方块贴图渲染状态 */
 export function getBlockStatus(): Promise<BlockStatusDto> {
-  return commands.main.blockStatus();
+  return commands.block.status();
 }
 
 /** 开始渲染方块贴图（force = 全量重渲染；已在进行返回 false） */
 export function blockRenderStart(force: boolean): Promise<boolean> {
-  return commands.main.blockRenderStart(force);
+  return commands.block.renderStart(force);
 }
 
 /** 把方块贴图设为实例图标 */
 export function blockSetIcon(uuid: string, id: string): Promise<boolean> {
-  return commands.main.blockSetIcon(uuid, id);
+  return commands.block.setIcon(uuid, id);
 }
 
 /** 按用户名或UUID添加皮肤方块（同名覆盖），返回方块ID */
 export function blockSkinAdd(input: string): Promise<string> {
-  return commands.main.blockSkinAdd(input);
+  return commands.block.skinAdd(input);
 }
 
 /** 删除皮肤方块（名字即皮肤方块显示名） */
 export function blockSkinRemove(name: string): Promise<void> {
-  return commands.main.blockSkinRemove(name);
+  return commands.block.skinRemove(name);
 }
 
 /** 方块渲染状态事件（进度 / 结束） */
 export function onBlockRender(cb: (e: BlockStatusDto) => void): Promise<UnlistenFn> {
-  return listen<BlockStatusDto>(MainBlockRender, (e) => cb(e.payload));
+  return listen<BlockStatusDto>(BlockRender, (e) => cb(e.payload));
 }
 
 /** mml-image 协议访问前缀（拼实例图标等本地图片地址用） */

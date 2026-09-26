@@ -4,6 +4,8 @@ import { computed, ref } from "vue";
 import { t } from "../lib/i18n";
 import { openWindow } from "../windows/windowManager";
 import type { AccountStoreDto } from "../lib/bindings";
+import { accountAvatarUrl, imageFailed, imageLoading, markImageFailed, markImageLoaded } from "../lib/accountImages";
+import { typeLabelKey } from "../lib/accountStore";
 
 const props = defineProps<{
   account: AccountStoreDto | null;
@@ -16,20 +18,16 @@ const emit = defineEmits<{
 
 const open = ref(false);
 
-const typeText = computed(() => {
-  if (!props.account) return "";
-  switch (props.account.authType) {
-    case "microsoft":
-      return t("account.microsoft");
-    case "offline":
-      return t("account.offline");
-    default:
-      return props.account.authType;
-  }
-});
+const typeText = computed(() =>
+  props.account ? t(typeLabelKey(props.account.authType)) : "",
+);
 
 const typeClass = computed(() =>
-  props.account?.authType === "microsoft" ? "type-ms" : "type-offline",
+  props.account?.authType === "microsoft"
+    ? "type-ms"
+    : props.account?.authType === "offline"
+      ? "type-offline"
+      : "type-external",
 );
 
 function toggle() {
@@ -46,7 +44,19 @@ function pick(account: AccountStoreDto) {
   <div class="account-wrap">
     <button class="account-btn" @click="toggle">
       <template v-if="account">
-        <span class="avatar" :style="{ background: account.avatarColor }">
+        <!-- 加载中：头像上叠转圈，onload 后消失 -->
+        <span v-if="!imageFailed(account, 'avatar')" class="avatar-box">
+          <img
+            class="avatar avatar-img"
+            :class="{ pending: imageLoading(account, 'avatar') }"
+            :src="accountAvatarUrl(account)"
+            alt=""
+            @load="markImageLoaded(account, 'avatar')"
+            @error="markImageFailed(account, 'avatar')"
+          />
+          <span v-if="imageLoading(account, 'avatar')" class="img-spin" />
+        </span>
+        <span v-else class="avatar" :style="{ background: account.avatarColor }">
           {{ account.userName.charAt(0).toUpperCase() }}
         </span>
         <span class="account-meta">
@@ -71,11 +81,12 @@ function pick(account: AccountStoreDto) {
       </svg>
     </button>
 
-    <!-- data-no-drag：遮罩在顶栏（标题栏拖拽区）里，不标记的话按下会被
-         startDragging 接管，click 事件到不了，菜单就收不起来 -->
-    <div v-if="open" class="menu-backdrop" data-no-drag @click="open = false"></div>
+    <!-- 点外面收起菜单。不加 data-no-drag：遮罩全屏铺开，标了会把整个标题栏
+         的拖拽也挡住（菜单开着时窗口拖不动）。用 pointerdown 收起——
+         在标题栏上按下时拖拽与收菜单一并进行，互不干扰 -->
+    <div v-if="open" class="menu-backdrop" @pointerdown="open = false"></div>
 
-    <!-- data-no-drag：菜单也在标题栏拖拽区里，footer 等非 button 区域
+    <!-- data-no-drag：菜单在标题栏拖拽区里，footer 等非 button 区域
          的 click 会被 startDragging 吞掉，须整体豁免 -->
     <Transition name="drop">
       <div v-if="open" class="account-menu" data-no-drag>
@@ -88,12 +99,23 @@ function pick(account: AccountStoreDto) {
           :class="{ active: acc.uuid === account?.uuid }"
           @click="pick(acc)"
         >
-          <span class="avatar small" :style="{ background: acc.avatarColor }">
+          <span v-if="!imageFailed(acc, 'avatar')" class="avatar-box">
+            <img
+              class="avatar small avatar-img"
+              :class="{ pending: imageLoading(acc, 'avatar') }"
+              :src="accountAvatarUrl(acc)"
+              alt=""
+              @load="markImageLoaded(acc, 'avatar')"
+              @error="markImageFailed(acc, 'avatar')"
+            />
+            <span v-if="imageLoading(acc, 'avatar')" class="img-spin" />
+          </span>
+          <span v-else class="avatar small" :style="{ background: acc.avatarColor }">
             {{ acc.userName.charAt(0).toUpperCase() }}
           </span>
           <span class="menu-meta">
-            <span class="menu-name">{{ acc.userName }}</span>
-            <span class="menu-type">{{ acc.authType === "microsoft" ? t("account.microsoft") : t("account.offline") }}</span>
+            <span class="menu-name" :title="acc.userName">{{ acc.userName }}</span>
+            <span class="menu-type">{{ t(typeLabelKey(acc.authType)) }}</span>
           </span>
         </button>
         <div
@@ -138,7 +160,7 @@ function pick(account: AccountStoreDto) {
 .avatar {
   width: 34px;
   height: 34px;
-  border-radius: 50%;
+  border-radius: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -146,7 +168,6 @@ function pick(account: AccountStoreDto) {
   font-weight: 700;
   font-size: 15px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
-  border: 1px solid rgba(255, 255, 255, 0.15);
   flex-shrink: 0;
 }
 
@@ -156,7 +177,6 @@ function pick(account: AccountStoreDto) {
   font-size: 13px;
 }
 
-/* 未选择账户的占位头像：底色用暗色，＋号才不至白字落在亮背景上看不见 */
 .avatar.placeholder {
   background: var(--bg-hover);
   border: 1px dashed var(--border);
@@ -199,6 +219,62 @@ function pick(account: AccountStoreDto) {
   background: rgba(154, 163, 175, 0.14);
 }
 
+.type-external {
+  color: #22d3ee;
+  background: rgba(6, 182, 212, 0.16);
+}
+
+/* 亮色主题：浅色文字在白底上看不清，换深色系 */
+[data-theme="Light"] .type-ms {
+  color: #2563eb;
+}
+
+[data-theme="Light"] .type-external {
+  color: #0e7490;
+}
+
+/* 真实头像图（加载失败回退字母头像） */
+.avatar-img {
+  object-fit: cover;
+  image-rendering: pixelated;
+}
+
+/* 头像槽容器：相对定位，加载中时上面叠转圈 */
+.avatar-box {
+  position: relative;
+  flex-shrink: 0;
+  display: inline-flex;
+}
+
+.avatar-img.pending {
+  opacity: 0;
+}
+
+/* 加载中转圈（img 上层居中） */
+.img-spin {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.img-spin::after {
+  content: "";
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: img-spin 0.8s linear infinite;
+}
+
+@keyframes img-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .chevron {
   color: var(--text-dim);
   transition: transform 0.15s;
@@ -213,6 +289,8 @@ function pick(account: AccountStoreDto) {
   right: 0;
   top: calc(100% + 8px);
   width: 240px;
+  max-height: calc(100vh - var(--titlebar-h) - 16px);
+  overflow-y: auto;
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -264,11 +342,15 @@ function pick(account: AccountStoreDto) {
   display: flex;
   flex-direction: column;
   line-height: 1.25;
+  min-width: 0;
 }
 
 .menu-name {
   font-size: 13px;
   font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .menu-type {
