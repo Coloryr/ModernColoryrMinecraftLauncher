@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 启动器设置窗口：左侧标签导航 + 右侧内容区
 // 标签：界面（含窗口设置）/ 皮肤与头像 / 网络与下载 / 游戏启动
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import WindowFrame from "../../components/ui/WindowFrame.vue";
 import SegmentedTabs from "../../components/ui/SegmentedTabs.vue";
 import NumberStepper from "../../components/ui/NumberStepper.vue";
@@ -23,6 +23,7 @@ import {
   setBgBlur,
   bgNativeSize,
   bgLoading,
+  bgSource,
 } from "../../lib/appearance";
 import {
   sidebarSide,
@@ -161,7 +162,9 @@ function onBgFile(e: Event) {
 }
 
 // ---- 图片地址输入（本地文件路径或网址） ----
+// 回显已设置的来源（打开窗口时不再是空的）；清除背景时输入框跟着清空
 const bgSourceInput = ref("");
+watch(bgSource, (v) => (bgSourceInput.value = v), { immediate: true });
 
 async function loadBgSource() {
   const source = bgSourceInput.value.trim();

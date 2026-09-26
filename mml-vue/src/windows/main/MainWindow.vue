@@ -59,7 +59,6 @@ getCurrentWindow().setTitle(t("winTitle.main")).catch(() => { /* 忽略 */ });
 // ================= 基础状态 =================
 
 import { closeSplash, splashError, splashVisible } from "../../lib/splash";
-const playerName = ref(localStorage.getItem("mml.playerName") ?? "Player");
 
 // ================= 数据 =================
 
@@ -286,8 +285,6 @@ const currentAccount = storeCurrentAccount;
 
 function onAccountChange(account: AccountStoreDto) {
   setCurrentAccount(account);
-  playerName.value = account.userName;
-  localStorage.setItem("mml.playerName", account.userName);
 }
 
 // ================= 启动状态 =================
@@ -312,14 +309,9 @@ function appendLogText(text: string) {
 }
 
 // ================= 启动进度（顶部进度条） =================
-// 核心按 login→check→…→end 顺序推进，已知阶段映射为近似百分比；未知阶段走滚动条
-const LAUNCH_STAGES = ["login", "check", "readinfo", "download", "jvm", "pre", "post", "end"];
+// 进度百分比由后端按 LaunchState 阶段随状态事件下发；无进度语义的状态走滚动条
 const launchStage = ref("");
-
-const launchPct = computed(() => {
-  const i = LAUNCH_STAGES.indexOf(launchStage.value);
-  return i < 0 ? null : Math.round(((i + 1) / LAUNCH_STAGES.length) * 100);
-});
+const launchPct = ref<number | null>(null);
 
 const launchStageText = computed(() =>
   launchStage.value ? stateText(launchStage.value) : statusText.value,
@@ -639,7 +631,7 @@ async function launchGroupAll(groupName?: string) {
   if (!g || g.items.length === 0) return;
   for (const inst of g.items) {
     try {
-      await api.launchGame(inst.uuid, playerName.value);
+      await api.launchGame(inst.uuid);
       inst.running = true;
     } catch {
       /* 忽略单个失败 */
@@ -814,7 +806,7 @@ async function multiLaunch() {
   for (const uuid of ids) {
     const inst = instances.value.find((i) => i.uuid === uuid);
     try {
-      await api.launchGame(uuid, playerName.value);
+      await api.launchGame(uuid);
       if (inst) inst.running = true;
     } catch {
       /* 忽略单个失败 */
@@ -987,12 +979,14 @@ async function subscribeEvents() {
       if (e.uuid !== selected.value?.uuid) return;
       statusText.value = stateText(e.state);
       launchStage.value = e.state;
+      launchPct.value = e.progress ?? null;
     }),
     onGameExit((e) => {
       if (e.uuid !== selected.value?.uuid) return;
       statusText.value =
         e.code === 0 ? t("launch.exited") : t("launch.exitedCode", { code: e.code });
       launchStage.value = "";
+      launchPct.value = null;
       appendLogText(
         e.code === 0
           ? t("launch.processExited")
@@ -1005,6 +999,7 @@ async function subscribeEvents() {
       if (e.uuid && e.uuid !== selected.value?.uuid) return;
       statusText.value = t("launch.failed");
       launchStage.value = "";
+      launchPct.value = null;
       appendLogText(t("launch.error", { msg: e.message }));
       if (e.uuid) {
         const inst = instances.value.find((i) => i.uuid === e.uuid);
@@ -1108,9 +1103,10 @@ async function launch() {
   selected.value.running = true;
   statusText.value = t("launch.launching");
   launchStage.value = "";
+  launchPct.value = null;
   logs.value = [];
   try {
-    await api.launchGame(uuid, playerName.value);
+    await api.launchGame(uuid);
   } catch (e) {
     if (selected.value) selected.value.running = false;
     statusText.value = t("launch.failed");

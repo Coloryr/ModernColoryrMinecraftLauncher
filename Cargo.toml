@@ -16,6 +16,7 @@ members = [
     "mml-core/mml-config",
     "mml-core/mml-downloader",
     "mml-core/mml-game",
+    "mml-core/mml-gpu",
     "mml-core/mml-ipc",
     "mml-core/mml-jvms",
     "mml-core/mml-log",

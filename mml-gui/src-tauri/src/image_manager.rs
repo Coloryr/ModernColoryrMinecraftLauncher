@@ -1,8 +1,10 @@
 //! 图像管理：`mml-image` 自定义协议的后端
 //!
 //! 前端用 `image_base_url()` 拼地址，请求经 [`url_image`] 按首段路由：
-//! `instance`（实例图标）/ `skin`（头像）/ `skin2d` / `skin2db` / `skin3d` /
-//! `skinraw` / `cape2d` / `caperaw`（账户皮肤与披风）/
+//! `instance`（实例图标）/
+//! `head`（账户头像）/ `skin`（皮肤全身图）/ `cape`（披风图）——渲染方式由后端读配置决定，
+//! 前端只挑"要哪种图"，不挑"怎么渲染"；
+//! `skinraw` / `caperaw`（原始皮肤/披风贴图，供前端 skinview3d 数据用）/
 //! `icon`（远程图片，带内存 + 磁盘 + ETag 缓存）/
 //! `block`（方块贴图）/ `item`（物品贴图）/ `screenshot`（实例截图）。
 
@@ -33,20 +35,17 @@ use uuid::Uuid;
 
 use crate::{
     dtos::account_dto::auth_type_from_str,
-    gui_config::{self, HeadType},
+    gui_config::{self, HeadType, SkinDisplay},
 };
 
 /// 实例图标内存缓存
 static INSTANCE_IMAGE: LazyLock<RwLock<HashMap<Uuid, Vec<u8>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
-/// 账户皮肤原图缓存（未使用，保留供后续扩展）
-static SKIN_IMAGE: LazyLock<RwLock<HashMap<UserKeyObj, Vec<u8>>>> =
-    LazyLock::new(|| RwLock::new(HashMap::new()));
 /// 账户头像（按配置类型渲染）内存缓存
 static HEAD_IMAGE: LazyLock<RwLock<HashMap<(UserKeyObj, String), Vec<u8>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
-/// 账户皮肤全身渲染图内存缓存（键带风格 + 皮肤类型段）
-static SKIN2D_IMAGE: LazyLock<RwLock<HashMap<(UserKeyObj, String), Vec<u8>>>> =
+/// 账户皮肤全身渲染图内存缓存（键带显示模式 + 皮肤类型段）
+static SKIN_IMAGE: LazyLock<RwLock<HashMap<(UserKeyObj, String), Vec<u8>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 /// 账户皮肤原图 PNG 内存缓存
 static SKINRAW_IMAGE: LazyLock<RwLock<HashMap<UserKeyObj, Vec<u8>>>> =
@@ -54,8 +53,8 @@ static SKINRAW_IMAGE: LazyLock<RwLock<HashMap<UserKeyObj, Vec<u8>>>> =
 /// 账户披风原图 PNG 内存缓存
 static CAPERAW_IMAGE: LazyLock<RwLock<HashMap<UserKeyObj, Vec<u8>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
-/// 账户披风 2D 图内存缓存
-static CAPE2D_IMAGE: LazyLock<RwLock<HashMap<UserKeyObj, Vec<u8>>>> =
+/// 账户披风渲染图内存缓存
+static CAPE_IMAGE: LazyLock<RwLock<HashMap<UserKeyObj, Vec<u8>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 /// 远程图标内存缓存（键为请求名 = 网址 sha256）
 static ICON_IMAGE: LazyLock<RwLock<HashMap<String, IconCache>>> =
@@ -228,8 +227,8 @@ fn load_instance_image(uri: &[&str], res: UriSchemeResponder) {
     send_png(res, image);
 }
 
-/// 账户头像（`skin/<账户类型>/<uuid>`）：按配置的头像类型渲染
-async fn load_skin_image(uri: &[&str], res: UriSchemeResponder) {
+/// 账户头像（`head/<账户类型>/<uuid>`）：按配置的头像类型渲染
+async fn load_head_image(uri: &[&str], res: UriSchemeResponder) {
     if uri.len() != 3 {
         send_bad(res);
         return;
@@ -299,21 +298,12 @@ async fn resolve_skin_files(uri: &[&str]) -> Option<SkinFiles> {
     })
 }
 
-/// 皮肤全身渲染风格（路由首段决定）
-#[derive(Clone, Copy, Debug, PartialEq)]
-enum SkinStyle {
-    /// 2D 展开图（TypeA，128×256）
-    Flat2DA,
-    /// 2D 大图（TypeB，272×532）
-    Flat2DB,
-    /// 3D 等距全身图（skin_3d_draw，400×400）
-    Iso3D,
-}
-
-/// 皮肤全身渲染图（skin2d / skin2db / skin3d 路由共用）
+/// 皮肤全身渲染图（`skin/<账户类型>/<uuid>`）
 ///
-/// 第4段为皮肤类型：`auto`（自动检测，可省略）/ `old`（1.7旧版）/ `new`（1.8新版）/ `slim`（纤细）
-async fn load_skin_render_image(uri: &[&str], res: UriSchemeResponder, style: SkinStyle) {
+/// 渲染风格由后端读 gui_config 的 `skin_display` 决定（Skin2DA / Skin2DB / Skin3D），
+/// 前端不选风格。第4段为皮肤型号：`auto`（自动检测，可省略）/ `old`（1.7旧版）/
+/// `new`（1.8新版）/ `slim`（纤细）——这是皮肤版型信息，不是渲染风格
+async fn load_skin_image(uri: &[&str], res: UriSchemeResponder) {
     if uri.len() != 3 && uri.len() != 4 {
         send_bad(res);
         return;
@@ -324,18 +314,19 @@ async fn load_skin_render_image(uri: &[&str], res: UriSchemeResponder, style: Sk
         return;
     }
 
+    let display = gui_config::get().skin_display;
     let Some(files) = resolve_skin_files(uri).await else {
         send_bad(res);
         return;
     };
-    let key = (files.key, format!("{style:?}/{skin_type}"));
+    let key = (files.key, format!("{display:?}/{skin_type}"));
     let Some(file) = files.skin else {
         send_bad(res);
         return;
     };
 
     {
-        let image = SKIN2D_IMAGE.read().unwrap().get(&key).cloned();
+        let image = SKIN_IMAGE.read().unwrap().get(&key).cloned();
         if let Some(data) = image {
             send_png(res, data);
             return;
@@ -347,10 +338,10 @@ async fn load_skin_render_image(uri: &[&str], res: UriSchemeResponder, style: Sk
         return;
     };
     let st = parse_skin_type(skin_type).flatten();
-    let image = match style {
-        SkinStyle::Flat2DA => skin_2d_draw::skin_2d_draw_typea(&bitmap, st),
-        SkinStyle::Flat2DB => skin_2d_draw::skin_2d_draw_typeb(&bitmap, st),
-        SkinStyle::Iso3D => skin_3d_draw::draw_skin_3d_typea(&bitmap, st),
+    let image = match display {
+        SkinDisplay::Skin2DA => skin_2d_draw::skin_2d_draw_typea(&bitmap, st),
+        SkinDisplay::Skin2DB => skin_2d_draw::skin_2d_draw_typeb(&bitmap, st),
+        SkinDisplay::Skin3D => skin_3d_draw::draw_skin_3d_typea(&bitmap, st),
     };
     let Some(image) = image else {
         send_bad(res);
@@ -361,7 +352,7 @@ async fn load_skin_render_image(uri: &[&str], res: UriSchemeResponder, style: Sk
         return;
     };
 
-    SKIN2D_IMAGE.write().unwrap().insert(key, data.clone());
+    SKIN_IMAGE.write().unwrap().insert(key, data.clone());
 
     send_png(res, data);
 }
@@ -447,8 +438,8 @@ async fn load_caperaw_image(uri: &[&str], res: UriSchemeResponder) {
     send_png(res, data);
 }
 
-/// 披风2D平面图（cape_2d_draw 正面）
-async fn load_cape2d_image(uri: &[&str], res: UriSchemeResponder) {
+/// 披风渲染图（`cape/<账户类型>/<uuid>`，cape_2d_draw 正面）
+async fn load_cape_image(uri: &[&str], res: UriSchemeResponder) {
     if uri.len() != 3 {
         send_bad(res);
         return;
@@ -465,7 +456,7 @@ async fn load_cape2d_image(uri: &[&str], res: UriSchemeResponder) {
     };
 
     {
-        let image = CAPE2D_IMAGE.read().unwrap().get(&key).cloned();
+        let image = CAPE_IMAGE.read().unwrap().get(&key).cloned();
         if let Some(data) = image {
             send_png(res, data);
             return;
@@ -485,7 +476,7 @@ async fn load_cape2d_image(uri: &[&str], res: UriSchemeResponder) {
         return;
     };
 
-    CAPE2D_IMAGE.write().unwrap().insert(key, data.clone());
+    CAPE_IMAGE.write().unwrap().insert(key, data.clone());
 
     send_png(res, data);
 }
@@ -784,20 +775,16 @@ pub async fn url_image(req: Request<Vec<u8>>, res: UriSchemeResponder) {
 
     if image_type == "instance" {
         load_instance_image(&uri, res);
+    } else if image_type == "head" {
+        load_head_image(&uri, res).await;
     } else if image_type == "skin" {
         load_skin_image(&uri, res).await;
-    } else if image_type == "skin2d" {
-        load_skin_render_image(&uri, res, SkinStyle::Flat2DA).await;
-    } else if image_type == "skin2db" {
-        load_skin_render_image(&uri, res, SkinStyle::Flat2DB).await;
-    } else if image_type == "skin3d" {
-        load_skin_render_image(&uri, res, SkinStyle::Iso3D).await;
     } else if image_type == "skinraw" {
         load_skinraw_image(&uri, res).await;
     } else if image_type == "caperaw" {
         load_caperaw_image(&uri, res).await;
-    } else if image_type == "cape2d" {
-        load_cape2d_image(&uri, res).await;
+    } else if image_type == "cape" {
+        load_cape_image(&uri, res).await;
     } else if image_type == "icon" {
         load_icon_image(&uri, res).await;
     } else if image_type == "block" {

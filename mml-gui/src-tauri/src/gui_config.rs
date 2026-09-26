@@ -90,7 +90,7 @@ pub enum HeadType {
 }
 
 /// 头像设置
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct HeadConfig {
     /// 头像类型：Head2DA / Head3DA / Head3DB / Head2DB

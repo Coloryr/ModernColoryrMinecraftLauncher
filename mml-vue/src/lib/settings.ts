@@ -1,6 +1,8 @@
 // 界面设置（侧栏位置 / 收起状态 / 列表显示模式 / 皮肤与头像显示），持久化到 localStorage + gui_config.json
 import { ref } from "vue";
+import { listen } from "@tauri-apps/api/event";
 import {
+  loadGuiConfig,
   normalizeHeadType,
   normalizeSkinDisplay,
   normalizeViewMode,
@@ -11,6 +13,8 @@ import {
   type ViewMode,
 } from "./guiConfig";
 import { bumpImageVersion } from "./accountImages";
+import { isTauri } from "../windows/windowManager";
+import { SkinConfigChange } from "./listens";
 export type { SidebarSide, ViewMode, SkinDisplay, HeadType } from "./guiConfig";
 
 const SIDE_KEY = "mml.sidebarSide";
@@ -125,5 +129,19 @@ export function restoreHeadConfig(type: HeadType, x: number, y: number) {
   localStorage.setItem(HEAD_TYPE_KEY, type);
   localStorage.setItem(HEAD_X_KEY, String(x));
   localStorage.setItem(HEAD_Y_KEY, String(y));
+}
+
+// ---- 跨窗口同步 ----
+// 每个窗口是独立 JS 上下文，ref 不会自动同步：设置窗口改了皮肤 / 头像模式后，
+// 后端在 saveGuiConfig 时广播 skin-config-change，本窗口重读配置并让所有
+// 账户图片带新版本号重取（后端渲染缓存键含这两项配置，取到的就是新模式渲染图）
+if (isTauri()) {
+  void listen(SkinConfigChange, async () => {
+    const cfg = await loadGuiConfig();
+    if (!cfg) return;
+    restoreSkinDisplay(cfg.skinDisplay);
+    restoreHeadConfig(cfg.head.headType, cfg.head.x, cfg.head.y);
+    bumpImageVersion();
+  });
 }
 

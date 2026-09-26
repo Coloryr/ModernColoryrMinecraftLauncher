@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+mml-gpu = { path = "../mml-gpu" }
 mml-skin = { path = "../mml-skin" }
 tiny-skia.workspace = true
 glam.workspace = true
+wgpu.workspace = true
+pollster.workspace = true
+bytemuck.workspace = true

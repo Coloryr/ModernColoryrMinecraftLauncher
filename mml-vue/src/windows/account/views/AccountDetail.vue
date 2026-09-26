@@ -48,7 +48,10 @@ function isCurrent(acc: AccountStoreDto): boolean {
           @dblclick="emit('switch', acc)"
         >
           <td class="col-actions">
-            <AccountActions :auth-type="acc.authType"
+            <AccountActions
+              :can-refresh="acc.canRefresh"
+              :can-relogin="acc.canRelogin"
+              :can-edit="acc.canEdit"
               @refresh="emit('refresh', acc)"
               @relogin="emit('relogin', acc)"
               @edit="emit('edit', acc)"

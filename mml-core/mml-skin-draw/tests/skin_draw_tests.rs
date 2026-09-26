@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use mml_skin_draw::{cape_2d_draw, head_2d_draw, head_3d_draw, skin_2d_draw};
+use mml_skin_draw::{cape_2d_draw, head_2d_draw, head_3d_draw, skin_2d_draw, skin_3d_draw};
 use tiny_skia::Pixmap;
 
 /// 比较两个位图的内容是否完全一致
@@ -137,4 +137,46 @@ fn regen_3d_refs() {
 
     let b = head_3d_draw::draw_head_3d_typeb(&image, 15.0, 65.0).expect("3d typeb 应成功");
     mml_skin::save_bitmap(&b, Path::new("tests").join("out_head_3d_b.png").as_path());
+}
+
+/// TEMP：输出皮肤 3D 渲染到 target/temp/out_skin_3d.png 供人工检查，验证后删除
+/// `cargo test -p mml-skin-draw --test skin_draw_tests dump_skin_3d -- --ignored`
+#[test]
+#[ignore]
+fn dump_skin_3d() {
+    let image = load_skin("skin_slim.png");
+    let res = skin_3d_draw::draw_skin_3d_typea(&image, None).expect("渲染应成功");
+    let dir = Path::new("../../target/temp");
+    std::fs::create_dir_all(dir).unwrap();
+    mml_skin::save_bitmap(&res, dir.join("out_skin_3d.png").as_path());
+    // TEMP：低头模式（俯仰 +30°）
+    let down = skin_3d_draw::draw_skin_3d_typeb(&image, None, 30.0, 45.0).expect("渲染应成功");
+    mml_skin::save_bitmap(&down, dir.join("out_skin_3d_down.png").as_path());
+}
+
+/// TEMP：与 head_3d 同角度输出，对比头部贴图；验证后删除
+#[test]
+#[ignore]
+fn dump_head_compare() {
+    let image = load_skin("skin_slim.png");
+    let dir = Path::new("../../target/temp");
+    std::fs::create_dir_all(dir).unwrap();
+    // 与 head 3D typeb 参考图同参数
+    let skin = skin_3d_draw::draw_skin_3d_typeb(&image, None, 15.0, 65.0).expect("渲染应成功");
+    mml_skin::save_bitmap(&skin, dir.join("out_skin_3d_headcmp.png").as_path());
+    let head = head_3d_draw::draw_head_3d_typeb(&image, 15.0, 65.0).expect("渲染应成功");
+    mml_skin::save_bitmap(&head, dir.join("out_head_3d_headcmp.png").as_path());
+}
+
+/// TEMP：typea 原角度对比皮肤 3D 与头 3D；验证后删除
+#[test]
+#[ignore]
+fn dump_head_compare_a() {
+    let image = load_skin("skin_slim.png");
+    let dir = Path::new("../../target/temp");
+    std::fs::create_dir_all(dir).unwrap();
+    let skin = skin_3d_draw::draw_skin_3d_typea(&image, None).expect("渲染应成功");
+    mml_skin::save_bitmap(&skin, dir.join("out_skin_3d_cmpa.png").as_path());
+    let head = head_3d_draw::draw_head_3d_typea(&image).expect("渲染应成功");
+    mml_skin::save_bitmap(&head, dir.join("out_head_3d_cmpa.png").as_path());
 }

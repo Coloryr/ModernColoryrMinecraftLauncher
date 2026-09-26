@@ -83,7 +83,10 @@ function hidePreview() {
       </div>
       <span v-if="isCurrent(acc)" class="current-tag">{{ t("account.current") }}</span>
       <span class="token-tag" :class="acc.tokenStatus">{{ tokenLabel(acc) }}</span>
-      <AccountActions :auth-type="acc.authType"
+      <AccountActions
+        :can-refresh="acc.canRefresh"
+        :can-relogin="acc.canRelogin"
+        :can-edit="acc.canEdit"
         @refresh="emit('refresh', acc)"
         @relogin="emit('relogin', acc)"
         @edit="emit('edit', acc)"

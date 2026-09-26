@@ -4,7 +4,6 @@
 import { ref } from "vue";
 import type { AccountStoreDto } from "./bindings";
 import { getImageBaseUrl } from "./api";
-import type { SkinDisplay } from "./guiConfig";
 
 /** mml-image 协议前缀（进窗口后异步取一次，浏览器预览取不到时保持空串走占位图） */
 export const imageBase = ref("");
@@ -25,24 +24,22 @@ export function bumpImageVersion() {
   imageVersion.value += 1;
 }
 
-/** 头像（真实渲染） */
+/** 头像（真实渲染，后端按头像配置选渲染方式） */
 export function accountAvatarUrl(acc: AccountStoreDto): string {
   return imageBase.value
-    ? `${imageBase.value}/skin/${acc.authType}/${acc.uuid}?v=${imageVersion.value}`
+    ? `${imageBase.value}/head/${acc.authType}/${acc.uuid}?v=${imageVersion.value}`
     : "";
 }
 
-/** 皮肤全身图（按显示模式：Skin2DA → 2D 展开图，Skin2DB → 2D 大图，Skin3D → 3D 等距模型） */
-export function accountSkinUrl(acc: AccountStoreDto, mode: SkinDisplay): string {
+/** 皮肤全身图（后端按全局显示模式配置选 2D 展开图 / 2D 大图 / 3D 等距模型） */
+export function accountSkinUrl(acc: AccountStoreDto): string {
   if (!imageBase.value) return "";
-  const seg =
-    mode === "Skin3D" ? "skin3d" : mode === "Skin2DB" ? "skin2db" : "skin2d";
-  return `${imageBase.value}/${seg}/${acc.authType}/${acc.uuid}/auto?v=${imageVersion.value}`;
+  return `${imageBase.value}/skin/${acc.authType}/${acc.uuid}/auto?v=${imageVersion.value}`;
 }
 
-/** 披风 2D 平面图 */
+/** 披风渲染图（后端渲染 2D 正面） */
 export function accountCapeUrl(acc: AccountStoreDto): string {
-  return imageBase.value ? `${imageBase.value}/cape2d/${acc.authType}/${acc.uuid}` : "";
+  return imageBase.value ? `${imageBase.value}/cape/${acc.authType}/${acc.uuid}` : "";
 }
 
 /** 图片加载失败标记（key 见 accountImageKey），标记后回退占位图 */

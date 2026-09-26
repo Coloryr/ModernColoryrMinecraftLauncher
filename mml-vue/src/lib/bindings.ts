@@ -103,7 +103,7 @@ export const commands = {
     getRunning: () => invoke<string[]>("main_get_running"),
     getVersions: () => invoke<VersionInfoDto[]>("main_get_versions"),
     imageBaseUrl: () => invoke<string>("main_image_base_url"),
-    launchGame: (uuid: string, userName: string) => invoke<void>("main_launch_game", { uuid, userName }),
+    launchGame: (uuid: string) => invoke<void>("main_launch_game", { uuid }),
     loadState: () => invoke<LoadState>("main_load_state"),
     moveGroup: (name: string, index: number) => invoke<boolean>("main_move_group", { name, index }),
     moveInstance: (uuid: string, group: string | null, index: number) => invoke<boolean>("main_move_instance", { uuid, group, index }),
@@ -152,6 +152,7 @@ export const commands = {
     getNetwork: () => invoke<NetworkSettingDto>("settings_get_network"),
     getSystemFonts: () => invoke<string[]>("settings_get_system_fonts"),
     removeJava: (name: string) => invoke<JavaInfoDto[]>("settings_remove_java", { name }),
+    resizeBg: (percent: number) => invoke<string>("settings_resize_bg", { percent }),
     saveLaunch: (minMemory: number, maxMemory: number, jvmArgs: string, gameArgs: string) => invoke<void>("settings_save_launch", { minMemory, maxMemory, jvmArgs, gameArgs }),
     saveNetwork: (dto: NetworkSettingDto) => invoke<void>("settings_save_network", { dto }),
     scanJava: () => invoke<JavaInfoDto[]>("settings_scan_java"),
@@ -177,6 +178,9 @@ export type AccountStoreDto = {
   server: string | null,
   ext1: string | null,
   ext2: string | null,
+  canRefresh: boolean,
+  canRelogin: boolean,
+  canEdit: boolean,
 };
 
 export type AccountOAuthDto = {
@@ -536,6 +540,7 @@ export type LogLine = {
 export type StateEvent = {
   uuid: string,
   state: string,
+  progress: number | null,
 };
 
 export type ExitEvent = {

@@ -904,14 +904,15 @@ pub fn main_move_instance(
 }
 
 /// 启动游戏（占位：标记运行 + 发事件；接入核心后替换为真实启动）
+///
+/// 启动用户名由后端自己从当前账户解析（`auths::get_current()`），前端不传
 #[tauri::command]
 pub fn main_launch_game(
     app: AppHandle,
     window: WebviewWindow,
     uuid: String,
-    user_name: String,
 ) -> Result<(), String> {
-    println!("[launch_game] uuid={uuid} user={user_name}");
+    println!("[launch_game] uuid={uuid}");
     let store = model(&window)?;
     {
         let mut store = store.lock().unwrap();
@@ -925,6 +926,7 @@ pub fn main_launch_game(
         StateEvent {
             uuid: uuid.clone(),
             state: "launching".into(),
+            progress: None,
         },
     );
     emit_log_line(&app, &uuid, "游戏启动中…", true);

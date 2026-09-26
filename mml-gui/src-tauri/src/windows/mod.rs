@@ -650,10 +650,26 @@ pub fn window_get_gui_config(window: WebviewWindow) -> GuiConfigDto {
 }
 
 /// 保存 GUI 状态到 gui_config.json（前端 DTO 转内部 GuiConfig）
+///
+/// 皮肤显示模式 / 头像配置有变化时广播 `skin-config-change`：渲染缓存键里含这两项，
+/// 各窗口收到后按新模式重取头像 / 皮肤图
 #[tauri::command]
-pub async fn window_save_gui_config(config: GuiConfigDto) -> Result<(), String> {
+pub async fn window_save_gui_config(app: AppHandle, config: GuiConfigDto) -> Result<(), String> {
     let new_config: crate::gui_config::GuiConfig = config.into();
+    let skin_changed = {
+        let old = crate::gui_config::get();
+        old.skin_display != new_config.skin_display || old.head != new_config.head
+    };
     crate::gui_config::set(new_config);
+    if skin_changed {
+        emit_skin_config_change(&app);
+    }
     Ok(())
+}
+
+/// 皮肤 / 头像显示配置变更事件（跨窗口同步重取渲染图）
+#[gui_macros::emit]
+fn emit_skin_config_change(app: &AppHandle) {
+    let _ = app.emit(listens::SKIN_CONFIG_CHANGE, ());
 }
 

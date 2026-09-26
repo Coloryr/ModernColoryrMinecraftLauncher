@@ -12,6 +12,7 @@
 //! | [`cape_2d_draw`] | 披风 2D 渲染 |
 
 pub mod cape_2d_draw;
+pub(crate) mod gpu_3d;
 pub mod head_2d_draw;
 pub mod head_3d_draw;
 pub mod skin_2d_draw;
@@ -38,6 +39,39 @@ pub mod skin_draw {
     #[inline]
     pub fn row_bytes(image: &Pixmap) -> usize {
         image.width() as usize * BPP
+    }
+
+    /// 整数倍降采样（预乘像素直接求平均即可，不需要还原成直乘）
+    pub(crate) fn downsample(src: &Pixmap, factor: u32) -> Option<Pixmap> {
+        let width = src.width() / factor;
+        let height = src.height() / factor;
+        let mut out = Pixmap::new(width, height)?;
+
+        let count = (factor * factor) as u32;
+
+        for y in 0..height {
+            for x in 0..width {
+                let mut sum = [0u32; 4];
+
+                for dy in 0..factor {
+                    for dx in 0..factor {
+                        let px = src.pixel(x * factor + dx, y * factor + dy)?;
+                        sum[0] += px.red() as u32;
+                        sum[1] += px.green() as u32;
+                        sum[2] += px.blue() as u32;
+                        sum[3] += px.alpha() as u32;
+                    }
+                }
+
+                let offset = ((y * width + x) * 4) as usize;
+                let dst = &mut out.data_mut()[offset..offset + 4];
+                for (i, value) in sum.iter().enumerate() {
+                    dst[i] = (value / count) as u8;
+                }
+            }
+        }
+
+        Some(out)
     }
 
     /// 按行复制源区域像素到目标位置
