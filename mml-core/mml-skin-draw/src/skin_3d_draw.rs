@@ -175,34 +175,16 @@ fn face_rect(w: i32, h: i32, d: i32, bx: i32, by: i32, di: usize) -> FaceRect {
 }
 
 /// 一个身体部件：尺寸 + 基础层 / overlay 层的中心与半尺寸 + 贴图块左上角
-pub(crate) struct Part {
+struct Part {
     /// 部件尺寸 (W 宽, H 高, D 深)，皮肤像素
-    pub dims: [i32; 3],
-    /// 基础层中心（模型坐标）与半尺寸
-    pub base_center: [f32; 3],
-    pub base_half: [f32; 3],
-    /// overlay 层半尺寸（基础层 × 1.125）与贴图块
-    pub overlay_half: [f32; 3],
-    pub base_block: [i32; 2],
-    pub overlay_block: [i32; 2],
-}
-
-/// 组装一个部件（半尺寸与 overlay 放大系数在这里统一处理）
-fn mk_part(
     dims: [i32; 3],
-    center: [f32; 3],
+    /// 基础层中心（模型坐标）与半尺寸
+    base_center: [f32; 3],
+    base_half: [f32; 3],
+    /// overlay 层半尺寸（基础层 × 1.125）与贴图块
+    overlay_half: [f32; 3],
     base_block: [i32; 2],
     overlay_block: [i32; 2],
-) -> Part {
-    let half = [dims[0] as f32 / 2.0, dims[1] as f32 / 2.0, dims[2] as f32 / 2.0];
-    Part {
-        dims,
-        base_center: center,
-        base_half: half,
-        overlay_half: [half[0] * 1.125, half[1] * 1.125, half[2] * 1.125],
-        base_block,
-        overlay_block,
-    }
 }
 
 /// 组装全身部件（纤细手臂 3 像素宽，普通 4 像素宽）
@@ -212,56 +194,32 @@ fn mk_part(
 fn parts(skin_type: SkinType) -> Vec<Part> {
     let slim = skin_type == SkinType::NewSlim;
     let aw = if slim { 3 } else { 4 }; // 手臂宽（像素）
+    let enlarge = 1.125; // overlay 层放大系数
+
+    let mk = |dims: [i32; 3], center: [f32; 3], base_block: [i32; 2], overlay_block: [i32; 2]| {
+        let half = [dims[0] as f32 / 2.0, dims[1] as f32 / 2.0, dims[2] as f32 / 2.0];
+        Part {
+            dims,
+            base_center: center,
+            base_half: half,
+            overlay_half: [half[0] * enlarge, half[1] * enlarge, half[2] * enlarge],
+            base_block,
+            overlay_block,
+        }
+    };
 
     vec![
         // 头：中心在颈部上方 4px（y = 12）
-        mk_part([8, 8, 8], [0.0, 12.0, 0.0], [0, 0], [32, 0]),
+        mk([8, 8, 8], [0.0, 12.0, 0.0], [0, 0], [32, 0]),
         // 身体
-        mk_part([8, 12, 4], [0.0, 2.0, 0.0], [16, 16], [16, 32]),
+        mk([8, 12, 4], [0.0, 2.0, 0.0], [16, 16], [16, 32]),
         // 右腿 / 左腿（右手侧在 x−）
-        mk_part([4, 12, 4], [-2.0, -10.0, 0.0], [0, 16], [0, 32]),
-        mk_part([4, 12, 4], [2.0, -10.0, 0.0], [16, 48], [0, 48]),
+        mk([4, 12, 4], [-2.0, -10.0, 0.0], [0, 16], [0, 32]),
+        mk([4, 12, 4], [2.0, -10.0, 0.0], [16, 48], [0, 48]),
         // 右臂 / 左臂：整段贴在身体侧面之外
-        mk_part([aw, 12, 4], [-4.0 - aw as f32 / 2.0, 2.0, 0.0], [40, 16], [40, 32]),
-        mk_part([aw, 12, 4], [4.0 + aw as f32 / 2.0, 2.0, 0.0], [32, 48], [48, 48]),
+        mk([aw, 12, 4], [-4.0 - aw as f32 / 2.0, 2.0, 0.0], [40, 16], [40, 32]),
+        mk([aw, 12, 4], [4.0 + aw as f32 / 2.0, 2.0, 0.0], [32, 48], [48, 48]),
     ]
-}
-
-/// 头部部件（中心在原点，供头像 3D 渲染使用）
-pub(crate) fn head_part() -> Part {
-    mk_part([8, 8, 8], [0.0, 0.0, 0.0], [0, 0], [32, 0])
-}
-
-/// 取一个部件的基础层 / overlay 层顶点（每面 6 顶点，贴图 uv 按实际尺寸归一化）
-pub(crate) fn part_verts(part: &Part, texture: &Pixmap) -> (Vec<Vert>, Vec<Vert>) {
-    let (tw, th) = (texture.width() as f32, texture.height() as f32);
-    let mut base = Vec::new();
-    let mut overlay = Vec::new();
-    for &d in &face::ALL {
-        base.extend_from_slice(&face_verts(
-            face_corners(part.base_half, d).map(|(pos, uv)| {
-                (
-                    [pos[0] + part.base_center[0], pos[1] + part.base_center[1], pos[2] + part.base_center[2]],
-                    uv,
-                )
-            }),
-            face_rect(part.dims[0], part.dims[1], part.dims[2], part.base_block[0], part.base_block[1], d),
-            tw,
-            th,
-        ));
-        overlay.extend_from_slice(&face_verts(
-            face_corners(part.overlay_half, d).map(|(pos, uv)| {
-                (
-                    [pos[0] + part.base_center[0], pos[1] + part.base_center[1], pos[2] + part.base_center[2]],
-                    uv,
-                )
-            }),
-            face_rect(part.dims[0], part.dims[1], part.dims[2], part.overlay_block[0], part.overlay_block[1], d),
-            tw,
-            th,
-        ));
-    }
-    (base, overlay)
 }
 
 /// 模型变换矩阵（俯仰 + 偏航 → 缩放 → 平移到画布中心）
@@ -302,13 +260,37 @@ pub fn draw_skin_3d_typeb(
     let st = skin_type.unwrap_or_else(|| skin_type_checker::get_skin_type(image));
     let texture = normalize_texture(image)?;
     let part_list = parts(st);
+    let (tw, th) = (texture.width() as f32, texture.height() as f32);
 
     let mut base = Vec::new();
     let mut overlay = Vec::new();
     for part in &part_list {
-        let (b, o) = part_verts(part, &texture);
-        base.extend(b);
-        overlay.extend(o);
+        for &d in &face::ALL {
+            base.extend_from_slice(&face_verts(
+                face_corners(part.base_half, d)
+                    .map(|(pos, uv)| {
+                        (
+                            [pos[0] + part.base_center[0], pos[1] + part.base_center[1], pos[2] + part.base_center[2]],
+                            uv,
+                        )
+                    }),
+                face_rect(part.dims[0], part.dims[1], part.dims[2], part.base_block[0], part.base_block[1], d),
+                tw,
+                th,
+            ));
+            overlay.extend_from_slice(&face_verts(
+                face_corners(part.overlay_half, d)
+                    .map(|(pos, uv)| {
+                        (
+                            [pos[0] + part.base_center[0], pos[1] + part.base_center[1], pos[2] + part.base_center[2]],
+                            uv,
+                        )
+                    }),
+                face_rect(part.dims[0], part.dims[1], part.dims[2], part.overlay_block[0], part.overlay_block[1], d),
+                tw,
+                th,
+            ));
+        }
     }
 
     render_3d(&texture, &base, &overlay, create_tran(pitch, yaw), SIZE_W, SIZE_H, SUPERSAMPLE)
