@@ -13,11 +13,11 @@ export type SidebarSide = "Left" | "Right";
 /** 实例列表显示模式（默认 list，用户改过后用用户的值） */
 export type ViewMode = "list" | "group" | "grid";
 /** 皮肤显示模式（账户界面皮肤预览形态，枚举值即 Rust 变体名） */
-export type SkinDisplay = "Skin2DA" | "Skin2DB" | "Skin3D";
+export type SkinDisplay = "Skin2DA" | "Skin2DB" | "Skin3D" | "Skin3DD";
 
 /** 把任意值规范成合法的皮肤显示模式（非法 / 缺省 → Skin2DA） */
 export function normalizeSkinDisplay(value: string | null | undefined): SkinDisplay {
-  return value === "Skin2DB" || value === "Skin3D" ? value : "Skin2DA";
+  return value === "Skin2DB" || value === "Skin3D" || value === "Skin3DD" ? value : "Skin2DA";
 }
 
 /** 把任意值规范成合法的显示模式（非法 / 缺省 → list） */

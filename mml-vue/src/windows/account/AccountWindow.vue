@@ -350,7 +350,7 @@ function tokenLabel(acc: AccountStoreDto): string {
       <div class="toolbar-right">
         <SegmentedTabs :model-value="view" :options="VIEW_OPTIONS" @update:model-value="view = $event as ViewMode" />
         <!-- 皮肤查看从账户管理进入（不再放主页面顶栏） -->
-        <BaseButton size="sm" @click="openWindow('skin')">{{ t("account.viewSkin") }}</BaseButton>
+        <BaseButton size="sm" class="view-skin-btn" @click="openWindow('skin')">{{ t("account.viewSkin") }}</BaseButton>
         <BaseButton variant="accent" size="sm" @click="openAdd">＋ {{ t("account.add") }}</BaseButton>
       </div>
     </div>
@@ -545,6 +545,18 @@ function tokenLabel(acc: AccountStoreDto): string {
   gap: 10px;
 }
 
+/* 查看皮肤按钮：plain 变体默认透明底，这里给个底色融入工具栏 */
+.view-skin-btn {
+  background: var(--bg-card);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.view-skin-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
 /* UUID 输入 + 随机按钮 */
 .uuid-row {
   display: flex;
@@ -553,7 +565,7 @@ function tokenLabel(acc: AccountStoreDto): string {
 }
 
 .toolbar-select {
-  min-width: 170px;
+  min-width: 110px;
   padding: 8px 28px 8px 12px;
   border-radius: 9px;
   border: 1px solid var(--border);
@@ -584,7 +596,7 @@ function tokenLabel(acc: AccountStoreDto): string {
   border: 1px solid var(--border);
   background: var(--bg-card);
   color: var(--text-dim);
-  width: 220px;
+  width: 200px;
 }
 
 .search-input {

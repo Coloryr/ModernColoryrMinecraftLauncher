@@ -55,7 +55,8 @@ const ICONS: Record<string, string> = {
 
 <style scoped>
 .seg-tabs {
-  display: flex;
+  /* inline-flex：轨道背景只包住选项内容，不撑满父容器宽度 */
+  display: inline-flex;
   gap: 4px;
   background: var(--bg-card);
   border: 1px solid var(--border);

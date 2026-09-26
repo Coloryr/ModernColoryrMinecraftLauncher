@@ -70,19 +70,23 @@ function onCommit() {
 </template>
 
 <style scoped>
+/* 一体式数字步进器：[- 输入框 +] 共用一个圆角边框盒
+   （底色用 --bg-raised：比卡片明显亮一档的专用色阶，见 themes.css） */
 .stepper {
   display: inline-flex;
-  align-items: center;
-  gap: 4px;
+  align-items: stretch;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-raised);
+  overflow: hidden;
 }
 
 .step-btn {
   width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--bg);
-  color: var(--text);
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
   font-size: 15px;
   line-height: 1;
   cursor: pointer;
@@ -95,22 +99,27 @@ function onCommit() {
   flex-shrink: 0;
 }
 
+.step-btn:first-child {
+  border-right: 1px solid var(--border);
+}
+
+.step-btn:last-child {
+  border-left: 1px solid var(--border);
+}
+
 .step-btn:hover {
-  border-color: var(--accent);
-  color: var(--accent);
   background: var(--accent-soft);
+  color: var(--accent);
 }
 
 .step-btn:active {
-  transform: scale(0.95);
+  background: var(--accent-soft);
 }
 
 .step-input {
   width: 64px;
-  height: 28px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--bg);
+  border: none;
+  background: transparent;
   color: var(--text);
   font-size: 13px;
   text-align: center;
@@ -126,7 +135,8 @@ function onCommit() {
   margin: 0;
 }
 
-.step-input:focus {
+/* 输入框无边框，聚焦反馈落在整体外框上 */
+.stepper:focus-within {
   border-color: var(--accent);
 }
 </style>

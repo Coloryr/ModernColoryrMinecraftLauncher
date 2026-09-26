@@ -11,6 +11,7 @@
   --bg-side: #1a1d23;
   --bg-card: #22262e;
   --bg-hover: #2a2f38;
+  --bg-raised: #3a4150;
   --bg-console: #0d0f12;
   --border: #2e333d;
 
@@ -48,6 +49,7 @@
   --bg-side: #f7f8fa;
   --bg-card: #ffffff;
   --bg-hover: #e9ecf1;
+  --bg-raised: #ffffff;
   --bg-console: #10151d;
   --border: #d8dce3;
 
@@ -278,6 +280,7 @@ html.has-bg {
   --bg-side: rgba(26, 29, 35, 0.62);
   --bg-card: rgba(34, 38, 46, 0.62);
   --bg-hover: rgba(42, 47, 56, 0.62);
+  --bg-raised: rgba(58, 65, 80, 0.62);
   --border: rgba(46, 51, 61, 0.72);
   /* 下拉框等浮层需要不透明底（半透明会透出下层文字） */
   --bg-solid: #22262e;
@@ -288,6 +291,7 @@ html.has-bg[data-theme="Light"] {
   --bg-side: rgba(247, 248, 250, 0.66);
   --bg-card: rgba(255, 255, 255, 0.66);
   --bg-hover: rgba(233, 236, 241, 0.66);
+  --bg-raised: rgba(255, 255, 255, 0.8);
   --border: rgba(216, 220, 227, 0.78);
   --bg-solid: #ffffff;
 }

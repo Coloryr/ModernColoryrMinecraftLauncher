@@ -308,21 +308,18 @@ async function removeJava(name: string) {
             <div class="general-col">
               <label class="field-label" style="margin-top: 0">{{ t("winSettings.font") }}</label>
               <div class="font-row">
-                <select v-model="fontPick" class="field-select font-select">
+                <select v-model="fontPick" class="field-select font-select" @change="setFontFamily(fontPick)">
                   <option value="">{{ t("winSettings.fontDefault") }}</option>
                   <option v-for="f in fonts" :key="f" :value="f">{{ f }}</option>
                 </select>
-                <BaseButton size="sm" variant="accent" @click="setFontFamily(fontPick)">
-                  {{ t("winSettings.apply") }}
-                </BaseButton>
               </div>
             </div>
           </div>
           <p class="field-desc" style="margin-top: 8px">{{ t("winSettings.fontDesc") }}</p>
           <p v-if="fontsLoading" class="hint">{{ t("winSettings.fontLoading") }}</p>
 
-          <!-- 界面动画开关 -->
-          <div class="switch-row row-card" style="margin-top: 14px">
+          <!-- 界面动画开关（无底色卡片，与周边文字排版对齐） -->
+          <div class="switch-row" style="margin-top: 14px">
             <div class="switch-text">
               <span class="switch-label">{{ t("winSettings.animations") }}</span>
               <span class="switch-state">{{ t("winSettings.animationsDesc") }}</span>
@@ -398,8 +395,8 @@ async function removeJava(name: string) {
 
           <h3 class="group-title">{{ t("winSettings.secWindow") }}</h3>
 
-          <!-- 两态设置用 Switch 开关 -->
-          <div class="switch-row row-card">
+          <!-- 两态设置用 Switch 开关（无底色卡片，与界面动画行一致） -->
+          <div class="switch-row">
             <div class="switch-text">
               <span class="switch-label">{{ t("winSettings.windowMode") }}</span>
               <span class="switch-state">{{ windowMode === "Multi" ? t("winSettings.multi") : t("winSettings.single") }}</span>
@@ -501,6 +498,7 @@ async function removeJava(name: string) {
               { value: 'Skin2DA', label: t('winSettings.skin2da') },
               { value: 'Skin2DB', label: t('winSettings.skin2db') },
               { value: 'Skin3D', label: t('winSettings.skin3d') },
+              { value: 'Skin3DD', label: t('winSettings.skin3dd') },
             ]"
             @update:model-value="(v) => setSkinDisplay(v as SkinDisplay)"
           />
@@ -538,7 +536,7 @@ async function removeJava(name: string) {
           <template v-if="network">
             <!-- 下载 -->
             <h3 class="group-title">{{ t("winSettings.secDownload") }}</h3>
-            <div class="grid-2">
+            <div class="grid-2 dl-grid">
               <div>
                 <label class="field-label">{{ t("winSettings.downloadSource") }}</label>
                 <SegmentedTabs
@@ -547,7 +545,7 @@ async function removeJava(name: string) {
                     { value: 'Offical', label: t('winSettings.sourceOffical') },
                     { value: 'Bmclapi', label: t('winSettings.sourceBmclapi') },
                   ]"
-                  @update:model-value="(v) => (network!.source = v)"
+                  @update:model-value="(v) => { network!.source = v; applyNetwork(); }"
                 />
               </div>
               <div>
@@ -556,21 +554,27 @@ async function removeJava(name: string) {
                   :model-value="network.downloadThread"
                   :min="1"
                   :max="64"
-                  @update:model-value="(v) => (network!.downloadThread = v)"
+                  @update:model-value="(v) => { network!.downloadThread = v; applyNetwork(); }"
                 />
               </div>
             </div>
 
-            <!-- 下载校验 / 自动下载 -->
-            <div class="check-list" style="margin-top: 14px">
-              <label class="check-row">
-                <input v-model="network.checkFile" type="checkbox" />
+            <!-- 下载校验 / 自动下载：开关行，即改即存 -->
+            <div class="grid-2" style="margin-top: 14px">
+              <div class="switch-row">
                 <span>{{ t("winSettings.checkFile") }}</span>
-              </label>
-              <label class="check-row">
-                <input v-model="network.autoDownload" type="checkbox" />
+                <BaseSwitch
+                  :model-value="network.checkFile"
+                  @update:model-value="(v) => { network!.checkFile = v; applyNetwork(); }"
+                />
+              </div>
+              <div class="switch-row">
                 <span>{{ t("winSettings.autoDownload") }}</span>
-              </label>
+                <BaseSwitch
+                  :model-value="network.autoDownload"
+                  @update:model-value="(v) => { network!.autoDownload = v; applyNetwork(); }"
+                />
+              </div>
             </div>
 
             <!-- 代理 -->
@@ -643,61 +647,74 @@ async function removeJava(name: string) {
               </div>
             </template>
 
+            <!-- 代理字段较多，保留显式保存按钮（其余网络设置即改即存） -->
+            <div class="save-row">
+              <BaseButton variant="accent" @click="saveNetwork">{{ t("winSettings.save") }}</BaseButton>
+            </div>
+
             <!-- 自定义 DNS（DoH） -->
             <h3 class="group-title">{{ t("winSettings.dns") }}</h3>
-            <div class="check-list">
-              <label class="check-row">
-                <input v-model="network.dns.enable" type="checkbox" />
+            <div class="switch-list">
+              <div class="switch-row">
                 <span>{{ t("winSettings.dnsEnable") }}</span>
-              </label>
-              <label class="check-row" :class="{ dim: !network.dns.enable }">
-                <input v-model="network.dns.httpProxy" type="checkbox" :disabled="!network.dns.enable" />
+                <BaseSwitch
+                  :model-value="network.dns.enable"
+                  @update:model-value="(v) => { network!.dns.enable = v; applyNetwork(); }"
+                />
+              </div>
+              <div class="switch-row" :class="{ dim: !network.dns.enable }">
                 <span>{{ t("winSettings.dnsProxy") }}</span>
-              </label>
+                <BaseSwitch
+                  :model-value="network.dns.httpProxy"
+                  :disabled="!network.dns.enable"
+                  @update:model-value="(v) => { network!.dns.httpProxy = v; applyNetwork(); }"
+                />
+              </div>
             </div>
             <template v-if="network.dns.enable">
               <label class="field-label" style="margin-top: 10px">{{ t("winSettings.dnsHttps") }}</label>
-              <textarea v-model="dnsHttpsText" class="field-input args-input" spellcheck="false" />
+              <!-- 编辑中只改本地草稿，失焦 / 回车才落盘 -->
+              <textarea v-model="dnsHttpsText" class="field-input args-input" spellcheck="false" @change="applyNetwork()" />
             </template>
 
             <!-- 游戏文件检查：关闭"检查xx"后对应的 SHA1 校验一并禁用（没得查自然不用校验） -->
             <h3 class="group-title">{{ t("winSettings.gameCheck") }}</h3>
             <div class="grid-2">
-              <div class="check-list">
-                <label class="check-row">
-                  <input v-model="network.check.core" type="checkbox" />
+              <div class="switch-list">
+                <div class="switch-row">
                   <span>{{ t("winSettings.checkCore") }}</span>
-                </label>
-                <label class="check-row">
-                  <input v-model="network.check.lib" type="checkbox" />
+                  <BaseSwitch v-model="network.check.core" />
+                </div>
+                <div class="switch-row">
                   <span>{{ t("winSettings.checkLib") }}</span>
-                </label>
-                <label class="check-row">
-                  <input v-model="network.check.assets" type="checkbox" />
+                  <BaseSwitch v-model="network.check.lib" />
+                </div>
+                <div class="switch-row">
                   <span>{{ t("winSettings.checkAssets") }}</span>
-                </label>
-                <label class="check-row">
-                  <input v-model="network.check.gameMod" type="checkbox" />
+                  <BaseSwitch v-model="network.check.assets" />
+                </div>
+                <div class="switch-row">
                   <span>{{ t("winSettings.checkMod") }}</span>
-                </label>
+                  <BaseSwitch v-model="network.check.gameMod" />
+                </div>
               </div>
-              <div class="check-list">
-                <label class="check-row" :class="{ dim: !network.check.core }">
-                  <input v-model="network.check.coreSha1" type="checkbox" :disabled="!network.check.core" />
+              <div class="switch-list">
+                <div class="switch-row" :class="{ dim: !network.check.core }">
                   <span>{{ t("winSettings.checkCoreSha1") }}</span>
-                </label>
-                <label class="check-row" :class="{ dim: !network.check.lib }">
-                  <input v-model="network.check.libSha1" type="checkbox" :disabled="!network.check.lib" />
+                  <BaseSwitch v-model="network.check.coreSha1" :disabled="!network.check.core" />
+                </div>
+                <div class="switch-row" :class="{ dim: !network.check.lib }">
                   <span>{{ t("winSettings.checkLibSha1") }}</span>
-                </label>
-                <label class="check-row" :class="{ dim: !network.check.assets }">
-                  <input v-model="network.check.assetsSha1" type="checkbox" :disabled="!network.check.assets" />
+                  <BaseSwitch v-model="network.check.libSha1" :disabled="!network.check.lib" />
+                </div>
+                <div class="switch-row" :class="{ dim: !network.check.assets }">
                   <span>{{ t("winSettings.checkAssetsSha1") }}</span>
-                </label>
-                <label class="check-row" :class="{ dim: !network.check.gameMod }">
-                  <input v-model="network.check.modSha1" type="checkbox" :disabled="!network.check.gameMod" />
+                  <BaseSwitch v-model="network.check.assetsSha1" :disabled="!network.check.assets" />
+                </div>
+                <div class="switch-row" :class="{ dim: !network.check.gameMod }">
                   <span>{{ t("winSettings.checkModSha1") }}</span>
-                </label>
+                  <BaseSwitch v-model="network.check.modSha1" :disabled="!network.check.gameMod" />
+                </div>
               </div>
             </div>
 
@@ -963,6 +980,12 @@ async function removeJava(name: string) {
   min-width: 0;
 }
 
+/* 下载源页签与线程数步进器统一高度（SegmentedTabs 自然高度 ≈35px） */
+.dl-grid .seg-tabs,
+.dl-grid .stepper {
+  height: 35px;
+}
+
 /* 两态设置行：左侧标题 + 当前值，右侧 Switch */
 .switch-row {
   display: flex;
@@ -1039,35 +1062,24 @@ async function removeJava(name: string) {
   gap: 12px 16px;
 }
 
-/* 复选框行（下载校验 / DNS / 游戏文件检查） */
-.check-list {
+/* 开关行（下载校验 / DNS / 游戏文件检查）：文字居左、BaseSwitch 居右 */
+.switch-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
 
-.check-row {
+.switch-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: space-between;
+  gap: 12px;
   font-size: 12.5px;
-  cursor: pointer;
   user-select: none;
 }
 
-.check-row.dim {
+.switch-row.dim {
   opacity: 0.55;
-}
-
-.check-row input[type="checkbox"] {
-  accent-color: var(--accent);
-  width: 15px;
-  height: 15px;
-  cursor: pointer;
-}
-
-.check-row input[type="checkbox"]:disabled {
-  cursor: not-allowed;
 }
 
 .save-row {
