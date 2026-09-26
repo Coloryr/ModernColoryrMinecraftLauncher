@@ -71,8 +71,10 @@ pub enum SkinDisplay {
     Skin2DA,
     /// 2D 大图（TypeB）
     Skin2DB,
-    /// 3D 等距模型（Rust 侧 skin_3d_draw 渲染）
+    /// 3D 等距模型，面朝上（仰视）
     Skin3D,
+    /// 3D 等距模型，面朝下（俯视）
+    Skin3DD,
 }
 
 /// 头像类型（serde 按变体名序列化，与前端同名）

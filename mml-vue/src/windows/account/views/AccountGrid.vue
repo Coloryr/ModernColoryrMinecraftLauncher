@@ -1,9 +1,10 @@
 <script setup lang="ts">
 // 账户平铺视图：皮肤 / 头像 / 披风 三图卡片
-import { ref } from "vue";
+import { computed, ref } from "vue";
 import { t } from "../../../lib/i18n";
 import {
   accountAvatarUrl,
+  accountCapeBackUrl,
   accountCapeUrl,
   accountSkinUrl,
   imageFailed,
@@ -21,6 +22,9 @@ const props = defineProps<{
   currentUuid: string;
 }>();
 
+// 皮肤显示模式是否为 3D（仰视 / 俯视都用等距全身图，槽位与悬浮样式一致）
+const isSkin3D = computed(() => skinDisplay.value === "Skin3D" || skinDisplay.value === "Skin3DD");
+
 const emit = defineEmits<{
   (e: "switch", acc: AccountStoreDto): void;
   (e: "refresh", acc: AccountStoreDto): void;
@@ -33,10 +37,15 @@ function isCurrent(acc: AccountStoreDto): boolean {
   return acc.uuid === props.currentUuid;
 }
 
-// 悬停图片浮动显示对应大图（头像 → 头部渲染，皮肤 → 全身图，披风 → 披风 2D）
-const preview = ref<{ x: number; y: number; url: string; kind: string; acc: AccountStoreDto } | null>(
-  null,
-);
+// 悬停图片浮动显示对应大图（头像 → 头部渲染，皮肤 → 全身图，披风 → 正面 + 背面两张并排）
+const preview = ref<{
+  x: number;
+  y: number;
+  url: string;
+  backUrl: string;
+  kind: string;
+  acc: AccountStoreDto;
+} | null>(null);
 
 const previewUrl = (kind: string, acc: AccountStoreDto): string =>
   kind === "avatar"
@@ -47,7 +56,15 @@ const previewUrl = (kind: string, acc: AccountStoreDto): string =>
 
 function showPreview(e: MouseEvent, acc: AccountStoreDto, kind: string) {
   if (imageFailed(acc, kind)) return;
-  preview.value = { x: e.clientX, y: e.clientY, kind, url: previewUrl(kind, acc), acc };
+  preview.value = {
+    x: e.clientX,
+    y: e.clientY,
+    kind,
+    url: previewUrl(kind, acc),
+    // 披风悬浮多带一张背面图（其余类型空串不渲染）
+    backUrl: kind === "cape" ? accountCapeBackUrl(acc) : "",
+    acc,
+  };
 }
 
 function movePreview(e: MouseEvent) {
@@ -100,7 +117,7 @@ function hidePreview() {
           <img
             :src="accountSkinUrl(acc)"
             class="img-skin"
-            :class="{ 'mode-3d': skinDisplay === 'Skin3D', pending: imageLoading(acc, 'skin') }"
+            :class="{ 'mode-3d': isSkin3D, pending: imageLoading(acc, 'skin') }"
             :alt="t('account.skin')"
             @load="markImageLoaded(acc, 'skin')"
             @error="markImageFailed(acc, 'skin')"
@@ -159,10 +176,11 @@ function hidePreview() {
       <div
         v-if="preview"
         class="skin-float"
-        :class="[preview.kind, preview.kind === 'skin' && skinDisplay === 'Skin3D' ? 'skin3d' : '']"
+        :class="[preview.kind, preview.kind === 'skin' && isSkin3D ? 'skin3d' : '']"
         :style="{ left: preview.x + 'px', top: preview.y + 'px' }"
       >
         <img :src="preview.url" alt="" />
+        <img v-if="preview.backUrl" :src="preview.backUrl" alt="" />
       </div>
     </Teleport>
   </div>
@@ -380,15 +398,20 @@ function hidePreview() {
   image-rendering: auto;
 }
 
+/* 披风悬浮大图 = 正面 + 背面两张并排（各 160x256，gap 分开间距） */
+.skin-float.cape {
+  display: flex;
+  gap: 8px;
+}
+
 .skin-float.cape img {
   width: 160px;
   height: 256px;
-  object-fit: contain;
 }
 
-/* 皮肤显示模式 = 3D：槽位改为方形小图（渲染图自带抗锯齿，不用 pixelated） */
+/* 皮肤显示模式 = 3D：渲染图为 272×532 竖图，铺满整个槽位（contain 按宽缩放），
+   渲染图自带抗锯齿，不用 pixelated */
 .img-skin.mode-3d {
-  height: 48px;
   image-rendering: auto;
   object-fit: contain;
 }

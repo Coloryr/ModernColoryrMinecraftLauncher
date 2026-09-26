@@ -296,7 +296,7 @@ pub fn draw_skin_3d_typeb(
     render_3d(&texture, &base, &overlay, create_tran(pitch, yaw), SIZE_W, SIZE_H, SUPERSAMPLE)
 }
 
-/// 渲染 3D 等距全身图（固定角度：水平 45°、面朝上 30°）
+/// 渲染 3D 等距全身图（固定角度：水平 45°、面朝上 30°，仰视）
 ///
 /// - `image`: 皮肤贴图
 /// - `skin_type`: 皮肤类型，`None` 为自动检测
@@ -306,6 +306,18 @@ pub fn draw_skin_3d_typeb(
 /// 返回 `SIZE_W` x `SIZE_H` 的渲染结果，分配失败或无可用 GPU 时返回 `None`
 pub fn draw_skin_3d_typea(image: &Pixmap, skin_type: Option<SkinType>) -> Option<Pixmap> {
     draw_skin_3d_typeb(image, skin_type, -30.0, 45.0)
+}
+
+/// 渲染 3D 等距全身图（固定角度：水平 45°、面朝下 30°，俯视）
+///
+/// - `image`: 皮肤贴图
+/// - `skin_type`: 皮肤类型，`None` 为自动检测
+///
+/// # 返回值
+///
+/// 返回 `SIZE_W` x `SIZE_H` 的渲染结果，分配失败或无可用 GPU 时返回 `None`
+pub fn draw_skin_3d_typea_down(image: &Pixmap, skin_type: Option<SkinType>) -> Option<Pixmap> {
+    draw_skin_3d_typeb(image, skin_type, 30.0, 45.0)
 }
 
 #[cfg(test)]

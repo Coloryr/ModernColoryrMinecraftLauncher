@@ -42,6 +42,11 @@ export function accountCapeUrl(acc: AccountStoreDto): string {
   return imageBase.value ? `${imageBase.value}/cape/${acc.authType}/${acc.uuid}` : "";
 }
 
+/** 披风背面渲染图（后端渲染 2D 背面，悬浮大图与正面并排用） */
+export function accountCapeBackUrl(acc: AccountStoreDto): string {
+  return imageBase.value ? `${imageBase.value}/capeback/${acc.authType}/${acc.uuid}` : "";
+}
+
 /** 图片加载失败标记（key 见 accountImageKey），标记后回退占位图 */
 export const failedImages = ref(new Set<string>());
 

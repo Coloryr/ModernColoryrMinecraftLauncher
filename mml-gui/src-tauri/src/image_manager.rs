@@ -2,7 +2,8 @@
 //!
 //! 前端用 `image_base_url()` 拼地址，请求经 [`url_image`] 按首段路由：
 //! `instance`（实例图标）/
-//! `head`（账户头像）/ `skin`（皮肤全身图）/ `cape`（披风图）——渲染方式由后端读配置决定，
+//! `head`（账户头像）/ `skin`（皮肤全身图）/ `cape`（披风正面图）/ `capeback`（披风背面图）
+//! ——渲染方式由后端读配置决定，
 //! 前端只挑"要哪种图"，不挑"怎么渲染"；
 //! `skinraw` / `caperaw`（原始皮肤/披风贴图，供前端 skinview3d 数据用）/
 //! `icon`（远程图片，带内存 + 磁盘 + ETag 缓存）/
@@ -23,7 +24,7 @@ use mml_base::hash_helper::{self, HashType};
 use mml_game::player_skin;
 use mml_names::names;
 use mml_net::mojang_api;
-use mml_skin::SkinType;
+use mml_skin::{skin_type_checker, SkinType};
 use mml_skin_draw::{cape_2d_draw, head_2d_draw, head_3d_draw, skin_2d_draw, skin_3d_draw};
 use mml_sys::path_helper;
 use tiny_skia::Pixmap;
@@ -55,6 +56,9 @@ static CAPERAW_IMAGE: LazyLock<RwLock<HashMap<UserKeyObj, Vec<u8>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 /// 账户披风渲染图内存缓存
 static CAPE_IMAGE: LazyLock<RwLock<HashMap<UserKeyObj, Vec<u8>>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
+/// 账户披风背面渲染图内存缓存
+static CAPE_BACK_IMAGE: LazyLock<RwLock<HashMap<UserKeyObj, Vec<u8>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 /// 远程图标内存缓存（键为请求名 = 网址 sha256）
 static ICON_IMAGE: LazyLock<RwLock<HashMap<String, IconCache>>> =
@@ -281,6 +285,8 @@ struct SkinFiles {
     key: UserKeyObj,
     skin: Option<PathBuf>,
     cape: Option<PathBuf>,
+    /// 会话服务器 metadata 的纤细标记（权威值；离线等查不到档案时为 false）
+    is_new_slim: bool,
 }
 
 /// 皮肤类URI（`skin*/cape*/<账户类型>/<uuid>`）解析出账户并取回皮肤/披风文件
@@ -293,6 +299,7 @@ async fn resolve_skin_files(uri: &[&str]) -> Option<SkinFiles> {
     let res = player_skin::download_skin(&user).await;
     Some(SkinFiles {
         key: user.get_key(),
+        is_new_slim: res.is_new_slim,
         skin: res.skin,
         cape: res.cape,
     })
@@ -300,7 +307,7 @@ async fn resolve_skin_files(uri: &[&str]) -> Option<SkinFiles> {
 
 /// 皮肤全身渲染图（`skin/<账户类型>/<uuid>`）
 ///
-/// 渲染风格由后端读 gui_config 的 `skin_display` 决定（Skin2DA / Skin2DB / Skin3D），
+/// 渲染风格由后端读 gui_config 的 `skin_display` 决定（Skin2DA / Skin2DB / Skin3D / Skin3DD），
 /// 前端不选风格。第4段为皮肤型号：`auto`（自动检测，可省略）/ `old`（1.7旧版）/
 /// `new`（1.8新版）/ `slim`（纤细）——这是皮肤版型信息，不是渲染风格
 async fn load_skin_image(uri: &[&str], res: UriSchemeResponder) {
@@ -337,11 +344,27 @@ async fn load_skin_image(uri: &[&str], res: UriSchemeResponder) {
         send_bad(res);
         return;
     };
-    let st = parse_skin_type(skin_type).flatten();
+    let st = match parse_skin_type(skin_type).flatten() {
+        Some(st) => Some(st),
+        None => {
+            // 自动检测：会话服务器 metadata 的纤细标记是权威值，用来纠偏——
+            // 服务器说是纤细就直接按纤细；说不是而贴图检测出纤细（手臂宽度含糊时
+            // 可能误判）按普通新版处理，其余沿用检测结果（Old / New）
+            let detected = skin_type_checker::get_skin_type(&bitmap);
+            Some(if files.is_new_slim {
+                SkinType::NewSlim
+            } else if detected == SkinType::NewSlim {
+                SkinType::New
+            } else {
+                detected
+            })
+        }
+    };
     let image = match display {
         SkinDisplay::Skin2DA => skin_2d_draw::skin_2d_draw_typea(&bitmap, st),
         SkinDisplay::Skin2DB => skin_2d_draw::skin_2d_draw_typeb(&bitmap, st),
         SkinDisplay::Skin3D => skin_3d_draw::draw_skin_3d_typea(&bitmap, st),
+        SkinDisplay::Skin3DD => skin_3d_draw::draw_skin_3d_typea_down(&bitmap, st),
     };
     let Some(image) = image else {
         send_bad(res);
@@ -477,6 +500,50 @@ async fn load_cape_image(uri: &[&str], res: UriSchemeResponder) {
     };
 
     CAPE_IMAGE.write().unwrap().insert(key, data.clone());
+
+    send_png(res, data);
+}
+
+/// 披风背面渲染图（`capeback/<账户类型>/<uuid>`，cape_2d_draw 背面，
+/// 供账户列表悬浮大图与正面并排显示）
+async fn load_cape_back_image(uri: &[&str], res: UriSchemeResponder) {
+    if uri.len() != 3 {
+        send_bad(res);
+        return;
+    }
+
+    let Some(files) = resolve_skin_files(uri).await else {
+        send_bad(res);
+        return;
+    };
+    let key = files.key;
+    let Some(file) = files.cape else {
+        send_bad(res);
+        return;
+    };
+
+    {
+        let image = CAPE_BACK_IMAGE.read().unwrap().get(&key).cloned();
+        if let Some(data) = image {
+            send_png(res, data);
+            return;
+        }
+    }
+
+    let Some(bitmap) = mml_skin::open_bitmap(&file) else {
+        send_bad(res);
+        return;
+    };
+    let Some(image) = cape_2d_draw::draw_cape_back_2d(&bitmap) else {
+        send_bad(res);
+        return;
+    };
+    let Ok(data) = image.encode_png() else {
+        send_bad(res);
+        return;
+    };
+
+    CAPE_BACK_IMAGE.write().unwrap().insert(key, data.clone());
 
     send_png(res, data);
 }
@@ -786,6 +853,8 @@ pub async fn url_image(req: Request<Vec<u8>>, res: UriSchemeResponder) {
         load_caperaw_image(&uri, res).await;
     } else if image_type == "cape" {
         load_cape_image(&uri, res).await;
+    } else if image_type == "capeback" {
+        load_cape_back_image(&uri, res).await;
     } else if image_type == "icon" {
         load_icon_image(&uri, res).await;
     } else if image_type == "block" {
