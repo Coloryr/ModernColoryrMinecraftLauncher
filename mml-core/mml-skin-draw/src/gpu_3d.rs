@@ -141,7 +141,14 @@ impl Pipelines {
             write_mask: wgpu::ColorWrites::ALL,
         };
 
-        let mk = |blend: Option<wgpu::BlendState>, depth: wgpu::DepthStencilState, entry: &str| {
+        // 底层剔除背面：部件间存在共面面（头底/身顶、腿顶/身底、臂内/身侧），
+        // 不剔除会 z-fighting，背面盖住正面。
+        // 顶层不剔除：帽子远侧要从透明纹素后面透出来（与 CPU 参考的
+        // 无剔除效果一致），顶层没有共面面，不会 z-fighting
+        let mk = |blend: Option<wgpu::BlendState>,
+                  depth: wgpu::DepthStencilState,
+                  cull: Option<wgpu::Face>,
+                  entry: &str| {
             device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some("mml-skin-3d"),
                 layout: Some(&layout),
@@ -177,11 +184,9 @@ impl Pipelines {
                 }),
                 primitive: wgpu::PrimitiveState {
                     topology: wgpu::PrimitiveTopology::TriangleList,
-                    // 面绕序为外侧 CCW（NDC y 向下时屏幕绕序保持 CCW）；
-                    // 剔除背面：部件间存在共面面（头底/身顶、腿顶/身底、臂内/身侧），
-                    // 不剔除会 z-fighting，背面盖住正面
+                    // 面绕序为外侧 CCW（NDC y 向下时屏幕绕序保持 CCW）
                     front_face: wgpu::FrontFace::Ccw,
-                    cull_mode: Some(wgpu::Face::Back),
+                    cull_mode: cull,
                     ..Default::default()
                 },
                 depth_stencil: Some(depth),
@@ -207,8 +212,8 @@ impl Pipelines {
         });
 
         Pipelines {
-            base: mk(None, depth_write, "fs_base"),
-            overlay: mk(overlay_blend, depth_ro, "fs_overlay"),
+            base: mk(None, depth_write, Some(wgpu::Face::Back), "fs_base"),
+            overlay: mk(overlay_blend, depth_ro, None, "fs_overlay"),
             bind_layout,
             sampler: device.create_sampler(&wgpu::SamplerDescriptor {
                 label: Some("mml-skin-3d"),

@@ -81,10 +81,12 @@ pub enum HeadType {
     /// 2D 平面头像（默认）
     #[default]
     Head2DA,
-    /// 3D 头像，不旋转
+    /// 3D 头像，面朝下（俯视）
     Head3DA,
     /// 3D 头像，按 X / Y 旋转
     Head3DB,
+    /// 3D 头像，面朝上（仰视）
+    Head3DC,
     /// 2D 大头像
     Head2DB,
 }

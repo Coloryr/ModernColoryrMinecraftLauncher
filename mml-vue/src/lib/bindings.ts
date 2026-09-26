@@ -736,5 +736,5 @@ export type ViewMode = "list" | "group" | "grid";
 
 export type SkinDisplay = "Skin2DA" | "Skin2DB" | "Skin3D";
 
-export type HeadType = "Head2DA" | "Head3DA" | "Head3DB" | "Head2DB";
+export type HeadType = "Head2DA" | "Head3DA" | "Head3DB" | "Head3DC" | "Head2DB";
 

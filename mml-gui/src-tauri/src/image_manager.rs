@@ -486,8 +486,9 @@ fn gen_head_image(bitmap: &Pixmap) -> Option<Pixmap> {
     let config = gui_config::get().head;
 
     match config.head_type {
-        HeadType::Head3DA => head_3d_draw::draw_head_3d_typea(bitmap, false),
+        HeadType::Head3DA => head_3d_draw::draw_head_3d_typea_down(bitmap),
         HeadType::Head3DB => head_3d_draw::draw_head_3d_typeb(bitmap, config.x, config.y),
+        HeadType::Head3DC => head_3d_draw::draw_head_3d_typea_up(bitmap),
         HeadType::Head2DB => head_2d_draw::head_2d_draw_typeb(bitmap),
         HeadType::Head2DA => head_2d_draw::head_2d_draw_typea(bitmap),
     }

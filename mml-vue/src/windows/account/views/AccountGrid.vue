@@ -372,10 +372,11 @@ function hidePreview() {
   height: 256px;
 }
 
-/* 皮肤显示模式 = 3D：等距全身图（方形，槽位与悬浮同源所以已进缓存） */
+/* 皮肤显示模式 = 3D：等距全身图（渲染图为 272x532，contain 防拉伸变形） */
 .skin-float.skin3d img {
   width: 320px;
   height: 320px;
+  object-fit: contain;
   image-rendering: auto;
 }
 

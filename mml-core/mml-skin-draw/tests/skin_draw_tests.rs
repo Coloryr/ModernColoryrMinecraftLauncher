@@ -105,7 +105,7 @@ fn test_skin_draw_typeb() {
 fn test_head_3d_draw_typea() {
     let image = load_skin("skin_slim.png");
 
-    let res = head_3d_draw::draw_head_3d_typea(&image, false);
+    let res = head_3d_draw::draw_head_3d_typea_down(&image);
     assert!(res.is_some());
     let res = res.unwrap();
 
@@ -132,111 +132,9 @@ fn test_head_3d_draw_typeb() {
 fn regen_3d_refs() {
     let image = load_skin("skin_slim.png");
 
-    let a = head_3d_draw::draw_head_3d_typea(&image, false).expect("3d typea 应成功");
+    let a = head_3d_draw::draw_head_3d_typea_down(&image).expect("3d typea 应成功");
     mml_skin::save_bitmap(&a, Path::new("tests").join("out_head_3d_a.png").as_path());
 
     let b = head_3d_draw::draw_head_3d_typeb(&image, 15.0, 65.0).expect("3d typeb 应成功");
     mml_skin::save_bitmap(&b, Path::new("tests").join("out_head_3d_b.png").as_path());
-}
-
-/// TEMP：输出皮肤 3D 渲染到 target/temp/out_skin_3d.png 供人工检查，验证后删除
-/// `cargo test -p mml-skin-draw --test skin_draw_tests dump_skin_3d -- --ignored`
-#[test]
-#[ignore]
-fn dump_skin_3d() {
-    let image = load_skin("skin_slim.png");
-    let res = skin_3d_draw::draw_skin_3d_typea(&image, None).expect("渲染应成功");
-    let dir = Path::new("../../target/temp");
-    std::fs::create_dir_all(dir).unwrap();
-    mml_skin::save_bitmap(&res, dir.join("out_skin_3d.png").as_path());
-    // TEMP：低头模式（俯仰 +30°）
-    let down = skin_3d_draw::draw_skin_3d_typeb(&image, None, 30.0, 45.0).expect("渲染应成功");
-    mml_skin::save_bitmap(&down, dir.join("out_skin_3d_down.png").as_path());
-}
-
-/// TEMP：与 head_3d 同角度输出，对比头部贴图；验证后删除
-#[test]
-#[ignore]
-fn dump_head_compare() {
-    let image = load_skin("skin_slim.png");
-    let dir = Path::new("../../target/temp");
-    std::fs::create_dir_all(dir).unwrap();
-    // 与 head 3D typeb 参考图同参数
-    let skin = skin_3d_draw::draw_skin_3d_typeb(&image, None, 15.0, 65.0).expect("渲染应成功");
-    mml_skin::save_bitmap(&skin, dir.join("out_skin_3d_headcmp.png").as_path());
-    let head = head_3d_draw::draw_head_3d_typeb(&image, 15.0, 65.0).expect("渲染应成功");
-    mml_skin::save_bitmap(&head, dir.join("out_head_3d_headcmp.png").as_path());
-}
-
-/// TEMP：typea 原角度对比皮肤 3D 与头 3D；验证后删除
-#[test]
-#[ignore]
-fn dump_head_compare_a() {
-    let image = load_skin("skin_slim.png");
-    let dir = Path::new("../../target/temp");
-    std::fs::create_dir_all(dir).unwrap();
-    let skin = skin_3d_draw::draw_skin_3d_typea(&image, None).expect("渲染应成功");
-    mml_skin::save_bitmap(&skin, dir.join("out_skin_3d_cmpa.png").as_path());
-    let head = head_3d_draw::draw_head_3d_typea(&image, false).expect("渲染应成功");
-    mml_skin::save_bitmap(&head, dir.join("out_head_3d_cmpa.png").as_path());
-}
-
-/// TEMP：输出面朝上的头像 3D 供检查，验证后删除
-#[test]
-#[ignore]
-fn dump_head_typec() {
-    let image = load_skin("skin_slim.png");
-    let dir = Path::new("../../target/temp");
-    std::fs::create_dir_all(dir).unwrap();
-    let res = head_3d_draw::draw_head_3d_typea(&image, true).expect("渲染应成功");
-    mml_skin::save_bitmap(&res, dir.join("out_head_3d_typec.png").as_path());
-}
-
-/// TEMP：只渲染外层（帽层）——把基础层头部区域清成透明再画面朝上视角，验证后删除
-#[test]
-#[ignore]
-fn dump_head_overlay_only() {
-    let image = load_skin("skin_slim.png");
-    // 基础层头部占 (0..32, 0..16)，整体清透明，剩下的就是帽层贴图
-    let mut overlay_skin = image.clone();
-    let data = overlay_skin.data_mut();
-    for y in 0..16usize {
-        for x in 0..32usize {
-            data[(y * 64 + x) * 4..(y * 64 + x) * 4 + 4].fill(0);
-        }
-    }
-
-    let dir = Path::new("../../target/temp");
-    std::fs::create_dir_all(dir).unwrap();
-    let up = head_3d_draw::draw_head_3d_typea(&overlay_skin, true).expect("渲染应成功");
-    mml_skin::save_bitmap(&up, dir.join("out_head_3d_overlay_up.png").as_path());
-    let down = head_3d_draw::draw_head_3d_typea(&overlay_skin, false).expect("渲染应成功");
-    mml_skin::save_bitmap(&down, dir.join("out_head_3d_overlay_down.png").as_path());
-}
-
-/// TEMP：统计 typea(false) 与参考图差异像素，验证后删除
-#[test]
-#[ignore]
-fn diff_typea() {
-    let image = load_skin("skin_slim.png");
-    let res = head_3d_draw::draw_head_3d_typea(&image, false).expect("渲染应成功");
-    let reference = load_reference("out_head_3d_a.png");
-    let (rw, rh) = (reference.width() as usize, reference.height() as usize);
-    let mut count = 0;
-    for y in 0..rh {
-        for x in 0..rw {
-            let i = (y * rw + x) * 4;
-            if res.data()[i..i + 4] != reference.data()[i..i + 4] {
-                count += 1;
-                if count <= 20 {
-                    println!(
-                        "({x},{y}) got {:?} want {:?}",
-                        &res.data()[i..i + 4],
-                        &reference.data()[i..i + 4]
-                    );
-                }
-            }
-        }
-    }
-    println!("total diff pixels: {count}");
 }
