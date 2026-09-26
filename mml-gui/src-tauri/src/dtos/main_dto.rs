@@ -100,6 +100,9 @@ pub struct StateEvent {
     pub uuid: String,
     /// 状态标识
     pub state: String,
+    /// 启动进度百分比（0–100；阶段由后端 LaunchState 定，前端不自算）。
+    /// 无进度语义的状态（如 launching）为 None，前端走滚动条
+    pub progress: Option<u32>,
 }
 
 /// 游戏退出事件

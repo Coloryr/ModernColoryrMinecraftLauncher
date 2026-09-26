@@ -292,14 +292,26 @@ html.has-bg[data-theme="Light"] {
   --bg-solid: #ffffff;
 }
 
-/* 标题栏不参与背景图：保持不透明底色（has-bg 块里对应 --bg-side 的原色）。
+/* 标题栏随背景图转半透明（比普通表面略实，保证拖动区与按钮可读）。
    .frame-head 是子窗口的 WindowFrame 标题栏，.topbar 是主窗口顶栏（兼作标题栏） */
 html.has-bg .frame-head,
 html.has-bg .topbar {
-  background: #1a1d23;
+  background: rgba(26, 29, 35, 0.8);
 }
 
 html.has-bg[data-theme="Light"] .frame-head,
 html.has-bg[data-theme="Light"] .topbar {
-  background: #f7f8fa;
+  background: rgba(247, 248, 250, 0.6);
+}
+
+/* 子窗口根（WindowFrame）不再整窗压一层 --bg 底色：与主窗口一致，
+   表面直接半透明叠在背景图上（多层叠加会比主窗口明显更暗） */
+html.has-bg .window-frame {
+  background: transparent;
+}
+
+/* 设置窗口内容区原本靠整窗 --bg 垫底，去掉后文字直接压在背景图上；
+   给它补回单层 --bg（小字密集的表单区，直接透图可读性差） */
+html.has-bg .tab-content {
+  background: var(--bg);
 }

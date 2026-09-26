@@ -66,6 +66,21 @@ impl Default for AuthType {
 }
 
 impl AuthType {
+    /// 是否有可刷新的令牌（离线账户没有凭据，无令牌可刷新）
+    pub fn can_refresh(&self) -> bool {
+        !matches!(self, AuthType::Offline)
+    }
+
+    /// 是否支持重新登录（重输密码重新认证；离线无令牌，OAuth 走静默刷新没有这一步）
+    pub fn can_relogin(&self) -> bool {
+        !matches!(self, AuthType::Offline | AuthType::OAuth)
+    }
+
+    /// 是否可编辑（离线账户没有服务器凭据，改名/改 UUID 即改账户本身）
+    pub fn can_edit(&self) -> bool {
+        matches!(self, AuthType::Offline)
+    }
+
     /// 从字符串解析认证类型
     ///
     /// - `str`: 认证类型名称（如 `Offline`、`OAuth`、`Nide8`）

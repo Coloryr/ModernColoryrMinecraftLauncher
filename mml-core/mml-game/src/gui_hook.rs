@@ -133,6 +133,29 @@ pub enum LaunchState {
     DownloadServerPack,
 }
 
+impl LaunchState {
+    /// 启动进度百分比（0–100，按阶段等权近似）
+    ///
+    /// 阶段集合与顺序以本枚举为准（GUI 侧不再自持阶段表）；
+    /// 新增变体时这里的 match 会因非穷尽而编译失败，强制同步
+    pub fn progress(&self) -> u32 {
+        let idx = match self {
+            LaunchState::Login => 0,
+            LaunchState::Check => 1,
+            LaunchState::ReadInfo => 2,
+            LaunchState::Download => 3,
+            LaunchState::Jvm => 4,
+            LaunchState::Pre => 5,
+            LaunchState::Post => 6,
+            LaunchState::End => 7,
+            LaunchState::LoadServerPack => 8,
+            LaunchState::CheckServerPack => 9,
+            LaunchState::DownloadServerPack => 10,
+        };
+        (idx + 1) * 100 / 11
+    }
+}
+
 /// 进程运行时机
 pub enum ProcessRunType {
     /// 启动前运行

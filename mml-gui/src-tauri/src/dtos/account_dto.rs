@@ -44,6 +44,12 @@ pub struct AccountStoreDto {
     pub ext1: Option<String>,
     /// 自定义字段 2（详情页展示）
     pub ext2: Option<String>,
+    /// 是否有可刷新的令牌（决定前端显示刷新按钮）
+    pub can_refresh: bool,
+    /// 是否支持重新登录（决定前端显示重登按钮）
+    pub can_relogin: bool,
+    /// 是否可编辑（决定前端显示编辑按钮）
+    pub can_edit: bool,
 }
 
 /// OAuth登录开始
@@ -97,6 +103,9 @@ impl AccountStoreDto {
             },
             ext1: login.text1.clone(),
             ext2: login.text2.clone(),
+            can_refresh: login.auth_type.can_refresh(),
+            can_relogin: login.auth_type.can_relogin(),
+            can_edit: login.auth_type.can_edit(),
         }
     }
 }

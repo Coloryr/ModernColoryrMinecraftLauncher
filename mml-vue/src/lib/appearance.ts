@@ -135,14 +135,14 @@ export async function setBgImageFromOriginal(source: string) {
   }
 }
 
-/** 调整原始分辨率（点「应用」后调用）：后端按源图重新缩放处理；
- *  只改图片分辨率，不改变图在窗口里的显示（显示始终铺满居中） */
+/** 调整原始分辨率（点「应用」后调用）：后端用缓存的原图重新缩放处理（不重新下载，
+ *  随机图网址不会换图）；只改图片分辨率，不改变图在窗口里的显示（显示始终铺满居中） */
 export async function resizeBg(percent: number) {
   bgNativeSize.value = Math.min(Math.max(Math.round(percent), 10), 100);
   if (!isTauri() || !bgSource.value) return;
   bgLoading.value = true;
   try {
-    bgImage.value = await commands.settings.setBg(bgSource.value, bgNativeSize.value);
+    bgImage.value = await commands.settings.resizeBg(bgNativeSize.value);
   } catch (err) {
     showToast(`${t("winSettings.bgResizeFailed")}：${String(err)}`);
   } finally {
@@ -162,16 +162,14 @@ export function setBgBlur(v: number) {
   void saveGuiConfig({ bgBlur: v });
 }
 
-/** 背景图层的内联样式（App.vue 的 .app-bg 绑定用）：
- *  始终铺满窗口（cover）并居中，标题栏不透背景图，图层整体下移半个标题栏高度
- *  （主窗口 64 / 子窗口 60 取 32），顶部露出的缝隙正好藏在标题栏后面 */
+/** 背景图层的内联样式（App.vue 的 .app-bg 绑定用）：始终铺满窗口（cover）并居中，
+ *  标题栏（.frame-head / .topbar）与各表面一样半透明透出此层（见 themes.css 的 has-bg） */
 export const bgLayerStyle = computed(() => {
   if (!bgImage.value) return undefined;
   return {
     backgroundImage: `url("${bgImage.value}")`,
     opacity: String(bgOpacity.value / 100),
     filter: `blur(${bgBlur.value}px)`,
-    backgroundPosition: "center calc(50% + 32px)",
   };
 });
 

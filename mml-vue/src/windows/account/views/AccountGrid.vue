@@ -42,7 +42,7 @@ const previewUrl = (kind: string, acc: AccountStoreDto): string =>
   kind === "avatar"
     ? acc.avatar || accountAvatarUrl(acc)
     : kind === "skin"
-      ? accountSkinUrl(acc, skinDisplay.value)
+      ? accountSkinUrl(acc)
       : accountCapeUrl(acc);
 
 function showPreview(e: MouseEvent, acc: AccountStoreDto, kind: string) {
@@ -98,7 +98,7 @@ function hidePreview() {
         </div>
         <div v-if="!imageFailed(acc, 'skin')" class="img-box img-skin-box">
           <img
-            :src="accountSkinUrl(acc, skinDisplay)"
+            :src="accountSkinUrl(acc)"
             class="img-skin"
             :class="{ 'mode-3d': skinDisplay === 'Skin3D', pending: imageLoading(acc, 'skin') }"
             :alt="t('account.skin')"
@@ -141,7 +141,10 @@ function hidePreview() {
       <div class="acc-head">
         <span class="acc-name">{{ acc.userName }}</span>
         <AccountTypeBadge :auth-type="acc.authType" />
-        <AccountActions :auth-type="acc.authType"
+        <AccountActions
+          :can-refresh="acc.canRefresh"
+          :can-relogin="acc.canRelogin"
+          :can-edit="acc.canEdit"
           @refresh="emit('refresh', acc)"
           @relogin="emit('relogin', acc)"
           @edit="emit('edit', acc)"

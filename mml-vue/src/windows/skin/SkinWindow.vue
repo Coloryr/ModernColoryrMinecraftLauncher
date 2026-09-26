@@ -35,9 +35,10 @@ const account = ref<AccountStoreDto | null>(null);
 /** 皮肤获取失败（离线账户 / 下载失败） */
 const noSkin = ref(false);
 
+// 全身图：后端按全局显示模式配置决定 2D/3D 渲染，这里只传皮肤型号
 const skin2dUrl = computed(() =>
   account.value && base.value
-    ? `${base.value}/skin2d/${account.value.authType}/${account.value.uuid}/${skinType.value}`
+    ? `${base.value}/skin/${account.value.authType}/${account.value.uuid}/${skinType.value}`
     : "",
 );
 const skinrawUrl = computed(() =>
@@ -52,7 +53,7 @@ const caperawUrl = computed(() =>
 );
 const cape2dUrl = computed(() =>
   account.value && base.value
-    ? `${base.value}/cape2d/${account.value.authType}/${account.value.uuid}`
+    ? `${base.value}/cape/${account.value.authType}/${account.value.uuid}`
     : "",
 );
 

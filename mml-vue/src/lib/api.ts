@@ -383,9 +383,9 @@ export const api = {
     return commands.main.moveInstance(uuid, group, index);
   },
 
-  /** 启动游戏（占位：标记运行 + 发事件） */
-  async launchGame(uuid: string, userName: string): Promise<void> {
-    return commands.main.launchGame(uuid, userName);
+  /** 启动游戏（占位：标记运行 + 发事件；启动用户名由后端从当前账户解析） */
+  async launchGame(uuid: string): Promise<void> {
+    return commands.main.launchGame(uuid);
   },
 
   /** 停止游戏 */

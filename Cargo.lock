@@ -2977,6 +2977,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "mml-gpu"
+version = "0.1.0"
+dependencies = [
+ "pollster 1.0.1",
+ "tiny-skia",
+ "wgpu",
+]
+
+[[package]]
 name = "mml-gui"
 version = "0.1.0"
 dependencies = [
@@ -3095,9 +3104,13 @@ dependencies = [
 name = "mml-skin-draw"
 version = "0.1.0"
 dependencies = [
+ "bytemuck",
  "glam",
+ "mml-gpu",
  "mml-skin",
+ "pollster 1.0.1",
  "tiny-skia",
+ "wgpu",
 ]
 
 [[package]]
