@@ -1,3 +1,5 @@
+use std::sync::OnceLock;
+
 use itertools::Itertools;
 use mml_base::serialize_tools;
 use mml_names::i18_items::error_type::{CoreResult, DataNotFoundData, ErrorData, ErrorType};
@@ -7,7 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::urls;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(default)]
 pub struct ResultsObj {
     pub content: String,
@@ -23,7 +25,7 @@ impl Default for ResultsObj {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(default)]
 pub struct OpenJ9Obj {
     pub error: bool,
@@ -39,7 +41,7 @@ impl Default for OpenJ9Obj {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(default)]
 pub struct OptObj {
     #[serde(rename = "downloadLink")]
@@ -56,7 +58,7 @@ impl Default for OptObj {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(default)]
 pub struct JdkObj {
     pub opt1: OptObj,
@@ -70,7 +72,7 @@ impl Default for JdkObj {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(default)]
 pub struct DownloadObj {
     pub name: String,
@@ -108,6 +110,7 @@ impl Default for OpenJ9FileObj {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct OpenJ9ListObj {
     pub arch: Vec<String>,
     pub os: Vec<String>,
@@ -115,8 +118,10 @@ pub struct OpenJ9ListObj {
     pub download: Vec<DownloadObj>,
 }
 
+static OPENJ9: OnceLock<OpenJ9ListObj> = OnceLock::new();
+
 /// 获取JAVA列表
-pub async fn get_java_list() -> CoreResult<OpenJ9ListObj> {
+async fn init() -> CoreResult<OpenJ9ListObj> {
     let data: OpenJ9Obj = crate::get_work_client().get_json(urls::OPENJ9).await?;
     let data = &data.results[0];
 
@@ -212,7 +217,7 @@ pub async fn get_java_list() -> CoreResult<OpenJ9ListObj> {
     })?;
 
     let result: String = ctx.with(|ctx| ctx.eval(data).unwrap()).await;
-    
+
     let files = serialize_tools::json_from_str::<OpenJ9FileObj>(&result)?;
 
     for mut item in files.downloads {
@@ -225,5 +230,12 @@ pub async fn get_java_list() -> CoreResult<OpenJ9ListObj> {
         obj.download.push(item);
     }
 
-    Ok(obj)
+    Ok(OPENJ9.get_or_init(|| obj).clone())
+}
+
+pub async fn get_java_list() -> CoreResult<OpenJ9ListObj> {
+    match OPENJ9.get() {
+        Some(data) => Ok(data.clone()),
+        None => init().await,
+    }
 }

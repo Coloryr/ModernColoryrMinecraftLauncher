@@ -74,13 +74,13 @@ impl Default for BinaryObj {
 #[serde(default)]
 pub struct AdoptiumVersionObj {
     /// OpenJDK 完整版本号
-    pub openjdk_version: String,
+    pub semver: String,
 }
 
 impl Default for AdoptiumVersionObj {
     fn default() -> Self {
         Self {
-            openjdk_version: Default::default(),
+            semver: Default::default(),
         }
     }
 }

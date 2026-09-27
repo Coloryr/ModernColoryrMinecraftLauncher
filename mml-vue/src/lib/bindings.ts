@@ -92,7 +92,7 @@ export const commands = {
     getList: (source: JavaTypes, javaType: string, major: number, system: string, arch: string) => invoke<JavaDownloadItemDto[]>("java_download_get_list", { source, javaType, major, system, arch }),
     getOptions: (source: JavaTypes) => invoke<JavaDownloadOptionsDto>("java_download_get_options", { source }),
     getTypes: () => invoke<JavaTypes[]>("java_download_get_types"),
-    start: (javaType: string, major: number, system: string, arch: string) => invoke<void>("java_download_start", { javaType, major, system, arch }),
+    start: (uuid: string) => invoke<void>("java_download_start", { uuid }),
   },
   main: {
     addGroup: (name: string) => invoke<boolean>("main_add_group", { name }),

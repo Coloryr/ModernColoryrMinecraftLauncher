@@ -82,6 +82,48 @@ impl Default for FoojayPackagesParamsObj {
     }
 }
 
+/// `/major_versions` 响应包装
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(default)]
+pub struct FoojayMajorVersionsResultObj {
+    pub result: Vec<FoojayMajorVersionObj>,
+    pub message: String,
+}
+
+impl Default for FoojayMajorVersionsResultObj {
+    fn default() -> Self {
+        Self {
+            result: Default::default(),
+            message: Default::default(),
+        }
+    }
+}
+
+/// `/major_versions` 里的单个主版本信息
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(default)]
+pub struct FoojayMajorVersionObj {
+    /// 主版本号
+    pub major_version: u32,
+    /// 支持等级（LTS / MTS / STS）
+    pub term_of_support: String,
+    /// 是否仍在维护
+    pub maintained: bool,
+    /// 是否仅有早期访问版（无 GA 正式版，查 /packages 拿不到包）
+    pub early_access_only: bool,
+}
+
+impl Default for FoojayMajorVersionObj {
+    fn default() -> Self {
+        Self {
+            major_version: Default::default(),
+            term_of_support: Default::default(),
+            maintained: Default::default(),
+            early_access_only: Default::default(),
+        }
+    }
+}
+
 /// `/packages` 响应包装
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
@@ -186,7 +228,9 @@ fn split_values(data: &str) -> Vec<String> {
 
 /// 获取四个下拉框的候选列表（发行类型 / 主版本 / 系统 / 架构）
 ///
-/// 数据来自 `/parameters`，主版本按数值降序，架构排序去重。
+/// 类型 / 系统 / 架构来自 `/parameters`；主版本来自 `/major_versions`——
+/// `/parameters` 会把仅有早期访问版的主版本也列出来（如 29+），那些版本
+/// 查 `/packages`（固定 `release_status=ga`）拿不到任何包，得过滤掉。
 /// 首次查询后缓存。
 ///
 /// # 返回值
@@ -213,22 +257,30 @@ pub async fn get_options() -> CoreResult<FoojayOptionsObj> {
 
     let types = split_values(&packages.package_type);
 
-    let mut majors: Vec<u32> = split_values(&packages.major_version)
-        .iter()
-        .filter_map(|item| item.parse().ok())
-        .collect();
-    majors.sort_unstable_by(|a, b| b.cmp(a));
-    let majors = majors.iter().map(|item| item.to_string()).collect();
-
     let systems = split_values(&packages.operating_system);
 
     let mut archs = split_values(&packages.architecture);
     archs.sort();
     archs.dedup();
 
+    // 主版本只取有 GA 正式版的（按数值降序）
+    let major_url = format!("{}major_versions", urls::FOOJAY);
+    let major_res = WORK_CLIENT
+        .get()
+        .unwrap()
+        .get_json::<FoojayMajorVersionsResultObj>(&major_url)
+        .await?;
+    let mut majors: Vec<u32> = major_res
+        .result
+        .iter()
+        .filter(|item| !item.early_access_only)
+        .map(|item| item.major_version)
+        .collect();
+    majors.sort_unstable_by(|a, b| b.cmp(a));
+
     let obj = FoojayOptionsObj {
         types,
-        majors,
+        majors: majors.iter().map(|item| item.to_string()).collect(),
         systems,
         archs,
     };

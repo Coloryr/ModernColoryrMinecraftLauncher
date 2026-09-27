@@ -3,6 +3,7 @@
 // 选项来自后端 java_download_get_options(source)，下载经 java_download_start（后端待实现）
 import { onMounted, ref } from "vue";
 import WindowFrame from "../../components/ui/WindowFrame.vue";
+import BaseButton from "../../components/ui/BaseButton.vue";
 import BaseModal from "../../components/ui/BaseModal.vue";
 import { t, tErr } from "../../lib/i18n";
 import { showToast } from "../../lib/toast";
@@ -124,6 +125,30 @@ async function loadOptions() {
   await loadList();
 }
 
+/** 正在下载的项（uuid），同一时间只允许一个 */
+const starting = ref<string | null>(null);
+
+/** 下载选中的包（按当前筛选条件组合） */
+async function startDownload() {
+  if (starting.value || !source.value || !javaType.value || major.value === null) return;
+  starting.value = "";
+  try {
+    await commands.javaDownload.start(javaType.value, major.value, system.value, arch.value);
+  } catch (e) {
+    showToast(tErr(e));
+  } finally {
+    starting.value = null;
+  }
+}
+
+/** 字节数转可读大小 */
+function formatSize(bytes: number): string {
+  if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
+  if (bytes >= 1024 ** 2) return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
+  if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${bytes} B`;
+}
+
 /** 按当前筛选条件拉取匹配的包列表 */
 async function loadList() {
   if (!source.value || !javaType.value || major.value === null || !system.value || !arch.value) {
@@ -226,10 +251,20 @@ async function loadList() {
 
       <!-- 匹配的包列表：grid 文本卡片 -->
       <div class="item-grid">
-        <div v-for="item in items" :key="item.id" class="item-card">
-          <div class="item-title">{{ item.javaVersion }}</div>
-          <div class="item-sub">{{ item.distribution }} · {{ item.packageType }} · {{ item.archiveType }}</div>
+        <div v-for="item in items" :key="item.uuid" class="item-card">
+          <div class="item-head">
+            <div class="item-title">{{ item.javaVersion }}</div>
+            <BaseButton
+              variant="accent"
+              :disabled="starting !== null"
+              @click="startDownload"
+            >
+              {{ t("winJavaDownload.download") }}
+            </BaseButton>
+          </div>
+          <div class="item-sub">{{ item.name }}</div>
           <div class="item-sub">{{ item.filename }}</div>
+          <div v-if="item.size > 0" class="item-sub">{{ formatSize(item.size) }}</div>
         </div>
       </div>
       <div v-if="!items.length && !listLoading" class="list-empty">
@@ -295,8 +330,8 @@ async function loadList() {
   flex: 1;
   margin-top: 14px;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 12px;
   align-content: start;
   overflow-y: auto;
 }
@@ -305,16 +340,24 @@ async function loadList() {
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--bg-card);
-  padding: 10px 12px;
+  padding: 12px 14px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
   min-width: 0;
+}
+
+/* 卡片标题行：版本号 + 下载按钮 */
+.item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .item-title {
   font-weight: 600;
-  font-size: 13.5px;
+  font-size: 15px;
 }
 
 .item-sub {
