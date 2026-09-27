@@ -1,6 +1,10 @@
 <script setup lang="ts">
-// Java 下载窗口：搜索源 + 发行类型 / 主版本 / 系统 / 架构 下拉筛选拟下载的 Java
-// 选项来自后端 java_download_get_options(source)，下载经 java_download_start（后端待实现）
+// Java 下载窗口：搜索源（Adoptium / Zulu / OpenJ9 / Foojay）+
+// 发行类型 / 主版本 / 系统 / 架构 四个下拉筛选拟下载的 Java
+//
+// 链路：java_download_get_options(source) 取四个下拉的候选 →
+//       java_download_get_list(...) 按筛选条件拉匹配的包列表 →
+//       java_download_start(uuid) 下载压缩包，后端解包识别并注册进 Java 列表
 import { onMounted, ref } from "vue";
 import WindowFrame from "../../components/ui/WindowFrame.vue";
 import BaseButton from "../../components/ui/BaseButton.vue";
@@ -128,12 +132,12 @@ async function loadOptions() {
 /** 正在下载的项（uuid），同一时间只允许一个 */
 const starting = ref<string | null>(null);
 
-/** 下载选中的包（按当前筛选条件组合） */
-async function startDownload() {
-  if (starting.value || !source.value || !javaType.value || major.value === null) return;
-  starting.value = "";
+/** 下载选中的包（后端按 uuid 取缓存里的下载信息） */
+async function startDownload(uuid: string) {
+  if (starting.value) return;
+  starting.value = uuid;
   try {
-    await commands.javaDownload.start(javaType.value, major.value, system.value, arch.value);
+    await commands.javaDownload.start(uuid);
   } catch (e) {
     showToast(tErr(e));
   } finally {
@@ -257,7 +261,7 @@ async function loadList() {
             <BaseButton
               variant="accent"
               :disabled="starting !== null"
-              @click="startDownload"
+              @click="startDownload(item.uuid)"
             >
               {{ t("winJavaDownload.download") }}
             </BaseButton>

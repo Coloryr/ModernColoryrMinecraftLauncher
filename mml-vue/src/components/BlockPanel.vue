@@ -43,7 +43,7 @@ async function startRender(force: boolean) {
     const started = await blockRenderStart(force);
     if (!started) showToast(t("blocks.rendering"));
   } catch (e) {
-    showToast(String(e));
+    showToast(tErr(e));
   }
 }
 

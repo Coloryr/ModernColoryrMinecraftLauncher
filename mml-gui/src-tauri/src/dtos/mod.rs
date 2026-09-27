@@ -36,7 +36,10 @@ pub use add_resource_dto::{
     ProjectItemDto, ResourceSaveDto, ResourceStatusDto, ResourceTaskDto, SourceTypeDto, TagDto,
 };
 pub use collect_dto::{CollectDataDto, CollectItemDto};
-pub use settings_dto::{BgInfoDto, DnsSettingDto, GameCheckSettingDto, LaunchSettingDto, NetworkSettingDto};
+pub use settings_dto::{
+    BgInfoDto, DnsSettingDto, GameCheckSettingDto, LaunchSettingDto, NetworkSettingDto,
+    RunArgSettingDto, WindowSettingDto,
+};
 pub use download_dto::{
     DownloadItemEvent, DownloadStatusDto, DownloadTaskDto, DownloadTaskEvent, DownloadThreadDto,
 };

@@ -239,7 +239,7 @@ pub struct RunArgObj {
     /// 最小内存（MB）
     #[serde(rename = "MinMemory")]
     pub min_memory: Option<u32>,
-    /// 是否启用 ColorASM（彩色日志输出）
+    /// 是否启用 ColorASM 注入
     #[serde(rename = "ColorASM")]
     pub colorasm: Option<bool>,
     /// 是否在启动 Minecraft 前执行预启动命令

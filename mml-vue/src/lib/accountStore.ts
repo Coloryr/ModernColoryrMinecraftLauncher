@@ -62,7 +62,7 @@ export async function removeAccount(uuid: string) {
   }
 }
 
-/** 刷新账户 Token */
+/** 刷新账户 Token：失败静默忽略，无论结果如何都乐观置为 valid */
 export async function refreshAccountToken(uuid: string) {
   try {
     await commands.account.refreshAccountToken(uuid);

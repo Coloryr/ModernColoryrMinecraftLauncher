@@ -2,7 +2,7 @@
 // 目录以 "/" 结尾（如 "minecraft/mods/"），其余为文件。
 
 export interface FileNode {
-  /** 完整路径（目录以 / 结尾的规范 key，不含尾部斜杠） */
+  /** 完整路径（规范 key 一律不含尾部斜杠，是否目录看 isDir） */
   key: string;
   name: string;
   isDir: boolean;

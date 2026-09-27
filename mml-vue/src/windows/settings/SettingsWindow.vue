@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 启动器设置窗口：左侧标签导航 + 右侧内容区
-// 标签：界面（含窗口设置）/ 皮肤与头像 / 网络与下载 / 游戏启动
+// 标签：界面（含窗口设置）/ 皮肤与头像 / 网络与下载 / 游戏启动 / Java
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import WindowFrame from "../../components/ui/WindowFrame.vue";
 import SegmentedTabs from "../../components/ui/SegmentedTabs.vue";
@@ -10,7 +10,14 @@ import BaseSwitch from "../../components/ui/BaseSwitch.vue";
 import BaseModal from "../../components/ui/BaseModal.vue";
 import CollapsePanel from "../../components/ui/CollapsePanel.vue";
 import { t, locale, setLocale, tErr } from "../../lib/i18n";
-import { commands, type JavaInfoDto, type JavaImportProgressDto, type NetworkSettingDto } from "../../lib/bindings";
+import {
+  commands,
+  type JavaInfoDto,
+  type JavaImportProgressDto,
+  type NetworkSettingDto,
+  type RunArgSettingDto,
+  type WindowSettingDto,
+} from "../../lib/bindings";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { SettingsJavaProgress } from "../../lib/listens";
 import { multiWindow, setMultiWindow, isTauri, openWindow } from "../windowManager";
@@ -101,11 +108,59 @@ function addDnsLine() {
 
 // ---- 游戏启动设置 ----
 const javaList = ref<JavaInfoDto[]>([]);
-const minMemory = ref(512);
-const maxMemory = ref(4096);
-const jvmArgs = ref("");
-const gameArgs = ref("");
+/** 全局启动参数（core RunArgObj）+ 游戏窗口设置（core WindowSettingObj），整体读写 */
+const run = ref<RunArgSettingDto | null>(null);
+const win = ref<WindowSettingDto | null>(null);
+/** JVM 环境变量逐条编辑（键 / 值两框；落盘时合成回 run.jvmEnv，与 core splitn(2,'=') 语义一致） */
+const envLines = ref<Array<{ key: string; value: string }>>([]);
+
+/** 环境变量添加 / 删除 */
+function addEnvLine() {
+  envLines.value.push({ key: "", value: "" });
+}
+function removeEnvLine(idx: number) {
+  envLines.value.splice(idx, 1);
+}
+/** 把逐条编辑的环境变量合成回 run.jvmEnv（保存前调用；只留键非空的行；值不变时不触发监听） */
+function commitEnvLines() {
+  if (!run.value) return;
+  const merged = envLines.value
+    .filter((l) => l.key.trim())
+    .map((l) => `${l.key.trim()}=${l.value}`)
+    .join("\n");
+  if (run.value.jvmEnv !== merged) run.value.jvmEnv = merged;
+}
+
+/** 启动设置即改即存（防抖合并连续输入）；内存冲突时不落盘只提示 */
+let launchSaveTimer: number | null = null;
+/** 初次加载完成前不触发自动保存 */
+let launchLoaded = false;
+
+watch([run, win, envLines], () => {
+  if (!launchLoaded) return;
+  if (launchSaveTimer !== null) clearTimeout(launchSaveTimer);
+  launchSaveTimer = window.setTimeout(() => {
+    launchSaveTimer = null;
+    void applyLaunch();
+  }, 500);
+}, { deep: true });
+
+async function applyLaunch() {
+  if (!run.value || !win.value) return;
+  if (run.value.minMemory > run.value.maxMemory) {
+    showToast(t("winSettings.memoryConflict"));
+    return;
+  }
+  try {
+    commitEnvLines();
+    await commands.settings.saveLaunch(run.value, win.value!);
+  } catch (e) {
+    showToast(tErr(e));
+  }
+}
 const scanning = ref(false);
+/** 扫描文件夹进行中（同扫描一样弹窗提示） */
+const scanningDir = ref(false);
 
 /** 压缩包导入进度事件：更新进度条（命令返回后由 importingJava 收尾） */
 let unlistenJavaProgress: UnlistenFn | null = null;
@@ -123,10 +178,16 @@ onMounted(async () => {
   const launch = await commands.settings.getLaunch().catch(() => null);
   if (launch) {
     javaList.value = launch.javaList;
-    minMemory.value = launch.minMemory;
-    maxMemory.value = launch.maxMemory;
-    jvmArgs.value = launch.jvmArgs;
-    gameArgs.value = launch.gameArgs;
+    run.value = launch.run;
+    win.value = launch.window;
+    envLines.value = launch.run.jvmEnv
+      .split("\n")
+      .filter((l) => l.trim())
+      .map((l) => {
+        const i = l.indexOf("=");
+        return i < 0 ? { key: l.trim(), value: "" } : { key: l.slice(0, i).trim(), value: l.slice(i + 1) };
+      });
+    launchLoaded = true;
   }
 });
 
@@ -222,19 +283,6 @@ async function applyNetwork() {
   if (!network.value) return;
   try {
     await commands.settings.saveNetwork(network.value);
-  } catch (e) {
-    showToast(tErr(e));
-  }
-}
-
-async function saveLaunch() {
-  if (minMemory.value > maxMemory.value) {
-    showToast(t("winSettings.memoryConflict"));
-    return;
-  }
-  try {
-    await commands.settings.saveLaunch(minMemory.value, maxMemory.value, jvmArgs.value, gameArgs.value);
-    showToast(t("winSettings.saved"));
   } catch (e) {
     showToast(tErr(e));
   }
@@ -379,11 +427,17 @@ async function scanJavaDir() {
     directory: true,
   });
   if (typeof picked !== "string") return;
+  scanningDir.value = true;
   try {
-    await commands.settings.scanJavaDir(picked);
+    const found = await commands.settings.scanJavaDir(picked);
     await refreshJava();
+    // 后端返回该文件夹下识别到的单个 Java，null 表示没扫到
+    if (found) showToast(t("winSettings.javaScanDirDone", { name: found.name }));
+    else showToast(t("winSettings.javaScanDirNone"));
   } catch (e) {
     showToast(tErr(e));
+  } finally {
+    scanningDir.value = false;
   }
 }
 
@@ -921,27 +975,145 @@ async function removeJava(name: string) {
 
         <!-- ================= 游戏启动 ================= -->
         <section v-else-if="tab === 'launch'" class="panel">
-          <template v-if="inTauri">
+          <template v-if="run && win">
+            <!-- 内存 -->
+            <h3 class="group-title">{{ t("winSettings.secMemory") }}</h3>
             <div class="grid-2">
               <div>
                 <label class="field-label">{{ t("winSettings.minMemory") }}</label>
-                <NumberStepper v-model="minMemory" :min="256" :max="65536" :step="256" />
+                <NumberStepper v-model="run!.minMemory" :min="256" :max="65536" :step="256" />
               </div>
               <div>
                 <label class="field-label">{{ t("winSettings.maxMemory") }}</label>
-                <NumberStepper v-model="maxMemory" :min="256" :max="65536" :step="256" />
+                <NumberStepper v-model="run!.maxMemory" :min="256" :max="65536" :step="256" />
               </div>
             </div>
 
-            <label class="field-label" style="margin-top: 14px">{{ t("winSettings.jvmArgs") }}</label>
-            <textarea v-model="jvmArgs" class="field-input args-input" spellcheck="false" />
-
-            <label class="field-label" style="margin-top: 14px">{{ t("winSettings.gameArgs") }}</label>
-            <textarea v-model="gameArgs" class="field-input args-input" spellcheck="false" />
-
-            <div class="save-row">
-              <BaseButton variant="accent" @click="saveLaunch">{{ t("winSettings.save") }}</BaseButton>
+            <!-- JVM -->
+            <h3 class="group-title">{{ t("winSettings.secJvm") }}</h3>
+            <div class="grid-2">
+              <div>
+                <label class="field-label">{{ t("winSettings.gcMode") }}</label>
+                <SegmentedTabs
+                  v-model="run!.gcMode"
+                  :options="[
+                    { value: 'Auto', label: t('winSettings.gcAuto') },
+                    { value: 'G1GC', label: t('winSettings.gcG1gc') },
+                    { value: 'ZGC', label: t('winSettings.gcZgc') },
+                    { value: 'None', label: t('winSettings.gcNone') },
+                  ]"
+                />
+              </div>
+              <div class="switch-list">
+                <div class="switch-row">
+                  <span>{{ t("winSettings.colorasm") }}</span>
+                  <BaseSwitch v-model="run!.colorasm" />
+                </div>
+                <div class="switch-row">
+                  <span>{{ t("winSettings.removeJvmArg") }}</span>
+                  <BaseSwitch v-model="run!.removeJvmArg" />
+                </div>
+              </div>
             </div>
+
+            <label class="field-label" style="margin-top: 14px">{{ t("winSettings.jvmEnv") }}</label>
+            <div class="dns-lines">
+              <div v-for="(_, i) in envLines" :key="i" class="line-row">
+                <input
+                  v-model="envLines[i].key"
+                  class="field-input grow"
+                  spellcheck="false"
+                  :placeholder="t('winSettings.envKey')"
+                />
+                <input
+                  v-model="envLines[i].value"
+                  class="field-input grow"
+                  spellcheck="false"
+                  :placeholder="t('winSettings.envValue')"
+                />
+                <button class="line-del" title="✕" @click="removeEnvLine(i)">✕</button>
+              </div>
+              <button class="line-add" @click="addEnvLine">＋ {{ t("args.addLine") }}</button>
+            </div>
+
+            <label class="field-label" style="margin-top: 10px">{{ t("winSettings.jvmArgs") }}</label>
+            <textarea v-model="run!.jvmArgs" class="field-input args-input" spellcheck="false" />
+
+            <!-- 游戏参数 -->
+            <h3 class="group-title">{{ t("winSettings.secGameArgs") }}</h3>
+            <div class="switch-row">
+              <span>{{ t("winSettings.removeGameArg") }}</span>
+              <BaseSwitch v-model="run!.removeGameArg" />
+            </div>
+            <label class="field-label" style="margin-top: 10px">{{ t("winSettings.gameArgs") }}</label>
+            <textarea v-model="run!.gameArgs" class="field-input args-input" spellcheck="false" />
+
+            <!-- 启动命令 -->
+            <h3 class="group-title">{{ t("winSettings.secLaunchCmd") }}</h3>
+            <div class="switch-list">
+              <div class="switch-row">
+                <span>{{ t("winSettings.preLaunch") }}</span>
+                <BaseSwitch v-model="run!.launchPreRun" />
+              </div>
+              <div class="switch-row" :class="{ dim: !run.launchPreRun }">
+                <span>{{ t("winSettings.preSameTime") }}</span>
+                <BaseSwitch v-model="run!.preRunWithGame" :disabled="!run.launchPreRun" />
+              </div>
+              <div class="switch-row">
+                <span>{{ t("winSettings.postLaunch") }}</span>
+                <BaseSwitch v-model="run!.launchPostRun" />
+              </div>
+            </div>
+            <template v-if="run.launchPreRun">
+              <label class="field-label" style="margin-top: 10px">{{ t("winSettings.preCmd") }}</label>
+              <input v-model="run!.preRunArg" class="field-input" spellcheck="false" />
+            </template>
+            <template v-if="run.launchPostRun">
+              <label class="field-label" style="margin-top: 10px">{{ t("winSettings.postCmd") }}</label>
+              <input v-model="run!.postRunArg" class="field-input" spellcheck="false" />
+            </template>
+
+            <!-- 游戏窗口 -->
+            <h3 class="group-title">{{ t("winSettings.secGameWindow") }}</h3>
+            <div class="switch-row">
+              <span>{{ t("winSettings.fullScreen") }}</span>
+              <BaseSwitch v-model="win!.fullScreen" />
+            </div>
+            <div class="grid-2" style="margin-top: 10px">
+              <div>
+                <label class="field-label">{{ t("winSettings.width") }}</label>
+                <NumberStepper v-model="win!.width" :min="100" :max="65535" />
+              </div>
+              <div>
+                <label class="field-label">{{ t("winSettings.height") }}</label>
+                <NumberStepper v-model="win!.height" :min="100" :max="65535" />
+              </div>
+            </div>
+
+            <!-- 游戏标题 -->
+            <h3 class="group-title">{{ t("winSettings.secGameTitle") }}</h3>
+            <div class="switch-list">
+              <div class="switch-row">
+                <span>{{ t("winSettings.editTitle") }}</span>
+                <BaseSwitch v-model="win!.editTitle" />
+              </div>
+              <div class="switch-row">
+                <span>{{ t("winSettings.randomTitle") }}</span>
+                <BaseSwitch v-model="win!.randomTitle" />
+              </div>
+              <div class="switch-row">
+                <span>{{ t("winSettings.cycleTitle") }}</span>
+                <BaseSwitch v-model="win!.cycleTitle" />
+              </div>
+            </div>
+            <template v-if="win.editTitle">
+              <label class="field-label" style="margin-top: 10px">{{ t("winSettings.gameTitle") }}</label>
+              <input v-model="win!.gameTitle" class="field-input" spellcheck="false" />
+            </template>
+            <template v-if="win.cycleTitle">
+              <label class="field-label" style="margin-top: 10px">{{ t("winSettings.titleDelay") }}</label>
+              <NumberStepper v-model="win!.titleDelay" :min="100" :max="600000" :step="100" />
+            </template>
           </template>
           <p v-else class="field-desc">{{ t("winSettings.tauriOnly") }}</p>
         </section>
@@ -964,10 +1136,12 @@ async function removeJava(name: string) {
               </BaseButton>
             </div>
             <div class="save-row java-add-actions">
-              <BaseButton size="sm" :disabled="scanning" @click="scanJava">
+              <BaseButton size="sm" :disabled="scanning || scanningDir" @click="scanJava">
                 {{ scanning ? t("winSettings.javaScanning") : t("winSettings.javaScan") }}
               </BaseButton>
-              <BaseButton size="sm" @click="scanJavaDir">{{ t("winSettings.javaScanDir") }}</BaseButton>
+              <BaseButton size="sm" :disabled="scanning || scanningDir" @click="scanJavaDir">
+                {{ t("winSettings.javaScanDir") }}
+              </BaseButton>
               <BaseButton size="sm" @click="importJavaArchive">{{ t("winSettings.javaImport") }}</BaseButton>
               <BaseButton size="sm" @click="downloadJava">
                 {{ t("winSettings.javaDownload") }}
@@ -999,6 +1173,19 @@ async function removeJava(name: string) {
               <div class="save-row">
                 <BaseButton size="sm" @click="confirmRemoveAll = false">{{ t("actions.cancel") }}</BaseButton>
                 <BaseButton size="sm" variant="danger" @click="removeAllJava">{{ t("actions.confirm") }}</BaseButton>
+              </div>
+            </BaseModal>
+
+            <!-- 扫描 Java 加载弹窗：扫描期间显示，完成自动消失 -->
+            <BaseModal
+              v-if="scanning || scanningDir"
+              :width="300"
+              :closable="false"
+              :overlay-close="false"
+            >
+              <div class="loading-modal">
+                <span class="loading-spin" />
+                <span>{{ t("winSettings.javaScanning") }}</span>
               </div>
             </BaseModal>
 
@@ -1569,6 +1756,31 @@ async function removeJava(name: string) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 扫描 Java 加载弹窗内容：转圈 + 提示文字 */
+.loading-modal {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--text-dim);
+  font-size: 14px;
+}
+
+.loading-spin {
+  width: 20px;
+  height: 20px;
+  border: 2.5px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: settings-loading-spin 0.8s linear infinite;
+}
+
+@keyframes settings-loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .java-add-name {

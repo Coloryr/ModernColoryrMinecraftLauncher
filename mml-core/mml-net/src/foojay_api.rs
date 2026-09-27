@@ -171,8 +171,8 @@ pub struct FoojayObj {
     pub directly_downloadable: bool,
     /// 包文件名
     pub filename: String,
-    /// 包大小（字节）
-    pub size: u64,
+    /// 包大小（字节；API 对未知大小返回 -1）
+    pub size: i64,
     /// 相关链接
     pub links: FoojayLinksObj,
 }
