@@ -1376,10 +1376,11 @@ watch(source, loadSource);
 
 /* 头部「版本列表」跳转按钮：点击滚动到版本区 */
 .detail-jump {
-  padding: 9px 14px;
+  height: 35px;
+  padding: 0 14px;
   border: 1px solid var(--border);
   border-radius: 10px;
-  background: transparent;
+  background: var(--bg-raised);
   color: var(--text-dim);
   font-size: 13px;
   font-family: inherit;
@@ -1395,7 +1396,8 @@ watch(source, loadSource);
 }
 
 .detail-download {
-  padding: 9px 22px;
+  height: 35px;
+  padding: 0 22px;
   border: none;
   border-radius: 10px;
   background: var(--accent-grad);
@@ -1590,7 +1592,8 @@ watch(source, loadSource);
 }
 
 .install-btn {
-  padding: 6px 14px;
+  height: 28px;
+  padding: 0 14px;
   border: 1px solid var(--accent-border);
   border-radius: 7px;
   background: var(--accent-soft);
@@ -1615,10 +1618,11 @@ watch(source, loadSource);
 }
 
 .page-btn {
-  padding: 6px 14px;
+  height: 28px;
+  padding: 0 14px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: transparent;
+  background: var(--bg-raised);
   color: var(--text-dim);
   font-size: 12px;
   font-family: inherit;

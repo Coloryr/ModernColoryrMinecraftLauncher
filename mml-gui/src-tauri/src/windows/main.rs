@@ -101,7 +101,7 @@ fn java_list() -> Vec<JavaInfoDto> {
             path: j.path.to_string_lossy().to_string(),
             version: j.version.clone(),
             // 遗留占位条目（Java 失效）主版本号为 -1，前端用 0 表示未知
-            major: j.major_version.max(0) as u32,
+            major: j.major_version.max(0),
             java_type: j.java_type.clone(),
             arch: j.arch.to_string(),
         })
@@ -371,25 +371,6 @@ pub fn main_update_instance_args(
 /// 获取 Java 列表（来自 mml_jvms，配置加载 / 扫描异步进行）
 #[tauri::command]
 pub fn main_get_java_list() -> Vec<JavaInfoDto> {
-    java_list()
-}
-
-/// 添加 Java（mml_jvms 校验有效后加入列表并保存配置）
-#[tauri::command]
-pub fn main_add_java(name: String, path: String) -> bool {
-    mml_jvms::add_item(name, path).is_some()
-}
-
-/// 删除指定名称的 Java
-#[tauri::command]
-pub fn main_remove_java(name: String) {
-    mml_jvms::remove(&name);
-}
-
-/// 扫描系统已安装的 Java（注册表 / 常见路径，耗时查询放线程池）并返回最新列表
-#[tauri::command]
-pub async fn main_scan_java() -> Vec<JavaInfoDto> {
-    let _ = tauri::async_runtime::spawn_blocking(mml_jvms::scan_java).await;
     java_list()
 }
 

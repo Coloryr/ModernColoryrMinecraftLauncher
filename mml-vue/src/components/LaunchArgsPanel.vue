@@ -414,7 +414,7 @@ const gcOptions = [
   height: 28px;
   border-radius: 8px;
   border: 1px solid var(--border);
-  background: transparent;
+  background: var(--bg-raised);
   color: var(--text-dim);
   font-size: 12px;
   cursor: pointer;
@@ -430,10 +430,13 @@ const gcOptions = [
 
 .line-add {
   align-self: flex-start;
-  padding: 8px 22px;
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 22px;
   border-radius: 9px;
   border: 1px dashed var(--border);
-  background: transparent;
+  background: var(--bg-raised);
   color: var(--text-dim);
   font-size: 13.5px;
   font-weight: 600;

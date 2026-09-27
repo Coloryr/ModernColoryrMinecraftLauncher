@@ -26,6 +26,7 @@ const windowMap: Record<WindowKind, Component> = {
   add_resource: defineAsyncComponent(() => import("./windows/add_resource/AddResourceWindow.vue")),
   collect: defineAsyncComponent(() => import("./windows/collect/CollectWindow.vue")),
   download: defineAsyncComponent(() => import("./windows/download/DownloadWindow.vue")),
+  java_download: defineAsyncComponent(() => import("./windows/java_download/JavaDownloadWindow.vue")),
   block: defineAsyncComponent(() => import("./windows/block/BlockWindow.vue")),
 };
 

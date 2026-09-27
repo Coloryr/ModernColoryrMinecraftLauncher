@@ -885,10 +885,11 @@ onMounted(async () => {
 }
 
 .mini-btn {
-  padding: 6px 12px;
+  height: 28px;
+  padding: 0 12px;
   border-radius: 7px;
   border: 1px solid var(--border);
-  background: transparent;
+  background: var(--bg-raised);
   color: var(--text-dim);
   font-size: 12px;
   font-family: inherit;
@@ -984,10 +985,11 @@ onMounted(async () => {
 }
 
 .modal-btn {
-  padding: 8px 16px;
+  height: 35px;
+  padding: 0 16px;
   border-radius: 8px;
   border: 1px solid var(--border);
-  background: transparent;
+  background: var(--bg-raised);
   color: var(--text);
   font-size: 13px;
   font-family: inherit;

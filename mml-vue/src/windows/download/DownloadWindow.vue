@@ -498,10 +498,11 @@ onUnmounted(() => {
 }
 
 .mini-btn {
-  padding: 3px 10px;
+  height: 28px;
+  padding: 0 10px;
   border: 1px solid var(--border);
   border-radius: 7px;
-  background: transparent;
+  background: var(--bg-raised);
   color: var(--text);
   font-size: 11.5px;
   font-family: inherit;

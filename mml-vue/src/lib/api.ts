@@ -70,21 +70,6 @@ export const api = {
     return commands.main.getJavaList();
   },
 
-  /** 添加 Java（后端校验有效后入列表；无效返回 false） */
-  async addJava(name: string, path: string): Promise<boolean> {
-    return commands.main.addJava(name, path);
-  },
-
-  /** 删除指定名称的 Java */
-  async removeJava(name: string): Promise<void> {
-    return commands.main.removeJava(name);
-  },
-
-  /** 扫描系统已安装的 Java（耗时查询）并返回最新列表 */
-  async scanJava(): Promise<JavaInfoDto[]> {
-    return commands.main.scanJava();
-  },
-
   /** 获取游戏版本列表（后端进程级缓存） */
   async getVersions(): Promise<VersionInfoDto[]> {
     return commands.main.getVersions();

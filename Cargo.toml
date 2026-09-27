@@ -100,6 +100,7 @@ tiny-skia = "~0.12.0"
 wgpu = "~30.0"
 pollster = "~1.0.1"
 bytemuck = { version = "~1.25.2", features = ["derive"] }
+rquickjs = { version = "~0.14.0", default-features = false, features = ["std", "futures"] }
 
 # 正式发布：fat LTO + 单代码生成单元，体积最小、运行最快，但出包慢（单线程合并优化）
 # 命令：cargo build --release / npm run build:release

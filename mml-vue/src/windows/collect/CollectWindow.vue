@@ -482,11 +482,11 @@ function closeMenu() {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   border: 1px solid var(--border);
   border-radius: 6px;
-  background: transparent;
+  background: var(--bg-raised);
   color: var(--text-dim);
   cursor: pointer;
 }

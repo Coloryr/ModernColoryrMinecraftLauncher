@@ -293,6 +293,55 @@ fn draw_texture_faces(
     }
 }
 
+/// 按不透明像素的包围盒裁剪（四周留 `margin` 像素边距）
+///
+/// 立方体只占画布中央一部分，四周的透明边距在账户头像这类小尺寸场景里
+/// 会透出底层底色；裁到内容包围盒后头像在任何显示方都是「铺满」的
+pub(crate) fn crop_content(pixmap: &Pixmap, margin: u32) -> Option<Pixmap> {
+    let width = pixmap.width();
+    let height = pixmap.height();
+    let data = pixmap.data();
+
+    let mut bounds: Option<(u32, u32, u32, u32)> = None; // (min_x, min_y, max_x, max_y)
+    for y in 0..height {
+        for x in 0..width {
+            let offset = ((y * width + x) * 4) as usize;
+            if data[offset + 3] == 0 {
+                continue;
+            }
+            bounds = Some(match bounds {
+                None => (x, y, x, y),
+                Some((min_x, min_y, max_x, max_y)) => (
+                    min_x.min(x),
+                    min_y.min(y),
+                    max_x.max(x),
+                    max_y.max(y),
+                ),
+            });
+        }
+    }
+
+    let Some((min_x, min_y, max_x, max_y)) = bounds else {
+        return None; // 全透明
+    };
+
+    let x0 = min_x.saturating_sub(margin);
+    let y0 = min_y.saturating_sub(margin);
+    let x1 = (max_x + 1 + margin).min(width);
+    let y1 = (max_y + 1 + margin).min(height);
+    let w = x1 - x0;
+    let h = y1 - y0;
+
+    let mut out = Pixmap::new(w, h)?;
+    for y in 0..h {
+        let src = (((y0 + y) * width + x0) * 4) as usize;
+        let dst = ((y * w) * 4) as usize;
+        out.data_mut()[dst..dst + (w * 4) as usize]
+            .copy_from_slice(&data[src..src + (w * 4) as usize]);
+    }
+    Some(out)
+}
+
 /// 整数倍降采样（预乘像素直接求平均即可，不需要还原成直乘）
 pub(crate) fn downsample(src: &Pixmap, factor: u32) -> Option<Pixmap> {
     let width = src.width() / factor;
@@ -326,7 +375,7 @@ pub(crate) fn downsample(src: &Pixmap, factor: u32) -> Option<Pixmap> {
     Some(out)
 }
 
-/// 渲染 3D 头像（固定角度），输出 `SIZE` x `SIZE`
+/// 渲染 3D 头像（固定角度），输出尺寸为内容包围盒（含 2px 边距）
 ///
 /// - `indices` / `face_pos`: 面的绘制顺序（几何顶点 + 贴图位置，按远 → 近排列）
 /// - `tran`: 模型变换矩阵
@@ -348,7 +397,7 @@ fn draw_head(
 
     draw_texture_faces(&mut pixmap, image, indices, face_pos, tran, enable_z, texel_eps, scale);
 
-    downsample(&pixmap, SUPERSAMPLE)
+    downsample(&pixmap, SUPERSAMPLE).and_then(|out| crop_content(&out, 2))
 }
 
 /// 渲染固定角度的 3D 头像（面朝上 / 仰视，无伪透视）

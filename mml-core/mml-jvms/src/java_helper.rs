@@ -38,7 +38,7 @@ fn get_major_version(version: &str) -> i32 {
 /// # 返回值
 ///
 /// 解析 `java -version` 成功返回 Java 信息，路径无效或输出异常返回 `None`
-pub(crate) fn test_java<P: AsRef<Path>>(file: P) -> Option<JavaInfoObj> {
+pub fn test_java<P: AsRef<Path>>(file: P) -> Option<JavaInfoObj> {
     let path = file.as_ref().to_path_buf();
 
     if !path.exists() || !path.is_file() {

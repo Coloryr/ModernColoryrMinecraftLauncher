@@ -53,6 +53,7 @@ pub struct BinaryObj {
     pub package: PackageObj,
     /// 源码版本引用
     pub scm_ref: String,
+    pub name: String,
 }
 
 impl Default for BinaryObj {
@@ -63,6 +64,7 @@ impl Default for BinaryObj {
             os: Default::default(),
             package: Default::default(),
             scm_ref: Default::default(),
+            name: Default::default(),
         }
     }
 }
@@ -118,25 +120,6 @@ impl Default for AdoptiumJavaVersionObj {
     }
 }
 
-/// 获取API系统对应的字符串
-///
-/// - `ostype`: 系统类型
-///
-/// # 返回值
-///
-/// 返回 Adoptium API 的 os 参数取值；未知系统返回空字符串
-fn get_os(ostype: Os) -> &'static str {
-    match ostype {
-        Os::Windows => "windows",
-        Os::Linux => "linux",
-        Os::AlpineLinux => "alpine-linux",
-        Os::MacOS => "mac",
-        Os::AIX => "aix",
-        Os::Solaris => "solaris",
-        _ => "",
-    }
-}
-
 /// 获取支持的Java主版本
 ///
 /// # 返回值
@@ -171,13 +154,9 @@ pub async fn get_java_version() -> Result<Vec<String>, ErrorType> {
 /// # 返回值
 ///
 /// 返回该版本各构建产物的下载信息列表
-pub async fn get_java_list(version: String, os: Os) -> Result<Vec<AdoptiumObj>, ErrorType> {
+pub async fn get_java_list(version: u32, os: &str) -> Result<Vec<AdoptiumObj>, ErrorType> {
     let mut url = String::from(ADOPTIUM_URL);
-    if os == Os::None {
-        url += &format!("v3/assets/latest/{}/hotspot", version);
-    } else {
-        url += &format!("v3/assets/latest/{}/hotspot?os={}", version, get_os(os));
-    }
+    url += &format!("v3/assets/latest/{}/hotspot?os={}", version, os);
 
     let res = WORK_CLIENT
         .get()

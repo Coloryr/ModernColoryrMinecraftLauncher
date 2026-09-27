@@ -15,6 +15,7 @@ export type WindowKind =
   | "add_resource"
   | "collect"
   | "download"
+  | "java_download"
   | "block";
 
 export interface WindowInfo {
@@ -37,6 +38,7 @@ export const WINDOW_REGISTRY: WindowInfo[] = [
   { kind: "add_resource", title: "添加资源" },
   { kind: "collect", title: "资源收藏" },
   { kind: "download", title: "下载管理" },
+  { kind: "java_download", title: "下载 Java" },
   { kind: "block", title: "方块列表" },
 ];
 

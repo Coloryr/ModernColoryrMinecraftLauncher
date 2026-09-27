@@ -42,16 +42,19 @@ withDefaults(
   filter: none;
 }
 
-/* 尺寸 */
+/* 尺寸（定高两档：28 = NumberStepper 档，35 = SegmentedTabs / 设置页 dl-grid 档；
+   lg 留给主操作按钮自行覆盖） */
 .s-sm {
   font-size: 12.5px;
-  padding: 7px 14px;
+  height: 28px;
+  padding: 0 14px;
   border-radius: 8px;
 }
 
 .s-md {
   font-size: 14px;
-  padding: 11px 20px;
+  height: 35px;
+  padding: 0 20px;
 }
 
 .s-lg {
@@ -76,7 +79,7 @@ withDefaults(
 
 .v-plain {
   border: 1px solid var(--border);
-  background: transparent;
+  background: var(--bg-raised);
   color: var(--text-dim);
 }
 

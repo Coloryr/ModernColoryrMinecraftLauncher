@@ -233,7 +233,8 @@ watch(
   color: var(--red);
   font-size: 14px;
   font-weight: 600;
-  padding: 11px 34px;
+  height: 35px;
+  padding: 0 34px;
   border-radius: 10px;
   cursor: pointer;
   border: 1px solid rgba(255, 95, 86, 0.4);
