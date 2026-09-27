@@ -401,7 +401,7 @@ function isGroupOpen(name: string) {
   padding: 9px 12px;
   border: 1px dashed var(--accent-border);
   border-radius: 10px;
-  background: transparent;
+  background: var(--bg-raised);
   color: var(--accent);
   font-size: 13px;
   font-family: inherit;

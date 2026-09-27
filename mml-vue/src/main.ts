@@ -50,8 +50,10 @@ async function bootstrap() {
     restoreHeadConfig(cfg.head.headType, cfg.head.x, cfg.head.y);
   }
 
-  // 背景图：Tauri 下从后端取（未设置则静默跳过），挂载前就绪避免闪底色
-  await restoreBg();
+  // 背景图：不阻塞挂载（大图走 base64 IPC 很慢，挂着等它=黑屏一阵）。
+  // 正常启动时背景 dataURL 已从 localStorage 秒取，无闪底色；
+  // 只有首次设置背景的那一次会先出界面、背景随后淡入
+  void restoreBg();
 
   applyTheme();
   applyLocale();

@@ -75,6 +75,9 @@ function applyBgInfo(info: {
   bgOpacity.value = info.opacity;
   bgBlur.value = info.blur;
   bgNativeSize.value = info.nativeSize;
+  // 缓存进 localStorage：下次启动挂载时立即有背景，不闪底色
+  // （超出配额时静默失败，仅当次会话生效，见 store）
+  store(BG_IMAGE_KEY, info.dataUrl);
 }
 
 /** 清掉本窗口的背景状态（不影响后端配置） */

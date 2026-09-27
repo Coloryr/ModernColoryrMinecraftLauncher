@@ -12,7 +12,7 @@ pub struct JavaInfoDto {
     /// 完整版本号
     pub version: String,
     /// 主版本号
-    pub major: u32,
+    pub major: i32,
     /// 发行类型（JDK / JRE）
     pub java_type: String,
     /// 位数（x86 / x64）
@@ -24,4 +24,18 @@ impl JavaInfoDto {
     pub fn major_label(&self) -> String {
         self.major.to_string()
     }
+}
+
+/// Java 压缩包导入进度（`settings-java-progress` 事件）
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct JavaImportProgressDto {
+    /// 当前阶段 ID（如 extract 解包 / detect 识别）
+    pub state: String,
+    /// 当前进度
+    pub now: u32,
+    /// 总量
+    pub total: u32,
+    /// 说明文本
+    pub sub_text: Option<String>,
 }

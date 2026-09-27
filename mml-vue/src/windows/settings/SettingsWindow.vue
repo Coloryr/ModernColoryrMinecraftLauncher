@@ -1,15 +1,19 @@
 <script setup lang="ts">
 // 启动器设置窗口：左侧标签导航 + 右侧内容区
 // 标签：界面（含窗口设置）/ 皮肤与头像 / 网络与下载 / 游戏启动
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import WindowFrame from "../../components/ui/WindowFrame.vue";
 import SegmentedTabs from "../../components/ui/SegmentedTabs.vue";
 import NumberStepper from "../../components/ui/NumberStepper.vue";
 import BaseButton from "../../components/ui/BaseButton.vue";
 import BaseSwitch from "../../components/ui/BaseSwitch.vue";
+import BaseModal from "../../components/ui/BaseModal.vue";
+import CollapsePanel from "../../components/ui/CollapsePanel.vue";
 import { t, locale, setLocale, tErr } from "../../lib/i18n";
-import { commands, type JavaInfoDto, type NetworkSettingDto } from "../../lib/bindings";
-import { multiWindow, setMultiWindow, isTauri } from "../windowManager";
+import { commands, type JavaInfoDto, type JavaImportProgressDto, type NetworkSettingDto } from "../../lib/bindings";
+import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { SettingsJavaProgress } from "../../lib/listens";
+import { multiWindow, setMultiWindow, isTauri, openWindow } from "../windowManager";
 import {
   animations,
   setAnimations,
@@ -46,13 +50,14 @@ const inTauri = isTauri();
 
 // ================= 标签导航 =================
 
-type SettingsTab = "ui" | "skin" | "network" | "launch";
+type SettingsTab = "ui" | "skin" | "network" | "launch" | "java";
 
 const TABS: Array<{ id: SettingsTab; icon: string }> = [
   { id: "ui", icon: "palette" },
   { id: "skin", icon: "user" },
   { id: "network", icon: "download" },
   { id: "launch", icon: "play" },
+  { id: "java", icon: "coffee" },
 ];
 
 const tab = ref<SettingsTab>("ui");
@@ -71,18 +76,28 @@ const fontsLoading = ref(false);
 
 // ---- 网络与下载设置 ----
 const network = ref<NetworkSettingDto | null>(null);
-/** DoH 地址列表 ⇄ 每行一个的文本 */
-const dnsHttpsText = computed({
-  get: () => network.value?.dns.https.join("\n") ?? "",
-  set: (v: string) => {
-    if (network.value) {
-      network.value.dns.https = v
-        .split("\n")
-        .map((s) => s.trim())
-        .filter((s) => s.length > 0);
-    }
-  },
-});
+// ---- 自定义 DNS（DoH）逐行编辑 ----
+// 编辑中只改本地草稿，失焦 / 回车才落盘；清空一行 = 删除该行（保留旧 textarea 过滤空行的语义）
+const dnsLines = ref<string[]>([]);
+/** 草稿 → network（过滤空行） */
+function commitDns() {
+  if (!network.value) return;
+  network.value.dns.https = dnsLines.value.map((s) => s.trim()).filter((s) => s.length > 0);
+  dnsLines.value = [...network.value.dns.https];
+}
+function setDnsLine(i: number, v: string) {
+  dnsLines.value[i] = v;
+}
+function removeDnsLine(i: number) {
+  dnsLines.value.splice(i, 1);
+  commitDns();
+  applyNetwork();
+}
+function addDnsLine() {
+  commitDns();
+  dnsLines.value.push("");
+  applyNetwork();
+}
 
 // ---- 游戏启动设置 ----
 const javaList = ref<JavaInfoDto[]>([]);
@@ -92,12 +107,19 @@ const jvmArgs = ref("");
 const gameArgs = ref("");
 const scanning = ref(false);
 
+/** 压缩包导入进度事件：更新进度条（命令返回后由 importingJava 收尾） */
+let unlistenJavaProgress: UnlistenFn | null = null;
+
 onMounted(async () => {
   if (!inTauri) return;
+  unlistenJavaProgress = await listen<JavaImportProgressDto>(SettingsJavaProgress, (e) => {
+    importProgress.value = e.payload;
+  });
   fontsLoading.value = true;
   fonts.value = await commands.settings.getSystemFonts().catch(() => []);
   fontsLoading.value = false;
   network.value = await commands.settings.getNetwork().catch(() => null);
+  if (network.value) dnsLines.value = [...network.value.dns.https];
   const launch = await commands.settings.getLaunch().catch(() => null);
   if (launch) {
     javaList.value = launch.javaList;
@@ -106,6 +128,10 @@ onMounted(async () => {
     jvmArgs.value = launch.jvmArgs;
     gameArgs.value = launch.gameArgs;
   }
+});
+
+onUnmounted(() => {
+  unlistenJavaProgress?.();
 });
 
 function onModeChange(v: string) {
@@ -191,6 +217,16 @@ async function saveNetwork() {
   }
 }
 
+/// 非代理网络设置即改即存（成功不弹提示，免得每次切换都打扰；失败才报）
+async function applyNetwork() {
+  if (!network.value) return;
+  try {
+    await commands.settings.saveNetwork(network.value);
+  } catch (e) {
+    showToast(tErr(e));
+  }
+}
+
 async function saveLaunch() {
   if (minMemory.value > maxMemory.value) {
     showToast(t("winSettings.memoryConflict"));
@@ -205,6 +241,77 @@ async function saveLaunch() {
 }
 
 // ---- Java ----
+/** 按类型收起的分组（默认全展开） */
+const collapsedTypes = ref<Record<string, boolean>>({});
+/** Java 列表按发行类型（JDK / JRE）分组，保持首次出现顺序 */
+const javaGroups = computed(() => {
+  const groups: { type: string; items: JavaInfoDto[] }[] = [];
+  const index = new Map<string, JavaInfoDto[]>();
+  for (const j of javaList.value) {
+    let items = index.get(j.javaType);
+    if (!items) {
+      items = [];
+      index.set(j.javaType, items);
+      groups.push({ type: j.javaType, items });
+    }
+    items.push(j);
+  }
+  return groups;
+});
+
+function toggleType(type: string) {
+  collapsedTypes.value[type] = !collapsedTypes.value[type];
+}
+function typeOpen(type: string) {
+  return !collapsedTypes.value[type];
+}
+
+/** 手动添加：名字 + 路径（main_add_java 落全局注册表） */
+const newJavaName = ref("");
+const newJavaPath = ref("");
+const addingJava = ref(false);
+
+async function refreshJava() {
+  const launch = await commands.settings.getLaunch().catch(() => null);
+  if (launch) javaList.value = launch.javaList;
+}
+
+async function browseJava() {
+  const { open } = await import("@tauri-apps/plugin-dialog");
+  const picked = await open({
+    title: t("winSettings.javaAdd"),
+    multiple: false,
+    filters: [{ name: "Java", extensions: ["exe"] }],
+  });
+  if (typeof picked !== "string") return;
+  newJavaPath.value = picked;
+  // 让后端探测该 Java，自动回填识别到的名字（失败则用户手填）
+  try {
+    const name = await commands.settings.detectJava(picked);
+    if (name) newJavaName.value = name;
+  } catch {
+    /* 探测失败：名字留给用户手填 */
+  }
+}
+
+async function addJava() {
+  const name = newJavaName.value.trim();
+  const path = newJavaPath.value.trim();
+  if (!name || !path) return;
+  addingJava.value = true;
+  try {
+    await commands.settings.addJava(name, path);
+    await refreshJava();
+    newJavaName.value = "";
+    newJavaPath.value = "";
+    showToast(t("winSettings.javaAdded", { name }));
+  } catch (e) {
+    showToast(tErr(e));
+  } finally {
+    addingJava.value = false;
+  }
+}
+
 async function scanJava() {
   scanning.value = true;
   try {
@@ -217,26 +324,78 @@ async function scanJava() {
   }
 }
 
-async function addJava() {
+/** 删除全部：先弹确认 */
+const confirmRemoveAll = ref(false);
+
+async function removeAllJava() {
+  try {
+    await commands.settings.removeAllJava();
+    await refreshJava();
+  } catch (e) {
+    showToast(tErr(e));
+  } finally {
+    confirmRemoveAll.value = false;
+  }
+}
+
+/** 压缩包导入（zip / 7z 等，解包后注册其中的 Java；进度经 settings-java-progress 事件上报） */
+const importingJava = ref(false);
+const importProgress = ref<JavaImportProgressDto | null>(null);
+
+const importPercent = computed(() => {
+  const p = importProgress.value;
+  if (!p || p.total <= 0) return 0;
+  return Math.min(100, Math.round((p.now / p.total) * 100));
+});
+
+async function importJavaArchive() {
   const { open } = await import("@tauri-apps/plugin-dialog");
   const picked = await open({
-    title: t("winSettings.javaAdd"),
+    title: t("winSettings.javaImport"),
     multiple: false,
-    filters: [{ name: "Java", extensions: ["exe"] }],
+    filters: [{ name: "Archive", extensions: ["zip", "7z", "gz", "tar"] }],
+  });
+  if (typeof picked !== "string") return;
+  importingJava.value = true;
+  importProgress.value = null;
+  try {
+    // 名字不填，由后端从压缩包内容识别
+    await commands.settings.importJava(null, picked);
+    await refreshJava();
+  } catch (e) {
+    showToast(tErr(e));
+  } finally {
+    importingJava.value = false;
+    importProgress.value = null;
+  }
+}
+
+/** 扫描指定文件夹（含子目录） */
+async function scanJavaDir() {
+  const { open } = await import("@tauri-apps/plugin-dialog");
+  const picked = await open({
+    title: t("winSettings.javaScanDir"),
+    multiple: false,
+    directory: true,
   });
   if (typeof picked !== "string") return;
   try {
-    const info = await commands.settings.addJava(picked);
-    javaList.value = [...javaList.value, info];
-    showToast(t("winSettings.javaAdded", { name: info.name }));
+    await commands.settings.scanJavaDir(picked);
+    await refreshJava();
   } catch (e) {
     showToast(tErr(e));
   }
 }
 
+/** 下载 Java：打开独立下载窗口（发行类型 / 主版本 / 系统 / 架构筛选） */
+function downloadJava() {
+  openWindow("java_download");
+}
+
 async function removeJava(name: string) {
   try {
-    javaList.value = await commands.settings.removeJava(name);
+    await commands.settings.removeJava(name);
+    await refreshJava();
   } catch (e) {
     showToast(tErr(e));
   }
@@ -273,8 +432,14 @@ async function removeJava(name: string) {
               <path d="M12 15V3" />
             </svg>
             <!-- 播放：游戏启动 -->
-            <svg v-else viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <svg v-else-if="item.icon === 'play'" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
               <path d="m6 4 14 8-14 8V4z" />
+            </svg>
+            <!-- 咖啡杯：Java -->
+            <svg v-else viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M17 8h1a4 4 0 1 1 0 8h-1" />
+              <path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z" />
+              <line x1="6" x2="6" y1="2" y2="4" /><line x1="10" x2="10" y1="2" y2="4" /><line x1="14" x2="14" y1="2" y2="4" />
             </svg>
           </span>
           <span class="tab-text">
@@ -648,8 +813,8 @@ async function removeJava(name: string) {
             </template>
 
             <!-- 代理字段较多，保留显式保存按钮（其余网络设置即改即存） -->
-            <div class="save-row">
-              <BaseButton variant="accent" @click="saveNetwork">{{ t("winSettings.save") }}</BaseButton>
+            <div class="save-row right">
+              <BaseButton variant="accent" size="sm" @click="saveNetwork">{{ t("winSettings.save") }}</BaseButton>
             </div>
 
             <!-- 自定义 DNS（DoH） -->
@@ -674,7 +839,20 @@ async function removeJava(name: string) {
             <template v-if="network.dns.enable">
               <label class="field-label" style="margin-top: 10px">{{ t("winSettings.dnsHttps") }}</label>
               <!-- 编辑中只改本地草稿，失焦 / 回车才落盘 -->
-              <textarea v-model="dnsHttpsText" class="field-input args-input" spellcheck="false" @change="applyNetwork()" />
+              <div class="dns-lines">
+                <div v-for="(line, i) in dnsLines" :key="i" class="line-row">
+                  <input
+                    class="field-input grow"
+                    :value="line"
+                    spellcheck="false"
+                    @input="setDnsLine(i, ($event.target as HTMLInputElement).value)"
+                    @change="commitDns(); applyNetwork();"
+                    @keydown.enter="($event.target as HTMLInputElement).blur()"
+                  />
+                  <button class="line-del" title="✕" @click="removeDnsLine(i)">✕</button>
+                </div>
+                <button class="line-add" @click="addDnsLine">＋ {{ t("args.addLine") }}</button>
+              </div>
             </template>
 
             <!-- 游戏文件检查：关闭"检查xx"后对应的 SHA1 校验一并禁用（没得查自然不用校验） -->
@@ -683,50 +861,66 @@ async function removeJava(name: string) {
               <div class="switch-list">
                 <div class="switch-row">
                   <span>{{ t("winSettings.checkCore") }}</span>
-                  <BaseSwitch v-model="network.check.core" />
+                  <BaseSwitch
+                  :model-value="network!.check.core"
+                  @update:model-value="(v) => { network!.check.core = v; applyNetwork(); }" />
                 </div>
                 <div class="switch-row">
                   <span>{{ t("winSettings.checkLib") }}</span>
-                  <BaseSwitch v-model="network.check.lib" />
+                  <BaseSwitch
+                  :model-value="network!.check.lib"
+                  @update:model-value="(v) => { network!.check.lib = v; applyNetwork(); }" />
                 </div>
                 <div class="switch-row">
                   <span>{{ t("winSettings.checkAssets") }}</span>
-                  <BaseSwitch v-model="network.check.assets" />
+                  <BaseSwitch
+                  :model-value="network!.check.assets"
+                  @update:model-value="(v) => { network!.check.assets = v; applyNetwork(); }" />
                 </div>
                 <div class="switch-row">
                   <span>{{ t("winSettings.checkMod") }}</span>
-                  <BaseSwitch v-model="network.check.gameMod" />
+                  <BaseSwitch
+                  :model-value="network!.check.gameMod"
+                  @update:model-value="(v) => { network!.check.gameMod = v; applyNetwork(); }" />
                 </div>
               </div>
               <div class="switch-list">
                 <div class="switch-row" :class="{ dim: !network.check.core }">
                   <span>{{ t("winSettings.checkCoreSha1") }}</span>
-                  <BaseSwitch v-model="network.check.coreSha1" :disabled="!network.check.core" />
+                  <BaseSwitch
+                  :model-value="network!.check.coreSha1"
+                  :disabled="!network.check.core"
+                  @update:model-value="(v) => { network!.check.coreSha1 = v; applyNetwork(); }" />
                 </div>
                 <div class="switch-row" :class="{ dim: !network.check.lib }">
                   <span>{{ t("winSettings.checkLibSha1") }}</span>
-                  <BaseSwitch v-model="network.check.libSha1" :disabled="!network.check.lib" />
+                  <BaseSwitch
+                  :model-value="network!.check.libSha1"
+                  :disabled="!network.check.lib"
+                  @update:model-value="(v) => { network!.check.libSha1 = v; applyNetwork(); }" />
                 </div>
                 <div class="switch-row" :class="{ dim: !network.check.assets }">
                   <span>{{ t("winSettings.checkAssetsSha1") }}</span>
-                  <BaseSwitch v-model="network.check.assetsSha1" :disabled="!network.check.assets" />
+                  <BaseSwitch
+                  :model-value="network!.check.assetsSha1"
+                  :disabled="!network.check.assets"
+                  @update:model-value="(v) => { network!.check.assetsSha1 = v; applyNetwork(); }" />
                 </div>
                 <div class="switch-row" :class="{ dim: !network.check.gameMod }">
                   <span>{{ t("winSettings.checkModSha1") }}</span>
-                  <BaseSwitch v-model="network.check.modSha1" :disabled="!network.check.gameMod" />
+                  <BaseSwitch
+                  :model-value="network!.check.modSha1"
+                  :disabled="!network.check.gameMod"
+                  @update:model-value="(v) => { network!.check.modSha1 = v; applyNetwork(); }" />
                 </div>
               </div>
-            </div>
-
-            <div class="save-row">
-              <BaseButton variant="accent" @click="saveNetwork">{{ t("winSettings.save") }}</BaseButton>
             </div>
           </template>
           <p v-else class="field-desc">{{ t("winSettings.tauriOnly") }}</p>
         </section>
 
         <!-- ================= 游戏启动 ================= -->
-        <section v-else class="panel">
+        <section v-else-if="tab === 'launch'" class="panel">
           <template v-if="inTauri">
             <div class="grid-2">
               <div>
@@ -748,23 +942,88 @@ async function removeJava(name: string) {
             <div class="save-row">
               <BaseButton variant="accent" @click="saveLaunch">{{ t("winSettings.save") }}</BaseButton>
             </div>
+          </template>
+          <p v-else class="field-desc">{{ t("winSettings.tauriOnly") }}</p>
+        </section>
 
-            <h3 class="group-title">{{ t("winSettings.javaList") }}</h3>
-            <div v-if="javaList.length === 0" class="field-desc">{{ t("winSettings.javaNone") }}</div>
-            <div v-else class="java-list">
-              <div v-for="j in javaList" :key="j.name" class="java-row">
-                <span class="java-name" :title="j.path">{{ j.name }}</span>
-                <span class="java-meta">{{ j.version }} · {{ j.javaType }} · {{ j.arch }}</span>
-                <BaseButton size="sm" variant="danger" @click="removeJava(j.name)">
-                  {{ t("winSettings.javaRemove") }}
-                </BaseButton>
-              </div>
+        <!-- ================= Java ================= -->
+        <section v-else-if="tab === 'java'" class="panel">
+          <template v-if="inTauri">
+            <!-- 手动添加：输入名字和路径（放最上面） -->
+            <h3 class="group-title" style="margin-top: 0">{{ t("winSettings.javaAdd") }}</h3>
+            <div class="java-add-row">
+              <input v-model="newJavaName" class="field-input java-add-name" :placeholder="t('winSettings.javaName')" spellcheck="false" />
+              <input v-model="newJavaPath" class="field-input grow" :placeholder="t('winSettings.javaPath')" spellcheck="false" />
+              <BaseButton size="sm" @click="browseJava">{{ t("args.browse") }}</BaseButton>
+              <BaseButton
+                size="sm" variant="accent"
+                :disabled="addingJava || !newJavaName.trim() || !newJavaPath.trim()"
+                @click="addJava"
+              >
+                {{ t("winSettings.javaAdd") }}
+              </BaseButton>
             </div>
-            <div class="save-row">
+            <div class="save-row java-add-actions">
               <BaseButton size="sm" :disabled="scanning" @click="scanJava">
                 {{ scanning ? t("winSettings.javaScanning") : t("winSettings.javaScan") }}
               </BaseButton>
-              <BaseButton size="sm" @click="addJava">{{ t("winSettings.javaAdd") }}</BaseButton>
+              <BaseButton size="sm" @click="scanJavaDir">{{ t("winSettings.javaScanDir") }}</BaseButton>
+              <BaseButton size="sm" @click="importJavaArchive">{{ t("winSettings.javaImport") }}</BaseButton>
+              <BaseButton size="sm" @click="downloadJava">
+                {{ t("winSettings.javaDownload") }}
+              </BaseButton>
+              <BaseButton size="sm" variant="danger" :disabled="javaList.length === 0" @click="confirmRemoveAll = true">
+                {{ t("winSettings.javaRemoveAll") }}
+              </BaseButton>
+            </div>
+
+            <!-- 压缩包导入进度条（解包 / 识别阶段经 settings-java-progress 事件推进） -->
+            <div v-if="importingJava || importProgress" class="java-progress">
+              <span class="java-progress-label">{{ t("winSettings.javaImporting") }}</span>
+              <div class="java-progress-track">
+                <div class="java-progress-fill" :style="{ width: importPercent + '%' }" />
+              </div>
+              <span class="java-progress-text">{{ importProgress ? `${importProgress.now}/${importProgress.total}` : "" }}</span>
+              <span v-if="importProgress?.subText" class="java-progress-sub" :title="importProgress.subText">{{ importProgress.subText }}</span>
+            </div>
+
+            <!-- 删除全部确认 -->
+            <BaseModal
+              v-if="confirmRemoveAll"
+              :title="t('winSettings.javaRemoveAll')"
+              :overlay-close="false"
+              below-titlebar
+              @close="confirmRemoveAll = false"
+            >
+              <p class="field-desc">{{ t("winSettings.javaRemoveAllConfirm") }}</p>
+              <div class="save-row">
+                <BaseButton size="sm" @click="confirmRemoveAll = false">{{ t("actions.cancel") }}</BaseButton>
+                <BaseButton size="sm" variant="danger" @click="removeAllJava">{{ t("actions.confirm") }}</BaseButton>
+              </div>
+            </BaseModal>
+
+            <div v-if="javaList.length === 0" class="field-desc">{{ t("winSettings.javaNone") }}</div>
+            <!-- 按发行类型（JDK / JRE）分组：类型行展开后，该类型的 Java 以卡片网格平铺 -->
+            <div v-for="g in javaGroups" :key="g.type" class="java-type">
+              <button class="java-type-head" @click="toggleType(g.type)">
+                <span class="chev" :class="{ up: typeOpen(g.type) }">▾</span>
+                <span class="java-type-name">{{ g.type }}</span>
+                <span class="java-count">{{ g.items.length }}</span>
+              </button>
+              <CollapsePanel :open="typeOpen(g.type)">
+                <div class="java-grid">
+                  <div v-for="j in g.items" :key="j.name" class="java-card">
+                    <div class="java-card-top">
+                      <span class="java-name" :title="j.name">{{ j.name }}</span>
+                      <BaseButton size="sm" variant="danger" @click="removeJava(j.name)">
+                        {{ t("winSettings.javaRemove") }}
+                      </BaseButton>
+                    </div>
+                    <span class="java-meta">{{ j.version }} · {{ j.arch }}</span>
+                    <span class="java-path" :title="j.path">{{ j.path }}</span>
+                  </div>
+                </div>
+              </CollapsePanel>
             </div>
           </template>
           <p v-else class="field-desc">{{ t("winSettings.tauriOnly") }}</p>
@@ -1015,8 +1274,13 @@ async function removeJava(name: string) {
 /* 选图 / 清除 / 地址输入 / 加载 一行：输入框占满剩余空间 */
 .bg-buttons {
   display: flex;
-  align-items: center;
+  /* 按钮与 42px 输入框等高（search-btn 行同款：stretch 撑高，覆盖 BaseButton 定高） */
+  align-items: stretch;
   gap: 10px;
+}
+
+.bg-buttons .ui-btn {
+  height: auto;
 }
 
 .bg-url-input {
@@ -1088,6 +1352,11 @@ async function removeJava(name: string) {
   margin-top: 16px;
 }
 
+/* 代理保存按钮靠右放，矮版（size=sm），不占一整行视觉重心 */
+.save-row.right {
+  justify-content: flex-end;
+}
+
 .args-input {
   min-height: 56px;
   resize: vertical;
@@ -1095,20 +1364,216 @@ async function removeJava(name: string) {
   font-size: 12px;
 }
 
-.java-list {
+/* DoH 逐行编辑（与 LaunchArgsPanel 的 JVM 参数行编辑同款） */
+.dns-lines {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  margin-top: 6px;
 }
 
-.java-row {
+.line-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.grow {
+  flex: 1;
+  min-width: 120px;
+}
+
+.line-del {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-raised);
+  color: var(--text-dim);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.line-del:hover {
+  color: var(--red);
+  border-color: var(--red);
+  background: rgba(255, 95, 86, 0.1);
+}
+
+.line-add {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 22px;
+  border-radius: 9px;
+  border: 1px dashed var(--border);
+  background: var(--bg-raised);
+  color: var(--text-dim);
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.line-add:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/* Java 页：按类型分组的行，展开后卡片网格平铺 */
+.java-type {
+  margin-bottom: 4px;
+}
+
+.java-type-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 0;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.java-type-name {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+
+.java-count {
+  font-size: 11px;
+  color: var(--text-dim);
+  background: var(--bg-hover);
+  border-radius: 999px;
+  padding: 1px 8px;
+}
+
+.chev {
+  font-size: 11px;
+  color: var(--text-dim);
+  transition: transform 0.22s ease;
+}
+
+.chev.up {
+  transform: rotate(180deg);
+}
+
+.java-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 10px;
+  padding: 4px 0 8px;
+}
+
+.java-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-raised);
+  min-width: 0;
+}
+
+.java-card-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.java-name {
+  font-weight: 600;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.java-meta {
+  font-size: 11.5px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.java-path {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-family: "Cascadia Code", Consolas, monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.java-add-row {
+  display: flex;
+  /* 按钮与 42px 输入框等高（stretch 撑高，覆盖 BaseButton 定高） */
+  align-items: stretch;
+  gap: 8px;
+}
+
+.java-add-row .ui-btn {
+  height: auto;
+}
+
+/* 添加区在最上面：按钮行与下方分组拉开距离 */
+.java-add-actions {
+  margin-bottom: 12px;
+}
+
+/* 压缩包导入进度条 */
+.java-progress {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 12px;
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  background: var(--bg-side);
+  margin-bottom: 12px;
+  font-size: 12px;
+}
+
+.java-progress-label {
+  flex: none;
+  color: var(--text-dim);
+}
+
+.java-progress-track {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg-raised);
+  overflow: hidden;
+}
+
+.java-progress-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--accent);
+  transition: width 0.2s ease;
+}
+
+.java-progress-text {
+  flex: none;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.java-progress-sub {
+  flex: none;
+  max-width: 220px;
+  color: var(--text-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.java-add-name {
+  width: 160px;
+  flex: none;
 }
 
 .java-name {

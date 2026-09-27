@@ -17,3 +17,4 @@ serde_json.workspace = true
 serde_repr.workspace = true
 scraper.workspace = true
 itertools.workspace = true
+rquickjs.workspace = true

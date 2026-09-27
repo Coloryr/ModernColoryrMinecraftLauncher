@@ -317,7 +317,8 @@ async function removeSkin(b: BlockItemDto) {
 
 .block-prompt-btn {
   margin-top: 8px;
-  padding: 9px 22px;
+  height: 35px;
+  padding: 0 22px;
   border: none;
   border-radius: 10px;
   background: var(--accent);
@@ -394,7 +395,8 @@ async function removeSkin(b: BlockItemDto) {
 }
 
 .block-rerender {
-  padding: 8px 14px;
+  height: 28px;
+  padding: 0 14px;
   border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--bg-card);

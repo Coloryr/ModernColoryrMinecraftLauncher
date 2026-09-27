@@ -112,8 +112,8 @@ function tagColor(tag: string) {
 }
 
 .refresh-btn {
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   border-radius: 8px;
   border: 1px solid var(--border);
   background: var(--bg-card);
@@ -221,7 +221,8 @@ function tagColor(tag: string) {
 }
 
 .pager-btn {
-  padding: 6px 16px;
+  height: 28px;
+  padding: 0 16px;
   border-radius: 8px;
   border: 1px solid var(--border);
   background: var(--bg-card);

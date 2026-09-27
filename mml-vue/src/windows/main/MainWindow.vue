@@ -2315,8 +2315,8 @@ onMounted(async () => {
 }
 
 .icon-btn {
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   border-radius: 8px;
   border: 1px solid var(--border);
   background: var(--bg-card);
@@ -2420,7 +2420,8 @@ onMounted(async () => {
 
 .action-btn {
   width: 100%;
-  padding: 9px 10px;
+  height: 28px;
+  padding: 0 10px;
   border-radius: 9px;
   border: 1px solid var(--border);
   background: var(--bg-card);
@@ -2710,8 +2711,8 @@ onMounted(async () => {
 .multi-exit {
   padding: 7px 12px;
   border-radius: 9px;
-  border: none;
-  background: transparent;
+  border: 1px solid var(--border);
+  background: var(--bg-raised);
   color: var(--text-dim);
   font-size: 12.5px;
   font-family: inherit;

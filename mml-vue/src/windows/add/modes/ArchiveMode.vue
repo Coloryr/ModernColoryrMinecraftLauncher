@@ -98,17 +98,20 @@ const emit = defineEmits<{
 }
 
 .files-btn {
-  border: none;
-  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg-raised);
   color: var(--accent);
   font-size: 12px;
   font-family: inherit;
   cursor: pointer;
-  padding: 2px 4px;
+  height: 28px;
+  padding: 0 10px;
 }
 
 .files-btn:hover {
-  text-decoration: underline;
+  border-color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .file-list {

@@ -69,6 +69,40 @@ pub enum ArchiveType {
     TarXz,
 }
 
+impl ArchiveType {
+    /// 根据文件路径后缀自动检测压缩包类型。
+    ///
+    /// * `path` — 待检测的文件路径。
+    ///
+    /// 后缀不受支持时返回 `None`。
+    pub fn try_from_path<P: AsRef<Path>>(path: P) -> Option<Self> {
+        let file_name = path.as_ref().file_name()?.to_string_lossy().to_lowercase();
+
+        if file_name.ends_with(names::ZIP_DOT_EXT)
+            || file_name.ends_with(names::MRPACK_DOT_EXT)
+            // jar本质是zip（客户端jar、mod jar等）
+            || file_name.ends_with(names::JAR_DOT_EXT)
+        {
+            // Modrinth 整合包（.mrpack）本质是 zip
+            Some(ArchiveType::Zip)
+        } else if file_name.ends_with(names::R7Z_DOT_EXT) {
+            Some(ArchiveType::R7Z)
+        } else if file_name.ends_with(names::TAR_GZ_DOT_EXT)
+            || file_name.ends_with(names::TGZ_DOT_EXT)
+        {
+            Some(ArchiveType::TarGz)
+        } else if file_name.ends_with(names::TAR_XZ_DOT_EXT)
+            || file_name.ends_with(names::TXZ_DOT_EXT)
+        {
+            Some(ArchiveType::TarXz)
+        } else if file_name.ends_with(names::TAR_EXT) {
+            Some(ArchiveType::Tar)
+        } else {
+            None
+        }
+    }
+}
+
 /// 压缩模式
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TarMode {

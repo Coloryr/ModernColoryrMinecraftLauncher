@@ -167,8 +167,12 @@ function pick(account: AccountStoreDto) {
   color: #fff;
   font-weight: 700;
   font-size: 15px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
   flex-shrink: 0;
+}
+
+/* 阴影只给字母 / 占位头像：3D 头像 PNG 带透明区，img 上投影会成方形托板 */
+.avatar:not(.avatar-img) {
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.35);
 }
 
 .avatar.small {
@@ -233,10 +237,12 @@ function pick(account: AccountStoreDto) {
   color: #0e7490;
 }
 
-/* 真实头像图（加载失败回退字母头像） */
+/* 真实头像图（加载失败回退字母头像）。
+ * 阴影用 drop-shadow：跟随头像轮廓投影，不会像 box-shadow 那样透出方形底板 */
 .avatar-img {
   object-fit: cover;
   image-rendering: pixelated;
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.35));
 }
 
 /* 头像槽容器：相对定位，加载中时上面叠转圈 */

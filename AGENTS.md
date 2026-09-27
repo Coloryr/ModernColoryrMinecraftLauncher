@@ -141,4 +141,15 @@
 - Claude 的工作缓存（反编译 jar、提取脚本等）放根目录 `target/temp`（与 §6 同源，
   不再放 H 盘）。
 
+## 12. 前后端分工（默认）
+
+- **默认只做前端**：界面与接线任务只改 `mml-vue/`（UI、状态、调用 `commands.xxx` 的接线），
+  后端**逻辑不实现**。
+- **接口骨架要做到新增 `#[tauri::command]` 为止**：前端要用的命令，在 Rust 侧补上
+  `#[tauri::command]` 声明与 DTO 定义（含注册进 `generate_handler!`），**函数体不填充**
+  （留 `todo!()` / 空实现，由用户自己写），跑 `cd mml-gui && npm run gen` 生成
+  `bindings.ts`，让前端接线类型对得上。
+- **用户添加 DTO 后要同步前端**：用户在 Rust 侧添加 / 修改 DTO 模型时，读取对应源码，
+  跑 `cd mml-gui && npm run gen` 重新生成 `bindings.ts`，并在前端接上新结构。
+
 

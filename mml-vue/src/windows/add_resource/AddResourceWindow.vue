@@ -824,7 +824,8 @@ onMounted(async () => {
 }
 
 .page-btn {
-  padding: 6px 14px;
+  height: 28px;
+  padding: 0 14px;
   border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--bg-card);
@@ -981,7 +982,8 @@ onMounted(async () => {
 }
 
 .install-btn {
-  padding: 6px 16px;
+  height: 35px;
+  padding: 0 16px;
   border: none;
   border-radius: 8px;
   background: var(--accent-grad);

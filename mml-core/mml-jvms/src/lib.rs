@@ -20,14 +20,21 @@ use std::{
     sync::{Arc, LazyLock, OnceLock, RwLock},
 };
 
-use mml_base::events::EventHandler;
+use mml_base::{
+    archives::{self, ArchiveType, BaseArchiveGui},
+    events::EventHandler,
+};
 use mml_config::config_obj::JvmConfigObj;
-use mml_names::{i18_items::error_type::CoreResult, names};
+use mml_names::{
+    i18_items::error_type::{CoreResult, ErrorType},
+    names,
+};
 use mml_sys::{ArchEnum, Os, java_scan_helper, path_helper};
 
 pub mod java_helper;
 
 /// Java 运行时信息
+#[derive(Debug, Clone)]
 pub struct JavaInfoObj {
     /// Java 显示名称（如 "OpenJDK-17.0.1-x86_64"）
     pub name: String,
@@ -187,17 +194,13 @@ pub fn remove_all() {
 /// # 返回值
 ///
 /// 添加成功返回 `Some(name)`，无效的 Java 返回 `None`
-pub fn add_item(name: String, file: String) -> Option<String> {
+pub fn add_item(name: Option<String>, file: String) -> Option<Arc<JavaInfoObj>> {
     let dir = mml_base::get_base_dir();
     let local = if file.starts_with(dir.to_str().unwrap()) {
         String::from(&file[dir.to_str().unwrap().len()..])
     } else {
         file
     };
-
-    // 先移除同名旧条目
-    remove(&name);
-
     let path = if local.starts_with(names::JAVA_DIR) {
         dir.join(&local)
     } else {
@@ -205,14 +208,20 @@ pub fn add_item(name: String, file: String) -> Option<String> {
     };
 
     let info = java_helper::test_java(&path);
+
     match info {
         None => None,
         Some(info) => {
-            // 写锁先释放再触发事件/保存：事件回调与 save() 内部都要拿读锁，
-            // 同线程写锁未释放时重入会死锁
+            let name = name.unwrap_or(info.name.clone());
+
+            // 先移除同名旧条目
+            remove(&name);
+
+            let info = Arc::new(info);
+
             {
                 let mut list = JVMS.write().unwrap();
-                list.insert(name.clone(), Arc::new(info));
+                list.insert(name.clone(), info.clone());
             }
 
             invoke_jvm_change();
@@ -221,15 +230,52 @@ pub fn add_item(name: String, file: String) -> Option<String> {
                 let mut config = mml_config::write_config();
                 let javas = &mut config.java_list;
                 javas.push(JvmConfigObj {
-                    name: name.clone(),
+                    name: name,
                     local: local.clone(),
                 });
             }
             mml_config::save();
 
-            Some(name.clone())
+            Some(info.clone())
         }
     }
+}
+
+/// 添加新的JAVA
+///
+/// # 参数
+///
+/// - `info`: Java 信息
+///
+/// # 返回值
+///
+/// 添加后返回JAVA信息
+pub fn add_info_item(info: JavaInfoObj) -> Arc<JavaInfoObj> {
+    let name = info.name.clone();
+
+    // 先移除同名旧条目
+    remove(&name);
+
+    let info = Arc::new(info);
+
+    {
+        let mut list = JVMS.write().unwrap();
+        list.insert(name.clone(), info.clone());
+    }
+
+    invoke_jvm_change();
+
+    {
+        let mut config = mml_config::write_config();
+        let javas = &mut config.java_list;
+        javas.push(JvmConfigObj {
+            name: name.clone(),
+            local: info.path.to_string_lossy().to_string(),
+        });
+    }
+    mml_config::save();
+
+    info.clone()
 }
 
 /// 从配置列表批量测试并添加 Java
@@ -393,6 +439,52 @@ pub fn scan_java() {
     }
 }
 
+/// 解压Java
+pub async fn unzip_java<P: AsRef<Path>>(
+    name: Option<String>,
+    path: P,
+    gui: BaseArchiveGui,
+) -> CoreResult<Option<Arc<JavaInfoObj>>> {
+    let name = name.unwrap_or(
+        path.as_ref()
+            .file_stem()
+            .unwrap()
+            .to_string_lossy()
+            .to_string(),
+    );
+
+    let archive = ArchiveType::try_from_path(&path);
+    let Some(arch) = archive else {
+        return Err(ErrorType::InvalidOperation);
+    };
+
+    let dir = JAVA_DIR.get().unwrap().join(&name);
+
+    archives::decompress(arch, path.as_ref(), &dir, gui)?;
+
+    let Some(data) = find_java_from_path(dir) else {
+        return Ok(None);
+    };
+
+    let file = if data.to_string_lossy().contains("jre")
+        && let Some(path) = data
+            .parent()
+            .and_then(|data| data.parent())
+            .map(|data| data.join("bin").join(data.file_name().unwrap()))
+        && path.exists()
+    {
+        path
+    } else {
+        data
+    };
+
+    let Some(data) = java_helper::test_java(file) else {
+        return Ok(None);
+    };
+
+    Ok(Some(add_info_item(data)))
+}
+
 // ============================================================================
 // 单元测试
 // ============================================================================
@@ -400,8 +492,8 @@ pub fn scan_java() {
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
-    use std::sync::{Arc, Mutex, Once, OnceLock};
     use std::sync::atomic::{AtomicU64, Ordering};
+    use std::sync::{Arc, Mutex, Once, OnceLock};
 
     use mml_config::config_obj::JvmConfigObj;
     use mml_sys::ArchEnum;
@@ -639,6 +731,8 @@ mod tests {
             assert!(!item.version.is_empty() || item.major_version > 0);
         }
 
-        JVMS.write().unwrap().retain(|name, _| before.contains(name));
+        JVMS.write()
+            .unwrap()
+            .retain(|name, _| before.contains(name));
     }
 }

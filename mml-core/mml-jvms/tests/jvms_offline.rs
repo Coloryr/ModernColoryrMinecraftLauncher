@@ -12,7 +12,10 @@
 
 use std::fs;
 use std::path::PathBuf;
-use std::sync::{Once, OnceLock, atomic::{AtomicU64, Ordering}};
+use std::sync::{
+    Once, OnceLock,
+    atomic::{AtomicU64, Ordering},
+};
 use std::time::{Duration, Instant};
 
 use mml_config::config_obj::JvmConfigObj;
@@ -30,8 +33,7 @@ static COUNTER: AtomicU64 = AtomicU64::new(0);
 /// 初始化全局依赖链（进程内只执行一次），返回运行根目录
 fn setup() -> PathBuf {
     INIT.call_once(|| {
-        let dir =
-            std::env::temp_dir().join(format!("mml-jvms-it-{}", uuid_like()));
+        let dir = std::env::temp_dir().join(format!("mml-jvms-it-{}", uuid_like()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         RUN_DIR.set(dir.clone()).unwrap();
@@ -146,17 +148,25 @@ fn add_and_remove_item_roundtrip() {
     let bad_file = bad.join("not-java.txt");
     fs::write(&bad_file, b"not java").unwrap();
     assert!(
-        mml_jvms::add_item("ut-bad".to_string(), bad_file.to_string_lossy().into_owned()).is_none(),
+        mml_jvms::add_item(
+            Some("ut-bad".to_string()),
+            bad_file.to_string_lossy().into_owned()
+        )
+        .is_none(),
         "非 Java 文件不应添加成功"
     );
     assert!(mml_jvms::get_java_info("ut-bad").is_none());
 
     // 添加有效 Java
     let added = mml_jvms::add_item(
-        "ut-fake".to_string(),
+        Some("ut-fake".to_string()),
         fake.to_string_lossy().into_owned(),
     );
-    assert_eq!(added.as_deref(), Some("ut-fake"), "添加成功应返回名称");
+    assert_eq!(
+        added.as_deref().map(|item| item.name.clone()),
+        Some("ut-fake".to_string()),
+        "添加成功应返回名称"
+    );
 
     let info = mml_jvms::get_java_info("ut-fake").expect("添加后应能查到");
     assert_eq!(info.major_version, 17);
@@ -164,14 +174,20 @@ fn add_and_remove_item_roundtrip() {
 
     // 同名重复添加应覆盖而非报错
     let added = mml_jvms::add_item(
-        "ut-fake".to_string(),
+        Some("ut-fake".to_string()),
         fake.to_string_lossy().into_owned(),
     );
-    assert_eq!(added.as_deref(), Some("ut-fake"));
+    assert_eq!(
+        added.as_deref().map(|item| item.name.clone()),
+        Some("ut-fake".to_string())
+    );
 
     // 移除
     mml_jvms::remove("ut-fake");
-    assert!(mml_jvms::get_java_info("ut-fake").is_none(), "移除后应查不到");
+    assert!(
+        mml_jvms::get_java_info("ut-fake").is_none(),
+        "移除后应查不到"
+    );
 
     let _ = fs::remove_dir_all(&fake_dir);
     let _ = fs::remove_dir_all(&bad);
@@ -217,7 +233,11 @@ async fn load_config_with_invalid_java_creates_placeholder() {
     assert_eq!(info.major_version, -1, "无效 Java 的主版本号应为 -1");
     assert!(info.version.is_empty());
     assert_eq!(info.arch, ArchEnum::Unknown);
-    assert!(mml_jvms::get_all_java().iter().any(|item| item.name == "ut-placeholder"));
+    assert!(
+        mml_jvms::get_all_java()
+            .iter()
+            .any(|item| item.name == "ut-placeholder")
+    );
 
     // 清理，避免影响其他用例
     mml_jvms::remove("ut-placeholder");

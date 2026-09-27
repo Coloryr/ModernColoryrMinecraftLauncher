@@ -4,30 +4,19 @@
 //! 与 Java 列表（mml-jvms，增删即时持久化）。
 
 use std::path::Path;
+use std::sync::Arc;
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
+use mml_base::archives::IBaseArchiveGui;
+use mml_jvms::java_helper;
 use tauri::{AppHandle, Emitter};
 
 use crate::dtos::{
-    BgInfoDto, DnsSettingDto, GameCheckSettingDto, JavaInfoDto, LaunchSettingDto, NetworkSettingDto,
+    BgInfoDto, DnsSettingDto, GameCheckSettingDto, JavaImportProgressDto, JavaInfoDto,
+    LaunchSettingDto, NetworkSettingDto,
 };
 use crate::listens;
-
-/// mml-jvms 内存列表 → 前端 DTO（与 windows::main 的 java_list 同构）
-fn java_list() -> Vec<JavaInfoDto> {
-    mml_jvms::get_all_java()
-        .iter()
-        .map(|j| JavaInfoDto {
-            name: j.name.clone(),
-            path: j.path.to_string_lossy().to_string(),
-            version: j.version.clone(),
-            // 遗留占位条目（Java 失效）主版本号为 -1，前端用 0 表示未知
-            major: j.major_version.max(0) as u32,
-            java_type: j.java_type.clone(),
-            arch: j.arch.to_string(),
-        })
-        .collect()
-}
 
 // ================= 界面字体 =================
 
@@ -76,7 +65,12 @@ async fn load_bg_bytes(source: &str) -> Result<(Vec<u8>, String), String> {
         let bytes = resp.bytes().await.map_err(|err| err.to_string())?;
         Ok((bytes.to_vec(), mime))
     } else {
-        let mime = match source.rsplit('.').next().map(|e| e.to_lowercase()).as_deref() {
+        let mime = match source
+            .rsplit('.')
+            .next()
+            .map(|e| e.to_lowercase())
+            .as_deref()
+        {
             Some("png") => "image/png",
             Some("jpg") | Some("jpeg") => "image/jpeg",
             Some("webp") => "image/webp",
@@ -358,62 +352,180 @@ pub fn settings_save_launch(min_memory: u32, max_memory: u32, jvm_args: String, 
 #[tauri::command]
 pub fn settings_scan_java() -> Vec<JavaInfoDto> {
     mml_jvms::scan_java();
-    persist_java();
     java_list()
 }
 
 /// 手动添加一个 Java（路径无效返回错误）
 #[tauri::command]
-pub fn settings_add_java(path: String) -> Result<JavaInfoDto, String> {
-    // 名称缺省用可执行文件所在目录名（如 "jdk-17.0.2"）
-    let name = Path::new(&path)
-        .parent()
-        .and_then(|p| p.file_name())
-        .map(|n| n.to_string_lossy().to_string())
-        .unwrap_or_else(|| "java".to_string());
-
-    let Some(added) = mml_jvms::add_item(name, path) else {
-        return Err("err.javaInvalid".to_string());
-    };
-    persist_java();
-    mml_jvms::get_all_java()
-        .into_iter()
-        .find(|j| j.name == added)
-        .map(|j| JavaInfoDto {
-            name: j.name.clone(),
-            path: j.path.to_string_lossy().to_string(),
-            version: j.version.clone(),
-            major: j.major_version.max(0) as u32,
-            java_type: j.java_type.clone(),
-            arch: j.arch.to_string(),
+pub fn settings_add_java(name: Option<String>, path: String) -> Result<JavaInfoDto, String> {
+    if let Some(added) = mml_jvms::add_item(name, path) {
+        Ok(JavaInfoDto {
+            name: added.name.clone(),
+            path: added.path.to_string_lossy().to_string(),
+            version: added.version.clone(),
+            major: added.major_version.max(0),
+            java_type: added.java_type.clone(),
+            arch: added.arch.to_string(),
         })
-        .ok_or_else(|| "err.javaInvalid".to_string())
+    } else {
+        Err("err.javaInvalid".to_string())
+    }
 }
 
 /// 移除一个 Java（按名称）
 #[tauri::command]
-pub fn settings_remove_java(name: String) -> Vec<JavaInfoDto> {
+pub fn settings_remove_java(name: String) {
     mml_jvms::remove(&name);
-    java_list()
 }
 
-/// 把 mml-jvms 内存列表里尚未入配置的条目补进 config.json（scan_java 只写内存）
-fn persist_java() {
-    let all = mml_jvms::get_all_java();
-    let mut dirty = false;
-    {
-        let mut config = mml_config::write_config();
-        for j in &all {
-            if !config.java_list.iter().any(|x| x.name == j.name) {
-                config.java_list.push(mml_config::config_obj::JvmConfigObj {
-                    name: j.name.clone(),
-                    local: j.path.to_string_lossy().to_string(),
-                });
-                dirty = true;
-            }
-        }
+/// 移除全部 Java，返回刷新后的列表
+#[tauri::command]
+pub fn settings_remove_all_java() {
+    mml_jvms::remove_all();
+}
+
+/// Java 压缩包导入进度事件（解包 / 识别阶段推进时发）
+#[gui_macros::emit]
+pub fn emit_settings_java_progress(app: &AppHandle, dto: JavaImportProgressDto) {
+    let _ = app.emit(listens::SETTINGS_JAVA_PROGRESS, dto);
+}
+
+/// 解压进度回调 → `settings-java-progress` 事件桥接
+///
+/// 给 `mml_jvms::unzip_java` 的 `BaseArchiveGui` 参数用：
+/// `start` 下发的 total 记在内部，`update` 携带它一起转发成进度事件，
+/// 当前文件名放进 `subText`；命令返回即导入完成，`done` 无需再发。
+struct JavaArchiveGui {
+    app: AppHandle,
+    /// `start` 下发的总数，`update` 时回读
+    total: AtomicUsize,
+}
+
+impl JavaArchiveGui {
+    fn new(app: &AppHandle) -> Arc<Self> {
+        Arc::new(Self {
+            app: app.clone(),
+            total: AtomicUsize::new(0),
+        })
     }
-    if dirty {
-        mml_config::save();
+}
+
+impl IBaseArchiveGui for JavaArchiveGui {
+    fn start(&self, total: usize) {
+        self.total.store(total, Ordering::Relaxed);
+        emit_settings_java_progress(
+            &self.app,
+            JavaImportProgressDto {
+                state: "extract".to_string(),
+                now: 0,
+                total: total as u32,
+                sub_text: None,
+            },
+        );
     }
+
+    fn update(&self, filename: Option<String>, current: usize) {
+        emit_settings_java_progress(
+            &self.app,
+            JavaImportProgressDto {
+                state: "extract".to_string(),
+                now: current as u32,
+                total: self.total.load(Ordering::Relaxed) as u32,
+                sub_text: filename,
+            },
+        );
+    }
+
+    fn done(&self) {}
+
+    /// 导入场景无需询问，非法字符文件名直接同意替换
+    fn file_rename(&self, _name: &str) -> bool {
+        true
+    }
+}
+
+/// 从压缩包（zip / 7z / tar.gz 等）解包导入 Java，返回刷新后的列表。
+/// 解包与识别过程中经 `settings-java-progress` 事件上报进度
+#[tauri::command]
+pub async fn settings_import_java(
+    app: AppHandle,
+    name: Option<String>,
+    archive_path: String,
+) -> Result<Option<JavaInfoDto>, String> {
+    let data = mml_jvms::unzip_java(
+        name,
+        Path::new(&archive_path),
+        Some(JavaArchiveGui::new(&app)),
+    )
+    .await
+    .map_err(|err| err.to_string())?;
+    if let Some(data) = data {
+        Ok(Some(JavaInfoDto {
+            name: data.name.clone(),
+            path: data.path.to_string_lossy().to_string(),
+            version: data.version.clone(),
+            major: data.major_version,
+            java_type: data.java_type.clone(),
+            arch: data.arch.to_string(),
+        }))
+    } else {
+        Ok(None)
+    }
+}
+
+/// 扫描指定文件夹（含子目录）里的 Java 并注册，返回刷新后的列表
+#[tauri::command]
+pub async fn settings_scan_java_dir(path: String) -> Result<Option<JavaInfoDto>, String> {
+    let data = mml_jvms::find_java_from_path(Path::new(&path));
+
+    let Some(data) = data else {
+        return Ok(None);
+    };
+
+    let data = tauri::async_runtime::spawn(async move { java_helper::test_java(Path::new(&data)) })
+        .await
+        .map_err(|err| err.to_string())?;
+
+    if let Some(info) = data {
+        let info = mml_jvms::add_info_item(info);
+        return Ok(Some(JavaInfoDto {
+            name: info.name.clone(),
+            path: info.path.to_string_lossy().to_string(),
+            version: info.version.clone(),
+            major: info.major_version,
+            java_type: info.java_type.clone(),
+            arch: info.arch.to_string(),
+        }));
+    } else {
+        return Ok(None);
+    }
+}
+
+/// 测试获取 Java 信息（不注册）：探测路径指向的 Java，返回识别到的名称 / 版本等
+#[tauri::command]
+pub async fn settings_detect_java(path: String) -> Result<Option<String>, String> {
+    let data = tauri::async_runtime::spawn(async move { java_helper::test_java(Path::new(&path)) })
+        .await
+        .map_err(|err| err.to_string())?;
+
+    if let Some(data) = data {
+        Ok(Some(data.name))
+    } else {
+        Ok(None)
+    }
+}
+
+/// mml-jvms 内存列表 → 前端 DTO（与 windows::main 的 java_list 同构）
+fn java_list() -> Vec<JavaInfoDto> {
+    mml_jvms::get_all_java()
+        .iter()
+        .map(|j| JavaInfoDto {
+            name: j.name.clone(),
+            path: j.path.to_string_lossy().to_string(),
+            version: j.version.clone(),
+            major: j.major_version.max(0),
+            java_type: j.java_type.clone(),
+            arch: j.arch.to_string(),
+        })
+        .collect()
 }

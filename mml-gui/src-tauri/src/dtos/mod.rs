@@ -14,6 +14,7 @@ pub mod download_dto;
 pub mod gui_config_dto;
 pub mod instance_dto;
 pub mod java_dto;
+pub mod java_download_dto;
 pub mod main_dto;
 pub mod resource_dto;
 pub mod settings_dto;
@@ -23,7 +24,8 @@ pub mod window_dto;
 pub use account_dto::{AccountStoreDto, AccountStoreViewDto};
 pub use args_dto::{EnvVarLineDto, InstanceArgsDto};
 pub use instance_dto::InstanceInfoDto;
-pub use java_dto::JavaInfoDto;
+pub use java_dto::{JavaImportProgressDto, JavaInfoDto};
+pub use java_download_dto::{JavaDownloadItemDto, JavaDownloadOptionsDto, JavaTypes};
 pub use version_dto::VersionInfoDto;
 pub use add_dto::{
     DetectedPackDto, DirEntry, LoaderProgressDto, ModpackItemDto, NameConflictDto, PackProgressDto,

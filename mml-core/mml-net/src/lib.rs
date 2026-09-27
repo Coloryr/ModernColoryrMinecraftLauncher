@@ -35,9 +35,7 @@
 
 use mml_base::serialize_tools;
 use mml_config::config_obj::{ProxyState, ProxyType};
-use mml_names::i18_items::error_type::{
-    CoreResult, ErrorType, HttpErrorData,
-};
+use mml_names::i18_items::error_type::{CoreResult, ErrorType, HttpErrorData};
 use reqwest::header::{HeaderMap, HeaderValue, IF_NONE_MATCH, USER_AGENT};
 use reqwest::{Proxy, Request, Response};
 use serde::Serialize;
@@ -49,22 +47,25 @@ use tokio::sync::Mutex;
 
 pub mod adoptium_api;
 pub mod authlib_api;
-pub mod openfrp_api;
+pub mod chunkbase_api;
 pub mod coloryr_api;
 pub mod curseforge_api;
-pub mod sakurafrp_api;
 pub mod fabric_api;
 pub mod input_file;
 pub mod liteloader_api;
 pub mod maven_utils;
-pub mod mojang_api;
-pub mod nide8_api;
 pub mod modrinth_api;
+pub mod mojang_api;
+pub mod foojay_api;
+pub mod nide8_api;
+pub mod openfrp_api;
+pub mod openj9_api;
 pub mod optifine_api;
 pub mod quilt_api;
+pub mod sakurafrp_api;
 pub mod url_helper;
 pub mod urls;
-pub mod chunkbase_api;
+pub mod zulu_api;
 
 /// 默认 HTTP 超时时间（秒）
 const DEFAULT_TIMEOUT: u64 = 10;
@@ -142,7 +143,6 @@ impl RateLimiter {
 
         self.request_count += 1;
     }
-
 }
 
 /// HTTP 客户端封装
@@ -233,11 +233,7 @@ impl Client {
     ///
     /// - `url`: 请求地址
     /// - `max_per_minute`: 每分钟最大请求数
-    pub async fn get_text_limited(
-        &self,
-        url: &str,
-        max_per_minute: u32,
-    ) -> CoreResult<String> {
+    pub async fn get_text_limited(&self, url: &str, max_per_minute: u32) -> CoreResult<String> {
         {
             let mut guard = self.rate_limiter.lock().await;
             match *guard {
@@ -264,11 +260,7 @@ impl Client {
     ///
     /// - `url`: 请求地址
     /// - `max_per_minute`: 每分钟最大请求数
-    pub async fn get_bytes_limited(
-        &self,
-        url: &str,
-        max_per_minute: u32,
-    ) -> CoreResult<Vec<u8>> {
+    pub async fn get_bytes_limited(&self, url: &str, max_per_minute: u32) -> CoreResult<Vec<u8>> {
         {
             let mut guard = self.rate_limiter.lock().await;
             match *guard {

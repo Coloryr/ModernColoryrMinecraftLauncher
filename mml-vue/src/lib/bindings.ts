@@ -88,9 +88,14 @@ export const commands = {
     pauseAll: () => invoke<number>("download_pause_all"),
     resumeAll: () => invoke<number>("download_resume_all"),
   },
+  javaDownload: {
+    getList: (source: JavaTypes, javaType: string, major: number, system: string, arch: string) => invoke<JavaDownloadItemDto[]>("java_download_get_list", { source, javaType, major, system, arch }),
+    getOptions: (source: JavaTypes) => invoke<JavaDownloadOptionsDto>("java_download_get_options", { source }),
+    getTypes: () => invoke<JavaTypes[]>("java_download_get_types"),
+    start: (javaType: string, major: number, system: string, arch: string) => invoke<void>("java_download_start", { javaType, major, system, arch }),
+  },
   main: {
     addGroup: (name: string) => invoke<boolean>("main_add_group", { name }),
-    addJava: (name: string, path: string) => invoke<boolean>("main_add_java", { name, path }),
     createInstance: (name: string, version: string, loader: string | null, loaderVersion: string | null, group: string | null, modpackType: string | null, source: string | null) => invoke<InstanceInfoDto>("main_create_instance", { name, version, loader, loaderVersion, group, modpackType, source }),
     deleteInstance: (uuid: string) => invoke<boolean>("main_delete_instance", { uuid }),
     getGameLog: (uuid: string) => invoke<LogLine[]>("main_get_game_log", { uuid }),
@@ -110,9 +115,7 @@ export const commands = {
     openUrl: (url: string) => invoke<void>("main_open_url", { url }),
     refreshVersions: () => invoke<VersionInfoDto[]>("main_refresh_versions"),
     removeGroup: (name: string) => invoke<boolean>("main_remove_group", { name }),
-    removeJava: (name: string) => invoke<void>("main_remove_java", { name }),
     renameInstance: (uuid: string, name: string) => invoke<boolean>("main_rename_instance", { uuid, name }),
-    scanJava: () => invoke<JavaInfoDto[]>("main_scan_java"),
     stopGame: (uuid: string) => invoke<void>("main_stop_game", { uuid }),
     updateInstance: (uuid: string, patch: InstancePatch) => invoke<boolean>("main_update_instance", { uuid, patch }),
     updateInstanceArgs: (uuid: string, args: InstanceArgsDto) => invoke<boolean>("main_update_instance_args", { uuid, args }),
@@ -145,17 +148,21 @@ export const commands = {
     shaderSet: (uuid: string, file: string | null) => invoke<void>("resource_shader_set", { uuid, file }),
   },
   settings: {
-    addJava: (path: string) => invoke<JavaInfoDto>("settings_add_java", { path }),
+    addJava: (name: string | null, path: string) => invoke<JavaInfoDto>("settings_add_java", { name, path }),
     clearBg: () => invoke<void>("settings_clear_bg"),
+    detectJava: (path: string) => invoke<string | null>("settings_detect_java", { path }),
     getBg: () => invoke<BgInfoDto | null>("settings_get_bg"),
     getLaunch: () => invoke<LaunchSettingDto>("settings_get_launch"),
     getNetwork: () => invoke<NetworkSettingDto>("settings_get_network"),
     getSystemFonts: () => invoke<string[]>("settings_get_system_fonts"),
-    removeJava: (name: string) => invoke<JavaInfoDto[]>("settings_remove_java", { name }),
+    importJava: (name: string | null, archivePath: string) => invoke<JavaInfoDto | null>("settings_import_java", { name, archivePath }),
+    removeAllJava: () => invoke<void>("settings_remove_all_java"),
+    removeJava: (name: string) => invoke<void>("settings_remove_java", { name }),
     resizeBg: (percent: number) => invoke<string>("settings_resize_bg", { percent }),
     saveLaunch: (minMemory: number, maxMemory: number, jvmArgs: string, gameArgs: string) => invoke<void>("settings_save_launch", { minMemory, maxMemory, jvmArgs, gameArgs }),
     saveNetwork: (dto: NetworkSettingDto) => invoke<void>("settings_save_network", { dto }),
     scanJava: () => invoke<JavaInfoDto[]>("settings_scan_java"),
+    scanJavaDir: (path: string) => invoke<JavaInfoDto | null>("settings_scan_java_dir", { path }),
     setBg: (source: string, percent: number) => invoke<string>("settings_set_bg", { source, percent }),
   },
 };
@@ -496,6 +503,23 @@ export type InstanceInfoDto = {
   source: string | null,
 };
 
+export type JavaTypes = "adoptium" | "zulu" | "openj9" | "foojay";
+
+export type JavaDownloadItemDto = {
+  uuid: string,
+  name: string,
+  javaVersion: string,
+  filename: string,
+  size: number,
+};
+
+export type JavaDownloadOptionsDto = {
+  types: string[],
+  majors: number[],
+  systems: string[],
+  archs: string[],
+};
+
 export type JavaInfoDto = {
   name: string,
   path: string,
@@ -503,6 +527,13 @@ export type JavaInfoDto = {
   major: number,
   javaType: string,
   arch: string,
+};
+
+export type JavaImportProgressDto = {
+  state: string,
+  now: number,
+  total: number,
+  subText: string | null,
 };
 
 export type LoadState = {

@@ -147,13 +147,17 @@ async function clearDone() {
 }
 
 .mp-bar-clear {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
   font-size: 12px;
   color: var(--text-dim);
-  background: none;
-  border: none;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
   cursor: pointer;
-  padding: 2px 6px;
+  padding: 0 10px;
   border-radius: 6px;
+  font-family: inherit;
 }
 
 .mp-bar-clear:hover {
@@ -242,14 +246,18 @@ async function clearDone() {
 }
 
 .mp-cancel {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
   font-size: 12px;
   color: var(--red);
-  background: none;
+  background: var(--bg-raised);
   border: 1px solid color-mix(in srgb, var(--red) 40%, transparent);
   border-radius: 6px;
-  padding: 1px 8px;
+  padding: 0 10px;
   cursor: pointer;
   flex-shrink: 0;
+  font-family: inherit;
 }
 
 .mp-cancel:hover {

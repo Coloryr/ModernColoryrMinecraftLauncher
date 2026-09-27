@@ -19,6 +19,7 @@ pub mod add_resource;
 pub mod collect;
 pub mod download;
 pub mod help;
+pub mod java_download;
 pub mod main;
 pub mod resource;
 pub mod settings;
@@ -93,6 +94,9 @@ const COLLECT_WINDOW_UUID: Uuid = uuid!("00000000-0000-0000-0000-00000000000c");
 /// 方块列表窗口固定 uuid
 const BLOCK_WINDOW_UUID: Uuid = uuid!("00000000-0000-0000-0000-00000000000d");
 
+/// Java 下载窗口固定 uuid
+const JAVA_DOWNLOAD_WINDOW_UUID: Uuid = uuid!("00000000-0000-0000-0000-00000000000e");
+
 /// 窗口注册表条目
 struct WindowEntry {
     /// 窗口标签（`mml-<kind>`，与前端 kind 对应）
@@ -137,6 +141,11 @@ const ADD_MODPACK_MIN_HEIGHT: f64 = 600.0;
 const SETTINGS_MIN_WIDTH: f64 = 850.0;
 /// 设置窗口最小高度
 const SETTINGS_MIN_HEIGHT: f64 = 600.0;
+
+/// Java 下载窗口最小宽度（四行下拉 + 下载按钮的小表单窗）
+const JAVA_DOWNLOAD_MIN_WIDTH: f64 = 520.0;
+/// Java 下载窗口最小高度
+const JAVA_DOWNLOAD_MIN_HEIGHT: f64 = 420.0;
 
 /// 窗口注册表：uuid → 窗口信息
 const WINDOWS_INFO: LazyLock<HashMap<Uuid, WindowEntry>> = LazyLock::new(|| {
@@ -243,6 +252,14 @@ const WINDOWS_INFO: LazyLock<HashMap<Uuid, WindowEntry>> = LazyLock::new(|| {
                 label: "mml-block",
                 min_width: MIN_WIDTH,
                 min_height: MIN_HEIGHT,
+            },
+        ),
+        (
+            JAVA_DOWNLOAD_WINDOW_UUID,
+            WindowEntry {
+                label: "mml-java_download",
+                min_width: JAVA_DOWNLOAD_MIN_WIDTH,
+                min_height: JAVA_DOWNLOAD_MIN_HEIGHT,
             },
         ),
     ])
