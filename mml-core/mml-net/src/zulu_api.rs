@@ -1,9 +1,11 @@
+use std::sync::OnceLock;
+
 use mml_names::i18_items::error_type::CoreResult;
 use serde::{Deserialize, Serialize};
 
 use crate::urls;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(default)]
 pub struct ZuluObj {
     pub arch: String,
@@ -34,6 +36,16 @@ impl Default for ZuluObj {
     }
 }
 
+static ZULU: OnceLock<Vec<ZuluObj>> = OnceLock::new();
+
+async fn init() -> CoreResult<Vec<ZuluObj>> {
+    let list: Vec<ZuluObj> = crate::get_work_client().get_json(urls::ZULU).await?;
+    Ok(ZULU.get_or_init(|| list).clone())
+}
+
 pub async fn get_java_list() -> CoreResult<Vec<ZuluObj>> {
-    crate::get_work_client().get_json(urls::ZULU).await
+    match ZULU.get() {
+        Some(data) => Ok(data.clone()),
+        None => init().await,
+    }
 }

@@ -595,6 +595,7 @@ export default {
   "winJavaDownload.system": "System",
   "winJavaDownload.arch": "Architecture",
   "winJavaDownload.listEmpty": "No matching Java",
+  "winJavaDownload.download": "Download",
   "winSettings.skinDisplay": "Skin display mode",
   "winSettings.skinDisplayDesc": "Show account skin hover preview as 2D flat, 2D overlay, 3D face-up or 3D face-down",
   "winSettings.skin2da": "2D flat",

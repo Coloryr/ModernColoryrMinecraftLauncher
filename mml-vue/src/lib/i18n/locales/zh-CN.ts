@@ -595,6 +595,7 @@ export default {
   "winJavaDownload.system": "系统",
   "winJavaDownload.arch": "架构",
   "winJavaDownload.listEmpty": "暂无匹配的 Java",
+  "winJavaDownload.download": "下载",
   "winSettings.skinDisplay": "皮肤显示模式",
   "winSettings.skinDisplayDesc": "账户皮肤悬停预览使用 2D 平铺、2D 叠加、3D 仰视还是 3D 俯视",
   "winSettings.skin2da": "2D 平铺",
