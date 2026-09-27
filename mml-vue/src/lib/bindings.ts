@@ -159,7 +159,7 @@ export const commands = {
     removeAllJava: () => invoke<void>("settings_remove_all_java"),
     removeJava: (name: string) => invoke<void>("settings_remove_java", { name }),
     resizeBg: (percent: number) => invoke<string>("settings_resize_bg", { percent }),
-    saveLaunch: (minMemory: number, maxMemory: number, jvmArgs: string, gameArgs: string) => invoke<void>("settings_save_launch", { minMemory, maxMemory, jvmArgs, gameArgs }),
+    saveLaunch: (run: RunArgSettingDto, window: WindowSettingDto) => invoke<void>("settings_save_launch", { run, window }),
     saveNetwork: (dto: NetworkSettingDto) => invoke<void>("settings_save_network", { dto }),
     scanJava: () => invoke<JavaInfoDto[]>("settings_scan_java"),
     scanJavaDir: (path: string) => invoke<JavaInfoDto | null>("settings_scan_java_dir", { path }),
@@ -730,12 +730,38 @@ export type GameCheckSettingDto = {
   modSha1: boolean,
 };
 
-export type LaunchSettingDto = {
-  javaList: JavaInfoDto[],
-  minMemory: number,
-  maxMemory: number,
+export type RunArgSettingDto = {
+  removeJvmArg: boolean,
+  removeGameArg: boolean,
   jvmArgs: string,
   gameArgs: string,
+  jvmEnv: string,
+  gcMode: string,
+  minMemory: number,
+  maxMemory: number,
+  colorasm: boolean,
+  launchPreRun: boolean,
+  preRunWithGame: boolean,
+  launchPostRun: boolean,
+  preRunArg: string,
+  postRunArg: string,
+};
+
+export type WindowSettingDto = {
+  fullScreen: boolean,
+  width: number,
+  height: number,
+  editTitle: boolean,
+  gameTitle: string,
+  randomTitle: boolean,
+  cycleTitle: boolean,
+  titleDelay: number,
+};
+
+export type LaunchSettingDto = {
+  javaList: JavaInfoDto[],
+  run: RunArgSettingDto,
+  window: WindowSettingDto,
 };
 
 export type BgInfoDto = {

@@ -6,7 +6,10 @@
 
 use serde::{Deserialize, Serialize};
 
-use mml_config::config_obj::{DnsObj, GameCheckObj, HttpObj, ProxyState, ProxyType, RunArgObj, SourceLocal};
+use mml_config::config_obj::{
+    DnsObj, GameCheckObj, GCType, HttpObj, ProxyState, ProxyType, RunArgObj, SourceLocal,
+    WindowSettingObj,
+};
 
 use super::JavaInfoDto;
 
@@ -54,6 +57,24 @@ fn proxy_type_from_str(s: &str) -> ProxyType {
         "Sock4" => ProxyType::Sock4,
         "Sock5" => ProxyType::Sock5,
         _ => ProxyType::Http,
+    }
+}
+
+fn gc_to_str(g: GCType) -> String {
+    match g {
+        GCType::Auto => "Auto".to_string(),
+        GCType::G1GC => "G1GC".to_string(),
+        GCType::ZGC => "ZGC".to_string(),
+        GCType::None => "None".to_string(),
+    }
+}
+
+fn gc_from_str(s: &str) -> GCType {
+    match s {
+        "G1GC" => GCType::G1GC,
+        "ZGC" => GCType::ZGC,
+        "None" => GCType::None,
+        _ => GCType::Auto,
     }
 }
 
@@ -215,35 +236,153 @@ impl From<GameCheckSettingDto> for GameCheckObj {
     }
 }
 
+/// 启动参数（前端 wire：camelCase，字段即 core `RunArgObj`）
+///
+/// core 侧是 `Option` 字段（`None` = 用全局默认），DTO 落到
+/// `RunArgObj::new()` 同款默认值；保存时全部写回 `Some(...)`。
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct RunArgSettingDto {
+    /// 是否移除原有的 JVM 参数
+    pub remove_jvm_arg: bool,
+    /// 是否移除原有的游戏参数
+    pub remove_game_arg: bool,
+    /// 自定义 JVM 参数（换行分隔多条）
+    pub jvm_args: String,
+    /// 自定义游戏参数（换行分隔多条）
+    pub game_args: String,
+    /// 自定义 JVM 环境变量
+    pub jvm_env: String,
+    /// GC 模式：Auto / G1GC / ZGC / None
+    pub gc_mode: String,
+    /// 最小内存（MB）
+    pub min_memory: u32,
+    /// 最大内存（MB）
+    pub max_memory: u32,
+    /// 是否启用 ColorASM（彩色日志输出）
+    pub colorasm: bool,
+    /// 是否在启动游戏前执行预启动命令
+    pub launch_pre_run: bool,
+    /// 预启动命令与游戏同时运行（true）还是等命令结束再启动游戏（false）
+    pub pre_run_with_game: bool,
+    /// 是否在游戏结束后执行后置命令
+    pub launch_post_run: bool,
+    /// 预启动命令内容
+    pub pre_run_arg: String,
+    /// 后置命令内容
+    pub post_run_arg: String,
+}
+
+impl From<&RunArgObj> for RunArgSettingDto {
+    fn from(r: &RunArgObj) -> Self {
+        Self {
+            remove_jvm_arg: r.remove_jvm_arg.unwrap_or(false),
+            remove_game_arg: r.remove_game_arg.unwrap_or(false),
+            jvm_args: r.jvm_args.clone().unwrap_or_default(),
+            game_args: r.game_args.clone().unwrap_or_default(),
+            jvm_env: r.jvm_env.clone().unwrap_or_default(),
+            gc_mode: gc_to_str(r.gc_mode.unwrap_or(GCType::Auto)),
+            min_memory: r.min_memory.unwrap_or(512),
+            max_memory: r.max_memory.unwrap_or(4096),
+            colorasm: r.colorasm.unwrap_or(false),
+            launch_pre_run: r.launch_pre_run.unwrap_or(false),
+            pre_run_with_game: r.pre_run_with_game.unwrap_or(true),
+            launch_post_run: r.launch_post_run.unwrap_or(false),
+            pre_run_arg: r.pre_run_arg.clone().unwrap_or_default(),
+            post_run_arg: r.post_run_arg.clone().unwrap_or_default(),
+        }
+    }
+}
+
+impl From<RunArgSettingDto> for RunArgObj {
+    fn from(d: RunArgSettingDto) -> Self {
+        Self {
+            remove_jvm_arg: Some(d.remove_jvm_arg),
+            remove_game_arg: Some(d.remove_game_arg),
+            jvm_args: Some(d.jvm_args),
+            game_args: Some(d.game_args),
+            jvm_env: Some(d.jvm_env),
+            gc_mode: Some(gc_from_str(&d.gc_mode)),
+            max_memory: Some(d.max_memory),
+            min_memory: Some(d.min_memory),
+            colorasm: Some(d.colorasm),
+            launch_pre_run: Some(d.launch_pre_run),
+            pre_run_with_game: Some(d.pre_run_with_game),
+            launch_post_run: Some(d.launch_post_run),
+            pre_run_arg: Some(d.pre_run_arg),
+            post_run_arg: Some(d.post_run_arg),
+        }
+    }
+}
+
+/// 游戏窗口设置（前端 wire：camelCase，字段即 core `WindowSettingObj`）
+///
+/// core 侧是 `Option` 字段，DTO 落到 `WindowSettingObj::new()` 同款默认值
+/// （`title_delay` core 尚无既有默认值，取 3000ms）。
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct WindowSettingDto {
+    /// 是否启动全屏模式
+    pub full_screen: bool,
+    /// 窗口宽度（像素）
+    pub width: u16,
+    /// 窗口高度（像素）
+    pub height: u16,
+    /// 是否启用自定义标题
+    pub edit_title: bool,
+    /// 自定义游戏窗口标题
+    pub game_title: String,
+    /// 是否使用随机标题
+    pub random_title: bool,
+    /// 是否循环切换标题
+    pub cycle_title: bool,
+    /// 循环标题切换间隔（毫秒）
+    pub title_delay: u32,
+}
+
+impl From<&WindowSettingObj> for WindowSettingDto {
+    fn from(w: &WindowSettingObj) -> Self {
+        Self {
+            full_screen: w.full_screen.unwrap_or(false),
+            width: w.width.unwrap_or(1280),
+            height: w.height.unwrap_or(720),
+            edit_title: w.edit_title.unwrap_or(false),
+            game_title: w.game_title.clone().unwrap_or_default(),
+            random_title: w.random_title.unwrap_or(false),
+            cycle_title: w.cycle_title.unwrap_or(false),
+            title_delay: w.title_delay.unwrap_or(3000),
+        }
+    }
+}
+
+impl From<WindowSettingDto> for WindowSettingObj {
+    fn from(d: WindowSettingDto) -> Self {
+        Self {
+            full_screen: Some(d.full_screen),
+            width: Some(d.width),
+            height: Some(d.height),
+            game_title: Some(d.game_title),
+            edit_title: Some(d.edit_title),
+            random_title: Some(d.random_title),
+            cycle_title: Some(d.cycle_title),
+            title_delay: Some(d.title_delay),
+        }
+    }
+}
+
 /// 启动设置（前端 wire：camelCase）
 ///
 /// Java 列表只读（增删走 `settings_scan_java` / `settings_add_java` /
-/// `settings_remove_java`），内存与参数走 `settings_save_launch`。
+/// `settings_remove_java`），启动参数与窗口设置走 `settings_save_launch`。
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase", default)]
 pub struct LaunchSettingDto {
     /// 已添加的 Java 运行时列表
     pub java_list: Vec<JavaInfoDto>,
-    /// 最小内存（MB）
-    pub min_memory: u32,
-    /// 最大内存（MB）
-    pub max_memory: u32,
-    /// 自定义 JVM 参数
-    pub jvm_args: String,
-    /// 自定义游戏参数
-    pub game_args: String,
-}
-
-impl From<&RunArgObj> for LaunchSettingDto {
-    fn from(r: &RunArgObj) -> Self {
-        Self {
-            java_list: Vec::new(),
-            min_memory: r.min_memory.unwrap_or(512),
-            max_memory: r.max_memory.unwrap_or(4096),
-            jvm_args: r.jvm_args.clone().unwrap_or_default(),
-            game_args: r.game_args.clone().unwrap_or_default(),
-        }
-    }
+    /// 启动参数（core `RunArgObj`）
+    pub run: RunArgSettingDto,
+    /// 游戏窗口设置（core `WindowSettingObj`）
+    pub window: WindowSettingDto,
 }
 
 /// 背景图信息（前端 wire：camelCase，`settings_get_bg` 返回值）

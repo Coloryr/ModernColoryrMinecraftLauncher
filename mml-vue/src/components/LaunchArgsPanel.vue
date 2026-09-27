@@ -28,7 +28,7 @@ function onBrowseFile(e: Event) {
   const input = e.target as HTMLInputElement;
   const file = input.files?.[0];
   if (file) {
-    // 浏览器环境只能拿到 fakepath；接入 Tauri 后改用文件对话框插件
+    // 浏览器 input 只能拿到 fakepath；待改用 @tauri-apps/plugin-dialog（settings / add 窗口已在用）
     update({ javaPath: file.name });
   }
 }

@@ -14,7 +14,7 @@ use tauri::{AppHandle, Emitter};
 
 use crate::dtos::{
     BgInfoDto, DnsSettingDto, GameCheckSettingDto, JavaImportProgressDto, JavaInfoDto,
-    LaunchSettingDto, NetworkSettingDto,
+    LaunchSettingDto, NetworkSettingDto, RunArgSettingDto, WindowSettingDto,
 };
 use crate::listens;
 
@@ -327,23 +327,25 @@ pub fn settings_save_network(dto: NetworkSettingDto) {
 
 // ================= 游戏启动设置 =================
 
-/// 读取启动设置（Java 列表 + 内存 + 自定义参数）
+/// 读取启动设置（Java 列表 + 启动参数 + 窗口设置）
 #[tauri::command]
 pub fn settings_get_launch() -> LaunchSettingDto {
-    let mut dto = LaunchSettingDto::from(&mml_config::read_config().jvm_arg);
+    let config = mml_config::read_config();
+    let mut dto = LaunchSettingDto {
+        java_list: Vec::new(),
+        run: RunArgSettingDto::from(&config.jvm_arg),
+        window: WindowSettingDto::from(&config.window),
+    };
     dto.java_list = java_list();
     dto
 }
 
-/// 保存内存与自定义参数（Java 列表走独立命令增删）
+/// 保存启动参数与窗口设置（Java 列表走独立命令增删）
 #[tauri::command]
-pub fn settings_save_launch(min_memory: u32, max_memory: u32, jvm_args: String, game_args: String) {
+pub fn settings_save_launch(run: RunArgSettingDto, window: WindowSettingDto) {
     let mut config = mml_config::write_config();
-    let run = &mut config.jvm_arg;
-    run.min_memory = Some(min_memory);
-    run.max_memory = Some(max_memory);
-    run.jvm_args = Some(jvm_args);
-    run.game_args = Some(game_args);
+    config.jvm_arg = run.into();
+    config.window = window.into();
     drop(config);
     mml_config::save();
 }

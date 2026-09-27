@@ -79,7 +79,7 @@ export interface GuiConfig {
   collect: CollectConfig;
   /** 界面字体族名（空串 = 默认字体栈） */
   font: string;
-  /** 皮肤显示模式：Skin2DA / Skin2DB / Skin3D */
+  /** 皮肤显示模式：Skin2DA / Skin2DB / Skin3D / Skin3DD */
   skinDisplay: SkinDisplay;
   /** 背景图来源（文件路径 / 网址，空串 = 无背景图） */
   bgSource: string;
@@ -142,6 +142,13 @@ export async function saveGuiConfig(patch: GuiConfigPatch): Promise<void> {
   }
 }
 
+/** 角度读取：没存过 / 非法值返回默认（与 settings.ts 的 readAngle 同语义） */
+function readAngle(raw: string | null, dflt: number): number {
+  if (raw === null) return dflt;
+  const v = Number(raw);
+  return Number.isFinite(v) ? v : dflt;
+}
+
 function defaultConfig(): GuiConfig {
   const stored = localStorage.getItem("mml.theme");
   return {
@@ -162,8 +169,10 @@ function defaultConfig(): GuiConfig {
     },
     head: {
       headType: normalizeHeadType(localStorage.getItem("mml.headType")),
-      x: Number(localStorage.getItem("mml.headX")) || 0,
-      y: Number(localStorage.getItem("mml.headY")) || 0,
+      // 与 settings.ts readAngle 同语义：没存过 / 非法值回落到默认角度
+      // （默认 x 15 / y 65，别用 || 0——未存过时会把默认角度覆盖成 0/0）
+      x: readAngle(localStorage.getItem("mml.headX"), 15),
+      y: readAngle(localStorage.getItem("mml.headY"), 65),
     },
     collect: {
       modpack: localStorage.getItem("mml.collect.modpack") !== "0",

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 资源管理窗口：存档 / 数据包 / 模组 / 资源包 / 截图 / 服务器 / 光影包 / 结构文件
+// 资源管理窗口：存档（数据包为其子页）/ 模组 / 资源包 / 截图 / 服务器 / 光影包 / 结构文件
 // 数据来自 resource_* 命令；删除进回收站，操作后重拉当前分类
 import { computed, onMounted, ref, watch } from "vue";
 import WindowFrame from "../../components/ui/WindowFrame.vue";

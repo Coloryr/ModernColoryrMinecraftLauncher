@@ -164,13 +164,42 @@ fn zulu_arch(arch: &str, bitness: &str) -> String {
     }
 }
 
-/// 下载选定的 Java（发行类型 / 主版本 / 系统 / 架构组合），
-/// 解包注册到 Java 列表后返回；下载 / 解包进度可另发事件
+/// 下载选定的 Java 包并解包注册
+///
+/// `java_download_get_list` 缓存的下载信息（`JAVA_ITEMS`）按 uuid 取出，
+/// 压缩包经下载器落到下载目录，随后 `mml_jvms::unzip_java` 解包识别并
+/// 注册进 Java 列表（`java-change` 事件由 mml_jvms 回调自动发出）。
+///
+/// # 参数
+///
+/// - `uuid`: 列表项 uuid（`java_download_get_list` 返回的 `uuid` 字段）
 #[tauri::command]
-pub async fn java_download_start(
-    uuid: String,
-) -> Result<(), String> {
-    todo!("java_download_start 待实现")
+pub async fn java_download_start(uuid: String) -> Result<(), String> {
+    let Ok(uuid) = Uuid::parse_str(&uuid) else {
+        return Err("err.javaItemNotFound".to_string());
+    };
+
+    let item = {
+        let locker = JAVA_ITEMS.read().unwrap();
+        locker.get(&uuid).cloned()
+    };
+    let Some(item) = item else {
+        return Err("err.javaItemNotFound".to_string());
+    };
+
+    // 下载压缩包（进度在下载窗口可见）
+    let ok = mml_downloader::start_download_task(vec![item.clone()]).await;
+    if !ok {
+        return Err("err.downloadFailed".to_string());
+    }
+
+    // 解包识别并注册（解包无需进度回调，传 None）
+    let archive = item.file.clone();
+    mml_jvms::unzip_java(Some(item.name.clone()), &archive, None)
+        .await
+        .map_err(|err| err.to_string())?;
+
+    Ok(())
 }
 
 /// 获取按当前筛选条件匹配的 Java 包列表（窗口下方的文本列表）
@@ -242,6 +271,7 @@ pub async fn java_download_get_list(
                         && item.java_version.first().copied() == Some(major as i32)
                         && item.os == system
                         && zulu_arch(&item.arch, &item.hw_bitness) == arch
+                        && unpackable(&item.url)
                 })
                 .collect();
             list.sort_by(|a, b| b.zulu_version.cmp(&a.zulu_version));
@@ -309,9 +339,12 @@ pub async fn java_download_get_list(
                 if side.opt1.download_link.is_empty() {
                     continue;
                 }
+                let url = side.opt1.download_link;
+                if !unpackable(&url) {
+                    continue;
+                }
                 let uuid = Uuid::new_v4();
                 let name = format!("{}_{}", item.name, java_type);
-                let url = side.opt1.download_link;
                 let filename = file_name_of(&url).to_string();
                 locker.insert(
                     uuid.clone(),
@@ -335,13 +368,19 @@ pub async fn java_download_get_list(
             }
         }
         JavaTypes::Foojay => {
-            let list = mml_net::foojay_api::get_java_list(major, &system, &arch, &java_type)
+            let mut list = mml_net::foojay_api::get_java_list(major, &system, &arch, &java_type)
                 .await
                 .map_err(|err| err.to_string())?;
+
+            // API 返回顺序是乱的，按 OpenJDK 版本号倒序（新版本在前）
+            list.sort_by(|a, b| version_key(&b.java_version).cmp(&version_key(&a.java_version)));
 
             let mut locker = JAVA_ITEMS.write().unwrap();
 
             for item in list {
+                if !unpackable(&item.filename) {
+                    continue;
+                }
                 let uuid = Uuid::new_v4();
                 let name = format!("{}_{}", item.distribution_version, item.package_type);
                 locker.insert(
@@ -362,7 +401,8 @@ pub async fn java_download_get_list(
                     name,
                     java_version: item.java_version,
                     filename: item.filename,
-                    size: item.size,
+                    // API 对未知大小返回 -1，归零让前端不显示大小
+                    size: item.size.max(0) as u64,
                 });
             }
         }
@@ -374,4 +414,25 @@ pub async fn java_download_get_list(
 /// 从下载地址取文件名（最后一段路径）
 fn file_name_of(url: &str) -> &str {
     url.rsplit('/').next().unwrap_or(url)
+}
+
+/// 只保留能被 `mml_jvms::unzip_java` 解包的压缩包
+///
+/// msi / exe / pkg / dmg 是安装器 / 磁盘镜像，无法解包注册，不应进列表
+fn unpackable(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    !(lower.ends_with(".msi")
+        || lower.ends_with(".exe")
+        || lower.ends_with(".pkg")
+        || lower.ends_with(".dmg"))
+}
+
+/// 版本号拆成数值段（如 "21.0.5+11" → [21, 0, 5, 11]），供逐段比较排序
+///
+/// 非数值段跳过；字典序比较会把 "9" 排在 "21" 后面，数值逐段比较不会
+fn version_key(version: &str) -> Vec<u32> {
+    version
+        .split(['.', '+', '_'])
+        .filter_map(|item| item.parse().ok())
+        .collect()
 }
