@@ -52,19 +52,37 @@ import {
 import { theme, setTheme, accent, setAccent, customAccent, setCustomAccent, ACCENTS, type Theme } from "../../lib/theme";
 import { setFontFamily, fontFamily } from "../../lib/fonts";
 import { showToast } from "../../lib/toast";
+import { loadGuiConfig, saveGuiConfig, type ClientConfig } from "../../lib/guiConfig";
+import { typeLabelKey } from "../../lib/accountStore";
+import { imageBase, imageVersion } from "../../lib/accountImages";
 
 const inTauri = isTauri();
 
+/** 设置页头像样例：内置纤细皮肤按当前头像配置渲染（配置变化经 imageVersion 重取） */
+const headPreviewUrl = computed(() =>
+  imageBase.value
+    ? `${imageBase.value}/head/preview/0?v=${imageVersion.value}`
+    : "",
+);
+
+/** 设置页皮肤样例：内置纤细皮肤按当前皮肤显示模式渲染 */
+const skinPreviewUrl = computed(() =>
+  imageBase.value
+    ? `${imageBase.value}/skin/preview/0/slim?v=${imageVersion.value}`
+    : "",
+);
+
 // ================= 标签导航 =================
 
-type SettingsTab = "ui" | "skin" | "network" | "launch" | "java";
+type SettingsTab = "ui" | "skin" | "network" | "launch" | "java" | "client";
 
 const TABS: Array<{ id: SettingsTab; icon: string }> = [
   { id: "ui", icon: "palette" },
-  { id: "skin", icon: "user" },
+  { id: "java", icon: "coffee" },
   { id: "network", icon: "download" },
   { id: "launch", icon: "play" },
-  { id: "java", icon: "coffee" },
+  { id: "skin", icon: "user" },
+  { id: "client", icon: "gear" },
 ];
 
 const tab = ref<SettingsTab>("ui");
@@ -105,6 +123,101 @@ function addDnsLine() {
   dnsLines.value.push("");
   applyNetwork();
 }
+
+// ---- 客户端设置（gui_config.client，即改即存） ----
+const client = ref<ClientConfig>({
+  motdCard: true,
+  motdInterval: 15,
+  loginLock: [],
+  autoJoin: false,
+  autoJoinServer: "",
+  motdServer: "",
+});
+
+/** 登录方式锁定的候选（复用账户添加类型的文案） */
+const LOGIN_TYPES = ["offline", "microsoft", "littleskin", "selflittleskin", "authlib", "nide8"] as const;
+
+/** 登录类型标签（key 用 accountStore.ACCOUNT_TYPES 的标准映射，别手拼——
+ *  LittleSkin 中间的 S 是大写的，手拼会变成不存在的 typeLittleskin） */
+function loginTypeLabel(ty: string): string {
+  return t(typeLabelKey(ty));
+}
+
+// 登录方式锁定：可添加的条目列表（类型 + 服务器信息）
+const addLockType = ref<string>("offline");
+const addLockServer = ref("");
+/** 需要服务器信息的类型（外置登录 / 自定义皮肤站 = 服务器地址，统一通行证 = 服务器 ID）；
+ *  这些类型可重复添加，靠服务器信息区分条目 */
+const SERVER_LOCK_TYPES = ["authlib", "selflittleskin", "nide8"];
+const addLockHasServer = computed(() => SERVER_LOCK_TYPES.includes(addLockType.value));
+/** 带服务器的类型始终可加（可添加不同地址）；其余类型加过就不再出现在下拉里 */
+const addLockOptions = computed(() =>
+  LOGIN_TYPES.filter(
+    (ty) =>
+      (SERVER_LOCK_TYPES as readonly string[]).includes(ty) ||
+      !client.value.loginLock.some((e) => e.ty === ty),
+  ),
+);
+/** 非空 = 服务器输入框红框 + 提示文字 */
+const lockServerError = ref("");
+
+function validateLockServer(): boolean {
+  if (!addLockHasServer.value) {
+    lockServerError.value = "";
+    return true;
+  }
+  const v = addLockServer.value.trim();
+  if (!v) {
+    lockServerError.value = t("winSettings.loginLockServerRequired");
+    return false;
+  }
+  if (client.value.loginLock.some((e) => e.ty === addLockType.value && e.server === v)) {
+    lockServerError.value = t("winSettings.loginLockServerDup");
+    return false;
+  }
+  lockServerError.value = "";
+  return true;
+}
+
+/** 服务器输入框的占位文案 */
+const lockServerPlaceholder = computed(() =>
+  addLockType.value === "nide8"
+    ? t("winSettings.lockNide8ServerHint")
+    : addLockType.value === "selflittleskin"
+      ? t("winSettings.lockSelfServerHint")
+      : t("winSettings.lockAuthlibServerHint"),
+);
+
+/** 添加一个锁定条目 */
+function addLock() {
+  const ty = addLockType.value;
+  if (!ty) return;
+  if (!validateLockServer()) return;
+  client.value.loginLock = [...client.value.loginLock, { ty, server: addLockServer.value.trim() }];
+  addLockServer.value = "";
+  lockServerError.value = "";
+  applyClient();
+}
+
+/** 移除一个锁定条目 */
+function removeLock(i: number) {
+  client.value.loginLock.splice(i, 1);
+  applyClient();
+}
+
+function applyClient() {
+  void saveGuiConfig({ client: { ...client.value } });
+}
+
+/** 服务器地址：自动进服与 MOTD 显示共用一个地址（两个配置字段保持一致） */
+const serverAddr = computed({
+  get: () => client.value.motdServer,
+  set: (v: string) => {
+    client.value.motdServer = v;
+    client.value.autoJoinServer = v;
+    applyClient();
+  },
+});
 
 // ---- 游戏启动设置 ----
 const javaList = ref<JavaInfoDto[]>([]);
@@ -167,6 +280,8 @@ let unlistenJavaProgress: UnlistenFn | null = null;
 
 onMounted(async () => {
   if (!inTauri) return;
+  const cfg = await loadGuiConfig();
+  if (cfg?.client) client.value = { ...cfg.client };
   unlistenJavaProgress = await listen<JavaImportProgressDto>(SettingsJavaProgress, (e) => {
     importProgress.value = e.payload;
   });
@@ -490,10 +605,15 @@ async function removeJava(name: string) {
               <path d="m6 4 14 8-14 8V4z" />
             </svg>
             <!-- 咖啡杯：Java -->
-            <svg v-else viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <svg v-else-if="item.icon === 'coffee'" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
               <path d="M17 8h1a4 4 0 1 1 0 8h-1" />
               <path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z" />
               <line x1="6" x2="6" y1="2" y2="4" /><line x1="10" x2="10" y1="2" y2="4" /><line x1="14" x2="14" y1="2" y2="4" />
+            </svg>
+            <!-- 齿轮：客户端设置 -->
+            <svg v-else viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+              <circle cx="12" cy="12" r="3" />
             </svg>
           </span>
           <span class="tab-text">
@@ -708,22 +828,8 @@ async function removeJava(name: string) {
 
         <!-- ================= 皮肤与头像 ================= -->
         <section v-else-if="tab === 'skin'" class="panel">
-          <!-- 皮肤显示模式：2D TypeA / 2D TypeB / 3D -->
-          <label class="field-label">{{ t("winSettings.skinDisplay") }}</label>
-          <p class="field-desc">{{ t("winSettings.skinDisplayDesc") }}</p>
-          <SegmentedTabs
-            :model-value="skinDisplay"
-            :options="[
-              { value: 'Skin2DA', label: t('winSettings.skin2da') },
-              { value: 'Skin2DB', label: t('winSettings.skin2db') },
-              { value: 'Skin3D', label: t('winSettings.skin3d') },
-              { value: 'Skin3DD', label: t('winSettings.skin3dd') },
-            ]"
-            @update:model-value="(v) => setSkinDisplay(v as SkinDisplay)"
-          />
-
           <!-- 头像显示模式 -->
-          <label class="field-label" style="margin-top: 20px">{{ t("winSettings.headDisplay") }}</label>
+          <label class="field-label">{{ t("winSettings.headDisplay") }}</label>
           <p class="field-desc">{{ t("winSettings.headDisplayDesc") }}</p>
           <SegmentedTabs
             :model-value="headType"
@@ -748,6 +854,32 @@ async function removeJava(name: string) {
               </div>
             </div>
           </template>
+
+          <!-- 皮肤显示模式：2D TypeA / 2D TypeB / 3D -->
+          <label class="field-label" style="margin-top: 20px">{{ t("winSettings.skinDisplay") }}</label>
+          <p class="field-desc">{{ t("winSettings.skinDisplayDesc") }}</p>
+          <SegmentedTabs
+            :model-value="skinDisplay"
+            :options="[
+              { value: 'Skin2DA', label: t('winSettings.skin2da') },
+              { value: 'Skin2DB', label: t('winSettings.skin2db') },
+              { value: 'Skin3D', label: t('winSettings.skin3d') },
+              { value: 'Skin3DD', label: t('winSettings.skin3dd') },
+            ]"
+            @update:model-value="(v) => setSkinDisplay(v as SkinDisplay)"
+          />
+
+          <!-- 样例预览：内置纤细皮肤按当前头像 / 皮肤配置实时渲染（配置变化经 URL 版本号重取） -->
+          <div class="sample-row">
+            <div class="sample-box">
+              <img v-if="imageBase" class="sample-img" :src="headPreviewUrl" alt="" />
+              <span class="sample-label">{{ t("winSettings.headSample") }}</span>
+            </div>
+            <div class="sample-box">
+              <img v-if="imageBase" class="sample-img skin" :src="skinPreviewUrl" alt="" />
+              <span class="sample-label">{{ t("winSettings.skinSample") }}</span>
+            </div>
+          </div>
         </section>
 
         <!-- ================= 网络与下载 ================= -->
@@ -976,6 +1108,23 @@ async function removeJava(name: string) {
         <!-- ================= 游戏启动 ================= -->
         <section v-else-if="tab === 'launch'" class="panel">
           <template v-if="run && win">
+            <!-- 游戏窗口 -->
+            <h3 class="group-title">{{ t("winSettings.secGameWindow") }}</h3>
+            <div class="switch-row">
+              <span>{{ t("winSettings.fullScreen") }}</span>
+              <BaseSwitch v-model="win!.fullScreen" />
+            </div>
+            <div class="grid-2" style="margin-top: 10px">
+              <div>
+                <label class="field-label">{{ t("winSettings.width") }}</label>
+                <NumberStepper v-model="win!.width" :min="100" :max="65535" />
+              </div>
+              <div>
+                <label class="field-label">{{ t("winSettings.height") }}</label>
+                <NumberStepper v-model="win!.height" :min="100" :max="65535" />
+              </div>
+            </div>
+
             <!-- 内存 -->
             <h3 class="group-title">{{ t("winSettings.secMemory") }}</h3>
             <div class="grid-2">
@@ -1073,47 +1222,6 @@ async function removeJava(name: string) {
               <input v-model="run!.postRunArg" class="field-input" spellcheck="false" />
             </template>
 
-            <!-- 游戏窗口 -->
-            <h3 class="group-title">{{ t("winSettings.secGameWindow") }}</h3>
-            <div class="switch-row">
-              <span>{{ t("winSettings.fullScreen") }}</span>
-              <BaseSwitch v-model="win!.fullScreen" />
-            </div>
-            <div class="grid-2" style="margin-top: 10px">
-              <div>
-                <label class="field-label">{{ t("winSettings.width") }}</label>
-                <NumberStepper v-model="win!.width" :min="100" :max="65535" />
-              </div>
-              <div>
-                <label class="field-label">{{ t("winSettings.height") }}</label>
-                <NumberStepper v-model="win!.height" :min="100" :max="65535" />
-              </div>
-            </div>
-
-            <!-- 游戏标题 -->
-            <h3 class="group-title">{{ t("winSettings.secGameTitle") }}</h3>
-            <div class="switch-list">
-              <div class="switch-row">
-                <span>{{ t("winSettings.editTitle") }}</span>
-                <BaseSwitch v-model="win!.editTitle" />
-              </div>
-              <div class="switch-row">
-                <span>{{ t("winSettings.randomTitle") }}</span>
-                <BaseSwitch v-model="win!.randomTitle" />
-              </div>
-              <div class="switch-row">
-                <span>{{ t("winSettings.cycleTitle") }}</span>
-                <BaseSwitch v-model="win!.cycleTitle" />
-              </div>
-            </div>
-            <template v-if="win.editTitle">
-              <label class="field-label" style="margin-top: 10px">{{ t("winSettings.gameTitle") }}</label>
-              <input v-model="win!.gameTitle" class="field-input" spellcheck="false" />
-            </template>
-            <template v-if="win.cycleTitle">
-              <label class="field-label" style="margin-top: 10px">{{ t("winSettings.titleDelay") }}</label>
-              <NumberStepper v-model="win!.titleDelay" :min="100" :max="600000" :step="100" />
-            </template>
           </template>
           <p v-else class="field-desc">{{ t("winSettings.tauriOnly") }}</p>
         </section>
@@ -1214,6 +1322,119 @@ async function removeJava(name: string) {
             </div>
           </template>
           <p v-else class="field-desc">{{ t("winSettings.tauriOnly") }}</p>
+        </section>
+
+        <!-- ================= 客户端设置 ================= -->
+        <section v-else-if="tab === 'client'" class="panel">
+          <h3 class="group-title">{{ t("winSettings.secServers") }}</h3>
+
+          <!-- 服务器地址：自动进服与 MOTD 显示共用 -->
+          <label class="field-label">{{ t("winSettings.serverAddress") }}</label>
+          <input
+            v-model="serverAddr"
+            class="field-input"
+            spellcheck="false"
+            placeholder="mc.example.com:25565"
+            :title="t('winSettings.serverAddressHint')"
+          />
+          <p class="field-desc" style="margin-top: 8px">{{ t("winSettings.serverAddressHint") }}</p>
+
+          <!-- 自动进服：启动时自动进入上面配置的服务器 -->
+          <div class="switch-row" style="margin-top: 12px">
+            <div class="switch-text">
+              <span class="switch-label">{{ t("winSettings.autoJoin") }}</span>
+              <span class="switch-state">{{ t("winSettings.autoJoinDesc") }}</span>
+            </div>
+            <BaseSwitch v-model="client.autoJoin" @update:model-value="applyClient" />
+          </div>
+
+          <!-- MOTD 卡片显示与刷新间隔 -->
+          <div class="switch-row" style="margin-top: 8px">
+            <div class="switch-text">
+              <span class="switch-label">{{ t("winSettings.motdCard") }}</span>
+              <span class="switch-state">{{ t("winSettings.motdCardDesc") }}</span>
+            </div>
+            <BaseSwitch v-model="client.motdCard" @update:model-value="applyClient" />
+          </div>
+          <div class="switch-row" :class="{ dim: !client.motdCard }" style="margin-top: 8px">
+            <div class="switch-text">
+              <span class="switch-label">{{ t("winSettings.motdInterval") }}</span>
+              <span class="switch-state">{{ t("winSettings.motdIntervalDesc") }}</span>
+            </div>
+            <NumberStepper
+              v-model="client.motdInterval"
+              :min="5"
+              :max="600"
+              @update:model-value="applyClient"
+            />
+          </div>
+
+          <h3 class="group-title">{{ t("winSettings.secLoginLock") }}</h3>
+          <p class="field-desc">{{ t("winSettings.loginLockDesc") }}</p>
+          <!-- 已锁定的条目列表 -->
+          <div v-if="client.loginLock.length" class="switch-list">
+            <div v-for="(e, i) in client.loginLock" :key="e.ty" class="switch-row lock-item">
+              <span class="lock-item-text">
+                {{ loginTypeLabel(e.ty) }}<template v-if="e.server"> — {{ e.server }}</template>
+              </span>
+              <BaseButton size="sm" variant="danger" @click="removeLock(i)">
+                {{ t("winSettings.loginLockRemove") }}
+              </BaseButton>
+            </div>
+          </div>
+          <!-- 添加条目：选类型；外置登录 / 自定义皮肤站 / 统一通行证必须填服务器信息，可重复添加不同地址 -->
+          <div class="lock-add">
+            <select v-model="addLockType" class="field-select lock-add-type">
+              <option v-for="ty in addLockOptions" :key="ty" :value="ty">
+                {{ loginTypeLabel(ty) }}
+              </option>
+            </select>
+            <input
+              v-if="addLockHasServer"
+              v-model="addLockServer"
+              class="field-input lock-add-server"
+              :class="{ 'lock-server-error': lockServerError }"
+              spellcheck="false"
+              :placeholder="lockServerPlaceholder"
+              @input="lockServerError = ''"
+            />
+            <BaseButton
+              size="sm"
+              variant="accent"
+              :disabled="!addLockOptions.length"
+              @click="addLock"
+            >
+              {{ t("winSettings.loginLockAdd") }}
+            </BaseButton>
+          </div>
+          <p v-if="lockServerError" class="lock-server-hint">{{ lockServerError }}</p>
+
+          <!-- 游戏标题（游戏窗口标题栏的自定义文字，全局默认值） -->
+          <template v-if="win">
+            <h3 class="group-title">{{ t("winSettings.secGameTitle") }}</h3>
+            <div class="switch-list">
+              <div class="switch-row">
+                <span>{{ t("winSettings.editTitle") }}</span>
+                <BaseSwitch v-model="win.editTitle" />
+              </div>
+              <div class="switch-row">
+                <span>{{ t("winSettings.randomTitle") }}</span>
+                <BaseSwitch v-model="win.randomTitle" />
+              </div>
+              <div class="switch-row">
+                <span>{{ t("winSettings.cycleTitle") }}</span>
+                <BaseSwitch v-model="win.cycleTitle" />
+              </div>
+            </div>
+            <template v-if="win.editTitle">
+              <label class="field-label" style="margin-top: 10px">{{ t("winSettings.gameTitle") }}</label>
+              <input v-model="win.gameTitle" class="field-input" spellcheck="false" />
+            </template>
+            <template v-if="win.cycleTitle">
+              <label class="field-label" style="margin-top: 10px">{{ t("winSettings.titleDelay") }}</label>
+              <NumberStepper v-model="win.titleDelay" :min="100" :max="600000" :step="100" />
+            </template>
+          </template>
         </section>
       </div>
     </div>
@@ -1357,6 +1578,41 @@ async function removeJava(name: string) {
   color: var(--text-dim);
   margin: -4px 0 10px;
   line-height: 1.6;
+}
+
+/* 样例预览：头像与皮肤并排一行，内置纤细皮肤按当前配置渲染 */
+.sample-row {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+
+.sample-box {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: var(--bg-side);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.sample-img {
+  height: 100px;
+  width: auto;
+  image-rendering: pixelated;
+}
+
+/* 皮肤全身图比头像高一些 */
+.sample-img.skin {
+  height: 200px;
+}
+
+.sample-label {
+  font-size: 11.5px;
+  color: var(--text-dim);
 }
 
 .accent-list {
@@ -1531,6 +1787,43 @@ async function removeJava(name: string) {
 
 .switch-row.dim {
   opacity: 0.55;
+}
+
+/* 登录方式锁定：条目列表 + 添加行 */
+.lock-item-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lock-add {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.lock-add-type {
+  width: 160px;
+  flex-shrink: 0;
+}
+
+.lock-add-server {
+  flex: 1;
+  min-width: 0;
+}
+
+/* 服务器信息缺失 / 重复：红框（含聚焦态，覆盖默认的 accent 边框） */
+.lock-add-server.lock-server-error,
+.lock-add-server.lock-server-error:focus {
+  border-color: var(--red);
+}
+
+.lock-server-hint {
+  color: var(--red);
+  font-size: 12px;
+  margin: 6px 0 0;
 }
 
 .save-row {

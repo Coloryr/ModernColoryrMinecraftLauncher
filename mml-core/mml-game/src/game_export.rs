@@ -25,6 +25,7 @@ use crate::{
 };
 
 /// 导出压缩包类型
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ExportPackType {
     /// MML 格式
     MML,
@@ -338,6 +339,42 @@ async fn modrinth(game: &InstanceSettingObj, arg: ExportArg) -> CoreResult<()> {
                 }),
             });
         }
+    }
+
+    let mut zip = BaseArchive::create_empty(ArchiveType::Zip, &arg.file)?;
+
+    if let Some(gui) = &arg.gui {
+        gui.start(arg.select.len() + 1);
+    }
+
+    if let Some(gui) = &arg.gui {
+        gui.update(Some(names::MODRINTH_FILE.to_string()), 0);
+    }
+
+    zip.add_data(names::MODRINTH_FILE, &serialize_tools::json_to_bytes(&obj)?)?;
+
+    let mut index = 0;
+
+    for item in arg.select {
+        let rel = match item.strip_prefix(&path) {
+            Ok(p) => p,
+            Err(_) => continue,
+        };
+
+        let rel_str = rel.to_string_lossy().replace('\\', "/");
+
+        let name = if rel_str.starts_with('/') {
+            format!("{}{}", names::OVERRIDE_DIR, rel_str)
+        } else {
+            format!("{}/{}", names::OVERRIDE_DIR, rel_str)
+        };
+
+        if let Some(gui) = &arg.gui {
+            gui.update(Some(name.clone()), 1 + index);
+        }
+
+        zip.add_file(&name, &item)?;
+        index += 1;
     }
 
     Ok(())

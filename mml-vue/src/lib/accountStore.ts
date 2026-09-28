@@ -15,6 +15,7 @@ export const ACCOUNT_TYPES: Array<{ value: string; labelKey: string }> = [
   { value: "offline", labelKey: "account.typeOffline" },
   { value: "microsoft", labelKey: "account.typeMicrosoft" },
   { value: "littleskin", labelKey: "account.typeLittleSkin" },
+  { value: "selflittleskin", labelKey: "account.typeSelflittleskin" },
   { value: "authlib", labelKey: "account.typeAuthlib" },
   { value: "nide8", labelKey: "account.typeNide8" },
 ];

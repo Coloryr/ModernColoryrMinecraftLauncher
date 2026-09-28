@@ -6,6 +6,8 @@ import type { LogLine } from "../lib/bindings";
 
 const props = defineProps<{
   logs: LogLine[];
+  /** 撑满父容器（独立日志窗口用；默认固定高度内嵌在主窗口里） */
+  fill?: boolean;
 }>();
 
 const consoleEl = ref<HTMLElement | null>(null);
@@ -65,7 +67,7 @@ watch(
 </script>
 
 <template>
-  <div class="inst-log">
+  <div class="inst-log" :class="{ fill: props.fill }">
     <div class="filter-bar">
       <select v-model="threadFilter" class="filter-select" :title="t('launch.filterThread')">
         <option value="">{{ t("launch.filterThread") }} · {{ t("launch.filterAll") }}</option>
@@ -101,6 +103,17 @@ watch(
   flex-direction: column;
   gap: 10px;
   min-height: 0;
+}
+
+/* 撑满父容器（独立日志窗口）：控制台随窗口伸缩，不固定高 */
+.inst-log.fill {
+  flex: 1;
+}
+
+.inst-log.fill .console {
+  height: auto;
+  flex: 1;
+  max-height: none;
 }
 
 .filter-bar {

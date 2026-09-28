@@ -656,7 +656,7 @@ pub async fn add_resource_download(
                 .join(world.as_deref().unwrap())
                 .join(names::GAME_DATAPACK_DIR),
             // 存档先下到临时目录，下载完成后再解压导入
-            _ => mml_downloader::get_download_path(),
+            _ => mml_downloader::get_cache_path(),
         }
     };
 

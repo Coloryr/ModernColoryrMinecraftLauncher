@@ -84,9 +84,34 @@ pub async fn account_add_account(
     app: AppHandle,
     name: String,
     account_type: String,
-    server: Option<String>,
+    mut server: Option<String>,
     password: Option<String>,
 ) -> Result<AccountStoreDto, String> {
+    // 登录方式锁定（客户端设置）：锁定了条目列表时，只允许添加其中的类型；
+    // 同一类型可有多个锁定条目（各自带服务器），此时传入的服务器必须命中
+    // 其中一个条目；条目都没配服务器时只按类型锁定
+    let lock = &crate::gui_config::get().client;
+    let ty_locks: Vec<&crate::gui_config::LoginLockObj> = lock
+        .login_lock
+        .iter()
+        .filter(|s| s.ty == account_type)
+        .collect();
+    if !lock.login_lock.is_empty() && ty_locks.is_empty() {
+        return Err("err.loginLocked".to_string());
+    }
+    let locked_servers: Vec<&str> = ty_locks
+        .iter()
+        .map(|s| s.server.as_str())
+        .filter(|s| !s.is_empty())
+        .collect();
+    if !locked_servers.is_empty() {
+        let entered = server.as_deref().unwrap_or("").trim();
+        match locked_servers.iter().find(|s| **s == entered) {
+            Some(s) => server = Some((*s).to_string()),
+            None => return Err("err.loginLocked".to_string()),
+        }
+    }
+
     let auth_type = auth_type_from_str(&account_type);
     if auth_type == AuthType::OAuth {
         return microsoft_login(&app).await;
@@ -100,7 +125,10 @@ pub async fn account_add_account(
 
     let mut login = match auth_type {
         AuthType::LittleSkin | AuthType::SelfLittleSkin => {
-            // server 为 None 时使用官方 LittleSkin
+            // 自建皮肤站必须填服务器地址；LittleSkin 的 server 为 None 时使用官方站
+            if auth_type == AuthType::SelfLittleSkin && server.is_none() {
+                return Err("err.serverEmpty".to_string());
+            }
             little_skin::authenticate(Uuid::new_v4().to_string(), user, password, server, None).await
         }
         AuthType::AuthlibInjector => {

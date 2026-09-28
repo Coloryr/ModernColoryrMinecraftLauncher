@@ -72,7 +72,9 @@ const ICONS: Record<string, string> = {
   background: transparent;
   color: var(--text-dim);
   font-size: 12.5px;
-  padding: 6px 12px;
+  /* 定高：27 + 上下 padding 3×2 + 边框 1×2 = 35，与 BaseButton 的 md 档齐平 */
+  height: 27px;
+  padding: 0 12px;
   border-radius: 7px;
   cursor: pointer;
   transition: all 0.15s;

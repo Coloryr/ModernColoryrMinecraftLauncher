@@ -18,8 +18,10 @@ pub mod add_modpack;
 pub mod add_resource;
 pub mod collect;
 pub mod download;
+pub mod export;
 pub mod help;
 pub mod java_download;
+pub mod log;
 pub mod main;
 pub mod resource;
 pub mod settings;
@@ -45,7 +47,7 @@ use tauri::{
 use crate::listens;
 use uuid::{Uuid, uuid};
 
-use crate::dtos::{GuiConfigDto, WindowSizeDto};
+use crate::dtos::{GuiConfigDto, LogFocusDto, WindowSizeDto};
 
 /// 窗口几何状态（window_save.json）
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -74,7 +76,24 @@ impl Default for WindowState {
 
 /// 主窗口固定 uuid（其余窗口从 2 号起按顺序分配）
 const MAIN_WINDOW_UUID: Uuid = uuid!("00000000-0000-0000-0000-000000000001");
+
+/// 账户窗口
 const ACCOUNT_WINDOW_UUID: Uuid = uuid!("00000000-0000-0000-0000-000000000002");
+
+/// 设置窗口
+const SETTINGS_WINDOW_UUID: Uuid = uuid!("00000000-0000-0000-0000-000000000003");
+
+/// 统计窗口
+const STATES_WINDOW_UUID: Uuid = uuid!("00000000-0000-0000-0000-000000000004");
+
+/// 皮肤窗口
+const SKIN_WINDOW_UUID: Uuid = uuid!("00000000-0000-0000-0000-000000000005");
+
+/// 帮助窗口
+const HELP_WINDOW_UUID: Uuid = uuid!("00000000-0000-0000-0000-000000000006");
+
+/// 资源管理窗口
+const RESOURCE_WINDOW_UUID: Uuid = uuid!("00000000-0000-0000-0000-000000000007");
 
 /// 添加实例窗口固定 uuid
 const ADD_WINDOW_UUID: Uuid = uuid!("00000000-0000-0000-0000-000000000008");
@@ -96,6 +115,12 @@ const BLOCK_WINDOW_UUID: Uuid = uuid!("00000000-0000-0000-0000-00000000000d");
 
 /// Java 下载窗口固定 uuid
 const JAVA_DOWNLOAD_WINDOW_UUID: Uuid = uuid!("00000000-0000-0000-0000-00000000000e");
+
+/// 游戏日志窗口固定 uuid
+const LOG_WINDOW_UUID: Uuid = uuid!("00000000-0000-0000-0000-00000000000f");
+
+/// 实例导出窗口固定 uuid
+const EXPORT_WINDOW_UUID: Uuid = uuid!("00000000-0000-0000-0000-000000000010");
 
 /// 窗口注册表条目
 struct WindowEntry {
@@ -147,6 +172,16 @@ const JAVA_DOWNLOAD_MIN_WIDTH: f64 = 520.0;
 /// Java 下载窗口最小高度
 const JAVA_DOWNLOAD_MIN_HEIGHT: f64 = 420.0;
 
+/// 游戏日志窗口最小宽度（日志控制台 + 实例选择条）
+const LOG_MIN_WIDTH: f64 = 720.0;
+/// 游戏日志窗口最小高度
+const LOG_MIN_HEIGHT: f64 = 480.0;
+
+/// 实例导出窗口最小宽度（元数据表单 + 导出设置）
+const EXPORT_MIN_WIDTH: f64 = 560.0;
+/// 实例导出窗口最小高度
+const EXPORT_MIN_HEIGHT: f64 = 500.0;
+
 /// 窗口注册表：uuid → 窗口信息
 const WINDOWS_INFO: LazyLock<HashMap<Uuid, WindowEntry>> = LazyLock::new(|| {
     HashMap::from([
@@ -167,7 +202,7 @@ const WINDOWS_INFO: LazyLock<HashMap<Uuid, WindowEntry>> = LazyLock::new(|| {
             },
         ),
         (
-            uuid!("00000000-0000-0000-0000-000000000003"),
+            SETTINGS_WINDOW_UUID,
             WindowEntry {
                 label: "mml-settings",
                 min_width: SETTINGS_MIN_WIDTH,
@@ -175,7 +210,7 @@ const WINDOWS_INFO: LazyLock<HashMap<Uuid, WindowEntry>> = LazyLock::new(|| {
             },
         ),
         (
-            uuid!("00000000-0000-0000-0000-000000000004"),
+            STATES_WINDOW_UUID,
             WindowEntry {
                 label: "mml-stats",
                 min_width: MIN_WIDTH,
@@ -183,7 +218,7 @@ const WINDOWS_INFO: LazyLock<HashMap<Uuid, WindowEntry>> = LazyLock::new(|| {
             },
         ),
         (
-            uuid!("00000000-0000-0000-0000-000000000005"),
+            SKIN_WINDOW_UUID,
             WindowEntry {
                 label: "mml-skin",
                 min_width: MIN_WIDTH,
@@ -191,7 +226,7 @@ const WINDOWS_INFO: LazyLock<HashMap<Uuid, WindowEntry>> = LazyLock::new(|| {
             },
         ),
         (
-            uuid!("00000000-0000-0000-0000-000000000006"),
+            HELP_WINDOW_UUID,
             WindowEntry {
                 label: "mml-help",
                 min_width: MIN_WIDTH,
@@ -199,7 +234,7 @@ const WINDOWS_INFO: LazyLock<HashMap<Uuid, WindowEntry>> = LazyLock::new(|| {
             },
         ),
         (
-            uuid!("00000000-0000-0000-0000-000000000007"),
+            RESOURCE_WINDOW_UUID,
             WindowEntry {
                 label: "mml-resource",
                 min_width: MIN_WIDTH,
@@ -260,6 +295,22 @@ const WINDOWS_INFO: LazyLock<HashMap<Uuid, WindowEntry>> = LazyLock::new(|| {
                 label: "mml-java_download",
                 min_width: JAVA_DOWNLOAD_MIN_WIDTH,
                 min_height: JAVA_DOWNLOAD_MIN_HEIGHT,
+            },
+        ),
+        (
+            LOG_WINDOW_UUID,
+            WindowEntry {
+                label: "mml-log",
+                min_width: LOG_MIN_WIDTH,
+                min_height: LOG_MIN_HEIGHT,
+            },
+        ),
+        (
+            EXPORT_WINDOW_UUID,
+            WindowEntry {
+                label: "mml-export",
+                min_width: EXPORT_MIN_WIDTH,
+                min_height: EXPORT_MIN_HEIGHT,
             },
         ),
     ])
@@ -393,8 +444,17 @@ pub fn window_state_set(uuid: &Uuid, state: WindowState) {
 
 /// 创建（或聚焦）一个窗口
 ///
+/// - `url_path`：webview 加载的路径（相对应用源，通常为 `index.html`；需要带
+///   参数时传 `index.html?...`——tauri 对恰好 `index.html` 的路径走裸 app URL
+///   分支，其余字符串经 `Url::join` 拼接，query 可随真实 URL 带给前端）
+///
 /// 注意：必须由 async 命令调用（同步命令在 Windows 主线程阻塞创建会冻结应用）。
-fn create_window(app: &AppHandle, label: &str, uuid: &Uuid) -> Result<WebviewWindow, String> {
+fn create_window(
+    app: &AppHandle,
+    label: &str,
+    uuid: &Uuid,
+    url_path: &str,
+) -> Result<WebviewWindow, String> {
     // 已存在则聚焦，避免重复窗口
     if let Some(win) = app.get_webview_window(label) {
         win.set_focus().map_err(|err| err.to_string())?;
@@ -418,17 +478,34 @@ fn create_window(app: &AppHandle, label: &str, uuid: &Uuid) -> Result<WebviewWin
         .unwrap_or((600.0, 400.0));
 
     // webview 铺不透明暗色底，避免加载首帧透出桌面（与暗色主题 --bg 一致）
-    let builder = WebviewWindowBuilder::new(app, label, WebviewUrl::App("index.html".into()))
+    let builder = WebviewWindowBuilder::new(app, label, WebviewUrl::App(url_path.into()))
         .title(names::MML)
         .min_inner_size(min_w, min_h)
         // 自绘标题栏：关掉系统装饰，最小化 / 最大化 / 关闭由前端 WindowControls 调下面的命令实现
         .decorations(false)
+        // 无边框阴影会把客户区四周（Win10 上是左 / 右 / 下，顶部 inset 恒为 0）缩进一圈，
+        // 无背景效果的系统上这一圈画成黑边，故关掉阴影让 webview 铺满整个窗口；
+        // 关掉后 tao 走完整的边缘命中测试，拖边缘调整大小不受影响
+        .shadow(false)
         .background_color(tauri::window::Color(0x14, 0x16, 0x1a, 0xff));
     let win = match geom {
-        Some(g) => builder
-            .inner_size(g.width as f64, g.height as f64)
-            .position(g.x as f64, g.y as f64)
-            .build(),
+        Some(g) => {
+            // 恢复端（builder.position / inner_size）用逻辑像素，保存端（outer_position /
+            // inner_size()）是物理像素：按目标显示器的缩放系数换算。否则带缩放（125%/150%）
+            // 的屏幕上每开一次窗都乘一遍缩放系数，窗口逐次变大、位置漂移。
+            // monitor_from_point 吃物理坐标，与保存的值同坐标系
+            let scale = app
+                .monitor_from_point(g.x as f64, g.y as f64)
+                .ok()
+                .flatten()
+                .or_else(|| app.primary_monitor().ok().flatten())
+                .map(|m| m.scale_factor())
+                .unwrap_or(1.0);
+            builder
+                .inner_size(g.width as f64 / scale, g.height as f64 / scale)
+                .position(g.x as f64 / scale, g.y as f64 / scale)
+                .build()
+        }
         None => builder.inner_size(min_w, min_h).center().build(),
     };
     let win = win.map_err(|e| e.to_string())?;
@@ -495,20 +572,26 @@ pub fn close_window_from_uuid(app: &AppHandle, uuid: &Uuid) -> Result<(), String
 }
 
 /// 打开（或聚焦）指定 uuid 的窗口
-pub fn open_window_from_uuid(app: &AppHandle, uuid: &Uuid) -> Result<(), String> {
+///
+/// - `url_path`：传给 [`create_window`] 的 webview 路径
+pub fn open_window_from_uuid(
+    app: &AppHandle,
+    uuid: &Uuid,
+    url_path: &str,
+) -> Result<(), String> {
     let binding = WINDOWS_INFO;
     let Some(entry) = binding.get(uuid) else {
         return Err(WindowNotFound.to_string());
     };
     let label = entry.label;
 
-    create_window(app, label, uuid)?;
+    create_window(app, label, uuid, url_path)?;
     Ok(())
 }
 
 /// 创建 / 聚焦主窗口（setup 阶段调用）
 pub fn show_main_window(app: &AppHandle) -> Result<(), String> {
-    open_window_from_uuid(app, &MAIN_WINDOW_UUID)
+    open_window_from_uuid(app, &MAIN_WINDOW_UUID, "index.html")
 }
 
 /// 窗口事件处理（注册于 `Builder::on_window_event`）
@@ -588,12 +671,52 @@ pub fn window_get_window_sizes() -> Vec<WindowSizeDto> {
         .collect()
 }
 
+/// 打开一个功能窗口（多窗口模式，窗口按钮调用）
+///
+/// - `kind`: 窗口类型
+/// - `instance`: 目标实例 UUID（游戏日志窗口定位要查看的实例；窗口已存在时
+///   聚焦并推送 `log-focus` 事件让已开窗口切换实例）
 #[tauri::command]
-pub async fn window_open_window(app: AppHandle, kind: String) -> Result<(), String> {
+pub async fn window_open_window(
+    app: AppHandle,
+    kind: String,
+    instance: Option<String>,
+) -> Result<(), String> {
+    kind_parse_check(&kind, &instance)?;
     let Some(uuid) = uuid_for_kind(&kind) else {
         return Err(format!("unknown window kind: {kind}"));
     };
-    open_window_from_uuid(&app, &uuid)
+    // log / export 窗口按 uuid 定位实例：新窗口靠 URL query 拿目标
+    let url_path = match (&kind[..], &instance) {
+        ("log", Some(instance)) | ("export", Some(instance)) => {
+            format!("index.html?window={kind}&uuid={instance}")
+        }
+        _ => String::from("index.html"),
+    };
+    open_window_from_uuid(&app, &uuid, &url_path)?;
+    // 新创建的窗口靠 URL query 拿目标；已存在的窗口 URL 不变，靠事件切换
+    if let Some(instance) = &instance {
+        if kind == "log" {
+            log::emit_log_focus(&app, LogFocusDto { uuid: instance.clone() });
+        }
+        if kind == "export" {
+            export::emit_export_focus(&app, LogFocusDto { uuid: instance.clone() });
+        }
+    }
+    Ok(())
+}
+
+/// 打开日志 / 导出窗口时的实例参数校验（kind 与 instance 参数匹配性）
+fn kind_parse_check(kind: &str, instance: &Option<String>) -> Result<(), String> {
+    if kind != "log" && kind != "export" && instance.is_some() {
+        return Err(format!("kind {kind} 不接受 instance 参数"));
+    }
+    if (kind == "log" || kind == "export")
+        && let Some(instance) = instance
+    {
+        Uuid::parse_str(instance).map_err(|_| "err.uuid".to_string())?;
+    }
+    Ok(())
 }
 
 /// 关闭一个窗口（多窗口模式，窗口关闭按钮调用）
@@ -677,9 +800,17 @@ pub async fn window_save_gui_config(app: AppHandle, config: GuiConfigDto) -> Res
         let old = crate::gui_config::get();
         old.skin_display != new_config.skin_display || old.head != new_config.head
     };
+    let client_changed = {
+        let old = crate::gui_config::get();
+        old.client != new_config.client
+    };
+    let new_client = new_config.client.clone();
     crate::gui_config::set(new_config);
     if skin_changed {
         emit_skin_config_change(&app);
+    }
+    if client_changed {
+        emit_client_config_change(&app, new_client.into());
     }
     Ok(())
 }
@@ -688,5 +819,11 @@ pub async fn window_save_gui_config(app: AppHandle, config: GuiConfigDto) -> Res
 #[gui_macros::emit]
 fn emit_skin_config_change(app: &AppHandle) {
     let _ = app.emit(listens::SKIN_CONFIG_CHANGE, ());
+}
+
+/// 客户端设置变更事件（跨窗口同步，如主窗口 MOTD 卡片 / 登录锁定）
+#[gui_macros::emit]
+fn emit_client_config_change(app: &AppHandle, config: crate::dtos::ClientConfigDto) {
+    let _ = app.emit(listens::CLIENT_CONFIG_CHANGE, config);
 }
 

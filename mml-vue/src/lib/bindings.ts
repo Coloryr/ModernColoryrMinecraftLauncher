@@ -12,7 +12,7 @@ export const commands = {
     getWindowSizes: () => invoke<WindowSizeDto[]>("window_get_window_sizes"),
     isMaximized: () => invoke<boolean>("window_is_maximized"),
     minimize: () => invoke<void>("window_minimize"),
-    openWindow: (kind: string) => invoke<void>("window_open_window", { kind }),
+    openWindow: (kind: string, instance: string | null) => invoke<void>("window_open_window", { kind, instance }),
     saveGuiConfig: (config: GuiConfigDto) => invoke<void>("window_save_gui_config", { config }),
     setTitle: (title: string) => invoke<void>("window_set_title", { title }),
     startDragging: () => invoke<void>("window_start_dragging"),
@@ -88,11 +88,19 @@ export const commands = {
     pauseAll: () => invoke<number>("download_pause_all"),
     resumeAll: () => invoke<number>("download_resume_all"),
   },
+  export: {
+    getInfo: (uuid: string) => invoke<ExportInfoDto>("export_get_info", { uuid }),
+    run: (uuid: string, config: ExportConfigDto) => invoke<void>("export_run", { uuid, config }),
+  },
   javaDownload: {
     getList: (source: JavaTypes, javaType: string, major: number, system: string, arch: string) => invoke<JavaDownloadItemDto[]>("java_download_get_list", { source, javaType, major, system, arch }),
     getOptions: (source: JavaTypes) => invoke<JavaDownloadOptionsDto>("java_download_get_options", { source }),
     getTypes: () => invoke<JavaTypes[]>("java_download_get_types"),
     start: (uuid: string) => invoke<void>("java_download_start", { uuid }),
+  },
+  log: {
+    getFiles: (uuid: string) => invoke<string[]>("log_get_files", { uuid }),
+    readFile: (uuid: string, path: string) => invoke<LogLine[]>("log_read_file", { uuid, path }),
   },
   main: {
     addGroup: (name: string) => invoke<boolean>("main_add_group", { name }),
@@ -104,6 +112,7 @@ export const commands = {
     getInstanceLangs: (uuid: string) => invoke<string[]>("main_get_instance_langs", { uuid }),
     getInstances: () => invoke<InstanceInfoDto[]>("main_get_instances"),
     getJavaList: () => invoke<JavaInfoDto[]>("main_get_java_list"),
+    getMotd: (address: string) => invoke<MotdDto>("main_get_motd", { address }),
     getNews: (page: number | null) => invoke<NewsItem[]>("main_get_news", { page }),
     getRunning: () => invoke<string[]>("main_get_running"),
     getVersions: () => invoke<VersionInfoDto[]>("main_get_versions"),
@@ -164,6 +173,9 @@ export const commands = {
     scanJava: () => invoke<JavaInfoDto[]>("settings_scan_java"),
     scanJavaDir: (path: string) => invoke<JavaInfoDto | null>("settings_scan_java_dir", { path }),
     setBg: (source: string, percent: number) => invoke<string>("settings_set_bg", { source, percent }),
+  },
+  stats: {
+    data: () => invoke<StatsDataDto>("stats_get_data"),
   },
 };
 
@@ -449,6 +461,47 @@ export type DownloadStatusDto = {
   paused: boolean,
 };
 
+export type ExportModDto = {
+  name: string,
+  online: boolean,
+  modId: string | null,
+  fileId: string | null,
+};
+
+export type ExportInfoDto = {
+  name: string,
+  version: string,
+  loader: string,
+  loaderVersion: string | null,
+  onlineMods: ExportModDto[],
+  localMods: ExportModDto[],
+  hasConfig: boolean,
+  hasResourcePacks: boolean,
+  hasShaderPacks: boolean,
+};
+
+export type ExportConfigDto = {
+  pack: string,
+  file: string,
+  includeMods: boolean,
+  includeConfig: boolean,
+  includeResourcePacks: boolean,
+  includeShaderPacks: boolean,
+  name: string,
+  author: string,
+  version: string,
+  summary: string,
+};
+
+export type ExportProgressDto = {
+  state: string,
+  now: number,
+  total: number,
+  text: string,
+  error: string | null,
+  file: string,
+};
+
 export type HeadConfigDto = {
   headType: HeadType,
   x: number,
@@ -469,6 +522,20 @@ export type CollectConfigDto = {
   shaderpack: boolean,
 };
 
+export type LoginLockItemDto = {
+  ty: string,
+  server: string,
+};
+
+export type ClientConfigDto = {
+  motdCard: boolean,
+  motdInterval: number,
+  loginLock: LoginLockItemDto[],
+  autoJoin: boolean,
+  autoJoinServer: string,
+  motdServer: string,
+};
+
 export type GuiConfigDto = {
   theme: Theme,
   locale: "zh_cn" | "en_us",
@@ -476,6 +543,7 @@ export type GuiConfigDto = {
   mainWindow: MainWindowConfigDto,
   head: HeadConfigDto,
   collect: CollectConfigDto,
+  client: ClientConfigDto,
   font: string,
   skinDisplay: SkinDisplay,
   bgSource: string,
@@ -534,6 +602,10 @@ export type JavaImportProgressDto = {
   now: number,
   total: number,
   subText: string | null,
+};
+
+export type LogFocusDto = {
+  uuid: string,
 };
 
 export type LoadState = {
@@ -619,6 +691,29 @@ export type BlockStatusDto = {
   total: number,
   text: string | null,
   error: string | null,
+};
+
+export type MotdSegmentDto = {
+  text: string,
+  color: string,
+  bold: boolean,
+  italic: boolean,
+  underlined: boolean,
+  strikethrough: boolean,
+};
+
+export type MotdDto = {
+  state: string,
+  message: string,
+  ip: string,
+  port: number,
+  ping: number,
+  version: string | null,
+  protocol: number | null,
+  playersOnline: number | null,
+  playersMax: number | null,
+  favicon: string | null,
+  segments: MotdSegmentDto[],
 };
 
 export type ModItemDto = {
@@ -770,6 +865,23 @@ export type BgInfoDto = {
   opacity: number,
   blur: number,
   nativeSize: number,
+};
+
+export type StatsInstanceDto = {
+  uuid: string,
+  name: string,
+  count: number,
+  seconds: number,
+  last: number | null,
+  running: boolean,
+};
+
+export type StatsDataDto = {
+  launchCount: number,
+  launchDoneCount: number,
+  launchErrorCount: number,
+  totalSeconds: number,
+  instances: StatsInstanceDto[],
 };
 
 export type VersionInfoDto = {

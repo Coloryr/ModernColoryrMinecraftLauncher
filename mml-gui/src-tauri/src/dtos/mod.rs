@@ -11,13 +11,17 @@ pub mod add_resource_dto;
 pub mod args_dto;
 pub mod collect_dto;
 pub mod download_dto;
+pub mod export_dto;
 pub mod gui_config_dto;
 pub mod instance_dto;
 pub mod java_dto;
 pub mod java_download_dto;
+pub mod log_dto;
 pub mod main_dto;
+pub mod motd_dto;
 pub mod resource_dto;
 pub mod settings_dto;
+pub mod stats_dto;
 pub mod version_dto;
 pub mod window_dto;
 
@@ -26,6 +30,9 @@ pub use args_dto::{EnvVarLineDto, InstanceArgsDto};
 pub use instance_dto::InstanceInfoDto;
 pub use java_dto::{JavaImportProgressDto, JavaInfoDto};
 pub use java_download_dto::{JavaDownloadItemDto, JavaDownloadOptionsDto, JavaTypes};
+pub use export_dto::{ExportConfigDto, ExportInfoDto, ExportModDto, ExportProgressDto};
+pub use log_dto::LogFocusDto;
+pub use stats_dto::{StatsDataDto, StatsInstanceDto};
 pub use version_dto::VersionInfoDto;
 pub use add_dto::{
     DetectedPackDto, DirEntry, LoaderProgressDto, ModpackItemDto, NameConflictDto, PackProgressDto,
@@ -43,7 +50,8 @@ pub use settings_dto::{
 pub use download_dto::{
     DownloadItemEvent, DownloadStatusDto, DownloadTaskDto, DownloadTaskEvent, DownloadThreadDto,
 };
-pub use gui_config_dto::{GuiConfigDto, MainWindowConfigDto};
+pub use gui_config_dto::{ClientConfigDto, GuiConfigDto, LoginLockItemDto, MainWindowConfigDto};
+pub use motd_dto::{MotdDto, MotdSegmentDto};
 pub use window_dto::WindowSizeDto;
 pub use main_dto::{
     BlockItemDto, BlockStatusDto, ErrorEvent, ExitEvent, InstanceChangeEvent, InstancePatch,

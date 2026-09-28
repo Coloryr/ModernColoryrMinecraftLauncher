@@ -11,8 +11,8 @@ use serde::{Deserialize, Serialize};
 use mml_names::Lang;
 
 use crate::gui_config::{
-    CollectConfig, GuiConfig, HeadConfig, HeadType, MainWindowConfig, SidebarSide, SkinDisplay,
-    Theme, ViewMode, WindowMode,
+    ClientConfig, CollectConfig, GuiConfig, HeadConfig, HeadType, LoginLockObj, MainWindowConfig,
+    SidebarSide, SkinDisplay, Theme, ViewMode, WindowMode,
 };
 
 /// 头像设置（前端 wire：camelCase，字段即 `head`）
@@ -55,6 +55,78 @@ pub struct CollectConfigDto {
     pub shaderpack: bool,
 }
 
+/// 登录方式锁定的一个条目（前端 wire：camelCase）
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct LoginLockItemDto {
+    /// 账户添加类型（offline / microsoft / littleskin / selflittleskin / authlib / nide8）
+    pub ty: String,
+    /// 锁定的服务器（authlib = 认证服务器地址，nide8 = 服务器 ID，空 = 不指定）
+    pub server: String,
+}
+
+impl From<LoginLockObj> for LoginLockItemDto {
+    fn from(o: LoginLockObj) -> Self {
+        Self {
+            ty: o.ty,
+            server: o.server,
+        }
+    }
+}
+
+impl From<LoginLockItemDto> for LoginLockObj {
+    fn from(d: LoginLockItemDto) -> Self {
+        Self {
+            ty: d.ty,
+            server: d.server,
+        }
+    }
+}
+
+/// 客户端设置（前端 wire：camelCase，字段即 `client`）
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[serde(rename_all = "camelCase", default)]
+pub struct ClientConfigDto {
+    /// 主窗口实例设置里显示 MOTD 卡片
+    pub motd_card: bool,
+    /// MOTD 卡片刷新间隔（秒）
+    pub motd_interval: u32,
+    /// 登录方式锁定列表（空 = 不锁定，可添加多个条目）
+    pub login_lock: Vec<LoginLockItemDto>,
+    /// 游戏自动进服（启动时自动进入 `auto_join_server`）
+    pub auto_join: bool,
+    /// 游戏自动进服地址（host 或 host:port，空 = 不自动进服）
+    pub auto_join_server: String,
+    /// MOTD 显示地址（host 或 host:port，空 = 不显示真实服务器信息）
+    pub motd_server: String,
+}
+
+impl From<ClientConfig> for ClientConfigDto {
+    fn from(c: ClientConfig) -> Self {
+        Self {
+            motd_card: c.motd_card,
+            motd_interval: c.motd_interval,
+            login_lock: c.login_lock.into_iter().map(Into::into).collect(),
+            auto_join: c.auto_join,
+            auto_join_server: c.auto_join_server,
+            motd_server: c.motd_server,
+        }
+    }
+}
+
+impl From<ClientConfigDto> for ClientConfig {
+    fn from(c: ClientConfigDto) -> Self {
+        Self {
+            motd_card: c.motd_card,
+            motd_interval: c.motd_interval,
+            login_lock: c.login_lock.into_iter().map(Into::into).collect(),
+            auto_join: c.auto_join,
+            auto_join_server: c.auto_join_server,
+            motd_server: c.motd_server,
+        }
+    }
+}
+
 /// GUI 配置（前端 wire：camelCase，即 `window_get_gui_config` 返回值）
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(rename_all = "camelCase", default)]
@@ -71,6 +143,8 @@ pub struct GuiConfigDto {
     pub head: HeadConfigDto,
     /// 收藏界面设置
     pub collect: CollectConfigDto,
+    /// 客户端设置
+    pub client: ClientConfigDto,
     /// 界面字体族名（空串 = 默认字体栈）
     pub font: String,
     /// 皮肤显示模式：Skin2D / Skin3D
@@ -109,6 +183,19 @@ impl From<GuiConfig> for GuiConfigDto {
                 resource_pack: c.collect.resource_pack,
                 shaderpack: c.collect.shaderpack,
             },
+            client: ClientConfigDto {
+                motd_card: c.client.motd_card,
+                motd_interval: c.client.motd_interval,
+                login_lock: c
+                    .client
+                    .login_lock
+                    .into_iter()
+                    .map(Into::into)
+                    .collect(),
+                auto_join: c.client.auto_join,
+                auto_join_server: c.client.auto_join_server,
+                motd_server: c.client.motd_server,
+            },
             font: c.font,
             skin_display: c.skin_display,
             bg_source: c.bg_source,
@@ -142,6 +229,19 @@ impl From<GuiConfigDto> for GuiConfig {
                 show_mod: d.collect.show_mod,
                 resource_pack: d.collect.resource_pack,
                 shaderpack: d.collect.shaderpack,
+            },
+            client: ClientConfig {
+                motd_card: d.client.motd_card,
+                motd_interval: d.client.motd_interval,
+                login_lock: d
+                    .client
+                    .login_lock
+                    .into_iter()
+                    .map(Into::into)
+                    .collect(),
+                auto_join: d.client.auto_join,
+                auto_join_server: d.client.auto_join_server,
+                motd_server: d.client.motd_server,
             },
             font: d.font,
             skin_display: d.skin_display,

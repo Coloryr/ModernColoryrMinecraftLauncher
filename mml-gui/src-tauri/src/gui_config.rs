@@ -168,6 +168,82 @@ impl Default for CollectConfig {
     }
 }
 
+/// 登录方式锁定的一个条目
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct LoginLockObj {
+    /// 账户添加类型（offline / microsoft / littleskin / selflittleskin / authlib / nide8）
+    pub ty: String,
+    /// 锁定的服务器（authlib = 认证服务器地址，nide8 = 服务器 ID，空 = 不指定）
+    pub server: String,
+}
+
+impl Default for LoginLockObj {
+    fn default() -> Self {
+        Self {
+            ty: String::new(),
+            server: String::new(),
+        }
+    }
+}
+
+/// 旧版兼容：锁定列表曾是纯字符串数组（无服务器信息）
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum LoginLockRaw {
+    Obj(LoginLockObj),
+    Str(String),
+}
+
+fn de_login_lock<'de, D>(d: D) -> Result<Vec<LoginLockObj>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let raw = Vec::<LoginLockRaw>::deserialize(d)?;
+    Ok(raw
+        .into_iter()
+        .map(|r| match r {
+            LoginLockRaw::Obj(o) => o,
+            LoginLockRaw::Str(ty) => LoginLockObj {
+                ty,
+                server: String::new(),
+            },
+        })
+        .collect())
+}
+
+/// 客户端设置（主窗口 MOTD 卡片 / 登录方式限制）
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct ClientConfig {
+    /// 主窗口实例设置里显示 MOTD 卡片
+    pub motd_card: bool,
+    /// MOTD 卡片刷新间隔（秒）
+    pub motd_interval: u32,
+    /// 登录方式锁定列表（空 = 不锁定，可添加多个条目）
+    #[serde(deserialize_with = "de_login_lock")]
+    pub login_lock: Vec<LoginLockObj>,
+    /// 游戏自动进服（启动时自动进入 `auto_join_server`）
+    pub auto_join: bool,
+    /// 游戏自动进服地址（host 或 host:port，空 = 不自动进服）
+    pub auto_join_server: String,
+    /// MOTD 显示地址（host 或 host:port，空 = 不显示真实服务器信息）
+    pub motd_server: String,
+}
+
+impl Default for ClientConfig {
+    fn default() -> Self {
+        Self {
+            motd_card: true,
+            motd_interval: 15,
+            login_lock: Vec::new(),
+            auto_join: false,
+            auto_join_server: String::new(),
+            motd_server: String::new(),
+        }
+    }
+}
+
 /// 界面设置
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -184,6 +260,8 @@ pub struct GuiConfig {
     pub head: HeadConfig,
     /// 收藏界面设置
     pub collect: CollectConfig,
+    /// 客户端设置
+    pub client: ClientConfig,
     /// 界面字体族名（空串 = 默认字体栈）
     pub font: String,
     /// 皮肤显示模式：Skin2D / Skin3D
@@ -207,6 +285,7 @@ impl Default for GuiConfig {
             main_window: Default::default(),
             head: Default::default(),
             collect: Default::default(),
+            client: Default::default(),
             font: String::new(),
             skin_display: Default::default(),
             bg_source: String::new(),

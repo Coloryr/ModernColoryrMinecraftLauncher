@@ -123,13 +123,14 @@ pub fn auth_type_from_str(s: &str) -> AuthType {
     match s {
         "microsoft" => AuthType::OAuth,
         "littleskin" => AuthType::LittleSkin,
+        "selflittleskin" => AuthType::SelfLittleSkin,
         "authlib" => AuthType::AuthlibInjector,
         "nide8" => AuthType::Nide8,
         _ => AuthType::Offline,
     }
 }
 
-/// AuthType → 前端账户类型字符串（自建皮肤站并入 littleskin 显示）
+/// AuthType → 前端账户类型字符串
 ///
 /// # 参数
 ///
@@ -142,7 +143,8 @@ fn auth_type_str(t: &AuthType) -> &'static str {
     match t {
         AuthType::Offline => "offline",
         AuthType::OAuth => "microsoft",
-        AuthType::LittleSkin | AuthType::SelfLittleSkin => "littleskin",
+        AuthType::LittleSkin => "littleskin",
+        AuthType::SelfLittleSkin => "selflittleskin",
         AuthType::AuthlibInjector => "authlib",
         AuthType::Nide8 => "nide8",
     }

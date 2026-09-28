@@ -16,6 +16,7 @@ import { isWindowKind, type WindowKind, WINDOW_REGISTRY } from "./registry";
 
 const MODE_KEY = "mml.windowMode";
 const WIN_PARAM = "window";
+const UUID_PARAM = "uuid";
 
 /** 是否多窗口模式（默认多窗口） */
 export const multiWindow = ref(localStorage.getItem(MODE_KEY) !== "Single");
@@ -50,12 +51,17 @@ function resolveKind(): WindowKind {
   return isWindowKind(k) ? k : "main";
 }
 
-function urlFor(kind: WindowKind): string {
+function urlFor(kind: WindowKind, params?: { uuid?: string }): string {
   const url = new URL(window.location.href);
   if (kind === "main") {
     url.searchParams.delete(WIN_PARAM);
   } else {
     url.searchParams.set(WIN_PARAM, kind);
+  }
+  if (params?.uuid) {
+    url.searchParams.set(UUID_PARAM, params.uuid);
+  } else {
+    url.searchParams.delete(UUID_PARAM);
   }
   return url.toString();
 }
@@ -65,17 +71,26 @@ export function kindFromUrl(): WindowKind {
   return isWindowKind(k) ? k : "main";
 }
 
-/** 打开一个窗口（功能入口等调用） */
-export function openWindow(kind: WindowKind) {
+/** 从 URL 读取目标实例 uuid（日志窗口等带参窗口用），没有返回 null */
+export function uuidFromUrl(): string | null {
+  return new URLSearchParams(window.location.search).get(UUID_PARAM);
+}
+
+/** 打开一个窗口（功能入口等调用）
+ *
+ * - `params.uuid`：目标实例 uuid（游戏日志窗口用，定位要查看的实例）
+ */
+export function openWindow(kind: WindowKind, params?: { uuid?: string }) {
   console.log("[windowManager] openWindow", kind, {
     multiWindow: multiWindow.value,
     tauri: isTauri(),
+    ...params,
   });
 
   // 单窗口模式（浏览器 / Tauri 一致）：应用内页面切换
   if (!multiWindow.value) {
     currentKind.value = kind;
-    if (!isTauri()) window.history.pushState({}, "", urlFor(kind));
+    if (!isTauri()) window.history.pushState({}, "", urlFor(kind, params));
     return;
   }
 
@@ -83,23 +98,25 @@ export function openWindow(kind: WindowKind) {
     // 统一走 Rust 窗口管理器：创建 / 聚焦在 src-tauri 的 windows/mod.rs 处理。
     // open_window 是 async 命令（不在 Windows 主线程创建窗口，避免冻结）。
     // 命令失败（例如窗口创建被拒）时回退到官方 JS API。
-    commands.windows.openWindow(kind).catch((e) => {
-      console.error("[windowManager] Rust 打开窗口失败，回退 JS API", kind, e);
-      createViaJs(kind);
-    });
+    commands.windows
+      .openWindow(kind, params?.uuid ?? null)
+      .catch((e) => {
+        console.error("[windowManager] Rust 打开窗口失败，回退 JS API", kind, e);
+        createViaJs(kind, params);
+      });
     return;
   }
 
   // 浏览器多窗口：新标签页模拟
-  window.open(urlFor(kind), kind, "noopener");
+  window.open(urlFor(kind, params), kind, "noopener");
 }
 
 /** 回退路径：用官方 JS API 创建 / 聚焦真实 WebviewWindow */
-function createViaJs(kind: WindowKind) {
+function createViaJs(kind: WindowKind, params?: { uuid?: string }) {
   const label = `mml-${kind}`;
   WebviewWindow.getByLabel(label).then(async (existing) => {
     if (existing) {
-      // 窗口已存在则聚焦
+      // 窗口已存在则聚焦（目标实例靠 game-log / log-focus 事件链路自行同步）
       existing.setFocus();
       return;
     }
@@ -108,7 +125,7 @@ function createViaJs(kind: WindowKind) {
     const size = sizes.find((s) => s.kind === kind);
     const info = WINDOW_REGISTRY.find((w) => w.kind === kind);
     const win = new WebviewWindow(label, {
-      url: "index.html",
+      url: urlFor(kind, params).replace(window.location.origin, ""),
       title: info?.title ?? kind,
       width: size?.width ?? 900,
       height: size?.height ?? 620,
@@ -121,7 +138,7 @@ function createViaJs(kind: WindowKind) {
       console.error("[windowManager] 创建窗口失败，回退到应用内切换", label, e);
       // 失败时回退：应用内切换，保证功能可用
       currentKind.value = kind;
-      window.history.pushState({}, "", urlFor(kind));
+      window.history.pushState({}, "", urlFor(kind, params));
     });
   });
 }

@@ -5,6 +5,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import {
   api,
   getLoadState,
+  onClientConfigChange,
   onGameExit,
   onGameLog,
   onInstanceChange,
@@ -12,6 +13,7 @@ import {
   onLaunchError,
   onLaunchState,
 } from "../../lib/api";
+import { loadGuiConfig, type ClientConfig } from "../../lib/guiConfig";
 import { t, tErr } from "../../lib/i18n";
 import { showToast } from "../../lib/toast";
 import { openWindow } from "../windowManager";
@@ -24,7 +26,7 @@ import {
   setViewMode,
   viewMode,
 } from "../../lib/settings";
-import type { AccountStoreDto, InstanceArgsDto, InstanceInfoDto, JavaInfoDto, LogLine, NewsItem, VersionInfoDto } from "../../lib/bindings";
+import type { AccountStoreDto, InstanceArgsDto, InstanceInfoDto, JavaInfoDto, LogLine, MotdDto, MotdSegmentDto, NewsItem, VersionInfoDto } from "../../lib/bindings";
 import InstanceIcon from "../../components/InstanceIcon.vue";
 import InstanceSelect from "../../components/InstanceSelect.vue";
 import InstanceMetaPanel from "../../components/InstanceMetaPanel.vue";
@@ -348,6 +350,11 @@ function toggleDetailLog() {
   if (detailLogOpen.value) refreshLogs();
 }
 
+/** 在独立日志窗口中打开当前实例的日志 */
+function openLogWindow() {
+  if (selected.value) openWindow("log", { uuid: selected.value.uuid });
+}
+
 function toggleSettings() {
   settingsOpen.value = !settingsOpen.value;
 }
@@ -487,15 +494,6 @@ const menuActions: Array<{
   options: Array<{ id: string; labelKey: string }>;
 }> = [
   {
-    id: "export",
-    labelKey: "actions.export",
-    options: [
-      { id: "pack", labelKey: "actions.exportPack" },
-      { id: "zip", labelKey: "actions.exportZip" },
-      { id: "mmc", labelKey: "actions.exportMmc" },
-    ],
-  },
-  {
     id: "genOnline",
     labelKey: "actions.genOnline",
     options: [
@@ -512,6 +510,12 @@ const menuActions: Array<{
     ],
   },
 ];
+
+/** 打开实例导出窗口（导出整合包） */
+function openExportWindow() {
+  if (!selected.value) return;
+  openWindow("export", { uuid: selected.value.uuid });
+}
 
 function toggleMenu(id: string) {
   openMenu.value = openMenu.value === id ? null : id;
@@ -929,21 +933,116 @@ const groupName = ref("");
 const groupError = ref("");
 const groupAdding = ref(false);
 
-// ================= 服务器 MOTD 悬浮卡片 =================
-// TEMP 模拟数据：在线人数 / 延迟为随机值，接入真实 MOTD 查询后替换
+// ================= 服务器 MOTD 卡片 =================
+// 客户端设置里配置 MOTD 显示地址，走内核 Server List Ping 查询；
+// 悬浮卡片查全局地址，实例详情里的卡片查实例自己的服务器地址
 
-const motdNow = ref(128);
-const motdPing = ref(32);
-const motdRefreshing = ref(false);
+const motdInfo = ref<MotdDto | null>(null);
+const motdLoading = ref(false);
+// 竞态保护：旧请求晚到不覆盖新结果
+let motdSeq = 0;
 
-function refreshMotd() {
-  if (motdRefreshing.value) return;
-  motdRefreshing.value = true;
-  setTimeout(() => {
-    motdNow.value = 118 + Math.floor(Math.random() * 30);
-    motdPing.value = 18 + Math.floor(Math.random() * 60);
-    motdRefreshing.value = false;
-  }, 800);
+async function refreshMotd() {
+  const addr = clientConfig.value.motdServer.trim();
+  if (!addr || motdLoading.value) return;
+  motdLoading.value = true;
+  const seq = ++motdSeq;
+  try {
+    const dto = await api.getMotd(addr);
+    if (seq === motdSeq) motdInfo.value = dto;
+  } catch {
+    if (seq === motdSeq) motdInfo.value = null;
+  } finally {
+    if (seq === motdSeq) motdLoading.value = false;
+  }
+}
+
+// 实例详情的 MOTD 卡片（查实例配置的服务器地址）
+const instMotd = ref<MotdDto | null>(null);
+const instMotdLoading = ref(false);
+let instMotdSeq = 0;
+
+async function refreshInstMotd() {
+  const inst = selected.value;
+  const ip = inst ? argsOf(inst.uuid).serverIp.trim() : "";
+  if (!ip) {
+    instMotd.value = null;
+    return;
+  }
+  if (instMotdLoading.value) return;
+  const port = inst ? argsOf(inst.uuid).serverPort || 25565 : 25565;
+  instMotdLoading.value = true;
+  const seq = ++instMotdSeq;
+  try {
+    const dto = await api.getMotd(`${ip}:${port}`);
+    if (seq === instMotdSeq) instMotd.value = dto;
+  } catch {
+    if (seq === instMotdSeq) instMotd.value = null;
+  } finally {
+    if (seq === instMotdSeq) instMotdLoading.value = false;
+  }
+}
+
+// 切换实例或改实例服务器地址后重新查询
+watch(
+  () => {
+    const inst = selected.value;
+    if (!inst) return "";
+    const a = argsOf(inst.uuid);
+    return `${inst.uuid}|${a.serverIp}|${a.serverPort}`;
+  },
+  () => void refreshInstMotd(),
+);
+
+/** MOTD 文字段渲染样式（颜色 + 加粗 / 斜体 / 下划线 / 删除线） */
+function motdSegStyle(seg: MotdSegmentDto): Record<string, string> {
+  const deco = [seg.underlined ? "underline" : "", seg.strikethrough ? "line-through" : ""]
+    .filter(Boolean)
+    .join(" ");
+  return {
+    color: seg.color,
+    fontWeight: seg.bold ? "700" : "inherit",
+    fontStyle: seg.italic ? "italic" : "inherit",
+    textDecoration: deco || "none",
+  };
+}
+
+/** 服务器图标（Base64 PNG → data URI，直接喂 <img>） */
+function faviconOf(m: MotdDto | null): string | null {
+  const f = m?.favicon;
+  if (!f) return null;
+  return f.startsWith("data:") ? f : `data:image/png;base64,${f}`;
+}
+
+// ---- 客户端设置（gui_config.client）：MOTD 卡片显示与自动刷新间隔 ----
+const clientConfig = ref<ClientConfig>({
+  motdCard: true,
+  motdInterval: 15,
+  loginLock: [],
+  autoJoin: false,
+  autoJoinServer: "",
+  motdServer: "",
+});
+const motdCardVisible = ref(true);
+let motdTimer: number | null = null;
+
+function restartMotdTimer() {
+  if (motdTimer !== null) clearInterval(motdTimer);
+  motdTimer = null;
+  if (!motdCardVisible.value) return;
+  const sec = clientConfig.value.motdInterval;
+  if (sec >= 5) {
+    motdTimer = window.setInterval(refreshMotd, sec * 1000);
+  }
+}
+
+/** 设置窗口保存 client 后广播：实时更新卡片显隐与刷新间隔 */
+function onClientConfig(c: ClientConfig) {
+  clientConfig.value = c;
+  // 没配地址就没东西可查，卡片不显示
+  motdCardVisible.value = c.motdCard && !!c.motdServer.trim();
+  restartMotdTimer();
+  void refreshMotd();
 }
 
 // ================= 事件订阅 =================
@@ -1155,10 +1254,19 @@ onMounted(async () => {
   document.addEventListener("click", onDocClick);
   document.addEventListener("keydown", onDocKeyDown);
   window.addEventListener("storage", onAddedInstanceStorage);
+  // 客户端设置：初始加载 + 设置窗口保存后实时跟随
+  try {
+    const cfg = await loadGuiConfig();
+    if (cfg?.client) onClientConfig(cfg.client);
+  } catch {
+    /* 浏览器环境忽略 */
+  }
+  onClientConfigChange(onClientConfig).then((unlisten) => unlistens.push(unlisten));
 });
 
 onUnmounted(() => {
   unlistens.forEach((fn) => fn());
+  if (motdTimer !== null) clearInterval(motdTimer);
   document.removeEventListener("click", onDocClick);
   document.removeEventListener("keydown", onDocKeyDown);
   window.removeEventListener("storage", onAddedInstanceStorage);
@@ -1480,8 +1588,11 @@ onMounted(async () => {
                   </div>
                 </div>
 
-                <!-- 实例操作（导出 / 生成为二级菜单） -->
+                <!-- 实例操作（导出直接开窗 / 生成为二级菜单） -->
                 <div class="action-grid">
+                  <button class="action-btn" @click="openExportWindow">
+                    {{ t("actions.export") }}
+                  </button>
                   <div v-for="m in menuActions" :key="m.id" class="menu-wrap">
                     <button class="action-btn" @click="toggleMenu(m.id)">
                       {{ t(m.labelKey) }}
@@ -1544,6 +1655,14 @@ onMounted(async () => {
                     >
                       <path d="m6 9 6 6 6-6" />
                     </svg>
+                  </button>
+                  <button
+                    v-if="selected"
+                    class="args-toggle"
+                    :title="t('logWindow.openInWindow')"
+                    @click="openLogWindow"
+                  >
+                    <span>🗔 {{ t("logWindow.openInWindow") }}</span>
                   </button>
                   <CollapsePanel :open="detailLogOpen">
                     <InstanceLogPanel :logs="logs" />
@@ -1619,20 +1738,30 @@ onMounted(async () => {
                         </label>
                       </div>
 
-                      <!-- MOTD 展示：两行服务器信息 + 一行状态 -->
+                      <!-- MOTD 展示：两行服务器信息 + 一行状态（查实例配置的服务器地址） -->
                       <div class="motd-card">
-                        <div class="motd-icon">MC</div>
+                        <img v-if="faviconOf(instMotd)" class="motd-icon" :src="faviconOf(instMotd)!" alt="" />
+                        <div v-else class="motd-icon">MC</div>
                         <div class="motd-info">
-                          <div class="motd-name">{{ t("server.name") }}</div>
-                          <div class="motd-text">{{ t("server.motd") }}</div>
+                          <div class="motd-name">{{ instMotd?.ip || argsOf(selected.uuid).serverIp || t("server.name") }}</div>
+                          <div class="motd-text">
+                            <template v-if="instMotd && instMotd.state === 'ok' && instMotd.segments.length">
+                              <span v-for="(seg, i) in instMotd.segments" :key="i" :style="motdSegStyle(seg)">{{ seg.text }}</span>
+                            </template>
+                            <span v-else-if="instMotd">{{ instMotd.message || t("server.offline") }}</span>
+                            <span v-else>{{ t("server.motd") }}</span>
+                          </div>
                           <div class="motd-meta">
-                            <span class="motd-online">{{
-                              t("server.players", { now: motdNow, max: 200 })
-                            }}</span>
-                            <span class="sep">·</span>
-                            <span>{{ t("server.version", { v: "1.21.1" }) }}</span>
-                            <span class="sep">·</span>
-                            <span>{{ t("server.ping", { ms: motdPing }) }}</span>
+                            <template v-if="instMotd && instMotd.state === 'ok'">
+                              <span class="motd-online">{{
+                                t("server.players", { now: instMotd.playersOnline ?? 0, max: instMotd.playersMax ?? 0 })
+                              }}</span>
+                              <span class="sep">·</span>
+                              <span>{{ instMotd.version || t("server.unknown") }}</span>
+                              <span class="sep">·</span>
+                              <span>{{ t("server.ping", { ms: instMotd.ping }) }}</span>
+                            </template>
+                            <span v-else-if="instMotdLoading" class="motd-online">{{ t("server.refreshing") }}</span>
                           </div>
                         </div>
                       </div>
@@ -1683,8 +1812,8 @@ onMounted(async () => {
 
       </main>
 
-      <!-- 服务器 MOTD 悬浮卡片（启动器下方） -->
-      <div class="motd-float">
+      <!-- 服务器 MOTD 悬浮卡片（启动器下方；客户端设置里配置地址与开关） -->
+      <div v-if="motdCardVisible" class="motd-float">
         <button
           class="motd-refresh"
           :title="t('server.refresh')"
@@ -1699,21 +1828,33 @@ onMounted(async () => {
             stroke-width="2"
             stroke-linecap="round"
             stroke-linejoin="round"
-            :class="{ spin: motdRefreshing }"
+            :class="{ spin: motdLoading }"
           >
             <path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6" />
           </svg>
         </button>
-        <div class="motd-float-icon">MC</div>
+        <img v-if="faviconOf(motdInfo)" class="motd-float-icon" :src="faviconOf(motdInfo)!" alt="" />
+        <div v-else class="motd-float-icon">MC</div>
         <div class="motd-float-info">
-          <div class="motd-float-name">{{ t("server.name") }}</div>
-          <div class="motd-float-text">{{ t("server.motd") }}</div>
+          <div class="motd-float-name">{{ motdInfo?.ip || t("server.name") }}</div>
+          <div class="motd-float-text">
+            <template v-if="motdInfo && motdInfo.state === 'ok' && motdInfo.segments.length">
+              <span v-for="(seg, i) in motdInfo.segments" :key="i" :style="motdSegStyle(seg)">{{ seg.text }}</span>
+            </template>
+            <span v-else-if="motdInfo">{{ motdInfo.message || t("server.offline") }}</span>
+            <span v-else>{{ t("server.refreshing") }}</span>
+          </div>
           <div class="motd-float-meta">
-            <span class="motd-online">{{ t("server.players", { now: motdNow, max: 200 }) }}</span>
-            <span class="sep">·</span>
-            <span>{{ t("server.version", { v: "1.21.1" }) }}</span>
-            <span class="sep">·</span>
-            <span>{{ t("server.ping", { ms: motdPing }) }}</span>
+            <template v-if="motdInfo && motdInfo.state === 'ok'">
+              <span class="motd-online">{{
+                t("server.players", { now: motdInfo.playersOnline ?? 0, max: motdInfo.playersMax ?? 0 })
+              }}</span>
+              <span class="sep">·</span>
+              <span>{{ motdInfo.version || t("server.unknown") }}</span>
+              <span class="sep">·</span>
+              <span>{{ t("server.ping", { ms: motdInfo.ping }) }}</span>
+            </template>
+            <span v-else-if="motdLoading" class="motd-online">{{ t("server.refreshing") }}</span>
           </div>
         </div>
       </div>
@@ -2161,7 +2302,7 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 12px;
-  max-width: 460px;
+  max-width: 560px;
   padding: 12px 16px;
   border-radius: 14px;
   border: 1px solid var(--border);
@@ -2207,8 +2348,8 @@ onMounted(async () => {
 }
 
 .motd-float-icon {
-  width: 44px;
-  height: 44px;
+  width: 60px;
+  height: 60px;
   border-radius: 10px;
   background: linear-gradient(135deg, #3ecf8e, #22d3ee);
   color: #fff;
@@ -2240,9 +2381,10 @@ onMounted(async () => {
   font-size: 12.5px;
   font-weight: 500;
   color: var(--text-dim);
-  white-space: nowrap;
+  /* MOTD 可能多行，保留 \n 换行 */
+  white-space: pre-wrap;
+  word-break: break-all;
   overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .motd-float-meta {
@@ -2290,6 +2432,8 @@ onMounted(async () => {
   font-size: 13.5px;
   font-weight: 600;
   color: var(--text);
+  /* MOTD 可能多行，保留 \n 换行 */
+  white-space: pre-wrap;
   word-break: break-all;
 }
 

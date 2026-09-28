@@ -1,0 +1,568 @@
+//! Minecraft 服务器 MOTD 查询（Server List Ping）
+//!
+//! 实现：TCP 连上后发握手包（next_state=1）与
+//! status request，读回 JSON 解析出版本 / 在线人数 / 描述 / 图标。
+//! 直连失败且主机名不是 IP 字面量时，尝试 SRV 记录
+//! （`_minecraft._tcp.<主机名>`）解析出真实地址重试。
+
+use std::{
+    net::IpAddr,
+    time::{Duration, Instant},
+};
+
+use serde::Deserialize;
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::TcpStream,
+    time::timeout,
+};
+
+use mml_names::{
+    i18,
+    i18_items::error_type::{CoreResult, ErrorData, ErrorType},
+};
+
+/// 连接与读包的超时
+const TIMEOUT: Duration = Duration::from_secs(5);
+
+/// 握手用的协议版本（1.16.5 = 754，只影响握手包内容，不影响查询结果）
+const PROTOCOL_VERSION: i32 = 754;
+
+/// 查询状态
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum MotdState {
+    /// 查询成功
+    #[default]
+    Ok,
+    /// 连上了但没读到数据
+    NoData,
+    /// 连接失败（含 SRV 解析失败）
+    ConnectFail,
+    /// 查询过程出错
+    Error,
+}
+
+/// 聊天文字（服务器 description 的 JSON 结构）
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct ChatObj {
+    pub text: String,
+    pub bold: Option<bool>,
+    pub italic: Option<bool>,
+    pub underlined: Option<bool>,
+    pub strikethrough: Option<bool>,
+    pub obfuscated: Option<bool>,
+    /// 颜色名（"gold" 等）或 #RRGGBB
+    pub color: Option<String>,
+    pub extra: Option<Vec<ChatObj>>,
+}
+
+/// 服务器版本信息
+#[derive(Debug, Clone, Deserialize)]
+pub struct ServerVersionObj {
+    pub name: String,
+    pub protocol: i32,
+}
+
+/// 在线玩家信息
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct ServerPlayersObj {
+    pub max: i32,
+    pub online: i32,
+    pub sample: Option<Vec<ServerPlayerObj>>,
+}
+
+/// 玩家样例
+#[derive(Debug, Clone, Deserialize)]
+pub struct ServerPlayerObj {
+    pub name: String,
+    pub id: String,
+}
+
+/// status 响应 JSON（只取关心的字段）
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default)]
+pub struct ServerStatusObj {
+    pub version: Option<ServerVersionObj>,
+    pub players: Option<ServerPlayersObj>,
+    /// description 可能是纯字符串（旧服务器）也可能是 Chat JSON
+    pub description: Option<serde_json::Value>,
+    /// Base64 PNG（data:image/png;base64, 前缀）
+    pub favicon: Option<String>,
+}
+
+/// 展平后的一段 MOTD 文字（color 已转成 #RRGGBB，供前端直接渲染）
+#[derive(Debug, Clone)]
+pub struct ChatSegment {
+    pub text: String,
+    pub color: String,
+    pub bold: bool,
+    pub italic: bool,
+    pub underlined: bool,
+    pub strikethrough: bool,
+}
+
+/// 服务器查询结果
+#[derive(Debug, Clone)]
+pub struct ServerMotdObj {
+    /// 实际查询的地址（SRV 重定向后与传入值不同）
+    pub ip: String,
+    pub port: u16,
+    pub state: MotdState,
+    /// 出错时的错误信息
+    pub message: String,
+    /// 延迟（毫秒，从发起连接到读到响应）
+    pub ping: u64,
+    pub version: Option<ServerVersionObj>,
+    pub players: Option<ServerPlayersObj>,
+    pub description: Option<ChatObj>,
+    pub favicon: Option<String>,
+}
+
+impl ServerMotdObj {
+    fn new(ip: &str, port: u16) -> Self {
+        Self {
+            ip: ip.to_string(),
+            port,
+            state: MotdState::Ok,
+            message: String::new(),
+            ping: 0,
+            version: None,
+            players: None,
+            description: None,
+            favicon: None,
+        }
+    }
+}
+
+/// 查询服务器信息（不抛异常，失败落在 `state` / `message` 里）
+pub async fn get_server_info(ip: &str, port: u16) -> ServerMotdObj {
+    let start = Instant::now();
+    let mut info = ServerMotdObj::new(ip, port);
+
+    // 直连；失败且主机名不是 IP 字面量时走 SRV 重定向
+    let stream = match connect(&info.ip, info.port).await {
+        Ok(s) => s,
+        Err(e) if is_host_name(&info.ip) => match srv_lookup(&info.ip).await {
+            Some((host, srv_port)) => match connect(&host, srv_port).await {
+                Ok(s) => {
+                    info.ip = host;
+                    info.port = srv_port;
+                    s
+                }
+                Err(e2) => {
+                    info.state = MotdState::ConnectFail;
+                    info.message = i18::get_error(e2);
+                    return info;
+                }
+            },
+            None => {
+                info.state = MotdState::ConnectFail;
+                info.message = i18::get_error(e);
+                return info;
+            }
+        },
+        Err(e) => {
+            info.state = MotdState::ConnectFail;
+            info.message = i18::get_error(e);
+            return info;
+        }
+    };
+
+    match query_status(stream, &info.ip, info.port).await {
+        Ok(status) => {
+            info.ping = start.elapsed().as_millis() as u64;
+            info.version = status.version;
+            info.players = status.players;
+            info.favicon = status.favicon;
+            if let Some(desc) = status.description {
+                info.description = Some(chat_from_value(&desc));
+            }
+        }
+        Err(e) => {
+            info.state = MotdState::Error;
+            info.message = i18::get_error(e);
+        }
+    }
+    info
+}
+
+/// 主机名是否 IP 字面量（IP 直连不走 SRV）
+fn is_host_name(ip: &str) -> bool {
+    ip.parse::<IpAddr>().is_err() && !ip.is_empty()
+}
+
+/// 连接（带超时）
+async fn connect(ip: &str, port: u16) -> CoreResult<TcpStream> {
+    timeout(TIMEOUT, TcpStream::connect((ip, port)))
+        .await
+        .map_err(|_| ErrorType::SocketError(ErrorData {
+            error: format!("连接超时: {ip}:{port}"),
+        }))?
+        .map_err(|err| ErrorType::SocketError(ErrorData {
+            error: format!("连接失败: {ip}:{port} {err}"),
+        }))
+}
+
+/// io 错误转 SocketError
+fn socket_err(err: std::io::Error) -> ErrorType {
+    ErrorType::SocketError(ErrorData {
+        error: err.to_string(),
+    })
+}
+
+/// 握手 + status request + 读响应
+async fn query_status(mut stream: TcpStream, ip: &str, port: u16) -> CoreResult<ServerStatusObj> {
+    let mut host_buf = Vec::with_capacity(ip.len() + 5);
+    write_varint(&mut host_buf, 0x00); // packet id: handshake
+    write_varint(&mut host_buf, PROTOCOL_VERSION);
+    write_varint(&mut host_buf, ip.len() as i32);
+    host_buf.extend_from_slice(ip.as_bytes());
+    host_buf.extend_from_slice(&port.to_be_bytes());
+    write_varint(&mut host_buf, 1); // next state: status
+
+    let mut buf = Vec::with_capacity(host_buf.len() + 5);
+    write_varint(&mut buf, host_buf.len() as i32);
+    buf.extend_from_slice(&host_buf);
+
+    let req = vec![1, 0]; // 帧长 1 + packet id: status request
+
+    async {
+        stream.write_all(&buf).await.map_err(socket_err)?;
+        stream.write_all(&req).await.map_err(socket_err)?;
+        stream.flush().await.map_err(socket_err)?;
+
+        let len = read_varint(&mut stream).await?;
+        if len <= 0 {
+            return Err(ErrorType::StreamError(ErrorData {
+                error: "响应长度异常".to_string(),
+            }));
+        }
+        let mut data = vec![0u8; len as usize];
+        stream.read_exact(&mut data).await.map_err(socket_err)?;
+
+        let mut pos = 0;
+        let packet_id = read_varint_from(&data, &mut pos);
+        if packet_id != 0 {
+            return Err(ErrorType::StreamError(ErrorData {
+                error: format!("响应包类型异常: {packet_id}"),
+            }));
+        }
+        let str_len = read_varint_from(&data, &mut pos) as usize;
+        if pos + str_len > data.len() {
+            return Err(ErrorType::StreamError(ErrorData {
+                error: "响应数据不完整".to_string(),
+            }));
+        }
+        let json = std::str::from_utf8(&data[pos..pos + str_len]).map_err(|err| {
+            ErrorType::SerializerError(ErrorData {
+                error: err.to_string(),
+            })
+        })?;
+        serde_json::from_str(json).map_err(|err| {
+            ErrorType::SerializerError(ErrorData {
+                error: err.to_string(),
+            })
+        })
+    }
+    .await
+}
+
+/// varint 编码
+fn write_varint(buf: &mut Vec<u8>, mut v: i32) {
+    loop {
+        if v & -128 == 0 {
+            buf.push(v as u8);
+            return;
+        }
+        buf.push((v & 0x7F | 128) as u8);
+        v = ((v as u32) >> 7) as i32;
+    }
+}
+
+/// 从流上读 varint
+async fn read_varint(stream: &mut TcpStream) -> CoreResult<i32> {
+    let mut result = 0i32;
+    let mut shift = 0;
+    loop {
+        let mut byte = [0u8; 1];
+        stream.read_exact(&mut byte).await.map_err(socket_err)?;
+        result |= ((byte[0] & 0x7F) as i32) << shift;
+        if byte[0] & 0x80 == 0 {
+            return Ok(result);
+        }
+        shift += 7;
+        if shift >= 32 {
+            return Err(ErrorType::StreamError(ErrorData {
+                error: "varint too big".to_string(),
+            }));
+        }
+    }
+}
+
+/// 从缓存读 varint（pos 前移）
+fn read_varint_from(data: &[u8], pos: &mut usize) -> i32 {
+    let mut result = 0i32;
+    let mut shift = 0;
+    while *pos < data.len() {
+        let byte = data[*pos];
+        *pos += 1;
+        result |= ((byte & 0x7F) as i32) << shift;
+        if byte & 0x80 == 0 {
+            break;
+        }
+        shift += 7;
+        if shift >= 32 {
+            break;
+        }
+    }
+    result
+}
+
+/// SRV 记录解析（`_minecraft._tcp.<主机名>` → 真实地址 + 端口）
+async fn srv_lookup(host: &str) -> Option<(String, u16)> {
+    use hickory_resolver::{Resolver, proto::rr::RData};
+
+    let resolver = Resolver::builder_tokio().ok()?.build().ok()?;
+    let name = format!("_minecraft._tcp.{host}.");
+    let answer = timeout(TIMEOUT, resolver.srv_lookup(name))
+        .await
+        .ok()?
+        .ok()?;
+    let srv = answer
+        .answers()
+        .iter()
+        .find_map(|r| match &r.data {
+            RData::SRV(srv) => Some(srv),
+            _ => None,
+        })?;
+    let target = srv.target.to_string();
+    // 去掉结尾根点
+    let target = target.strip_suffix('.').unwrap_or(&target).to_string();
+    if target.is_empty() {
+        return None;
+    }
+    Some((target, srv.port))
+}
+
+/// description 解析：纯字符串按 § 颜色码切段，对象按 Chat JSON 解析
+fn chat_from_value(value: &serde_json::Value) -> ChatObj {
+    if let Some(text) = value.as_str() {
+        return chat_from_plain(text);
+    }
+    serde_json::from_value(value.clone()).unwrap_or_default()
+}
+
+/// 纯字符串（带 § 颜色码）转 Chat（算法同 ColorMC 的 StringToChar）：
+/// 切成带样式的段落，换行保留在文字里
+fn chat_from_plain(text: &str) -> ChatObj {
+    let mut root = ChatObj {
+        text: String::new(),
+        extra: Some(Vec::new()),
+        ..Default::default()
+    };
+    let extra = root.extra.as_mut().unwrap();
+
+    let mut color: Option<String> = None;
+    let mut bold = false;
+    let mut italic = false;
+    let mut underlined = false;
+    let mut strikethrough = false;
+    let mut current = String::new();
+
+    let mut chars = text.chars().peekable();
+    let flush = |current: &mut String, extra: &mut Vec<ChatObj>, color: &Option<String>, bold: bool, italic: bool, underlined: bool, strikethrough: bool| {
+        if !current.is_empty() {
+            extra.push(ChatObj {
+                text: std::mem::take(current),
+                color: color.clone(),
+                bold: Some(bold),
+                italic: Some(italic),
+                underlined: Some(underlined),
+                strikethrough: Some(strikethrough),
+                obfuscated: None,
+                extra: None,
+            });
+        }
+    };
+
+    while let Some(c) = chars.next() {
+        if c != '§' {
+            current.push(c);
+            continue;
+        }
+        let Some(code) = chars.next() else { break };
+        if code == 'r' {
+            // 重置全部样式
+            flush(&mut current, extra, &color, bold, italic, underlined, strikethrough);
+            color = None;
+            bold = false;
+            italic = false;
+            underlined = false;
+            strikethrough = false;
+            continue;
+        }
+        if let Some(hex) = code_color(code) {
+            flush(&mut current, extra, &color, bold, italic, underlined, strikethrough);
+            color = Some(hex.to_string());
+            // 颜色码会重置字体样式
+            bold = false;
+            italic = false;
+            underlined = false;
+            strikethrough = false;
+            continue;
+        }
+        flush(&mut current, extra, &color, bold, italic, underlined, strikethrough);
+        match code {
+            'l' | 'L' => bold = true,
+            'o' | 'O' => italic = true,
+            'n' | 'N' => underlined = true,
+            'm' | 'M' => strikethrough = true,
+            'k' | 'K' => {} // 混淆字符按普通文字展示
+            _ => current.push('§'),
+        }
+        if !matches!(code, 'l' | 'L' | 'o' | 'O' | 'n' | 'N' | 'm' | 'M' | 'k' | 'K') {
+            current.push(code);
+        }
+    }
+    flush(&mut current, extra, &color, bold, italic, underlined, strikethrough);
+    root
+}
+
+/// § 颜色码 → #RRGGBB
+fn code_color(code: char) -> Option<&'static str> {
+    Some(match code {
+        '0' => "#000000",
+        '1' => "#0000AA",
+        '2' => "#00AA00",
+        '3' => "#00AAAA",
+        '4' => "#AA0000",
+        '5' => "#AA00AA",
+        '6' => "#FFAA00",
+        '7' => "#AAAAAA",
+        '8' => "#555555",
+        '9' => "#5555FF",
+        'a' | 'A' => "#55FF55",
+        'b' | 'B' => "#55FFFF",
+        'c' | 'C' => "#FF5555",
+        'd' | 'D' => "#FF55FF",
+        'e' | 'E' => "#FFFF55",
+        'f' | 'F' => "#FFFFFF",
+        _ => return None,
+    })
+}
+
+/// 把 Chat 树展平成可直接渲染的文字段（子段落继承父段落的样式）
+pub fn chat_to_segments(chat: &ChatObj) -> Vec<ChatSegment> {
+    let mut out = Vec::new();
+    flatten_chat(
+        chat,
+        "#FFFFFF",
+        false,
+        false,
+        false,
+        false,
+        &mut out,
+    );
+    out
+}
+
+/// 展平递归
+#[allow(clippy::too_many_arguments)]
+fn flatten_chat(
+    chat: &ChatObj,
+    color: &str,
+    bold: bool,
+    italic: bool,
+    underlined: bool,
+    strikethrough: bool,
+    out: &mut Vec<ChatSegment>,
+) {
+    let color = chat.color.as_deref().map_or(color, |c| color_hex(c).unwrap_or(c));
+    let bold = chat.bold.unwrap_or(bold);
+    let italic = chat.italic.unwrap_or(italic);
+    let underlined = chat.underlined.unwrap_or(underlined);
+    let strikethrough = chat.strikethrough.unwrap_or(strikethrough);
+
+    if !chat.text.is_empty() {
+        out.push(ChatSegment {
+            text: chat.text.clone(),
+            color: color.to_string(),
+            bold,
+            italic,
+            underlined,
+            strikethrough,
+        });
+    }
+    if let Some(extra) = &chat.extra {
+        for child in extra {
+            flatten_chat(child, color, bold, italic, underlined, strikethrough, out);
+        }
+    }
+}
+
+/// 颜色名 → #RRGGBB（已是 # 开头的原样返回）
+fn color_hex(name: &str) -> Option<&'static str> {
+    Some(match name.to_ascii_lowercase().as_str() {
+        "black" => "#000000",
+        "dark_blue" => "#0000AA",
+        "dark_green" => "#00AA00",
+        "dark_aqua" => "#00AAAA",
+        "dark_red" => "#AA0000",
+        "dark_purple" => "#AA00AA",
+        "gold" => "#FFAA00",
+        "gray" => "#AAAAAA",
+        "dark_gray" => "#555555",
+        "blue" => "#5555FF",
+        "green" => "#55FF55",
+        "aqua" => "#55FFFF",
+        "red" => "#FF5555",
+        "light_purple" => "#FF55FF",
+        "yellow" => "#FFFF55",
+        "white" => "#FFFFFF",
+        _ => return None,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_write_read_varint() {
+        for v in [0, 1, 127, 128, 255, 754, 65535, 0x7FFFFFFF] {
+            let mut buf = Vec::new();
+            write_varint(&mut buf, v);
+            let mut pos = 0;
+            assert_eq!(read_varint_from(&buf, &mut pos), v);
+            assert_eq!(pos, buf.len());
+        }
+    }
+
+    #[test]
+    fn test_chat_from_plain() {
+        let chat = chat_from_plain("§aHello§r world\n§lBold");
+        let segs = chat_to_segments(&chat);
+        let text: String = segs.iter().map(|s| s.text.as_str()).collect();
+        assert_eq!(text, "Hello world\nBold");
+        let first = &segs[0];
+        assert_eq!(first.color, "#55FF55");
+        assert!(segs.iter().any(|s| s.bold));
+    }
+
+    #[test]
+    fn test_chat_from_value_object() {
+        let v: serde_json::Value = serde_json::from_str(
+            r#"{"text":"A","color":"gold","extra":[{"text":"B","bold":true}]}"#,
+        )
+        .unwrap();
+        let chat = chat_from_value(&v);
+        let segs = chat_to_segments(&chat);
+        assert_eq!(segs.len(), 2);
+        assert_eq!(segs[0].color, "#FFAA00");
+        // 子段落继承颜色，覆盖加粗
+        assert_eq!(segs[1].color, "#FFAA00");
+        assert!(segs[1].bold);
+    }
+}

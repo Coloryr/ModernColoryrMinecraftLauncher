@@ -95,6 +95,7 @@ pub mod game_libraries;
 pub mod game_log;
 pub mod game_mods;
 pub mod game_options;
+pub mod game_motd;
 pub mod game_resourcepacks;
 pub mod game_saves;
 pub mod game_schematics;
