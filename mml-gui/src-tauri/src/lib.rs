@@ -49,6 +49,12 @@ pub fn run() {
                 main::emit_java_change(&handle);
             });
 
+            // 游戏运行日志（mml-core `add_run_log` 推送）→ 转发为前端 `game-log` 事件
+            let handle = app.handle().clone();
+            mml_game::add_run_log(move |log| {
+                main::forward_run_log(&handle, log);
+            });
+
             // 下载器：挂接 UI 回调（转发为前端事件）并启动下载线程池
             let handle = app.handle().clone();
             mml_downloader::set_gui_handel(Box::new(download::DownloadGuiHook::new(handle)));

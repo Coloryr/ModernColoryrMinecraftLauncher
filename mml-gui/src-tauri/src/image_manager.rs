@@ -24,14 +24,14 @@ use mml_base::hash_helper::{self, HashType};
 use mml_game::player_skin;
 use mml_names::names;
 use mml_net::mojang_api;
-use mml_skin::{skin_type_checker, SkinType};
+use mml_skin::{SkinType, skin_type_checker};
 use mml_skin_draw::{cape_2d_draw, head_2d_draw, head_3d_draw, skin_2d_draw, skin_3d_draw};
 use mml_sys::path_helper;
-use tiny_skia::Pixmap;
 use tauri::{
     UriSchemeResponder,
     http::{Request, Response, StatusCode},
 };
+use tiny_skia::Pixmap;
 use uuid::Uuid;
 
 use crate::{
@@ -135,7 +135,9 @@ fn sniff_mime(data: &[u8]) -> Option<&'static str> {
         Some("image/gif")
     } else if data.len() > 12 && &data[0..4] == b"RIFF" && &data[8..12] == b"WEBP" {
         Some("image/webp")
-    } else if data.len() > 12 && &data[4..8] == b"ftyp" && (&data[8..12] == b"avif" || &data[8..12] == b"avis")
+    } else if data.len() > 12
+        && &data[4..8] == b"ftyp"
+        && (&data[8..12] == b"avif" || &data[8..12] == b"avis")
     {
         Some("image/avif")
     } else if data.starts_with(b"<?xml") || data.starts_with(b"<svg") {
@@ -238,6 +240,12 @@ async fn load_head_image(uri: &[&str], res: UriSchemeResponder) {
         return;
     }
 
+    // 设置页样例预览（`head/preview/<uuid>`）：内置样例皮肤按当前配置渲染，不查账户
+    if uri[1] == "preview" {
+        send_head_preview(res);
+        return;
+    }
+
     let Some(files) = resolve_skin_files(uri).await else {
         send_bad(res);
         return;
@@ -278,6 +286,50 @@ async fn load_head_image(uri: &[&str], res: UriSchemeResponder) {
     HEAD_IMAGE.write().unwrap().insert(key, data.clone());
 
     send_png(res, data);
+}
+
+/// 设置页头像样例皮肤（纤细模型，取自 mml-skin 的测试资源）
+const PREVIEW_SKIN: &[u8] = include_bytes!("../../../mml-core/mml-skin/tests/skin_slim.png");
+
+/// 设置页头像样例预览：内置皮肤按当前头像配置渲染
+///
+/// 不查账户、不落缓存（设置页切换配置后靠前端 URL 版本号重取，渲染开销可忽略）
+fn send_head_preview(res: UriSchemeResponder) {
+    let Some(bitmap) = Pixmap::decode_png(PREVIEW_SKIN).ok() else {
+        send_bad(res);
+        return;
+    };
+    let Some(head) = gen_head_image(&bitmap) else {
+        send_bad(res);
+        return;
+    };
+    match head.encode_png() {
+        Ok(data) => send_png(res, data),
+        Err(_) => send_bad(res),
+    }
+}
+
+/// 设置页皮肤样例预览：内置皮肤按当前皮肤显示模式渲染
+///
+/// `skin_type` 直接采用 URI 段（样例皮肤是纤细模型，前端固定传 `slim`），不查账户不落缓存
+fn send_skin_preview(skin_type: &str, res: UriSchemeResponder) {
+    let Some(st) = parse_skin_type(skin_type) else {
+        send_bad(res);
+        return;
+    };
+    let Some(bitmap) = Pixmap::decode_png(PREVIEW_SKIN).ok() else {
+        send_bad(res);
+        return;
+    };
+    let display = gui_config::get().skin_display;
+    let Some(image) = render_skin_display(&bitmap, st, display) else {
+        send_bad(res);
+        return;
+    };
+    match image.encode_png() {
+        Ok(data) => send_png(res, data),
+        Err(_) => send_bad(res),
+    }
 }
 
 /// 账户皮肤与披风的本地缓存文件
@@ -321,6 +373,12 @@ async fn load_skin_image(uri: &[&str], res: UriSchemeResponder) {
         return;
     }
 
+    // 设置页样例预览（`skin/preview/<uuid>/<skin_type>`）：内置样例皮肤按当前配置渲染
+    if uri[1] == "preview" {
+        send_skin_preview(skin_type, res);
+        return;
+    }
+
     let display = gui_config::get().skin_display;
     let Some(files) = resolve_skin_files(uri).await else {
         send_bad(res);
@@ -360,12 +418,7 @@ async fn load_skin_image(uri: &[&str], res: UriSchemeResponder) {
             })
         }
     };
-    let image = match display {
-        SkinDisplay::Skin2DA => skin_2d_draw::skin_2d_draw_typea(&bitmap, st),
-        SkinDisplay::Skin2DB => skin_2d_draw::skin_2d_draw_typeb(&bitmap, st),
-        SkinDisplay::Skin3D => skin_3d_draw::draw_skin_3d_typea(&bitmap, st),
-        SkinDisplay::Skin3DD => skin_3d_draw::draw_skin_3d_typea_down(&bitmap, st),
-    };
+    let image = render_skin_display(&bitmap, st, display);
     let Some(image) = image else {
         send_bad(res);
         return;
@@ -378,6 +431,20 @@ async fn load_skin_image(uri: &[&str], res: UriSchemeResponder) {
     SKIN_IMAGE.write().unwrap().insert(key, data.clone());
 
     send_png(res, data);
+}
+
+/// 按皮肤显示模式选渲染方式（2D 展开 / 2D 大图 / 3D 等距）
+fn render_skin_display(
+    bitmap: &Pixmap,
+    st: Option<SkinType>,
+    display: SkinDisplay,
+) -> Option<Pixmap> {
+    match display {
+        SkinDisplay::Skin2DA => skin_2d_draw::skin_2d_draw_typea(bitmap, st),
+        SkinDisplay::Skin2DB => skin_2d_draw::skin_2d_draw_typeb(bitmap, st),
+        SkinDisplay::Skin3D => skin_3d_draw::draw_skin_3d_typea(bitmap, st),
+        SkinDisplay::Skin3DD => skin_3d_draw::draw_skin_3d_typea_down(bitmap, st),
+    }
 }
 
 /// URI里的皮肤类型段 → SkinType（None = 自动检测）
@@ -681,8 +748,8 @@ fn set_icon_image(info: &str, data: Vec<u8>, mime: &'static str) {
 }
 
 /// 初始化图标磁盘缓存目录（启动时调用）
-pub fn init<P: AsRef<Path>>(path: P) {
-    ICON_DIR.get_or_init(|| path.as_ref().join(names::IMAGE_DIR));
+pub fn init() {
+    ICON_DIR.get_or_init(|| mml_downloader::get_cache_path().join(names::IMAGE_DIR));
 }
 
 /// 方块贴图（`mml-image/block/<方块ID>`）：
@@ -771,12 +838,18 @@ fn icon_name(url: &str) -> String {
 
 /// 远程图片的磁盘缓存位置（`<网址 sha256>.png`）
 fn icon_file(url: &str) -> PathBuf {
-    ICON_DIR.get().unwrap().join(format!("{}.png", icon_name(url)))
+    ICON_DIR
+        .get()
+        .unwrap()
+        .join(format!("{}.png", icon_name(url)))
 }
 
 /// 图标的 ETag 旁车文件（`<网址 sha256>.etag`）
 fn icon_etag_file(url: &str) -> PathBuf {
-    ICON_DIR.get().unwrap().join(format!("{}.etag", icon_name(url)))
+    ICON_DIR
+        .get()
+        .unwrap()
+        .join(format!("{}.etag", icon_name(url)))
 }
 
 /// 读取记录的 ETag

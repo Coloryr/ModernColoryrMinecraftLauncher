@@ -17,12 +17,18 @@ import type {
   ErrorEvent,
   ExitEvent,
   FileListDto,
+  ClientConfigDto,
+  ExportConfigDto,
+  ExportInfoDto,
+  ExportProgressDto,
   InstanceArgsDto,
   InstanceInfoDto,
   JavaInfoDto,
   LoadState,
   LogEvent,
+  LogFocusDto,
   ModItemDto,
+  MotdDto,
   ModPackStatusDto,
   NewsItem,
   PackItemDto,
@@ -36,10 +42,11 @@ import type {
   ServerItemDto,
   ShaderItemDto,
   SchematicItemDto,
+  StatsDataDto,
   StateEvent,
   VersionInfoDto,
 } from "./bindings";
-import { AddLoaderProgress, AddModpackStatus, AddNameConflict, AddPackProgress, AddResourceStatus, BlockRender, CloseBlocked, CollectChange, DownloadItem, DownloadTask, GameExit, GameLog, InstanceChange, JavaChange, LaunchError, LaunchState } from "./listens";
+import { AddLoaderProgress, AddModpackStatus, AddNameConflict, AddPackProgress, AddResourceStatus, BlockRender, ClientConfigChange, CloseBlocked, CollectChange, DownloadItem, DownloadTask, ExportFocus, ExportProgress, GameExit, GameLog, InstanceChange, JavaChange, LaunchError, LaunchState, LogFocus } from "./listens";
 
 export interface CreateInstanceOpts {
   loader?: string;
@@ -53,6 +60,16 @@ export const api = {
   /** 获取实例列表（含运行状态） */
   async getInstances(): Promise<InstanceInfoDto[]> {
     return commands.main.getInstances();
+  },
+
+  /** 获取统计快照（全局计数 + 每实例启动次数 / 时长） */
+  async getStatsData(): Promise<StatsDataDto> {
+    return commands.stats.data();
+  },
+
+  /** 查询服务器 MOTD（地址 host 或 host:port，端口缺省 25565） */
+  async getMotd(address: string): Promise<MotdDto> {
+    return commands.main.getMotd(address);
   },
 
   /** 获取分组列表 */
@@ -388,6 +405,26 @@ export const api = {
     return commands.main.getRunning();
   },
 
+  /** 列出实例日志文件（logs 与 crash-reports 目录，绝对路径） */
+  async getLogFiles(uuid: string): Promise<string[]> {
+    return commands.log.getFiles(uuid);
+  },
+
+  /** 读取单个日志文件（path 为 getLogFiles 返回的路径） */
+  async readLogFile(uuid: string, path: string): Promise<LogLine[]> {
+    return commands.log.readFile(uuid, path);
+  },
+
+  /** 获取实例导出信息（在线 / 本地模组分组 + 内容目录有无） */
+  async getExportInfo(uuid: string): Promise<ExportInfoDto> {
+    return commands.export.getInfo(uuid);
+  },
+
+  /** 发起导出（后台任务，进度经 onExportProgress 事件上报） */
+  async runExport(uuid: string, config: ExportConfigDto): Promise<void> {
+    return commands.export.run(uuid, config);
+  },
+
   /** 获取下载状态快照（任务 + 线程 + 总体速度，下载管理窗口轮询） */
   async getDownloadStatus(): Promise<DownloadStatusDto> {
     return commands.download.getStatus();
@@ -459,6 +496,24 @@ export const api = {
 /** 游戏日志事件（uuid + 日志行；clear = true 时前端清屏） */
 export function onGameLog(cb: (e: LogEvent) => void): Promise<UnlistenFn> {
   return listen<LogEvent>(GameLog, (e) => cb(e.payload));
+}
+/** 日志窗口切换目标实例事件（窗口已存在时再次打开，壳层推送新目标） */
+export function onLogFocus(cb: (uuid: string) => void): Promise<UnlistenFn> {
+  return listen<LogFocusDto>(LogFocus, (e) => cb(e.payload.uuid));
+}
+/** 客户端设置变更事件（设置窗口保存后广播，payload 为新 client 配置） */
+export function onClientConfigChange(cb: (e: ClientConfigDto) => void): Promise<UnlistenFn> {
+  return listen<ClientConfigDto>(ClientConfigChange, (e) => cb(e.payload));
+}
+/** 实例导出进度事件（state：running / done / failed） */
+export function onExportProgress(
+  cb: (e: ExportProgressDto) => void,
+): Promise<UnlistenFn> {
+  return listen<ExportProgressDto>(ExportProgress, (e) => cb(e.payload));
+}
+/** 导出窗口切换目标实例事件（窗口已存在时再次打开，壳层推送新目标） */
+export function onExportFocus(cb: (uuid: string) => void): Promise<UnlistenFn> {
+  return listen<LogFocusDto>(ExportFocus, (e) => cb(e.payload.uuid));
 }
 /** 启动状态事件（state：launching 等） */
 export function onLaunchState(cb: (e: StateEvent) => void): Promise<UnlistenFn> {

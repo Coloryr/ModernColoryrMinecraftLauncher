@@ -16,7 +16,9 @@ export type WindowKind =
   | "collect"
   | "download"
   | "java_download"
-  | "block";
+  | "block"
+  | "log"
+  | "export";
 
 export interface WindowInfo {
   kind: WindowKind;
@@ -40,6 +42,8 @@ export const WINDOW_REGISTRY: WindowInfo[] = [
   { kind: "download", title: "下载管理" },
   { kind: "java_download", title: "下载 Java" },
   { kind: "block", title: "方块列表" },
+  { kind: "log", title: "游戏日志" },
+  { kind: "export", title: "导出实例" },
 ];
 
 export function isWindowKind(v: string | null): v is WindowKind {

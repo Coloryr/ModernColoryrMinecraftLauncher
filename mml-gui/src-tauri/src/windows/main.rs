@@ -12,15 +12,17 @@ use tauri::{AppHandle, Emitter, WebviewWindow};
 use crate::dtos::main_dto::{LoadState, LogLine, NewsItem};
 use crate::dtos::{
     EnvVarLineDto, ErrorEvent, ExitEvent, InstanceArgsDto, InstanceChangeEvent,
-    InstanceInfoDto, InstancePatch, JavaInfoDto, LogEvent, StateEvent, VersionInfoDto,
+    InstanceInfoDto, InstancePatch, JavaInfoDto, LogEvent, MotdDto, StateEvent, VersionInfoDto,
 };
 use crate::{image_manager, listens, windows};
 use mml_config::config_obj::{GCType, RunArgObj, WindowSettingObj};
+use mml_game::game_log::{GameLog, GameLogItemObj};
 use mml_game::GameInstance;
 use mml_game::launcher::instance_setting_obj::{
     AdvanceJvmObj, InstanceSettingObj, ProxyHostObj, ServerObj,
 };
 use mml_game::launcher::{LogEncoding, ModPackType};
+use mml_game::{InstanceLog, InstanceLogType};
 use mml_game::loader::LoaderType;
 use mml_game::mojang::VersionType;
 use uuid::Uuid;
@@ -49,8 +51,6 @@ pub struct MainWindowModel {
     pub group_order: Vec<String>,
     /// 运行中的实例 uuid
     pub running: HashSet<String>,
-    /// 实例游戏日志（uuid → 日志行，`main_get_game_log` 查询）
-    pub logs: HashMap<String, Vec<LogLine>>,
 }
 
 impl MainWindowModel {
@@ -61,7 +61,6 @@ impl MainWindowModel {
             extra_groups: Vec::new(),
             group_order: Vec::new(),
             running: HashSet::new(),
-            logs: HashMap::new(),
         }
     }
 
@@ -527,6 +526,158 @@ fn emit_log_line(app: &AppHandle, uuid: &str, text: &str, clear: bool) {
     );
 }
 
+/// 内核日志条目的捕获时间（`时:分:秒.毫秒`）
+fn item_time(item: &GameLogItemObj) -> String {
+    item.time.format("%H:%M:%S%.3f").to_string()
+}
+
+/// 内核日志条目 → 前端日志行
+///
+/// 启动器消息变体（耗时 / 路径 / 参数等）转为可读文本；标准游戏日志直接取
+/// 解析四字段，行内无时间戳时回退条目捕获时间
+pub(crate) fn log_line_from_item(item: &GameLogItemObj) -> LogLine {
+    let (mut time, text, thread, level, category) = match &item.log {
+        GameLog::GameLog(obj) => (
+            obj.time.clone(),
+            obj.log.clone(),
+            obj.thread.clone(),
+            obj.level.as_str().to_string(),
+            obj.category.clone(),
+        ),
+        GameLog::Text(s) => (item_time(item), s.clone(), String::new(), String::new(), String::new()),
+        GameLog::RuntimeLib(p) => (
+            item_time(item),
+            format!("运行库：{}", p.display()),
+            String::new(),
+            String::new(),
+            String::new(),
+        ),
+        GameLog::JavaRedirect => (
+            item_time(item),
+            String::from("Java 输出已重定向"),
+            String::new(),
+            String::new(),
+            String::new(),
+        ),
+        GameLog::JavaLocalRedirect => (
+            item_time(item),
+            String::from("Java 切换回本地查找"),
+            String::new(),
+            String::new(),
+            String::new(),
+        ),
+        GameLog::LoginTime(d) => (
+            item_time(item),
+            format!("登录用时：{:.2}s", d.as_secs_f64()),
+            String::new(),
+            String::new(),
+            String::new(),
+        ),
+        GameLog::ServerPackCheckTime(d) => (
+            item_time(item),
+            format!("服务器包检查用时：{:.2}s", d.as_secs_f64()),
+            String::new(),
+            String::new(),
+            String::new(),
+        ),
+        GameLog::CheckGameFileTime(d) => (
+            item_time(item),
+            format!("检查游戏文件用时：{:.2}s", d.as_secs_f64()),
+            String::new(),
+            String::new(),
+            String::new(),
+        ),
+        GameLog::DownloadFileTime(d) => (
+            item_time(item),
+            format!("文件下载用时：{:.2}s", d.as_secs_f64()),
+            String::new(),
+            String::new(),
+            String::new(),
+        ),
+        GameLog::LaunchTime(d) => (
+            item_time(item),
+            format!("启动用时：{:.2}s", d.as_secs_f64()),
+            String::new(),
+            String::new(),
+            String::new(),
+        ),
+        GameLog::CmdPreTime(d) => (
+            item_time(item),
+            format!("启动前执行用时：{:.2}s", d.as_secs_f64()),
+            String::new(),
+            String::new(),
+            String::new(),
+        ),
+        GameLog::CmdPostTime(d) => (
+            item_time(item),
+            format!("启动后执行用时：{:.2}s", d.as_secs_f64()),
+            String::new(),
+            String::new(),
+            String::new(),
+        ),
+        GameLog::LaunchArgs(s) => (
+            item_time(item),
+            s.clone(),
+            String::new(),
+            String::new(),
+            String::new(),
+        ),
+        GameLog::JavaPath(p) => (
+            item_time(item),
+            format!("Java 路径：{}", p.display()),
+            String::new(),
+            String::new(),
+            String::new(),
+        ),
+    };
+    if time.is_empty() {
+        time = item_time(item);
+    }
+    LogLine {
+        time,
+        text,
+        thread,
+        level,
+        category,
+    }
+}
+
+/// 转发内核实例运行日志到前端（lib.rs setup 里订阅 `mml_game::add_run_log`）
+pub(crate) fn forward_run_log(app: &AppHandle, log: &InstanceLog) {
+    let uuid = log.uuid.to_string();
+    match &log.log {
+        InstanceLogType::AddLog(item) => {
+            let line = log_line_from_item(item);
+            emit_game_log(
+                app,
+                LogEvent {
+                    uuid,
+                    time: line.time,
+                    text: line.text,
+                    thread: line.thread,
+                    level: line.level,
+                    category: line.category,
+                    clear: false,
+                },
+            );
+        }
+        InstanceLogType::ClearLog => {
+            emit_game_log(
+                app,
+                LogEvent {
+                    uuid,
+                    time: String::new(),
+                    text: String::new(),
+                    thread: String::new(),
+                    level: String::new(),
+                    category: String::new(),
+                    clear: true,
+                },
+            );
+        }
+    }
+}
+
 /// 游戏退出事件
 #[gui_macros::emit]
 fn emit_game_exit(app: &AppHandle, event: ExitEvent) {
@@ -820,7 +971,6 @@ pub async fn main_delete_instance(
         store.instances.retain(|i| i.uuid != uuid);
         store.args.remove(&uuid);
         store.running.remove(&uuid);
-        store.logs.remove(&uuid);
         if store.instances.len() < before {
             ok = true;
         }
@@ -942,20 +1092,20 @@ pub fn main_stop_game(app: AppHandle, window: WebviewWindow, uuid: String) -> Re
     Ok(())
 }
 
-/// 获取实例日志
+/// 获取实例日志（内核运行日志快照；实例不存在返回空列表）
 #[tauri::command]
-pub fn main_get_game_log(window: WebviewWindow, uuid: String) -> Vec<LogLine> {
-    let Ok(store) = model(&window) else {
-        eprintln!("[main_get_game_log] 主窗口模型未初始化");
+pub fn main_get_game_log(uuid: String) -> Vec<LogLine> {
+    let Ok(id) = Uuid::parse_str(&uuid) else {
         return Vec::new();
     };
-    store
-        .lock()
-        .unwrap()
-        .logs
-        .get(&uuid)
-        .cloned()
-        .unwrap_or_default()
+    let Some(instance) = mml_game::get_instance(&id) else {
+        return Vec::new();
+    };
+    let game = instance.read().unwrap();
+    let Some(runtime) = game.get_runtime_log() else {
+        return Vec::new();
+    };
+    runtime.iter().map(log_line_from_item).collect()
 }
 
 /// 获取运行中实例
@@ -991,5 +1141,58 @@ pub fn main_load_state() -> LoadState {
     LoadState {
         ok: mml_core::get_state(),
         error: None,
+    }
+}
+
+/// 查询服务器 MOTD（地址 host 或 host:port，端口缺省 25565）
+#[tauri::command]
+pub async fn main_get_motd(address: String) -> MotdDto {
+    let (ip, port) = parse_motd_addr(&address);
+    mml_game::game_motd::get_server_info(&ip, port).await.into()
+}
+
+/// MOTD 展示的默认端口
+const MOTD_DEFAULT_PORT: u16 = 25565;
+
+/// 解析服务器地址：host / host:port / [IPv6]:port / 裸 IPv6
+fn parse_motd_addr(address: &str) -> (String, u16) {
+    let addr = address.trim();
+    if addr.is_empty() {
+        return (String::new(), MOTD_DEFAULT_PORT);
+    }
+    // [IPv6]:port
+    if let Some(rest) = addr.strip_prefix('[') {
+        if let Some((host, port)) = rest.split_once(']') {
+            let port = port
+                .strip_prefix(':')
+                .and_then(|p| p.parse().ok())
+                .unwrap_or(MOTD_DEFAULT_PORT);
+            return (host.to_string(), port);
+        }
+    }
+    // host:port（只有一个冒号才算 host:port，多个冒号视为裸 IPv6）
+    if let Some((host, port)) = addr.rsplit_once(':') {
+        if !host.contains(':')
+            && !port.is_empty()
+            && let Ok(p) = port.parse::<u16>()
+        {
+            return (host.to_string(), p);
+        }
+    }
+    (addr.to_string(), MOTD_DEFAULT_PORT)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_motd_addr;
+
+    #[test]
+    fn test_parse_motd_addr() {
+        assert_eq!(parse_motd_addr("mc.example.com"), ("mc.example.com".into(), 25565));
+        assert_eq!(parse_motd_addr("mc.example.com:25566"), ("mc.example.com".into(), 25566));
+        assert_eq!(parse_motd_addr("  mc.example.com:25566 "), ("mc.example.com".into(), 25566));
+        assert_eq!(parse_motd_addr("[::1]:25565"), ("::1".into(), 25565));
+        assert_eq!(parse_motd_addr("::1"), ("::1".into(), 25565));
+        assert_eq!(parse_motd_addr(""), (String::new(), 25565));
     }
 }

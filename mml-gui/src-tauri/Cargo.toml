@@ -44,6 +44,7 @@ mml-skin-draw = { path = "../../mml-core/mml-skin-draw" }
 mml-tex-draw = { path = "../../mml-core/mml-tex-draw" }
 
 uuid = { version = "~1.26.0", features = ["v4", "serde"] }
+chrono.workspace = true
 dirs = "~7.0.0"
 tiny-skia = "~0.12.0"
 image = { version = "~0.25.10", default-features = false, features = ["png", "jpeg", "webp"] }

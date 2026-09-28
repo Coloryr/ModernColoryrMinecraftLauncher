@@ -26,6 +26,7 @@ import { listen } from "@tauri-apps/api/event";
 import { AccountOAuth, AccountOAuthState } from "../../lib/listens";
 import { commands } from "../../lib/bindings";
 import type { AccountOAuthDto, AccountOAuthStateDto } from "../../lib/bindings";
+import { loadGuiConfig, type LoginLockItem } from "../../lib/guiConfig";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { openWindow } from "../windowManager";
 
@@ -39,6 +40,12 @@ const view = ref<ViewMode>("grid");
 // 进入窗口时从 Rust 加载账户数据，并注册微软登录事件
 onMounted(() => {
   loadAccounts();
+  // 读客户端设置的登录方式锁定
+  loadGuiConfig().then((cfg) => {
+    if (cfg?.client) {
+      loginLock.value = cfg.client.loginLock;
+    }
+  });
 
   // 后端拿到设备码：弹出授权码窗口
   listen<AccountOAuthDto>(AccountOAuth, (data) => {
@@ -95,6 +102,26 @@ const filtered = computed(() => {
 const showAdd = ref(false);
 const addType = ref("offline");
 const addFields = ref<Record<string, string>>({});
+
+// 登录方式锁定（客户端设置里配置的条目列表；非空时只允许列表中的登录方式）
+const loginLock = ref<LoginLockItem[]>([]);
+const addTypeOptions = computed(() =>
+  loginLock.value.length
+    ? ACCOUNT_TYPES.filter((x) => loginLock.value.some((e) => e.ty === x.value))
+    : ACCOUNT_TYPES,
+);
+
+/** 锁定条目配置了服务器时，对应的服务器字段预填设置里保存的附加信息 */
+function prefillServerFields(type: string) {
+  const item = loginLock.value.find((e) => e.ty === type && e.server);
+  if (!item) return;
+  if (type === "authlib" || type === "selflittleskin") {
+    addFields.value.server ??= item.server;
+  }
+  if (type === "nide8") {
+    addFields.value.serverId ??= item.server;
+  }
+}
 const showOauth = ref(false);
 const showOauthRun = ref(false);
 const oauthCode = ref("");
@@ -116,6 +143,11 @@ const ADD_FIELDS: Record<string, AddField[]> = {
     { key: "name", labelKey: "account.username" },
     { key: "pass", labelKey: "account.password", password: true },
   ],
+  selflittleskin: [
+    { key: "server", labelKey: "account.server" },
+    { key: "name", labelKey: "account.username" },
+    { key: "pass", labelKey: "account.password", password: true },
+  ],
   authlib: [
     { key: "server", labelKey: "account.server" },
     { key: "name", labelKey: "account.username" },
@@ -130,13 +162,16 @@ const ADD_FIELDS: Record<string, AddField[]> = {
 
 function openAdd() {
   showAdd.value = true;
-  addType.value = "offline";
+  // 锁定登录方式时默认第一个锁定条目的类型，并预填锁定的服务器
+  addType.value = loginLock.value[0]?.ty ?? "offline";
   addFields.value = {};
+  prefillServerFields(addType.value);
 }
 
 function onAddTypeChange(value: string) {
   addType.value = value;
   addFields.value = {};
+  prefillServerFields(value);
 }
 
 /** 添加弹窗是否在处理中（防止重复提交） */
@@ -350,8 +385,8 @@ function tokenLabel(acc: AccountStoreDto): string {
       <div class="toolbar-right">
         <SegmentedTabs :model-value="view" :options="VIEW_OPTIONS" @update:model-value="view = $event as ViewMode" />
         <!-- 皮肤查看从账户管理进入（不再放主页面顶栏） -->
-        <BaseButton size="sm" class="view-skin-btn" @click="openWindow('skin')">{{ t("account.viewSkin") }}</BaseButton>
-        <BaseButton variant="accent" size="sm" @click="openAdd">＋ {{ t("account.add") }}</BaseButton>
+        <BaseButton size="md" class="view-skin-btn" @click="openWindow('skin')">{{ t("account.viewSkin") }}</BaseButton>
+        <BaseButton variant="accent" size="md" class="add-btn" @click="openAdd">＋ {{ t("account.add") }}</BaseButton>
       </div>
     </div>
 
@@ -380,7 +415,7 @@ function tokenLabel(acc: AccountStoreDto): string {
       <label class="field-label">{{ t("account.type") }}</label>
       <select v-model="addType" class="field-select"
         @change="onAddTypeChange(($event.target as HTMLSelectElement).value)">
-        <option v-for="x in ACCOUNT_TYPES" :key="x.value" :value="x.value">{{ t(x.labelKey) }}</option>
+        <option v-for="x in addTypeOptions" :key="x.value" :value="x.value">{{ t(x.labelKey) }}</option>
       </select>
 
       <template v-for="f in ADD_FIELDS[addType] ?? []" :key="f.key">
@@ -519,7 +554,7 @@ function tokenLabel(acc: AccountStoreDto): string {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 10px;
   flex-wrap: wrap;
   margin-bottom: 14px;
 }
@@ -557,6 +592,11 @@ function tokenLabel(acc: AccountStoreDto): string {
   color: var(--text);
 }
 
+/* 添加按钮收窄左右内边距（md 默认 20px） */
+.add-btn {
+  padding: 0 12px;
+}
+
 /* UUID 输入 + 随机按钮 */
 .uuid-row {
   display: flex;
@@ -566,7 +606,8 @@ function tokenLabel(acc: AccountStoreDto): string {
 
 .toolbar-select {
   min-width: 110px;
-  padding: 8px 28px 8px 12px;
+  height: 35px;
+  padding: 0 28px 0 12px;
   border-radius: 9px;
   border: 1px solid var(--border);
   background: var(--bg-card);
@@ -591,12 +632,12 @@ function tokenLabel(acc: AccountStoreDto): string {
   align-items: center;
   gap: 6px;
   padding: 0 10px;
-  height: 34px;
+  height: 35px;
   border-radius: 9px;
   border: 1px solid var(--border);
   background: var(--bg-card);
   color: var(--text-dim);
-  width: 200px;
+  width: 185px;
 }
 
 .search-input {

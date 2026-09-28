@@ -126,6 +126,9 @@ static PAUSED: AtomicBool = AtomicBool::new(false);
 static NEXT_TASK_ID: AtomicU64 = AtomicU64::new(1);
 
 /// 临时下载文件夹路径
+static CACHE_PATH: OnceLock<PathBuf> = OnceLock::new();
+
+/// 文件下载路径
 static DOWNLOAD_PATH: OnceLock<PathBuf> = OnceLock::new();
 
 /// 初始化下载文件夹
@@ -134,13 +137,13 @@ static DOWNLOAD_PATH: OnceLock<PathBuf> = OnceLock::new();
 ///
 /// - `dir`: 程序运行根目录，下载文件夹将创建在 `{dir}/downloads/` 下
 pub fn init<P: AsRef<Path>>(dir: P) -> CoreResult<()> {
-    let dir = DOWNLOAD_PATH.get_or_init(|| dir.as_ref().join(names::DOWNLOAD_DIR));
-    if !dir.exists() {
-        path_helper::create_dir_all(dir)?;
+    let cache = CACHE_PATH.get_or_init(|| dir.as_ref().join(names::CACHE_DIR));
+    if !cache.exists() {
+        path_helper::create_dir_all(cache)?;
     } else {
         // 启动时清空下载临时目录：此时没有任何下载任务，目录里只会有
         // 上次运行残留的临时文件（崩溃 / 断电 / 任务被强杀留下），不清会一直占空间
-        if let Ok(entries) = std::fs::read_dir(dir) {
+        if let Ok(entries) = std::fs::read_dir(cache) {
             for entry in entries.flatten() {
                 let path = entry.path();
                 if path.is_dir() {
@@ -152,10 +155,17 @@ pub fn init<P: AsRef<Path>>(dir: P) -> CoreResult<()> {
         }
     }
 
+    DOWNLOAD_PATH.get_or_init(|| dir.as_ref().join(names::DOWNLOAD_DIR));
+
     Ok(())
 }
 
 /// 获取下载临时文件夹路径
+pub fn get_cache_path() -> PathBuf {
+    CACHE_PATH.get().unwrap().clone()
+}
+
+/// 获取下载文件夹路径
 pub fn get_download_path() -> PathBuf {
     DOWNLOAD_PATH.get().unwrap().clone()
 }
@@ -165,7 +175,7 @@ pub fn get_download_path() -> PathBuf {
 /// 保证不与已有文件冲突。
 pub fn gen_temp_file() -> PathBuf {
     loop {
-        let file = DOWNLOAD_PATH
+        let file = CACHE_PATH
             .get()
             .unwrap()
             .join(Uuid::new_v4().to_string());

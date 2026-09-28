@@ -1,48 +1,62 @@
 <script setup lang="ts">
 // 游戏统计窗口：汇总卡片 + 每实例启动次数 / 时长表
-// TEMP 演示数据：stats 与总计为硬编码假数据，接入后端统计接口后替换
-import { onMounted, ref } from "vue";
+// 数据来自 Rust 侧 stats_get_data（内核 game_count::CountObj 快照），运行中每 5 秒刷新
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import WindowFrame from "../../components/ui/WindowFrame.vue";
 import InstanceIcon from "../../components/InstanceIcon.vue";
 import { api } from "../../lib/api";
 import { t } from "../../lib/i18n";
-import type { InstanceInfoDto } from "../../lib/bindings";
+import type { StatsDataDto } from "../../lib/bindings";
 
-const instances = ref<InstanceInfoDto[]>([]);
+const data = ref<StatsDataDto | null>(null);
 
-// 模拟统计数据
-const stats = new Map<string, { count: number; hours: number; last: string }>([
-  ["11111111-1111-4111-8111-111111111111", { count: 23, hours: 18.5, last: "2026-04-12 21:30" }],
-  ["22222222-2222-4222-8222-222222222222", { count: 56, hours: 41.2, last: "2026-04-15 19:05" }],
-  ["33333333-3333-4333-8333-333333333333", { count: 9, hours: 6.8, last: "2026-03-28 22:11" }],
-  ["44444444-4444-4444-8444-444444444444", { count: 31, hours: 27.4, last: "2026-04-10 20:44" }],
-]);
+let timer: number | null = null;
 
-const totalLaunch = 119;
-const totalHours = 93.9;
-
-function statOf(uuid: string) {
-  return stats.get(uuid) ?? { count: 0, hours: 0, last: t("detail.none") };
+async function load() {
+  try {
+    data.value = await api.getStatsData();
+  } catch {
+    // 拉取失败保留上次数据
+  }
 }
 
 onMounted(async () => {
-  try {
-    instances.value = await api.getInstances();
-  } catch {
-    instances.value = [];
-  }
+  await load();
+  timer = window.setInterval(load, 5000);
 });
+
+onBeforeUnmount(() => {
+  if (timer !== null) window.clearInterval(timer);
+});
+
+/** 总游戏时长（小时） */
+const totalHours = computed(() =>
+  data.value ? (data.value.totalSeconds / 3600).toFixed(1) : "0.0",
+);
+
+/** 时长列文本 */
+function hoursOf(seconds: number) {
+  return t("winStats.hours", { h: (seconds / 3600).toFixed(1) });
+}
+
+/** 最近游玩时间（epoch 毫秒 → YYYY-MM-DD HH:mm） */
+function fmtTime(ms: number | null) {
+  if (!ms) return t("detail.none");
+  const d = new Date(ms);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
 </script>
 
 <template>
   <WindowFrame :title="t('features.stats')" @close="$emit('close')">
     <div class="summary">
       <div class="summary-card">
-        <span class="summary-num">{{ instances.length }}</span>
+        <span class="summary-num">{{ data?.instances.length ?? 0 }}</span>
         <span class="summary-label">{{ t("winStats.instances") }}</span>
       </div>
       <div class="summary-card">
-        <span class="summary-num">{{ totalLaunch }}</span>
+        <span class="summary-num">{{ data?.launchCount ?? 0 }}</span>
         <span class="summary-label">{{ t("winStats.totalLaunch") }}</span>
       </div>
       <div class="summary-card">
@@ -61,16 +75,17 @@ onMounted(async () => {
         </tr>
       </thead>
       <tbody>
-        <tr v-for="inst in instances" :key="inst.uuid">
+        <tr v-for="inst in data?.instances ?? []" :key="inst.uuid">
           <td class="inst-cell">
             <InstanceIcon :name="inst.name" :uuid="inst.uuid" :size="30" />
             <span>{{ inst.name }}</span>
+            <span v-if="inst.running" class="running-tag">{{ t("winStats.running") }}</span>
           </td>
-          <td>{{ statOf(inst.uuid).count }}</td>
-          <td>{{ t("winStats.hours", { h: statOf(inst.uuid).hours }) }}</td>
-          <td>{{ statOf(inst.uuid).last }}</td>
+          <td>{{ inst.count }}</td>
+          <td>{{ hoursOf(inst.seconds) }}</td>
+          <td>{{ fmtTime(inst.last) }}</td>
         </tr>
-        <tr v-if="instances.length === 0">
+        <tr v-if="!data || data.instances.length === 0">
           <td colspan="4" class="empty-cell">{{ t("winStats.noData") }}</td>
         </tr>
       </tbody>
@@ -144,6 +159,15 @@ onMounted(async () => {
   align-items: center;
   gap: 10px;
   font-weight: 600;
+}
+
+.running-tag {
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  padding: 1px 7px;
 }
 
 .empty-cell {

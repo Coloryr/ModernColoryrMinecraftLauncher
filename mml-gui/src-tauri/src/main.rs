@@ -23,15 +23,16 @@ fn main() {
     let res = path_helper::write_text(temp, "test write");
     obj.path = if res.is_err() { get_save_path() } else { path };
 
-    // 窗口状态 / GUI 配置与核心共用同一运行路径
     windows::init(&obj.path);
     gui_config::init(&obj.path);
     collect_utils::init(&obj.path);
-    image_manager::init(&obj.path);
 
     if let Err(e) = mml_core::init(obj) {
         err_box::fatal_error(e);
     }
+
+    // 窗口状态 / GUI 配置与核心共用同一运行路径
+    image_manager::init();
 
     mml_gui_lib::run()
 }
