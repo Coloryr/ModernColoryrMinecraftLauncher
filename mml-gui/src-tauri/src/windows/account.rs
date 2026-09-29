@@ -6,7 +6,8 @@ use std::fmt::Display;
 use std::sync::RwLock;
 
 use mml_auth::{AuthType, LoginObj, auths, legacy::{authlib_injector, little_skin, nide8}, oauth};
-use mml_net::mojang_api::{self, SkinObj};
+use mml_names::i18_items::error_type::{CoreResult, ErrorType};
+use mml_net::mojang_api::{self, MinecraftProfileObj, SkinObj};
 use mml_sys::open_helper;
 use tauri::{AppHandle, Emitter};
 use tokio_util::sync::CancellationToken;
@@ -361,6 +362,25 @@ pub fn account_edit_offline(
 
 // ---- 皮肤 / 披风纹理（原皮肤窗口的查询与正版装备操作） ----
 
+/// 查询正版档案，令牌失效（401 / 403）时自动刷新令牌重试一次
+///
+/// 微软访问令牌约 24 小时过期，长期挂机后查纹理 / 装备会整体 401。
+/// 刷新走完整 OAuth 链并把新令牌写回账户存储（内存 + accounts.json），
+/// 后续请求直接用新令牌；令牌不展示给前端、账户可见信息不变，无需广播 account-change。
+async fn get_oauth_profile(auth: &mut LoginObj) -> CoreResult<MinecraftProfileObj> {
+    let first = mojang_api::get_minecraft_profile(&auth.access_token).await;
+    let expired = matches!(
+        &first,
+        Err(ErrorType::HttpError(data)) if matches!(data.status, Some(401) | Some(403))
+    );
+    if !expired {
+        return first;
+    }
+    auth.refresh(CancellationToken::new()).await?;
+    auth.save();
+    mojang_api::get_minecraft_profile(&auth.access_token).await
+}
+
 /// 查询账户的皮肤 / 披风纹理列表
 ///
 /// OAuth 账户走 minecraft services 档案（多皮肤 + 多披风，`active` 是服务端
@@ -377,12 +397,12 @@ pub async fn account_get_textures(
         return Ok(TexturesDto::default());
     }
 
-    let Some(auth) = auths::get(&uuid, auth_type) else {
+    let Some(mut auth) = auths::get(&uuid, auth_type) else {
         return Err(String::from("err.accountMissing"));
     };
 
     if auth_type.is_oauth() {
-        let profile = mojang_api::get_minecraft_profile(&auth.access_token)
+        let profile = get_oauth_profile(&mut auth)
             .await
             .map_err(|err| err.to_string())?;
         let skins = textures_from(&profile.skins).await;
@@ -482,11 +502,11 @@ async fn equip_texture(
     if !auth_type.is_oauth() {
         return Err(String::from("err.notOauth"));
     }
-    let Some(auth) = auths::get(uuid, auth_type) else {
+    let Some(mut auth) = auths::get(uuid, auth_type) else {
         return Err(String::from("err.accountMissing"));
     };
 
-    let profile = mojang_api::get_minecraft_profile(&auth.access_token)
+    let profile = get_oauth_profile(&mut auth)
         .await
         .map_err(|err| err.to_string())?;
 
