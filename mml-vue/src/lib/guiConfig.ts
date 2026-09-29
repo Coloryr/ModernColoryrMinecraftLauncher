@@ -72,6 +72,8 @@ export interface CollectConfig {
 export interface LoginLockItem {
   /** 账户添加类型（offline / microsoft / littleskin / selflittleskin / authlib / nide8） */
   ty: string;
+  /** 登录模型名字（添加账户时下拉里的显示名；空 = 用类型名 / 服务器地址显示） */
+  name: string;
   /** 锁定的服务器（authlib = 认证服务器地址，nide8 = 服务器 ID，空 = 不指定） */
   server: string;
 }
@@ -81,6 +83,8 @@ export interface ClientConfig {
   motdCard: boolean;
   /** MOTD 卡片刷新间隔（秒） */
   motdInterval: number;
+  /** 登录方式锁定总开关（false = 锁定列表不生效） */
+  loginLockOn: boolean;
   /** 登录方式锁定列表（空 = 不锁定，可添加多个条目） */
   loginLock: LoginLockItem[];
   /** 游戏自动进服（启动时自动进入 autoJoinServer） */
@@ -177,9 +181,13 @@ function safeLockList(raw: string | null): LoginLockItem[] {
     if (!Array.isArray(v)) return [];
     return v
       .map((x): LoginLockItem | null => {
-        if (typeof x === "string") return { ty: x, server: "" };
+        if (typeof x === "string") return { ty: x, name: "", server: "" };
         if (x && typeof x === "object" && typeof x.ty === "string") {
-          return { ty: x.ty, server: typeof x.server === "string" ? x.server : "" };
+          return {
+            ty: x.ty,
+            name: typeof x.name === "string" ? x.name : "",
+            server: typeof x.server === "string" ? x.server : "",
+          };
         }
         return null;
       })
@@ -230,6 +238,7 @@ function defaultConfig(): GuiConfig {
     client: {
       motdCard: localStorage.getItem("mml.client.motdCard") !== "0",
       motdInterval: Number(localStorage.getItem("mml.client.motdInterval")) || 15,
+      loginLockOn: localStorage.getItem("mml.client.loginLockOn") === "1",
       loginLock: safeLockList(localStorage.getItem("mml.client.loginLock")),
       autoJoin: localStorage.getItem("mml.client.autoJoin") === "1",
       autoJoinServer: localStorage.getItem("mml.client.autoJoinServer") ?? "",

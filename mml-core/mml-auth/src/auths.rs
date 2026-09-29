@@ -24,7 +24,7 @@ use std::{
 use mml_base::{inner_path, serialize_tools};
 use mml_config::config_save;
 use mml_names::{i18_items::error_type::CoreResult, names, uuids};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use crate::{AuthType, LoginObj, UserKeyObj};
 
@@ -36,20 +36,11 @@ static AUTHS: LazyLock<RwLock<HashMap<UserKeyObj, LoginObj>>> =
 static CURRENT_USER: LazyLock<RwLock<Option<UserKeyObj>>> = LazyLock::new(|| RwLock::new(None));
 
 /// 选中账户的持久化结构
-#[derive(Serialize, Deserialize)]
-#[serde(default)]
-struct SelectUserObj {
-    /// 当前选中的账户键（无选中时为 `None`）
-    pub user: Option<UserKeyObj>,
-}
-
-impl Default for SelectUserObj {
-    fn default() -> Self {
-        Self {
-            user: Default::default(),
-        }
-    }
-}
+///
+/// 文件内容即 `Option<UserKeyObj>` 的直接序列化（`None` 时为 `null`），
+/// 不包外层结构；读取侧类型与此保持一致
+/// （历史上曾按包一层 `user` 字段的结构解析，与写入格式不符导致重启后
+/// 选中账户静默丢失）。
 
 /// 从磁盘加载账户列表到内存
 ///
@@ -70,14 +61,13 @@ fn load<P: AsRef<Path>>(path: P) {
 ///
 /// - `path`: 选中账户数据文件的路径
 fn load_select<P: AsRef<Path>>(path: P) {
-    let json = serialize_tools::json_from_file::<SelectUserObj>(path);
+    let json = serialize_tools::json_from_file::<Option<UserKeyObj>>(path);
     if let Err(err) = json {
         mml_log::error_type(err);
         return;
     }
 
-    let user = json.unwrap();
-    *CURRENT_USER.write().unwrap() = user.user;
+    *CURRENT_USER.write().unwrap() = json.unwrap();
 }
 
 /// 将内存中所有账户持久化到磁盘

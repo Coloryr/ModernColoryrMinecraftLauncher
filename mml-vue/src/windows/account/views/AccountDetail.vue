@@ -14,6 +14,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: "switch", acc: AccountStoreDto): void;
   (e: "refresh", acc: AccountStoreDto): void;
+  (e: "refreshSkin", acc: AccountStoreDto): void;
   (e: "relogin", acc: AccountStoreDto): void;
   (e: "edit", acc: AccountStoreDto): void;
   (e: "delete", acc: AccountStoreDto): void;
@@ -53,6 +54,7 @@ function isCurrent(acc: AccountStoreDto): boolean {
               :can-relogin="acc.canRelogin"
               :can-edit="acc.canEdit"
               @refresh="emit('refresh', acc)"
+          @refresh-skin="emit('refreshSkin', acc)"
               @relogin="emit('relogin', acc)"
               @edit="emit('edit', acc)"
               @delete="emit('delete', acc)"

@@ -8,6 +8,13 @@
 //! `skinraw` / `caperaw`（原始皮肤/披风贴图，供前端 skinview3d 数据用）/
 //! `icon`（远程图片，带内存 + 磁盘 + ETag 缓存）/
 //! `block`（方块贴图）/ `item`（物品贴图）/ `screenshot`（实例截图）。
+//!
+//! 皮肤 / 披风纹理一律按**内容 SHA1** 取（与游戏 assets objects 同款布局，
+//! 同一份贴图跨账户只存一份）：`skinraw/<sha1>`、`caperaw/<sha1>`、
+//! `skin/<sha1>[/<skin_type>]`、`cape/<sha1>`、`capeback/<sha1>`。
+//! 账户型 URI（`head/skin/cape*/<账户类型>/<uuid>`）保留给账户列表的
+//! "当前选中"预览：解析账户 → 下载定 sha1 → 转调 sha1 型渲染。
+//! 渲染缓存键也用内容 sha1，同一贴图的渲染结果跨账户共享。
 
 use std::{
     collections::HashMap,
@@ -19,11 +26,14 @@ use std::{
     time::{Duration, Instant},
 };
 
-use mml_auth::{UserKeyObj, auths};
+use mml_auth::auths;
 use mml_base::hash_helper::{self, HashType};
-use mml_game::player_skin;
+use mml_game::{
+    launcher_path::assets_path,
+    player_skin::{self, TextureFile},
+};
 use mml_names::names;
-use mml_net::mojang_api;
+use mml_net::{get_work_client, mojang_api};
 use mml_skin::{SkinType, skin_type_checker};
 use mml_skin_draw::{cape_2d_draw, head_2d_draw, head_3d_draw, skin_2d_draw, skin_3d_draw};
 use mml_sys::path_helper;
@@ -42,23 +52,27 @@ use crate::{
 /// 实例图标内存缓存
 static INSTANCE_IMAGE: LazyLock<RwLock<HashMap<Uuid, Vec<u8>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
-/// 账户头像（按配置类型渲染）内存缓存
-static HEAD_IMAGE: LazyLock<RwLock<HashMap<(UserKeyObj, String), Vec<u8>>>> =
+/// 账户头像（按配置类型渲染）内存缓存（键：皮肤内容 sha1 + 头像渲染配置；
+/// 同一皮肤的头像跨账户共享）
+static HEAD_IMAGE: LazyLock<RwLock<HashMap<(String, String), Vec<u8>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
-/// 账户皮肤全身渲染图内存缓存（键带显示模式 + 皮肤类型段）
-static SKIN_IMAGE: LazyLock<RwLock<HashMap<(UserKeyObj, String), Vec<u8>>>> =
+/// 皮肤全身渲染图内存缓存（键：内容 sha1 + 显示模式 + 皮肤类型段）
+static SKIN_IMAGE: LazyLock<RwLock<HashMap<(String, String), Vec<u8>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
-/// 账户皮肤原图 PNG 内存缓存
-static SKINRAW_IMAGE: LazyLock<RwLock<HashMap<UserKeyObj, Vec<u8>>>> =
+/// 皮肤原图 PNG 内存缓存（键：内容 sha1）
+static SKINRAW_IMAGE: LazyLock<RwLock<HashMap<String, Vec<u8>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
-/// 账户披风原图 PNG 内存缓存
-static CAPERAW_IMAGE: LazyLock<RwLock<HashMap<UserKeyObj, Vec<u8>>>> =
+/// 披风原图 PNG 内存缓存（键：内容 sha1）
+static CAPERAW_IMAGE: LazyLock<RwLock<HashMap<String, Vec<u8>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
-/// 账户披风渲染图内存缓存
-static CAPE_IMAGE: LazyLock<RwLock<HashMap<UserKeyObj, Vec<u8>>>> =
+/// 披风渲染图内存缓存（键：内容 sha1）
+static CAPE_IMAGE: LazyLock<RwLock<HashMap<String, Vec<u8>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
-/// 账户披风背面渲染图内存缓存
-static CAPE_BACK_IMAGE: LazyLock<RwLock<HashMap<UserKeyObj, Vec<u8>>>> =
+/// 披风背面渲染图内存缓存（键：内容 sha1）
+static CAPE_BACK_IMAGE: LazyLock<RwLock<HashMap<String, Vec<u8>>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
+/// 纹理内容 sha1 → 源 URL：本地文件被清后按登记地址重新下载
+static TEXTURE_URLS: LazyLock<RwLock<HashMap<String, String>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 /// 远程图标内存缓存（键为请求名 = 网址 sha256）
 static ICON_IMAGE: LazyLock<RwLock<HashMap<String, IconCache>>> =
@@ -68,11 +82,6 @@ static ICON_DIR: OnceLock<PathBuf> = OnceLock::new();
 
 /// 图标内存缓存存活时长，超时后删除并回源重新下载
 const ICON_TIMEOUT: Duration = Duration::from_secs(60);
-
-/// 图标磁盘缓存的新鲜窗口（按文件修改时间判断）。
-/// 过期后不再直接删掉重下，而是带 If-None-Match 去服务器校验：
-/// 304 就续用本地（重写文件刷新时间戳），200 才真正重新下载
-const DISK_ICON_TIMEOUT: Duration = Duration::from_secs(24 * 3600);
 
 /// 图标缓存条目
 #[derive(Clone)]
@@ -103,6 +112,8 @@ fn send_png(res: UriSchemeResponder, data: Vec<u8>) {
         Response::builder()
             .status(StatusCode::OK)
             .header("Content-Type", "image/png")
+            // skinview3d 取 skinraw/caperaw 上传 WebGL 纹理要过 CORS，必须带本头
+            .header("Access-Control-Allow-Origin", "*")
             .body(data)
             .unwrap(),
     );
@@ -113,6 +124,8 @@ fn send_bad(res: UriSchemeResponder) {
     res.respond(
         Response::builder()
             .status(StatusCode::BAD_REQUEST)
+            // 失败响应同样带 CORS 头，前端 fetch 才能读到失败状态而不是一律 ERR_FAILED
+            .header("Access-Control-Allow-Origin", "*")
             .body(&[0u8; 0])
             .unwrap(),
     );
@@ -170,6 +183,8 @@ fn send_icon(res: UriSchemeResponder, icon: &IconBytes) {
         Response::builder()
             .status(StatusCode::OK)
             .header("Content-Type", icon.mime)
+            // 与 send_png 同理：webview 里跨源取图（canvas 绘制等）需要 CORS 头
+            .header("Access-Control-Allow-Origin", "*")
             .body(icon.data.clone())
             .unwrap(),
     );
@@ -233,7 +248,9 @@ fn load_instance_image(uri: &[&str], res: UriSchemeResponder) {
     send_png(res, image);
 }
 
-/// 账户头像（`head/<账户类型>/<uuid>`）：按配置的头像类型渲染
+/// 账户头像（`head/<账户类型>/<uuid>`）：解析账户当前皮肤后按配置的头像类型渲染
+///
+/// 保持账户型：账户列表高频渲染，不能每个头像先查一次纹理列表
 async fn load_head_image(uri: &[&str], res: UriSchemeResponder) {
     if uri.len() != 3 {
         send_bad(res);
@@ -250,15 +267,24 @@ async fn load_head_image(uri: &[&str], res: UriSchemeResponder) {
         send_bad(res);
         return;
     };
-    let key = files.key;
-    let Some(file) = files.skin else {
+    let Some(tex) = files.skin else {
         send_bad(res);
         return;
     };
 
-    // 缓存键带上头像渲染配置：切换头像模式 / 旋转角度后立即出新图而不是旧缓存
-    let head = gui_config::get().head;
-    let key = (key, format!("{:?}/{}/{}", head.head_type, head.x, head.y));
+    send_head_image(&tex.sha1, res).await;
+}
+
+/// 头像渲染（sha1 入口；账户型请求解析出当前皮肤后也转调这里）
+///
+/// 缓存键带上头像渲染配置：切换头像模式 / 旋转角度后立即出新图而不是旧缓存；
+/// 同一皮肤的头像跨账户共享
+async fn send_head_image(skin_sha1: &str, res: UriSchemeResponder) {
+    let config = gui_config::get().head;
+    let key = (
+        skin_sha1.to_string(),
+        format!("{:?}/{}/{}", config.head_type, config.x, config.y),
+    );
 
     {
         let image = HEAD_IMAGE.read().unwrap().get(&key).cloned();
@@ -268,17 +294,21 @@ async fn load_head_image(uri: &[&str], res: UriSchemeResponder) {
         }
     }
 
-    let Some(bitmap) = mml_skin::open_bitmap(&file) else {
+    let Some(bytes) = load_texture_bytes(skin_sha1).await else {
+        send_bad(res);
+        return;
+    };
+    let Ok(bitmap) = Pixmap::decode_png(&bytes) else {
         send_bad(res);
         return;
     };
 
-    let Some(head) = gen_head_image(&bitmap) else {
+    let Some(image) = gen_head_image(&bitmap) else {
         send_bad(res);
         return;
     };
 
-    let Ok(data) = head.encode_png() else {
+    let Ok(data) = image.encode_png() else {
         send_bad(res);
         return;
     };
@@ -332,37 +362,83 @@ fn send_skin_preview(skin_type: &str, res: UriSchemeResponder) {
     }
 }
 
-/// 账户皮肤与披风的本地缓存文件
+/// 账户皮肤与披风的本地缓存纹理
 struct SkinFiles {
-    key: UserKeyObj,
-    skin: Option<PathBuf>,
-    cape: Option<PathBuf>,
+    skin: Option<TextureFile>,
+    cape: Option<TextureFile>,
     /// 会话服务器 metadata 的纤细标记（权威值；离线等查不到档案时为 false）
     is_new_slim: bool,
 }
 
-/// 皮肤类URI（`skin*/cape*/<账户类型>/<uuid>`）解析出账户并取回皮肤/披风文件
+/// 皮肤类URI账户型（`skin*/cape*/<账户类型>/<uuid>`）解析出账户并取回皮肤/披风纹理
 ///
 /// 账户不存在返回None；皮肤/披风某一项可能没有（如离线账户都没有）；
-/// 下载结果由player_skin层缓存到本地皮肤目录
+/// 下载结果由player_skin层按内容SHA1缓存到本地皮肤目录，
+/// 同时把源URL登记进 [`TEXTURE_URLS`]，sha1型请求在文件被清后能回源
 async fn resolve_skin_files(uri: &[&str]) -> Option<SkinFiles> {
     let user_type = auth_type_from_str(uri.get(1)?);
     let user = auths::get(uri.get(2)?, user_type)?;
     let res = player_skin::download_skin(&user).await;
+    if let Some(tex) = &res.skin {
+        push_texture_url(&tex.sha1, &tex.url);
+    }
+    if let Some(tex) = &res.cape {
+        push_texture_url(&tex.sha1, &tex.url);
+    }
     Some(SkinFiles {
-        key: user.get_key(),
         is_new_slim: res.is_new_slim,
         skin: res.skin,
         cape: res.cape,
     })
 }
 
-/// 皮肤全身渲染图（`skin/<账户类型>/<uuid>`）
+/// 判断片段是否为内容 SHA1（40 位十六进制）
+///
+/// sha1 型与账户型 URI 的区分依据：账户类型关键字与账户 uuid 都不是 40 位十六进制
+fn is_sha1(s: &str) -> bool {
+    s.len() == 40 && s.chars().all(|c| c.is_ascii_hexdigit())
+}
+
+/// 按内容 sha1 取纹理 PNG 字节
+///
+/// 本地皮肤目录有文件直接读；没有则按 [`TEXTURE_URLS`] 登记的源 URL 重新下载
+/// （下载结果仍按内容 sha1 落盘，与请求的 sha1 一致才返回）
+async fn load_texture_bytes(sha1: &str) -> Option<Vec<u8>> {
+    let file = assets_path::get_skin_object(sha1);
+    if file.is_file() {
+        return path_helper::read_byte(&file).ok();
+    }
+
+    let url = TEXTURE_URLS.read().unwrap().get(sha1).cloned()?;
+    let data = mojang_api::get_assets(&url).await.ok()?;
+    let saved = assets_path::save_skin_object(&data).ok()?;
+    (saved == sha1).then_some(data)
+}
+
+/// 皮肤全身渲染图（`skin/...`）
+///
+/// 片段形态（首段 `skin` 已剥）：
+/// - `skin/<sha1>`、`skin/<sha1>/<skin_type>`：sha1 型（40 位十六进制），
+///   直接按内容取皮肤——皮肤窗口等已知具体贴图的场景用
+/// - `skin/<账户类型>/<uuid>[/<skin_type>]`：账户型，解析该账户**当前选中**的皮肤
+///   后转 sha1 型渲染——账户列表预览用
+/// - `skin/preview/<uuid>/<skin_type>`：账户型的特例（设置页样例），先判 preview
 ///
 /// 渲染风格由后端读 gui_config 的 `skin_display` 决定（Skin2DA / Skin2DB / Skin3D / Skin3DD），
-/// 前端不选风格。第4段为皮肤型号：`auto`（自动检测，可省略）/ `old`（1.7旧版）/
+/// 前端不选风格。皮肤型号段：`auto`（自动检测，可省略）/ `old`（1.7旧版）/
 /// `new`（1.8新版）/ `slim`（纤细）——这是皮肤版型信息，不是渲染风格
 async fn load_skin_image(uri: &[&str], res: UriSchemeResponder) {
+    // sha1 型：2-3 段且第 2 段是 40 位十六进制
+    if (uri.len() == 2 || uri.len() == 3) && is_sha1(uri[1]) {
+        let skin_type = uri.get(2).copied().unwrap_or("auto");
+        if parse_skin_type(skin_type).is_none() {
+            send_bad(res);
+            return;
+        }
+        send_skin_display(uri[1], skin_type, None, res).await;
+        return;
+    }
+
     if uri.len() != 3 && uri.len() != 4 {
         send_bad(res);
         return;
@@ -379,16 +455,29 @@ async fn load_skin_image(uri: &[&str], res: UriSchemeResponder) {
         return;
     }
 
-    let display = gui_config::get().skin_display;
     let Some(files) = resolve_skin_files(uri).await else {
         send_bad(res);
         return;
     };
-    let key = (files.key, format!("{display:?}/{skin_type}"));
-    let Some(file) = files.skin else {
+    let Some(tex) = files.skin else {
         send_bad(res);
         return;
     };
+    send_skin_display(&tex.sha1, skin_type, Some(files.is_new_slim), res).await;
+}
+
+/// 皮肤全身渲染（sha1 入口；账户型请求解析出当前皮肤后也转调这里）
+///
+/// `server_slim` 为账户型解析得到的会话服务器纤细标记（权威值，用于自动型号纠偏）；
+/// sha1 型请求传 `None`，自动型号仅按贴图检测
+async fn send_skin_display(
+    sha1: &str,
+    skin_type: &str,
+    server_slim: Option<bool>,
+    res: UriSchemeResponder,
+) {
+    let display = gui_config::get().skin_display;
+    let key = (sha1.to_string(), format!("{display:?}/{skin_type}"));
 
     {
         let image = SKIN_IMAGE.read().unwrap().get(&key).cloned();
@@ -398,28 +487,29 @@ async fn load_skin_image(uri: &[&str], res: UriSchemeResponder) {
         }
     }
 
-    let Some(bitmap) = mml_skin::open_bitmap(&file) else {
+    let Some(bytes) = load_texture_bytes(sha1).await else {
+        send_bad(res);
+        return;
+    };
+    let Ok(bitmap) = Pixmap::decode_png(&bytes) else {
         send_bad(res);
         return;
     };
     let st = match parse_skin_type(skin_type).flatten() {
         Some(st) => Some(st),
         None => {
-            // 自动检测：会话服务器 metadata 的纤细标记是权威值，用来纠偏——
-            // 服务器说是纤细就直接按纤细；说不是而贴图检测出纤细（手臂宽度含糊时
-            // 可能误判）按普通新版处理，其余沿用检测结果（Old / New）
+            // 自动检测：带服务器纤细标记时用于纠偏——服务器说是纤细就直接按纤细；
+            // 说不是而贴图检测出纤细（手臂宽度含糊时可能误判）按普通新版处理，
+            // 其余沿用检测结果（Old / New）
             let detected = skin_type_checker::get_skin_type(&bitmap);
-            Some(if files.is_new_slim {
-                SkinType::NewSlim
-            } else if detected == SkinType::NewSlim {
-                SkinType::New
-            } else {
-                detected
+            Some(match server_slim {
+                Some(true) => SkinType::NewSlim,
+                Some(false) if detected == SkinType::NewSlim => SkinType::New,
+                _ => detected,
             })
         }
     };
-    let image = render_skin_display(&bitmap, st, display);
-    let Some(image) = image else {
+    let Some(image) = render_skin_display(&bitmap, st, display) else {
         send_bad(res);
         return;
     };
@@ -458,78 +548,76 @@ fn parse_skin_type(s: &str) -> Option<Option<SkinType>> {
     }
 }
 
-/// 原始皮肤贴图PNG（供前端 skinview3d 做3D渲染）
+/// 原始皮肤贴图PNG（`skinraw/<sha1>`，供前端 skinview3d 做3D渲染）
 async fn load_skinraw_image(uri: &[&str], res: UriSchemeResponder) {
-    if uri.len() != 3 {
+    if uri.len() != 2 {
         send_bad(res);
         return;
     }
 
-    let Some(files) = resolve_skin_files(uri).await else {
-        send_bad(res);
-        return;
-    };
-    let key = files.key;
-    let Some(file) = files.skin else {
-        send_bad(res);
-        return;
-    };
-
     {
-        let image = SKINRAW_IMAGE.read().unwrap().get(&key).cloned();
+        let image = SKINRAW_IMAGE.read().unwrap().get(uri[1]).cloned();
         if let Some(data) = image {
             send_png(res, data);
             return;
         }
     }
 
-    let Ok(data) = path_helper::read_byte(&file) else {
+    let Some(data) = load_texture_bytes(uri[1]).await else {
         send_bad(res);
         return;
     };
 
-    SKINRAW_IMAGE.write().unwrap().insert(key, data.clone());
+    SKINRAW_IMAGE
+        .write()
+        .unwrap()
+        .insert(uri[1].to_string(), data.clone());
 
     send_png(res, data);
 }
 
-/// 原始披风贴图PNG（供前端 skinview3d 挂载）
+/// 原始披风贴图PNG（`caperaw/<sha1>`，供前端 skinview3d 挂载）
 async fn load_caperaw_image(uri: &[&str], res: UriSchemeResponder) {
-    if uri.len() != 3 {
+    if uri.len() != 2 {
         send_bad(res);
         return;
     }
 
-    let Some(files) = resolve_skin_files(uri).await else {
-        send_bad(res);
-        return;
-    };
-    let key = files.key;
-    let Some(file) = files.cape else {
-        send_bad(res);
-        return;
-    };
-
     {
-        let image = CAPERAW_IMAGE.read().unwrap().get(&key).cloned();
+        let image = CAPERAW_IMAGE.read().unwrap().get(uri[1]).cloned();
         if let Some(data) = image {
             send_png(res, data);
             return;
         }
     }
 
-    let Ok(data) = path_helper::read_byte(&file) else {
+    let Some(data) = load_texture_bytes(uri[1]).await else {
         send_bad(res);
         return;
     };
 
-    CAPERAW_IMAGE.write().unwrap().insert(key, data.clone());
+    CAPERAW_IMAGE
+        .write()
+        .unwrap()
+        .insert(uri[1].to_string(), data.clone());
 
     send_png(res, data);
 }
 
-/// 披风渲染图（`cape/<账户类型>/<uuid>`，cape_2d_draw 正面）
+/// 披风渲染图（cape_2d_draw 正面）
+///
+/// - `cape/<sha1>`：sha1 型，按内容直接取
+/// - `cape/<账户类型>/<uuid>`：账户型，解析该账户**当前选中**的披风后转 sha1 型
+///   渲染——账户列表预览用
 async fn load_cape_image(uri: &[&str], res: UriSchemeResponder) {
+    if uri.len() == 2 {
+        if is_sha1(uri[1]) {
+            send_cape_image(uri[1], res).await;
+        } else {
+            send_bad(res);
+        }
+        return;
+    }
     if uri.len() != 3 {
         send_bad(res);
         return;
@@ -539,21 +627,28 @@ async fn load_cape_image(uri: &[&str], res: UriSchemeResponder) {
         send_bad(res);
         return;
     };
-    let key = files.key;
-    let Some(file) = files.cape else {
+    let Some(tex) = files.cape else {
         send_bad(res);
         return;
     };
+    send_cape_image(&tex.sha1, res).await;
+}
 
+/// 披风正面渲染（sha1 入口；账户型请求解析出当前披风后也转调这里）
+async fn send_cape_image(sha1: &str, res: UriSchemeResponder) {
     {
-        let image = CAPE_IMAGE.read().unwrap().get(&key).cloned();
+        let image = CAPE_IMAGE.read().unwrap().get(sha1).cloned();
         if let Some(data) = image {
             send_png(res, data);
             return;
         }
     }
 
-    let Some(bitmap) = mml_skin::open_bitmap(&file) else {
+    let Some(bytes) = load_texture_bytes(sha1).await else {
+        send_bad(res);
+        return;
+    };
+    let Ok(bitmap) = Pixmap::decode_png(&bytes) else {
         send_bad(res);
         return;
     };
@@ -566,14 +661,27 @@ async fn load_cape_image(uri: &[&str], res: UriSchemeResponder) {
         return;
     };
 
-    CAPE_IMAGE.write().unwrap().insert(key, data.clone());
+    CAPE_IMAGE
+        .write()
+        .unwrap()
+        .insert(sha1.to_string(), data.clone());
 
     send_png(res, data);
 }
 
-/// 披风背面渲染图（`capeback/<账户类型>/<uuid>`，cape_2d_draw 背面，
-/// 供账户列表悬浮大图与正面并排显示）
+/// 披风背面渲染图（cape_2d_draw 背面，供账户列表悬浮大图与正面并排显示）
+///
+/// - `capeback/<sha1>`：sha1 型，按内容直接取
+/// - `capeback/<账户类型>/<uuid>`：账户型，解析该账户**当前选中**的披风后转 sha1 型渲染
 async fn load_cape_back_image(uri: &[&str], res: UriSchemeResponder) {
+    if uri.len() == 2 {
+        if is_sha1(uri[1]) {
+            send_cape_back_image(uri[1], res).await;
+        } else {
+            send_bad(res);
+        }
+        return;
+    }
     if uri.len() != 3 {
         send_bad(res);
         return;
@@ -583,21 +691,28 @@ async fn load_cape_back_image(uri: &[&str], res: UriSchemeResponder) {
         send_bad(res);
         return;
     };
-    let key = files.key;
-    let Some(file) = files.cape else {
+    let Some(tex) = files.cape else {
         send_bad(res);
         return;
     };
+    send_cape_back_image(&tex.sha1, res).await;
+}
 
+/// 披风背面渲染（sha1 入口；账户型请求解析出当前披风后也转调这里）
+async fn send_cape_back_image(sha1: &str, res: UriSchemeResponder) {
     {
-        let image = CAPE_BACK_IMAGE.read().unwrap().get(&key).cloned();
+        let image = CAPE_BACK_IMAGE.read().unwrap().get(sha1).cloned();
         if let Some(data) = image {
             send_png(res, data);
             return;
         }
     }
 
-    let Some(bitmap) = mml_skin::open_bitmap(&file) else {
+    let Some(bytes) = load_texture_bytes(sha1).await else {
+        send_bad(res);
+        return;
+    };
+    let Ok(bitmap) = Pixmap::decode_png(&bytes) else {
         send_bad(res);
         return;
     };
@@ -610,7 +725,10 @@ async fn load_cape_back_image(uri: &[&str], res: UriSchemeResponder) {
         return;
     };
 
-    CAPE_BACK_IMAGE.write().unwrap().insert(key, data.clone());
+    CAPE_BACK_IMAGE
+        .write()
+        .unwrap()
+        .insert(sha1.to_string(), data.clone());
 
     send_png(res, data);
 }
@@ -628,10 +746,11 @@ fn gen_head_image(bitmap: &Pixmap) -> Option<Pixmap> {
     }
 }
 
-/// 远程图标（`icon/<请求名>`）：内存 → 磁盘 → 网络三级缓存
+/// 远程图标（`icon/<请求名>`）：内存 → 磁盘 + ETag 校验 → 网络
 ///
-/// 磁盘过期时不直接删掉重下，而是带 ETag 回源校验，304 续用本地；
-/// 网络失败时有过期的本地副本就先用着
+/// 内存未命中时读磁盘缓存，并带记录的 ETag 发一次条件请求回源校验：
+/// 服务器 304（图没变）不拉图片体，直接用硬盘缓存；200 才重新拉图更新本地；
+/// 网络失败时用本地副本兜底
 async fn load_icon_image(uri: &[&str], res: UriSchemeResponder) {
     if uri.len() != 2 {
         send_bad(res);
@@ -661,34 +780,23 @@ async fn load_icon_image(uri: &[&str], res: UriSchemeResponder) {
     let file = icon_file(&url);
     let etag_file = icon_etag_file(&url);
 
-    // 磁盘缓存的本地副本（有文件但过期时保留，供 304 续用 / 网络失败兜底）
+    // 磁盘缓存的本地副本（供 304 续用 / 网络失败兜底）
     let cached = read_icon_bytes(&file);
     if cached.is_none() && file.is_file() {
         // 内容损坏：删掉重新下载
         let _ = path_helper::delete(&file);
     }
 
-    // 磁盘缓存仍新鲜：直接用，不发请求
-    if let Some(icon) = &cached {
-        if !is_icon_expired(&file) {
-            set_icon_image(name, icon.data.clone(), icon.mime);
-            send_icon(res, icon);
-            return;
-        }
-    }
-
-    // 过期 / 缺失：回源。存有 ETag（两家 CDN 的 ETag 都是图片内容的 MD5）就带
-    // If-None-Match 校验，图没变时 304 直接续用本地，不用重新下载
+    // 有磁盘缓存就带 ETag（两家 CDN 的 ETag 都是图片内容的 MD5）去校验，
+    // 没有就直接下载——每次最多一个请求，图没变时 304 只回头部不带体
     let etag = read_icon_etag(&etag_file);
-    match mojang_api::get_assets_with_check(&url, etag.as_deref()).await {
+    match get_work_client().get_bytes_with_check(&url, etag.as_deref()).await {
         Ok(check) if check.not_modified => {
             if let Some(icon) = &cached {
-                // 重写一份刷新修改时间，把新鲜窗口清零
-                write_icon_file(&file, &icon.data);
                 set_icon_image(name, icon.data.clone(), icon.mime);
                 send_icon(res, icon);
             } else {
-                // 只有 ETag 没有图片（异常状态），重新下载
+                // 只有 ETag 没有图片（异常状态），下次不带 ETag 重新下载
                 let _ = path_helper::delete(&etag_file);
                 send_bad(res);
             }
@@ -708,7 +816,7 @@ async fn load_icon_image(uri: &[&str], res: UriSchemeResponder) {
             send_icon(res, &icon);
         }
         Err(_) => {
-            // 网络失败：有过期的本地副本就先用着
+            // 网络失败：有本地副本就先用着
             if let Some(icon) = &cached {
                 set_icon_image(name, icon.data.clone(), icon.mime);
                 send_icon(res, icon);
@@ -791,6 +899,33 @@ fn load_item_image(uri: &[&str], res: UriSchemeResponder) {
 /// 实例图标内存缓存失效（实例图标被外部更换后调用，让下次请求重读磁盘）
 pub fn clear_instance_image(uuid: &Uuid) {
     INSTANCE_IMAGE.write().unwrap().remove(uuid);
+}
+
+/// 清空全部纹理类内存缓存（账户列表"刷新皮肤"用）
+///
+/// 渲染缓存键是内容 sha1 而非账户维度，量小全清最稳（重渲染开销可忽略）；
+/// 同时清掉 sha1→URL 登记表，下次取图重新走会话服务器下载并登记。
+/// 本地皮肤文件按内容缓存，服务器换肤后贴图内容变化自动落新文件，无需删文件；
+/// webview 侧的旧图由前端 bump 图片版本号破掉。
+pub fn clear_texture_images() {
+    HEAD_IMAGE.write().unwrap().clear();
+    SKIN_IMAGE.write().unwrap().clear();
+    SKINRAW_IMAGE.write().unwrap().clear();
+    CAPERAW_IMAGE.write().unwrap().clear();
+    CAPE_IMAGE.write().unwrap().clear();
+    CAPE_BACK_IMAGE.write().unwrap().clear();
+    TEXTURE_URLS.write().unwrap().clear();
+}
+
+/// 登记纹理的源 URL（内容 sha1 → URL），本地文件被清后 sha1 型请求能回源
+pub fn push_texture_url(sha1: &str, url: &str) {
+    if sha1.is_empty() || url.is_empty() {
+        return;
+    }
+    TEXTURE_URLS
+        .write()
+        .unwrap()
+        .insert(sha1.to_string(), url.to_string());
 }
 
 /// 实例截图（`mml-image/screenshot/<实例uuid>/<文件名>`）：
@@ -876,19 +1011,7 @@ fn decode_as_png(data: &[u8]) -> Option<Vec<u8>> {
     Some(out.into_inner())
 }
 
-/// 磁盘缓存是否已过期（按文件修改时间判断）
-fn is_icon_expired(file: &Path) -> bool {
-    let Ok(time) = fs::metadata(file).and_then(|meta| meta.modified()) else {
-        return true;
-    };
-
-    // 修改时间晚于当前时间（时钟回拨）时按未过期处理，避免反复重新下载
-    time.elapsed()
-        .map(|elapsed| elapsed >= DISK_ICON_TIMEOUT)
-        .unwrap_or(false)
-}
-
-/// 读取磁盘缓存的图标内容（不管新鲜度，过期判断由调用方做）
+/// 读取磁盘缓存的图标内容（不管新鲜度，有效性由 ETag 校验）
 fn read_icon_bytes(file: &Path) -> Option<IconBytes> {
     if !file.is_file() {
         return None;

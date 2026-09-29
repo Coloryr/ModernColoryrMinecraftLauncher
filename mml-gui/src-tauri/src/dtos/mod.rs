@@ -24,6 +24,7 @@ pub mod settings_dto;
 pub mod stats_dto;
 pub mod version_dto;
 pub mod window_dto;
+pub mod skin_dto;
 
 pub use account_dto::{AccountStoreDto, AccountStoreViewDto};
 pub use args_dto::{EnvVarLineDto, InstanceArgsDto};

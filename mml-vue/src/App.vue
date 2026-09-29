@@ -17,7 +17,6 @@ const windowMap: Record<WindowKind, Component> = {
   main: defineAsyncComponent(() => import("./windows/main/MainWindow.vue")),
   settings: defineAsyncComponent(() => import("./windows/settings/SettingsWindow.vue")),
   stats: defineAsyncComponent(() => import("./windows/stats/StatsWindow.vue")),
-  skin: defineAsyncComponent(() => import("./windows/skin/SkinWindow.vue")),
   help: defineAsyncComponent(() => import("./windows/help/HelpWindow.vue")),
   resource: defineAsyncComponent(() => import("./windows/resource/ResourceWindow.vue")),
   account: defineAsyncComponent(() => import("./windows/account/AccountWindow.vue")),

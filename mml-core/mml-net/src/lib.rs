@@ -36,8 +36,8 @@
 use mml_base::serialize_tools;
 use mml_config::config_obj::{ProxyState, ProxyType};
 use mml_names::i18_items::error_type::{CoreResult, ErrorType, HttpErrorData};
-use reqwest::header::{HeaderMap, HeaderValue, IF_NONE_MATCH, USER_AGENT};
-use reqwest::{Proxy, Request, Response};
+use reqwest::header::{HeaderMap, HeaderValue, IF_NONE_MATCH, ETAG, USER_AGENT};
+use reqwest::{Proxy, Request, Response, StatusCode};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use std::fmt;
@@ -350,11 +350,20 @@ impl Client {
         self.get_with_retry(url).await
     }
 
-    /// 发送带 If-None-Match 的 GET 请求（缓存校验），返回原始响应
+    /// 带 If-None-Match 缓存校验的 GET 下载：发完整请求并取回响应头与响应体
     ///
-    /// 本地存有资源的 ETag 时带上；服务器返回 304 表示资源没变，
-    /// 返回 200 时响应头里会带新的 ETag。失败时自动重试一次（同 `get_with_retry`）。
-    pub async fn get_if_none_match(&self, url: &str, etag: Option<&str>) -> CoreResult<Response> {
+    /// 本地存有资源的 ETag 时带上做校验；服务器返回 304 表示资源没变
+    /// （响应体为空），返回 200 时响应头里会带新的 ETag。
+    /// 失败时自动重试一次（同 `get_with_retry`）。
+    ///
+    /// # 返回值
+    ///
+    /// 返回 [`AssetCheckResponse`]（304 标记、新 ETag、响应体）；请求失败返回对应错误
+    pub async fn get_bytes_with_check(
+        &self,
+        url: &str,
+        etag: Option<&str>,
+    ) -> CoreResult<AssetCheckResponse> {
         let build = |etag: Option<&str>| {
             let mut req = self.inner.get(url);
             if let Some(etag) = etag {
@@ -363,10 +372,28 @@ impl Client {
             req
         };
 
-        match build(etag).send().await {
-            Ok(resp) => Ok(resp),
-            Err(_) => build(etag).send().await.map_err(map_err),
-        }
+        let resp = match build(etag).send().await {
+            Ok(resp) => resp,
+            Err(_) => build(etag).send().await.map_err(map_err)?,
+        };
+
+        let not_modified = resp.status() == StatusCode::NOT_MODIFIED;
+        let etag = resp
+            .headers()
+            .get(ETAG)
+            .and_then(|value| value.to_str().ok())
+            .map(|value| value.to_string());
+        let data = if not_modified {
+            Vec::new()
+        } else {
+            resp.bytes().await.map_err(map_err)?.to_vec()
+        };
+
+        Ok(AssetCheckResponse {
+            not_modified,
+            etag,
+            data,
+        })
     }
 
     /// 发送 GET 请求，返回响应体文本
@@ -548,6 +575,16 @@ impl Default for Client {
 }
 
 /// 全局通用 HTTP 客户端（下载资源、一般 API 调用）
+/// 带 ETag 缓存校验的下载结果（[`Client::get_bytes_with_check`] 返回）
+pub struct AssetCheckResponse {
+    /// 服务器返回 304：本地缓存的资源仍然有效
+    pub not_modified: bool,
+    /// ETag 响应头（S3 / R2 类存储在非分片上传时就是内容的 MD5）
+    pub etag: Option<String>,
+    /// 响应体（304 时为空）
+    pub data: Vec<u8>,
+}
+
 static WORK_CLIENT: OnceLock<Arc<Client>> = OnceLock::new();
 /// 全局登录 HTTP 客户端（OAuth、Yggdrasil 认证）
 static LOGIN_CLIENT: OnceLock<Arc<Client>> = OnceLock::new();

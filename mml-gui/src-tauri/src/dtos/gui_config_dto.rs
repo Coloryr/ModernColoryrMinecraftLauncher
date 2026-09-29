@@ -61,6 +61,8 @@ pub struct CollectConfigDto {
 pub struct LoginLockItemDto {
     /// 账户添加类型（offline / microsoft / littleskin / selflittleskin / authlib / nide8）
     pub ty: String,
+    /// 登录模型名字（添加账户时下拉里的显示名；空 = 用类型名 / 服务器地址显示）
+    pub name: String,
     /// 锁定的服务器（authlib = 认证服务器地址，nide8 = 服务器 ID，空 = 不指定）
     pub server: String,
 }
@@ -69,6 +71,7 @@ impl From<LoginLockObj> for LoginLockItemDto {
     fn from(o: LoginLockObj) -> Self {
         Self {
             ty: o.ty,
+            name: o.name,
             server: o.server,
         }
     }
@@ -78,6 +81,7 @@ impl From<LoginLockItemDto> for LoginLockObj {
     fn from(d: LoginLockItemDto) -> Self {
         Self {
             ty: d.ty,
+            name: d.name,
             server: d.server,
         }
     }
@@ -91,6 +95,8 @@ pub struct ClientConfigDto {
     pub motd_card: bool,
     /// MOTD 卡片刷新间隔（秒）
     pub motd_interval: u32,
+    /// 登录方式锁定总开关（false = 锁定列表不生效）
+    pub login_lock_on: bool,
     /// 登录方式锁定列表（空 = 不锁定，可添加多个条目）
     pub login_lock: Vec<LoginLockItemDto>,
     /// 游戏自动进服（启动时自动进入 `auto_join_server`）
@@ -106,6 +112,7 @@ impl From<ClientConfig> for ClientConfigDto {
         Self {
             motd_card: c.motd_card,
             motd_interval: c.motd_interval,
+            login_lock_on: c.login_lock_on,
             login_lock: c.login_lock.into_iter().map(Into::into).collect(),
             auto_join: c.auto_join,
             auto_join_server: c.auto_join_server,
@@ -119,6 +126,7 @@ impl From<ClientConfigDto> for ClientConfig {
         Self {
             motd_card: c.motd_card,
             motd_interval: c.motd_interval,
+            login_lock_on: c.login_lock_on,
             login_lock: c.login_lock.into_iter().map(Into::into).collect(),
             auto_join: c.auto_join,
             auto_join_server: c.auto_join_server,
@@ -186,6 +194,7 @@ impl From<GuiConfig> for GuiConfigDto {
             client: ClientConfigDto {
                 motd_card: c.client.motd_card,
                 motd_interval: c.client.motd_interval,
+                login_lock_on: c.client.login_lock_on,
                 login_lock: c
                     .client
                     .login_lock
@@ -233,6 +242,7 @@ impl From<GuiConfigDto> for GuiConfig {
             client: ClientConfig {
                 motd_card: d.client.motd_card,
                 motd_interval: d.client.motd_interval,
+                login_lock_on: d.client.login_lock_on,
                 login_lock: d
                     .client
                     .login_lock

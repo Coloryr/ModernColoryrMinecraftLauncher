@@ -25,7 +25,6 @@ pub mod log;
 pub mod main;
 pub mod resource;
 pub mod settings;
-pub mod skin;
 pub mod stats;
 
 use std::{
@@ -85,9 +84,6 @@ const SETTINGS_WINDOW_UUID: Uuid = uuid!("00000000-0000-0000-0000-000000000003")
 
 /// 统计窗口
 const STATES_WINDOW_UUID: Uuid = uuid!("00000000-0000-0000-0000-000000000004");
-
-/// 皮肤窗口
-const SKIN_WINDOW_UUID: Uuid = uuid!("00000000-0000-0000-0000-000000000005");
 
 /// 帮助窗口
 const HELP_WINDOW_UUID: Uuid = uuid!("00000000-0000-0000-0000-000000000006");
@@ -213,14 +209,6 @@ const WINDOWS_INFO: LazyLock<HashMap<Uuid, WindowEntry>> = LazyLock::new(|| {
             STATES_WINDOW_UUID,
             WindowEntry {
                 label: "mml-stats",
-                min_width: MIN_WIDTH,
-                min_height: MIN_HEIGHT,
-            },
-        ),
-        (
-            SKIN_WINDOW_UUID,
-            WindowEntry {
-                label: "mml-skin",
                 min_width: MIN_WIDTH,
                 min_height: MIN_HEIGHT,
             },

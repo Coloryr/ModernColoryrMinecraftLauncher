@@ -13,6 +13,7 @@ import {
   onLaunchError,
   onLaunchState,
 } from "../../lib/api";
+import { commands } from "../../lib/bindings";
 import { loadGuiConfig, type ClientConfig } from "../../lib/guiConfig";
 import { t, tErr } from "../../lib/i18n";
 import { showToast } from "../../lib/toast";
@@ -56,7 +57,9 @@ import CollapsePanel from "../../components/ui/CollapsePanel.vue";
 
 // 注意：不能用顶层 await —— 会让 <script setup> 变成 async setup，
 // App.vue 没有 <Suspense> 包裹，Vue 将不渲染该组件（窗口白屏）
-getCurrentWindow().setTitle(t("winTitle.main")).catch(() => { /* 忽略 */ });
+// 写系统窗口标题（任务栏 / Alt+Tab）走自定义命令 window_set_title：
+// JS API setTitle 需要 core:window:allow-set-title 权限（capabilities 未放行）
+commands.windows.setTitle(t("winTitle.main")).catch(() => { /* 忽略 */ });
 
 // ================= 基础状态 =================
 
@@ -277,8 +280,8 @@ import {
   accounts as storeAccounts,
   currentAccount as storeCurrentAccount,
   setCurrentAccount,
+  clearCurrentAccount,
 } from "../../lib/accountStore";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
 import { LoadDone } from "../../lib/listens.ts";
 import type { LoadState } from "../../lib/bindings";
@@ -1018,6 +1021,7 @@ function faviconOf(m: MotdDto | null): string | null {
 const clientConfig = ref<ClientConfig>({
   motdCard: true,
   motdInterval: 15,
+  loginLockOn: false,
   loginLock: [],
   autoJoin: false,
   autoJoinServer: "",
@@ -1025,6 +1029,28 @@ const clientConfig = ref<ClientConfig>({
 });
 const motdCardVisible = ref(true);
 let motdTimer: number | null = null;
+
+// ---- 登录方式锁定：账户选择列表只显示锁定类型，当前账户被滤掉就取消选择 ----
+/** 锁定的登录类型（总开关关闭或列表为空 = 不过滤） */
+const lockedTypes = computed(
+  () =>
+    new Set(
+      clientConfig.value.loginLockOn
+        ? clientConfig.value.loginLock.map((e) => e.ty)
+        : [],
+    ),
+);
+
+/** 过滤后的账户列表（传给顶栏选择器） */
+const visibleAccounts = computed(() => {
+  const lock = lockedTypes.value;
+  const list = accounts.value;
+  return lock.size ? list.filter((a) => lock.has(a.authType)) : list;
+});
+
+watch([lockedTypes, currentAccount], ([lock, acc]) => {
+  if (lock.size && acc && !lock.has(acc.authType)) void clearCurrentAccount();
+});
 
 function restartMotdTimer() {
   if (motdTimer !== null) clearInterval(motdTimer);
@@ -1313,7 +1339,7 @@ onMounted(async () => {
         :features="features"
         :news-active="newsActive"
         :current-account="currentAccount"
-        :accounts="accounts"
+        :accounts="visibleAccounts"
         @toggle-news="toggleNews"
         @feature="openWindow"
         @update:account="onAccountChange"

@@ -212,7 +212,7 @@ function closeMenu() {
       <!-- 分组 + 操作 -->
       <div class="collect-head">
         <label class="field-label">{{ t("collect.groupLabel") }}</label>
-        <select v-model="group" class="field-input group-sel">
+        <select v-model="group" class="field-select group-sel">
           <option v-for="g in groupOptions" :key="g" :value="g">
             {{ g === DEFAULT_GROUP ? t("collect.defaultGroup") : g }}
           </option>
@@ -309,7 +309,7 @@ function closeMenu() {
     <BaseModal v-if="showAddGroup" :title="t('collect.addGroupTitle')" @close="showAddGroup = false">
       <input
         v-model="newGroupName"
-        class="field-input"
+        class="field-select"
         :placeholder="t('collect.groupPlaceholder')"
         spellcheck="false"
         @keydown.enter="confirmAddGroup"
@@ -354,7 +354,7 @@ function closeMenu() {
       :title="t('collect.addToGroupTitle')"
       @close="addToGroupTarget = ''"
     >
-      <select v-model="addToGroupTarget" class="field-input">
+      <select v-model="addToGroupTarget" class="field-select">
         <option v-for="g in groupNames" :key="g" :value="g">{{ g }}</option>
       </select>
       <div class="modal-actions">

@@ -128,6 +128,7 @@ function addDnsLine() {
 const client = ref<ClientConfig>({
   motdCard: true,
   motdInterval: 15,
+  loginLockOn: false,
   loginLock: [],
   autoJoin: false,
   autoJoinServer: "",
@@ -143,11 +144,12 @@ function loginTypeLabel(ty: string): string {
   return t(typeLabelKey(ty));
 }
 
-// 登录方式锁定：可添加的条目列表（类型 + 服务器信息）
+// 登录方式锁定：可添加的条目列表（类型 + 登录模型名 + 服务器信息）
 const addLockType = ref<string>("offline");
+const addLockName = ref("");
 const addLockServer = ref("");
 /** 需要服务器信息的类型（外置登录 / 自定义皮肤站 = 服务器地址，统一通行证 = 服务器 ID）；
- *  这些类型可重复添加，靠服务器信息区分条目 */
+ *  这些类型可重复添加，条目带「登录模型名字」，添加账户时直接下拉选择 */
 const SERVER_LOCK_TYPES = ["authlib", "selflittleskin", "nide8"];
 const addLockHasServer = computed(() => SERVER_LOCK_TYPES.includes(addLockType.value));
 /** 带服务器的类型始终可加（可添加不同地址）；其余类型加过就不再出现在下拉里 */
@@ -193,7 +195,16 @@ function addLock() {
   const ty = addLockType.value;
   if (!ty) return;
   if (!validateLockServer()) return;
-  client.value.loginLock = [...client.value.loginLock, { ty, server: addLockServer.value.trim() }];
+  const name = addLockName.value.trim();
+  if (addLockHasServer.value && !name) {
+    lockServerError.value = t("winSettings.loginLockNameRequired");
+    return;
+  }
+  client.value.loginLock = [
+    ...client.value.loginLock,
+    { ty, name, server: addLockServer.value.trim() },
+  ];
+  addLockName.value = "";
   addLockServer.value = "";
   lockServerError.value = "";
   applyClient();
@@ -1371,11 +1382,20 @@ async function removeJava(name: string) {
 
           <h3 class="group-title">{{ t("winSettings.secLoginLock") }}</h3>
           <p class="field-desc">{{ t("winSettings.loginLockDesc") }}</p>
-          <!-- 已锁定的条目列表 -->
+          <!-- 总开关：关闭时锁定列表不生效 -->
+          <div class="switch-row">
+            <div class="switch-text">
+              <span class="switch-label">{{ t("winSettings.loginLockOn") }}</span>
+              <span class="switch-state">{{ t("winSettings.loginLockOnDesc") }}</span>
+            </div>
+            <BaseSwitch v-model="client.loginLockOn" @update:model-value="applyClient" />
+          </div>
+          <!-- 已锁定的条目列表（总开关打开时才可编辑） -->
+          <template v-if="client.loginLockOn">
           <div v-if="client.loginLock.length" class="switch-list">
             <div v-for="(e, i) in client.loginLock" :key="e.ty" class="switch-row lock-item">
               <span class="lock-item-text">
-                {{ loginTypeLabel(e.ty) }}<template v-if="e.server"> — {{ e.server }}</template>
+                {{ loginTypeLabel(e.ty) }}<template v-if="e.name"> — {{ e.name }}</template><template v-if="e.server"> — {{ e.server }}</template>
               </span>
               <BaseButton size="sm" variant="danger" @click="removeLock(i)">
                 {{ t("winSettings.loginLockRemove") }}
@@ -1389,6 +1409,13 @@ async function removeJava(name: string) {
                 {{ loginTypeLabel(ty) }}
               </option>
             </select>
+            <input
+              v-if="addLockHasServer"
+              v-model="addLockName"
+              class="field-input lock-add-name"
+              spellcheck="false"
+              :placeholder="t('winSettings.lockModelName')"
+            />
             <input
               v-if="addLockHasServer"
               v-model="addLockServer"
@@ -1408,6 +1435,7 @@ async function removeJava(name: string) {
             </BaseButton>
           </div>
           <p v-if="lockServerError" class="lock-server-hint">{{ lockServerError }}</p>
+          </template>
 
           <!-- 游戏标题（游戏窗口标题栏的自定义文字，全局默认值） -->
           <template v-if="win">
@@ -1806,6 +1834,11 @@ async function removeJava(name: string) {
 
 .lock-add-type {
   width: 160px;
+  flex-shrink: 0;
+}
+
+.lock-add-name {
+  width: 150px;
   flex-shrink: 0;
 }
 

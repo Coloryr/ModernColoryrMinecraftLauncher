@@ -121,18 +121,6 @@ watch(
   gap: 8px;
 }
 
-.filter-select {
-  flex: 1;
-  min-width: 0;
-  padding: 6px 8px;
-  font-size: 12px;
-  color: var(--text);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  cursor: pointer;
-}
-
 .console {
   height: 46vh;
   max-height: 480px;

@@ -13,9 +13,9 @@
 //! 是 Microsoft OAuth 认证流程的最后两步。
 
 use mml_config::config_obj::SourceLocal;
-use mml_names::i18_items::error_type::{CoreResult, ErrorType};
+use mml_names::i18_items::error_type::{CoreResult, ErrorData, ErrorType, HttpErrorData};
 
-use reqwest::{Method, Request, StatusCode, Url, header::ETAG, header::HeaderValue};
+use reqwest::{Method, Request, Url, header::HeaderValue};
 use serde::{Deserialize, Serialize};
 
 use crate::{WORK_CLIENT, url_helper, urls};
@@ -31,53 +31,6 @@ pub async fn get_assets(url: &String) -> CoreResult<Vec<u8>> {
     WORK_CLIENT.get().unwrap().get_bytes(url).await
 }
 
-/// 缓存校验下载的结果
-pub struct AssetCheckResponse {
-    /// 服务器返回 304：本地缓存的资源仍然有效
-    pub not_modified: bool,
-    /// ETag 响应头（S3 / R2 类存储在非分片上传时就是内容的 MD5）
-    pub etag: Option<String>,
-    /// 响应体（304 时为空）
-    pub data: Vec<u8>,
-}
-
-/// 直接下载资源，可带上次记录的 ETag 做缓存校验（If-None-Match）
-///
-/// - 服务器 304 → `not_modified = true`，`data` 为空，本地缓存可以继续用
-/// - 服务器 200 → 返回新内容与新的 ETag，本地缓存应更新
-///
-/// # 返回值
-///
-/// 返回缓存校验结果（是否未变更、新 ETag、响应体）
-pub async fn get_assets_with_check(
-    url: &String,
-    etag: Option<&str>,
-) -> CoreResult<AssetCheckResponse> {
-    let resp = WORK_CLIENT
-        .get()
-        .unwrap()
-        .get_if_none_match(url, etag)
-        .await?;
-
-    let not_modified = resp.status() == StatusCode::NOT_MODIFIED;
-    let etag = resp
-        .headers()
-        .get(ETAG)
-        .and_then(|value| value.to_str().ok())
-        .map(|value| value.to_string());
-    let data = if not_modified {
-        Vec::new()
-    } else {
-        resp.bytes().await.map_err(crate::map_err)?.to_vec()
-    };
-
-    Ok(AssetCheckResponse {
-        not_modified,
-        etag,
-        data,
-    })
-}
-
 /// 获取主版本列表
 ///
 /// - `source`: 下载源（`None` 时取当前配置）
@@ -90,6 +43,36 @@ pub async fn get_versions(source: Option<SourceLocal>) -> CoreResult<Vec<u8>> {
     WORK_CLIENT.get().unwrap().get_bytes(&url).await
 }
 
+/// 档案里的单件皮肤 / 披风
+///
+/// 皮肤项只有 `variant`；披风项多一个 `alias`（披风名，如 "Migrator"）
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(default)]
+pub struct SkinObj {
+    /// 纹理条目 UUID
+    pub id: String,
+    /// 选中状态（ACTIVE / 空等）
+    pub state: String,
+    /// 贴图下载地址
+    pub url: String,
+    /// 皮肤型号（CLASSIC / SLIM），披风项为空
+    pub variant: String,
+    /// 披风名（仅披风项有）
+    pub alias: Option<String>,
+}
+
+impl Default for SkinObj {
+    fn default() -> Self {
+        Self {
+            id: Default::default(),
+            state: Default::default(),
+            url: Default::default(),
+            variant: Default::default(),
+            alias: Default::default(),
+        }
+    }
+}
+
 /// Minecraft 玩家档案
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(default)]
@@ -98,6 +81,8 @@ pub struct MinecraftProfileObj {
     pub id: String,
     /// 玩家名
     pub name: String,
+    pub skins: Vec<SkinObj>,
+    pub capes: Vec<SkinObj>,
 }
 
 impl Default for MinecraftProfileObj {
@@ -105,6 +90,8 @@ impl Default for MinecraftProfileObj {
         Self {
             id: Default::default(),
             name: Default::default(),
+            skins: Default::default(),
+            capes: Default::default(),
         }
     }
 }
@@ -158,6 +145,88 @@ pub async fn get_minecraft_profile(token: &str) -> CoreResult<MinecraftProfileOb
     let data = crate::handle_response::<MinecraftProfileObj>(res).await?;
 
     Ok(data)
+}
+
+/// 向玩家配置接口发送带 Bearer 的 JSON 请求（成功不解析响应体）
+///
+/// 换肤 / 换披风接口成功时返回空负载（204）或无需使用的 profile，
+/// 这里只关心是否 2xx；失败时把服务器的错误 JSON 原文带进错误里。
+///
+/// # 参数
+///
+/// - `method`: 请求方法（POST / PUT）
+/// - `path`: 相对 `MINECRAFT_SERVICES` 的路径（如 `/skins`）
+/// - `token`: Minecraft 访问令牌
+/// - `body`: JSON 请求体
+async fn send_profile_json<T: Serialize>(
+    method: Method,
+    path: &str,
+    token: &str,
+    body: &T,
+) -> CoreResult<()> {
+    let client = crate::get_login_client();
+    let mut req = Request::new(
+        method,
+        Url::parse(&format!("{}{path}", urls::MINECRAFT_SERVICES)).unwrap(),
+    );
+    req.headers_mut().insert(
+        "Authorization",
+        HeaderValue::from_str(&format!("Bearer {token}")).unwrap(),
+    );
+    let body = serde_json::to_vec(body)
+        .map_err(|err| ErrorType::SerializerError(ErrorData { error: err.to_string() }))?
+        .into();
+    *req.body_mut() = Some(body);
+    let res = client.send(req).await?;
+
+    let status = res.status();
+    if !status.is_success() {
+        let url = res.url().to_string();
+        let error = res.text().await.unwrap_or_default();
+        return Err(ErrorType::HttpError(HttpErrorData {
+            error,
+            url,
+            status: Some(status.as_u16()),
+        }));
+    }
+
+    Ok(())
+}
+
+/// 更换玩家皮肤（装备档案里已有的皮肤：传该皮肤条目的 URL 与型号）
+///
+/// # 参数
+///
+/// - `token`: Minecraft 访问令牌
+/// - `variant`: 皮肤型号（`classic` / `slim`）
+/// - `url`: 皮肤纹理 URL（档案 `skins[].url`）
+///
+/// # 返回值
+///
+/// 成功返回 `Ok(())`；令牌无效 / 不拥有该皮肤等返回对应错误
+pub async fn set_minecraft_skin(token: &str, variant: &str, url: &str) -> CoreResult<()> {
+    send_profile_json(
+        Method::POST,
+        "/skins",
+        token,
+        &serde_json::json!({ "variant": variant, "url": url }),
+    )
+    .await
+}
+
+/// 显示指定披风（装备档案里已有的披风）
+///
+/// # 参数
+///
+/// - `token`: Minecraft 访问令牌
+/// - `cape_id`: 披风 UUID（档案 `capes[].id`）
+///
+/// # 返回值
+///
+/// 成功返回 `Ok(())`；不拥有该披风（400）等返回对应错误
+pub async fn set_minecraft_cape(token: &str, cape_id: &str) -> CoreResult<()> {
+    send_profile_json(Method::PUT, "/capes/active", token, &serde_json::json!({ "capeId": cape_id }))
+        .await
 }
 
 /// 获取皮肤信息

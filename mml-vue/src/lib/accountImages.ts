@@ -24,6 +24,14 @@ export function bumpImageVersion() {
   imageVersion.value += 1;
 }
 
+/** 清掉某账户的加载失败 / 已加载标记（刷新皮肤后让它重走一遍加载流程） */
+export function resetImageState(acc: AccountStoreDto): void {
+  const keep = (set: Set<string>) =>
+    new Set([...set].filter((key) => !key.startsWith(`${acc.uuid}:`)));
+  failedImages.value = keep(failedImages.value);
+  loadedImages.value = keep(loadedImages.value);
+}
+
 /** 头像（真实渲染，后端按头像配置选渲染方式） */
 export function accountAvatarUrl(acc: AccountStoreDto): string {
   return imageBase.value

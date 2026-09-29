@@ -244,18 +244,6 @@ watch([threadFilter, levelFilter, categoryFilter], rebuild);
   flex-shrink: 0;
 }
 
-.filter-select {
-  flex: 1;
-  min-width: 0;
-  padding: 6px 8px;
-  font-size: 12px;
-  color: var(--text);
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  cursor: pointer;
-}
-
 .editor-host-wrap {
   position: relative;
   height: 46vh;

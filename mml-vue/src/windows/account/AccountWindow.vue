@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 账户管理窗口：平铺 / 列表 / 详情 三种展示 + 类型筛选 + 搜索 + 添加账户
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import WindowFrame from "../../components/ui/WindowFrame.vue";
 import BaseButton from "../../components/ui/BaseButton.vue";
 import BaseModal from "../../components/ui/BaseModal.vue";
@@ -21,18 +21,21 @@ import {
   refreshAccountToken,
   setCurrentAccount,
 } from "../../lib/accountStore";
-import type { AccountStoreDto } from "../../lib/bindings";
+import { onClientConfigChange } from "../../lib/api";
+import type { AccountStoreDto, ClientConfigDto } from "../../lib/bindings";
 import { listen } from "@tauri-apps/api/event";
 import { AccountOAuth, AccountOAuthState } from "../../lib/listens";
 import { commands } from "../../lib/bindings";
 import type { AccountOAuthDto, AccountOAuthStateDto } from "../../lib/bindings";
 import { loadGuiConfig, type LoginLockItem } from "../../lib/guiConfig";
-import { getCurrentWindow } from "@tauri-apps/api/window";
-import { openWindow } from "../windowManager";
+import { bumpImageVersion, resetImageState } from "../../lib/accountImages";
+import SkinModal from "./SkinModal.vue";
 
-// 注意：不能用顶层 await —— 会让 <script setup> 变成 async setup，
-// App.vue 没有 <Suspense> 包裹，Vue 将不渲染该组件（窗口白屏）
-getCurrentWindow().setTitle(t("winTitle.account")).catch(() => { /* 忽略 */ });
+/** 皮肤预览弹窗（原独立皮肤窗口已并入） */
+const showSkin = ref(false);
+
+// 系统窗口标题由 WindowFrame 统一同步（watch title → window_set_title），
+// 这里不再手动调 JS API setTitle（需要 capabilities 未放行的 set-title 权限）
 
 type ViewMode = "grid" | "list" | "detail";
 const view = ref<ViewMode>("grid");
@@ -43,9 +46,14 @@ onMounted(() => {
   // 读客户端设置的登录方式锁定
   loadGuiConfig().then((cfg) => {
     if (cfg?.client) {
-      loginLock.value = cfg.client.loginLock;
+      // 总开关关闭时锁定列表不生效
+      loginLock.value = cfg.client.loginLockOn ? cfg.client.loginLock : [];
     }
   });
+  // 设置窗口保存客户端设置时实时同步锁定（增删登录模型后无需重开账户窗口）
+  onClientConfigChange((c: ClientConfigDto) => {
+    loginLock.value = c.loginLockOn ? c.loginLock : [];
+  }).catch(() => { /* 忽略 */ });
 
   // 后端拿到设备码：弹出授权码窗口
   listen<AccountOAuthDto>(AccountOAuth, (data) => {
@@ -89,7 +97,10 @@ const searchText = ref("");
 
 const filtered = computed(() => {
   const q = searchText.value.trim().toLowerCase();
+  const lock = lockedTypes.value;
   return accounts.value.filter((a) => {
+    // 登录方式锁定生效时，列表只显示锁定类型的账户
+    if (lock.size && !lock.has(a.authType)) return false;
     if (typeFilter.value !== "all" && a.authType !== typeFilter.value) return false;
     if (q) {
       return [a.userName, a.uuid, a.authType].some((s) => s.toLowerCase().includes(q));
@@ -103,7 +114,7 @@ const showAdd = ref(false);
 const addType = ref("offline");
 const addFields = ref<Record<string, string>>({});
 
-// 登录方式锁定（客户端设置里配置的条目列表；非空时只允许列表中的登录方式）
+// 登录方式锁定（客户端设置里配置的条目列表；总开关打开时只允许列表中的登录方式）
 const loginLock = ref<LoginLockItem[]>([]);
 const addTypeOptions = computed(() =>
   loginLock.value.length
@@ -111,15 +122,38 @@ const addTypeOptions = computed(() =>
     : ACCOUNT_TYPES,
 );
 
-/** 锁定条目配置了服务器时，对应的服务器字段预填设置里保存的附加信息 */
-function prefillServerFields(type: string) {
-  const item = loginLock.value.find((e) => e.ty === type && e.server);
-  if (!item) return;
-  if (type === "authlib" || type === "selflittleskin") {
-    addFields.value.server ??= item.server;
+/** 需要服务器信息的锁定类型（外置登录 / 自定义皮肤站 / 统一通行证） */
+const SERVER_LOCK_TYPES = ["authlib", "selflittleskin", "nide8"];
+/** 生效中的锁定类型集合（loginLock 已按总开关过滤，非空 = 锁定生效） */
+const lockedTypes = computed(() => new Set(loginLock.value.map((e) => e.ty)));
+
+/** 当前添加类型的锁定服务器条目：有值时服务器输入框换成「登录模型」下拉 */
+const lockServerEntries = computed(() =>
+  SERVER_LOCK_TYPES.includes(addType.value)
+    ? loginLock.value.filter((e) => e.ty === addType.value && e.server)
+    : [],
+);
+/** 当前选中的登录模型（值为条目的服务器地址，类型内唯一） */
+const selectedLockServer = ref("");
+
+/** 选中登录模型：把条目服务器写进对应字段（外置登录 / 自定义皮肤站 → server，统一通行证 → serverId） */
+function onSelectLockServer(server: string) {
+  selectedLockServer.value = server;
+  if (addType.value === "nide8") {
+    addFields.value.serverId = server;
+  } else {
+    addFields.value.server = server;
   }
-  if (type === "nide8") {
-    addFields.value.serverId ??= item.server;
+}
+
+/** 类型切换后重置表单：有锁定条目时默认选中第一个登录模型 */
+function resetAddFields() {
+  addFields.value = {};
+  const first = lockServerEntries.value[0];
+  if (first) {
+    onSelectLockServer(first.server);
+  } else {
+    selectedLockServer.value = "";
   }
 }
 const showOauth = ref(false);
@@ -160,18 +194,23 @@ const ADD_FIELDS: Record<string, AddField[]> = {
   ],
 };
 
+/** 弹窗实际渲染的字段：锁定条目存在时隐藏服务器字段（由登录模型下拉决定） */
+const addFormFields = computed(() =>
+  (ADD_FIELDS[addType.value] ?? []).filter(
+    (f) => !(lockServerEntries.value.length && (f.key === "server" || f.key === "serverId")),
+  ),
+);
+
 function openAdd() {
   showAdd.value = true;
-  // 锁定登录方式时默认第一个锁定条目的类型，并预填锁定的服务器
+  // 锁定登录方式时默认第一个锁定条目的类型，并选中第一个登录模型
   addType.value = loginLock.value[0]?.ty ?? "offline";
-  addFields.value = {};
-  prefillServerFields(addType.value);
+  resetAddFields();
 }
 
 function onAddTypeChange(value: string) {
   addType.value = value;
-  addFields.value = {};
-  prefillServerFields(value);
+  resetAddFields();
 }
 
 /** 添加弹窗是否在处理中（防止重复提交） */
@@ -257,6 +296,18 @@ function seedOf(uuid: string): number {
 function refreshToken(acc: AccountStoreDto) {
   refreshAccountToken(acc.uuid);
   showToast(t("account.refreshed"));
+}
+
+/** 刷新皮肤：后端清渲染缓存重取，前端 bump 版本号破 webview 旧图并清失败标记 */
+async function refreshSkin(acc: AccountStoreDto) {
+  try {
+    await commands.account.refreshSkin(acc.uuid);
+    resetImageState(acc);
+    bumpImageVersion();
+    showToast(t("account.skinRefreshed"));
+  } catch (e) {
+    showToast(tErr(e));
+  }
 }
 
 /** 重新登录：微软账户直接走设备码流程；其余类型弹窗重输密码重新认证 */
@@ -354,10 +405,17 @@ async function confirmEdit() {
   }
 }
 
-const TYPE_OPTIONS = computed(() => [
-  { value: "all", label: t("account.all") },
-  ...ACCOUNT_TYPES.map((x) => ({ value: x.value, label: t(x.labelKey) })),
-]);
+const TYPE_OPTIONS = computed(() => {
+  // 锁定生效时筛选下拉只保留锁定的登录方式
+  const lock = lockedTypes.value;
+  const types = lock.size ? ACCOUNT_TYPES.filter((x) => lock.has(x.value)) : ACCOUNT_TYPES;
+  return [{ value: "all", label: t("account.all") }, ...types.map((x) => ({ value: x.value, label: t(x.labelKey) }))];
+});
+
+// 锁定变化后当前筛选类型可能已不在下拉里，回退到「全部」
+watch(TYPE_OPTIONS, (opts) => {
+  if (!opts.some((o) => o.value === typeFilter.value)) typeFilter.value = "all";
+});
 
 function tokenLabel(acc: AccountStoreDto): string {
   return acc.tokenStatus === "valid" ? t("account.tokenValid") : t("account.tokenExpired");
@@ -385,7 +443,7 @@ function tokenLabel(acc: AccountStoreDto): string {
       <div class="toolbar-right">
         <SegmentedTabs :model-value="view" :options="VIEW_OPTIONS" @update:model-value="view = $event as ViewMode" />
         <!-- 皮肤查看从账户管理进入（不再放主页面顶栏） -->
-        <BaseButton size="md" class="view-skin-btn" @click="openWindow('skin')">{{ t("account.viewSkin") }}</BaseButton>
+        <BaseButton size="md" class="view-skin-btn" :disabled="!currentAccount" @click="showSkin = true">{{ t("account.viewSkin") }}</BaseButton>
         <BaseButton variant="accent" size="md" class="add-btn" @click="openAdd">＋ {{ t("account.add") }}</BaseButton>
       </div>
     </div>
@@ -393,14 +451,14 @@ function tokenLabel(acc: AccountStoreDto): string {
     <!-- 视图：平铺 / 列表 / 详情（见 views/ 目录）；详情模式下视图区自己管理滚动 -->
     <div class="view-area" :class="{ fill: view === 'detail' }">
       <AccountGrid v-if="view === 'grid'" :accounts="filtered" :current-uuid="currentAccount?.uuid ?? ''"
-        @switch="switchAccount" @refresh="refreshToken" @relogin="relogin"
+        @switch="switchAccount" @refresh="refreshToken" @refresh-skin="refreshSkin" @relogin="relogin"
         @edit="openEdit" @delete="deleteTarget = $event" />
       <AccountList v-else-if="view === 'list'" :accounts="filtered" :current-uuid="currentAccount?.uuid ?? ''"
         :token-label="tokenLabel" :seed-of="seedOf" @switch="switchAccount"
-        @refresh="refreshToken" @relogin="relogin" @edit="openEdit" @delete="deleteTarget = $event" />
+        @refresh="refreshToken" @refresh-skin="refreshSkin" @relogin="relogin" @edit="openEdit" @delete="deleteTarget = $event" />
       <AccountDetail v-else :accounts="filtered" :current-uuid="currentAccount?.uuid ?? ''"
-        :token-label="tokenLabel" @switch="switchAccount" @refresh="refreshToken" @relogin="relogin"
-        @edit="openEdit" @delete="deleteTarget = $event" />
+        :token-label="tokenLabel" @switch="switchAccount" @refresh="refreshToken" @refresh-skin="refreshSkin"
+        @relogin="relogin" @edit="openEdit" @delete="deleteTarget = $event" />
     </div>
 
     <!-- 添加账户弹窗（按类型显示不同输入框）：不遮标题栏、点空白不关闭 -->
@@ -418,7 +476,18 @@ function tokenLabel(acc: AccountStoreDto): string {
         <option v-for="x in addTypeOptions" :key="x.value" :value="x.value">{{ t(x.labelKey) }}</option>
       </select>
 
-      <template v-for="f in ADD_FIELDS[addType] ?? []" :key="f.key">
+      <!-- 锁定了服务器条目的类型：选登录模型，服务器由条目决定，不再显示服务器输入框 -->
+      <template v-if="lockServerEntries.length">
+        <label class="field-label">{{ t("account.loginModel") }}</label>
+        <select class="field-select" :value="selectedLockServer"
+          @change="onSelectLockServer(($event.target as HTMLSelectElement).value)">
+          <option v-for="e in lockServerEntries" :key="e.server" :value="e.server">
+            {{ e.name || e.server }}
+          </option>
+        </select>
+      </template>
+
+      <template v-for="f in addFormFields" :key="f.key">
         <label class="field-label">{{ t(f.labelKey) }}</label>
         <input v-model="addFields[f.key]" class="field-input" :type="f.password ? 'password' : 'text'"
           spellcheck="false" @keyup.enter="confirmAdd" />
@@ -546,6 +615,9 @@ function tokenLabel(acc: AccountStoreDto): string {
         <BaseButton variant="primary" @click="confirmEdit">{{ t("actions.confirm") }}</BaseButton>
       </div>
     </BaseModal>
+
+    <!-- 皮肤 / 披风预览弹窗（2D / 3D 预览 + 纹理列表 + 正版装备） -->
+    <SkinModal v-if="showSkin" @close="showSkin = false" />
   </WindowFrame>
 </template>
 
@@ -616,7 +688,7 @@ function tokenLabel(acc: AccountStoreDto): string {
   outline: none;
   font-family: inherit;
   appearance: none;
-  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239aa3af' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239aa3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 8px center;
   background-size: 12px;

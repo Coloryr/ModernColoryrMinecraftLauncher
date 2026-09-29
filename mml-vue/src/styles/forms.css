@@ -70,6 +70,10 @@
     border: 1px solid var(--border);
     border-radius: 10px;
     box-shadow: var(--shadow-lg);
+    /* UA 默认 position-try-order 是 most-block-size：在候选位置里挑可用空间
+       最大的方向，弹窗里向下明明放得下也会翻到上面去。改回 normal = 固定
+       优先 UA 默认的下方展开，只有下方真放不下时翻转兜底才生效 */
+    position-try-order: normal;
     transform-origin: top;
     /* display / overlay 是离散属性，必须 allow-discrete，
        否则隐藏瞬间生效、退场动画放不出来 */
@@ -119,24 +123,35 @@
   border-color: var(--accent);
 }
 
+/* 紧凑场景（日志工具条等）的小号下拉：外观对齐 field-select（同箭头 / 不透明底 / 主题边框），
+   只缩小尺寸；弹层保持原生（高度太小不适合页内渲染） */
+.filter-select {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 24px 6px 8px;
+  font-size: 12px;
+  color: var(--text);
+  background: var(--bg-solid, var(--bg-card));
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  outline: none;
+  font-family: inherit;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239aa3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 6px center;
+  background-size: 12px;
+}
+
+.filter-select:focus {
+  border-color: var(--accent);
+}
+
 .range {
   width: 100%;
   accent-color: var(--accent);
-}
-
-.version-select {
-  width: 100%;
-  background: var(--bg);
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  padding: 6px;
-  font-size: 13px;
-  outline: none;
-}
-
-.version-select option {
-  padding: 4px 6px;
 }
 
 .error-text {
