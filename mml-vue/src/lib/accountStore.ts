@@ -29,10 +29,10 @@ export async function loadAccounts(): Promise<void> {
   try {
     const view = await commands.account.getAccounts();
     accounts.value = view.accounts;
+    // currentUuid 为 null = 后端明确记录了"未选择"（登录方式锁定清除后），
+    // 不能再回退到第一个账户，否则取消选择会被撤销
     currentAccount.value =
-      view.accounts.find((a) => a.uuid === view.currentUuid) ??
-      view.accounts[0] ??
-      null;
+      view.accounts.find((a) => a.uuid === view.currentUuid) ?? null;
   } catch {
     /* 浏览器环境：保持为空 */
   }
@@ -47,6 +47,16 @@ export async function setCurrentAccount(acc: AccountStoreDto) {
     /* 忽略 */
   }
   currentAccount.value = acc;
+}
+
+/** 取消当前选择（后端清空记录并广播 account-change） */
+export async function clearCurrentAccount() {
+  try {
+    await commands.account.setCurrentAccount("");
+  } catch {
+    /* 忽略 */
+  }
+  currentAccount.value = null;
 }
 
 /** 删除账户 */

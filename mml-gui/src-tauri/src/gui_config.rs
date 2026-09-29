@@ -174,6 +174,8 @@ impl Default for CollectConfig {
 pub struct LoginLockObj {
     /// 账户添加类型（offline / microsoft / littleskin / selflittleskin / authlib / nide8）
     pub ty: String,
+    /// 登录模型名字（添加账户时下拉里的显示名；空 = 用类型名 / 服务器地址显示）
+    pub name: String,
     /// 锁定的服务器（authlib = 认证服务器地址，nide8 = 服务器 ID，空 = 不指定）
     pub server: String,
 }
@@ -182,6 +184,7 @@ impl Default for LoginLockObj {
     fn default() -> Self {
         Self {
             ty: String::new(),
+            name: String::new(),
             server: String::new(),
         }
     }
@@ -206,6 +209,7 @@ where
             LoginLockRaw::Obj(o) => o,
             LoginLockRaw::Str(ty) => LoginLockObj {
                 ty,
+                name: String::new(),
                 server: String::new(),
             },
         })
@@ -220,6 +224,8 @@ pub struct ClientConfig {
     pub motd_card: bool,
     /// MOTD 卡片刷新间隔（秒）
     pub motd_interval: u32,
+    /// 登录方式锁定总开关（false = 锁定列表不生效，任何类型都可添加）
+    pub login_lock_on: bool,
     /// 登录方式锁定列表（空 = 不锁定，可添加多个条目）
     #[serde(deserialize_with = "de_login_lock")]
     pub login_lock: Vec<LoginLockObj>,
@@ -236,6 +242,7 @@ impl Default for ClientConfig {
         Self {
             motd_card: true,
             motd_interval: 15,
+            login_lock_on: false,
             login_lock: Vec::new(),
             auto_join: false,
             auto_join_server: String::new(),

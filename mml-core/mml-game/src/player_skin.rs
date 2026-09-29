@@ -3,13 +3,16 @@
 //! 按账户认证类型向对应的会话服务器查询档案，解析 profile 属性里的
 //! 皮肤 / 披风地址，并缓存到本地皮肤目录。
 
-use std::path::PathBuf;
+use std::{
+    collections::HashMap,
+    path::PathBuf,
+    sync::{LazyLock, RwLock},
+};
 
 use mml_auth::{AuthType, LoginObj};
 use mml_base::hash_helper;
 use mml_names::i18_items::error_type::{CoreResult, ErrorType, SkinBlockErrorData};
 use mml_net::{mojang_api, urls};
-use mml_sys::path_helper;
 use serde::Deserialize;
 
 use crate::launcher_path::assets_path;
@@ -55,16 +58,31 @@ struct TextureMetadataObj {
     model: String,
 }
 
+/// 单个纹理的本地缓存（内容 SHA1 寻址，皮肤 / 披风共用一套存储）
+#[derive(Debug, Clone)]
+pub struct TextureFile {
+    /// 文件位置
+    pub path: PathBuf,
+    /// 内容 SHA1（十六进制小写，与游戏 assets objects 命名一致）
+    pub sha1: String,
+    /// 纹理源地址（供上层登记，本地文件被清后按此回源）
+    pub url: String,
+}
+
 /// 皮肤下载结果
 #[derive(Debug, Default)]
 pub struct DownloadSkinRes {
-    /// 皮肤文件位置
-    pub skin: Option<PathBuf>,
-    /// 披风文件位置
-    pub cape: Option<PathBuf>,
+    /// 皮肤文件
+    pub skin: Option<TextureFile>,
+    /// 披风文件
+    pub cape: Option<TextureFile>,
     /// 是否为纤细（slim）皮肤
     pub is_new_slim: bool,
 }
+
+/// URL → 内容 SHA1 映射：同进程内同一 URL 只下载一次
+static URL_HASH: LazyLock<RwLock<HashMap<String, String>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
 
 /// 下载皮肤与披风
 ///
@@ -123,6 +141,7 @@ pub async fn download_skin(obj: &LoginObj) -> DownloadSkinRes {
         Some(data) => load_texture(&data.url).await,
         None => None,
     };
+
 
     DownloadSkinRes {
         skin,
@@ -200,7 +219,7 @@ pub async fn fetch_skin_by_input(input: &str) -> CoreResult<(String, PathBuf)> {
         .profile_name
         .or(name)
         .unwrap_or_else(|| uuid.clone());
-    Ok((name, file))
+    Ok((name, file.path))
 }
 
 /// 解析 profile 属性（base64 后的 JSON）里的皮肤数据
@@ -218,7 +237,10 @@ fn parse_textures(value: &str) -> Option<MinecraftTexturesObj> {
     serde_json::from_str::<MinecraftTexturesObj>(&data).ok()
 }
 
-/// 取回单个皮肤 / 披风文件，已缓存则直接返回位置
+/// 取回单个皮肤 / 披风纹理，按内容 SHA1 缓存
+///
+/// 下载后按内容定键（游戏 assets objects 同款布局），同一份贴图
+/// 不论来自哪个 URL / 账户都只存一份；同进程内同 URL 只下载一次。
 ///
 /// # 参数
 ///
@@ -226,21 +248,37 @@ fn parse_textures(value: &str) -> Option<MinecraftTexturesObj> {
 ///
 /// # 返回值
 ///
-/// 返回本地文件位置；下载或写入失败返回 `None`
-async fn load_texture(url: &str) -> Option<PathBuf> {
-    if url.trim().is_empty() {
+/// 返回本地文件与内容 SHA1；下载或写入失败返回 `None`
+pub async fn load_texture(url: &str) -> Option<TextureFile> {
+    let url = url.trim();
+    if url.is_empty() {
         return None;
     }
 
-    let file = assets_path::get_skin_from_url(url.to_string());
-    if file.exists() {
-        return Some(file);
+    // 先查 URL→SHA1 映射：命中且文件还在就直接用，不发请求
+    if let Some(sha1) = URL_HASH.read().unwrap().get(url) {
+        let file = assets_path::get_skin_object(sha1);
+        if file.exists() {
+            return Some(TextureFile {
+                path: file,
+                sha1: sha1.clone(),
+                url: url.to_string(),
+            });
+        }
     }
 
     let data = mojang_api::get_assets(&url.to_string()).await.ok()?;
-    path_helper::write_bytes(&file, &data).ok()?;
+    let sha1 = assets_path::save_skin_object(&data).ok()?;
+    URL_HASH
+        .write()
+        .unwrap()
+        .insert(url.to_string(), sha1.clone());
 
-    Some(file)
+    Some(TextureFile {
+        path: assets_path::get_skin_object(&sha1),
+        sha1,
+        url: url.to_string(),
+    })
 }
 
 #[cfg(test)]

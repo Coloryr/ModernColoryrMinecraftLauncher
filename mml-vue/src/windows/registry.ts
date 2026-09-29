@@ -6,7 +6,6 @@ export type WindowKind =
   | "main"
   | "settings"
   | "stats"
-  | "skin"
   | "help"
   | "resource"
   | "account"
@@ -31,7 +30,6 @@ export const WINDOW_REGISTRY: WindowInfo[] = [
   { kind: "main", title: "ModernMinecraftLauncher" },
   { kind: "settings", title: "启动器设置" },
   { kind: "stats", title: "游戏统计" },
-  { kind: "skin", title: "皮肤查看" },
   { kind: "help", title: "帮助手册" },
   { kind: "resource", title: "资源管理" },
   { kind: "account", title: "账户管理" },

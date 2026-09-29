@@ -14,6 +14,7 @@ defineProps<{
 
 defineEmits<{
   (e: "refresh"): void;
+  (e: "refreshSkin"): void;
   (e: "relogin"): void;
   (e: "edit"): void;
   (e: "delete"): void;
@@ -25,6 +26,12 @@ defineEmits<{
     <button v-if="canEdit" class="icon-btn" :title="t('account.editOffline')" @click="$emit('edit')">
       <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z" />
+      </svg>
+    </button>
+    <button class="icon-btn" :title="t('account.refreshSkin')" @click="$emit('refreshSkin')">
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 15v4a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-4" />
+        <path d="M17 8l-5-5-5 5M12 3v12" />
       </svg>
     </button>
     <button v-if="canRefresh" class="icon-btn" :title="t('account.refresh')" @click="$emit('refresh')">

@@ -432,10 +432,28 @@ fn find_java() -> Option<Vec<JavaInfoObj>> {
 pub fn scan_java() {
     if let Some(list) = find_java() {
         let mut list1 = JVMS.write().unwrap();
+        let mut config = mml_config::write_config();
 
         for (_, item) in list.into_iter().enumerate() {
+            let name = item.name.clone();
+            // 先移除同名旧条目
+            config.java_list.retain(|item| {
+                if item.name.eq_ignore_ascii_case(&name) {
+                    false
+                } else {
+                    true
+                }
+            });
+            config.java_list.push(JvmConfigObj {
+                name: name.clone(),
+                local: item.path.to_string_lossy().to_string(),
+            });
             list1.insert(item.name.clone(), Arc::new(item));
         }
+
+        drop(config);
+
+        mml_config::save();
     }
 }
 

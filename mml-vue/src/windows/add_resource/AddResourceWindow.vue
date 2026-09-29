@@ -419,23 +419,23 @@ onMounted(async () => {
 
         <!-- 过滤条件 + 搜索 -->
         <div class="res-filters">
-          <select v-model="version" class="field-input sel-filter" @change="submitSearch">
+          <select v-model="version" class="field-select sel-filter" @change="submitSearch">
             <option value="">{{ t("modpack.allVersions") }}</option>
             <option v-for="v in versions" :key="v" :value="v">{{ v }}</option>
           </select>
-          <select v-model="sort" class="field-input sel-filter" @change="submitSearch">
+          <select v-model="sort" class="field-select sel-filter" @change="submitSearch">
             <option v-for="s in sorts" :key="s" :value="s">{{ t(`modpack.sort.${s}`) }}</option>
           </select>
           <select
             v-if="categories.length"
             v-model="category"
-            class="field-input sel-filter"
+            class="field-select sel-filter"
             @change="submitSearch"
           >
             <option value="">{{ t("modpack.allCategories") }}</option>
             <option v-for="c in categories" :key="c.value" :value="c.value">{{ c.label }}</option>
           </select>
-          <select v-if="type === 'mod'" v-model="loader" class="field-input sel-filter" @change="submitSearch">
+          <select v-if="type === 'mod'" v-model="loader" class="field-select sel-filter" @change="submitSearch">
             <option v-for="l in LOADERS" :key="l" :value="l">
               {{ l === "normal" ? t("addResource.loader.normal") : l }}
             </option>
@@ -527,7 +527,7 @@ onMounted(async () => {
           </div>
         </div>
         <div class="ver-tools">
-          <select v-model="fileVersion" class="field-input sel-file-version" @change="onFileVersionChange">
+          <select v-model="fileVersion" class="field-select sel-file-version" @change="onFileVersionChange">
             <option value="">{{ t("modpack.allVersions") }}</option>
             <option v-for="v in versions" :key="v" :value="v">{{ v }}</option>
           </select>
@@ -628,6 +628,12 @@ onMounted(async () => {
   min-width: 120px;
   padding: 8px 10px;
   font-size: 13px;
+}
+
+/* field-select 的自定义箭头留位 */
+select.sel-filter,
+select.sel-file-version {
+  padding-right: 26px;
 }
 
 /* 存档类型：源锁定为 CurseForge 的占位块（与页签同高） */

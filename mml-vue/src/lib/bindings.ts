@@ -23,9 +23,13 @@ export const commands = {
     cancelOAuth: () => invoke<void>("account_cancel_oauth"),
     editOffline: (uuid: string, newName: string, newUuid: string) => invoke<void>("account_edit_offline", { uuid, newName, newUuid }),
     getAccounts: () => invoke<AccountStoreViewDto>("account_get_accounts"),
+    getTextures: (accountType: string, uuid: string) => invoke<TexturesDto>("account_get_textures", { accountType, uuid }),
     openBrowser: (url: string) => invoke<void>("account_open_browser", { url }),
     refreshAccountToken: (uuid: string) => invoke<boolean>("account_refresh_account_token", { uuid }),
+    refreshSkin: (uuid: string) => invoke<void>("account_refresh_skin", { uuid }),
     removeAccount: (uuid: string) => invoke<boolean>("account_remove_account", { uuid }),
+    setActiveCape: (accountType: string, uuid: string, sha1: string) => invoke<void>("account_set_active_cape", { accountType, uuid, sha1 }),
+    setActiveSkin: (accountType: string, uuid: string, sha1: string) => invoke<void>("account_set_active_skin", { accountType, uuid, sha1 }),
     setCurrentAccount: (uuid: string) => invoke<boolean>("account_set_current_account", { uuid }),
   },
   add: {
@@ -524,12 +528,14 @@ export type CollectConfigDto = {
 
 export type LoginLockItemDto = {
   ty: string,
+  name: string,
   server: string,
 };
 
 export type ClientConfigDto = {
   motdCard: boolean,
   motdInterval: number,
+  loginLockOn: boolean,
   loginLock: LoginLockItemDto[],
   autoJoin: boolean,
   autoJoinServer: string,
@@ -865,6 +871,18 @@ export type BgInfoDto = {
   opacity: number,
   blur: number,
   nativeSize: number,
+};
+
+export type TexturesDto = {
+  skins: TextureItemDto[],
+  capes: TextureItemDto[],
+};
+
+export type TextureItemDto = {
+  name: string,
+  sha1: string,
+  model: string,
+  active: boolean,
 };
 
 export type StatsInstanceDto = {

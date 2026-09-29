@@ -8,11 +8,12 @@ use std::{
 };
 
 use mml_auth::LoginObj;
-use mml_base::serialize_tools;
+use mml_base::{
+    hash_helper::{self, HashType},
+    serialize_tools,
+};
 use mml_names::{i18_items::error_type::CoreResult, names};
 use mml_sys::path_helper;
-use url::Url;
-use uuid::Uuid;
 
 use crate::mojang::{
     assets_obj::AssetsObj,
@@ -121,27 +122,39 @@ pub fn save_skin(obj: LoginObj, file: PathBuf) {
     path_helper::copy_file(&file, &path).unwrap();
 }
 
-/// 获取url的皮肤位置
+/// 按内容 SHA1 保存皮肤 / 披风贴图（与游戏 assets objects 同款布局）
+///
+/// 皮肤与披风共用一套存储：`SKIN_DIR/<sha1前2字符>/<sha1>`，
+/// 同一份贴图（无论来自哪个账户 / 哪个 URL）只存一份。
 ///
 /// # 参数
 ///
-/// - `url`: 网页地址，以UUID结尾
+/// - `data`: 贴图文件内容
 ///
 /// # 返回值
 ///
-/// 返回皮肤文件位置；地址解析失败时返回 UUID(0) 的文件位置
-pub fn get_skin_from_url(url: String) -> PathBuf {
-    let name = if let Ok(url) = Url::parse(&url)
-        && let Some(filename) = url.path().split('/').last()
-        && !filename.is_empty()
-    {
-        filename.to_string()
-    } else {
-        Uuid::from_u128(0).to_string()
-    };
+/// 返回内容 SHA1（十六进制小写）；写入失败返回对应错误
+pub fn save_skin_object(data: &[u8]) -> CoreResult<String> {
+    let hash = hash_helper::gen_hash(HashType::Sha1, data);
+    let file = get_skin_object(&hash);
+    if !file.exists() {
+        path_helper::write_bytes(&file, data)?;
+    }
+    Ok(hash)
+}
 
-    let dir: String = name.chars().take(2).collect();
-    Path::new(&SKIN_DIR.get().unwrap()).join(dir).join(name)
+/// 按内容 SHA1 取皮肤 / 披风贴图位置
+///
+/// # 参数
+///
+/// - `sha1`: 贴图内容 SHA1
+///
+/// # 返回值
+///
+/// 返回贴图文件位置（不保证文件存在，由调用方判断）
+pub fn get_skin_object(sha1: &str) -> PathBuf {
+    let dir: String = sha1.chars().take(2).collect();
+    Path::new(&SKIN_DIR.get().unwrap()).join(dir).join(sha1)
 }
 
 /// 读取资源文件

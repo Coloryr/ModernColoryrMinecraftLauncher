@@ -450,14 +450,14 @@ watch(source, loadSource);
     <div class="modpack-top">
     <div class="modpack-filters">
       <SegmentedTabs v-model="source" :options="sources" />
-      <select v-model="version" class="field-input sel-version" @change="submitSearch">
+      <select v-model="version" class="field-select sel-version" @change="submitSearch">
         <option value="">{{ t("modpack.allVersions") }}</option>
         <option v-for="v in versions" :key="v" :value="v">{{ v }}</option>
       </select>
-      <select v-model="sort" class="field-input sel-sort" @change="submitSearch">
+      <select v-model="sort" class="field-select sel-sort" @change="submitSearch">
         <option v-for="s in sorts" :key="s" :value="s">{{ t(`modpack.sort.${s}`) }}</option>
       </select>
-      <select v-model="category" class="field-input sel-category" @change="submitSearch">
+      <select v-model="category" class="field-select sel-category" @change="submitSearch">
         <option value="">{{ t("modpack.allCategories") }}</option>
         <option v-for="c in categories" :key="c.value" :value="c.value">{{ c.label }}</option>
       </select>
@@ -682,7 +682,7 @@ watch(source, loadSource);
                 <div class="detail-section detail-versions-head">
                   <span>{{ t("modpack.versions") }}</span>
                   <div class="version-tools">
-                    <select v-model="fileVersion" class="field-input sel-file-version" @change="onFileVersionChange">
+                    <select v-model="fileVersion" class="field-select sel-file-version" @change="onFileVersionChange">
                       <option value="">{{ t("modpack.allVersions") }}</option>
                       <option v-for="v in versions" :key="v" :value="v">{{ v }}</option>
                     </select>
@@ -754,6 +754,14 @@ watch(source, loadSource);
   min-width: 110px;
   padding: 8px 10px;
   font-size: 13px;
+}
+
+/* field-select 的自定义箭头留位（sel-group 是组合框输入框，不在此列） */
+select.sel-version,
+select.sel-sort,
+select.sel-category,
+select.sel-file-version {
+  padding-right: 26px;
 }
 
 /* 分组是组合框（外层 div 包输入框 + 下拉），内边距和字号落到输入框上 */

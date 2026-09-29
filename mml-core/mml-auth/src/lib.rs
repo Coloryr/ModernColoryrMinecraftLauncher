@@ -81,6 +81,10 @@ impl AuthType {
         matches!(self, AuthType::Offline)
     }
 
+    pub fn is_oauth(&self) -> bool {
+        matches!(self, AuthType::OAuth)
+    }
+
     /// 从字符串解析认证类型
     ///
     /// - `str`: 认证类型名称（如 `Offline`、`OAuth`、`Nide8`）
