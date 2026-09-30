@@ -532,9 +532,15 @@ pub fn add_custom_loader(obj: CustomLoaderType, uuid: Uuid) {
 ///
 /// 返回缓存的高清修复信息
 pub fn add_optifine(obj: OptifineObj) -> Arc<OptifineObj> {
-    let mut list = OPTIFINE_LOADER.write().unwrap();
     let info = Arc::new(obj);
-    list.insert(info.version.clone(), info.clone());
+    // 写锁必须**先释放**再调 `save_optifine`：后者内部要取 OPTIFINE_LOADER 的**读锁**，
+    // 而 `std::sync::RwLock` 不可重入（同线程持写锁时再取读锁会永久阻塞 = 自死锁）。
+    // 之前这里就是死锁点：加载器支持列表一查到这里，整个查询永久卡住、`abort()` 也无效
+    // （同步阻塞，不是异步任务）。同样的坑在 get_version 处修过一次，别再犯。
+    {
+        let mut list = OPTIFINE_LOADER.write().unwrap();
+        list.insert(info.version.clone(), info.clone());
+    }
 
     save_optifine();
 
@@ -547,8 +553,12 @@ pub fn add_optifine(obj: OptifineObj) -> Arc<OptifineObj> {
 ///
 /// - `obj`: LiteLoader 版本元数据
 pub fn add_liteloader(obj: LiteloaderMetaObj) {
-    let mut list = LITE_LOADER.write().unwrap();
-    list.extend(obj.versions.into_iter().map(|(k, v)| (k, Arc::new(v))));
+    // 同 `add_optifine`：写锁先释放，再调内部取读锁的 `save_liteloader`，
+    // 否则同线程自死锁（这是"加载器列表卡在 1/6"的直接原因）。
+    {
+        let mut list = LITE_LOADER.write().unwrap();
+        list.extend(obj.versions.into_iter().map(|(k, v)| (k, Arc::new(v))));
+    }
 
     save_liteloader();
 }

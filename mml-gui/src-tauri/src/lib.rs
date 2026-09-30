@@ -8,6 +8,9 @@
 //! | [`gui_config`] | GUI 配置读写 |
 //! | [`image_manager`] | 图片资源加载（`mml-image://` 协议） |
 //! | [`windows`] | 各窗口的规格 / IPC 命令 / 事件，窗口创建 / 聚焦 / 关闭统一处理 |
+//!
+//! 自定义主页面（`mml-home://` 协议）的压缩包在运行根目录常驻，
+//! 启动时打开成常驻句柄、请求时按条目现读，**全程不落盘解压**（见 [`windows::custom_home`]）。
 
 use mml_names::i18;
 
@@ -71,6 +74,9 @@ pub fn run() {
             if let Err(err) = collect_utils::load() {
                 mml_log::error_type(err);
             }
+
+            // 自定义主页面：把压缩包打开成常驻句柄（不落盘解压），请求时按条目现读
+            windows::custom_home::reload();
 
             let handle = app.handle().clone();
             tauri::async_runtime::spawn(async move {

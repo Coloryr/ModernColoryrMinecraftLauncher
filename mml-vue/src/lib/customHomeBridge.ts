@@ -7,12 +7,16 @@
 //   iframe → 父：{ __mml: 1, id, type: "invoke", cmd, args }
 //   iframe → 父：{ __mml: 1, id, type: "subscribe", event }
 //   iframe → 父：{ __mml: 1, type: "unsubscribe", id }
-//   iframe → 父：{ __mml: 1, type: "ready" }（握手；父窗口原样回一条 ready）
+//   iframe → 父：{ __mml: 1, type: "ready" }（握手；父窗口回 ready + 当前主题）
 //   父 → iframe：{ __mml: 1, id, ok: true, data } / { __mml: 1, id, ok: false, error }
 //   父 → iframe：{ __mml: 1, type: "event", id, event, payload }
+//   父 → iframe：{ __mml: 1, type: "ready", theme: "Dark" | "Light" }
+//   父 → iframe：{ __mml: 1, type: "theme", theme }（主题变化时主动推）
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+import { watch } from "vue";
 import { GameExit, GameLog, InstanceChange, LaunchError, LaunchState } from "./listens";
+import { resolvedTheme } from "./theme";
 
 /** 与 custom_home_bridge.js 约定的协议版本 */
 const PROTOCOL = 1;
@@ -68,6 +72,8 @@ export function attachCustomHomeBridge(iframe: HTMLIFrameElement): () => void {
   let queue: Array<{ id: number; event: string; payload: unknown }> = [];
   let flushTimer: number | null = null;
   let disposed = false;
+  /** 是否已经完成握手（iframe 的桥接脚本会一直重复发 ready，直到收到应答） */
+  let handshaken = false;
 
   /** 回发到 iframe（opaque origin 拿不到确切 origin，只能 targetOrigin "*"） */
   function post(msg: Record<string, unknown>) {
@@ -138,6 +144,12 @@ export function attachCustomHomeBridge(iframe: HTMLIFrameElement): () => void {
 
   /** 调命令：放行全部已注册命令，Tauri 对未注册命令会自行报错，错误串原样回给页面 */
   async function handleInvoke(id: number, cmd: unknown, args: unknown) {
+    // 握手还没完成就来的 invoke：说明 iframe 侧已经不是当前这份脚本（重载 / 换页），
+    // 立刻回一条错误，别让它永远挂在那里
+    if (!handshaken) {
+      post({ id, ok: false, error: "mml bridge: handshake not completed" });
+      return;
+    }
     try {
       const data = await invoke(String(cmd), (args ?? {}) as Record<string, unknown>);
       post({ id, ok: true, data });
@@ -153,9 +165,12 @@ export function attachCustomHomeBridge(iframe: HTMLIFrameElement): () => void {
     const data = e.data as BridgeRequest | null | undefined;
     if (!data || typeof data !== "object" || data.__mml !== PROTOCOL) return;
 
-    // 握手：原样回一条，iframe 据此 resolve window.mml.ready
+    // 握手：回一条 ready（带当前主题），iframe 据此 resolve window.mml.ready 并应用主题。
+    // iframe 侧在收到应答前会每 100ms 重发一次 ready，所以这里只管每次都回，不去重
+    // （重发是它发现自己没收到应答时的重试，压制它会让页面一直卡在握手前）
     if (data.type === "ready") {
-      post({ type: "ready" });
+      handshaken = true;
+      post({ type: "ready", theme: resolvedTheme() });
       return;
     }
     const id = Number(data.id);
@@ -171,8 +186,16 @@ export function attachCustomHomeBridge(iframe: HTMLIFrameElement): () => void {
 
   window.addEventListener("message", onMessage);
 
+  // 主题：iframe 是独立文档，拿不到启动器 `<html data-theme>` 上的 CSS 变量，
+  // 所以握手时先回一份，之后主题变化（设置窗口切换 / System 跟随系统）再主动推。
+  // 注册 watch 时不会立刻触发（没有 immediate），首屏由握手那条负责，不会重复发。
+  const stopThemeWatch = watch(resolvedTheme, (v) => {
+    post({ type: "theme", theme: v });
+  });
+
   return () => {
     disposed = true;
+    stopThemeWatch();
     window.removeEventListener("message", onMessage);
     if (flushTimer !== null) {
       clearTimeout(flushTimer);

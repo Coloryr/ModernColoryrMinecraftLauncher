@@ -5,7 +5,7 @@
 
 use mml_names::i18_items::error_type::CoreResult;
 
-use crate::{WORK_CLIENT, url_helper};
+use crate::{url_helper};
 
 /// 获取 Quilt 加载器安装配置（profile JSON）
 ///
@@ -23,7 +23,7 @@ pub async fn get_loader(mc: &str, version: &str) -> CoreResult<Vec<u8>> {
         url_helper::get_quilt_meta()
     );
 
-    WORK_CLIENT.get().unwrap().get_bytes(&url).await
+    crate::get_work_client().get_bytes(&url).await
 }
 
 /// 获取 Quilt 元数据（可用版本列表）
@@ -34,5 +34,5 @@ pub async fn get_loader(mc: &str, version: &str) -> CoreResult<Vec<u8>> {
 pub async fn get_meta() -> CoreResult<Vec<u8>> {
     let url = url_helper::get_quilt_meta();
 
-    WORK_CLIENT.get().unwrap().get_bytes(&url).await
+    crate::get_work_client().get_bytes(&url).await
 }

@@ -9,7 +9,7 @@ use mml_names::i18_items::error_type::ErrorType;
 use mml_sys::Os;
 use serde::{Deserialize, Serialize};
 
-use crate::{WORK_CLIENT, urls::ADOPTIUM_URL};
+use crate::{urls::ADOPTIUM_URL};
 
 /// 可用 Java 主版本缓存
 static JAVA_VERSION: OnceLock<Vec<String>> = OnceLock::new();
@@ -132,9 +132,7 @@ pub async fn get_java_version() -> Result<Vec<String>, ErrorType> {
 
     let url = ADOPTIUM_URL.to_string() + "v3/info/available_releases";
 
-    let res = WORK_CLIENT
-        .get()
-        .unwrap()
+    let res = crate::get_work_client()
         .get_json::<AdoptiumJavaVersionObj>(&url)
         .await?;
 
@@ -158,9 +156,7 @@ pub async fn get_java_list(version: u32, os: &str) -> Result<Vec<AdoptiumObj>, E
     let mut url = String::from(ADOPTIUM_URL);
     url += &format!("v3/assets/latest/{}/hotspot?os={}", version, os);
 
-    let res = WORK_CLIENT
-        .get()
-        .unwrap()
+    let res = crate::get_work_client()
         .get_json::<Vec<AdoptiumObj>>(&url)
         .await?;
 

@@ -50,6 +50,14 @@ use uuid::{Uuid, uuid};
 use crate::dtos::{GuiConfigDto, LogFocusDto, WindowSizeDto};
 
 /// 窗口几何状态（window_save.json）
+///
+/// 全仓统一这一套口径：
+/// - `x / y`：**外框**位置，物理像素（与 `outer_position()` 同源）
+/// - `width / height`：**客户区**尺寸，物理像素（与 `inner_size()` 同源），且不小于注册表里的最小客户区
+///
+/// 注册表 `WINDOWS_INFO` 里的最小 / 默认尺寸则是**客户区 + 逻辑像素**，两者之间只差显示器的
+/// 缩放系数一次换算（见 [`min_inner_physical`]）；只有下发给 Windows 的外框最小尺寸
+/// 才需要再加上那圈边框带（见 [`reconcile_min_size`]）。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct WindowState {
@@ -61,6 +69,11 @@ pub struct WindowState {
     pub width: u32,
     /// 客户区高（`inner_size()`）
     pub height: u32,
+    /// 上次退出时是否处于最大化（全屏也算）
+    ///
+    /// 为 true 时 `x / y / width / height` 保留的是**最大化之前**的几何：开窗先按它开、
+    /// 再最大化，这样既回到原来那块屏，也能恢复最大化状态。
+    pub maximized: bool,
 }
 
 impl Default for WindowState {
@@ -70,6 +83,7 @@ impl Default for WindowState {
             y: 0,
             width: 0,
             height: 0,
+            maximized: false,
         }
     }
 }
@@ -123,9 +137,9 @@ const EXPORT_WINDOW_UUID: Uuid = uuid!("00000000-0000-0000-0000-000000000010");
 struct WindowEntry {
     /// 窗口标签（`mml-<kind>`，与前端 kind 对应）
     label: &'static str,
-    /// 最小宽度（= 无历史几何时的默认宽度）
+    /// 最小**客户区**宽度（逻辑像素；= 无历史几何时的默认宽度）
     min_width: f64,
-    /// 最小高度（= 无历史几何时的默认高度）
+    /// 最小**客户区**高度（逻辑像素；= 无历史几何时的默认高度）
     min_height: f64,
 }
 
@@ -178,6 +192,11 @@ const LOG_MIN_HEIGHT: f64 = 480.0;
 const EXPORT_MIN_WIDTH: f64 = 560.0;
 /// 实例导出窗口最小高度
 const EXPORT_MIN_HEIGHT: f64 = 500.0;
+
+/// 方块列表窗口最小宽度（分类栏 + 网格；工具条上还有搜索框、图标尺寸档与两个按钮）
+const BLOCK_MIN_WIDTH: f64 = 770.0;
+/// 方块列表窗口最小高度
+const BLOCK_MIN_HEIGHT: f64 = 560.0;
 
 /// 窗口注册表：uuid → 窗口信息
 const WINDOWS_INFO: LazyLock<HashMap<Uuid, WindowEntry>> = LazyLock::new(|| {
@@ -274,8 +293,8 @@ const WINDOWS_INFO: LazyLock<HashMap<Uuid, WindowEntry>> = LazyLock::new(|| {
             BLOCK_WINDOW_UUID,
             WindowEntry {
                 label: "mml-block",
-                min_width: MIN_WIDTH,
-                min_height: MIN_HEIGHT,
+                min_width: BLOCK_MIN_WIDTH,
+                min_height: BLOCK_MIN_HEIGHT,
             },
         ),
         (
@@ -463,6 +482,8 @@ fn create_window(
     }
 
     let geom = window_state_for(uuid);
+    // 上次是最大化：按记录里的「最大化之前」几何开窗，开完再最大化（见 save_window_state）
+    let restore_maximized = geom.as_ref().map(|g| g.maximized).unwrap_or(false);
 
     // 最小尺寸随注册表条目走（各窗口内容布局不同，可压缩程度不同）；
     // 无历史几何时直接以最小尺寸居中打开（注册表即窗口尺寸的唯一来源）
@@ -478,10 +499,13 @@ fn create_window(
         .min_inner_size(min_w, min_h)
         // 自绘标题栏：关掉系统装饰，最小化 / 最大化 / 关闭由前端 WindowControls 调下面的命令实现
         .decorations(false)
-        // 无边框阴影会把客户区四周（Win10 上是左 / 右 / 下，顶部 inset 恒为 0）缩进一圈，
-        // 无背景效果的系统上这一圈画成黑边，故关掉阴影让 webview 铺满整个窗口；
-        // 关掉后 tao 走完整的边缘命中测试，拖边缘调整大小不受影响
-        .shadow(false)
+        // 保留系统阴影（tao 的默认值）：Win11 下窗口投影与圆角都由 DWM 画。
+        // 代价是客户区被缩进一圈：这是 Windows 的**边框 / 非客户区带**
+        // （SM_CXSIZEFRAME + SM_CXPADDEDBORDER，96 DPI 下每边 8px；投影本身画在外框之外），
+        // 顶部按 tao 对 Win11 的经验值是 1px。只有 Windows 有这个带，也只有开着无边框阴影时才有。
+        // 这一圈归 DWM 画边框 / 圆角，webview 不再铺满外框；拖边缘调整大小走系统非客户区。
+        // 若在关掉「透明效果」的机器上这一圈又变成黑边，改回 `.shadow(false)` 即可。
+        .shadow(true)
         .background_color(tauri::window::Color(0x14, 0x16, 0x1a, 0xff));
     let win = match geom {
         Some(g) => {
@@ -496,22 +520,90 @@ fn create_window(
                 .or_else(|| app.primary_monitor().ok().flatten())
                 .map(|m| m.scale_factor())
                 .unwrap_or(1.0);
+            // 恢复前先夹一次最小客户区：历史几何可能小于当前最小尺寸（旧版本存的，或最小尺寸
+            // 后来调大过），直接创建会得到一个比最小值还小的窗口，而且这个非法值又会被原样写回
+            // 文件、一直循环。这里按客户区口径夹（不含边框带）。
+            let (min_pw, min_ph) = min_inner_physical((min_w, min_h), scale);
             builder
-                .inner_size(g.width as f64 / scale, g.height as f64 / scale)
+                .inner_size(
+                    g.width.max(min_pw) as f64 / scale,
+                    g.height.max(min_ph) as f64 / scale,
+                )
                 .position(g.x as f64 / scale, g.y as f64 / scale)
                 .build()
         }
         None => builder.inner_size(min_w, min_h).center().build(),
     };
     let win = win.map_err(|e| e.to_string())?;
+
+    // 无边框 + 系统阴影时，客户区比外框小一圈：那是 Windows 的边框 / 非客户区带
+    // （96 DPI 下左右下各 8px、顶部 1px；投影画在外框之外，不在这一圈里）。
+    // tao 建窗和 set_inner_size 都会补偿这个带，但 WM_GETMINMAXINFO 不会
+    // （无边框时 adjust_size 不加减任何边距）—— 于是 min_inner_size 实际约束的是
+    // 「外框最小尺寸」，客户区会少掉一圈，界面被压得比注册表里设定的更小。
+    reconcile_min_size(&win, min_w, min_h);
+
     OPEN_WINDOWS
         .write()
         .unwrap()
         .insert(uuid.clone(), win.clone());
     ensure_window_model(app, uuid);
-    // 开窗即记录初始几何（文件始终反映当前所有窗口；后续缩放/移动会持续更新）
-    let _ = save_window_state(uuid, &win);
+    // 开窗即记录初始几何（文件始终反映当前所有窗口；后续缩放/移动会持续更新）。
+    // 带上 restore_maximized：下面 maximize() 触发的 Resized 会被跳过（最大化时不记几何），
+    // 否则文件里的最大化标志会被这次初始保存清掉。
+    let _ = save_window_state(uuid, &win, restore_maximized);
+    if restore_maximized {
+        let _ = win.maximize();
+    }
     Ok(win)
+}
+
+/// 取某窗口的最小客户区尺寸（注册表口径：逻辑像素）
+fn min_size_of(uuid: &Uuid) -> Option<(f64, f64)> {
+    WINDOWS_INFO.get(uuid).map(|e| (e.min_width, e.min_height))
+}
+
+/// 注册表里的最小客户区尺寸（逻辑像素）→ 物理像素
+///
+/// 存盘与恢复都按客户区口径，夹取时用它。**不要在这里加边框带**：那圈只影响下发给 Windows 的
+/// **外框**最小尺寸（见 [`reconcile_min_size`]），客户区本身不含它。
+fn min_inner_physical(min: (f64, f64), scale: f64) -> (u32, u32) {
+    let scale = if scale > 0.0 { scale } else { 1.0 };
+    (
+        (min.0 * scale).round().max(1.0) as u32,
+        (min.1 * scale).round().max(1.0) as u32,
+    )
+}
+
+/// 把注册表里的最小尺寸（客户区口径）换算成外框口径，再重设一次
+///
+/// Windows 的最小尺寸走 `WM_GETMINMAXINFO`，它约束的是**外框**；而我们关心的其实是客户区
+/// （webview 能拿到多少排版空间）。无边框 + 系统阴影时「外框 − 客户区」就是那圈 Windows
+/// 边框带（96 DPI 下左右下各 8px、顶部 1px，且只有 Windows 有）。
+/// 这里量出真实差值（物理像素，随 DPI 自动变化、不用自己算 SM_CXSIZEFRAME ——
+/// 那双指标也不是按 DPI 倍数缩的：96→8、120→9、144→11）加到最小尺寸上。
+/// 没有这个带时差值为 0，等于什么都没做（关掉阴影或换到别的平台都安全）。
+fn reconcile_min_size(win: &WebviewWindow, min_w: f64, min_h: f64) {
+    let (Ok(inner), Ok(outer)) = (win.inner_size(), win.outer_size()) else {
+        return;
+    };
+    let dx = outer.width.saturating_sub(inner.width);
+    let dy = outer.height.saturating_sub(inner.height);
+    if dx == 0 && dy == 0 {
+        return;
+    }
+    // 量到的差值是物理像素，换算回逻辑像素后与 min_w / min_h 一起设回去。
+    //
+    // 必须用**逻辑单位**：tauri/tao 把它存成 `PixelUnit::Logical`，换到别的 DPI 显示器时
+    // 会跟着缩放，与建窗时 `min_inner_size(min_w, min_h)` 的口径一致；
+    // 用物理像素（`PhysicalSize`）则不会缩放，高 DPI 屏上"最小 770"就不再成立。
+    let scale = win.scale_factor().unwrap_or(1.0);
+    if scale <= 0.0 {
+        return;
+    }
+    let width = min_w + dx as f64 / scale;
+    let height = min_h + dy as f64 / scale;
+    let _ = win.set_min_size(Some(tauri::LogicalSize::new(width, height)));
 }
 
 /// 保存窗口几何到状态表
@@ -520,7 +612,13 @@ fn create_window(
 /// `.position()` 设置的是外框位置 → 存 `outer_position()`；
 /// `.inner_size()` 设置的是客户区尺寸 → 存 `inner_size()`。
 /// 混用会导致每次开窗位置漂移、窗口逐次变大。
-fn save_window_state(uuid: &Uuid, window: &WebviewWindow) -> Result<(), String> {
+///
+/// 两条统一规则：
+/// - 尺寸夹到不小于注册表里的最小客户区（见 [`min_inner_physical`]），保证文件里的值能直接开窗；
+/// - `maximized`（最大化 / 全屏）为真时**不覆盖几何**，只记下这个标志。最大化窗口的
+///   `outer_position()` 带着框外偏移（常见是 −8），当成普通位置存下来，下次开窗
+///   `monitor_from_point` 可能解析到**另一块显示器**，而且开出来还不是最大化。
+fn save_window_state(uuid: &Uuid, window: &WebviewWindow, maximized: bool) -> Result<(), String> {
     let pos = window.outer_position().map_err(|err| err.to_string())?;
     let size = window.inner_size().map_err(|err| err.to_string())?;
 
@@ -529,10 +627,19 @@ fn save_window_state(uuid: &Uuid, window: &WebviewWindow) -> Result<(), String> 
         None => WindowState::default(),
     };
 
-    geom.x = pos.x;
-    geom.y = pos.y;
-    geom.width = size.width;
-    geom.height = size.height;
+    let scale = window.scale_factor().unwrap_or(1.0);
+    // 夹到不小于注册表里的最小客户区：文件里出现比最小值还小的尺寸，下次开窗就会以非法尺寸
+    // 创建，而且会被反复写回、一直不收敛（真实例子：窗口停在「外框 = 最小尺寸」上时，
+    // 客户区比最小值小了一圈带宽，主窗口 920×600 → 904×600）。
+    let (min_w, min_h) = min_inner_physical(min_size_of(uuid).unwrap_or((0.0, 0.0)), scale);
+
+    if !maximized {
+        geom.x = pos.x;
+        geom.y = pos.y;
+        geom.width = size.width.max(min_w);
+        geom.height = size.height.max(min_h);
+    }
+    geom.maximized = maximized;
     window_state_set(uuid, geom);
 
     Ok(())
@@ -561,7 +668,10 @@ pub fn close_window_from_uuid(app: &AppHandle, uuid: &Uuid) -> Result<(), String
         return Ok(());
     }
 
-    save_window_state(uuid, &window)?;
+    // 最大化 / 全屏时只记标志，几何保留最大化之前的值（见 save_window_state）
+    let maximized =
+        window.is_maximized().unwrap_or(false) || window.is_fullscreen().unwrap_or(false);
+    save_window_state(uuid, &window, maximized)?;
     window.close().map_err(|err| err.to_string())?;
     Ok(())
 }
@@ -607,7 +717,10 @@ pub fn on_window_event(window: &tauri::Window<tauri::Wry>, event: &tauri::Window
             // 关闭已放行：取消该窗口还在跑的整合包搜索
             add_modpack::cancel_search(&label);
             if let Some(win) = window.app_handle().get_webview_window(&label) {
-                let _ = save_window_state(uuid, &win);
+                // 最大化 / 全屏：只记标志、不覆盖几何（否则下次会开在另一块屏、而且不最大化）
+                let maximized =
+                    win.is_maximized().unwrap_or(false) || win.is_fullscreen().unwrap_or(false);
+                let _ = save_window_state(uuid, &win, maximized);
             }
             if *uuid == MAIN_WINDOW_UUID {
                 mml_core::stop();
@@ -636,7 +749,8 @@ pub fn on_window_event(window: &tauri::Window<tauri::Wry>, event: &tauri::Window
                 if win.is_maximized().unwrap_or(false) || win.is_fullscreen().unwrap_or(false) {
                     return;
                 }
-                let _ = save_window_state(uuid, &win);
+                // 这里已确定不是最大化 / 全屏；取消最大化时也会走到这，顺手把标志清掉
+                let _ = save_window_state(uuid, &win, false);
             }
         }
         _ => {}

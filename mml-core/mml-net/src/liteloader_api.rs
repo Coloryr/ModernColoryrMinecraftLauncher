@@ -4,7 +4,7 @@
 
 use mml_names::i18_items::error_type::CoreResult;
 
-use crate::{WORK_CLIENT, urls};
+use crate::{urls};
 
 /// 获取 LiteLoader 版本元数据（可用版本列表）
 ///
@@ -14,5 +14,5 @@ use crate::{WORK_CLIENT, urls};
 pub async fn get_meta() -> CoreResult<Vec<u8>> {
     let url = format!("{}versions/versions.json", urls::LITELOADER);
 
-    WORK_CLIENT.get().unwrap().get_bytes(&url).await
+    crate::get_work_client().get_bytes(&url).await
 }

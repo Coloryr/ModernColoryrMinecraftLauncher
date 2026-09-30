@@ -208,7 +208,12 @@ function readAngle(raw: string | null, dflt: number): number {
   return Number.isFinite(v) ? v : dflt;
 }
 
-function defaultConfig(): GuiConfig {
+/**
+ * 默认配置（浏览器回退用；也是设置窗口「恢复默认」的取值来源）
+ *
+ * 口径与 Rust 侧 `GuiConfig::default()` 一致，改这里要同步那边。
+ */
+export function defaultConfig(): GuiConfig {
   const stored = localStorage.getItem("mml.theme");
   return {
     // 没有显式选择时跟随系统深浅色（与 theme.ts 的首绘兜底一致）

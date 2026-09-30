@@ -18,7 +18,6 @@ import type {
   ExitEvent,
   FileListDto,
   ClientConfigDto,
-  CustomHomeProgressDto,
   ExportConfigDto,
   ExportInfoDto,
   ExportProgressDto,
@@ -47,7 +46,7 @@ import type {
   StateEvent,
   VersionInfoDto,
 } from "./bindings";
-import { AddLoaderProgress, AddModpackStatus, AddNameConflict, AddPackProgress, AddResourceStatus, BlockRender, ClientConfigChange, CloseBlocked, CollectChange, CustomHomeChange, CustomHomeProgress, DownloadItem, DownloadTask, ExportFocus, ExportProgress, GameExit, GameLog, InstanceChange, JavaChange, LaunchError, LaunchState, LogFocus } from "./listens";
+import { AddLoaderProgress, AddModpackStatus, AddNameConflict, AddPackProgress, AddResourceStatus, BlockRender, ClientConfigChange, CloseBlocked, CollectChange, CustomHomeChange, DownloadItem, DownloadTask, ExportFocus, ExportProgress, GameExit, GameLog, InstanceChange, JavaChange, LaunchError, LaunchState, LogFocus } from "./listens";
 
 export interface CreateInstanceOpts {
   loader?: string;
@@ -534,13 +533,6 @@ export function onInstanceChange(cb: (type: string) => void): Promise<UnlistenFn
 }
 export function onJavaChange(cb: () => void): Promise<UnlistenFn> {
   return listen(JavaChange, () => cb());
-}
-
-/** 自定义主页面导入进度（解包阶段推进时发） */
-export function onCustomHomeProgress(
-  cb: (e: CustomHomeProgressDto) => void,
-): Promise<UnlistenFn> {
-  return listen<CustomHomeProgressDto>(CustomHomeProgress, (e) => cb(e.payload));
 }
 
 /** 自定义主页面内容变更（导入 / 删除后广播，主窗口据此重拉状态） */

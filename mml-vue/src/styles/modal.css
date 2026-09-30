@@ -1,4 +1,4 @@
-﻿/* ---------------- 统一弹窗（BaseModal 插槽内通用样式） ---------------- */
+/* ---------------- 统一弹窗（BaseModal 插槽内通用样式） ---------------- */
 
 .modal-actions {
   display: flex;
@@ -24,5 +24,12 @@
   color: var(--text-dim);
   margin-bottom: 4px;
   word-break: break-all;
+}
+
+/* 弹窗正文里的一段普通文字（问询 / 提示类文案） */
+.modal-text {
+  margin: 0 0 10px;
+  color: var(--text);
+  line-height: 1.6;
 }
 

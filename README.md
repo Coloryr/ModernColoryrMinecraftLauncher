@@ -17,6 +17,7 @@
 | `mml-core/` | 启动器内核，多 crate：游戏启动、版本管理、Mod 加载器、整合包、下载、认证、Java 管理、网络 API（Mojang / Modrinth / CurseForge / Fabric 等）、皮肤与贴图渲染、NBT 解析等 |
 | `mml-gui/` | Tauri 桌面壳；窗口规格与 IPC 命令在 `src-tauri/src/windows/`，IPC 类型由 `ipc-gen` 扫描 Rust 源码自动生成 |
 | `mml-vue/` | 前端（Vue3 + Vite）；窗口在 `src/windows/`，通用组件在 `src/components/` |
+| `mml-ui-demo/` | **独立**的 Vue3 + Vite 示例工程：给服主写「自定义主页面」用的样板，`npm run build` 产出可直接导入启动器的 zip（不进 Cargo workspace，也不挂进 `mml-vue` 的构建） |
 
 ## 开发与构建
 
@@ -28,6 +29,7 @@
 | `dev-frontend.bat` | 只跑前端（vite，浏览器访问 `http://localhost:1420/?window=<kind>` 预览窗口，无 IPC 数据） |
 | `build-release.bat` | 正式发布构建（fat LTO，含安装包） |
 | `build-prerelease.bat` | 预发布构建（thin LTO，只出 exe，更快） |
+| `cd mml-ui-demo && npm run build` | 构建自定义主页面示例并打包成 `mml-ui-demo.zip`（用法见该目录的 README） |
 
 ## TODO
 

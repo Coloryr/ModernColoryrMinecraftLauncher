@@ -4,7 +4,7 @@
 // 渲染进行中后端拒绝关闭（close-blocked 事件），这里弹二次确认：中断渲染再关
 import { onMounted, onUnmounted, ref } from "vue";
 import WindowFrame from "../../components/ui/WindowFrame.vue";
-import BlockPanel from "../../components/BlockPanel.vue";
+import BlockPanel from "./BlockPanel.vue";
 import BaseButton from "../../components/ui/BaseButton.vue";
 import BaseModal from "../../components/ui/BaseModal.vue";
 import { t } from "../../lib/i18n";

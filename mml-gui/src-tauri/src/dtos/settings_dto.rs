@@ -340,6 +340,21 @@ pub struct WindowSettingDto {
     pub title_delay: u32,
 }
 
+/// 设置项的出厂默认值（「恢复默认」用）
+///
+/// 与各 getter 返回同一批 DTO 形状，值取自 core 的 `Default` / `new()`：
+/// 前端不再自己复制一套默认值，避免两处口径漂移。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SettingsDefaultsDto {
+    /// 网络与下载（HttpObj / DnsObj / GameCheckObj 的默认值）
+    pub network: NetworkSettingDto,
+    /// 启动参数（RunArgObj::new()）
+    pub run: RunArgSettingDto,
+    /// 游戏窗口（WindowSettingObj::new()）
+    pub window: WindowSettingDto,
+}
+
 impl From<&WindowSettingObj> for WindowSettingDto {
     fn from(w: &WindowSettingObj) -> Self {
         Self {

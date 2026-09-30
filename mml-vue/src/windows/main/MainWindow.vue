@@ -6,6 +6,7 @@ import {
   api,
   getLoadState,
   onClientConfigChange,
+  onCustomHomeChange,
   onGameExit,
   onGameLog,
   onInstanceChange,
@@ -27,12 +28,13 @@ import {
   setViewMode,
   viewMode,
 } from "../../lib/settings";
-import type { AccountStoreDto, InstanceArgsDto, InstanceInfoDto, JavaInfoDto, LogLine, MotdDto, MotdSegmentDto, NewsItem, VersionInfoDto } from "../../lib/bindings";
+import type { AccountStoreDto, CustomHomeInfoDto, InstanceArgsDto, InstanceInfoDto, JavaInfoDto, LogLine, MotdDto, MotdSegmentDto, NewsItem, VersionInfoDto } from "../../lib/bindings";
 import InstanceIcon from "../../components/InstanceIcon.vue";
 import InstanceSelect from "../../components/InstanceSelect.vue";
 import InstanceMetaPanel from "../../components/InstanceMetaPanel.vue";
 import LaunchArgsPanel from "../../components/LaunchArgsPanel.vue";
 import HomePage from "../../components/HomePage.vue";
+import CustomHomePage from "../../components/CustomHomePage.vue";
 import CustomExecPanel from "../../components/CustomExecPanel.vue";
 import InstanceLogPanel from "../../components/InstanceLogPanel.vue";
 import ProxyPanel from "../../components/ProxyPanel.vue";
@@ -202,6 +204,27 @@ const newsLoading = ref(false);
 /** 打开 / 关闭启动器主页（保留选中实例） */
 function toggleNews() {
   newsActive.value = !newsActive.value;
+}
+
+// ---- 自定义主页面（服主导入的 zip 顶替内置主页；导入 / 删除在设置窗口「客户端设置」） ----
+// 启用与否在 gui_config.client.customHome，已导入情况来自常驻压缩包，都由 status 现算
+
+/** 自定义主页面状态（null = 还没拉到 / 出错 → 一律回落内置主页） */
+const customHome = ref<CustomHomeInfoDto | null>(null);
+
+/** 是否用自定义页面顶替内置主页：启用 + 已导入 + 有入口 URL，任一不满足都回落，不白屏 */
+const useCustomHome = computed(
+  () =>
+    !!customHome.value?.enabled && !!customHome.value.installed && !!customHome.value.entryUrl,
+);
+
+/** 拉取自定义主页面状态（没导入过就是 installed=false，不报错） */
+async function loadCustomHome() {
+  try {
+    customHome.value = await commands.customHome.status();
+  } catch {
+    customHome.value = null;
+  }
 }
 
 // 切换选中实例后自动滚动到详情顶部
@@ -1031,6 +1054,7 @@ const clientConfig = ref<ClientConfig>({
   autoJoinServer: "",
   motdServer: "",
   lockInstance: "",
+  customHome: false,
 });
 const motdCardVisible = ref(true);
 let motdTimer: number | null = null;
@@ -1106,6 +1130,8 @@ function onClientConfig(c: ClientConfig) {
   motdCardVisible.value = c.motdCard && !!c.motdServer.trim();
   restartMotdTimer();
   void refreshMotd();
+  // 「启用自定义主页面」开关在这里；enabled 由 status 现算，顺手回拉一次
+  void loadCustomHome();
 }
 
 // ================= 事件订阅 =================
@@ -1172,6 +1198,10 @@ async function subscribeEvents() {
       loadInstances();
       loadGroups();
     }),
+    // 自定义主页面导入 / 删除（该动作不改 gui_config，client-config-change 不会发）
+    onCustomHomeChange(() => {
+      void loadCustomHome();
+    }),
     // Java 列表变更（添加 / 删除 / 配置加载完成）→ 重新拉取
     onJavaChange(() => {
       loadJava();
@@ -1189,7 +1219,7 @@ async function doInit() {
   if (inited) return;
   inited = true;
   try {
-    await Promise.all([loadInstances(), loadGroups(), loadJava()]);
+    await Promise.all([loadInstances(), loadGroups(), loadJava(), loadCustomHome()]);
     restoreSelection();
     closeSplash();
     loadVersions();
@@ -1438,7 +1468,11 @@ onMounted(async () => {
 
         <!-- 空实例：强制打开启动器主页，主页内融合空状态引导（隐藏实例分组） -->
         <template v-else-if="instances.length === 0">
-          <section class="news-page">
+          <!-- 自定义主页面：整块铺满内容区（不留四周内边距，也不给底部留白） -->
+          <section v-if="useCustomHome" class="custom-home-page">
+            <CustomHomePage :entry-url="customHome?.entryUrl ?? ''" />
+          </section>
+          <section v-else class="news-page">
             <HomePage
               :items="news"
               :loading="newsLoading"
@@ -1461,7 +1495,12 @@ onMounted(async () => {
              直接作为进出动画的两个子节点，内容不用包一层 -->
         <template v-else-if="effectiveMode === 'list'">
           <Transition name="view-swap" mode="out-in">
-            <section v-if="newsActive" key="home" class="news-page">
+            <!-- 自定义主页面：与列表模式一样铺满内容区（自己滚动，不留内边距） -->
+            <section v-if="newsActive && useCustomHome" key="custom-home" class="custom-home-page">
+              <CustomHomePage :entry-url="customHome?.entryUrl ?? ''" />
+            </section>
+
+            <section v-else-if="newsActive" key="home" class="news-page">
             <HomePage
               :items="news"
               :loading="newsLoading"
@@ -1590,9 +1629,20 @@ onMounted(async () => {
 
           <!-- 右侧内容区：实例详情 / 启动器主页（进出都走动画） -->
           <section ref="detailEl" class="detail">
+            <!-- 自定义主页面走自己的 flex 布局：.detail 带 padding 且可滚动，直接塞 iframe 时
+                 height:100% 解析不出高度（父元素没有确定高度），会把页面压扁；这里单独包一层
+                 去掉 padding 的撑满容器，让 iframe 铺满整个内容区 -->
             <Transition name="view-swap" mode="out-in">
+              <div
+                v-if="newsActive && useCustomHome"
+                key="custom-home"
+                class="custom-home-fill"
+              >
+                <CustomHomePage :entry-url="customHome?.entryUrl ?? ''" />
+              </div>
+
               <HomePage
-                v-if="newsActive"
+                v-else-if="newsActive"
                 key="home"
                 :items="news"
                 :loading="newsLoading"
@@ -2322,6 +2372,26 @@ onMounted(async () => {
   padding: 18px 28px 130px;
   overflow-y: auto;
   min-width: 0;
+}
+
+/* 自定义主页面占位块：整块铺满内容区，内边距与底部留白都不给（页面自己负责排版与滚动）。
+   高度必须走 flex 而不能只靠 height:100%：.detail 只有主轴上的确定尺寸，
+   子元素 height:100% 解析不出高度，会把 iframe 压扁 */
+.custom-home-page {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* 兜底分支里的自定义主页面：.detail 带 padding 且自身可滚动，要在它内部撑满，
+   得有一层确定高度的容器把 padding 抵消掉 */
+.custom-home-fill {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  margin: -16px -26px -130px;
 }
 
 .news-page-head {
