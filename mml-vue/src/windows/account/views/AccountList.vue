@@ -76,7 +76,7 @@ function hidePreview() {
         {{ acc.userName.charAt(0).toUpperCase() }}
       </span>
       <div class="row-meta">
-        <span class="row-name" :title="acc.userName">{{ acc.userName }}</span>
+        <span class="row-name" v-tip="acc.userName">{{ acc.userName }}</span>
         <span class="row-sub">
           <AccountTypeBadge :auth-type="acc.authType" />
           <span class="row-uuid">{{ acc.uuid }}</span>

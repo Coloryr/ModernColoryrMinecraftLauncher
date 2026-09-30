@@ -27,7 +27,7 @@
 
 use std::{collections::HashSet, sync::{LazyLock, RwLock}};
 
-use chrono::{DateTime, FixedOffset, Local};
+use chrono::{DateTime, Duration, FixedOffset, Local};
 use mml_names::i18_items::error_type::CoreResult;
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
@@ -145,6 +145,12 @@ pub struct LoginObj {
     /// 最后登录时间（带时区的日期时间）
     #[serde(rename = "LastLogin")]
     pub last_login: DateTime<FixedOffset>,
+    /// 访问令牌绝对过期时间（带时区）
+    ///
+    /// 仅 OAuth 账户记录（登录 / 刷新时由响应的 expires_in 换算）；
+    /// None = 无过期信息（离线 / 皮肤站令牌或旧版数据），视为不过期
+    #[serde(rename = "ExpireAt")]
+    pub expire_at: Option<DateTime<FixedOffset>>,
 }
 
 impl LoginObj {
@@ -176,6 +182,7 @@ impl LoginObj {
             text1: Default::default(),
             text2: Default::default(),
             last_login: dt_new,
+            expire_at: None,
         }
     }
 
@@ -197,6 +204,7 @@ impl LoginObj {
             text1: Default::default(),
             text2: Default::default(),
             last_login: Default::default(),
+            expire_at: None,
         }
     }
 
@@ -218,7 +226,33 @@ impl LoginObj {
             text1: Default::default(),
             text2: Default::default(),
             last_login: Default::default(),
+            expire_at: None,
         }
+    }
+
+    /// 记录访问令牌的有效期（秒），按当前时间换算为绝对过期时间
+    ///
+    /// 登录 / 刷新成功后调用；`expires_in <= 0` 时忽略（不记录过期时间）
+    ///
+    /// # 参数
+    ///
+    /// - `expires_in`: 令牌剩余有效期（秒）
+    pub fn set_expire_in(&mut self, expires_in: i64) {
+        if expires_in > 0 {
+            self.expire_at = Some((Local::now() + Duration::seconds(expires_in)).fixed_offset());
+        }
+    }
+
+    /// 访问令牌是否已过本地记录的过期时间
+    ///
+    /// 未记录过期时间（离线 / 皮肤站令牌、旧版数据）视为未过期。
+    /// 仅代表本地时钟判断，不代表服务端已吊销。
+    ///
+    /// # 返回值
+    ///
+    /// 已过期返回 `true`
+    pub fn is_expired(&self) -> bool {
+        self.expire_at.is_some_and(|t| Local::now().fixed_offset() > t)
     }
 
     /// 获取账户的唯一键（UUID + 认证类型）
@@ -271,6 +305,7 @@ impl Default for LoginObj {
             text1: Default::default(),
             text2: Default::default(),
             last_login: Default::default(),
+            expire_at: None,
         }
     }
 }

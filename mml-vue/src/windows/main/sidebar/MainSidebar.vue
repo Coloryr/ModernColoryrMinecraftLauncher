@@ -62,7 +62,7 @@ function isGroupOpen(name: string) {
         @update:model-value="emit('update:mode', $event as ViewMode)"
       />
       <div class="sidebar-head-actions">
-        <button class="icon-btn" :title="t('sidebar.collapse')" @click="emit('collapse')">‹</button>
+        <button class="icon-btn" v-tip="t('sidebar.collapse')" @click="emit('collapse')">‹</button>
       </div>
     </div>
 
@@ -95,7 +95,7 @@ function isGroupOpen(name: string) {
           @contextmenu.prevent="onGroupContext($event, g.name)"
           @pointerdown="onDragPointerDown($event, { kind: 'group', groupName: g.name })"
         >
-          <button class="group-title" :title="t('group.collapse')" @click="onGroupTitleClick(g.name)">
+          <button class="group-title" v-tip="t('group.collapse')" @click="onGroupTitleClick(g.name)">
             <svg
               class="group-chevron"
               :class="{ collapsed: isCollapsed(g.name) }"
@@ -149,7 +149,7 @@ function isGroupOpen(name: string) {
                 <InstanceIcon :name="inst.name" :uuid="inst.uuid" :size="38" />
                 <span v-if="inst.loader !== 'normal'" class="loader-text">{{ t(`add.loader.${inst.loader}`) }}</span>
                 <span class="inst-name">{{ inst.name }}</span>
-                <span v-if="inst.running" class="run-dot" title="running"></span>
+                <span v-if="inst.running" class="run-dot" v-tip="'running'"></span>
               </div>
             </template>
           </template>
@@ -204,7 +204,7 @@ function isGroupOpen(name: string) {
           class="loader-corner loader-text"
         >{{ t(`add.loader.${inst.loader}`) }}</span>
         <span class="tile-name">{{ inst.name }}</span>
-        <span v-if="inst.running" class="run-dot" title="running"></span>
+        <span v-if="inst.running" class="run-dot" v-tip="'running'"></span>
       </div>
       <div v-if="filteredInstances.length === 0" class="empty-tip tile-empty">{{ t("search.empty") }}</div>
     </div>

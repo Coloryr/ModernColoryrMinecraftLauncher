@@ -73,15 +73,13 @@ export async function removeAccount(uuid: string) {
   }
 }
 
-/** 刷新账户 Token：失败静默忽略，无论结果如何都乐观置为 valid */
+/** 刷新账户 Token：失败静默忽略；成功由后端广播 account-change 重拉真实状态（含过期标记） */
 export async function refreshAccountToken(uuid: string) {
   try {
     await commands.account.refreshAccountToken(uuid);
   } catch {
-    /* 忽略 */
+    /* 忽略：状态以后端为准 */
   }
-  const acc = accounts.value.find((a) => a.uuid === uuid);
-  if (acc) acc.tokenStatus = "valid";
 }
 
 /** 添加账户（真实由 Rust 创建），返回创建的账户；失败抛出后端错误文案 */

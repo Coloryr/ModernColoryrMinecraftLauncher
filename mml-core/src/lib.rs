@@ -126,6 +126,8 @@ pub fn load() -> CoreResult<()> {
 
     CORE_STOP_EVENT.add_handler(config_save::stop);
     CORE_STOP_EVENT.add_handler(mml_downloader::stop);
+    // 退出时中断贴图渲染：渲染循环是协作式的，不打断会一直跑到本轮结束
+    CORE_STOP_EVENT.add_handler(mml_tex_draw::cancel);
     CORE_STOP_EVENT.add_handler(mml_log::stop);
 
     *STATE.write().unwrap() = true;

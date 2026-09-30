@@ -60,7 +60,7 @@ function isCurrent(acc: AccountStoreDto): boolean {
               @delete="emit('delete', acc)"
             />
           </td>
-          <td class="cell-name" :title="acc.userName">
+          <td class="cell-name" v-tip="acc.userName">
             {{ acc.userName }}
             <span v-if="isCurrent(acc)" class="current-tag">{{ t("account.current") }}</span>
           </td>
@@ -70,8 +70,8 @@ function isCurrent(acc: AccountStoreDto): boolean {
           <td>
             <span class="token-tag" :class="acc.tokenStatus">{{ tokenLabel(acc) }}</span>
           </td>
-          <td class="cell-ext" :title="acc.ext1 ?? ''">{{ acc.ext1 ?? "—" }}</td>
-          <td class="cell-ext" :title="acc.ext2 ?? ''">{{ acc.ext2 ?? "—" }}</td>
+          <td class="cell-ext" v-tip="acc.ext1 ?? ''">{{ acc.ext1 ?? "—" }}</td>
+          <td class="cell-ext" v-tip="acc.ext2 ?? ''">{{ acc.ext2 ?? "—" }}</td>
         </tr>
       </tbody>
       </table>

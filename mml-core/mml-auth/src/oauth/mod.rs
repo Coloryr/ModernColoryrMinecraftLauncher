@@ -306,6 +306,9 @@ impl LoginObj {
     /// 微软正版账户的刷新流程：先用现有 Minecraft Token 快速验证，
     /// 失败则走完整刷新链（refresh_token → Xbox → XSTS → Minecraft Token → Profile）
     ///
+    /// 快速验证成功时不更新凭据（token 仍有效，`expire_at` 保持原值）；
+    /// 完整刷新成功后按新令牌的 expires_in 重算 `expire_at`
+    ///
     /// # 参数
     ///
     /// - `cancel`: 取消令牌，用于中断异步操作
@@ -335,7 +338,7 @@ impl LoginObj {
         if cancel.is_cancelled() {
             return Err(ErrorType::TaskCancel);
         }
-        let token = mojang_api::get_minecraft_token(&xsts.xbl_uhs, &xsts.xbl_token).await?;
+        let (token, expires_in) = mojang_api::get_minecraft_token(&xsts.xbl_uhs, &xsts.xbl_token).await?;
         if cancel.is_cancelled() {
             return Err(ErrorType::TaskCancel);
         }
@@ -345,6 +348,7 @@ impl LoginObj {
         self.uuid = profile.id;
         self.text1 = Some(oauth.refresh_token);
         self.access_token = token;
+        self.set_expire_in(expires_in);
         self.last_login = Local::now().fixed_offset();
 
         Ok(())

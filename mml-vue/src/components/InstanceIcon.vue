@@ -89,9 +89,11 @@ watch(
       class="inst-icon-img"
       :src="url"
       alt=""
+      loading="lazy"
+      decoding="async"
       @error="failed = true"
     />
-    <span v-if="failed || !url">{{ char }}</span>
+    <span class="inst-icon-char">{{ char }}</span>
   </div>
 </template>
 
@@ -108,6 +110,12 @@ watch(
   user-select: none;
   overflow: hidden;
   position: relative;
+}
+
+/* 首字母始终在 DOM 里：真图是绝对定位、盖在它上面，图没到之前就先显示字母，
+   避免等图标请求返回时整块只剩渐变底 */
+.inst-icon-char {
+  line-height: 1;
 }
 
 .inst-icon-img {

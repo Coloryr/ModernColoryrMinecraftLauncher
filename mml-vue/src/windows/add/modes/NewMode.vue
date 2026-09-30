@@ -149,7 +149,7 @@ function onLoaderPathPick(e: Event) {
           size="sm"
           variant="ghost"
           :disabled="verLoading"
-          :title="t('add.versionRefresh')"
+          v-tip="t('add.versionRefresh')"
           @click="emit('refreshVersions')"
         >
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -181,7 +181,7 @@ function onLoaderPathPick(e: Event) {
           size="sm"
           variant="ghost"
           :disabled="!newVersion || loaderLoading"
-          :title="t('add.loaderRefresh')"
+          v-tip="t('add.loaderRefresh')"
           @click="emit('refreshLoaders')"
         >
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -211,7 +211,7 @@ function onLoaderPathPick(e: Event) {
           size="sm"
           variant="ghost"
           :disabled="!newVersion || noLoaderVersion || loaderVerLoading"
-          :title="t('add.loaderVerRefresh')"
+          v-tip="t('add.loaderVerRefresh')"
           @click="emit('refreshLoaderVersions')"
         >
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">

@@ -27,7 +27,7 @@ watch(
       v-if="!failed"
       :src="src"
       :alt="alt ?? ''"
-      :title="title"
+      v-tip="title"
       loading="lazy"
       :class="{ show: loaded }"
       @load="loaded = true"

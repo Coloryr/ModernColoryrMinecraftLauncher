@@ -13,6 +13,8 @@ import CollapsePanel from "./ui/CollapsePanel.vue";
 const props = defineProps<{
   args: InstanceArgsDto;
   javas: JavaInfoDto[];
+  /** 实例锁定生效：只留内存 / 窗口大小 / Java，扩展参数整块隐藏 */
+  locked?: boolean;
 }>();
 
 const emit = defineEmits<{ (e: "update:args", v: InstanceArgsDto): void }>();
@@ -166,8 +168,8 @@ const gcOptions = [
       </div>
     </div>
 
-    <!-- 扩展参数 -->
-    <div class="args-block advanced">
+    <!-- 扩展参数：实例锁定时整块隐藏（含标题行与分隔线），只留上面的三项 -->
+    <div v-if="!locked" class="args-block advanced">
       <button class="advanced-toggle" @click="advancedOpen = !advancedOpen">
         <span>{{ t("args.advanced") }}</span>
         <svg
@@ -226,7 +228,7 @@ const gcOptions = [
               spellcheck="false"
               @input="setLine('jvmArgs', i, ($event.target as HTMLInputElement).value)"
             />
-            <button class="line-del" title="✕" @click="removeLine('jvmArgs', i)">✕</button>
+            <button class="line-del" v-tip="'✕'" @click="removeLine('jvmArgs', i)">✕</button>
           </div>
           <button class="line-add" @click="addLine('jvmArgs')">＋ {{ t("args.addLine") }}</button>
 
@@ -240,7 +242,7 @@ const gcOptions = [
               spellcheck="false"
               @input="setLine('gameArgs', i, ($event.target as HTMLInputElement).value)"
             />
-            <button class="line-del" title="✕" @click="removeLine('gameArgs', i)">✕</button>
+            <button class="line-del" v-tip="'✕'" @click="removeLine('gameArgs', i)">✕</button>
           </div>
           <button class="line-add" @click="addLine('gameArgs')">＋ {{ t("args.addLine") }}</button>
 
@@ -254,7 +256,7 @@ const gcOptions = [
               spellcheck="false"
               @input="setLine('classPath', i, ($event.target as HTMLInputElement).value)"
             />
-            <button class="line-del" title="✕" @click="removeLine('classPath', i)">✕</button>
+            <button class="line-del" v-tip="'✕'" @click="removeLine('classPath', i)">✕</button>
           </div>
           <button class="line-add" @click="addLine('classPath')">＋ {{ t("args.addLine") }}</button>
 
@@ -275,7 +277,7 @@ const gcOptions = [
               spellcheck="false"
               @input="setEnvValue(i, ($event.target as HTMLInputElement).value)"
             />
-            <button class="line-del" title="✕" @click="removeEnv(i)">✕</button>
+            <button class="line-del" v-tip="'✕'" @click="removeEnv(i)">✕</button>
           </div>
           <button class="line-add" @click="addEnv">＋ {{ t("args.addLine") }}</button>
         </div>

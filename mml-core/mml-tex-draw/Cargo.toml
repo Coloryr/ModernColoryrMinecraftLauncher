@@ -13,6 +13,7 @@ mml-downloader = { path = "../mml-downloader" }
 mml-config = { path = "../mml-config" }
 mml-log = { path = "../mml-log" }
 tokio.workspace = true
+tokio-util.workspace = true
 tiny-skia.workspace = true
 glam.workspace = true
 rayon.workspace = true

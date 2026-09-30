@@ -24,8 +24,6 @@ use std::{
 use mml_base::{inner_path, serialize_tools};
 use mml_config::config_save;
 use mml_names::{i18_items::error_type::CoreResult, names, uuids};
-use serde::Deserialize;
-
 use crate::{AuthType, LoginObj, UserKeyObj};
 
 /// 全局账户存储（键 = UUID + 认证类型）

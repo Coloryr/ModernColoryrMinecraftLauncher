@@ -15,8 +15,12 @@
 
 use std::{
     collections::HashMap,
+    io::Cursor,
     path::{Path, PathBuf},
-    sync::{LazyLock, OnceLock, RwLock},
+    sync::{
+        LazyLock, OnceLock, RwLock,
+        atomic::{AtomicBool, Ordering},
+    },
 };
 
 use mml_base::{
@@ -24,13 +28,18 @@ use mml_base::{
     file_item::{FileHash, FileItemObj, LaterRun},
     serialize_tools,
 };
-use mml_game::{gui_hook, launcher_path::{libraries_path, version_path}};
+use mml_game::{
+    gui_hook,
+    launcher_path::{assets_path, libraries_path, version_path},
+    mojang::{assets_obj::AssetsObj, game_arg_obj::GameArgObj},
+};
 use mml_names::{
     Lang,
     i18_items::error_type::{CoreResult, DataNotFoundData, ErrorType, PathNotExistsData},
     names,
 };
 use mml_sys::path_helper;
+use tokio_util::sync::CancellationToken;
 
 use crate::block::obj::{BlocksObj, ItemsObj};
 
@@ -39,17 +48,87 @@ pub mod gpu;
 pub mod item;
 pub mod model;
 
+/// 渲染防重入标志：load_blocks 可能被并发触发（界面按钮连点、界面与内核各起一轮），
+/// 不挡住的话会各自下发一次客户端 jar 下载任务，同一文件下两遍
+static LOADING: AtomicBool = AtomicBool::new(false);
+
+/// 本轮渲染的取消令牌（每轮 load_blocks 开始时换新，取消不会串到下一轮）
+///
+/// 同时用于两处：渲染循环按条目查询（[`cancel_token`] 克隆后无锁读），
+/// 以及本轮下发的下载任务（客户端 jar / 语言文件）——取消只影响本轮，
+/// 不动下载队列里其它任务（整合包安装等）
+static CANCEL: LazyLock<RwLock<CancellationToken>> =
+    LazyLock::new(|| RwLock::new(CancellationToken::new()));
+
+/// 全局渲染进度回调（GUI 启动时注册）：调用 [`load_blocks`] 时没传回调的
+/// 调用方经它上报进度（界面按钮那条路径自带回调，这里只是兜底）
+static GUI: OnceLock<gui_hook::ProgressGui> = OnceLock::new();
+
+/// 注册全局渲染进度回调（启动时调用一次）
+pub fn set_gui_handel(gui: gui_hook::ProgressGui) {
+    let _ = GUI.set(gui);
+}
+
+/// 是否正在渲染（供界面层防重入查询）
+pub fn is_loading() -> bool {
+    LOADING.load(Ordering::Acquire)
+}
+
+/// 取消本轮渲染
+///
+/// 渲染循环与在途下载都是协作式取消：置位后循环跳过剩余条目、
+/// 下载在下一个数据块处收手，`load_blocks` 返回 [`ErrorType::TaskCancel`]。
+/// 也挂在核心停止链上，退出程序时不再等渲染跑完
+pub fn cancel() {
+    CANCEL.read().unwrap().cancel();
+}
+
+/// 本轮渲染是否已被取消
+pub fn is_cancelled() -> bool {
+    CANCEL.read().unwrap().is_cancelled()
+}
+
+/// 取本轮取消令牌（渲染循环持有克隆，按条目无锁查询）
+pub(crate) fn cancel_token() -> CancellationToken {
+    CANCEL.read().unwrap().clone()
+}
+
 /// 下载并渲染方块/物品贴图（版本清单 → 客户端jar → 解包渲染）
 ///
-/// `gui`可选，渲染期间按已处理的模型数上报进度；
-/// `force`为 true 时忽略版本短路，全量重渲染
+/// `gui`可选，渲染期间按已处理的模型数上报进度（未传时回退全局注册的回调）；
+/// `force`为 true 时忽略版本短路，全量重渲染；
+/// 已有渲染在跑时直接返回 `Ok(())`（调用方先查 [`is_loading`] 区分）；
+/// 被 [`cancel`] 取消时返回 [`ErrorType::TaskCancel`]
 pub async fn load_blocks(gui: gui_hook::ProgressGui, force: bool) -> CoreResult<()> {
+    if LOADING.swap(true, Ordering::AcqRel) {
+        return Ok(());
+    }
+    // 新一轮：换新令牌，上一轮的取消不残留
+    *CANCEL.write().unwrap() = CancellationToken::new();
+    let gui = gui.or_else(|| GUI.get().and_then(|g| g.clone()));
+    let result = load_blocks_impl(gui.clone(), force).await;
+    LOADING.store(false, Ordering::Release);
+    // 收尾借回调发一次空文字事件，把 running 已复位的最终状态推给界面。
+    // 进度事件只在渲染步进时触发，结束时没有任何后续事件，
+    // 界面会一直停在最后一次步进事件的“渲染中”状态
+    if let Some(gui) = &gui {
+        gui.set_progress_text(None);
+    }
+    result
+}
+
+async fn load_blocks_impl(gui: gui_hook::ProgressGui, force: bool) -> CoreResult<()> {
+    // 本轮取消令牌：渲染循环按条目查询，下载任务也挂在它上面
+    let cancel = cancel_token();
+
     // 版本清单（本地缓存，缺了才在线拉）；方块与物品分开短路，只补渲染缺的那部分
     let versions = version_path::get_version_obj_online().await?;
     let last = versions.latest.release.clone();
     let block_done = !force && block::mml_tex_draw_id() == last;
     let item_done = !force && item::items_id() == last;
-    if block_done && item_done {
+    // 语言文件也算“已完成”：客户端 jar 只带 en_us，中文要按资源索引单独补下，
+    // 已渲染过的版本也可能还没下过（短路掉就永远补不上）
+    if block_done && item_done && langs_ready() {
         return Ok(());
     }
 
@@ -70,8 +149,18 @@ pub async fn load_blocks(gui: gui_hook::ProgressGui, force: bool) -> CoreResult<
         hash: FileHash::Sha1(obj.downloads.client.sha1.clone()),
         later: LaterRun::None,
     };
-    if !item.check_hash() && !mml_downloader::start_download_task(vec![item.clone()]).await {
-        return Err(ErrorType::DownloadFileFail);
+    if !item.check_hash()
+        && !mml_downloader::start_download_task_cancellable(vec![item.clone()], cancel.clone()).await
+    {
+        return Err(cancel_or(ErrorType::DownloadFileFail, &cancel));
+    }
+
+    // 语言文件（方块/物品显示名）：jar 里只有 en_us，中文等按资源索引补下。
+    // 取消要往外抛（本轮已作废），其它失败只记日志：界面退化成显示 ID，贴图照常渲染
+    match download_langs(&obj, &cancel).await {
+        Ok(()) => {}
+        Err(ErrorType::TaskCancel) => return Err(ErrorType::TaskCancel),
+        Err(err) => mml_log::error_type(err),
     }
 
     // 打开jar并渲染
@@ -87,6 +176,24 @@ pub async fn load_blocks(gui: gui_hook::ProgressGui, force: bool) -> CoreResult<
     save()?;
 
     Ok(())
+}
+
+/// 收尾错误：本轮已被取消时报取消（用户主动中断，不算失败），否则报原错误
+///
+/// # 参数
+///
+/// - `err`: 取消未发生时要返回的错误
+/// - `cancel`: 本轮取消令牌
+///
+/// # 返回值
+///
+/// 已取消返回 [`ErrorType::TaskCancel`]，否则返回 `err`
+fn cancel_or(err: ErrorType, cancel: &CancellationToken) -> ErrorType {
+    if cancel.is_cancelled() {
+        ErrorType::TaskCancel
+    } else {
+        err
+    }
 }
 
 /// 方块语言表缓存（按语言缓存整个翻译表）
@@ -162,9 +269,9 @@ pub fn init<P: AsRef<Path>>(path: P) -> CoreResult<()> {
 
 /// 加载数据
 ///
-/// 读回上次的结果后，仅在用户同意渲染（block_render = true）时后台执行
-/// load_blocks（版本短路命中时直接返回）；首次运行没有数据文件也正常，
-/// 等后台下载渲染完成再save
+/// 只读回上次的渲染结果（版本号在 `block.json` / `items.json` 里），
+/// **不**在启动时自动补渲染：渲染一律由界面按钮经 [`load_blocks`] 触发。
+/// 首次运行没有数据文件也正常，读不到就是「未渲染」
 pub fn load() -> CoreResult<()> {
     if let Ok(obj) = serialize_tools::json_from_file::<BlocksObj>(BLOCK_FILE.get().unwrap()) {
         *BLOCKS.write().unwrap() = obj;
@@ -175,37 +282,7 @@ pub fn load() -> CoreResult<()> {
         *ITEMS.write().unwrap() = obj;
     }
 
-    // 默认不渲染：用户在界面同意后写入配置，之后每次启动自动补渲染缺失版本
-    if mml_config::read_config().block_render {
-        spawn_load_task();
-    }
-
     Ok(())
-}
-
-/// 后台执行load_blocks，不阻塞调用方，错误只记日志
-fn spawn_load_task() {
-    let task = async {
-        if let Err(err) = load_blocks(None, false).await {
-            mml_log::error_type(err);
-        }
-    };
-    match tokio::runtime::Handle::try_current() {
-        // 已在异步环境（如GUI的tauri::async_runtime），挂到当前runtime
-        Ok(handle) => {
-            handle.spawn(task);
-        }
-        // 同步环境，独立线程带自己的runtime
-        Err(_) => {
-            std::thread::spawn(move || {
-                tokio::runtime::Builder::new_current_thread()
-                    .enable_all()
-                    .build()
-                    .unwrap()
-                    .block_on(task);
-            });
-        }
-    }
 }
 
 /// 保存数据
@@ -318,6 +395,107 @@ pub(crate) fn extract_langs(
         return (block_map, item_map);
     }
     (std::collections::HashMap::new(), std::collections::HashMap::new())
+}
+
+/// 需要从资源索引补下的语言文件
+///
+/// 客户端 jar 只内置 `en_us.json`（由 [`extract_langs`] 提取），其余语言
+/// 只在资源索引里列出；这里列的是除 en_us 外界面用得到的语言
+const EXTRA_LANGS: [&str; 1] = ["zh_cn"];
+
+/// 语言文件路径（`langs/<name>.json`，不保证存在）
+///
+/// # 参数
+///
+/// - `name`: 语言名（如 `zh_cn`）
+///
+/// # 返回值
+///
+/// 返回文件路径；语言目录尚未初始化时返回 `None`
+fn lang_path(name: &str) -> Option<PathBuf> {
+    get_lang_dir().map(|dir| dir.join(format!("{name}.json")))
+}
+
+/// [`EXTRA_LANGS`] 里的语言文件是否都已在本地
+///
+/// # 返回值
+///
+/// 全部存在返回 `true`
+fn langs_ready() -> bool {
+    EXTRA_LANGS
+        .iter()
+        .all(|name| lang_path(name).is_some_and(|file| file.is_file()))
+}
+
+/// 从资源索引下载方块/物品名称需要的语言文件
+///
+/// 客户端 jar 只带 `en_us.json`，`zh_cn` 等语言由版本 JSON 的 `assetIndex`
+/// 列出、经资源下载站取回；缺了只能回退显示方块 ID。
+/// 失败不算渲染失败（只记日志）：界面退化成显示 ID，贴图渲染照常。
+///
+/// # 参数
+///
+/// - `obj`: 版本数据（取其 `assetIndex` 定位资源索引）
+/// - `cancel`: 本轮取消令牌（下载挂在它上面，取消只影响本次任务）
+///
+/// # 返回值
+///
+/// 成功或无需下载返回 `Ok(())`；本轮被取消返回 [`ErrorType::TaskCancel`]；
+/// 索引/语言文件获取失败返回对应错误
+async fn download_langs(obj: &GameArgObj, cancel: &CancellationToken) -> CoreResult<()> {
+    let Some(index) = &obj.asset_index else {
+        return Ok(());
+    };
+
+    // 资源索引：与游戏本体的资源检查共用一份本地缓存（assets/indexes/<id>.json），缺了才在线拉
+    let assets = match assets_path::get_index(index) {
+        Ok(assets) => assets,
+        Err(_) => {
+            let mut url = index.url.clone();
+            mml_net::url_helper::change_source(&mut url);
+            let data = mml_net::mojang_api::get_assets(&url).await?;
+            let assets: AssetsObj = serialize_tools::json_from_bytes(&data)?;
+            assets_path::add_index(obj, &mut Cursor::new(data));
+            assets
+        }
+    };
+
+    // 只下本地缺失或大小不符的（大小不符 = 客户端换版本了）
+    let mut list = Vec::new();
+    for name in EXTRA_LANGS {
+        let Some(asset) = assets.objects.get(&format!("minecraft/lang/{name}.json")) else {
+            continue;
+        };
+        let Some(file) = lang_path(name) else {
+            continue;
+        };
+        let done = match std::fs::metadata(&file) {
+            Ok(meta) => meta.len() as i64 == asset.size,
+            Err(_) => false,
+        };
+        if done {
+            continue;
+        }
+
+        list.push(FileItemObj {
+            name: format!("{name}.json"),
+            file,
+            url: mml_net::url_helper::get_download_assets(&asset.hash),
+            hash: FileHash::Sha1(asset.hash.clone()),
+            later: LaterRun::None,
+        });
+    }
+    if list.is_empty() {
+        return Ok(());
+    }
+
+    if !mml_downloader::start_download_task_cancellable(list, cancel.clone()).await {
+        return Err(cancel_or(ErrorType::DownloadFileFail, cancel));
+    }
+    // 语言表按语言整体缓存，重下后要清掉旧版本的翻译
+    LANGS.write().unwrap().clear();
+
+    Ok(())
 }
 
 /// 获取方块数据

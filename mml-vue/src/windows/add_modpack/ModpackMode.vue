@@ -511,14 +511,14 @@ watch(source, loadSource);
           <button
             class="pack-star"
             :class="{ on: item.isStar }"
-            :title="item.isStar ? t('modpack.unstar') : t('modpack.star')"
+            v-tip="item.isStar ? t('modpack.unstar') : t('modpack.star')"
             @click.stop="toggleStar(item)"
           >
             <svg viewBox="0 0 24 24" width="17" height="17" stroke-width="2" stroke-linejoin="round">
               <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
             </svg>
           </button>
-          <div class="pack-main" :title="t('modpack.detailHint')" @dblclick="openDetail(item)">
+          <div class="pack-main" v-tip="t('modpack.detailHint')" @dblclick="openDetail(item)">
             <AsyncImage v-if="item.image" class="pack-icon" :src="item.image" alt="" />
             <div v-else class="pack-icon pack-icon-fallback">{{ item.name.slice(0, 1).toUpperCase() }}</div>
             <div class="pack-info">
@@ -583,7 +583,7 @@ watch(source, loadSource);
           <!-- 头部 + 内容合在一块面板里：头部固定、内容滚动，滚动条贴面板右缘 -->
           <div class="detail-panel">
           <div class="detail-head">
-            <button class="detail-back" :title="t('modpack.back')" @click="closeDetail">
+            <button class="detail-back" v-tip="t('modpack.back')" @click="closeDetail">
               <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <line x1="19" y1="12" x2="5" y2="12" />
                 <polyline points="12 19 5 12 12 5" />
@@ -629,7 +629,7 @@ watch(source, loadSource);
             <button
               class="detail-star"
               :class="{ on: detailItem.isStar }"
-              :title="detailItem.isStar ? t('modpack.unstar') : t('modpack.star')"
+              v-tip="detailItem.isStar ? t('modpack.unstar') : t('modpack.star')"
               @click="toggleStar(detailItem)"
             >
               <svg viewBox="0 0 24 24" width="20" height="20" stroke-width="2" stroke-linejoin="round">
@@ -639,7 +639,7 @@ watch(source, loadSource);
             <button
               v-if="detailItem.url"
               class="detail-link"
-              :title="t('modpack.openPage')"
+              v-tip="t('modpack.openPage')"
               @click="api.openUrl(detailItem.url)"
             >
               <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -671,7 +671,7 @@ watch(source, loadSource);
                       :key="shot.logo"
                       class="detail-shot"
                       :src="shot.logo"
-                      :title="shot.name || shot.description"
+                      v-tip="shot.name || shot.description"
                       @click="openPreview(shot.logo)"
                     />
                   </div>

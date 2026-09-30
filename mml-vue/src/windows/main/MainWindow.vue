@@ -107,6 +107,8 @@ const filteredGroups = computed(() => {
 });
 
 function select(inst: InstanceInfoDto) {
+  // 实例锁定：只能使用锁定的那个实例（对玩家静默拦截，不暴露"被锁定"这件事）
+  if (lockActive.value && inst.uuid !== lockUuid.value) return;
   selected.value = inst;
   // 持久化当前选中实例到 gui_config.json（uuid 未变时内部跳过，不会重复写盘）
   setSelectedInstance(inst.uuid);
@@ -719,6 +721,8 @@ function onInstContext(e: MouseEvent, inst: InstanceInfoDto) {
     }
     openCtxMenu(e, { kind: "multi" });
   } else {
+    // 实例锁定时选不中别的实例，菜单动作又是按选中实例执行的，这里直接不给开
+    if (lockActive.value && inst.uuid !== lockUuid.value) return;
     // 普通模式：先选中该实例，再弹出实例菜单
     select(inst);
     openCtxMenu(e, { kind: "instance", instance: inst });
@@ -1026,9 +1030,42 @@ const clientConfig = ref<ClientConfig>({
   autoJoin: false,
   autoJoinServer: "",
   motdServer: "",
+  lockInstance: "",
 });
 const motdCardVisible = ref(true);
 let motdTimer: number | null = null;
+
+// ---- 实例锁定：只允许使用锁定的那个实例（设置窗口「客户端设置 → 实例锁定」） ----
+/** 锁定的实例 uuid（空 = 未锁定） */
+const lockUuid = computed(() => clientConfig.value.lockInstance);
+/** 锁定是否生效：uuid 非空且实例还在（实例被删掉后走 lockMissing 的错误页） */
+const lockActive = computed(
+  () => !!lockUuid.value && instances.value.some((i) => i.uuid === lockUuid.value),
+);
+/** 实例列表是否已加载过：区分「还在加载」与「确实没有这个实例」，避免启动瞬间闪错误页 */
+const instancesLoaded = ref(false);
+/** 锁定的实例已不存在（整合包作者的实例目录被删 / 改名）：主窗口整块换成错误页 */
+const lockMissing = computed(
+  () =>
+    instancesLoaded.value &&
+    !!lockUuid.value &&
+    !instances.value.some((i) => i.uuid === lockUuid.value),
+);
+/** 锁定生效时强制按列表模式渲染（只覆盖渲染，不写回 gui_config，解锁后自动回到原模式） */
+const effectiveMode = computed<ViewMode>(() => (lockActive.value ? "list" : mode.value));
+
+// 锁定生效时把选中实例压到锁定实例：切换入口已隐藏，若还停在别处（比如上次退出时选的是另一个）
+// 就会启动错的实例。不走 select()——那会关掉启动器主页。
+watch(
+  () => (lockActive.value ? lockUuid.value : ""),
+  (uuid) => {
+    if (!uuid || selected.value?.uuid === uuid) return;
+    const inst = instances.value.find((i) => i.uuid === uuid);
+    if (!inst) return;
+    selected.value = inst;
+    setSelectedInstance(inst.uuid);
+  },
+);
 
 // ---- 登录方式锁定：账户选择列表只显示锁定类型，当前账户被滤掉就取消选择 ----
 /** 锁定的登录类型（总开关关闭或列表为空 = 不过滤） */
@@ -1172,6 +1209,7 @@ function openFeedback() {
 
 async function loadInstances() {
   instances.value = await api.getInstances();
+  instancesLoaded.value = true;
   // 保留当前选中；不自动选中实例（默认停在启动器主页）
   if (selected.value) {
     const now = instances.value.find((i) => i.uuid === selected.value?.uuid);
@@ -1247,6 +1285,8 @@ function onPickInstance(uuid: string) {
 // ================= 添加实例（独立窗口） =================
 
 function openAdd() {
+  // 实例锁定生效时禁止新建实例（入口本就随侧边栏 / 禁用按钮不可达，这里兜底）
+  if (lockActive.value) return;
   openWindow("add");
 }
 
@@ -1388,8 +1428,16 @@ onMounted(async () => {
           <button class="multi-exit" @click="exitMultiSelect">{{ t("multi.exit") }}</button>
         </div>
 
+        <!-- 锁定的实例已不存在（整合包作者的实例被删 / 改名）：整块换成错误页，顶部栏保留 -->
+        <template v-if="lockMissing">
+          <section class="lock-error">
+            <div class="lock-error-badge">!</div>
+            <p class="lock-error-text">{{ t("launch.instanceLockError") }}</p>
+          </section>
+        </template>
+
         <!-- 空实例：强制打开启动器主页，主页内融合空状态引导（隐藏实例分组） -->
-        <template v-if="instances.length === 0">
+        <template v-else-if="instances.length === 0">
           <section class="news-page">
             <HomePage
               :items="news"
@@ -1411,7 +1459,7 @@ onMounted(async () => {
 
         <!-- 列表模式：启动器主页 ↔ 实例列表。两者布局角色一致（flex:1 纵向），
              直接作为进出动画的两个子节点，内容不用包一层 -->
-        <template v-else-if="mode === 'list'">
+        <template v-else-if="effectiveMode === 'list'">
           <Transition name="view-swap" mode="out-in">
             <section v-if="newsActive" key="home" class="news-page">
             <HomePage
@@ -1431,7 +1479,8 @@ onMounted(async () => {
             </section>
 
             <section v-else key="list" class="list-mode">
-            <div class="list-toolbar">
+            <!-- 实例锁定生效时视图固定为列表，模式切换控件整块隐藏（只留个空工具栏会很怪） -->
+            <div v-if="!lockActive" class="list-toolbar">
               <SegmentedTabs
                 :model-value="mode"
                 :options="MODE_OPTIONS"
@@ -1446,10 +1495,13 @@ onMounted(async () => {
             />
             <h2 class="list-title">{{ selected?.name ?? t("launch.selectInstance") }}</h2>
 
+            <!-- 实例锁定生效：只有这一个实例可用，切换入口整块隐藏 -->
             <InstanceSelect
+              v-if="!lockActive"
               :instances="instances"
               :model-value="selected?.uuid ?? null"
               @update:model-value="onPickInstance"
+              @add="openAdd"
             />
 
             <div class="launch-actions">
@@ -1478,10 +1530,16 @@ onMounted(async () => {
                 <InstanceMetaPanel
                   :instance="selected"
                   :versions="versions"
+                  :locked="lockActive"
                   @update="onMetaUpdate"
                   @refreshed="onVersionsRefreshed"
                 />
-                <LaunchArgsPanel :args="argsOf(selected.uuid)" :javas="javas" @update:args="updateArgs" />
+                <LaunchArgsPanel
+                  :args="argsOf(selected.uuid)"
+                  :javas="javas"
+                  :locked="lockActive"
+                  @update:args="updateArgs"
+                />
               </div>
             </CollapsePanel>
             </section>
@@ -1493,7 +1551,7 @@ onMounted(async () => {
           <!-- 侧栏槽位：宽度在展开(300px) / 收起(24px) 之间过渡，动画期间内容被裁掉而不被压扁 -->
           <div class="sidebar-slot" :class="{ collapsed: sidebarCollapsed }">
             <MainSidebar
-              :mode="mode"
+              :mode="effectiveMode"
               :mode-options="MODE_OPTIONS"
               :search-text="searchText"
               :groups="groups"
@@ -1525,7 +1583,7 @@ onMounted(async () => {
             <!-- 展开把手：绝对定位在槽位外缘，收起时淡入（不占位，避免展开瞬间内容跳动） -->
             <button
               class="sidebar-expand"
-              :title="t('sidebar.expand')"
+              v-tip="t('sidebar.expand')"
               @click="collapseSidebar(false)"
             >›</button>
           </div>
@@ -1584,29 +1642,29 @@ onMounted(async () => {
                   <span>{{ t("detail.launchCount", { count: 0 }) }}</span>
                   <!-- 小图标快捷操作（单色 SVG） -->
                   <div class="meta-actions">
-                    <button class="icon-btn" :title="t('actions.openFolder')" @click="onAction('openFolder')">
+                    <button class="icon-btn" v-tip="t('actions.openFolder')" @click="onAction('openFolder')">
                       <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />
                       </svg>
                     </button>
-                    <button class="icon-btn" :title="t('actions.viewLog')" @click="onAction('viewLog')">
+                    <button class="icon-btn" v-tip="t('actions.viewLog')" @click="onAction('viewLog')">
                       <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z" />
                         <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" />
                       </svg>
                     </button>
-                    <button class="icon-btn" :title="t('actions.editConfig')" @click="onAction('editConfig')">
+                    <button class="icon-btn" v-tip="t('actions.editConfig')" @click="onAction('editConfig')">
                       <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3" />
                         <path d="M1 14h6M9 8h6M17 16h6" />
                       </svg>
                     </button>
-                    <button class="icon-btn" :title="t('actions.rename')" @click="onAction('rename')">
+                    <button class="icon-btn" v-tip="t('actions.rename')" @click="onAction('rename')">
                       <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
                       </svg>
                     </button>
-                    <button class="icon-btn danger" :title="t('actions.delete')" @click="onAction('delete')">
+                    <button class="icon-btn danger" v-tip="t('actions.delete')" @click="onAction('delete')">
                       <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6" />
                       </svg>
@@ -1655,12 +1713,14 @@ onMounted(async () => {
                   <InstanceMetaPanel
                     :instance="selected"
                     :versions="versions"
+                    :locked="lockActive"
                     @update="onMetaUpdate"
                     @refreshed="onVersionsRefreshed"
                   />
                   <LaunchArgsPanel
                     :args="argsOf(selected.uuid)"
                     :javas="javas"
+                    :locked="lockActive"
                     @update:args="updateArgs"
                   />
                 </div>
@@ -1685,7 +1745,7 @@ onMounted(async () => {
                   <button
                     v-if="selected"
                     class="args-toggle"
-                    :title="t('logWindow.openInWindow')"
+                    v-tip="t('logWindow.openInWindow')"
                     @click="openLogWindow"
                   >
                     <span>🗔 {{ t("logWindow.openInWindow") }}</span>
@@ -1842,7 +1902,7 @@ onMounted(async () => {
       <div v-if="motdCardVisible" class="motd-float">
         <button
           class="motd-refresh"
-          :title="t('server.refresh')"
+          v-tip="t('server.refresh')"
           @click="refreshMotd"
         >
           <svg
@@ -1913,7 +1973,7 @@ onMounted(async () => {
       <InstanceLogPanel :logs="logs" />
     </BaseModal>
 
-    <BaseModal v-if="showRename && selected" :title="t('actions.renameTitle')" @close="showRename = false">
+    <BaseModal v-if="showRename && selected" :title="t('actions.renameTitle')" :closable="false" @close="showRename = false">
       <label class="field-label">{{ t("add.name") }}</label>
       <input v-model="renameName" class="field-input" @keyup.enter="doRename" spellcheck="false" />
 
@@ -1926,7 +1986,7 @@ onMounted(async () => {
     </BaseModal>
 
     <!-- ===== 删除实例确认 ===== -->
-    <BaseModal v-if="showDelete && selected" :title="t('actions.deleteTitle')" @close="!deleteBusy && (showDelete = false)">
+    <BaseModal v-if="showDelete && selected" :title="t('actions.deleteTitle')" :closable="false" @close="!deleteBusy && (showDelete = false)">
       <p class="delete-tip">{{ t("actions.deleteConfirm", { name: selected.name }) }}</p>
 
       <!-- 删除进度（整目录挪回收站无法取得真实进度，显示滚动动画条） -->
@@ -1944,7 +2004,7 @@ onMounted(async () => {
     </BaseModal>
 
     <!-- ===== 多选删除确认 ===== -->
-    <BaseModal v-if="showMultiDelete" :title="t('multi.deleteTitle')" @close="!multiDeleteBusy && (showMultiDelete = false)">
+    <BaseModal v-if="showMultiDelete" :title="t('multi.deleteTitle')" :closable="false" @close="!multiDeleteBusy && (showMultiDelete = false)">
       <p class="delete-tip">{{ t("multi.deleteConfirm", { count: selectedIds.size }) }}</p>
 
       <!-- 删除进度（真实进度：已完成实例数 / 总数） -->
@@ -1964,7 +2024,7 @@ onMounted(async () => {
     </BaseModal>
 
     <!-- ===== 删除分组确认 ===== -->
-    <BaseModal v-if="showDeleteGroup" :title="t('group.delete')" @close="showDeleteGroup = false">
+    <BaseModal v-if="showDeleteGroup" :title="t('group.delete')" :closable="false" @close="showDeleteGroup = false">
       <p class="delete-tip">{{ t("group.deleteConfirm", { name: deleteGroupName, count: deleteGroupCount }) }}</p>
 
       <div class="modal-actions">
@@ -1976,7 +2036,7 @@ onMounted(async () => {
     </BaseModal>
 
     <!-- ===== 添加分组弹窗 ===== -->
-    <BaseModal v-if="showAddGroup" :title="t('group.addGroup')" @close="showAddGroup = false">
+    <BaseModal v-if="showAddGroup" :title="t('group.addGroup')" :closable="false" @close="showAddGroup = false">
       <label class="field-label">{{ t("group.namePlaceholder") }}</label>
       <input v-model="groupName" class="field-input" @keyup.enter="createGroup" spellcheck="false" />
 
@@ -2785,6 +2845,41 @@ onMounted(async () => {
   font-size: 14px;
 }
 
+/* ----- 实例锁定失效（锁定的实例已不存在）----- */
+
+/* 整块内容区被替换：居中放置一个警示徽标 + 文案，其余入口随内容一起消失 */
+.lock-error {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 40px 28px 130px;
+  min-width: 0;
+}
+
+.lock-error-badge {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 30px;
+  font-weight: 700;
+  color: var(--red);
+  background: var(--bg-card);
+  border: 2px solid var(--red);
+}
+
+.lock-error-text {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-align: center;
+}
+
 /* ----- 列表模式（下拉框选中实例） ----- */
 
 .list-mode {
@@ -2792,6 +2887,9 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   align-items: center;
+  /* 内容不满一屏时整块垂直居中；展开设置面板后内容超高时退回顶部对齐，
+     这样第一项仍然可见、能正常往下滚（`center` 会把溢出部分顶到滚动范围之外） */
+  justify-content: safe center;
   gap: 16px;
   padding: 20px 30px 130px;
   overflow-y: auto;

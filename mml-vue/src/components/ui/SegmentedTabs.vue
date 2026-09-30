@@ -33,7 +33,7 @@ const ICONS: Record<string, string> = {
       :key="opt.value"
       class="seg-btn"
       :class="{ active: current === opt.value }"
-      :title="opt.label"
+      v-tip="opt.label"
       @click="emit('update:modelValue', opt.value)"
     >
       <svg

@@ -11,7 +11,7 @@
 
 use mml_names::i18;
 
-use crate::windows::{download, main};
+use crate::windows::{block, download, main};
 
 pub mod collect_utils;
 pub mod dtos;
@@ -30,10 +30,13 @@ include!(concat!(env!("OUT_DIR"), "/invokes_gen.rs"));
 pub fn run() {
     tauri::Builder::default()
         .register_asynchronous_uri_scheme_protocol("mml-image", move |_app, request, responder| {
-            // 该回调跑在 WebView2 主线程的窗口过程里，不在 tokio 运行时上下文内，
-            // 用 `tokio::spawn` 会 panic（no reactor running）；必须走 Tauri 的全局 Handle
             tauri::async_runtime::spawn(async move {
                 image_manager::url_image(request, responder).await;
+            });
+        })
+        .register_asynchronous_uri_scheme_protocol("mml-home", move |_app, request, responder| {
+            tauri::async_runtime::spawn(async move {
+                windows::custom_home::url_custom_home(request, responder).await;
             });
         })
         .plugin(tauri_plugin_dialog::init())
@@ -59,6 +62,9 @@ pub fn run() {
             let handle = app.handle().clone();
             mml_downloader::set_gui_handel(Box::new(download::DownloadGuiHook::new(handle)));
             mml_downloader::start();
+
+            // 方块渲染：内核 `load()` 里的启动自动补渲染经此回调上报界面
+            block::set_gui_handel(app.handle());
 
             // 收藏数据与核心无关，但必须等 `mml_core::init` 里的日志系统起来后再读，
             // 否则解析失败会没有输出、看起来像没加载

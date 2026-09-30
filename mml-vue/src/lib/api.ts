@@ -18,6 +18,7 @@ import type {
   ExitEvent,
   FileListDto,
   ClientConfigDto,
+  CustomHomeProgressDto,
   ExportConfigDto,
   ExportInfoDto,
   ExportProgressDto,
@@ -46,7 +47,7 @@ import type {
   StateEvent,
   VersionInfoDto,
 } from "./bindings";
-import { AddLoaderProgress, AddModpackStatus, AddNameConflict, AddPackProgress, AddResourceStatus, BlockRender, ClientConfigChange, CloseBlocked, CollectChange, DownloadItem, DownloadTask, ExportFocus, ExportProgress, GameExit, GameLog, InstanceChange, JavaChange, LaunchError, LaunchState, LogFocus } from "./listens";
+import { AddLoaderProgress, AddModpackStatus, AddNameConflict, AddPackProgress, AddResourceStatus, BlockRender, ClientConfigChange, CloseBlocked, CollectChange, CustomHomeChange, CustomHomeProgress, DownloadItem, DownloadTask, ExportFocus, ExportProgress, GameExit, GameLog, InstanceChange, JavaChange, LaunchError, LaunchState, LogFocus } from "./listens";
 
 export interface CreateInstanceOpts {
   loader?: string;
@@ -535,6 +536,18 @@ export function onJavaChange(cb: () => void): Promise<UnlistenFn> {
   return listen(JavaChange, () => cb());
 }
 
+/** 自定义主页面导入进度（解包阶段推进时发） */
+export function onCustomHomeProgress(
+  cb: (e: CustomHomeProgressDto) => void,
+): Promise<UnlistenFn> {
+  return listen<CustomHomeProgressDto>(CustomHomeProgress, (e) => cb(e.payload));
+}
+
+/** 自定义主页面内容变更（导入 / 删除后广播，主窗口据此重拉状态） */
+export function onCustomHomeChange(cb: () => void): Promise<UnlistenFn> {
+  return listen(CustomHomeChange, () => cb());
+}
+
 /** 下载任务状态事件（type：add / remove / update） */
 export function onDownloadTask(cb: (e: DownloadTaskEvent) => void): Promise<UnlistenFn> {
   return listen<DownloadTaskEvent>(DownloadTask, (e) => cb(e.payload));
@@ -601,6 +614,11 @@ export function getBlockStatus(): Promise<BlockStatusDto> {
 /** 开始渲染方块贴图（force = 全量重渲染；已在进行返回 false） */
 export function blockRenderStart(force: boolean): Promise<boolean> {
   return commands.block.renderStart(force);
+}
+
+/** 取消正在进行的方块贴图渲染（返回是否有渲染可取消） */
+export function blockRenderCancel(): Promise<boolean> {
+  return commands.block.renderCancel();
 }
 
 /** 把方块贴图设为实例图标 */

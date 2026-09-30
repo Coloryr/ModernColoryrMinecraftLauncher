@@ -144,6 +144,8 @@ async function fetchSupportLoaders() {
   showLoaderProgress.value = true;
   try {
     const list = await api.addGetSupportLoaders(mc);
+    // 关窗后回来的结果直接丢（窗口已经没了，别弹提示 / 写列表）
+    if (leaving) return;
     supportLoadersCache.set(mc, list);
     // 请求期间版本已变化时丢弃过期结果
     if (newVersion.value === mc) {
@@ -152,6 +154,7 @@ async function fetchSupportLoaders() {
       showToast(t("tip.refreshed"));
     }
   } catch {
+    if (leaving) return;
     // 查询失败不缓存：保留原版 + 自定义兜底，可用刷新按钮重试
     if (newVersion.value === mc) {
       loaders.value = [FALLBACK_LOADERS[0], FALLBACK_LOADERS[1]];
@@ -233,6 +236,7 @@ async function fetchLoaderVersions() {
     const loader = addLoader.value;
     const mc = newVersion.value;
     const list = await api.addLoaderVersions(loader, mc);
+    if (leaving) return;
     loaderVerCache.set(key, list);
     if (addLoader.value === loader && newVersion.value === mc) {
       loaderVersions.value = list;
@@ -240,6 +244,7 @@ async function fetchLoaderVersions() {
       showToast(t("tip.refreshed"));
     }
   } catch {
+    if (leaving) return;
     // 拉取失败（如数据源不可达）时清空并提示，可用刷新按钮重试
     loaderVersions.value = [];
     addLoaderVer.value = "";
@@ -614,6 +619,9 @@ const addedName = ref("");
 /** 创建成功后弹出"是否继续添加"询问 */
 const askContinue = ref(false);
 
+/** 正在关窗（不继续添加）：在途查询的结果全部丢弃 */
+let leaving = false;
+
 /** 继续添加：清空一次性表单（保留模式 / 版本列表等数据源），回到干净表单 */
 function continueAdding() {
   askContinue.value = false;
@@ -633,9 +641,16 @@ function continueAdding() {
   addUrl.value = "";
 }
 
-/** 不继续：关闭窗口 */
-function finishAdding() {
+/** 不继续：丢掉本窗口的查询状态（加载器支持列表 / 加载器版本）并直接关窗 */
+async function finishAdding() {
   askContinue.value = false;
+  leaving = true;
+  // 查询在途时后端有关闭保护（CloseRequested 被拒），先解除再关，否则窗关不掉
+  loaderQuerying = "";
+  loaderLoading.value = false;
+  loaderVerLoading.value = false;
+  showLoaderProgress.value = false;
+  await api.setCloseGuard(false).catch(() => {});
   emit("close");
 }
 
@@ -873,6 +888,7 @@ onMounted(async () => {
       v-if="nameConflict"
       :title="t('add.nameConflictTitle')"
       @close="answerConflict(false)"
+      :closable="false"
     >
       <p class="conflict-text">
         {{
@@ -892,6 +908,7 @@ onMounted(async () => {
       v-if="askContinue"
       :title="t('add.addedTitle')"
       @close="finishAdding"
+      :closable="false"
     >
       <p class="conflict-text">{{ t("add.askContinue", { name: addedName }) }}</p>
       <div class="modal-actions">

@@ -13,7 +13,7 @@ use tauri::{AppHandle, Emitter};
 use crate::dtos::{BlockItemDto, BlockStatusDto};
 use crate::{image_manager, listens};
 use mml_game::gui_hook::IProgressGui;
-use mml_names::Lang;
+use mml_names::{Lang, i18_items::error_type::ErrorType};
 
 use super::main::{core_instance, emit_instance_change};
 
@@ -40,13 +40,12 @@ static BLOCK_RENDER: LazyLock<BlockRenderState> = LazyLock::new(|| BlockRenderSt
     error: Mutex::new(None),
 });
 
-/// 方块渲染状态快照（配置开关 + 内存进度合并；命令 `block_status` 同名，故叫 render_status）
+/// 方块渲染状态快照（内存进度 + 渲染结果合并；命令 `block_status` 同名，故叫 render_status）
 fn render_status() -> BlockStatusDto {
     BlockStatusDto {
         rendered: !mml_tex_draw::blocks().is_empty() || !mml_tex_draw::items().is_empty(),
-        opt_in: mml_config::read_config().block_render,
         version: mml_tex_draw::block_version(),
-        running: BLOCK_RENDER.running.load(Ordering::Acquire),
+        running: BLOCK_RENDER.running.load(Ordering::Acquire) || mml_tex_draw::is_loading(),
         now: BLOCK_RENDER.now.load(Ordering::Acquire),
         total: BLOCK_RENDER.total.load(Ordering::Acquire),
         text: BLOCK_RENDER.text.lock().unwrap().clone(),
@@ -80,6 +79,24 @@ impl IProgressGui for BlockRenderGui {
 #[gui_macros::emit]
 pub fn emit_block_render(app: &AppHandle, data: BlockStatusDto) {
     let _ = app.emit(listens::BLOCK_RENDER, data);
+}
+
+/// 渲染是否进行中（窗口关闭保护用）
+///
+/// 已取消时算「不在渲染」：渲染循环还要几毫秒才退出，若仍拦着，
+/// 前端「取消 → 关窗」会撞上这段窗口期又弹一次确认
+pub fn render_running() -> bool {
+    (BLOCK_RENDER.running.load(Ordering::Acquire) || mml_tex_draw::is_loading())
+        && !mml_tex_draw::is_cancelled()
+}
+
+/// 注册内核侧的渲染进度回调（启动时调用一次）
+///
+/// 供内核侧自行发起的渲染（调用 `load_blocks` 时没传回调）上报事件与进度；
+/// 界面触发的渲染自带回调，这里注册的只是兜底
+pub fn set_gui_handel(app: &AppHandle) {
+    let gui: Arc<dyn IProgressGui> = Arc::new(BlockRenderGui { app: app.clone() });
+    mml_tex_draw::set_gui_handel(Some(gui));
 }
 
 /// 获取方块与物品列表（按请求语言翻译，cat + name 排序）
@@ -143,19 +160,16 @@ pub fn block_status() -> BlockStatusDto {
 
 /// 开始渲染方块贴图（force = 忽略版本短路全量重渲染）
 ///
+/// 渲染一律由界面触发（启动时不再自动补渲染）。
 /// 返回是否成功启动（已在跑返回 false，前端据此提示）
 #[tauri::command]
 pub async fn block_render_start(app: AppHandle, force: bool) -> Result<bool, String> {
-    if BLOCK_RENDER.running.swap(true, Ordering::AcqRel) {
+    // 防重入查两处：GUI 自己的 running 标志 + mml-tex-draw 本体的 LOADING
+    //（内核侧可能自发起一轮，不走 GUI 标志，不查会并发再起一轮、同一 jar 下两遍）。
+    // is_loading 必须先于 swap 判断：它命中时直接返回，若已把 running 置 true
+    // 而本轮没有 spawn 任务去复位，标志会卡死，之后永远“已在渲染中”
+    if mml_tex_draw::is_loading() || BLOCK_RENDER.running.swap(true, Ordering::AcqRel) {
         return Ok(false);
-    }
-
-    // 用户同意渲染：写入配置，之后每次启动自动补渲染缺失版本
-    {
-        let mut config = mml_config::write_config();
-        config.block_render = true;
-        drop(config);
-        mml_config::save();
     }
 
     // 新一轮渲染：清掉上次的错误与进度
@@ -168,7 +182,8 @@ pub async fn block_render_start(app: AppHandle, force: bool) -> Result<bool, Str
     let gui: Arc<dyn IProgressGui> = Arc::new(BlockRenderGui { app: app.clone() });
     tauri::async_runtime::spawn(async move {
         let result = mml_tex_draw::load_blocks(Some(gui), force).await;
-        if let Err(err) = result {
+        // 主动取消不算失败（渲染循环随后就退出，状态复位交给下面统一做）
+        if let Err(err) = result && !matches!(err, ErrorType::TaskCancel) {
             *BLOCK_RENDER.error.lock().unwrap() = Some(err.to_string());
         }
         BLOCK_RENDER.running.store(false, Ordering::Release);
@@ -176,6 +191,21 @@ pub async fn block_render_start(app: AppHandle, force: bool) -> Result<bool, Str
     });
 
     Ok(true)
+}
+
+/// 取消正在进行的渲染
+///
+/// 渲染循环与在途下载都是协作式的，取消后几毫秒内退出本轮，
+/// 残留的半成品 PNG 不会被登记（下次全量渲染覆盖）。
+/// 返回是否有渲染在进行（没有可取消的返回 false）
+#[tauri::command]
+pub fn block_render_cancel(app: AppHandle) -> bool {
+    if !render_running() {
+        return false;
+    }
+    mml_tex_draw::cancel();
+    emit_block_render(&app, render_status());
+    true
 }
 
 /// 把方块/物品贴图设为实例图标

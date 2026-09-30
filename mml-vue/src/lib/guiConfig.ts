@@ -93,6 +93,10 @@ export interface ClientConfig {
   autoJoinServer: string;
   /** MOTD 显示地址（host 或 host:port，空 = 不显示真实服务器信息） */
   motdServer: string;
+  /** 实例锁定：锁定的实例 uuid（空 = 未锁定）；锁定时主窗口不允许切换到其它实例 */
+  lockInstance: string;
+  /** 自定义主页面：启用后主窗口的启动器主页换成导入的页面 */
+  customHome: boolean;
 }
 
 export interface GuiConfig {
@@ -243,6 +247,8 @@ function defaultConfig(): GuiConfig {
       autoJoin: localStorage.getItem("mml.client.autoJoin") === "1",
       autoJoinServer: localStorage.getItem("mml.client.autoJoinServer") ?? "",
       motdServer: localStorage.getItem("mml.client.motdServer") ?? "",
+      lockInstance: localStorage.getItem("mml.client.lockInstance") ?? "",
+      customHome: localStorage.getItem("mml.client.customHome") === "1",
     },
     font: localStorage.getItem("mml.font") ?? "",
     skinDisplay: normalizeSkinDisplay(localStorage.getItem("mml.skinDisplay")),

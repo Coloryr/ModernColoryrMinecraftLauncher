@@ -336,6 +336,7 @@ impl InstanceSettingObj {
                         text1: Default::default(),
                         text2: Default::default(),
                         last_login: Default::default(),
+                        expire_at: None,
                     };
                     Ok(())
                 } else {

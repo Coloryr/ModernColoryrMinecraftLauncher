@@ -235,6 +235,10 @@ pub struct ClientConfig {
     pub auto_join_server: String,
     /// MOTD 显示地址（host 或 host:port，空 = 不显示真实服务器信息）
     pub motd_server: String,
+    /// 实例锁定：锁定的实例 uuid（空 = 未锁定）；锁定时主窗口不允许切换到其它实例
+    pub lock_instance: String,
+    /// 自定义主页面：启用后主窗口的启动器主页换成 base_dir/custom_home 里的 index.html
+    pub custom_home: bool,
 }
 
 impl Default for ClientConfig {
@@ -247,6 +251,8 @@ impl Default for ClientConfig {
             auto_join: false,
             auto_join_server: String::new(),
             motd_server: String::new(),
+            lock_instance: String::new(),
+            custom_home: false,
         }
     }
 }

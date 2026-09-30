@@ -13,10 +13,11 @@
 
 pub mod account;
 pub mod add;
-pub mod block;
 pub mod add_modpack;
 pub mod add_resource;
+pub mod block;
 pub mod collect;
+pub mod custom_home;
 pub mod download;
 pub mod export;
 pub mod help;
@@ -381,6 +382,12 @@ fn close_guarded(uuid: &Uuid) -> bool {
         return !mml_downloader::get_tasks().is_empty();
     }
 
+    // 方块窗口：渲染进行中拒绝关闭（渲染任务虽独立于窗口存活，
+    // 但关窗后进度无从展示，用户也会误以为渲染被中断）
+    if *uuid == BLOCK_WINDOW_UUID {
+        return block::render_running();
+    }
+
     let binding = WINDOW_MODELS.read().unwrap();
     let Some(model) = binding.get(uuid) else {
         return false;
@@ -562,11 +569,7 @@ pub fn close_window_from_uuid(app: &AppHandle, uuid: &Uuid) -> Result<(), String
 /// 打开（或聚焦）指定 uuid 的窗口
 ///
 /// - `url_path`：传给 [`create_window`] 的 webview 路径
-pub fn open_window_from_uuid(
-    app: &AppHandle,
-    uuid: &Uuid,
-    url_path: &str,
-) -> Result<(), String> {
+pub fn open_window_from_uuid(app: &AppHandle, uuid: &Uuid, url_path: &str) -> Result<(), String> {
     let binding = WINDOWS_INFO;
     let Some(entry) = binding.get(uuid) else {
         return Err(WindowNotFound.to_string());
@@ -685,10 +688,20 @@ pub async fn window_open_window(
     // 新创建的窗口靠 URL query 拿目标；已存在的窗口 URL 不变，靠事件切换
     if let Some(instance) = &instance {
         if kind == "log" {
-            log::emit_log_focus(&app, LogFocusDto { uuid: instance.clone() });
+            log::emit_log_focus(
+                &app,
+                LogFocusDto {
+                    uuid: instance.clone(),
+                },
+            );
         }
         if kind == "export" {
-            export::emit_export_focus(&app, LogFocusDto { uuid: instance.clone() });
+            export::emit_export_focus(
+                &app,
+                LogFocusDto {
+                    uuid: instance.clone(),
+                },
+            );
         }
     }
     Ok(())
@@ -783,7 +796,7 @@ pub fn window_get_gui_config(window: WebviewWindow) -> GuiConfigDto {
 /// 各窗口收到后按新模式重取头像 / 皮肤图
 #[tauri::command]
 pub async fn window_save_gui_config(app: AppHandle, config: GuiConfigDto) -> Result<(), String> {
-    let new_config: crate::gui_config::GuiConfig = config.into();
+    let mut new_config: crate::gui_config::GuiConfig = config.into();
     let skin_changed = {
         let old = crate::gui_config::get();
         old.skin_display != new_config.skin_display || old.head != new_config.head
@@ -793,6 +806,15 @@ pub async fn window_save_gui_config(app: AppHandle, config: GuiConfigDto) -> Res
         old.client != new_config.client
     };
     let new_client = new_config.client.clone();
+    if client_changed {
+        let uuid = new_client.lock_instance.clone();
+        if !uuid.is_empty()
+            && let Ok(uuid) = Uuid::parse_str(&uuid)
+            && mml_game::have_instance_uuid(&uuid)
+        {
+            new_config.main_window.selected_instance = new_client.lock_instance.clone();
+        }
+    }
     crate::gui_config::set(new_config);
     if skin_changed {
         emit_skin_config_change(&app);
@@ -814,4 +836,3 @@ fn emit_skin_config_change(app: &AppHandle) {
 fn emit_client_config_change(app: &AppHandle, config: crate::dtos::ClientConfigDto) {
     let _ = app.emit(listens::CLIENT_CONFIG_CHANGE, config);
 }
-

@@ -40,7 +40,7 @@ const emit = defineEmits<{
       <button
         class="topbar-icon-btn"
         :class="{ pressed: newsActive }"
-        :title="t('home.entry')"
+        v-tip="t('home.entry')"
         @click="emit('toggle-news')"
       >
         <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -54,7 +54,7 @@ const emit = defineEmits<{
         v-for="f in features"
         :key="f.id"
         class="topbar-icon-btn"
-        :title="t('features.' + f.id)"
+        v-tip="t('features.' + f.id)"
         @click="emit('feature', f.id)"
       >
         <svg v-if="f.icon === 'gear'" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8">

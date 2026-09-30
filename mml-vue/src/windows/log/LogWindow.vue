@@ -203,7 +203,7 @@ onBeforeUnmount(() => {
   <WindowFrame body-fill :title="t('logWindow.title')" @close="$emit('close')">
     <div class="log-window">
       <div class="topbar">
-        <select v-model="currentUuid" class="inst-select" :title="t('logWindow.instance')">
+        <select v-model="currentUuid" class="inst-select" v-tip="t('logWindow.instance')">
           <option value="">{{ t("logWindow.runningProcess") }}</option>
           <option v-for="i in instances" :key="i.uuid" :value="i.uuid">{{ i.name }}</option>
         </select>
@@ -228,7 +228,7 @@ onBeforeUnmount(() => {
               :key="f"
               class="file-item"
               :class="{ active: f === activeFile }"
-              :title="f"
+              v-tip="f"
               @click="openFile(f)"
             >
               {{ fileName(f) }}
@@ -240,7 +240,7 @@ onBeforeUnmount(() => {
                 :key="f"
                 class="file-item"
                 :class="{ active: f === activeFile }"
-                :title="f"
+                v-tip="f"
                 @click="openFile(f)"
               >
                 {{ fileName(f) }}

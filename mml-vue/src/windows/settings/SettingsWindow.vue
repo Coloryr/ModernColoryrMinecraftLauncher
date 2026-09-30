@@ -12,6 +12,9 @@ import CollapsePanel from "../../components/ui/CollapsePanel.vue";
 import { t, locale, setLocale, tErr } from "../../lib/i18n";
 import {
   commands,
+  type CustomHomeInfoDto,
+  type CustomHomeProgressDto,
+  type InstanceInfoDto,
   type JavaInfoDto,
   type JavaImportProgressDto,
   type NetworkSettingDto,
@@ -20,6 +23,7 @@ import {
 } from "../../lib/bindings";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { SettingsJavaProgress } from "../../lib/listens";
+import { onCustomHomeProgress } from "../../lib/api";
 import { multiWindow, setMultiWindow, isTauri, openWindow } from "../windowManager";
 import {
   animations,
@@ -133,6 +137,7 @@ const client = ref<ClientConfig>({
   autoJoin: false,
   autoJoinServer: "",
   motdServer: "",
+  lockInstance: "",
 });
 
 /** 登录方式锁定的候选（复用账户添加类型的文案） */
@@ -220,6 +225,102 @@ function applyClient() {
   void saveGuiConfig({ client: { ...client.value } });
 }
 
+// ---- 实例锁定：在下拉框里指定要锁定的实例，主窗口只允许使用它 ----
+
+/** 实例列表（锁定下拉框的候选项） */
+const lockInstances = ref<InstanceInfoDto[]>([]);
+
+/** 拉取实例列表（进客户端设置页时刷新，避免锁定的实例已被删掉） */
+async function refreshLockInstances() {
+  lockInstances.value = await commands.main.getInstances().catch(() => []);
+}
+
+/** 已保存的锁定 uuid 在实例列表里找不到（实例被删 / 改名）：下拉框额外补一条选中项，便于切回「不锁定」 */
+const lockMissing = computed(
+  () =>
+    !!client.value.lockInstance &&
+    !lockInstances.value.some((i) => i.uuid === client.value.lockInstance),
+);
+
+/**
+ * 切换锁定的实例
+ * @param uuid 目标实例 uuid；空串 = 不锁定
+ */
+function onLockInstanceChange(uuid: string) {
+  client.value.lockInstance = uuid;
+  applyClient();
+}
+
+// ---- 自定义主页面：导入 zip 顶替主窗口的启动器主页 ----
+
+/** 已导入情况（未导入 / 后端不可用都是 null） */
+const customHome = ref<CustomHomeInfoDto | null>(null);
+/** 导入进行中（进度条显示条件之一） */
+const importingCustomHome = ref(false);
+/** 导入进度（`custom-home-progress` 事件负载） */
+const customHomeProgress = ref<CustomHomeProgressDto | null>(null);
+let unlistenCustomHomeProgress: UnlistenFn | null = null;
+
+const customHomePercent = computed(() => {
+  const p = customHomeProgress.value;
+  if (!p || p.total <= 0) return 0;
+  return Math.min(100, Math.round((p.now / p.total) * 100));
+});
+
+/** 状态行：未导入 / 已导入（n 个文件）· 启用中 */
+const customHomeState = computed(() => {
+  const info = customHome.value;
+  if (!info?.installed) return t("winSettings.customHomeNone");
+  const parts = [t("winSettings.customHomeInstalled", { count: info.fileCount })];
+  if (client.value.customHome) parts.push(t("winSettings.customHomeEnabled"));
+  return parts.join(" · ");
+});
+
+/** 重拉导入状态（进页面 / 删除后调用） */
+async function refreshCustomHome() {
+  customHome.value = await commands.customHome.status().catch(() => null);
+}
+
+/** 选一个 zip 导入（全量替换现有包；进度经 custom-home-progress 事件上报） */
+async function importCustomHome() {
+  const { open } = await import("@tauri-apps/plugin-dialog");
+  const picked = await open({
+    title: t("winSettings.customHomeImport"),
+    multiple: false,
+    filters: [{ name: "Zip", extensions: ["zip"] }],
+  });
+  if (typeof picked !== "string") return;
+  importingCustomHome.value = true;
+  customHomeProgress.value = null;
+  try {
+    customHome.value = await commands.customHome.import(picked);
+  } catch (e) {
+    showToast(`${t("winSettings.customHomeImportFailed")}：${tErr(e)}`);
+  } finally {
+    importingCustomHome.value = false;
+    customHomeProgress.value = null;
+  }
+}
+
+/** 在文件管理器里打开 custom_home 目录（没导入过时后端会先建出来） */
+async function openCustomHomeDir() {
+  try {
+    await commands.customHome.openDir();
+  } catch (e) {
+    showToast(tErr(e));
+  }
+}
+
+/** 删除已导入的包（配置里的启用开关不动，主窗口会自动回落到内置主页） */
+async function removeCustomHome() {
+  try {
+    await commands.customHome.remove();
+    await refreshCustomHome();
+  } catch (e) {
+    showToast(tErr(e));
+  }
+}
+
 /** 服务器地址：自动进服与 MOTD 显示共用一个地址（两个配置字段保持一致） */
 const serverAddr = computed({
   get: () => client.value.motdServer,
@@ -296,6 +397,9 @@ onMounted(async () => {
   unlistenJavaProgress = await listen<JavaImportProgressDto>(SettingsJavaProgress, (e) => {
     importProgress.value = e.payload;
   });
+  unlistenCustomHomeProgress = await onCustomHomeProgress((e) => {
+    customHomeProgress.value = e;
+  });
   fontsLoading.value = true;
   fonts.value = await commands.settings.getSystemFonts().catch(() => []);
   fontsLoading.value = false;
@@ -315,10 +419,21 @@ onMounted(async () => {
       });
     launchLoaded = true;
   }
+  void refreshLockInstances();
+  void refreshCustomHome();
+});
+
+/** 切到客户端设置页时刷新实例列表 / 自定义主页状态（设置窗口开着时它们可能已被改动） */
+watch(tab, (v) => {
+  if (v === "client") {
+    void refreshLockInstances();
+    void refreshCustomHome();
+  }
 });
 
 onUnmounted(() => {
   unlistenJavaProgress?.();
+  unlistenCustomHomeProgress?.();
 });
 
 function onModeChange(v: string) {
@@ -701,7 +816,7 @@ async function removeJava(name: string) {
               class="accent-swatch"
               :class="{ active: accent === a.id }"
               :style="{ background: a.color }"
-              :title="t(`winSettings.accent.${a.id}`)"
+              v-tip="t(`winSettings.accent.${a.id}`)"
               @click="setAccent(a.id)"
             >
               <svg
@@ -723,7 +838,7 @@ async function removeJava(name: string) {
             <label
               class="accent-swatch accent-custom"
               :class="{ active: accent === 'custom' }"
-              :title="t('winSettings.accent.custom')"
+              v-tip="t('winSettings.accent.custom')"
             >
               <svg
                 v-if="accent === 'custom'"
@@ -1046,7 +1161,7 @@ async function removeJava(name: string) {
                     @change="commitDns(); applyNetwork();"
                     @keydown.enter="($event.target as HTMLInputElement).blur()"
                   />
-                  <button class="line-del" title="✕" @click="removeDnsLine(i)">✕</button>
+                  <button class="line-del" v-tip="'✕'" @click="removeDnsLine(i)">✕</button>
                 </div>
                 <button class="line-add" @click="addDnsLine">＋ {{ t("args.addLine") }}</button>
               </div>
@@ -1191,7 +1306,7 @@ async function removeJava(name: string) {
                   spellcheck="false"
                   :placeholder="t('winSettings.envValue')"
                 />
-                <button class="line-del" title="✕" @click="removeEnvLine(i)">✕</button>
+                <button class="line-del" v-tip="'✕'" @click="removeEnvLine(i)">✕</button>
               </div>
               <button class="line-add" @click="addEnvLine">＋ {{ t("args.addLine") }}</button>
             </div>
@@ -1277,7 +1392,7 @@ async function removeJava(name: string) {
                 <div class="java-progress-fill" :style="{ width: importPercent + '%' }" />
               </div>
               <span class="java-progress-text">{{ importProgress ? `${importProgress.now}/${importProgress.total}` : "" }}</span>
-              <span v-if="importProgress?.subText" class="java-progress-sub" :title="importProgress.subText">{{ importProgress.subText }}</span>
+              <span v-if="importProgress?.subText" class="java-progress-sub" v-tip="importProgress.subText">{{ importProgress.subText }}</span>
             </div>
 
             <!-- 删除全部确认 -->
@@ -1286,6 +1401,7 @@ async function removeJava(name: string) {
               :title="t('winSettings.javaRemoveAll')"
               :overlay-close="false"
               below-titlebar
+              :closable="false"
               @close="confirmRemoveAll = false"
             >
               <p class="field-desc">{{ t("winSettings.javaRemoveAllConfirm") }}</p>
@@ -1320,13 +1436,13 @@ async function removeJava(name: string) {
                 <div class="java-grid">
                   <div v-for="j in g.items" :key="j.name" class="java-card">
                     <div class="java-card-top">
-                      <span class="java-name" :title="j.name">{{ j.name }}</span>
+                      <span class="java-name" v-tip="j.name">{{ j.name }}</span>
                       <BaseButton size="sm" variant="danger" @click="removeJava(j.name)">
                         {{ t("winSettings.javaRemove") }}
                       </BaseButton>
                     </div>
                     <span class="java-meta">{{ j.version }} · {{ j.arch }}</span>
-                    <span class="java-path" :title="j.path">{{ j.path }}</span>
+                    <span class="java-path" v-tip="j.path">{{ j.path }}</span>
                   </div>
                 </div>
               </CollapsePanel>
@@ -1346,7 +1462,7 @@ async function removeJava(name: string) {
             class="field-input"
             spellcheck="false"
             placeholder="mc.example.com:25565"
-            :title="t('winSettings.serverAddressHint')"
+            v-tip="t('winSettings.serverAddressHint')"
           />
           <p class="field-desc" style="margin-top: 8px">{{ t("winSettings.serverAddressHint") }}</p>
 
@@ -1436,6 +1552,68 @@ async function removeJava(name: string) {
           </div>
           <p v-if="lockServerError" class="lock-server-hint">{{ lockServerError }}</p>
           </template>
+
+          <!-- 实例锁定：下拉框选择要锁定的实例，主窗口只允许使用它 -->
+          <h3 class="group-title">{{ t("winSettings.secInstanceLock") }}</h3>
+          <p class="field-desc">{{ t("winSettings.instanceLockDesc") }}</p>
+          <div class="switch-row">
+            <div class="switch-text">
+              <span class="switch-label">{{ t("winSettings.instanceLockOn") }}</span>
+              <span class="switch-state">{{ t("winSettings.instanceLockOnDesc") }}</span>
+            </div>
+            <select
+              class="field-select lock-select"
+              :value="client.lockInstance"
+              @change="onLockInstanceChange(($event.target as HTMLSelectElement).value)"
+            >
+              <option value="">{{ t("winSettings.instanceLockNone") }}</option>
+              <option v-for="i in lockInstances" :key="i.uuid" :value="i.uuid">
+                {{ i.name }}
+              </option>
+              <!-- 锁定的实例已被删掉：补一条选中项，让作者能看到当前锁的是什么并切回「不锁定」 -->
+              <option v-if="lockMissing" :value="client.lockInstance">
+                {{ t("winSettings.instanceLockMissing") }}
+              </option>
+            </select>
+          </div>
+
+          <!-- 自定义主页面：导入 zip 顶替主窗口的启动器主页 -->
+          <h3 class="group-title">{{ t("winSettings.secCustomHome") }}</h3>
+          <p class="field-desc">{{ t("winSettings.customHomeDesc") }}</p>
+          <div class="switch-row">
+            <div class="switch-text">
+              <span class="switch-label">{{ t("winSettings.customHomeOn") }}</span>
+              <span class="switch-state">{{ t("winSettings.customHomeOnDesc") }}</span>
+            </div>
+            <BaseSwitch v-model="client.customHome" @update:model-value="applyClient" />
+          </div>
+          <div class="custom-home-row">
+            <BaseButton size="sm" :disabled="importingCustomHome" @click="importCustomHome">
+              {{ t("winSettings.customHomeImport") }}
+            </BaseButton>
+            <BaseButton size="sm" @click="openCustomHomeDir">
+              {{ t("winSettings.customHomeOpenDir") }}
+            </BaseButton>
+            <BaseButton
+              size="sm"
+              variant="danger"
+              :disabled="!customHome?.installed"
+              @click="removeCustomHome"
+            >
+              {{ t("winSettings.customHomeRemove") }}
+            </BaseButton>
+            <span class="custom-home-state">{{ customHomeState }}</span>
+          </div>
+
+          <!-- 导入进度条（解包阶段经 custom-home-progress 事件推进） -->
+          <div v-if="importingCustomHome || customHomeProgress" class="java-progress">
+            <span class="java-progress-label">{{ t("winSettings.customHomeImporting") }}</span>
+            <div class="java-progress-track">
+              <div class="java-progress-fill" :style="{ width: customHomePercent + '%' }" />
+            </div>
+            <span class="java-progress-text">{{ customHomeProgress ? `${customHomeProgress.now}/${customHomeProgress.total}` : "" }}</span>
+            <span v-if="customHomeProgress?.subText" class="java-progress-sub" v-tip="customHomeProgress.subText">{{ customHomeProgress.subText }}</span>
+          </div>
 
           <!-- 游戏标题（游戏窗口标题栏的自定义文字，全局默认值） -->
           <template v-if="win">
@@ -1837,6 +2015,13 @@ async function removeJava(name: string) {
   flex-shrink: 0;
 }
 
+/* 实例锁定下拉框：实例名可能较长，给足宽度并允许截断 */
+.lock-select {
+  width: 240px;
+  flex-shrink: 0;
+  min-width: 0;
+}
+
 .lock-add-name {
   width: 150px;
   flex-shrink: 0;
@@ -2082,6 +2267,20 @@ async function removeJava(name: string) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 自定义主页面：按钮行 + 状态文字 */
+.custom-home-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.custom-home-state {
+  font-size: 12px;
+  color: var(--text-dim);
 }
 
 /* 扫描 Java 加载弹窗内容：转圈 + 提示文字 */

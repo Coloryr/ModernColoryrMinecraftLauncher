@@ -105,6 +105,10 @@ pub struct ClientConfigDto {
     pub auto_join_server: String,
     /// MOTD 显示地址（host 或 host:port，空 = 不显示真实服务器信息）
     pub motd_server: String,
+    /// 实例锁定：锁定的实例 uuid（空 = 未锁定）；锁定时主窗口不允许切换到其它实例
+    pub lock_instance: String,
+    /// 自定义主页面：启用后主窗口的启动器主页换成导入的页面
+    pub custom_home: bool,
 }
 
 impl From<ClientConfig> for ClientConfigDto {
@@ -117,6 +121,8 @@ impl From<ClientConfig> for ClientConfigDto {
             auto_join: c.auto_join,
             auto_join_server: c.auto_join_server,
             motd_server: c.motd_server,
+            lock_instance: c.lock_instance,
+            custom_home: c.custom_home,
         }
     }
 }
@@ -131,6 +137,8 @@ impl From<ClientConfigDto> for ClientConfig {
             auto_join: c.auto_join,
             auto_join_server: c.auto_join_server,
             motd_server: c.motd_server,
+            lock_instance: c.lock_instance,
+            custom_home: c.custom_home,
         }
     }
 }
@@ -204,6 +212,8 @@ impl From<GuiConfig> for GuiConfigDto {
                 auto_join: c.client.auto_join,
                 auto_join_server: c.client.auto_join_server,
                 motd_server: c.client.motd_server,
+                lock_instance: c.client.lock_instance,
+                custom_home: c.client.custom_home,
             },
             font: c.font,
             skin_display: c.skin_display,
@@ -252,6 +262,8 @@ impl From<GuiConfigDto> for GuiConfig {
                 auto_join: d.client.auto_join,
                 auto_join_server: d.client.auto_join_server,
                 motd_server: d.client.motd_server,
+                lock_instance: d.client.lock_instance,
+                custom_home: d.client.custom_home,
             },
             font: d.font,
             skin_display: d.skin_display,

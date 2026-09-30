@@ -176,12 +176,20 @@ pub fn main_get_groups() -> Vec<String> {
 }
 
 /// 获取实例的游戏内语言列表（从资源索引查 minecraft/lang/*.json，资源未下载时为空）
+///
+/// 查询要读整份资源索引 JSON 再反序列化，是同步重活：丢到阻塞线程执行，
+/// 不要占住 async runtime —— 否则同期的其它 IPC 与图片协议请求会被一起拖住。
 #[tauri::command]
-pub fn main_get_instance_langs(uuid: String) -> Vec<String> {
-    let Ok(id) = Uuid::parse_str(&uuid) else {
-        return Vec::new();
-    };
-    mml_game::get_instance_langs(&id)
+pub async fn main_get_instance_langs(uuid: String) -> Vec<String> {
+    let res = tauri::async_runtime::spawn_blocking(move || {
+        let Ok(id) = Uuid::parse_str(&uuid) else {
+            return Vec::new();
+        };
+        mml_game::get_instance_langs(&id)
+    })
+    .await;
+
+    res.unwrap_or_default()
 }
 
 /// 解析核心实例配置 -> 前端启动参数 DTO

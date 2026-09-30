@@ -17,6 +17,7 @@ import {
 import { restoreBg } from "./lib/appearance";
 import { setMultiWindow } from "./windows/windowManager";
 import { restoreFontFamily } from "./lib/fonts";
+import { vTip } from "./lib/tip";
 
 // 禁用右键默认菜单（WebView2 / 浏览器自带的“刷新、返回、打印”等）。
 // 文本输入框（input / textarea / contenteditable）保留原生菜单，方便复制粘贴。
@@ -58,7 +59,7 @@ async function bootstrap() {
   applyTheme();
   applyLocale();
   loadAccounts(); // 账户列表由 Rust 提供（浏览器环境静默跳过）
-  createApp(App).mount("#app");
+  createApp(App).directive("tip", vTip).mount("#app");
 }
 
 bootstrap();

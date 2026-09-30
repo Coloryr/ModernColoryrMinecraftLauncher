@@ -11,6 +11,8 @@ import type { InstanceInfoDto, VersionInfoDto } from "../lib/bindings";
 const props = defineProps<{
   instance: InstanceInfoDto;
   versions: VersionInfoDto[];
+  /** 实例锁定生效：只留游戏内语言 / 日志编码，版本与加载器整块隐藏 */
+  locked?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -189,8 +191,12 @@ const DEFAULT_LANGS = [
   { value: "en_us", label: "English" },
 ];
 const langs = ref([...DEFAULT_LANGS]);
+// 查询要读整份资源索引，耗时较长；期间下拉框显示"加载中"并禁用，
+// 免得用户选到还没被真实列表替换掉的默认项
+const langsLoading = ref(false);
 
 async function refreshLangs() {
+  langsLoading.value = true;
   try {
     const list = await api.getInstanceLangs(props.instance.uuid);
     if (list.length) {
@@ -198,6 +204,8 @@ async function refreshLangs() {
     }
   } catch {
     langs.value = [...DEFAULT_LANGS];
+  } finally {
+    langsLoading.value = false;
   }
 }
 
@@ -259,110 +267,117 @@ function onPlatformChange(value: string) {
       </Transition>
     </Teleport>
 
-    <!-- 版本类型 + 版本 -->
-    <span class="meta-label">{{ t("meta.versionType") }}</span>
-    <select
-      class="field-select"
-      :value="typeFilter"
-      @change="onVersionTypeChange(($event.target as HTMLSelectElement).value)"
-    >
-      <option v-for="vt in versionTypes" :key="vt" :value="vt">{{ typeName(vt) }}</option>
-    </select>
-    <span class="meta-label small">{{ t("meta.version") }}</span>
-    <div class="select-row">
+    <!-- 版本与加载器：实例锁定时整块隐藏，避免玩家改掉整合包作者选定的版本 -->
+    <template v-if="!locked">
+      <!-- 版本类型 + 版本 -->
+      <span class="meta-label">{{ t("meta.versionType") }}</span>
       <select
         class="field-select"
-        :value="instance.version"
-        @change="change({ version: ($event.target as HTMLSelectElement).value })"
+        :value="typeFilter"
+        @change="onVersionTypeChange(($event.target as HTMLSelectElement).value)"
       >
-        <optgroup :label="typeName(typeFilter)">
-          <option v-for="v in filteredVersions" :key="v.id" :value="v.id">{{ v.id }}</option>
-        </optgroup>
+        <option v-for="vt in versionTypes" :key="vt" :value="vt">{{ typeName(vt) }}</option>
       </select>
-      <BaseButton
-        size="sm"
-        variant="ghost"
-        :disabled="verLoading"
-        :title="t('add.versionRefresh')"
-        @click="onRefreshVersions"
-      >
-        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21 12a9 9 0 1 1-2.64-6.36" />
-          <polyline points="21 3 21 9 15 9" />
-        </svg>
-      </BaseButton>
-    </div>
+      <span class="meta-label small">{{ t("meta.version") }}</span>
+      <div class="select-row">
+        <select
+          class="field-select"
+          :value="instance.version"
+          @change="change({ version: ($event.target as HTMLSelectElement).value })"
+        >
+          <optgroup :label="typeName(typeFilter)">
+            <option v-for="v in filteredVersions" :key="v.id" :value="v.id">{{ v.id }}</option>
+          </optgroup>
+        </select>
+        <BaseButton
+          size="sm"
+          variant="ghost"
+          :disabled="verLoading"
+          v-tip="t('add.versionRefresh')"
+          @click="onRefreshVersions"
+        >
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+            <polyline points="21 3 21 9 15 9" />
+          </svg>
+        </BaseButton>
+      </div>
 
-    <!-- 加载器类型 + 加载器版本 -->
-    <span class="meta-label">{{ t("meta.loader") }}</span>
-    <div class="select-row">
-      <!-- 默认只有原版 / 当前 / 自定义，刷新后合并该版本支持的加载器；查询期间锁住 -->
-      <select
-        class="field-select"
-        :value="instance.loader"
-        :disabled="loadersLoading"
-        @change="onLoaderChange(($event.target as HTMLSelectElement).value)"
-      >
-        <option v-for="l in loaderOptions" :key="l" :value="l">{{ loaderLabel(l) }}</option>
-      </select>
-      <BaseButton
-        size="sm"
-        variant="ghost"
-        :disabled="loadersLoading || !instance.version"
-        :title="t('add.loaderRefresh')"
-        @click="onRefreshLoaders"
-      >
-        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21 12a9 9 0 1 1-2.64-6.36" />
-          <polyline points="21 3 21 9 15 9" />
-        </svg>
-      </BaseButton>
-    </div>
-    <span class="meta-label small">{{ instance.loader === "custom" ? t("add.loaderPath") : t("meta.loaderVersion") }}</span>
-    <!-- 自定义加载器：路径选择（文件名存入加载器版本字段），其余为版本下拉 -->
-    <div v-if="instance.loader === 'custom'" class="select-row">
-      <input
-        class="field-input"
-        :value="instance.loaderVersion ?? ''"
-        :placeholder="t('add.loaderPathPlaceholder')"
-        spellcheck="false"
-        @input="change({ loaderVersion: ($event.target as HTMLInputElement).value || null })"
-      />
-      <BaseButton size="sm" variant="accent" @click="loaderPathInput?.click()">…</BaseButton>
-      <input ref="loaderPathInput" type="file" accept=".jar" class="hidden-input" @change="onLoaderPathPick" />
-    </div>
-    <div v-else class="select-row">
-      <!-- 默认锁死；点刷新或切换加载器后自动拉取真实版本列表并解锁 -->
-      <select
-        class="field-select"
-        :value="instance.loaderVersion ?? ''"
-        :disabled="lvLocked || lvLoading"
-        @change="change({ loaderVersion: ($event.target as HTMLSelectElement).value || null })"
-      >
-        <option v-for="lv in lvOptions" :key="lv" :value="lv">{{ lv }}</option>
-      </select>
-      <BaseButton
-        size="sm"
-        variant="ghost"
-        :disabled="lvLoading || !instance.version || instance.loader === 'normal'"
-        :title="t('add.loaderVerRefresh')"
-        @click="onRefreshLoaderVersions"
-      >
-        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21 12a9 9 0 1 1-2.64-6.36" />
-          <polyline points="21 3 21 9 15 9" />
-        </svg>
-      </BaseButton>
-    </div>
+      <!-- 加载器类型 + 加载器版本 -->
+      <span class="meta-label">{{ t("meta.loader") }}</span>
+      <div class="select-row">
+        <!-- 默认只有原版 / 当前 / 自定义，刷新后合并该版本支持的加载器；查询期间锁住 -->
+        <select
+          class="field-select"
+          :value="instance.loader"
+          :disabled="loadersLoading"
+          @change="onLoaderChange(($event.target as HTMLSelectElement).value)"
+        >
+          <option v-for="l in loaderOptions" :key="l" :value="l">{{ loaderLabel(l) }}</option>
+        </select>
+        <BaseButton
+          size="sm"
+          variant="ghost"
+          :disabled="loadersLoading || !instance.version"
+          v-tip="t('add.loaderRefresh')"
+          @click="onRefreshLoaders"
+        >
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+            <polyline points="21 3 21 9 15 9" />
+          </svg>
+        </BaseButton>
+      </div>
+      <span class="meta-label small">{{ instance.loader === "custom" ? t("add.loaderPath") : t("meta.loaderVersion") }}</span>
+      <!-- 自定义加载器：路径选择（文件名存入加载器版本字段），其余为版本下拉 -->
+      <div v-if="instance.loader === 'custom'" class="select-row">
+        <input
+          class="field-input"
+          :value="instance.loaderVersion ?? ''"
+          :placeholder="t('add.loaderPathPlaceholder')"
+          spellcheck="false"
+          @input="change({ loaderVersion: ($event.target as HTMLInputElement).value || null })"
+        />
+        <BaseButton size="sm" variant="accent" @click="loaderPathInput?.click()">…</BaseButton>
+        <input ref="loaderPathInput" type="file" accept=".jar" class="hidden-input" @change="onLoaderPathPick" />
+      </div>
+      <div v-else class="select-row">
+        <!-- 默认锁死；点刷新或切换加载器后自动拉取真实版本列表并解锁 -->
+        <select
+          class="field-select"
+          :value="instance.loaderVersion ?? ''"
+          :disabled="lvLocked || lvLoading"
+          @change="change({ loaderVersion: ($event.target as HTMLSelectElement).value || null })"
+        >
+          <option v-for="lv in lvOptions" :key="lv" :value="lv">{{ lv }}</option>
+        </select>
+        <BaseButton
+          size="sm"
+          variant="ghost"
+          :disabled="lvLoading || !instance.version || instance.loader === 'normal'"
+          v-tip="t('add.loaderVerRefresh')"
+          @click="onRefreshLoaderVersions"
+        >
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+            <polyline points="21 3 21 9 15 9" />
+          </svg>
+        </BaseButton>
+      </div>
+    </template>
 
     <!-- 游戏内语言 + 日志编码 -->
     <span class="meta-label">{{ t("meta.lang") }}</span>
     <select
       class="field-select"
       :value="instance.lang ?? 'zh_cn'"
+      :disabled="langsLoading"
       @change="change({ lang: ($event.target as HTMLSelectElement).value })"
     >
-      <option v-for="l in langs" :key="l.value" :value="l.value">{{ l.label }}</option>
+      <option v-if="langsLoading" value="">{{ t("meta.langLoading") }}</option>
+      <template v-else>
+        <option v-for="l in langs" :key="l.value" :value="l.value">{{ l.label }}</option>
+      </template>
     </select>
     <span class="meta-label small">{{ t("meta.logEncoding") }}</span>
     <select
@@ -374,42 +389,45 @@ function onPlatformChange(value: string) {
       <option value="gbk">{{ t("meta.gbk") }}</option>
     </select>
 
-    <!-- 整合包类型（最底部，不占整行；ID 平台填项目 / 文件 ID，在线平台填网址） -->
-    <span class="meta-label">{{ t("meta.modpack") }}</span>
-    <select
-      class="field-select"
-      :value="instance.modpackType === 'none' ? '' : instance.modpackType ?? ''"
-      @change="onPlatformChange(($event.target as HTMLSelectElement).value)"
-    >
-      <option v-for="p in platforms" :key="p.value" :value="p.value">{{ p.label }}</option>
-    </select>
-    <!-- 在线网络整合包：网址输入框（隐藏 ID 输入框） -->
-    <div v-if="instance.modpackType === 'serverpack'" class="modpack-url">
-      <input
-        class="field-input"
-        :value="instance.serverUrl ?? ''"
-        :placeholder="t('add.url')"
-        spellcheck="false"
-        @input="change({ serverUrl: ($event.target as HTMLInputElement).value || null })"
-      />
-    </div>
-    <!-- ID 平台：项目 / 文件 ID 等宽并排 -->
-    <div v-else-if="instance.modpackType && instance.modpackType !== 'none'" class="modpack-ids">
-      <input
-        class="field-input"
-        :value="instance.pid ?? ''"
-        :placeholder="t('meta.pid')"
-        spellcheck="false"
-        @input="change({ pid: ($event.target as HTMLInputElement).value || null })"
-      />
-      <input
-        class="field-input"
-        :value="instance.fid ?? ''"
-        :placeholder="t('meta.fid')"
-        spellcheck="false"
-        @input="change({ fid: ($event.target as HTMLInputElement).value || null })"
-      />
-    </div>
+    <!-- 整合包类型：同样是整合包作者的设定，锁定时整块隐藏 -->
+    <template v-if="!locked">
+      <!-- 整合包类型（最底部，不占整行；ID 平台填项目 / 文件 ID，在线平台填网址） -->
+      <span class="meta-label">{{ t("meta.modpack") }}</span>
+      <select
+        class="field-select"
+        :value="instance.modpackType === 'none' ? '' : instance.modpackType ?? ''"
+        @change="onPlatformChange(($event.target as HTMLSelectElement).value)"
+      >
+        <option v-for="p in platforms" :key="p.value" :value="p.value">{{ p.label }}</option>
+      </select>
+      <!-- 在线网络整合包：网址输入框（隐藏 ID 输入框） -->
+      <div v-if="instance.modpackType === 'serverpack'" class="modpack-url">
+        <input
+          class="field-input"
+          :value="instance.serverUrl ?? ''"
+          :placeholder="t('add.url')"
+          spellcheck="false"
+          @input="change({ serverUrl: ($event.target as HTMLInputElement).value || null })"
+        />
+      </div>
+      <!-- ID 平台：项目 / 文件 ID 等宽并排 -->
+      <div v-else-if="instance.modpackType && instance.modpackType !== 'none'" class="modpack-ids">
+        <input
+          class="field-input"
+          :value="instance.pid ?? ''"
+          :placeholder="t('meta.pid')"
+          spellcheck="false"
+          @input="change({ pid: ($event.target as HTMLInputElement).value || null })"
+        />
+        <input
+          class="field-input"
+          :value="instance.fid ?? ''"
+          :placeholder="t('meta.fid')"
+          spellcheck="false"
+          @input="change({ fid: ($event.target as HTMLInputElement).value || null })"
+        />
+      </div>
+    </template>
   </div>
 </template>
 

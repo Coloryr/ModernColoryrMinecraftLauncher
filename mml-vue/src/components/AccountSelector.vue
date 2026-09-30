@@ -114,7 +114,7 @@ function pick(account: AccountStoreDto) {
             {{ acc.userName.charAt(0).toUpperCase() }}
           </span>
           <span class="menu-meta">
-            <span class="menu-name" :title="acc.userName">{{ acc.userName }}</span>
+            <span class="menu-name" v-tip="acc.userName">{{ acc.userName }}</span>
             <span class="menu-type">{{ t(typeLabelKey(acc.authType)) }}</span>
           </span>
         </button>

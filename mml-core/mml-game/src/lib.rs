@@ -557,6 +557,17 @@ pub fn have_instance_name(name: &str) -> bool {
     !temp.is_none()
 }
 
+/// 是否存在这个名字的实例
+/// - `uuid`: 实例标识
+///
+/// # 返回值
+///
+/// 存在返回 `true`
+pub fn have_instance_uuid(uuid: &Uuid) -> bool {
+    let list = INSTANCES.read().unwrap();
+    list.contains_key(uuid)
+}
+
 /// 将实例添加到分组中
 ///
 /// UUID 为空或冲突时自动重新生成。

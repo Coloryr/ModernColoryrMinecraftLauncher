@@ -76,7 +76,7 @@ onMounted(async () => {
       :key="btn.id"
       class="wc-btn"
       :class="btn.id"
-      :title="btn.label()"
+      v-tip="btn.label()"
       @click="btn.run()"
     >
       <svg

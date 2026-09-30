@@ -229,6 +229,50 @@ pub async fn set_minecraft_cape(token: &str, cape_id: &str) -> CoreResult<()> {
         .await
 }
 
+/// 上传本地皮肤文件（正版）
+///
+/// 皮肤文件是 multipart 表单直传（`variant` = classic / slim，`file` = PNG 字节），
+/// 与按 URL 换肤（[`set_minecraft_skin`]）走同一接口不同形态，成功返回空负载。
+///
+/// # 参数
+///
+/// - `token`: Minecraft 访问令牌
+/// - `variant`: 皮肤型号，`classic`（经典）或 `slim`（纤细）
+/// - `file_name`: 文件名（服务端记录来源用，取本地文件名即可）
+/// - `data`: PNG 文件字节
+pub async fn upload_minecraft_skin(
+    token: &str,
+    variant: &str,
+    file_name: &str,
+    data: Vec<u8>,
+) -> CoreResult<()> {
+    let form = reqwest::multipart::Form::new()
+        .text("variant", variant.to_string())
+        .part(
+            "file",
+            reqwest::multipart::Part::bytes(data)
+                .file_name(file_name.to_string())
+                .mime_str("image/png")
+                .map_err(|err| ErrorType::SerializerError(ErrorData { error: err.to_string() }))?,
+        );
+
+    let res = crate::get_login_client()
+        .post_multipart(&format!("{}/skins", urls::MINECRAFT_SERVICES), form, token)
+        .await?;
+
+    let status = res.status();
+    if !status.is_success() {
+        let url = res.url().to_string();
+        let error = res.text().await.unwrap_or_default();
+        return Err(ErrorType::HttpError(HttpErrorData {
+            error,
+            url,
+            status: Some(status.as_u16()),
+        }));
+    }
+    Ok(())
+}
+
 /// 获取皮肤信息
 /// - `uuid`: 玩家 UUID
 /// - `url`: 查询地址（`None` 时用官方会话服务器）
@@ -309,8 +353,9 @@ impl Default for MinecraftTokenResObj {
 ///
 /// # 返回值
 ///
-/// 返回 Minecraft 访问令牌；令牌无效时返回 `AuthTokenTimeout`
-pub async fn get_minecraft_token(uhs: &str, token: &str) -> CoreResult<String> {
+/// 返回 Minecraft 访问令牌及其有效期（秒，本地判过期用）；
+/// 令牌无效时返回 `AuthTokenTimeout`
+pub async fn get_minecraft_token(uhs: &str, token: &str) -> CoreResult<(String, i64)> {
     let obj = MinecraftTokenObj {
         identity_token: format!("XBL3.0 x={uhs};{token}"),
     };
@@ -322,7 +367,7 @@ pub async fn get_minecraft_token(uhs: &str, token: &str) -> CoreResult<String> {
     if res.expires_in <= 0 || res.access_token.is_empty() {
         Err(ErrorType::AuthTokenTimeout)
     } else {
-        Ok(res.access_token)
+        Ok((res.access_token, res.expires_in))
     }
 }
 
