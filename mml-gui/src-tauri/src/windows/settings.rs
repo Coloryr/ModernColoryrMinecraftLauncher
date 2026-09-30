@@ -9,12 +9,13 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use mml_base::archives::IBaseArchiveGui;
+use mml_config::config_obj::{DnsObj, GameCheckObj, HttpObj, RunArgObj, WindowSettingObj};
 use mml_jvms::java_helper;
 use tauri::{AppHandle, Emitter};
 
 use crate::dtos::{
     BgInfoDto, DnsSettingDto, GameCheckSettingDto, JavaImportProgressDto, JavaInfoDto,
-    LaunchSettingDto, NetworkSettingDto, RunArgSettingDto, WindowSettingDto,
+    LaunchSettingDto, NetworkSettingDto, RunArgSettingDto, SettingsDefaultsDto, WindowSettingDto,
 };
 use crate::listens;
 
@@ -315,14 +316,39 @@ pub fn settings_get_network() -> NetworkSettingDto {
 }
 
 /// 保存网络与下载设置（Http / DNS / 游戏文件检查一次落盘）
+///
+/// 保存后**立即生效**，三件事依次做：
+/// 1. `mml_net::rebuild()` —— 重建两个 HTTP 客户端，并**中断所有在途请求**
+///    （旧实现用 `OnceLock` 只建一次，改完代理必须重启才生效）；
+///    被中断的请求返回"请求已中断"错误，调用方按失败处理、重试即走新代理；
+/// 2. `mml_downloader::cancel_all()` —— 取消全部下载任务，别让它们在旧代理上继续跑；
+/// 3. 落盘配置。
+///
+/// 这样"卡在加载器列表时改代理"能立刻生效，不用关窗重开。
 #[tauri::command]
 pub fn settings_save_network(dto: NetworkSettingDto) {
+    // 先记一行"收到的代理配置"，用来判断前端到底有没有把值送进来
+    // （代理字段是草稿，只有点保存才会到这里）
+    mml_log::info(format!(
+        "保存网络设置：workProxy={} ({} {}:{}) loginProxy={} ({} {}:{})",
+        dto.work_proxy,
+        dto.work_proxy_type,
+        dto.proxy_ip,
+        dto.proxy_port,
+        dto.login_proxy,
+        dto.login_proxy_type,
+        dto.proxy_ip,
+        dto.proxy_port,
+    ));
+
     let mut config = mml_config::write_config();
     config.http = dto.clone().into();
     config.dns = dto.dns.into();
     config.check = dto.check.into();
     drop(config);
     mml_config::save();
+    mml_downloader::cancel_all();
+    mml_net::rebuild();
 }
 
 // ================= 游戏启动设置 =================
@@ -348,6 +374,28 @@ pub fn settings_save_launch(run: RunArgSettingDto, window: WindowSettingDto) {
     config.window = window.into();
     drop(config);
     mml_config::save();
+}
+
+/// 设置项的出厂默认值（供界面「恢复默认」用）
+///
+/// 形状与 `settings_get_network` / `settings_get_launch` 一致，值取自 core 的默认值：
+/// - `HttpObj::default()` / `DnsObj::default()` / `GameCheckObj::default()`
+/// - `RunArgObj::new()`（512 / 4096 / GC Auto / 预启动与游戏同时运行）
+/// - `WindowSettingObj::new()`（窗口 1280×720）
+///
+/// 注意 `GameCheckSettingDto` 的 `derive(Default)` 是**全 false**，与 core 的
+/// 「八项全 true」不同，所以这里必须走 `From<&GameCheckObj>` 而不是 DTO 自己的 Default。
+#[tauri::command]
+pub fn settings_get_defaults() -> SettingsDefaultsDto {
+    let mut network = NetworkSettingDto::from(&HttpObj::default());
+    network.dns = DnsSettingDto::from(&DnsObj::default());
+    network.check = GameCheckSettingDto::from(&GameCheckObj::default());
+
+    SettingsDefaultsDto {
+        network,
+        run: RunArgSettingDto::from(&RunArgObj::new()),
+        window: WindowSettingDto::from(&WindowSettingObj::new()),
+    }
 }
 
 /// 扫描系统已安装的 Java 并持久化到配置

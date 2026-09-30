@@ -22,7 +22,6 @@ use scraper::{ElementRef, Html, Selector, selectable::Selectable};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    WORK_CLIENT,
     url_helper::{self, get_source},
     urls,
 };
@@ -89,12 +88,13 @@ pub async fn get_optifine_version() -> CoreResult<Vec<GetOptifineObj>> {
     let url = url_helper::get_optifine_meta();
     let mut list = Vec::<GetOptifineObj>::new();
 
-    let data = WORK_CLIENT.get().unwrap().get_text(&url).await?;
+    let data = crate::get_work_client().get_text(&url).await?;
     if get_source() == SourceLocal::Offical {
         let html = Html::parse_document(&data);
         let select = Selector::parse("tr.downloadLine").unwrap();
+        let rows: Vec<_> = html.select(&select).collect();
 
-        for row in html.select(&select) {
+        for (row_idx, row) in rows.iter().enumerate() {
             let mut col_download = None;
             let mut col_mirror = None;
             let mut col_forge = None;
@@ -219,15 +219,11 @@ pub async fn get_optifine_download(
 ) -> CoreResult<Option<String>> {
     match source {
         SourceLocal::Offical => {
-            WORK_CLIENT
-                .get()
-                .unwrap()
+            crate::get_work_client()
                 .get_text(&url1.as_ref().unwrap())
                 .await?;
 
-            let data = WORK_CLIENT
-                .get()
-                .unwrap()
+            let data = crate::get_work_client()
                 .get_text(&url2.as_ref().unwrap())
                 .await?;
             let html = Html::parse_document(&data);
@@ -256,7 +252,9 @@ pub async fn get_optifine_download(
 /// 返回支持 OptiFine 的 Minecraft 版本集合（首次查询后缓存）
 pub async fn get_support_version() -> CoreResult<Option<HashSet<String>>> {
     match OPTIFINE_MC_VERSION.get() {
-        Some(data) => Ok(Some(data.clone())),
+        Some(data) => {
+            Ok(Some(data.clone()))
+        }
         None => {
             let list = get_optifine_version().await?;
             let list1 = list.iter().chunk_by(|item| &item.mc_version);
@@ -270,3 +268,4 @@ pub async fn get_support_version() -> CoreResult<Option<HashSet<String>>> {
         }
     }
 }
+

@@ -1,0 +1,113 @@
+<script setup lang="ts">
+// 添加实例 · 分组组合框：可输入、聚焦时列出已有分组、允许自定义
+// 留空 = 默认分组（不进下拉）
+//
+// 展开态由父组件持有（`v-model:open`）：Esc 的优先级链里要先收下拉再谈关窗。
+import { computed } from "vue";
+import { t } from "../../../lib/i18n";
+
+const props = defineProps<{
+  modelValue: string;
+  groups: string[];
+  open: boolean;
+}>();
+
+const emit = defineEmits<{
+  (e: "update:modelValue", v: string): void;
+  (e: "update:open", v: boolean): void;
+}>();
+
+/** 按输入内容过滤已有分组（大小写不敏感） */
+const matched = computed(() => {
+  const q = props.modelValue.trim().toLowerCase();
+  return props.groups.filter((g) => g.toLowerCase().includes(q));
+});
+
+function onInput(e: Event) {
+  emit("update:modelValue", (e.target as HTMLInputElement).value);
+  emit("update:open", true);
+}
+
+function pick(name: string) {
+  emit("update:modelValue", name);
+  emit("update:open", false);
+}
+</script>
+
+<template>
+  <div class="group-combo">
+    <input
+      :value="modelValue"
+      class="field-input"
+      :placeholder="t('add.groupPlaceholder')"
+      spellcheck="false"
+      autocomplete="off"
+      role="combobox"
+      aria-autocomplete="list"
+      :aria-expanded="open"
+      @input="onInput"
+      @focus="emit('update:open', true)"
+      @blur="emit('update:open', false)"
+    />
+    <div v-if="open" class="group-drop" role="listbox">
+      <button
+        v-for="g in matched"
+        :key="g"
+        type="button"
+        class="group-opt"
+        role="option"
+        :aria-selected="modelValue === g"
+        @mousedown.prevent
+        @click="pick(g)"
+      >
+        {{ g }}
+      </button>
+      <div v-if="!matched.length" class="empty-tip">{{ t("add.groupNone") }}</div>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.group-combo {
+  position: relative;
+}
+
+.group-drop {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  max-height: 180px;
+  overflow-y: auto;
+  padding: 4px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow-lg);
+}
+
+.group-opt {
+  display: block;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.group-opt:hover {
+  background: var(--bg-hover);
+}
+
+.group-opt[aria-selected="true"] {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+</style>

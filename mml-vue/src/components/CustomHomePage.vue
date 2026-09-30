@@ -33,7 +33,8 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-/* 铺满内容区：父容器都是纵向 flex（.news-page / .detail），flex:1 吃掉剩余高度 */
+/* 铺满内容区：父容器都是「确定高度的纵向 flex」（.custom-home-page / .custom-home-fill），
+   高度靠 flex:1 吃满，height:100% 只是兜底 */
 .custom-home-frame {
   flex: 1;
   width: 100%;

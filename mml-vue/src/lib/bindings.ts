@@ -174,6 +174,7 @@ export const commands = {
     clearBg: () => invoke<void>("settings_clear_bg"),
     detectJava: (path: string) => invoke<string | null>("settings_detect_java", { path }),
     getBg: () => invoke<BgInfoDto | null>("settings_get_bg"),
+    getDefaults: () => invoke<SettingsDefaultsDto>("settings_get_defaults"),
     getLaunch: () => invoke<LaunchSettingDto>("settings_get_launch"),
     getNetwork: () => invoke<NetworkSettingDto>("settings_get_network"),
     getSystemFonts: () => invoke<string[]>("settings_get_system_fonts"),
@@ -440,13 +441,6 @@ export type CustomHomeInfoDto = {
   entryUrl: string,
   version: string,
   fileCount: number,
-};
-
-export type CustomHomeProgressDto = {
-  state: string,
-  now: number,
-  total: number,
-  subText: string,
 };
 
 export type DownloadTaskEvent = {
@@ -882,6 +876,12 @@ export type WindowSettingDto = {
   randomTitle: boolean,
   cycleTitle: boolean,
   titleDelay: number,
+};
+
+export type SettingsDefaultsDto = {
+  network: NetworkSettingDto,
+  run: RunArgSettingDto,
+  window: WindowSettingDto,
 };
 
 export type LaunchSettingDto = {

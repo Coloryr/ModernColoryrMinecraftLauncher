@@ -93,46 +93,151 @@ pub async fn get_support_loaders(mc: &str, gui: ProgressGui) -> CoreResult<Vec<S
         }
     }
 
+    // 目的：`try_join!` 只要有一路不返回，整体就卡住。这里每 500ms 打印一次
+    // "哪几路还没完成"，一次就能看出是哪一路永远不返回（之前只能看到"整体卡住"）。
+    let finished: std::sync::Arc<[std::sync::atomic::AtomicBool; SUPPORT_LOAD_STEPS]> =
+        std::sync::Arc::new(std::array::from_fn(|_| {
+            std::sync::atomic::AtomicBool::new(false)
+        }));
+    const NAMES: [&str; SUPPORT_LOAD_STEPS] = [
+        "forge",
+        "fabric",
+        "quilt",
+        "neoforge",
+        "optifine",
+        "liteloader",
+    ];
+    macro_rules! mark_done {
+        ($idx:expr) => {
+            finished[$idx].store(true, Ordering::SeqCst);
+        };
+    }
+    // 看门狗：独立任务，定期报告未完成的路；全部完成后自行退出
+    let watchdog = {
+        let finished = std::sync::Arc::clone(&finished);
+        tokio::spawn(async move {
+            let started = std::time::Instant::now();
+            loop {
+                tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                let pending: Vec<&str> = NAMES
+                    .iter()
+                    .enumerate()
+                    .filter(|(i, _)| !finished[*i].load(Ordering::SeqCst))
+                    .map(|(_, n)| *n)
+                    .collect();
+                if pending.is_empty() {
+                    return;
+                }
+            }
+        })
+    };
+
     let forge = async {
-        let ok = forge_versions(mc).await.map(|v| !v.is_empty()).unwrap_or(false);
+        let t = std::time::Instant::now();
+        let ok = match forge_versions(mc).await {
+            Ok(v) => !v.is_empty(),
+            // 被全局中断（用户改了代理）：不能吞，要让整次查询立刻失败退出
+            Err(err) if mml_net::is_aborted(&err) => {
+                mark_done!(0);
+                return Err(err);
+            }
+            Err(e) => {
+                false
+            }
+        };
+        mark_done!(0);
         bump(&done, &gui);
-        ok
+        Ok(ok)
     };
     let fabric = async {
-        let ok = fabric_versions().await.map(|v| !v.is_empty()).unwrap_or(false);
+        let t = std::time::Instant::now();
+        let ok = match fabric_versions().await {
+            Ok(v) => !v.is_empty(),
+            Err(err) if mml_net::is_aborted(&err) => {
+                mark_done!(1);
+                return Err(err);
+            }
+            Err(e) => {
+                false
+            }
+        };
+        mark_done!(1);
         bump(&done, &gui);
-        ok
+        Ok(ok)
     };
     let quilt = async {
-        let ok = quilt_versions().await.map(|v| !v.is_empty()).unwrap_or(false);
+        let t = std::time::Instant::now();
+        let ok = match quilt_versions().await {
+            Ok(v) => !v.is_empty(),
+            Err(err) if mml_net::is_aborted(&err) => {
+                mark_done!(2);
+                return Err(err);
+            }
+            Err(e) => {
+                false
+            }
+        };
+        mark_done!(2);
         bump(&done, &gui);
-        ok
+        Ok(ok)
     };
     let neoforge = async {
+        let t = std::time::Instant::now();
         let ok = if mml_net::url_helper::get_source() == SourceLocal::Offical {
             version_ge(mc, "1.20.1")
         } else {
-            neoforge_versions(mc).await.map(|v| !v.is_empty()).unwrap_or(false)
+            match neoforge_versions(mc).await {
+                Ok(v) => !v.is_empty(),
+                Err(err) if mml_net::is_aborted(&err) => {
+                    mark_done!(3);
+                    return Err(err);
+                }
+                Err(e) => {
+                    false
+                }
+            }
         };
+        mark_done!(3);
         bump(&done, &gui);
-        ok
+        Ok(ok)
     };
     let optifine = async {
-        let ok = matches!(
-            mml_net::optifine_api::get_support_version().await,
-            Ok(Some(set)) if set.contains(mc)
-        );
+        let t = std::time::Instant::now();
+        let ok = match mml_net::optifine_api::get_support_version().await {
+            Ok(Some(set)) => set.contains(mc),
+            Ok(None) => false,
+            Err(err) if mml_net::is_aborted(&err) => {
+                mark_done!(4);
+                return Err(err);
+            }
+            Err(e) => {
+                false
+            }
+        };
+        mark_done!(4);
         bump(&done, &gui);
-        ok
+        Ok(ok)
     };
     let liteloader = async {
-        let ok = liteloader_supports(mc).await;
+        let t = std::time::Instant::now();
+        // liteloader_supports 内部把普通错误吞成 false，中断会向上抛
+        let ok = match liteloader_supports(mc).await {
+            Ok(ok) => ok,
+            Err(err) => {
+                mark_done!(5);
+                return Err(err);
+            }
+        };
+        mark_done!(5);
         bump(&done, &gui);
-        ok
+        Ok(ok)
     };
 
     let (forge_ok, fabric_ok, quilt_ok, neoforge_ok, optifine_ok, liteloader_ok) =
-        tokio::join!(forge, fabric, quilt, neoforge, optifine, liteloader);
+        tokio::try_join!(forge, fabric, quilt, neoforge, optifine, liteloader)?;
+    let (forge_ok, fabric_ok, quilt_ok, neoforge_ok, optifine_ok, liteloader_ok) = (
+        forge_ok, fabric_ok, quilt_ok, neoforge_ok, optifine_ok, liteloader_ok,
+    );
 
     if forge_ok {
         list.push(LoaderType::Forge.to_string().to_string());
@@ -168,11 +273,12 @@ pub const SUPPORT_LOAD_STEPS: usize = 6;
 ///
 /// # 返回值
 ///
-/// 返回是否有可用的 LiteLoader 版本
-async fn liteloader_supports(mc: &str) -> bool {
+/// 返回是否有可用的 LiteLoader 版本；**被全局中断时向上抛**（否则中断会被吞成 false）
+async fn liteloader_supports(mc: &str) -> CoreResult<bool> {
     match liteloader_versions(mc).await {
-        Ok(list) => !list.is_empty(),
-        Err(_) => false,
+        Ok(list) => Ok(!list.is_empty()),
+        Err(err) if mml_net::is_aborted(&err) => Err(err),
+        Err(_) => Ok(false),
     }
 }
 
@@ -206,6 +312,11 @@ fn version_ge(a: &str, b: &str) -> bool {
 /// Forge：官方源为 maven-metadata.xml（全量，按 `{mc}-` 前缀筛选并去前缀），
 /// BMCLAPI 源为按游戏版本的 JSON 数组（直接是构建号）；两者都取新版本在前
 ///
+/// **回退方向是单向的**（业务约定）：
+/// - 配置为 **BMCLAPI** 源时，镜像不可达可以回退官方源（镜像只是加速，官方才是权威）；
+/// - 配置为**官方**源时**绝不回退 BMCLAPI**（用户明确选了官方源，私自换镜像会让人以为
+///   自己在用官方数据，实际拿到的是镜像快照）。
+///
 /// # 参数
 ///
 /// - `mc`: 游戏版本号
@@ -215,35 +326,51 @@ fn version_ge(a: &str, b: &str) -> bool {
 /// 返回构建号列表；下载或解析失败返回对应错误
 async fn forge_versions(mc: &str) -> CoreResult<Vec<String>> {
     if mml_net::url_helper::get_source() == SourceLocal::Offical {
-        // 命中缓存：只做前缀过滤
-        if let Some(all) = FORGE_META_ALL.read().unwrap().as_ref() {
-            return Ok(forge_of_mc(all, mc));
-        }
-
-        let url = mml_net::url_helper::get_forge_versions(mc);
-        let data = mml_net::get_work_client().get_text(&url).await?;
-        let re = Regex::new(r"<version>([^<]+)</version>").unwrap();
-        let mut all: Vec<String> = re
-            .captures_iter(&data)
-            .filter_map(|c| c.get(1).map(|m| m.as_str().to_string()))
-            .collect();
-        all.reverse();
-        *FORGE_META_ALL.write().unwrap() = Some(all.clone());
-        Ok(forge_of_mc(&all, mc))
+        // 官方源：只查官方 maven，失败就失败（不回退镜像）
+        forge_versions_offical(mc).await
     } else {
         if let Some(hit) = FORGE_BMCLAPI.lock().unwrap().get(mc) {
             return Ok(hit.clone());
         }
 
         let url = mml_net::url_helper::get_forge_versions(mc);
-        let data = mml_net::get_work_client().get_text(&url).await?;
-        let arr = serde_json::from_str::<serde_json::Value>(&data)
-            .map_err(|_| ErrorType::DataNotFound(DataNotFoundData::Info))?;
-        let mut list = value_versions(&arr);
-        list.reverse();
-        FORGE_BMCLAPI.lock().unwrap().insert(mc.to_string(), list.clone());
-        Ok(list)
+        let result = mml_net::get_work_client().get_text(&url).await;
+        match result {
+            Ok(data) => {
+                let arr = serde_json::from_str::<serde_json::Value>(&data)
+                    .map_err(|_| ErrorType::DataNotFound(DataNotFoundData::Info))?;
+                let mut list = value_versions(&arr);
+                list.reverse();
+                FORGE_BMCLAPI.lock().unwrap().insert(mc.to_string(), list.clone());
+                Ok(list)
+            }
+            // 被全局中断（用户改了代理）：不能回退——回退会发新请求，本次中断对它无效
+            Err(err) if mml_net::is_aborted(&err) => Err(err),
+            // BMCLAPI 镜像不可达（普通错误）：回退官方源
+            Err(_) => forge_versions_offical(mc).await,
+        }
     }
+}
+
+/// 从 Forge 官方 maven 拉全量版本列表并按游戏版本筛选
+///
+/// 官方源与「BMCLAPI 回退」两条路径共用，保证解析与缓存逻辑只有一份。
+async fn forge_versions_offical(mc: &str) -> CoreResult<Vec<String>> {
+    // 命中缓存：只做前缀过滤
+    if let Some(all) = FORGE_META_ALL.read().unwrap().as_ref() {
+        return Ok(forge_of_mc(all, mc));
+    }
+
+    let url = mml_net::url_helper::get_forge_versions(mc);
+    let data = mml_net::get_work_client().get_text(&url).await?;
+    let re = Regex::new(r"<version>([^<]+)</version>").unwrap();
+    let mut all: Vec<String> = re
+        .captures_iter(&data)
+        .filter_map(|c| c.get(1).map(|m| m.as_str().to_string()))
+        .collect();
+    all.reverse();
+    *FORGE_META_ALL.write().unwrap() = Some(all.clone());
+    Ok(forge_of_mc(&all, mc))
 }
 
 /// 从 Forge 全量版本列表中筛出指定游戏版本的构建号
@@ -350,8 +477,11 @@ fn neoforge_mc_version(version: &str) -> Option<String> {
 
 /// NeoForge：按配置源拉取版本列表
 ///
-/// 配置为官方源时只走官方源（全量列表按游戏版本过滤）；
-/// 配置为 BMCLAPI 镜像时镜像按游戏版本返回，镜像不可达时回退官方源。
+/// 配置为官方源时**只走官方源**（全量列表按游戏版本过滤），失败就失败；
+/// 配置为 BMCLAPI 镜像时镜像按游戏版本返回，镜像不可达时**可以回退官方源**。
+///
+/// 回退**单向**（与 [`forge_versions`] 同一约定）：BMCLAPI → 官方允许，
+/// 官方 → BMCLAPI 禁止。
 ///
 /// # 参数
 ///
@@ -379,7 +509,11 @@ async fn neoforge_versions(mc: &str) -> CoreResult<Vec<String>> {
             .await
         {
             Ok(data) => (data, false),
-            // BMCLAPI 镜像不可达：回退官方源
+            // 被全局中断（用户改了代理）：**不能再回退**——回退会发一次新请求，
+            // 而新请求带着更新的世代号，本次中断对它无效，于是这一路永远不返回，
+            // 外层 try_join! 就卡死、进度条停住。必须原样向上抛。
+            Err(e) if mml_net::is_aborted(&e) => return Err(e),
+            // BMCLAPI 镜像不可达（普通错误）：回退官方源
             Err(e) => (client.get_text(&official).await.map_err(|_| e)?, true),
         }
     };
@@ -478,7 +612,9 @@ async fn optifine_versions(mc: &str) -> CoreResult<Vec<String>> {
 async fn liteloader_versions(mc: &str) -> CoreResult<Vec<String>> {
     // 版本信息取缓存；无缓存时在线拉取并落盘
     let data = match version_path::get_liteloader(mc) {
-        Some(data) => data,
+        Some(_) => {
+            version_path::get_liteloader(mc).unwrap()
+        }
         None => {
             let meta = mml_net::liteloader_api::get_meta().await?;
             let obj = serialize_tools::json_from_bytes::<LiteloaderMetaObj>(&meta)?;
@@ -518,4 +654,5 @@ fn value_versions(value: &serde_json::Value) -> Vec<String> {
         })
         .collect()
 }
+
 

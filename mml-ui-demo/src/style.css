@@ -1,0 +1,88 @@
+/* 自定义主页面示例的全局样式
+   配色集中在 :root 与 [data-mml-theme="Light"] 两个块里，服主改这里就能换皮肤。
+
+   主题：启动器会在本页面的 <html> 上写 data-mml-theme="Dark|Light"
+   （iframe 是独立文档，拿不到启动器页面的 CSS 变量，只能靠这个属性）。
+   所以配色规则一律写成「暗色为默认、亮色用 [data-mml-theme="Light"] 覆盖」。 */
+
+:root {
+  --bg: #10131a;
+  --bg-card: #181c26;
+  --bg-card-2: #1f2431;
+  --line: #2a3040;
+  --fg: #e8ecf4;
+  --fg-dim: #98a2b6;
+  --accent: #4f8cff;
+  --accent-2: #7c5cff;
+  --accent-grad: linear-gradient(120deg, #7c5cff, #4f8cff);
+  --accent-soft: rgba(79, 140, 255, 0.16);
+  --tag-dim-bg: rgba(152, 162, 182, 0.16);
+  --ok: #3ecf8e;
+  --ok-soft: rgba(62, 207, 142, 0.18);
+  --warn: #ffb454;
+  --err: #ff7a7a;
+  --hero-fg: #ffffff;
+  --shadow: 0 10px 26px rgba(0, 0, 0, 0.32);
+
+  color-scheme: dark;
+}
+
+/* 亮色：只覆盖变量，组件样式不用各写一套 */
+[data-mml-theme="Light"] {
+  --bg: #f2f4f8;
+  --bg-card: #ffffff;
+  --bg-card-2: #eef1f6;
+  --line: #d3dae6;
+  --fg: #1b2029;
+  --fg-dim: #5c6675;
+  --accent: #2f6fe4;
+  --accent-2: #6b46e0;
+  --accent-grad: linear-gradient(120deg, #6b46e0, #2f6fe4);
+  --accent-soft: rgba(47, 111, 228, 0.14);
+  --tag-dim-bg: rgba(92, 102, 117, 0.14);
+  --ok: #12a06a;
+  --ok-soft: rgba(18, 160, 106, 0.16);
+  --warn: #b87400;
+  --err: #d13b3b;
+  --hero-fg: #ffffff;
+  --shadow: 0 10px 24px rgba(31, 42, 68, 0.16);
+
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: "Microsoft YaHei UI", "Microsoft YaHei", system-ui, -apple-system,
+    "Segoe UI", Roboto, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  /* 主题切换时给个过渡，别硬闪 */
+  transition: background-color 0.18s ease, color 0.18s ease;
+}
+
+/* 页面自己滚动，铺满 iframe 给的整块区域 */
+#app {
+  min-height: 100%;
+  padding: 22px 26px 30px;
+}
+
+button {
+  font: inherit;
+  cursor: pointer;
+}
+
+a {
+  color: var(--accent);
+}

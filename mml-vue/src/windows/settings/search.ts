@@ -1,0 +1,178 @@
+// 设置窗口 · 设置项搜索索引
+//
+// 为什么是静态索引而不是扫 DOM：只有当前标签是渲染出来的（v-if），跨 6 个标签搜不到别页的项；
+// 而索引里的 `group` 就是 SettingsGroup 的 id（DOM 锚点 `#set-<id>`），命中后跳过去即可。
+//
+// 维护约定：**这里列的是"能搜到的设置项"**，标签页里加/改设置项时同步这里
+// （键名写错不会报错，只是搜不到，所以加完记得在搜索框里打一遍试试）。
+import { t } from "../../lib/i18n";
+import { SETTINGS_TABS, type SettingsTab } from "./types";
+
+/** 分组 id → 分组标题的 i18n 键（结果里显示「分组 › 项」用） */
+export const GROUP_TITLES: Record<string, string> = {
+  general: "winSettings.secGeneral",
+  theme: "winSettings.secTheme",
+  window: "winSettings.secWindow",
+  mainWindow: "winSettings.secMainWindow",
+  bgImage: "winSettings.bgImage",
+  skin: "winSettings.tab.skin",
+  download: "winSettings.secDownload",
+  proxy: "winSettings.secProxy",
+  dns: "winSettings.dns",
+  gameCheck: "winSettings.gameCheck",
+  gameWindow: "winSettings.secGameWindow",
+  memory: "winSettings.secMemory",
+  jvm: "winSettings.secJvm",
+  gameArgs: "winSettings.secGameArgs",
+  launchCmd: "winSettings.secLaunchCmd",
+  javaAdd: "winSettings.javaAdd",
+  servers: "winSettings.secServers",
+  loginLock: "winSettings.secLoginLock",
+  instanceLock: "winSettings.secInstanceLock",
+  customHome: "winSettings.secCustomHome",
+  gameTitle: "winSettings.secGameTitle",
+};
+
+interface IndexEntry {
+  tab: SettingsTab;
+  group: string;
+  /** 设置项标题的 i18n 键 */
+  labelKey: string;
+  /** 额外匹配词（术语 / 英文别名），可选 */
+  extra?: string[];
+}
+
+/** 设置项索引（按标签顺序，同组内按界面顺序） */
+const SETTINGS_INDEX: IndexEntry[] = [
+  // ---- 界面 ----
+  { tab: "ui", group: "general", labelKey: "winSettings.language", extra: ["language", "语言"] },
+  { tab: "ui", group: "general", labelKey: "winSettings.font", extra: ["font", "字体"] },
+  { tab: "ui", group: "general", labelKey: "winSettings.animations", extra: ["animation", "动画"] },
+  { tab: "ui", group: "theme", labelKey: "winSettings.theme", extra: ["theme", "dark", "light", "深色", "浅色"] },
+  { tab: "ui", group: "theme", labelKey: "winSettings.accent", extra: ["accent", "color", "强调色", "主题色"] },
+  { tab: "ui", group: "window", labelKey: "winSettings.windowMode", extra: ["window mode", "多窗口", "单窗口"] },
+  { tab: "ui", group: "mainWindow", labelKey: "winSettings.sidebar", extra: ["sidebar", "侧栏"] },
+  { tab: "ui", group: "bgImage", labelKey: "winSettings.bgImage", extra: ["background", "壁纸", "背景"] },
+  { tab: "ui", group: "bgImage", labelKey: "winSettings.bgOpacity", extra: ["opacity", "不透明度"] },
+  { tab: "ui", group: "bgImage", labelKey: "winSettings.bgBlur", extra: ["blur", "模糊"] },
+  { tab: "ui", group: "bgImage", labelKey: "winSettings.bgNativeSize", extra: ["resolution", "分辨率"] },
+
+  // ---- 皮肤与头像 ----
+  { tab: "skin", group: "skin", labelKey: "winSettings.headDisplay", extra: ["head", "头像"] },
+  { tab: "skin", group: "skin", labelKey: "winSettings.skinDisplay", extra: ["skin", "皮肤"] },
+  { tab: "skin", group: "skin", labelKey: "winSettings.rotX", extra: ["rotate", "旋转"] },
+  { tab: "skin", group: "skin", labelKey: "winSettings.rotY", extra: ["rotate", "旋转"] },
+
+  // ---- 网络与下载 ----
+  { tab: "network", group: "download", labelKey: "winSettings.downloadSource", extra: ["source", "bmclapi", "下载源"] },
+  { tab: "network", group: "download", labelKey: "winSettings.downloadThread", extra: ["thread", "线程", "并发"] },
+  { tab: "network", group: "download", labelKey: "winSettings.checkFile", extra: ["sha1", "校验"] },
+  { tab: "network", group: "download", labelKey: "winSettings.autoDownload", extra: ["auto download", "自动下载"] },
+  { tab: "network", group: "proxy", labelKey: "winSettings.proxyWork", extra: ["proxy", "代理"] },
+  { tab: "network", group: "proxy", labelKey: "winSettings.proxyLogin", extra: ["proxy", "代理"] },
+  { tab: "network", group: "proxy", labelKey: "winSettings.proxyType", extra: ["socks", "http"] },
+  { tab: "network", group: "proxy", labelKey: "winSettings.proxyIp", extra: ["ip", "address"] },
+  { tab: "network", group: "proxy", labelKey: "winSettings.proxyPort", extra: ["port", "端口"] },
+  { tab: "network", group: "proxy", labelKey: "winSettings.proxyUsername", extra: ["user", "用户名"] },
+  { tab: "network", group: "proxy", labelKey: "winSettings.proxyPassword", extra: ["password", "密码"] },
+  { tab: "network", group: "dns", labelKey: "winSettings.dnsEnable", extra: ["dns", "doh"] },
+  { tab: "network", group: "dns", labelKey: "winSettings.dnsProxy", extra: ["dns", "proxy"] },
+  { tab: "network", group: "dns", labelKey: "winSettings.dnsHttps", extra: ["doh", "https"] },
+  { tab: "network", group: "gameCheck", labelKey: "winSettings.checkCore", extra: ["core", "核心"] },
+  { tab: "network", group: "gameCheck", labelKey: "winSettings.checkLib", extra: ["library", "运行库"] },
+  { tab: "network", group: "gameCheck", labelKey: "winSettings.checkAssets", extra: ["assets", "资源"] },
+  { tab: "network", group: "gameCheck", labelKey: "winSettings.checkMod", extra: ["mod", "模组"] },
+  { tab: "network", group: "gameCheck", labelKey: "winSettings.checkCoreSha1", extra: ["sha1"] },
+  { tab: "network", group: "gameCheck", labelKey: "winSettings.checkLibSha1", extra: ["sha1"] },
+  { tab: "network", group: "gameCheck", labelKey: "winSettings.checkAssetsSha1", extra: ["sha1"] },
+  { tab: "network", group: "gameCheck", labelKey: "winSettings.checkModSha1", extra: ["sha1"] },
+
+  // ---- 游戏启动 ----
+  { tab: "launch", group: "gameWindow", labelKey: "winSettings.fullScreen", extra: ["fullscreen", "全屏"] },
+  { tab: "launch", group: "gameWindow", labelKey: "winSettings.width", extra: ["width", "宽"] },
+  { tab: "launch", group: "gameWindow", labelKey: "winSettings.height", extra: ["height", "高"] },
+  { tab: "launch", group: "memory", labelKey: "winSettings.minMemory", extra: ["memory", "内存", "xmx"] },
+  { tab: "launch", group: "memory", labelKey: "winSettings.maxMemory", extra: ["memory", "内存", "xmx"] },
+  { tab: "launch", group: "jvm", labelKey: "winSettings.gcMode", extra: ["gc", "g1gc", "zgc"] },
+  { tab: "launch", group: "jvm", labelKey: "winSettings.colorasm", extra: ["asmtools", "彩色日志"] },
+  { tab: "launch", group: "jvm", labelKey: "winSettings.removeJvmArg", extra: ["jvm args"] },
+  { tab: "launch", group: "jvm", labelKey: "winSettings.jvmEnv", extra: ["env", "环境变量"] },
+  { tab: "launch", group: "jvm", labelKey: "winSettings.jvmArgs", extra: ["jvm args", "启动参数"] },
+  { tab: "launch", group: "gameArgs", labelKey: "winSettings.removeGameArg", extra: ["game args"] },
+  { tab: "launch", group: "gameArgs", labelKey: "winSettings.gameArgs", extra: ["game args", "游戏参数"] },
+  { tab: "launch", group: "launchCmd", labelKey: "winSettings.preLaunch", extra: ["pre launch", "预启动"] },
+  { tab: "launch", group: "launchCmd", labelKey: "winSettings.preSameTime", extra: ["pre launch"] },
+  { tab: "launch", group: "launchCmd", labelKey: "winSettings.postLaunch", extra: ["post launch", "后置"] },
+  { tab: "launch", group: "launchCmd", labelKey: "winSettings.preCmd", extra: ["command", "命令"] },
+  { tab: "launch", group: "launchCmd", labelKey: "winSettings.postCmd", extra: ["command", "命令"] },
+
+  // ---- Java ----
+  { tab: "java", group: "javaAdd", labelKey: "winSettings.javaAdd", extra: ["java", "添加"] },
+  { tab: "java", group: "javaAdd", labelKey: "winSettings.javaName", extra: ["java name"] },
+  { tab: "java", group: "javaAdd", labelKey: "winSettings.javaPath", extra: ["java path", "路径"] },
+  { tab: "java", group: "javaAdd", labelKey: "winSettings.javaScan", extra: ["scan", "扫描"] },
+  { tab: "java", group: "javaAdd", labelKey: "winSettings.javaScanDir", extra: ["scan folder", "扫描文件夹"] },
+  { tab: "java", group: "javaAdd", labelKey: "winSettings.javaImport", extra: ["import", "导入"] },
+  { tab: "java", group: "javaAdd", labelKey: "winSettings.javaDownload", extra: ["download", "下载"] },
+  { tab: "java", group: "javaAdd", labelKey: "winSettings.javaRemoveAll", extra: ["remove", "删除"] },
+
+  // ---- 客户端设置 ----
+  { tab: "client", group: "servers", labelKey: "winSettings.serverAddress", extra: ["server", "服务器地址"] },
+  { tab: "client", group: "servers", labelKey: "winSettings.autoJoin", extra: ["auto join", "自动进服"] },
+  { tab: "client", group: "servers", labelKey: "winSettings.motdCard", extra: ["motd", "服务器信息"] },
+  { tab: "client", group: "servers", labelKey: "winSettings.motdInterval", extra: ["motd", "interval", "间隔"] },
+  { tab: "client", group: "loginLock", labelKey: "winSettings.loginLockOn", extra: ["login lock", "登录方式锁定"] },
+  { tab: "client", group: "loginLock", labelKey: "winSettings.loginLockAdd", extra: ["login lock", "添加"] },
+  { tab: "client", group: "instanceLock", labelKey: "winSettings.instanceLockOn", extra: ["instance lock", "实例锁定"] },
+  { tab: "client", group: "customHome", labelKey: "winSettings.customHomeOn", extra: ["custom home", "自定义主页面"] },
+  { tab: "client", group: "customHome", labelKey: "winSettings.customHomeImport", extra: ["zip", "导入"] },
+  { tab: "client", group: "customHome", labelKey: "winSettings.customHomeOpenDir", extra: ["folder", "打开目录"] },
+  { tab: "client", group: "customHome", labelKey: "winSettings.customHomeRemove", extra: ["remove", "删除"] },
+  { tab: "client", group: "gameTitle", labelKey: "winSettings.editTitle", extra: ["title", "标题"] },
+  { tab: "client", group: "gameTitle", labelKey: "winSettings.randomTitle", extra: ["title", "随机标题"] },
+  { tab: "client", group: "gameTitle", labelKey: "winSettings.cycleTitle", extra: ["title", "循环标题"] },
+  { tab: "client", group: "gameTitle", labelKey: "winSettings.gameTitle", extra: ["title", "标题文字"] },
+  { tab: "client", group: "gameTitle", labelKey: "winSettings.titleDelay", extra: ["title", "间隔"] },
+];
+
+export interface SettingsHit {
+  tab: SettingsTab;
+  group: string;
+  /** 标签页显示名 */
+  tabLabel: string;
+  /** 分组显示名 */
+  groupLabel: string;
+  /** 设置项显示名 */
+  label: string;
+}
+
+/** 把命中位置的原文交回界面（用于高亮），不在这里做高亮拼接 */
+export function searchSettings(query: string, limit = 40): SettingsHit[] {
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+
+  const tabLabelOf = (tab: SettingsTab) => {
+    const item = SETTINGS_TABS.find((x) => x.id === tab);
+    return item ? t(`winSettings.tab.${item.id}`) : tab;
+  };
+
+  const hits: SettingsHit[] = [];
+  for (const e of SETTINGS_INDEX) {
+    const groupTitleKey = GROUP_TITLES[e.group];
+    const groupLabel = groupTitleKey ? t(groupTitleKey) : e.group;
+    const label = t(e.labelKey);
+    const haystack = [label, groupLabel, tabLabelOf(e.tab), e.labelKey, ...(e.extra ?? [])]
+      .join(" ")
+      .toLowerCase();
+    if (!haystack.includes(q)) continue;
+    hits.push({
+      tab: e.tab,
+      group: e.group,
+      tabLabel: tabLabelOf(e.tab),
+      groupLabel,
+      label,
+    });
+    if (hits.length >= limit) break;
+  }
+  return hits;
+}

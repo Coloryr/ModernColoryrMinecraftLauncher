@@ -18,7 +18,7 @@ use mml_names::i18_items::error_type::{CoreResult, ErrorData, ErrorType, HttpErr
 use reqwest::{Method, Request, Url, header::HeaderValue};
 use serde::{Deserialize, Serialize};
 
-use crate::{WORK_CLIENT, url_helper, urls};
+use crate::{url_helper, urls};
 
 /// 直接下载资源
 ///
@@ -28,7 +28,7 @@ use crate::{WORK_CLIENT, url_helper, urls};
 ///
 /// 返回资源内容字节
 pub async fn get_assets(url: &String) -> CoreResult<Vec<u8>> {
-    WORK_CLIENT.get().unwrap().get_bytes(url).await
+    crate::get_work_client().get_bytes(url).await
 }
 
 /// 获取主版本列表
@@ -40,7 +40,7 @@ pub async fn get_assets(url: &String) -> CoreResult<Vec<u8>> {
 /// 返回版本清单 JSON 原文字节
 pub async fn get_versions(source: Option<SourceLocal>) -> CoreResult<Vec<u8>> {
     let url = url_helper::game_version(source);
-    WORK_CLIENT.get().unwrap().get_bytes(&url).await
+    crate::get_work_client().get_bytes(&url).await
 }
 
 /// 档案里的单件皮肤 / 披风

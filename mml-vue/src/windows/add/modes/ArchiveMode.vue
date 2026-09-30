@@ -1,17 +1,20 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 // 添加实例 · 模式二：导入压缩包（路径框 + 文件树 + 压缩包类型）
+import { nextTick, ref, watch } from "vue";
 import { t } from "../../../lib/i18n";
 import BaseButton from "../../../components/ui/BaseButton.vue";
-import FileTree from "../../../components/FileTree.vue";
+import FileTreePanel from "../parts/FileTreePanel.vue";
 import type { FileNode } from "../../../lib/fileTree";
 
-defineProps<{
+const props = defineProps<{
   path: string;
   tree: FileNode[];
   checked: Set<string>;
   expanded: Set<string>;
   packTypes: string[];
   packType: string;
+  /** 校验失败：压缩包必填（高亮 + 自动聚焦） */
+  invalid?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -23,39 +26,46 @@ const emit = defineEmits<{
   (e: "set-all", on: boolean): void;
   (e: "update:packType", v: string): void;
 }>();
+
+const pathInput = ref<HTMLInputElement | null>(null);
+
+// 必填校验失败：聚焦路径框（高亮见模板的 is-invalid）
+watch(
+  () => props.invalid,
+  async (invalid) => {
+    if (!invalid) return;
+    await nextTick();
+    pathInput.value?.focus();
+  },
+);
 </script>
 
 <template>
   <label class="field-label">{{ t("add.archive") }} <span class="req">*</span></label>
   <div class="path-row">
     <input
+      ref="pathInput"
       :value="path"
       class="field-input"
+      :class="{ 'is-invalid': invalid }"
       :placeholder="t('add.archivePlaceholder')"
       spellcheck="false"
+      autocomplete="off"
       @input="emit('update:path', ($event.target as HTMLInputElement).value)"
     />
     <BaseButton size="sm" variant="accent" @click="emit('pick')">{{ t("add.browse") }}</BaseButton>
   </div>
 
   <template v-if="tree.length">
-    <div class="files-head">
-      <span class="field-label files-label">{{ t("add.files") }}</span>
-      <span class="files-actions">
-        <button class="files-btn" @click="emit('set-all', true)">{{ t("add.filesAll") }}</button>
-        <button class="files-btn" @click="emit('set-all', false)">{{ t("add.filesNone") }}</button>
-      </span>
-    </div>
-    <div class="file-list">
-      <FileTree
-        :nodes="tree"
-        :checked="checked"
-        :expanded="expanded"
-        @toggle-file="emit('toggle-file', $event)"
-        @toggle-dir="(n: FileNode, on: boolean) => emit('toggle-dir', n, on)"
-        @toggle-expand="emit('toggle-expand', $event)"
-      />
-    </div>
+    <FileTreePanel
+      :tree="tree"
+      :checked="checked"
+      :expanded="expanded"
+      @toggle-file="emit('toggle-file', $event)"
+      @toggle-dir="(n: FileNode, on: boolean) => emit('toggle-dir', n, on)"
+      @toggle-expand="emit('toggle-expand', $event)"
+      @set-all="emit('set-all', $event)"
+    />
 
     <label class="field-label">{{ t("add.packType") }}</label>
     <select
@@ -66,61 +76,13 @@ const emit = defineEmits<{
       <option v-for="p in packTypes" :key="p" :value="p">{{ t(`add.pack.${p}`) }}</option>
     </select>
   </template>
+  <!-- 还没选包时的空状态：说明这一步之后会发生什么 -->
+  <p v-else class="field-hint">{{ t("add.archiveHint") }}</p>
 </template>
 
 <style scoped>
-.req {
-  color: var(--red);
-}
-
-.path-row {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.files-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin: 4px 0 6px;
-}
-
-.files-label {
-  margin: 0;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.files-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.files-btn {
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  background: var(--bg-raised);
-  color: var(--accent);
-  font-size: 12px;
-  font-family: inherit;
-  cursor: pointer;
-  height: 28px;
-  padding: 0 10px;
-}
-
-.files-btn:hover {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-}
-
-.file-list {
-  max-height: 220px;
-  overflow-y: auto;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 6px;
-  background: var(--bg);
-  margin-bottom: 8px;
+/* 卡片里第一条标签顶格，不留多余的 12px */
+.field-label:first-child {
+  margin-top: 0;
 }
 </style>

@@ -1,15 +1,18 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 // 添加实例 · 模式三：添加文件夹（路径框 + 内容树，懒加载）
+import { nextTick, ref, watch } from "vue";
 import { t } from "../../../lib/i18n";
 import BaseButton from "../../../components/ui/BaseButton.vue";
-import FileTree from "../../../components/FileTree.vue";
+import FileTreePanel from "../parts/FileTreePanel.vue";
 import type { FileNode } from "../../../lib/fileTree";
 
-defineProps<{
+const props = defineProps<{
   path: string;
   tree: FileNode[];
   checked: Set<string>;
   expanded: Set<string>;
+  /** 校验失败：文件夹必填（高亮 + 自动聚焦） */
+  invalid?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -21,103 +24,54 @@ const emit = defineEmits<{
   (e: "lazy-load", node: FileNode): void;
   (e: "set-all", on: boolean): void;
 }>();
+
+const pathInput = ref<HTMLInputElement | null>(null);
+
+// 必填校验失败：聚焦路径框（高亮见模板的 is-invalid）
+watch(
+  () => props.invalid,
+  async (invalid) => {
+    if (!invalid) return;
+    await nextTick();
+    pathInput.value?.focus();
+  },
+);
 </script>
 
 <template>
   <label class="field-label">{{ t("add.folder") }} <span class="req">*</span></label>
   <div class="path-row">
     <input
+      ref="pathInput"
       :value="path"
       class="field-input"
+      :class="{ 'is-invalid': invalid }"
       :placeholder="t('add.folderPlaceholder')"
       spellcheck="false"
+      autocomplete="off"
       @input="emit('update:path', ($event.target as HTMLInputElement).value)"
     />
     <BaseButton size="sm" variant="accent" @click="emit('pick')">{{ t("add.browse") }}</BaseButton>
   </div>
 
-  <template v-if="tree.length">
-    <div class="files-head">
-      <span class="field-label files-label">{{ t("add.files") }}</span>
-      <span class="files-actions">
-        <button class="files-btn" @click="emit('set-all', true)">{{ t("add.filesAll") }}</button>
-        <button class="files-btn" @click="emit('set-all', false)">{{ t("add.filesNone") }}</button>
-      </span>
-    </div>
-    <div class="file-list">
-      <FileTree
-        :nodes="tree"
-        :checked="checked"
-        :expanded="expanded"
-        @toggle-file="emit('toggle-file', $event)"
-        @toggle-dir="(n: FileNode, on: boolean) => emit('toggle-dir', n, on)"
-        @toggle-expand="emit('toggle-expand', $event)"
-        @lazy-load="emit('lazy-load', $event)"
-      />
-    </div>
-  </template>
-  <p v-else class="hint">{{ t("add.folderHint") }}</p>
+  <FileTreePanel
+    v-if="tree.length"
+    :tree="tree"
+    :checked="checked"
+    :expanded="expanded"
+    @toggle-file="emit('toggle-file', $event)"
+    @toggle-dir="(n: FileNode, on: boolean) => emit('toggle-dir', n, on)"
+    @toggle-expand="emit('toggle-expand', $event)"
+    @lazy-load="emit('lazy-load', $event)"
+    @set-all="emit('set-all', $event)"
+  />
+  <!-- 还没选文件夹时的空状态 -->
+  <p v-else class="field-hint">{{ t("add.folderHint") }}</p>
 </template>
 
 <style scoped>
-.req {
-  color: var(--red);
-}
-
-.path-row {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.files-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin: 4px 0 6px;
-}
-
-.files-label {
-  margin: 0;
-  font-weight: 600;
-  color: var(--text);
-}
-
-.files-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.files-btn {
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  background: var(--bg-raised);
-  color: var(--accent);
-  font-size: 12px;
-  font-family: inherit;
-  cursor: pointer;
-  height: 28px;
-  padding: 0 10px;
-}
-
-.files-btn:hover {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-}
-
-.file-list {
-  max-height: 220px;
-  overflow-y: auto;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 6px;
-  background: var(--bg);
-  margin-bottom: 8px;
-}
-
-.hint {
-  font-size: 12px;
-  color: var(--text-dim);
-  margin-top: 8px;
+/* 卡片里第一条标签顶格，不留多余的 12px */
+.field-label:first-child {
+  margin-top: 0;
 }
 </style>

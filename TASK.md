@@ -158,8 +158,8 @@ pub fn emit_custom_home_progress(app: &AppHandle, data: CustomHomeProgressDto) {
   `Content-Type: application/javascript`。
 - 未导入 / 文件不存在 → 404。响应带 `Access-Control-Allow-Origin: *`（照 `send_png` 的写法）。
 
-桥接脚本本身作为独立文件 `mml-gui/src-tauri/src/windows/custom_home_bridge.js`，
-用 `include_str!("custom_home_bridge.js")` 引入（不要塞成 Rust 字符串字面量，难维护）。
+桥接脚本本身作为独立文件 `mml-gui/src-tauri/resources/custom_home_bridge.js`，
+用 `include_str!("../../resources/custom_home_bridge.js")` 引入（不要塞成 Rust 字符串字面量，难维护）。
 
 ## 三、前端
 
@@ -268,7 +268,7 @@ window.mml = {
 
 **Rust（新增）**
 - `mml-gui/src-tauri/src/windows/custom_home.rs`
-- `mml-gui/src-tauri/src/windows/custom_home_bridge.js`
+- `mml-gui/src-tauri/resources/custom_home_bridge.js`
 - `mml-gui/src-tauri/src/dtos/custom_home_dto.rs`
 
 **Rust（修改）**
@@ -355,7 +355,7 @@ window.mml = {
   （不要把 `dist/` 这层目录一起打进去）。打包手段实现时定：Node 脚本调
   PowerShell `Compress-Archive`（零依赖）或加一个 `archiver` 之类的依赖。
 - 页面能力：只用 Rust 注入的 `window.mml`（`invoke` / `on` / `ready`，协议见本文件
-  「三、桥接协议」与 `mml-gui/src-tauri/src/windows/custom_home_bridge.js`）。示例至少演示：
+  「三、桥接协议」与 `mml-gui/src-tauri/resources/custom_home_bridge.js`）。示例至少演示：
   - `mml.invoke("main_get_instances")` → 渲染实例列表；
   - `mml.invoke("main_launch_game", { uuid })` → 启动游戏；
   - `mml.on("launch-state", ...)` → 显示启动阶段文本。
@@ -390,10 +390,15 @@ window.mml = {
 | `mml-gui/src-tauri/src/dtos/gui_config_dto.rs` | `ClientConfigDto` 新增 `customHome` + 两个 `From` 同步 |
 | `mml-gui/src-tauri/src/dtos/custom_home_dto.rs` | **新增**：`CustomHomeInfoDto` / `CustomHomeProgressDto` |
 | `mml-gui/src-tauri/src/dtos/mod.rs` | 登记新 DTO 模块与重导出 |
-| `mml-gui/src-tauri/src/windows/custom_home.rs` | **新增**：4 条命令 + 2 个事件 + `mml-home` handler（含路径穿越防护、MIME 表、HTML 注入、`percent_decode`） |
-| `mml-gui/src-tauri/src/windows/custom_home_bridge.js` | **新增**：iframe 侧桥接脚本（`window.mml`），`include_str!` 引入 |
+| `mml-gui/src-tauri/src/windows/custom_home.rs` | **新增**：4 条命令 + 2 个事件 + `mml-home` handler。**最终形态**：压缩包常驻句柄 + 按条目现读（不再解压），见「偏差 6」 |
+| `mml-gui/src-tauri/resources/custom_home_bridge.js` | **新增**：iframe 侧桥接脚本（`window.mml` = `invoke` / `on` / `onTheme` / `theme` / `ready`），由 `custom_home.rs` 用 `include_str!("../../resources/custom_home_bridge.js")` 编译期嵌入。**后续调整**：原先放在 `src-tauri/src/windows/` 下，已挪到 `resources/` 资源目录；后又增加主题下发（见「手工验收反馈」一节） |
 | `mml-gui/src-tauri/src/windows/mod.rs` | `pub mod custom_home;` |
 | `mml-gui/src-tauri/src/lib.rs` | 注册 `mml-home` 异步 scheme |
+
+**资源目录调整（本轮）**：桥接脚本 `custom_home_bridge.js` 从 `src-tauri/src/windows/` 挪到
+`src-tauri/resources/`，`custom_home.rs` 的 `include_str!` 路径同步改为 `../../resources/...`。
+仍由 `include_str!` 编译期嵌入二进制，**没有**加进 `tauri.conf.json` 的 `bundle.resources`
+（加了只会在安装包里多一份运行时没人读的副本）。
 
 生成物（由 `npm run gen` 产出，勿手改）：`bindings.ts` 里出现
 `commands.customHome.{import,status,remove,openDir}` 与
@@ -409,21 +414,180 @@ window.mml = {
 | `mml-vue/src/lib/guiConfig.ts` | `ClientConfig.customHome` + `defaultConfig()` 的 client |
 | `mml-vue/src/lib/api.ts` | `onCustomHomeProgress` / `onCustomHomeChange` |
 | `mml-vue/src/lib/i18n/locales/zh-CN.ts`、`en-US.ts` | `winSettings.secCustomHome` 等一组键 + `err.customHomeNoIndex` |
-| `mml-vue/src/windows/settings/SettingsWindow.vue` | 客户端设置页新增「自定义主页面」分组（开关 / 导入 / 打开目录 / 删除 / 状态行 / 内联进度条），进页面 `refreshCustomHome()` |
+| `mml-vue/src/windows/settings/SettingsWindow.vue` | 客户端设置页新增「自定义主页面」分组（开关 / 导入 / 打开目录 / 删除 / 状态行 / 内联进度条），进页面 `refreshCustomHome()`；`client` 默认值补 `customHome: false` |
+| `mml-vue/src/windows/main/MainWindow.vue` | **最后补齐**（见下） |
+
+**最后一步（已补齐）**——`MainWindow.vue`：
+
+- `customHome` ref（`custom_home_status` 结果）+ `useCustomHome = computed(...)`（`enabled && installed && entryUrl`，任一不满足回落内置主页）；
+- `loadCustomHome()`：进 `doInit()` 的 `Promise.all`、`onClientConfig()`（启用开关走 `client-config-change`）、并订阅 `custom-home-change`（导入 / 删除不改 `gui_config`，靠这个事件回拉）；
+- **三处**主页渲染点各加 `<CustomHomePage>` 分支：空实例分支、列表模式 `Transition` 里的 `key="home"` 节点、分组 / 平铺兜底分支的 `Transition`（该分支自定义页用 `key="custom-home"`，因为同一个 `v-if` 链里的分支 key 必须互不相同，编译器强制）；
+- `clientConfig` 的默认字面量补 `customHome: false`。
+
+`npm --prefix mml-vue run build` 退出码 0（先修掉两个**既有**类型错误：上一轮给 `ClientConfig` 加必填字段后，`MainWindow.vue` 与 `SettingsWindow.vue` 的 `ref<ClientConfig>({...})` 默认值没跟上，`vue-tsc` 报 `Property 'customHome' is missing`）。
 
 ### 未完成（恢复时从这里接着做）
 
-- **`mml-vue/src/windows/main/MainWindow.vue` 一行都没改** —— 这是整个功能还差的关键一步：
-  - 新增 `customHome` ref（`custom_home_status` 结果）与
-    `useCustomHome = computed(() => info.enabled && info.installed && !!info.entryUrl)`；
-  - `doInit()` 里拉一次；`onClientConfig()`（`client-config-change`）里顺带重拉一次；
-    再订阅 `custom-home-change` 重拉（见下面的偏差 1）；
-  - **三处** `HomePage` 渲染点各加分支（行号以当前文件为准，见「已核实的现状」里的描述，
-    现文件已比原规格记录的行号更靠下）：空实例分支、列表模式 `Transition` 的 `key="home"`
-    节点、分组/平铺兜底分支。两个 `Transition` 的 `key="home"` 节点要保证进出动画正常。
-- 手工验收 1~7 一条都还没跑（需要用户自己起 `cd mml-gui && npm run tauri dev`）。
-  **当前状态：导入 zip 后主窗口仍显示内置主页**（不会白屏，只是自定义页面不生效）。
-- 本节「八」的 `mml-ui-demo` 尚未开始（目录也还没建）。
+- **代码改动已全部完成**（Rust + 前端 + `mml-ui-demo`；`npm run gen` / `cargo check -p mml-gui` /
+  `npm --prefix mml-vue run build` / `mml-ui-demo` 的 `npm run build` 均通过）。
+- **手工验收一条都还没跑**（需要用户自己起 `cd mml-gui && npm run tauri dev`）：
+  - 主功能验收 1~7：**代码侧已就绪，导入 zip 后主窗口应显示自定义页面**
+    （未导入 / 未启用则回落内置主页，不白屏）。
+  - §八 的示例工程：`mml-ui-demo/mml-ui-demo.zip` 导入后应能列实例 / 启动游戏 / 显示启动阶段。
+- 用户实测已确认「自定义主页面能加载」，并反馈了两个问题（**没铺满 / 不跟随亮色**），
+  两项都已修（见「手工验收反馈后修的三个问题」）。需要复验：铺满效果、亮色跟随
+  （含主题设为 `System` 后跟随系统切换），以及原验收 1~7。
+  修这两项时改了 Rust 侧资源（桥接脚本），所以 `mml-gui` 需要重新编译——用户重启
+  `tauri dev` 即可，无需其他操作。
+
+### `mml-ui-demo` 实现情况（§八）
+
+| 文件 | 说明 |
+| --- | --- |
+| `mml-ui-demo/index.html` | 入口模板（构建后 `dist/index.html` 在根目录，`base: "./"` 保证相对引用） |
+| `mml-ui-demo/src/App.vue` | **服务器主页**示例：`SERVER`（名字 / 标语 / 滚动公告 / 进服方式 / 必读 / 开服时间 / 赞助名单 / 页脚）与 `EVENTS`（活动日历）两个常量即全部内容；交互部分 = 一键进服（`main_launch_game`）+ 实例列表（`main_get_instances`）+ 启动阶段（`launch-state` / `game-exit` / `launch-error`） |
+| `mml-ui-demo/src/bridge.ts` | `window.mml` 使用封装：宿主探测（探针命令 `main_load_state`）、带超时 invoke、类型化订阅、主题读取 |
+| `mml-ui-demo/src/mml.d.ts` | `window.mml` 与 payload 类型（含 `MmlTheme` / `onTheme`；**本工程自己维护**，不从启动器仓库引） |
+| `mml-ui-demo/src/vite-env.d.ts` | `vite/client` 类型（`import "./style.css"` 需要） |
+| `mml-ui-demo/scripts/pack.mjs` | 零依赖打包：优先 bsdtar，退回 PowerShell `Compress-Archive`；打 `dist/` 的**内容**，zip 根目录即 `index.html` |
+| `mml-ui-demo/README.md` | 服主文档：改哪里（SERVER / EVENTS 对照表）、`window.mml` API、事件白名单、四个坑、**暗色 / 亮色跟随**、**全部 IPC 权限的安全说明** |
+
+已核实的构建结果：`npm run build`（`vue-tsc --noEmit` + `vite build` + 打包）退出码 0，
+产出 `dist/index.html` 与 `mml-ui-demo.zip`（2 个顶层条目，28.7 KB）。
+zip 条目为 `index.html`、`assets/`、`assets/index-*.{js,css}`——**正斜杠、入口在根**，
+符合启动器的入口定位规则；`dist/index.html` 保留 `</head>`，桥接脚本能被注入。
+
+浏览器预览用 `npm run dev`（1520 端口，避开 mml-vue 的 1420）：连不上启动器时页面照常渲染，
+顶部显示提示条、实例列表退回示例数据。
+
+### 手工验收反馈后修的三个问题（用户实测：页面加载了但没铺满、且不跟随亮色）
+
+#### 1. 页面没占满内容区（铺满 + 去内边距）
+
+原因有两个，都在启动器侧：
+
+- **高度解析不出来**：`.detail` 只在主轴上有确定尺寸（它是横向 flex 的子项），
+  子元素 `height:100%` 解析不出高度 → iframe 被压扁。
+- **内边距与底部留白**：主页容器 `.news-page` 带 `padding: 18px 28px 130px`，
+  其中 130px 是给 MOTD 悬浮卡片的留白；自定义页面不需要这些。
+
+改法（`MainWindow.vue`）：三处渲染点的自定义分支改成**独立占位块**——
+空实例分支与列表模式用 `.custom-home-page`，分组 / 平铺兜底分支因为要撑满带 padding、
+自身可滚动的 `.detail`，用 `.custom-home-fill`（`flex:1` + 负 margin 抵消 padding）：
+
+| 位置 | 现在 |
+| --- | --- |
+| 空实例分支 | `<section v-if="useCustomHome" class="custom-home-page">`（否则才是 `.news-page`） |
+| 列表模式 `Transition` | `key="custom-home"` 的 `.custom-home-page` / `key="home"` 的 `.news-page` |
+| 分组 / 平铺兜底 `Transition` | `key="custom-home"` 的 `.custom-home-fill` / `key="home"` 的 HomePage |
+
+`CustomHomePage.vue` 的 iframe 保持 `flex:1; width/height:100%`，父容器现在有确定高度了。
+
+#### 2. 不跟随启动器主题（亮色模式）
+
+iframe 是**独立文档**，拿不到启动器 `<html data-theme>` 上的 CSS 变量——原规格只解决了
+「能不能调命令 / 订阅事件」，没管主题，所以自定义页面只有自己的暗色配色。现在加一条
+**主题下发通道**（不动白名单与命令表）：
+
+- 桥接脚本（`resources/custom_home_bridge.js`）：`window.mml` 增加 `theme` 与 `onTheme(cb)`；
+  收到主题后写到自己的 `<html data-mml-theme="Dark|Light">` 并同步 `color-scheme`；
+  父窗口应答前先用 `prefers-color-scheme` 兜底，避免首屏闪一下错误主题。
+- 父窗口（`lib/customHomeBridge.ts`）：握手应答 `{ __mml:1, type:"ready", theme }` 带上当前主题；
+  之后 `watch(resolvedTheme, ...)` 主动推 `{ __mml:1, type:"theme", theme }`
+  （覆盖设置窗口切换与 System 跟随系统两种情况），卸载时停掉 watch。
+- 示例工程：`style.css` 改成「暗色为默认 + `[data-mml-theme="Light"]` 覆盖变量」，
+  `App.vue` 里硬编码的 `#ff7a7a` 换成变量；README 增加「暗色 / 亮色」一节。
+
+主题值用的是启动器自己的 `Theme` 取值（`Dark` / `Light`，`System` 已由 `resolvedTheme()` 解析）。
+
+#### 3. 主题跟随补强（System 模式下系统切换）
+
+上一项只保证「启动器推什么页面就显示什么」，但**启动器主题设为「跟随系统」时**，若系统是在
+窗口打开之后才切换深浅色，启动器侧 `matchMedia` 未必随窗口重开而更新，页面就不会变。
+所以桥接脚本自己也在盯：`prefers-color-scheme` 变化时，**只要父窗口还没下发过明确主题**，
+就按系统偏好更新自己（`themeFromSystemGuess` 标志；父窗口一旦下发即交权）。
+这同时让「浏览器直接预览」这个场景也能跟随系统。
+
+#### 4. 示例工程改成真正的「服务器主页」（本轮）
+
+原来那个示例是个通用小面板，和「服主给服务器做定制」的定位不符。现在 `App.vue` 改成
+服务器门面，内容集中在两个常量里，服主照着改即可：
+
+- `SERVER`：服务器名 / 标语 / 滚动公告（ticker）/ 进服方式（`join`，第一项是服务器地址，用来
+  匹配「推荐」实例）/ 进服必读 `rules` / 开服时间 `schedule` / 赞助名单 `sponsors` / 页脚 `contact`；
+- `EVENTS`：活动日历（日期 + 标题 + 说明）。
+
+页面结构：门面横幅（含「一键进服」主按钮）→ 环境提示条 → 左栏（最近活动 / 进服必读 /
+选择客户端）→ 右栏（怎么进服 / 开服时间 / 赞助名单）→ 启动状态 → 页脚。
+「一键进服」与列表里的「启动」都调 `main_launch_game`，状态区显示 `launch-state` 阶段
+与 `game-exit` 结果；`serverInstance` 会优先挑 `serverUrl` 等于本服地址的实例并打上「推荐」。
+样例数据全部换成服务器口吻（暮色群岛 / play.example.com / 群号等）。
+
+#### 5. 浅色仍然不生效的排查与本轮加固
+
+用户复测反馈「还是没有浅色样式」。排查过程（**用无头 Edge 跑了真实页面，没有截图**：
+`target/temp/bridge_test/` 下自建了父窗口 harness + 页面，`--dump-dom` 读 DOM 状态）：
+
+- 构建产物里两套配色变量都在（`[data-mml-theme=Light]` 确实进了 CSS），**不是样式丢失**；
+- harness 里父窗口回 `ready + theme=Light` 后，页面 `<html>` 的 `data-mml-theme` **确实变成
+  Light**，主题推送也生效 —— 桥接这条链路是通的；
+- 结论：如果页面还是暗色，只可能是**页面自己没写浅色样式**（比如导入了自己写的、只有一套
+  暗色的 HTML），或者跑的是**旧 zip**。桥接没法给别人的 HTML 变出配色，但可以做两件事：
+
+本轮加固（都是为了让"没写主题样式的页面"也能亮）：
+
+1. **裸 HTML 兜底样式**：桥接脚本在应用主题时，若页面**自己声明了配色**（body 有内联背景 /
+   有 `link[rel=stylesheet]` / head 里有非空 `<style>`）就什么都不做；否则注入一份最小样式表
+   （底色 / 文字色 / 链接色，两套变量），至少把整页白板压成跟启动器一致的深浅色。
+2. **握手语义修正**（顺带修的既有小问题）：桥接脚本在收到应答前每 100ms 重发 `ready`，
+   父窗口只回一条；实测第一次应答可能早于 iframe 的 message 监听就绪，导致 iframe **永远
+   卡在握手前**（`window.mml.ready` 不 resolve、invoke 全部永挂）。现在父窗口**每条 ready
+   都回**（幂等），并给握手完成前的 `invoke` 回一条错误而不是让它悬着。
+
+示例工程侧同时把两套 token 补全（`--accent-grad` / `--accent-soft` / `--tag-dim-bg` /
+`--ok-soft` 等），亮色下不再复用暗色的半透明底。
+
+#### 6. 改成「只存压缩包 + 直接文件流读取」（用户要求，本轮最终形态）
+
+用户要求：**不再解压到文件夹，直接文件流读取**。现在磁盘上只有一个包，没有任何解压产物：
+
+| 东西 | 位置 | 说明 |
+| --- | --- | --- |
+| 服主导入的包 | `base_dir/custom_home.zip` | **唯一持久产物**，导入时只校验 + 复制 |
+| 常驻句柄 | 进程内存（`static HANDLE`） | 启动 / 导入 / 删除时（重）打开，条目表只读一次 |
+| 解压目录 | **没有** | 协议请求直接从 zip 条目现读（`BaseArchive::read`） |
+
+Rust 侧（`windows/custom_home.rs`）：
+
+- 新增 `HomeArchive`：`BaseArchive` + **规范化条目索引**（`HashMap<规范化名, 包内原名>`）。
+  索引是必需的：zip 条目名可能是反斜杠（PowerShell `Compress-Archive` 就这么写），
+  而 URL 路径一定是正斜杠；`entry_name()` 依次尝试 原名 / `./` 前缀 / 反斜杠版本。
+- `reload()`：**（重）打开常驻句柄**，启动、导入、删除各调一次；包打不开或没有入口页时
+  句柄留 `None`，协议层自然 404、主窗口回落内置主页。
+- 协议 handler `url_custom_home`：不再碰文件系统，改成
+  `resolve_entry(archive, path)`（路径安全 + 入口定位）→ `archive.read(entry)` → 按 MIME 返回。
+  **路径穿越防护**依旧保留：原始串与百分号解码后都要过 `is_safe_rel`，且只接受
+  **精确命中包内条目**（精确匹配而不是前缀拼接，不存在拼出包外的可能）。
+- 入口定位统一到 `resolve_entry` / `HomeArchive::single_top_dir`：`/` 或空路径 → `index.html`；
+  包根没有就试「唯一顶层目录/index.html」（即整包套一层目录的布局）。
+- 删掉的：`ensure_extracted` / `cache_stale` / `clear_cache` / `clear_legacy` /
+  `custom_home_prepare` 命令 / `custom_home-progress` 事件与 `CustomHomeProgressDto`
+  （导入只是复制文件，没有可上报的进度）。`file_count` 改为**包内条目数**。
+- `custom_home_open_dir` 改为「定位压缩包」：有包就在资源管理器里选中它，没有就打开运行根目录。
+- `lib.rs`：`setup` 里一句 `windows::custom_home::reload()`；回落到只等 `mml_core::load()`
+  就发 `load-done`（不再有解压任务要等），退出也不再需要清理 `RunEvent`。
+
+前端：删掉进度条与 `onCustomHomeProgress`（事件已不存在），文案改成「正在读取压缩包…」、
+「定位压缩包」，README 与 i18n 同步。
+
+#### 6.1 过程中的两次中间形态（已被上面取代，留档说明为何废弃）
+
+- **先做过「每次启动解压到缓存目录、退出清理」**：能满足「不留常驻解压目录」，但每次启动
+  都要解一遍，且引入 zip 与缓存的新旧比较、启动页要不要等解压等问题。
+- **再做过「解压与核心加载都结束才关启动页」**：解决了「主窗口出现时页面还没解压出来」的
+  404 空档，但把启动时间变成了 `max(核心加载, 解压)`。
+- 最终按用户要求改成**直接读包**，这两个问题都不存在了：没有解压步骤，也没有缓存，
+  启动流程回到原来的样子（只等核心加载）。
 
 ### 与前面章节的偏差（需要确认是否接受）
 
@@ -435,13 +599,19 @@ window.mml = {
    前端 API 仍是 `remove()`）—— 就是为了发上面那个事件。
 3. `CustomHomeProgressDto.sub_text` 用的是 `String`（按 §2.1 的字面定义）；
    `JavaImportProgressDto` 是 `Option<String>`。空串表示没有当前文件名。
+   （改动 6 之后它只在启动解压时发，用户看不到内联进度条——导入本身已经不解包了。）
 4. `custom_home_open_dir` 在目录不存在时会先 `create_dir_all` 再打开（按钮因此始终可用）。
 5. 细节：注入用的 `</head>` 匹配是**大小写不敏感**的；MIME 表额外收了 `htm`；
    百分号解码对非法转义原样保留（`100%.png` 这类文件名仍可用），解码后的 `..` / `\` / `:`
    照旧拒绝。
+6. 新语义下的取舍：**改解压目录里的文件不再生效**（每次启动重建），服主要改内容必须重新导入
+   包；另外 `custom_home.zip` 与缓存目录在运行根目录里并列，服主手动删掉 zip 就等于取消导入。
+
 
 ### 卫生
 
-- 没有 `TEMP` 调试代码，`target/temp` 下没有新增中间产物。
-- 上述源码改动都在工作区里，未提交。
+- 没有 `TEMP` 调试代码；`target/temp` 下只剩我为验证 `Compress-Archive` / `tar` 打包行为建的
+  临时目录 `target/temp/packtest`（在 git 忽略范围内），本次结束前清掉。
+- 上述源码改动都在工作区里，未提交；`mml-ui-demo/` 是新增目录，它自己的 `.gitignore`
+  忽略 `node_modules/`、`dist/`、`*.zip`。
 

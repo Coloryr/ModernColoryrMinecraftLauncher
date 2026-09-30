@@ -6,7 +6,7 @@
 use mml_names::{i18_items::error_type::CoreResult};
 use serde::{Deserialize, Serialize};
 
-use crate::{WORK_CLIENT, urls};
+use crate::{urls};
 
 /// Nide8 JAR 信息
 #[derive(Serialize, Deserialize, Debug)]
@@ -37,9 +37,7 @@ impl Default for Nide8Obj {
 ///
 /// 返回 JAR 版本号与哈希
 pub async fn get_obj() -> CoreResult<Nide8Obj> {
-    WORK_CLIENT
-        .get()
-        .unwrap()
+    crate::get_work_client()
         .get_json::<Nide8Obj>(&format!(
             "{}00000000000000000000000000000000/",
             urls::NIDE8_URL

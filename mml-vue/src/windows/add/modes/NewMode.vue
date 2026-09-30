@@ -2,7 +2,7 @@
 // 添加实例 · 模式一：从头新建（版本类型 / 版本 / 加载器 / 加载器版本 / 自定义加载器路径）
 // 选项数据（版本类型 / 加载器 / 加载器版本）全部来自 mml-core 的独立 ID，显示名走 i18n
 // 版本类型为多选：下拉展开后是复选项；选中多个类型时，右侧版本列表按类型分组
-import { computed, onUnmounted, ref } from "vue";
+import { computed, nextTick, onUnmounted, ref, watch } from "vue";
 import { t } from "../../../lib/i18n";
 import BaseButton from "../../../components/ui/BaseButton.vue";
 import type { VersionInfoDto } from "../../../lib/bindings";
@@ -31,6 +31,8 @@ const props = defineProps<{
   /** 当前加载器没有版本列表（原版 / 自定义），刷新按钮禁用 */
   noLoaderVersion: boolean;
   loaderPath: string;
+  /** 校验失败：游戏版本必填（高亮 + 自动聚焦） */
+  invalidVersion?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -45,6 +47,17 @@ const emit = defineEmits<{
 }>();
 
 const loaderPathInput = ref<HTMLInputElement | null>(null);
+const versionSelect = ref<HTMLSelectElement | null>(null);
+
+// 必填校验失败：把焦点落到版本下拉上（高亮见模板的 is-invalid）
+watch(
+  () => props.invalidVersion,
+  async (invalid) => {
+    if (!invalid) return;
+    await nextTick();
+    versionSelect.value?.focus();
+  },
+);
 
 // ================= 版本类型多选下拉 =================
 
@@ -102,7 +115,7 @@ function onLoaderPathPick(e: Event) {
 </script>
 
 <template>
-  <div class="add-row2">
+  <div class="field-row-2">
     <div class="add-field">
       <label class="field-label">{{ t("add.verType") }}</label>
       <!-- 多选下拉：展开后是复选项，勾选不关闭，点外部关闭 -->
@@ -110,16 +123,19 @@ function onLoaderPathPick(e: Event) {
         <button
           type="button"
           class="field-select type-trigger"
+          :aria-expanded="typeOpen"
           @click="typeOpen = !typeOpen"
         >
           <span class="type-label">{{ typeLabel }}</span>
         </button>
-        <div v-if="typeOpen" class="type-drop">
+        <div v-if="typeOpen" class="type-drop" role="listbox" aria-multiselectable="true">
           <button
             v-for="vt in versionTypes"
             :key="vt"
             type="button"
             class="type-opt"
+            role="option"
+            :aria-selected="verTypes.includes(vt)"
             :class="{ selected: verTypes.includes(vt) }"
             @click="toggleType(vt)"
           >
@@ -133,8 +149,10 @@ function onLoaderPathPick(e: Event) {
       <div class="path-row">
         <!-- 选中多个版本类型时按类型分组展示 -->
         <select
+          ref="versionSelect"
           :value="newVersion"
           class="field-select"
+          :class="{ 'is-invalid': invalidVersion }"
           @change="emit('update:newVersion', ($event.target as HTMLSelectElement).value)"
         >
           <optgroup
@@ -164,7 +182,7 @@ function onLoaderPathPick(e: Event) {
     </div>
   </div>
 
-  <div class="add-row2">
+  <div class="field-row-2">
     <div class="add-field">
       <label class="field-label">{{ t("add.loader") }}</label>
       <div class="path-row">
@@ -233,6 +251,7 @@ function onLoaderPathPick(e: Event) {
         class="field-input"
         :placeholder="t('add.loaderPathPlaceholder')"
         spellcheck="false"
+        autocomplete="off"
         @input="emit('update:loaderPath', ($event.target as HTMLInputElement).value)"
       />
       <BaseButton size="sm" variant="accent" @click="loaderPathInput?.click()">…</BaseButton>
@@ -242,26 +261,6 @@ function onLoaderPathPick(e: Event) {
 </template>
 
 <style scoped>
-.add-row2 {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 14px;
-}
-
-.add-field .field-label {
-  margin-top: 6px;
-}
-
-.req {
-  color: var(--red);
-}
-
-.path-row {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
 /* 版本类型多选下拉 */
 .type-combo {
   position: relative;
@@ -322,9 +321,5 @@ function onLoaderPathPick(e: Event) {
   background: var(--accent-soft);
   color: var(--accent);
   font-weight: 600;
-}
-
-.hidden-input {
-  display: none;
 }
 </style>

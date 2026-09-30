@@ -10,7 +10,7 @@ use std::sync::OnceLock;
 use mml_names::i18_items::error_type::{CoreResult, DataNotFoundData, ErrorType};
 use serde::{Deserialize, Serialize};
 
-use crate::{WORK_CLIENT, urls};
+use crate::{urls};
 
 /// 可选项缓存（首次查询后复用）
 static OPTIONS: OnceLock<FoojayOptionsObj> = OnceLock::new();
@@ -243,9 +243,7 @@ pub async fn get_options() -> CoreResult<FoojayOptionsObj> {
 
     let url = format!("{}parameters", urls::FOOJAY);
 
-    let res = WORK_CLIENT
-        .get()
-        .unwrap()
+    let res = crate::get_work_client()
         .get_json::<FoojayParametersResultObj>(&url)
         .await?;
 
@@ -265,9 +263,7 @@ pub async fn get_options() -> CoreResult<FoojayOptionsObj> {
 
     // 主版本只取有 GA 正式版的（按数值降序）
     let major_url = format!("{}major_versions", urls::FOOJAY);
-    let major_res = WORK_CLIENT
-        .get()
-        .unwrap()
+    let major_res = crate::get_work_client()
         .get_json::<FoojayMajorVersionsResultObj>(&major_url)
         .await?;
     let mut majors: Vec<u32> = major_res
@@ -324,9 +320,7 @@ pub async fn get_java_list(
 
     url += "&release_status=ga&directly_downloadable=true";
 
-    let res = WORK_CLIENT
-        .get()
-        .unwrap()
+    let res = crate::get_work_client()
         .get_json::<FoojayResultObj>(&url)
         .await?;
 

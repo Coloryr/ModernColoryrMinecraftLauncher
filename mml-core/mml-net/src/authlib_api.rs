@@ -8,7 +8,7 @@ use std::sync::LazyLock;
 use mml_names::i18_items::error_type::{CoreResult, DataNotFoundData, ErrorType};
 use serde::{Deserialize, Serialize};
 
-use crate::{WORK_CLIENT, url_helper};
+use crate::{url_helper};
 
 /// Authlib-Injector 元数据
 #[derive(Serialize, Deserialize, Debug)]
@@ -105,9 +105,7 @@ pub static LOCAL_AUTHLIB: LazyLock<AuthlibInjectorObj> = LazyLock::new(|| Authli
 /// 返回最新构建的下载信息；找不到对应构建号时返回 `DataNotFound`
 pub async fn get_obj() -> CoreResult<AuthlibInjectorObj> {
     let url = url_helper::get_authlib_injector_meta();
-    let meta = WORK_CLIENT
-        .get()
-        .unwrap()
+    let meta = crate::get_work_client()
         .get_json::<AuthlibInjectorMetaObj>(&url)
         .await?;
 
@@ -118,9 +116,7 @@ pub async fn get_obj() -> CoreResult<AuthlibInjectorObj> {
 
     match item {
         None => Err(ErrorType::DataNotFound(DataNotFoundData::Info)),
-        Some(data) => Ok(WORK_CLIENT
-            .get()
-            .unwrap()
+        Some(data) => Ok(crate::get_work_client()
             .get_json::<AuthlibInjectorObj>(&url_helper::get_authlib_injector(data))
             .await?),
     }

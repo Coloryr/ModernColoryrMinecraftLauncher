@@ -453,33 +453,67 @@ impl IProgressGui for SupportLoadersProgressGui {
 ///
 /// 全局查询：结果按版本号缓存（主窗口 / 添加实例窗口共用），
 /// 同版本并发查询单飞共享，每查完一个加载器发一次进度事件（前端显示进度条）。
+///
+/// **中断自动重试**：用户改代理时 `mml_net` 会中断全部在途请求，这一次查询随之失败。
+/// 此时**自动用新客户端重跑一次**——因为旧请求绑定的是发出时那份客户端，
+/// 只有重新发起才会走新代理。最多重试 [`RETRY_ON_ABORT`] 次，避免代理不通时死循环。
 #[tauri::command]
 pub async fn add_get_support_loaders(app: AppHandle, mc: String) -> Result<Vec<String>, String> {
     use std::sync::LazyLock;
     use tokio::sync::{Mutex, OnceCell};
 
+    /// 因"中断"（改代理）而失败时允许的重试次数
+    const RETRY_ON_ABORT: usize = 2;
+
     /// 支持列表查询结果缓存（版本号 -> 查询单飞单元）
     static SUPPORT_LOADERS_CACHE: LazyLock<Mutex<HashMap<String, Arc<OnceCell<Vec<String>>>>>> =
         LazyLock::new(|| Mutex::new(HashMap::new()));
 
-    // 取/建该版本的查询单元：并发请求共享同一次查询
-    let cell = {
-        let mut cache = SUPPORT_LOADERS_CACHE.lock().await;
-        cache.entry(mc.clone()).or_default().clone()
-    };
-    let gui_app = app.clone();
-    let mc_clone = mc.clone();
-    let result = cell
-        .get_or_try_init(|| async move {
-            let gui: ProgressGui =
-                Some(Arc::new(SupportLoadersProgressGui { app: gui_app }) as Arc<dyn IProgressGui>);
-            mml_game::loader::loader_versions::get_support_loaders(&mc_clone, gui).await
-        })
-        .await;
-    // 失败不缓存：单元留空，下次查询重试
-    match result {
-        Ok(list) => Ok(list.clone()),
-        Err(e) => Err(e.to_string()),
+    let mut attempt = 0usize;
+    loop {
+        // 取/建该版本的查询单元：并发请求共享同一次查询
+        let cell = {
+            let mut cache = SUPPORT_LOADERS_CACHE.lock().await;
+            cache.entry(mc.clone()).or_default().clone()
+        };
+        let gui_app = app.clone();
+        let mc_clone = mc.clone();
+        let result = cell
+            .get_or_try_init(|| async move {
+                let gui: ProgressGui = Some(
+                    Arc::new(SupportLoadersProgressGui { app: gui_app }) as Arc<dyn IProgressGui>
+                );
+                mml_game::loader::loader_versions::get_support_loaders(&mc_clone, gui).await
+            })
+            .await;
+
+        match result {
+            Ok(list) => return Ok(list.clone()),
+            Err(e) => {
+                // 失败不缓存：把这个单元摘掉，下次查询重新发起（拿到新代理 / 重新联网）
+                {
+                    let mut cache = SUPPORT_LOADERS_CACHE.lock().await;
+                    // 只摘掉还是同一个单元的那条：期间可能已被别的请求换成新的，别误删
+                    if cache
+                        .get(&mc)
+                        .is_some_and(|current| Arc::ptr_eq(current, &cell))
+                    {
+                        cache.remove(&mc);
+                    }
+                }
+
+                // 被中断（用户改了代理）→ 用新客户端重跑一次
+                if mml_net::is_aborted(&e) && attempt < RETRY_ON_ABORT {
+                    attempt += 1;
+                    mml_log::info(format!(
+                        "加载器查询被中断，用新客户端重试（第 {attempt} 次）：mc={mc}"
+                    ));
+                    continue;
+                }
+
+                return Err(e.to_string());
+            }
+        }
     }
 }
 
