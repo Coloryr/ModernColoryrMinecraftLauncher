@@ -10,11 +10,9 @@ import type { useSettingsJava } from "../../composables/useSettingsJava";
 
 const props = defineProps<{
   settings: ReturnType<typeof useSettingsJava>;
-  resettable: string[];
   flashGroup?: string;
 }>();
 
-const emit = defineEmits<{ (e: "reset", id: string): void }>();
 
 const {
   inTauri,
@@ -53,9 +51,7 @@ useModalKeys((e) => {
     <SettingsGroup
       id="javaAdd"
       title-key="winSettings.javaAdd"
-      :resettable="resettable.includes('javaAdd')"
       :flash="flashGroup === 'javaAdd'"
-      @reset="emit('reset', $event)"
     >
       <!-- 手动添加：输入名字和路径 -->
       <div class="java-add-row">

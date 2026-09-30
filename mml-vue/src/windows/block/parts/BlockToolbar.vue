@@ -9,12 +9,6 @@ import { BLOCK_SIZE_ORDER, isBlockSize, type BlockSize } from "../types";
 const props = defineProps<{
   keyword: string;
   size: BlockSize;
-  /** 当前显示的条数 */
-  count: number;
-  /** 方块总数 */
-  total: number;
-  /** 是否处于筛选态（决定计数文案） */
-  filtered: boolean;
   /** 渲染中：重新渲染禁用 */
   running: boolean;
 }>();
@@ -34,12 +28,6 @@ const sizeOptions = computed(() =>
 function onSize(v: string) {
   if (isBlockSize(v)) emit("update:size", v);
 }
-
-const countText = computed(() =>
-  props.filtered
-    ? t("blocks.countFiltered", { n: props.count, total: props.total })
-    : t("blocks.count", { n: props.count }),
-);
 </script>
 
 <template>
@@ -71,7 +59,6 @@ const countText = computed(() =>
 
     <BaseButton @click="emit('add-skin')">{{ t("blocks.addSkin") }}</BaseButton>
     <BaseButton :disabled="running" @click="emit('re-render')">{{ t("blocks.reRender") }}</BaseButton>
-    <span class="block-count">{{ countText }}</span>
   </div>
 </template>
 
@@ -80,13 +67,18 @@ const countText = computed(() =>
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-shrink: 0;
+  /* 在标题栏里要能收缩：窗口最窄时优先挤搜索框，不去裁按钮 */
+  flex-shrink: 1;
+  min-width: 0;
 }
 
 .search-wrap {
   position: relative;
-  flex: 1;
-  min-width: 0;
+  /* 现在固定住在标题栏里：给个确定宽度，不再靠 flex:1 撑（标题栏里没有富余空间可分）；
+     窗口很窄时允许收缩到这里的最小值 */
+  width: 200px;
+  min-width: 120px;
+  flex: 0 1 auto;
   display: flex;
 }
 
@@ -123,14 +115,5 @@ const countText = computed(() =>
 .search-clear:hover {
   background: var(--bg-hover);
   color: var(--text);
-}
-
-.block-count {
-  margin-left: auto;
-  flex-shrink: 0;
-  font-size: 12px;
-  color: var(--text-dim);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
 }
 </style>

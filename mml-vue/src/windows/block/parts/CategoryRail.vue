@@ -1,6 +1,5 @@
 <script setup lang="ts">
-// 方块列表 · 左侧分类栏：全部 + 各分类条目数，底部显示渲染版本
-import { t } from "../../../lib/i18n";
+// 方块列表 · 左侧分类栏：全部 + 各分类条目数
 
 interface CatItem {
   /** 分类 ID（"" = 全部） */
@@ -12,7 +11,6 @@ interface CatItem {
 defineProps<{
   items: CatItem[];
   active: string;
-  version: string;
 }>();
 
 const emit = defineEmits<{ (e: "pick", id: string): void }>();
@@ -33,7 +31,6 @@ const emit = defineEmits<{ (e: "pick", id: string): void }>();
       <span class="cat-name">{{ c.label }}</span>
       <span class="cat-num">{{ c.count }}</span>
     </button>
-    <div v-if="version" class="cat-foot">{{ t("blocks.version", { v: version }) }}</div>
   </aside>
 </template>
 
@@ -96,12 +93,5 @@ const emit = defineEmits<{ (e: "pick", id: string): void }>();
 
 .cat-item.on .cat-num {
   color: var(--accent);
-}
-
-.cat-foot {
-  margin-top: auto;
-  padding: 10px 11px 2px;
-  font-size: 11.5px;
-  color: var(--text-dim);
 }
 </style>

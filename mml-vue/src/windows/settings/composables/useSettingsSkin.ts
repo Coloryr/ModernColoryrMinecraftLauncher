@@ -61,12 +61,18 @@ export function useSettingsSkin() {
     setSkinDisplay(v as SkinDisplay);
   }
 
-  /** 分组级"恢复默认"：返回是否处理了该分组 */
+  /** 分组级"恢复默认"：返回是否处理了该分组（皮肤页拆成"头像"与"皮肤"两组） */
   async function resetGroup(id: string): Promise<boolean> {
-    if (id !== "skin") return false;
-    setHeadConfig(DEFAULT_HEAD_TYPE, DEFAULT_HEAD_X, DEFAULT_HEAD_Y);
-    setSkinDisplay(DEFAULT_SKIN_DISPLAY);
-    return true;
+    switch (id) {
+      case "head":
+        setHeadConfig(DEFAULT_HEAD_TYPE, DEFAULT_HEAD_X, DEFAULT_HEAD_Y);
+        return true;
+      case "skin":
+        setSkinDisplay(DEFAULT_SKIN_DISPLAY);
+        return true;
+      default:
+        return false;
+    }
   }
 
   return {
@@ -84,6 +90,5 @@ export function useSettingsSkin() {
     onSkinDisplayChange,
     offsetAdjustable,
     resetGroup,
-    resettableGroups: ["skin"],
   };
 }

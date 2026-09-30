@@ -248,6 +248,5 @@ export function useSettingsUi() {
     bgBlur: blurDraft,
     setBgBlur: (v: number) => (blurDraft.value = v),
     resetGroup,
-    resettableGroups: ["general", "theme", "window", "mainWindow", "bgImage"],
   };
 }

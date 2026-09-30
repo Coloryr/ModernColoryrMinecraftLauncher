@@ -215,7 +215,6 @@ export function useSettingsClient() {
   // ---------- 恢复默认 ----------
 
   /** 这一片全部属于 gui_config.client，默认值取前端那份镜像（guiConfig.defaultConfig） */
-  const resettableGroups = ["servers", "loginLock", "instanceLock", "customHome"];
 
   async function resetGroup(id: string): Promise<boolean> {
     const d = defaultConfig().client;
@@ -274,6 +273,5 @@ export function useSettingsClient() {
     load,
     saveState: state,
     resetGroup,
-    resettableGroups,
   };
 }

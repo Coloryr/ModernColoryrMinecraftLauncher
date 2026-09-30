@@ -12,13 +12,10 @@ import type { useSettingsUi } from "../../composables/useSettingsUi";
 
 const props = defineProps<{
   settings: ReturnType<typeof useSettingsUi>;
-  /** 支持"恢复默认"的分组 id */
-  resettable: string[];
   /** 需要高亮脉冲的分组 id（搜索命中 / 刚恢复默认） */
   flashGroup?: string;
 }>();
 
-const emit = defineEmits<{ (e: "reset", id: string): void }>();
 
 const {
   inTauri,
@@ -67,21 +64,19 @@ onMounted(() => void loadFonts());
   <SettingsGroup
     id="general"
     title-key="winSettings.secGeneral"
-    :resettable="resettable.includes('general')"
     :flash="flashGroup === 'general'"
-    @reset="emit('reset', $event)"
   >
     <!-- 语言 / 字体：两个下拉并排一行 -->
     <div class="general-row">
       <div class="general-col">
-        <label class="field-label no-top">{{ t("winSettings.language") }}</label>
+        <label class="field-label">{{ t("winSettings.language") }}</label>
         <select class="field-select lang-select" :value="locale" @change="onLangChange(($event.target as HTMLSelectElement).value)">
           <option value="zh_cn">简体中文</option>
           <option value="en_us">English</option>
         </select>
       </div>
       <div class="general-col">
-        <label class="field-label no-top">{{ t("winSettings.font") }}</label>
+        <label class="field-label">{{ t("winSettings.font") }}</label>
         <div class="font-row">
           <select v-model="fontPick" class="field-select font-select" @change="setFontFamily(fontPick)">
             <option value="">{{ t("winSettings.fontDefault") }}</option>
@@ -90,11 +85,11 @@ onMounted(() => void loadFonts());
         </div>
       </div>
     </div>
-    <p class="field-desc mt-8">{{ t("winSettings.fontDesc") }}</p>
+    <p class="field-desc">{{ t("winSettings.fontDesc") }}</p>
     <p v-if="fontsLoading" class="hint">{{ t("winSettings.fontLoading") }}</p>
 
     <!-- 界面动画开关 -->
-    <div class="switch-row mt-14">
+    <div class="switch-row">
       <div class="switch-text">
         <span class="switch-label">{{ t("winSettings.animations") }}</span>
         <span class="switch-state">{{ t("winSettings.animationsDesc") }}</span>
@@ -106,9 +101,7 @@ onMounted(() => void loadFonts());
   <SettingsGroup
     id="theme"
     title-key="winSettings.secTheme"
-    :resettable="resettable.includes('theme')"
     :flash="flashGroup === 'theme'"
-    @reset="emit('reset', $event)"
   >
     <!-- 主题：跟随系统 / 浅色 / 深色 -->
     <label class="field-label">{{ t("winSettings.theme") }}</label>
@@ -123,7 +116,7 @@ onMounted(() => void loadFonts());
     />
 
     <!-- 强调色 -->
-    <label class="field-label mt-16">{{ t("winSettings.accent") }}</label>
+    <label class="field-label">{{ t("winSettings.accent") }}</label>
     <p class="field-desc">{{ t("winSettings.accentDesc") }}</p>
     <div class="accent-list">
       <button
@@ -179,9 +172,7 @@ onMounted(() => void loadFonts());
   <SettingsGroup
     id="window"
     title-key="winSettings.secWindow"
-    :resettable="resettable.includes('window')"
     :flash="flashGroup === 'window'"
-    @reset="emit('reset', $event)"
   >
     <!-- 两态设置用 Switch 开关 -->
     <div class="switch-row">
@@ -197,9 +188,7 @@ onMounted(() => void loadFonts());
   <SettingsGroup
     id="mainWindow"
     title-key="winSettings.secMainWindow"
-    :resettable="resettable.includes('mainWindow')"
     :flash="flashGroup === 'mainWindow'"
-    @reset="emit('reset', $event)"
   >
     <label class="field-label">{{ t("winSettings.sidebar") }}</label>
     <SegmentedTabs
@@ -210,15 +199,13 @@ onMounted(() => void loadFonts());
       ]"
       @update:model-value="onSideChange"
     />
-    <p class="field-desc mt-8">{{ t("winSettings.sidebarDesc") }}</p>
+    <p class="field-desc">{{ t("winSettings.sidebarDesc") }}</p>
   </SettingsGroup>
 
   <SettingsGroup
     id="bgImage"
     title-key="winSettings.bgImage"
-    :resettable="resettable.includes('bgImage')"
     :flash="flashGroup === 'bgImage'"
-    @reset="emit('reset', $event)"
   >
     <p class="field-desc">{{ t("winSettings.bgImageDesc") }}</p>
     <div class="bg-buttons">

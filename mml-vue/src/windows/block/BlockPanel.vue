@@ -1,23 +1,23 @@
 <script setup lang="ts">
 // 方块列表：左侧分类栏（带数量）+ 右侧网格（搜索 / 分类过滤 / 图标尺寸档）
-// 三态视图：未渲染 → 提示卡；渲染中 → 顶部一行进度（下方列表照常可用）；已渲染 → 工具条 + 分类栏 + 网格
+// 三态视图：未渲染 → 提示卡；渲染中 → 顶部一行进度（下方列表照常可用）；已渲染 → 分类栏 + 网格
 //
-// 数据、事件订阅与操作在 composables/useBlockList，局部 UI 在 parts/
-// （工具条 / 分类栏 / 虚拟网格 / 详情 / 选实例 / 加皮肤）。
+// 状态在 BlockWindow（工具条在标题栏，两边要共用同一份状态），这里只做排版与局部交互；
+// 数据、事件订阅与操作在 composables/useBlockList，局部 UI 在 parts/。
 import { computed, ref } from "vue";
 import { t } from "../../lib/i18n";
-import { useBlockList } from "./composables/useBlockList";
 import { SKIN_CAT } from "./types";
-import BlockToolbar from "./parts/BlockToolbar.vue";
 import CategoryRail from "./parts/CategoryRail.vue";
 import BlockGrid from "./parts/BlockGrid.vue";
 import BlockDetailModal from "./parts/BlockDetailModal.vue";
 import InstancePickModal from "./parts/InstancePickModal.vue";
-import SkinAddModal from "./parts/SkinAddModal.vue";
 import BaseButton from "../../components/ui/BaseButton.vue";
 import type { InstanceInfoDto } from "../../lib/bindings";
+import type { useBlockList } from "./composables/useBlockList";
 
-defineProps<{
+const props = defineProps<{
+  /** 方块列表状态（在 BlockWindow 里创建：标题栏的工具条用的是同一份状态） */
+  settings: ReturnType<typeof useBlockList>;
   currentInstance: InstanceInfoDto | null;
 }>();
 
@@ -46,32 +46,15 @@ const {
   openDetail,
   closeDetail,
   stepDetail,
-  addSkin,
   removeSkin,
   setIcon,
-} = useBlockList();
+} = props.settings;
 
 /** 分类栏条目：全部 + 各分类；文案与计数在这里算好，侧栏只管渲染 */
 const catItems = computed(() => [
   { id: "", label: t("blocks.catAll"), count: blocks.value.length },
   ...cats.value.map((c) => ({ id: c, label: catLabel(c), count: catCounts.value.get(c) ?? 0 })),
 ]);
-
-// ---------- 添加皮肤方块 ----------
-
-const skinOpen = ref(false);
-const skinBusy = ref(false);
-
-async function onSkinSubmit(input: string) {
-  if (skinBusy.value) return;
-  skinBusy.value = true;
-  try {
-    // 成功才关弹窗：失败时提示已弹，输入内容留着让用户改
-    if (await addSkin(input)) skinOpen.value = false;
-  } finally {
-    skinBusy.value = false;
-  }
-}
 
 // ---------- 设为实例图标 ----------
 
@@ -122,29 +105,9 @@ async function onDetailRemove() {
       </BaseButton>
     </div>
 
-    <!-- 已渲染：工具条（渲染中仍可用，仅「重新渲染」禁用） -->
-    <BlockToolbar
-      v-if="rendered"
-      :keyword="keyword"
-      :size="size"
-      :count="filtered.length"
-      :total="blocks.length"
-      :filtered="isFiltered"
-      :running="running"
-      @update:keyword="keyword = $event"
-      @update:size="size = $event"
-      @add-skin="skinOpen = true"
-      @re-render="startRender(true)"
-    />
-
     <!-- 已渲染：分类栏 + 网格 -->
     <div v-if="rendered" class="block-main">
-      <CategoryRail
-        :items="catItems"
-        :active="cat"
-        :version="status?.version ?? ''"
-        @pick="cat = $event"
-      />
+      <CategoryRail :items="catItems" :active="cat" @pick="cat = $event" />
       <BlockGrid
         :items="filtered"
         :keyword="keyword"
@@ -178,14 +141,6 @@ async function onDetailRemove() {
         {{ status?.error ? t("blocks.retry") : t("blocks.renderNow") }}
       </BaseButton>
     </div>
-
-    <!-- 添加皮肤方块（用户名或 UUID） -->
-    <SkinAddModal
-      v-if="skinOpen"
-      :busy="skinBusy"
-      @submit="onSkinSubmit"
-      @close="skinOpen = false"
-    />
 
     <!-- 设为实例图标：选哪个实例（当前实例高亮，点条目即设） -->
     <InstancePickModal
