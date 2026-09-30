@@ -2,23 +2,49 @@
 // 方块列表窗口：独立窗口承载方块网格（搜索 / 分类 / 设为实例图标）
 // 当前实例从 gui_config 的选中实例恢复（与主窗口共享同一份配置）
 // 渲染进行中后端拒绝关闭（close-blocked 事件），这里弹二次确认：中断渲染再关
+//
+// 工具条（搜索 / 图标尺寸档 / 添加皮肤 / 重新渲染）放在标题栏的 head-right 槽里：
+// 所以状态在这一层创建，面板与工具条共用同一份（BlockPanel 只接收它做排版）。
 import { onMounted, onUnmounted, ref } from "vue";
 import WindowFrame from "../../components/ui/WindowFrame.vue";
 import BlockPanel from "./BlockPanel.vue";
+import BlockToolbar from "./parts/BlockToolbar.vue";
+import SkinAddModal from "./parts/SkinAddModal.vue";
 import BaseButton from "../../components/ui/BaseButton.vue";
 import BaseModal from "../../components/ui/BaseModal.vue";
 import { t } from "../../lib/i18n";
 import { api, blockRenderCancel, onCloseBlocked } from "../../lib/api";
 import { loadGuiConfig } from "../../lib/guiConfig";
+import { useBlockList } from "./composables/useBlockList";
 import type { InstanceInfoDto } from "../../lib/bindings";
 
 const emit = defineEmits<{ (e: "close"): void }>();
+
+/** 方块列表状态（面板与标题栏工具条共用） */
+const list = useBlockList();
+const { rendered, keyword, size, running, startRender, addSkin } = list;
 
 const currentInstance = ref<InstanceInfoDto | null>(null);
 let unlisten: (() => void) | null = null;
 
 /** 关闭被渲染拦下时的二次确认框 */
 const confirmClose = ref(false);
+
+// ---------- 添加皮肤方块（入口在标题栏工具条上，所以弹窗跟着放这一层） ----------
+
+const skinOpen = ref(false);
+const skinBusy = ref(false);
+
+async function onSkinSubmit(input: string) {
+  if (skinBusy.value) return;
+  skinBusy.value = true;
+  try {
+    // 成功才关弹窗：失败时提示已弹，输入内容留着让用户改
+    if (await addSkin(input)) skinOpen.value = false;
+  } finally {
+    skinBusy.value = false;
+  }
+}
 
 onMounted(async () => {
   try {
@@ -49,7 +75,24 @@ async function confirmCloseRender() {
 
 <template>
   <WindowFrame body-fill :title="t('home.blocks')" @close="emit('close')">
-    <BlockPanel :current-instance="currentInstance" />
+    <!-- 工具条放进标题栏：不占内容区高度，也不随内容滚动；未渲染时整条不出现 -->
+    <template #head-right>
+      <BlockToolbar
+        v-if="rendered"
+        :keyword="keyword"
+        :size="size"
+        :running="running"
+        @update:keyword="keyword = $event"
+        @update:size="size = $event"
+        @add-skin="skinOpen = true"
+        @re-render="startRender(true)"
+      />
+    </template>
+
+    <BlockPanel :settings="list" :current-instance="currentInstance" />
+
+    <!-- 添加皮肤方块（用户名或 UUID） -->
+    <SkinAddModal v-if="skinOpen" :busy="skinBusy" @submit="onSkinSubmit" @close="skinOpen = false" />
 
     <!-- 渲染中关窗：确认后中断渲染再关 -->
     <BaseModal v-if="confirmClose" :title="t('blocks.closeRenderTitle')" :closable="false" @close="confirmClose = false">

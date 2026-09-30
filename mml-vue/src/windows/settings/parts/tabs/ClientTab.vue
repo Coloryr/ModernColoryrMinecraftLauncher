@@ -16,11 +16,9 @@ const props = defineProps<{
   settings: ReturnType<typeof useSettingsClient>;
   /** 游戏窗口设置（游戏标题三开关与标题文字） */
   win: WindowSettingDto | null;
-  resettable: string[];
   flashGroup?: string;
 }>();
 
-const emit = defineEmits<{ (e: "reset", id: string): void }>();
 
 const {
   client,
@@ -61,12 +59,10 @@ watch(lockServerError, async (msg) => {
   <SettingsGroup
     id="servers"
     title-key="winSettings.secServers"
-    :resettable="resettable.includes('servers')"
     :flash="flashGroup === 'servers'"
-    @reset="emit('reset', $event)"
   >
     <!-- 服务器地址：自动进服与 MOTD 显示共用 -->
-    <label class="field-label no-top">{{ t("winSettings.serverAddress") }}</label>
+    <label class="field-label">{{ t("winSettings.serverAddress") }}</label>
     <input
       v-model="serverAddr"
       class="field-input"
@@ -75,10 +71,10 @@ watch(lockServerError, async (msg) => {
       placeholder="mc.example.com:25565"
       v-tip="t('winSettings.serverAddressHint')"
     />
-    <p class="field-desc mt-8">{{ t("winSettings.serverAddressHint") }}</p>
+    <p class="field-desc">{{ t("winSettings.serverAddressHint") }}</p>
 
     <!-- 自动进服：启动时自动进入上面配置的服务器 -->
-    <div class="switch-row mt-12">
+    <div class="switch-row">
       <div class="switch-text">
         <span class="switch-label">{{ t("winSettings.autoJoin") }}</span>
         <span class="switch-state">{{ t("winSettings.autoJoinDesc") }}</span>
@@ -87,14 +83,14 @@ watch(lockServerError, async (msg) => {
     </div>
 
     <!-- MOTD 卡片显示与刷新间隔 -->
-    <div class="switch-row mt-8">
+    <div class="switch-row">
       <div class="switch-text">
         <span class="switch-label">{{ t("winSettings.motdCard") }}</span>
         <span class="switch-state">{{ t("winSettings.motdCardDesc") }}</span>
       </div>
       <BaseSwitch v-model="client.motdCard" @update:model-value="applyClient" />
     </div>
-    <div class="switch-row mt-8" :class="{ dim: !client.motdCard }">
+    <div class="switch-row" :class="{ dim: !client.motdCard }">
       <div class="switch-text">
         <span class="switch-label">{{ t("winSettings.motdInterval") }}</span>
         <span class="switch-state">{{ t("winSettings.motdIntervalDesc") }}</span>
@@ -110,9 +106,7 @@ watch(lockServerError, async (msg) => {
   <SettingsGroup
     id="loginLock"
     title-key="winSettings.secLoginLock"
-    :resettable="resettable.includes('loginLock')"
     :flash="flashGroup === 'loginLock'"
-    @reset="emit('reset', $event)"
   >
     <p class="field-desc">{{ t("winSettings.loginLockDesc") }}</p>
     <!-- 总开关：关闭时锁定列表不生效 -->
@@ -174,9 +168,7 @@ watch(lockServerError, async (msg) => {
   <SettingsGroup
     id="instanceLock"
     title-key="winSettings.secInstanceLock"
-    :resettable="resettable.includes('instanceLock')"
     :flash="flashGroup === 'instanceLock'"
-    @reset="emit('reset', $event)"
   >
     <p class="field-desc">{{ t("winSettings.instanceLockDesc") }}</p>
     <div class="switch-row">
@@ -202,9 +194,7 @@ watch(lockServerError, async (msg) => {
   <SettingsGroup
     id="customHome"
     title-key="winSettings.secCustomHome"
-    :resettable="resettable.includes('customHome')"
     :flash="flashGroup === 'customHome'"
-    @reset="emit('reset', $event)"
   >
     <p class="field-desc">{{ t("winSettings.customHomeDesc") }}</p>
     <div class="switch-row">
@@ -244,9 +234,7 @@ watch(lockServerError, async (msg) => {
     v-if="win"
     id="gameTitle"
     title-key="winSettings.secGameTitle"
-    :resettable="resettable.includes('gameTitle')"
     :flash="flashGroup === 'gameTitle'"
-    @reset="emit('reset', $event)"
   >
     <div class="switch-list">
       <div class="switch-row">
@@ -263,11 +251,11 @@ watch(lockServerError, async (msg) => {
       </div>
     </div>
     <template v-if="win.editTitle">
-      <label class="field-label mt-10">{{ t("winSettings.gameTitle") }}</label>
+      <label class="field-label">{{ t("winSettings.gameTitle") }}</label>
       <input v-model="win.gameTitle" class="field-input" spellcheck="false" autocomplete="off" />
     </template>
     <template v-if="win.cycleTitle">
-      <label class="field-label mt-10">{{ t("winSettings.titleDelay") }}</label>
+      <label class="field-label">{{ t("winSettings.titleDelay") }}</label>
       <NumberStepper v-model="win.titleDelay" :min="100" :max="600000" :step="100" />
     </template>
   </SettingsGroup>

@@ -9,33 +9,68 @@
  *
  * 口径统一：控件高度用全局 `--field-h`（forms.css）与 BaseButton md 的 35px；
  * 分组标题、设置行、说明文字只用这里的类，不在组件里另写一套。
+ *
+ * 垂直间距**只有这一处规则**（模板里不再写 margin / 间距类），见下面「组内垂直节奏」。
  */
 
-/* ---------- 间距工具类 ----------
- * 原来到处写 style="margin-top: Npx"，间距口径散在模板里；这里收成几个固定档位。
- * 只在本窗口生效（前缀 .settings-layout）。 */
-.settings-layout .no-top {
+/* ---------- 组内垂直节奏（唯一来源） ----------
+ * 只有四档，其余都是"贴住它解释的东西"：
+ *   行内：标签 ↔ 它的说明        4px（.switch-text 的 gap）
+ *   紧贴：标签 ↔ 它的控件        8px
+ *        说明 ↔ 它解释的块       上 6px / 下 8px（说明永远贴着被解释的那一块）
+ *   块 ↔ 块（行与行、标签之前）  16px
+ *   分组之间                    24px；标题分隔线到首行内容 12px（.group-title 的上下边距）
+ * 例外只有两条，都是"附着在上面那一行"的状态文字：提示 .hint 8px、校验红字 6px。
+ * 需要新的例外就加在本节里并写清原因，别回模板写 margin。
+ */
+.settings-layout .setting-group > * {
   margin-top: 0;
 }
 
-.settings-layout .mt-8 {
+.settings-layout .setting-group > * + * {
+  margin-top: 16px;
+}
+
+/* 标签紧贴自己的控件 */
+.settings-layout .setting-group > .field-label {
+  margin: 0;
+}
+
+.settings-layout .setting-group > .field-label + * {
   margin-top: 8px;
 }
 
-.settings-layout .mt-10 {
-  margin-top: 10px;
+/* 说明是标签的补充：跟标签更近（此时它是"标签 → 说明 → 控件"里的中间那行） */
+.settings-layout .setting-group > .field-label + .field-desc {
+  margin-top: 4px;
 }
 
-.settings-layout .mt-12 {
-  margin-top: 12px;
+/* 说明跟在控件后面时，贴住上面那个控件 */
+.settings-layout .setting-group > .field-desc {
+  margin-top: 6px;
 }
 
-.settings-layout .mt-14 {
-  margin-top: 14px;
+.settings-layout .setting-group > .field-desc + * {
+  margin-top: 8px;
 }
 
-.settings-layout .mt-16 {
-  margin-top: 16px;
+/* 首行不留白（说明或标签开头的分组） */
+.settings-layout .setting-group > .field-desc:first-child {
+  margin-top: 0;
+}
+
+/* 附着在上面那一行的状态文字 */
+.settings-layout .setting-group > .hint {
+  margin-top: 8px;
+}
+
+.settings-layout .setting-group > .lock-server-hint {
+  margin-top: 6px;
+}
+
+/* 两列行 / 网格单元里的标签顶格（它们不是分组的直接子元素，上面那套节奏管不到） */
+.settings-layout .setting-group .field-label:first-child {
+  margin-top: 0;
 }
 
 /* 自定义强调色上的对勾：白勾压在彩色块上要一点描边阴影才看得清 */
@@ -92,40 +127,37 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 6px;
 }
 
-/* 标题行右侧：全局恢复默认 + 搜索 */
-.settings-layout .set-head-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+/* 标题行右侧：全部恢复默认 */
+.settings-layout .set-content-head > .ui-btn {
   flex-shrink: 0;
 }
 
-/* ---------- 设置项搜索 ---------- */
+/* ---------- 设置项搜索（在标题栏里，不属于 .settings-layout） ---------- */
 
-.settings-layout .set-search {
+.frame-head .set-search {
   position: relative;
   flex: 0 0 auto;
-  width: 260px;
+  width: 280px;
 }
 
-/* 与标题行齐平：压到 32px，不用表单默认的 42px */
-.settings-layout .set-search-input {
+/* 标题栏高 60px：输入框压到 32px，和标题、窗口按钮在同一视觉水平线上 */
+.frame-head .set-search-input {
   height: 32px;
   min-height: 0;
   padding: 0 10px;
   font-size: 12.5px;
 }
 
-.settings-layout .set-search-drop {
+.frame-head .set-search-drop {
+  /* 标题栏之上：下拉要压在内容区上方 */
+  z-index: 60;
   position: absolute;
-  top: calc(100% + 4px);
+  top: calc(100% + 6px);
   left: 0;
   right: 0;
-  z-index: 30;
-  max-height: 300px;
+  max-height: 320px;
   overflow-y: auto;
   padding: 4px;
   background: var(--bg-card);
@@ -134,12 +166,12 @@
   box-shadow: var(--shadow-lg);
 }
 
-.settings-layout .set-search-item {
+.frame-head .set-search-item {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  gap: 2px;
   width: 100%;
-  padding: 7px 9px;
+  padding: 8px 10px;
   border: none;
   border-radius: 7px;
   background: transparent;
@@ -150,16 +182,16 @@
   cursor: pointer;
 }
 
-.settings-layout .set-search-item:hover,
-.settings-layout .set-search-item.on {
+.frame-head .set-search-item:hover,
+.frame-head .set-search-item.on {
   background: var(--bg-hover);
 }
 
-.settings-layout .set-search-label {
+.frame-head .set-search-label {
   font-weight: 600;
 }
 
-.settings-layout .set-search-path {
+.frame-head .set-search-path {
   font-size: 11px;
   color: var(--text-dim);
 }
@@ -183,7 +215,9 @@
   gap: 8px;
   font-size: 13.5px;
   font-weight: 700;
-  margin: 22px 0 12px;
+  /* 上边距 = 分组间隔；下方 12px 是"分隔线到首行内容"的距离
+     （padding-bottom 在分隔线**之上**，不能替代它，否则首行会贴着线） */
+  margin: 24px 0 12px;
   padding-bottom: 9px;
   border-bottom: 1px solid var(--border);
 }
@@ -201,55 +235,7 @@
   margin-top: 10px;
 }
 
-/* 无标题分组（皮肤页）的「恢复默认」：内容下方右对齐 */
-.settings-layout .group-reset-row {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 12px;
-}
-
-.settings-layout .group-reset.static {
-  opacity: 1;
-}
-
-/* 分组标题右侧的「恢复默认」按钮：默认低调，悬停才明显 */
-.settings-layout .group-reset {
-  margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 3px 9px;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--text-dim);
-  font-size: 11.5px;
-  font-family: inherit;
-  font-weight: 500;
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.12s, color 0.12s, border-color 0.12s, background 0.12s;
-}
-
-/* 键盘用户与鼠标悬停都能看到；焦点进入分组内也显示 */
-.settings-layout .setting-group:hover .group-reset,
-.settings-layout .setting-group:focus-within .group-reset,
-.settings-layout .group-reset:focus-visible {
-  opacity: 1;
-}
-
-.settings-layout .group-reset:hover {
-  color: var(--accent);
-  border-color: var(--accent-border);
-  background: var(--accent-soft);
-}
-
-.settings-layout .group-reset:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-
-/* 恢复默认后短暂高亮该分组，让用户看清改了哪儿 */
+/* 设置项搜索命中后跳到的分组：短暂高亮，让用户看清落点 */
 .settings-layout .setting-group.flash {
   border-radius: 12px;
   animation: set-group-flash 1.1s ease-out;
@@ -262,12 +248,6 @@
   to {
     background: transparent;
   }
-}
-
-/* 搜索命中：跳到该分组并高亮 */
-.settings-layout .setting-group.search-hit {
-  border-radius: 12px;
-  animation: set-group-hit 1.6s ease-out;
 }
 
 @keyframes set-group-hit {
@@ -290,7 +270,8 @@
 .settings-layout .field-desc {
   font-size: 12px;
   color: var(--text-dim);
-  margin: -4px 0 10px;
+  /* 间距交给"组内垂直节奏"那一节；这里只留文字样式 */
+  margin: 0;
   line-height: 1.6;
 }
 
@@ -298,7 +279,7 @@
 .settings-layout .hint {
   font-size: 12px;
   color: var(--accent);
-  margin-top: 10px;
+  margin: 0;
 }
 
 /* ---------- 皮肤与头像：样例预览 ---------- */
@@ -307,7 +288,6 @@
   display: flex;
   align-items: stretch;
   gap: 12px;
-  margin-top: 16px;
   flex-wrap: wrap;
 }
 
@@ -422,7 +402,8 @@
 .settings-layout .switch-text {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  /* 标签与它自己那行说明的间距（行内节奏第一档） */
+  gap: 4px;
   min-width: 0;
 }
 
@@ -475,7 +456,6 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-top: 12px;
 }
 
 .settings-layout .range-label {
@@ -527,7 +507,6 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 10px;
 }
 
 .settings-layout .lock-add-type {
@@ -613,7 +592,6 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-top: 6px;
 }
 
 .settings-layout .line-row {
@@ -782,17 +760,13 @@
   flex: none;
 }
 
-/* 添加区在最上面：按钮行与下方分组拉开距离 */
-.settings-layout .java-add-actions {
-  margin-bottom: 12px;
-}
+/* 添加区在最上面：与下方 Java 分组的间距交给"组内垂直节奏" */
 
 /* 压缩包导入进度条 */
 .settings-layout .java-progress {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 12px;
   font-size: 12px;
 }
 
@@ -846,7 +820,6 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 10px;
-  margin-top: 10px;
 }
 
 .settings-layout .custom-home-state {

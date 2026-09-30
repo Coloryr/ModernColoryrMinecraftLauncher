@@ -15,7 +15,9 @@ export const GROUP_TITLES: Record<string, string> = {
   window: "winSettings.secWindow",
   mainWindow: "winSettings.secMainWindow",
   bgImage: "winSettings.bgImage",
-  skin: "winSettings.tab.skin",
+  head: "winSettings.headDisplay",
+  skin: "winSettings.skinDisplay",
+  preview: "winSettings.secPreview",
   download: "winSettings.secDownload",
   proxy: "winSettings.secProxy",
   dns: "winSettings.dns",
@@ -58,10 +60,10 @@ const SETTINGS_INDEX: IndexEntry[] = [
   { tab: "ui", group: "bgImage", labelKey: "winSettings.bgNativeSize", extra: ["resolution", "分辨率"] },
 
   // ---- 皮肤与头像 ----
-  { tab: "skin", group: "skin", labelKey: "winSettings.headDisplay", extra: ["head", "头像"] },
+  { tab: "skin", group: "head", labelKey: "winSettings.headDisplay", extra: ["head", "头像"] },
+  { tab: "skin", group: "head", labelKey: "winSettings.rotX", extra: ["rotate", "旋转"] },
+  { tab: "skin", group: "head", labelKey: "winSettings.rotY", extra: ["rotate", "旋转"] },
   { tab: "skin", group: "skin", labelKey: "winSettings.skinDisplay", extra: ["skin", "皮肤"] },
-  { tab: "skin", group: "skin", labelKey: "winSettings.rotX", extra: ["rotate", "旋转"] },
-  { tab: "skin", group: "skin", labelKey: "winSettings.rotY", extra: ["rotate", "旋转"] },
 
   // ---- 网络与下载 ----
   { tab: "network", group: "download", labelKey: "winSettings.downloadSource", extra: ["source", "bmclapi", "下载源"] },
@@ -144,6 +146,52 @@ export interface SettingsHit {
   groupLabel: string;
   /** 设置项显示名 */
   label: string;
+}
+
+/**
+ * 有"默认值"可恢复的分组 id
+ *
+ * 判断依据是默认值有没有真源：
+ * - 前端持有的（外观 / 皮肤 / 客户端设置）取 `guiConfig.defaultConfig`；
+ * - 核心配置（网络 / 启动 / 游戏窗口）取后端 `settings_get_defaults`；
+ * - `javaAdd` 不在内：Java 列表是系统扫描出来的，没有"默认值"可言。
+ */
+export const RESETTABLE_GROUPS = [
+  "general",
+  "theme",
+  "window",
+  "mainWindow",
+  "bgImage",
+  "head",
+  "skin",
+  "download",
+  "proxy",
+  "dns",
+  "gameCheck",
+  "gameWindow",
+  "memory",
+  "jvm",
+  "gameArgs",
+  "launchCmd",
+  "gameTitle",
+  "servers",
+  "loginLock",
+  "instanceLock",
+  "customHome",
+];
+
+/**
+ * 某个标签页包含哪些分组（按索引顺序去重）
+ *
+ * 用途：内容区右上角「恢复本页默认」要知道本页该重置哪几组。
+ * 从搜索索引派生，保证"能搜到的分组"与"会被重置的分组"始终一致。
+ */
+export function groupsOfTab(tab: SettingsTab): string[] {
+  const groups: string[] = [];
+  for (const e of SETTINGS_INDEX) {
+    if (e.tab === tab && !groups.includes(e.group)) groups.push(e.group);
+  }
+  return groups;
 }
 
 /** 把命中位置的原文交回界面（用于高亮），不在这里做高亮拼接 */

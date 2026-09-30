@@ -143,7 +143,6 @@ export function useSettingsLaunch() {
   // ---------- 恢复默认 ----------
 
   /** 这几个分组的默认值都在 Rust（RunArgObj::new / WindowSettingObj::new） */
-  const resettableGroups = ["gameWindow", "memory", "jvm", "gameArgs", "launchCmd", "gameTitle"];
 
   async function resetGroup(id: string): Promise<boolean> {
     const d = await loadDefaults();
@@ -222,6 +221,5 @@ export function useSettingsLaunch() {
     removeEnvLine,
     saveState: state,
     resetGroup,
-    resettableGroups,
   };
 }

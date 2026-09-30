@@ -205,7 +205,6 @@ export function useSettingsJava() {
   }
 
   // Java 列表是"系统里扫出来的东西"，没有"恢复默认"可言
-  const resettableGroups: string[] = [];
 
   async function resetGroup(_id: string): Promise<boolean> {
     return false;
@@ -237,6 +236,5 @@ export function useSettingsJava() {
     downloadJava,
     load,
     resetGroup,
-    resettableGroups,
   };
 }

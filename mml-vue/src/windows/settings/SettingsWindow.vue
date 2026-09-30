@@ -26,7 +26,7 @@ import { useSettingsLaunch } from "./composables/useSettingsLaunch";
 import { useSettingsJava } from "./composables/useSettingsJava";
 import { useSettingsClient } from "./composables/useSettingsClient";
 import { isSettingsTab, SETTINGS_TABS, type SettingsTab } from "./types";
-import type { SettingsHit } from "./search";
+import { groupsOfTab, RESETTABLE_GROUPS, type SettingsHit } from "./search";
 import "./settings.css";
 
 const emit = defineEmits<{ (e: "close"): void }>();
@@ -66,17 +66,7 @@ const client = useSettingsClient();
 // 游戏标题那组显示在客户端设置页，但数据属于 window 设置：这里取出给 ClientTab
 const { win: launchWin } = launch;
 
-/** 支持"恢复默认"的分组 id（由各 composable 汇总，SettingsGroup 据此决定显不显示按钮） */
-const resettableGroups = computed(() => [
-  ...ui.resettableGroups,
-  ...skin.resettableGroups,
-  ...network.resettableGroups,
-  ...launch.resettableGroups,
-  ...java.resettableGroups,
-  ...client.resettableGroups,
-]);
-
-/** 刚恢复默认 / 搜索命中的分组：短暂高亮 */
+/** 刚被搜索命中的分组：短暂高亮 */
 const flashGroup = ref("");
 let flashTimer: number | null = null;
 
@@ -94,23 +84,23 @@ function handlers() {
   return [ui, skin, network, launch, java, client];
 }
 
-/** 分组级"恢复默认"：按注册顺序派发给各 composable，谁认领谁处理 */
-async function onResetGroup(id: string) {
-  for (const h of handlers()) {
-    if (await h.resetGroup(id)) {
-      flash(id);
-      showToast(t("winSettings.resetDone"));
-      return;
-    }
-  }
-}
+/** 本页包含哪些分组（由搜索索引派生：能搜到的分组 = 会被重置的分组） */
+const pageGroups = computed(() => groupsOfTab(tab.value));
 
-/** 全部恢复默认：逐个分组派发（已确认过一次，不再逐组提示） */
-const confirmResetAll = ref(false);
+/** 本页有没有可恢复的默认值（Java 页没有：列表是系统扫描出来的） */
+const canResetPage = computed(() => pageGroups.value.some((id) => RESETTABLE_GROUPS.includes(id)));
 
-async function onResetAll() {
-  confirmResetAll.value = false;
-  for (const id of resettableGroups.value) {
+/**
+ * 恢复本页默认
+ *
+ * 只在内容区右上角保留这一个重置入口：分组级按钮撤掉了（原来皮肤页会同时出现"整页"与"分组"
+ * 两个重置按钮，分不清该点哪个）。范围＝本页包含的分组，其它页不受影响。
+ */
+const confirmResetPage = ref(false);
+
+async function onResetPage() {
+  confirmResetPage.value = false;
+  for (const id of pageGroups.value) {
     for (const h of handlers()) {
       if (await h.resetGroup(id)) break;
     }
@@ -169,83 +159,80 @@ function onKeyDown(e: KeyboardEvent) {
 
 <template>
   <WindowFrame :title="t('features.settings')" body-fill @close="emit('close')">
+    <!-- 设置项搜索放在标题栏（全局可用：切哪个标签都在，且不随内容区滚动） -->
+    <template #head-right>
+      <SettingsSearch @select="onSearchSelect" />
+    </template>
+
     <div class="settings-layout">
       <SettingsRail v-model="tab" :tabs="SETTINGS_TABS" />
 
       <!-- 右侧内容区：每个标签一个面板，独立滚动 -->
       <div class="tab-content">
-        <!-- 当前页大标题 + 全局恢复默认 + 设置项搜索（跨标签搜，命中跳转并高亮） -->
+        <!-- 当前页大标题 + 恢复本页默认（整页只保留这一个重置入口） -->
         <header class="set-content-head">
           <div>
             <h2 class="set-content-title">{{ t(`winSettings.tab.${tab}`) }}</h2>
             <p class="set-content-sub">{{ t(`winSettings.tabDesc.${tab}`) }}</p>
           </div>
-          <div class="set-head-actions">
-            <BaseButton size="sm" v-tip="t('winSettings.resetAllHint')" @click="confirmResetAll = true">
-              {{ t("winSettings.resetAll") }}
-            </BaseButton>
-            <SettingsSearch @select="onSearchSelect" />
-          </div>
+          <BaseButton
+            v-if="canResetPage"
+            size="sm"
+            v-tip="t('winSettings.resetPageHint')"
+            @click="confirmResetPage = true"
+          >
+            {{ t("winSettings.resetPage") }}
+          </BaseButton>
         </header>
 
         <section class="set-panel">
           <UiTab
             v-if="tab === 'ui'"
             :settings="ui"
-            :resettable="resettableGroups"
             :flash-group="flashGroup"
-            @reset="onResetGroup"
           />
           <JavaTab
             v-else-if="tab === 'java'"
             :settings="java"
-            :resettable="resettableGroups"
             :flash-group="flashGroup"
-            @reset="onResetGroup"
           />
           <NetworkTab
             v-else-if="tab === 'network'"
             :settings="network"
-            :resettable="resettableGroups"
             :flash-group="flashGroup"
-            @reset="onResetGroup"
           />
           <LaunchTab
             v-else-if="tab === 'launch'"
             :settings="launch"
-            :resettable="resettableGroups"
             :flash-group="flashGroup"
-            @reset="onResetGroup"
           />
           <SkinTab
             v-else-if="tab === 'skin'"
             :settings="skin"
-            :resettable="resettableGroups"
             :flash-group="flashGroup"
-            @reset="onResetGroup"
           />
           <ClientTab
             v-else
             :settings="client"
             :win="launchWin"
-            :resettable="resettableGroups"
             :flash-group="flashGroup"
-            @reset="onResetGroup"
           />
         </section>
       </div>
     </div>
 
-    <!-- 全部恢复默认：影响面大，先确认 -->
+    <!-- 恢复本页默认：只影响当前页，仍先确认一次 -->
     <BaseModal
-      v-if="confirmResetAll"
-      :title="t('winSettings.resetAllTitle')"
-      @close="confirmResetAll = false"
+      v-if="confirmResetPage"
+      :title="t('winSettings.resetPageTitle')"
+      @close="confirmResetPage = false"
     >
-      <p class="modal-text">{{ t("winSettings.resetAllConfirm") }}</p>
+      <p class="modal-text">
+        {{ t("winSettings.resetPageConfirm", { page: t(`winSettings.tab.${tab}`) }) }}
+      </p>
       <div class="modal-actions">
-        <BaseButton @click="confirmResetAll = false">{{ t("actions.cancel") }}</BaseButton>
-        <BaseButton variant="danger" @click="onResetAll">{{ t("winSettings.resetAll") }}</BaseButton>
+        <BaseButton @click="confirmResetPage = false">{{ t("actions.cancel") }}</BaseButton>
+        <BaseButton variant="danger" @click="onResetPage">{{ t("winSettings.resetPage") }}</BaseButton>
       </div>
     </BaseModal>
   </WindowFrame>

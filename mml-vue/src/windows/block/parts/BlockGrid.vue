@@ -243,6 +243,10 @@ function onCellKey(e: KeyboardEvent, i: number) {
   min-width: 0;
   min-height: 0;
   overflow-y: auto;
+  /* 悬停时格子会上浮 2px（.block-cell:hover 的 translateY）：
+     顶端这 2px 余量是给它留的，否则第一排的格子会被裁掉上边缘那条线。
+     加在滚动容器上（padding 在裁剪盒之内、可见），不影响下面占位元素的高度 */
+  padding-top: 2px;
   padding-right: 2px;
 }
 

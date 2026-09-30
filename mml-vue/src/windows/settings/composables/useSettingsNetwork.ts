@@ -174,7 +174,6 @@ export function useSettingsNetwork() {
   // ---------- 恢复默认 ----------
 
   /** 这几个分组的默认值都在 Rust（HttpObj / DnsObj / GameCheckObj 的 Default） */
-  const resettableGroups = ["download", "proxy", "dns", "gameCheck"];
 
   async function resetGroup(id: string): Promise<boolean> {
     const d = await loadDefaults();
@@ -234,7 +233,6 @@ export function useSettingsNetwork() {
     addDnsLine,
     saveState: state,
     resetGroup,
-    resettableGroups,
     markError,
   };
 }

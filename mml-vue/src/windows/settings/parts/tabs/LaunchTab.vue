@@ -14,11 +14,9 @@ import type { useSettingsLaunch } from "../../composables/useSettingsLaunch";
 
 const props = defineProps<{
   settings: ReturnType<typeof useSettingsLaunch>;
-  resettable: string[];
   flashGroup?: string;
 }>();
 
-const emit = defineEmits<{ (e: "reset", id: string): void }>();
 
 const {
   run,
@@ -47,15 +45,13 @@ watch(memoryConflict, async (bad) => {
     <SettingsGroup
       id="gameWindow"
       title-key="winSettings.secGameWindow"
-      :resettable="resettable.includes('gameWindow')"
       :flash="flashGroup === 'gameWindow'"
-      @reset="emit('reset', $event)"
     >
       <div class="switch-row">
         <span>{{ t("winSettings.fullScreen") }}</span>
         <BaseSwitch v-model="win!.fullScreen" />
       </div>
-      <div class="grid-2 mt-10">
+      <div class="grid-2">
         <div>
           <label class="field-label">{{ t("winSettings.width") }}</label>
           <NumberStepper v-model="win!.width" :min="100" :max="65535" />
@@ -70,17 +66,15 @@ watch(memoryConflict, async (bad) => {
     <SettingsGroup
       id="memory"
       title-key="winSettings.secMemory"
-      :resettable="resettable.includes('memory')"
       :flash="flashGroup === 'memory'"
-      @reset="emit('reset', $event)"
     >
       <div class="grid-2">
         <div :class="{ 'field-invalid': memoryConflict }">
-          <label class="field-label no-top">{{ t("winSettings.minMemory") }}</label>
+          <label class="field-label">{{ t("winSettings.minMemory") }}</label>
           <NumberStepper ref="minMemoryRef" v-model="run!.minMemory" :min="256" :max="65536" :step="256" />
         </div>
         <div :class="{ 'field-invalid': memoryConflict }">
-          <label class="field-label no-top">{{ t("winSettings.maxMemory") }}</label>
+          <label class="field-label">{{ t("winSettings.maxMemory") }}</label>
           <NumberStepper v-model="run!.maxMemory" :min="256" :max="65536" :step="256" />
         </div>
       </div>
@@ -94,13 +88,11 @@ watch(memoryConflict, async (bad) => {
     <SettingsGroup
       id="jvm"
       title-key="winSettings.secJvm"
-      :resettable="resettable.includes('jvm')"
       :flash="flashGroup === 'jvm'"
-      @reset="emit('reset', $event)"
     >
       <div class="grid-2">
         <div>
-          <label class="field-label no-top">{{ t("winSettings.gcMode") }}</label>
+          <label class="field-label">{{ t("winSettings.gcMode") }}</label>
           <SegmentedTabs v-model="run!.gcMode" :options="gcOptions" />
         </div>
         <div class="switch-list">
@@ -115,7 +107,7 @@ watch(memoryConflict, async (bad) => {
         </div>
       </div>
 
-      <label class="field-label mt-14">{{ t("winSettings.jvmEnv") }}</label>
+      <label class="field-label">{{ t("winSettings.jvmEnv") }}</label>
       <div class="dns-lines">
         <div v-for="(_, i) in envLines" :key="i" class="line-row">
           <input
@@ -138,31 +130,27 @@ watch(memoryConflict, async (bad) => {
         <button class="line-add" @click="addEnvLine">＋ {{ t("args.addLine") }}</button>
       </div>
 
-      <label class="field-label mt-10">{{ t("winSettings.jvmArgs") }}</label>
+      <label class="field-label">{{ t("winSettings.jvmArgs") }}</label>
       <textarea v-model="run!.jvmArgs" class="field-input args-input" spellcheck="false" />
     </SettingsGroup>
 
     <SettingsGroup
       id="gameArgs"
       title-key="winSettings.secGameArgs"
-      :resettable="resettable.includes('gameArgs')"
       :flash="flashGroup === 'gameArgs'"
-      @reset="emit('reset', $event)"
     >
       <div class="switch-row">
         <span>{{ t("winSettings.removeGameArg") }}</span>
         <BaseSwitch v-model="run!.removeGameArg" />
       </div>
-      <label class="field-label mt-10">{{ t("winSettings.gameArgs") }}</label>
+      <label class="field-label">{{ t("winSettings.gameArgs") }}</label>
       <textarea v-model="run!.gameArgs" class="field-input args-input" spellcheck="false" />
     </SettingsGroup>
 
     <SettingsGroup
       id="launchCmd"
       title-key="winSettings.secLaunchCmd"
-      :resettable="resettable.includes('launchCmd')"
       :flash="flashGroup === 'launchCmd'"
-      @reset="emit('reset', $event)"
     >
       <div class="switch-list">
         <div class="switch-row">
@@ -179,11 +167,11 @@ watch(memoryConflict, async (bad) => {
         </div>
       </div>
       <template v-if="run.launchPreRun">
-        <label class="field-label mt-10">{{ t("winSettings.preCmd") }}</label>
+        <label class="field-label">{{ t("winSettings.preCmd") }}</label>
         <input v-model="run!.preRunArg" class="field-input" spellcheck="false" autocomplete="off" />
       </template>
       <template v-if="run.launchPostRun">
-        <label class="field-label mt-10">{{ t("winSettings.postCmd") }}</label>
+        <label class="field-label">{{ t("winSettings.postCmd") }}</label>
         <input v-model="run!.postRunArg" class="field-input" spellcheck="false" autocomplete="off" />
       </template>
     </SettingsGroup>

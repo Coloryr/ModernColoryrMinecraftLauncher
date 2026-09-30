@@ -13,11 +13,9 @@ import type { useSettingsNetwork } from "../../composables/useSettingsNetwork";
 
 const props = defineProps<{
   settings: ReturnType<typeof useSettingsNetwork>;
-  resettable: string[];
   flashGroup?: string;
 }>();
 
-const emit = defineEmits<{ (e: "reset", id: string): void }>();
 
 const {
   network,
@@ -43,13 +41,11 @@ const {
     <SettingsGroup
       id="download"
       title-key="winSettings.secDownload"
-      :resettable="resettable.includes('download')"
       :flash="flashGroup === 'download'"
-      @reset="emit('reset', $event)"
     >
       <div class="grid-2 dl-grid">
         <div>
-          <label class="field-label no-top">{{ t("winSettings.downloadSource") }}</label>
+          <label class="field-label">{{ t("winSettings.downloadSource") }}</label>
           <SegmentedTabs
             :model-value="network.source"
             :options="sourceOptions"
@@ -57,7 +53,7 @@ const {
           />
         </div>
         <div>
-          <label class="field-label no-top">{{ t("winSettings.downloadThread") }}</label>
+          <label class="field-label">{{ t("winSettings.downloadThread") }}</label>
           <NumberStepper
             :model-value="network.downloadThread"
             :min="1"
@@ -68,7 +64,7 @@ const {
       </div>
 
       <!-- 下载校验 / 自动下载：开关行，即改即存 -->
-      <div class="grid-2 mt-14">
+      <div class="grid-2">
         <div class="switch-row">
           <span>{{ t("winSettings.checkFile") }}</span>
           <BaseSwitch
@@ -89,24 +85,22 @@ const {
     <SettingsGroup
       id="proxy"
       title-key="winSettings.secProxy"
-      :resettable="resettable.includes('proxy')"
       :flash="flashGroup === 'proxy'"
-      @reset="emit('reset', $event)"
     >
       <div class="grid-2">
         <div>
-          <label class="field-label no-top">{{ t("winSettings.proxyWork") }}</label>
+          <label class="field-label">{{ t("winSettings.proxyWork") }}</label>
           <SegmentedTabs v-model="proxy.workProxy" :options="proxyModeOptions" />
         </div>
         <div>
-          <label class="field-label no-top">{{ t("winSettings.proxyLogin") }}</label>
+          <label class="field-label">{{ t("winSettings.proxyLogin") }}</label>
           <SegmentedTabs v-model="proxy.loginProxy" :options="proxyModeOptions" />
         </div>
       </div>
 
       <!-- 任一路走手动代理才显示代理详情（改动只进草稿，点保存才落盘） -->
       <template v-if="proxyDetailVisible">
-        <div class="grid-2 mt-14">
+        <div class="grid-2">
           <div>
             <label class="field-label">{{ t("winSettings.proxyType") }}</label>
             <SegmentedTabs
@@ -116,7 +110,7 @@ const {
             />
           </div>
         </div>
-        <div class="grid-2 mt-12">
+        <div class="grid-2">
           <div>
             <label class="field-label">{{ t("winSettings.proxyIp") }}</label>
             <input v-model="proxy.proxyIp" class="field-input" spellcheck="false" autocomplete="off" />
@@ -151,9 +145,7 @@ const {
     <SettingsGroup
       id="dns"
       title-key="winSettings.dns"
-      :resettable="resettable.includes('dns')"
       :flash="flashGroup === 'dns'"
-      @reset="emit('reset', $event)"
     >
       <div class="switch-list">
         <div class="switch-row">
@@ -173,7 +165,7 @@ const {
         </div>
       </div>
       <template v-if="network.dns.enable">
-        <label class="field-label mt-10">{{ t("winSettings.dnsHttps") }}</label>
+        <label class="field-label">{{ t("winSettings.dnsHttps") }}</label>
         <!-- 编辑中只改本地草稿，失焦 / 回车才落盘 -->
         <div class="dns-lines">
           <div v-for="(line, i) in dnsLines" :key="i" class="line-row">
@@ -196,9 +188,7 @@ const {
     <SettingsGroup
       id="gameCheck"
       title-key="winSettings.gameCheck"
-      :resettable="resettable.includes('gameCheck')"
       :flash="flashGroup === 'gameCheck'"
-      @reset="emit('reset', $event)"
     >
       <!-- 关闭"检查xx"后对应的 SHA1 校验一并禁用（没得查自然不用校验） -->
       <div class="grid-2">
