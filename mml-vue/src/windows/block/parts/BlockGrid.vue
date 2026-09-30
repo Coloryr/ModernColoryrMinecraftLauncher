@@ -34,6 +34,15 @@ const emit = defineEmits<{
 /** 视口外上下各多渲染几行，滚动时不至于看到空白 */
 const OVERSCAN = 2;
 
+/**
+ * 列表末尾的留白（px）
+ *
+ * 由滚动内容自己提供（加在占位高度上），不是把滚动区从底部缩进来：
+ * 这样滚动条能一直延伸到底边，而"最后一行下面有空档"只在滚到最下面时出现。
+ * 数值等于窗口内容区原本的下内边距（22px），观感与之前一致。
+ */
+const BOTTOM_SPACE = 22;
+
 // ---------- 度量 ----------
 
 const metrics = computed(() => BLOCK_SIZES[props.size]);
@@ -42,7 +51,9 @@ const gap = computed(() => metrics.value.gap);
 const rowH = computed(() => metrics.value.cell + metrics.value.gap);
 
 const scroller = ref<HTMLDivElement | null>(null);
-const viewportW = ref(0);
+/** 网格本体：列宽要按它的实际宽度算（它比滚动容器窄，右侧留了 26px 呼吸） */
+const gridEl = ref<HTMLDivElement | null>(null);
+const gridW = ref(0);
 const viewportH = ref(0);
 const scrollTop = ref(0);
 
@@ -50,17 +61,33 @@ let ro: ResizeObserver | null = null;
 let raf = 0;
 
 function measure(el: HTMLElement) {
-  viewportW.value = el.clientWidth;
+  // 容器通栏（滚动条贴窗口右边），网格在容器里右侧缩进；列数按**网格**宽度算，
+  // 否则列会按"更宽"的容器宽度去分，格子被压窄、最后一列还会顶到留白区里
+  gridW.value = gridEl.value?.clientWidth || el.clientWidth;
   viewportH.value = el.clientHeight;
+}
+
+/** 拿到 DOM 后重新量一次（网格是 v-if 挂上来的，首次量的时候可能还不存在） */
+async function remeasure() {
+  const el = scroller.value;
+  if (!el) return;
+  await nextTick();
+  measure(el);
 }
 
 onMounted(() => {
   const el = scroller.value;
   if (!el) return;
-  measure(el);
+  void remeasure();
   ro = new ResizeObserver(() => measure(el));
   ro.observe(el);
 });
+
+// 列表从空变有（或反向）时网格才会挂上/卸载，宽度要跟着重算
+watch(
+  () => props.items.length,
+  () => void remeasure(),
+);
 
 onUnmounted(() => {
   ro?.disconnect();
@@ -80,7 +107,7 @@ function onScroll() {
 
 const cols = computed(() => {
   const { minCol } = metrics.value;
-  return Math.max(1, Math.floor((viewportW.value + gap.value) / (minCol + gap.value)));
+  return Math.max(1, Math.floor((gridW.value + gap.value) / (minCol + gap.value)));
 });
 const rows = computed(() => Math.ceil(props.items.length / cols.value));
 const startRow = computed(() => Math.max(0, Math.floor(scrollTop.value / rowH.value) - OVERSCAN));
@@ -198,8 +225,8 @@ function onCellKey(e: KeyboardEvent, i: number) {
 
 <template>
   <div ref="scroller" class="grid-scroll" @scroll.passive="onScroll">
-    <div v-if="items.length" class="grid-pad" :style="{ height: totalH + 'px' }">
-      <div class="block-grid" :style="gridStyle">
+    <div v-if="items.length" class="grid-pad" :style="{ height: totalH + BOTTOM_SPACE + 'px' }">
+      <div ref="gridEl" class="block-grid" :style="gridStyle">
         <button
           v-for="(b, k) in visible"
           :key="b.id"
@@ -243,11 +270,11 @@ function onCellKey(e: KeyboardEvent, i: number) {
   min-width: 0;
   min-height: 0;
   overflow-y: auto;
-  /* 悬停时格子会上浮 2px（.block-cell:hover 的 translateY）：
-     顶端这 2px 余量是给它留的，否则第一排的格子会被裁掉上边缘那条线。
-     加在滚动容器上（padding 在裁剪盒之内、可见），不影响下面占位元素的高度 */
-  padding-top: 2px;
-  padding-right: 2px;
+  /* 顶部留白 = 窗口内容区原本的上内边距（22px）+ 悬停上浮的 2px 余量：
+     它是滚动内容的一部分，所以只在滚到最上面时出现，滚动条轨道仍是整条；
+     否则第一排格子悬停上浮时会被裁掉上边缘那条线 */
+  padding-top: 24px;
+  /* 右侧不留内边距：滚动条要贴窗口右边缘（父级已抵消 frame-body 的右内边距） */
 }
 
 /* 等高占位：撑出滚动条长度；真正的格子绝对定位在里面并按行偏移 */
@@ -259,7 +286,10 @@ function onCellKey(e: KeyboardEvent, i: number) {
   position: absolute;
   top: 0;
   left: 0;
-  right: 0;
+  /* 右侧缩进与 .block-main 的 16px 间距一致（原来取 26px 与窗口左内边距对齐，
+     但滚动条本身还占约 9px，看着右边比左边空得多）；滚动条仍在窗口最右边。
+     列数按这个更窄的宽度算（见 script 里的 gridW） */
+  right: 16px;
   display: grid;
 }
 
