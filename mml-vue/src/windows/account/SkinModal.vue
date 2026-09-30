@@ -3,7 +3,9 @@
 // 并列出该账户所有皮肤 / 披风；正版账户可"设为装备"，第三方规范只有单皮肤单披风
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import BaseModal from "../../components/ui/BaseModal.vue";
+import BaseButton from "../../components/ui/BaseButton.vue";
 import BaseSwitch from "../../components/ui/BaseSwitch.vue";
+import SegmentedTabs from "../../components/ui/SegmentedTabs.vue";
 import { t, tErr } from "../../lib/i18n";
 import { showToast } from "../../lib/toast";
 import { currentAccount } from "../../lib/accountStore";
@@ -13,6 +15,12 @@ import * as skinview3d from "skinview3d";
 
 /** 展示模式 */
 type Mode = "2d" | "3d";
+
+/** 2D / 3D 分段切换选项 */
+const MODE_OPTIONS = computed(() => [
+  { value: "3d", label: t("winSkin.mode3d") },
+  { value: "2d", label: t("winSkin.mode2d") },
+]);
 
 /** 皮肤类型（auto = 自动检测；old = 1.7旧版；new = 1.8新版经典；slim = 纤细） */
 type SkinTypeOpt = "auto" | "old" | "new" | "slim";
@@ -76,12 +84,30 @@ const noSkin = ref(false);
 const loading = ref(false);
 /** 纹理列表加载中（打开弹窗 / 换账户后首次拉取较慢，列表区给个提示） */
 const listLoading = ref(false);
+/** 待上传的本地皮肤文件路径（空 = 无），选中后选型号直传（须在下方 immediate watch 之前声明） */
+const uploadFile = ref("");
 
 /** 当前账户的皮肤 / 披风纹理列表（离线 / 查询失败为 null，走占位图） */
 const textures = ref<TexturesDto | null>(null);
 
 /** 是否正版账户（第三方规范只有单皮肤单披风，无装备操作） */
 const isOauth = computed(() => currentAccount.value?.authType === "microsoft");
+
+/** 是否第三方在线账户（皮肤站 / 统一通行证 / 外置登录，皮肤管理在对应网页完成） */
+const isThirdParty = computed(
+  () => !!currentAccount.value && !isOauth.value && currentAccount.value.authType !== "offline",
+);
+
+/** 用系统浏览器打开账户对应皮肤站的网页 */
+async function openSkinSite() {
+  const acc = currentAccount.value;
+  if (!acc) return;
+  try {
+    await commands.account.openSkinSite(acc.authType, acc.uuid);
+  } catch (e) {
+    showToast(tErr(e));
+  }
+}
 
 /** 当前装备的皮肤（无 active 取第一个；离线 / 查询失败为 null） */
 const activeSkin = computed(() => {
@@ -135,6 +161,7 @@ watch(
       return;
     }
     const accountChanged = acc.uuid !== texturesUuid;
+    uploadFile.value = "";
     listLoading.value = true;
     try {
       textures.value = await commands.account.getTextures(acc.authType, acc.uuid);
@@ -187,6 +214,43 @@ function capeThumbUrl(item: TextureItemDto): string {
 
 /** 正在装备的 sha1（按钮禁用标记） */
 const equipBusy = ref("");
+
+/** 上传进行中 */
+const uploading = ref(false);
+
+/** 打开系统文件对话框选皮肤 PNG（浏览器没有对话框插件，按钮本身也不显示） */
+async function pickSkinFile() {
+  try {
+    const { open } = await import("@tauri-apps/plugin-dialog");
+    const picked = await open({
+      title: t("account.uploadSkin"),
+      multiple: false,
+      filters: [{ name: "PNG", extensions: ["png"] }],
+    });
+    if (typeof picked === "string" && picked) {
+      uploadFile.value = picked;
+    }
+  } catch {
+    /* 非桌面环境 */
+  }
+}
+
+/** 上传选中的皮肤文件并装备（variant = 经典 / 纤细） */
+async function doUpload(variant: "classic" | "slim") {
+  const acc = currentAccount.value;
+  if (!acc || !uploadFile.value || uploading.value) return;
+  uploading.value = true;
+  try {
+    await commands.account.uploadSkin(acc.authType, acc.uuid, variant, uploadFile.value);
+    uploadFile.value = "";
+    textures.value = await commands.account.getTextures(acc.authType, acc.uuid);
+    showToast(t("account.uploadOk"));
+  } catch (e) {
+    showToast(tErr(e));
+  } finally {
+    uploading.value = false;
+  }
+}
 
 async function equip(kind: "skin" | "cape", item: TextureItemDto) {
   const acc = currentAccount.value;
@@ -255,10 +319,14 @@ function setupViewer() {
   applyAnim();
 
   // 皮肤 + 披风都就绪（或确定失败）才撤掉加载指示
+  // loadSkin 必须显式传 model：不传时默认按贴图自动检测，纤细皮肤贴图版面
+  // 与经典相同，检测结果恒为经典，会覆盖构造时传的 model 选项
   loading.value = true;
-  const skinP = viewer.loadSkin(skinrawUrl.value).catch(() => {
-    noSkin.value = true;
-  });
+  const skinP = viewer
+    .loadSkin(skinrawUrl.value, { model: modelOpt.value })
+    .catch(() => {
+      noSkin.value = true;
+    });
   // 没有披风的账户加载失败是正常的，静默忽略
   const capeP =
     showCape.value && caperawUrl.value
@@ -386,14 +454,13 @@ onBeforeUnmount(destroyViewer);
     <div class="skin-layout">
       <!-- 预览区：2D / 3D 切换在展示区上方 -->
       <div class="preview">
-        <div class="mode-toggle">
-          <button class="mode-btn" :class="{ active: mode === '3d' }" @click="mode = '3d'">
-            {{ t("winSkin.mode3d") }}
-          </button>
-          <button class="mode-btn" :class="{ active: mode === '2d' }" @click="mode = '2d'">
-            {{ t("winSkin.mode2d") }}
-          </button>
-        </div>
+        <!-- 2D / 3D 分段切换（统一 SegmentedTabs） -->
+        <SegmentedTabs
+          class="mode-toggle"
+          :model-value="mode"
+          :options="MODE_OPTIONS"
+          @update:model-value="mode = $event as Mode"
+        />
 
         <div
           ref="stage"
@@ -463,7 +530,35 @@ onBeforeUnmount(destroyViewer);
         </template>
 
         <!-- 纹理列表：点击切换预览，正版可设为装备 -->
-        <h2 class="info-title ctl-title">{{ t("account.skinsList") }}</h2>
+        <h2 class="info-title ctl-title list-head">
+          {{ t("account.skinsList") }}
+          <BaseButton
+            v-if="isOauth && base"
+            variant="accent"
+            size="sm"
+            :disabled="listLoading || uploading"
+            @click="pickSkinFile"
+          >
+            {{ t("account.uploadSkin") }}
+          </BaseButton>
+          <!-- 第三方：皮肤上传 / 装备在皮肤站网页面板完成 -->
+          <BaseButton v-if="isThirdParty" variant="accent" size="sm" :disabled="listLoading" @click="openSkinSite">
+            {{ t("account.openSkinSite") }}
+          </BaseButton>
+        </h2>
+        <!-- 待上传文件：选型号直传 -->
+        <div v-if="uploadFile" class="tex-item upload-row">
+          <span class="tex-name" v-tip="uploadFile">
+            {{ uploadFile.split("\\").pop()?.split("/").pop() }}
+          </span>
+          <BaseButton size="sm" :disabled="uploading" @click="doUpload('classic')">
+            {{ t("winSkin.skinClassic") }}
+          </BaseButton>
+          <BaseButton size="sm" :disabled="uploading" @click="doUpload('slim')">
+            {{ t("winSkin.skinSlim") }}
+          </BaseButton>
+          <BaseButton variant="ghost" size="sm" :disabled="uploading" @click="uploadFile = ''">✕</BaseButton>
+        </div>
         <div class="tex-list">
           <div
             v-for="item in textures?.skins ?? []"
@@ -474,17 +569,17 @@ onBeforeUnmount(destroyViewer);
           >
             <img :src="skinThumbUrl(item)" class="tex-thumb skin" draggable="false" alt="" />
             <div class="tex-meta">
-              <span class="tex-name" :title="item.name">{{ item.name }}</span>
+              <span class="tex-name" v-tip="item.name">{{ item.name }}</span>
               <span class="tex-model">{{ modelLabel(item.model) }}</span>
             </div>
-            <button
+            <BaseButton
               v-if="isOauth"
-              class="tex-equip"
+              size="sm"
               :disabled="item.active || equipBusy === item.sha1"
               @click.stop="equip('skin', item)"
             >
               {{ item.active ? t("account.equipped") : t("account.equip") }}
-            </button>
+            </BaseButton>
           </div>
           <p v-if="listLoading" class="tex-empty">{{ t("account.loadingTextures") }}</p>
           <p v-else-if="!(textures?.skins ?? []).length" class="tex-empty">{{ t("winSkin.noSkin") }}</p>
@@ -501,16 +596,16 @@ onBeforeUnmount(destroyViewer);
           >
             <img :src="capeThumbUrl(item)" class="tex-thumb cape" draggable="false" alt="" />
             <div class="tex-meta">
-              <span class="tex-name" :title="item.name">{{ item.name }}</span>
+              <span class="tex-name" v-tip="item.name">{{ item.name }}</span>
             </div>
-            <button
+            <BaseButton
               v-if="isOauth"
-              class="tex-equip"
+              size="sm"
               :disabled="item.active || equipBusy === item.sha1"
               @click.stop="equip('cape', item)"
             >
               {{ item.active ? t("account.equipped") : t("account.equip") }}
-            </button>
+            </BaseButton>
           </div>
           <p v-if="listLoading" class="tex-empty">{{ t("account.loadingTextures") }}</p>
           <p v-else-if="!(textures?.capes ?? []).length" class="tex-empty">{{ t("account.noCape") }}</p>
@@ -532,29 +627,9 @@ onBeforeUnmount(destroyViewer);
   min-width: 320px;
 }
 
+/* SegmentedTabs（2D / 3D）下方留缝 */
 .mode-toggle {
-  display: inline-flex;
-  gap: 4px;
-  padding: 4px;
   margin-bottom: 12px;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-}
-
-.mode-btn {
-  padding: 5px 16px;
-  font-size: 13px;
-  color: var(--text-dim);
-  background: transparent;
-  border: 0;
-  border-radius: 7px;
-  cursor: pointer;
-}
-
-.mode-btn.active {
-  color: var(--text);
-  background: var(--border);
 }
 
 .preview-stage {
@@ -688,6 +763,19 @@ onBeforeUnmount(destroyViewer);
   gap: 6px;
 }
 
+/* 列表标题行：标题 + 上传按钮 */
+.list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* 待上传文件行 */
+.upload-row {
+  cursor: default;
+}
+
 .tex-item {
   display: flex;
   align-items: center;
@@ -739,22 +827,6 @@ onBeforeUnmount(destroyViewer);
 .tex-model {
   font-size: 11px;
   color: var(--text-dim);
-}
-
-.tex-equip {
-  flex: none;
-  padding: 4px 10px;
-  font-size: 12px;
-  color: var(--text);
-  background: var(--border);
-  border: 0;
-  border-radius: 8px;
-  cursor: pointer;
-}
-
-.tex-equip:disabled {
-  opacity: 0.55;
-  cursor: default;
 }
 
 .tex-empty {

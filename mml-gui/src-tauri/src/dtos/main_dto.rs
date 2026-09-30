@@ -190,8 +190,6 @@ pub struct BlockItemDto {
 pub struct BlockStatusDto {
     /// 已有渲染结果（blocks() 非空）
     pub rendered: bool,
-    /// 用户已同意渲染（配置开关）
-    pub opt_in: bool,
     /// 已渲染的游戏版本（未渲染为空串）
     pub version: String,
     /// 正在渲染

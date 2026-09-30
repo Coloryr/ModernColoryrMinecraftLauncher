@@ -122,6 +122,13 @@ function stateLabel(state: string): string {
 
 // ================= 数据刷新 =================
 
+/** 是否出现过任务（任务清空时据此判断“下载结束”并自动关窗） */
+let hadTasks = false;
+/** 用户主动停止后本次不自动关窗（停完可能还想看状态） */
+let keepOpen = false;
+/** 上一轮任务里是否有失败（有失败就不自动关窗，留着让用户看到） */
+let lastFailed = false;
+
 async function refresh() {
   try {
     status.value = await api.getDownloadStatus();
@@ -129,6 +136,19 @@ async function refresh() {
     /* 纯浏览器模式：无 IPC，保持空状态 */
   } finally {
     loading.value = false;
+  }
+
+  if (status.value.tasks.length > 0) {
+    hadTasks = true;
+    keepOpen = false;
+    lastFailed = status.value.tasks.some((x) => x.failed > 0);
+    return;
+  }
+  // 任务全部结束（下载完成后清空）：自动关窗，不用手动点关闭；
+  // 有失败或用户主动停止时保留窗口
+  if (hadTasks && !keepOpen && !lastFailed) {
+    hadTasks = false;
+    emit("close");
   }
 }
 
@@ -148,6 +168,7 @@ async function resumeAll() {
 }
 
 async function stopAll() {
+  keepOpen = true;
   await api.stopAllDownloads();
   await refresh();
 }
@@ -254,8 +275,8 @@ onUnmounted(() => {
         </div>
       </div>
 
-      <!-- 下载任务 -->
-      <div class="section">
+      <!-- 下载任务：只有一个任务时隐藏（信息与下方线程进度重复） -->
+      <div v-if="tasks.length !== 1" class="section">
         <div class="section-head">
           <span class="section-title">{{ t("winDownload.tasks") }}</span>
         </div>
@@ -302,7 +323,7 @@ onUnmounted(() => {
         <div v-else class="thread-list">
           <div v-for="item in threads" :key="item.thread" class="thread-item">
             <span class="thread-id">#{{ item.thread + 1 }}</span>
-            <span class="thread-name" :title="item.name">{{ item.name }}</span>
+            <span class="thread-name" v-tip="item.name">{{ item.name }}</span>
             <span class="thread-progress">
               <span class="progress-track">
                 <span class="progress-fill" :style="{ width: item.progress + '%' }" />
@@ -320,7 +341,7 @@ onUnmounted(() => {
     </div>
 
     <!-- 停止下载确认 -->
-    <BaseModal v-if="confirmStop" :title="t('winDownload.stopTitle')" @close="confirmStop = false">
+    <BaseModal v-if="confirmStop" :title="t('winDownload.stopTitle')" :closable="false" @close="confirmStop = false">
       <p class="delete-tip">{{ t("winDownload.stopConfirm") }}</p>
       <div class="modal-actions">
         <BaseButton @click="confirmStop = false">{{ t("add.cancel") }}</BaseButton>
@@ -331,7 +352,7 @@ onUnmounted(() => {
     </BaseModal>
 
     <!-- 关闭窗口确认（有下载任务时） -->
-    <BaseModal v-if="confirmClose" :title="t('winDownload.closeTitle')" @close="confirmClose = false">
+    <BaseModal v-if="confirmClose" :title="t('winDownload.closeTitle')" :closable="false" @close="confirmClose = false">
       <p class="delete-tip">{{ t("winDownload.closeConfirm") }}</p>
       <div class="modal-actions">
         <BaseButton @click="confirmClose = false">{{ t("add.cancel") }}</BaseButton>
@@ -545,6 +566,7 @@ onUnmounted(() => {
   font-size: 11.5px;
   color: var(--text-dim);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 /* ---------- 进度条 ---------- */
@@ -574,10 +596,11 @@ onUnmounted(() => {
 }
 
 /* ---------- 线程 ---------- */
-/* 线程行：固定列宽（信息列紧邻），状态列放得下最长的标签（"获取信息" / "Fetching Info"） */
+/* 线程行：固定列宽（信息列紧邻），状态列放得下最长的标签（"获取信息" / "Fetching Info"）；
+   大小 / 速度列按最宽的 "41.4 MB / 41.4 MB"、"12.3 MB/s" 留宽，数字列一律不换行 */
 .thread-item {
   display: grid;
-  grid-template-columns: 26px minmax(0, 1fr) 116px 108px 62px 88px;
+  grid-template-columns: 26px minmax(0, 1fr) 116px 124px 78px 88px;
   gap: 8px;
   align-items: center;
   padding: 6px 10px;
@@ -613,6 +636,7 @@ onUnmounted(() => {
   font-size: 11.5px;
   color: var(--text-dim);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .thread-size {
@@ -620,6 +644,7 @@ onUnmounted(() => {
   font-size: 11.5px;
   color: var(--text-dim);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .thread-speed {
@@ -628,6 +653,7 @@ onUnmounted(() => {
   font-weight: 600;
   color: var(--green, #4caf7d);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .thread-speed.idle {

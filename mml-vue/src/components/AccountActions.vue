@@ -23,29 +23,29 @@ defineEmits<{
 
 <template>
   <div class="acc-actions">
-    <button v-if="canEdit" class="icon-btn" :title="t('account.editOffline')" @click="$emit('edit')">
+    <button v-if="canEdit" class="icon-btn" v-tip="t('account.editOffline')" @click="$emit('edit')">
       <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z" />
       </svg>
     </button>
-    <button class="icon-btn" :title="t('account.refreshSkin')" @click="$emit('refreshSkin')">
+    <button class="icon-btn" v-tip="t('account.refreshSkin')" @click="$emit('refreshSkin')">
       <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M3 15v4a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-4" />
-        <path d="M17 8l-5-5-5 5M12 3v12" />
+        <circle cx="12" cy="8" r="4" />
+        <path d="M4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5" />
       </svg>
     </button>
-    <button v-if="canRefresh" class="icon-btn" :title="t('account.refresh')" @click="$emit('refresh')">
+    <button v-if="canRefresh" class="icon-btn" v-tip="t('account.refresh')" @click="$emit('refresh')">
       <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6" />
       </svg>
     </button>
-    <button v-if="canRelogin" class="icon-btn" :title="t('account.relogin')" @click="$emit('relogin')">
+    <button v-if="canRelogin" class="icon-btn" v-tip="t('account.relogin')" @click="$emit('relogin')">
       <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
         <path d="M10 17l5-5-5-5M15 12H3" />
       </svg>
     </button>
-    <button class="icon-btn danger" :title="t('account.delete')" @click="$emit('delete')">
+    <button class="icon-btn danger" v-tip="t('account.delete')" @click="$emit('delete')">
       <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6" />
       </svg>

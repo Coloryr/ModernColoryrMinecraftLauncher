@@ -95,7 +95,12 @@ impl AccountStoreDto {
             login_time: login.last_login.format("%Y-%m-%d %H:%M").to_string(),
             avatar_color: format!("linear-gradient(135deg, {c1}, {c2})"),
             skin: c1,
-            token_status: "valid".to_string(),
+            // 本地判过期：仅 OAuth 记录了 expire_at，其余类型恒有效
+            token_status: if login.is_expired() {
+                "expired".to_string()
+            } else {
+                "valid".to_string()
+            },
             avatar: None,
             server: match login.auth_type {
                 AuthType::OAuth | AuthType::Offline => None,

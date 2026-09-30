@@ -511,7 +511,7 @@ function tokenLabel(acc: AccountStoreDto): string {
       @close="cancelLogin"
     >
       <label class="field-label">{{ t("account.oauthCode") }}</label>
-      <div class="oauth-code copyable" :title="t('account.copy')" @click="copyOauthValue(oauthCode)">
+      <div class="oauth-code copyable" v-tip="t('account.copy')" @click="copyOauthValue(oauthCode)">
         {{ oauthCode }}
         <svg class="copy-ico" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <rect x="9" y="9" width="12" height="12" rx="2" />
@@ -520,7 +520,7 @@ function tokenLabel(acc: AccountStoreDto): string {
       </div>
 
       <label class="field-label">{{ t("account.oauthUrl") }}</label>
-      <div class="oauth-url copyable" :title="t('account.copy')" @click="copyOauthValue(oauthUrl)">
+      <div class="oauth-url copyable" v-tip="t('account.copy')" @click="copyOauthValue(oauthUrl)">
         <span class="oauth-url-text">{{ oauthUrl }}</span>
         <svg class="copy-ico" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <rect x="9" y="9" width="12" height="12" rx="2" />
@@ -552,7 +552,7 @@ function tokenLabel(acc: AccountStoreDto): string {
     </BaseModal>
 
     <!-- 删除确认 -->
-    <BaseModal v-if="deleteTarget" :title="t('account.delete')" below-titlebar @close="deleteTarget = null">
+    <BaseModal v-if="deleteTarget" :title="t('account.delete')" :closable="false" below-titlebar @close="deleteTarget = null">
       <p class="delete-tip">{{ t("account.deleteConfirm", { name: deleteTarget.userName }) }}</p>
       <div class="modal-actions">
         <BaseButton @click="deleteTarget = null">{{ t("add.cancel") }}</BaseButton>

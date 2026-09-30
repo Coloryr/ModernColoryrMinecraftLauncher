@@ -236,7 +236,7 @@ onBeforeUnmount(() => {
           >
             {{ running ? t("winExport.exporting") : t("winExport.exportBtn") }}
           </button>
-          <span v-if="running" class="progress-text" :title="progress?.text">
+          <span v-if="running" class="progress-text" v-tip="progress?.text">
             {{ progress?.text }}
           </span>
         </div>

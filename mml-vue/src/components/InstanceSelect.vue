@@ -10,7 +10,11 @@ const props = defineProps<{
   modelValue: string | null;
 }>();
 
-const emit = defineEmits<{ (e: "update:modelValue", uuid: string): void }>();
+const emit = defineEmits<{
+  (e: "update:modelValue", uuid: string): void;
+  /** 下拉末尾的「添加实例」入口（由窗口决定怎么开新建窗口） */
+  (e: "add"): void;
+}>();
 
 const open = ref(false);
 
@@ -21,6 +25,12 @@ const selected = computed(() =>
 function pick(inst: InstanceInfoDto) {
   emit("update:modelValue", inst.uuid);
   open.value = false;
+}
+
+/** 添加实例：先收起下拉，再交给窗口处理 */
+function addNew() {
+  open.value = false;
+  emit("add");
 }
 </script>
 
@@ -77,8 +87,19 @@ function pick(inst: InstanceInfoDto) {
               </template>
             </span>
           </span>
-          <span v-if="inst.running" class="run-dot" :title="t('launch.running')"></span>
+          <span v-if="inst.running" class="run-dot" v-tip="t('launch.running')"></span>
         </button>
+
+        <!-- 列表末尾：新建实例入口（实例多时吸底，不用滚到底才看得见） -->
+        <div class="menu-foot">
+          <div class="menu-sep"></div>
+          <button class="option add-option" @click="addNew">
+            <span class="add-icon">＋</span>
+            <span class="option-text">
+              <span class="option-name">{{ t("add.title") }}</span>
+            </span>
+          </button>
+        </div>
       </div>
     </Transition>
   </div>
@@ -183,7 +204,8 @@ function pick(inst: InstanceInfoDto) {
   border: 1px solid var(--border);
   border-radius: 12px;
   box-shadow: var(--shadow-lg);
-  padding: 6px;
+  /* 底部内边距交给吸底的新建入口，滚动时它才贴得住底 */
+  padding: 6px 6px 0;
   max-height: 280px;
   overflow-y: auto;
   z-index: 300;
@@ -247,6 +269,33 @@ function pick(inst: InstanceInfoDto) {
   border-radius: 50%;
   background: var(--green);
   box-shadow: 0 0 5px var(--green);
+  flex-shrink: 0;
+}
+
+/* 新建实例入口：与实例项之间用分隔线隔开 */
+.menu-sep {
+  height: 1px;
+  background: var(--border);
+  margin: 6px 4px;
+}
+
+.menu-foot {
+  position: sticky;
+  bottom: 0;
+  padding-bottom: 6px;
+  background: var(--bg-card);
+}
+
+.add-option {
+  color: var(--accent);
+}
+
+.add-icon {
+  /* 与实例图标同宽，让文字左对齐一致 */
+  width: 30px;
+  text-align: center;
+  font-size: 16px;
+  line-height: 1;
   flex-shrink: 0;
 }
 </style>

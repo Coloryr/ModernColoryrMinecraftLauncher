@@ -67,7 +67,10 @@ pub mod url_helper;
 pub mod urls;
 pub mod zulu_api;
 
-/// 默认 HTTP 超时时间（秒）
+/// 默认 HTTP 超时时间（秒）：连接超时与单次读取超时共用
+///
+/// 注意是 `read_timeout`（单次读空闲超时）而非请求总超时——
+/// 总超时会掐断慢速网络下的大文件下载（客户端 jar 40+MB）
 const DEFAULT_TIMEOUT: u64 = 10;
 
 /// 默认 User-Agent 标识
@@ -181,7 +184,7 @@ impl Client {
         );
 
         let builder = reqwest::Client::builder()
-            .timeout(Duration::from_secs(DEFAULT_TIMEOUT))
+            .read_timeout(Duration::from_secs(DEFAULT_TIMEOUT))
             .connect_timeout(Duration::from_secs(DEFAULT_TIMEOUT))
             .default_headers(headers);
 
@@ -318,7 +321,7 @@ impl Client {
         };
 
         let builder = reqwest::Client::builder()
-            .timeout(Duration::from_secs(DEFAULT_TIMEOUT))
+            .read_timeout(Duration::from_secs(DEFAULT_TIMEOUT))
             .connect_timeout(Duration::from_secs(DEFAULT_TIMEOUT))
             .default_headers(headers)
             .proxy(proxy);
@@ -445,6 +448,22 @@ impl Client {
         self.inner
             .post(url)
             .json(body)
+            .send()
+            .await
+            .map_err(map_err)
+    }
+
+    /// 发送 POST 请求，multipart 表单（文件上传），带 Bearer 鉴权，返回原始响应
+    pub async fn post_multipart(
+        &self,
+        url: &str,
+        form: reqwest::multipart::Form,
+        token: &str,
+    ) -> CoreResult<reqwest::Response> {
+        self.inner
+            .post(url)
+            .bearer_auth(token)
+            .multipart(form)
             .send()
             .await
             .map_err(map_err)

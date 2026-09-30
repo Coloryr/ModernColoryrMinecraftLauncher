@@ -529,7 +529,7 @@ onMounted(async () => {
           <div v-if="shots.length" class="shot-grid">
             <div v-for="item in shots" :key="item.name" class="shot-cell">
               <AsyncImage class="shot-img" :src="shotUrl(item)" :alt="item.name" :title="item.name" @click="preview = item" />
-              <button class="shot-del" :title="t('resource.delete')" @click="deleteShotAsk(item)">×</button>
+              <button class="shot-del" v-tip="t('resource.delete')" @click="deleteShotAsk(item)">×</button>
             </div>
           </div>
           <div v-else class="empty-tip">{{ t("resource.empty") }}</div>
@@ -648,7 +648,7 @@ onMounted(async () => {
     <BaseModal
       v-if="confirmBox"
       :title="confirmBox.title"
-      :closable="!confirmBusy"
+      :closable="false"
       @close="confirmBox = null"
     >
       <p class="confirm-text">{{ confirmBox.text }}</p>
@@ -675,6 +675,7 @@ onMounted(async () => {
     <BaseModal
       v-if="serverForm"
       :title="serverForm.edit ? t('resource.serverEdit') : t('resource.serverAdd')"
+      :closable="false"
       @close="serverForm = null"
     >
       <div class="form-grid">

@@ -36,7 +36,7 @@ const emit = defineEmits<{
 
 <template>
   <!-- 初始化期间只给一个关闭按钮，不铺整条标题栏 -->
-  <button class="splash-close" :title="t('titlebar.close')" @click="onClose">
+  <button class="splash-close" v-tip="t('titlebar.close')" @click="onClose">
     <svg viewBox="0 0 12 12" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round">
       <path d="m3 3 6 6M9 3l-6 6" />
     </svg>

@@ -268,13 +268,13 @@ function closeMenu() {
             <span v-else class="card-icon-none">?</span>
           </div>
           <div class="card-text">
-            <div class="card-name" :title="item.name">{{ item.name }}</div>
+            <div class="card-name" v-tip="item.name">{{ item.name }}</div>
             <div class="card-meta">{{ item.source }} · {{ item.fileType }}</div>
           </div>
           <button
             v-if="focus?.uuid === item.uuid || checked.has(item.uuid)"
             class="card-open"
-            :title="t('collect.openUrl')"
+            v-tip="t('collect.openUrl')"
             @click.stop="openUrl(item)"
           >
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
@@ -306,7 +306,7 @@ function closeMenu() {
     </div>
 
     <!-- 添加分组 -->
-    <BaseModal v-if="showAddGroup" :title="t('collect.addGroupTitle')" @close="showAddGroup = false">
+    <BaseModal v-if="showAddGroup" :title="t('collect.addGroupTitle')" :closable="false" @close="showAddGroup = false">
       <input
         v-model="newGroupName"
         class="field-select"
@@ -324,6 +324,7 @@ function closeMenu() {
     <BaseModal
       v-if="deleteGroupTarget"
       :title="t('collect.deleteGroup')"
+      :closable="false"
       @close="deleteGroupTarget = ''"
     >
       <p class="confirm-text">{{ t("collect.deleteGroupConfirm", { name: deleteGroupTarget }) }}</p>
@@ -334,7 +335,7 @@ function closeMenu() {
     </BaseModal>
 
     <!-- 清空确认 -->
-    <BaseModal v-if="clearOpen" :title="t('collect.clear')" @close="clearOpen = false">
+    <BaseModal v-if="clearOpen" :title="t('collect.clear')" :closable="false" @close="clearOpen = false">
       <p class="confirm-text">
         {{
           clearGroup === null
@@ -353,6 +354,7 @@ function closeMenu() {
       v-if="addToGroupTarget !== ''"
       :title="t('collect.addToGroupTitle')"
       @close="addToGroupTarget = ''"
+      :closable="false"
     >
       <select v-model="addToGroupTarget" class="field-select">
         <option v-for="g in groupNames" :key="g" :value="g">{{ g }}</option>

@@ -3,11 +3,12 @@
 //! 数据由 `mml_auth::auths` 持有（`accounts.json`），这里只做命令与事件转发。
 
 use std::fmt::Display;
+use std::path::Path;
 use std::sync::RwLock;
 
 use mml_auth::{AuthType, LoginObj, auths, legacy::{authlib_injector, little_skin, nide8}, oauth};
 use mml_names::i18_items::error_type::{CoreResult, ErrorType};
-use mml_net::mojang_api::{self, MinecraftProfileObj, SkinObj};
+use mml_net::{mojang_api::{self, MinecraftProfileObj, SkinObj}, urls};
 use mml_sys::open_helper;
 use tauri::{AppHandle, Emitter};
 use tokio_util::sync::CancellationToken;
@@ -215,7 +216,8 @@ async fn microsoft_login(app: &AppHandle) -> Result<AccountStoreDto, String> {
     };
 
     emit_oauth_state(app, "token", None);
-    let token = match mojang_api::get_minecraft_token(&xsts.xbl_uhs, &xsts.xbl_token).await {
+    let (token, expires_in) = match mojang_api::get_minecraft_token(&xsts.xbl_uhs, &xsts.xbl_token).await
+    {
         Ok(ok) => ok,
         Err(err) => return Err(oauth_fail(app, err)),
     };
@@ -236,6 +238,7 @@ async fn microsoft_login(app: &AppHandle) -> Result<AccountStoreDto, String> {
     let mut login = LoginObj::new(profile.name, uuid, token, String::new());
     login.auth_type = AuthType::OAuth;
     login.text1 = Some(oauth_res.refresh_token);
+    login.set_expire_in(expires_in);
     login.save();
 
     if auths::get_current().is_none() {
@@ -563,4 +566,82 @@ pub async fn account_set_active_cape(
     sha1: String,
 ) -> Result<(), String> {
     equip_texture(&app, &account_type, &uuid, "cape", &sha1).await
+}
+
+/// 上传本地皮肤文件并装备（正版专用，第三方规范无上传接口）
+///
+/// 文件路径来自前端系统文件对话框（仅支持 PNG）；上传成功后服务端
+/// 自动装备新皮肤，这里清纹理渲染缓存并广播账户变更。
+///
+/// # 参数
+///
+/// - `variant`: 皮肤型号，`classic`（经典）或 `slim`（纤细）
+/// - `path`: 本地皮肤 PNG 文件路径
+#[tauri::command]
+pub async fn account_upload_skin(
+    app: AppHandle,
+    account_type: String,
+    uuid: String,
+    variant: String,
+    path: String,
+) -> Result<(), String> {
+    let auth_type = auth_type_from_str(&account_type);
+    if !auth_type.is_oauth() {
+        return Err(String::from("err.notOauth"));
+    }
+    if variant != "classic" && variant != "slim" {
+        return Err(String::from("err.variantInvalid"));
+    }
+
+    let data = mml_sys::path_helper::read_byte(&path).map_err(|err| err.to_string())?;
+    // PNG 文件签名（89 50 4E 47 0D 0A 1A 0A），服务端只收 PNG，提前拦下明显不对的文件
+    if !data.starts_with(&[0x89, b'P', b'N', b'G', 0x0D, 0x0A, 0x1A, 0x0A]) {
+        return Err(String::from("err.notPng"));
+    }
+
+    let auth = auths::get(&uuid, auth_type).ok_or("err.accountMissing")?;
+    let file_name = Path::new(&path)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("skin")
+        .to_string();
+
+    mojang_api::upload_minecraft_skin(&auth.access_token, &variant, &file_name, data)
+        .await
+        .map_err(|err| err.to_string())?;
+
+    crate::image_manager::clear_texture_images();
+    emit_account_change(&app);
+    Ok(())
+}
+
+/// 打开第三方账户对应皮肤站的网页（皮肤上传 / 装备在皮肤站的网页面板完成）
+///
+/// LittleSkin 开官网，统一通行证开对应服务器页，自建皮肤站 / 外置登录开
+/// 服务器根地址（外置登录存的是 Yggdrasil API 根，剥掉 `/api/yggdrasil` 后缀
+/// 得到站点根）。
+#[tauri::command]
+pub fn account_open_skin_site(account_type: String, uuid: String) -> Result<(), String> {
+    let auth_type = auth_type_from_str(&account_type);
+    if auth_type == AuthType::Offline || auth_type.is_oauth() {
+        return Err(String::from("err.notOauth"));
+    }
+    let auth = auths::get(&uuid, auth_type).ok_or("err.accountMissing")?;
+    let server = auth.text1.clone().unwrap_or_default();
+
+    let url = match auth_type {
+        AuthType::LittleSkin => urls::LITTLE_SKIN_URL.to_string(),
+        AuthType::Nide8 => format!("{}{}", urls::NIDE8_URL, server),
+        AuthType::AuthlibInjector => server
+            .trim_end_matches('/')
+            .trim_end_matches("/api/yggdrasil")
+            .to_string(),
+        AuthType::SelfLittleSkin => server.trim_end_matches('/').to_string(),
+        _ => return Err(String::from("err.notOauth")),
+    };
+    if !url.starts_with("http") {
+        return Err(String::from("err.serverEmpty"));
+    }
+    open_helper::open_url(&url);
+    Ok(())
 }

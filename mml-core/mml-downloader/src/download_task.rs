@@ -114,11 +114,17 @@ impl DownloadTask {
     /// # 返回值
     ///
     /// `true` — 全部文件下载成功
-    /// `false` — 有文件下载失败
+    /// `false` — 有文件下载失败或任务被取消
     pub async fn wait_done(&self) -> bool {
-        let _ = self.sem.acquire().await.unwrap();
-
-        self.total_size == self.completed_count.load(Ordering::SeqCst)
+        tokio::select! {
+            res = async {
+                let _ = self.sem.acquire().await.unwrap();
+                self.total_size == self.completed_count.load(Ordering::SeqCst)
+            } => res,
+            // 取消时立即唤醒等待方：任务已移出队列，不再等在途文件
+            // 自行失败收尾（可能要等网络超时，长达数十秒）
+            _ = self.cancel.cancelled() => false,
+        }
     }
 
     /// 取消此下载任务

@@ -25,12 +25,14 @@ export const commands = {
     getAccounts: () => invoke<AccountStoreViewDto>("account_get_accounts"),
     getTextures: (accountType: string, uuid: string) => invoke<TexturesDto>("account_get_textures", { accountType, uuid }),
     openBrowser: (url: string) => invoke<void>("account_open_browser", { url }),
+    openSkinSite: (accountType: string, uuid: string) => invoke<void>("account_open_skin_site", { accountType, uuid }),
     refreshAccountToken: (uuid: string) => invoke<boolean>("account_refresh_account_token", { uuid }),
     refreshSkin: (uuid: string) => invoke<void>("account_refresh_skin", { uuid }),
     removeAccount: (uuid: string) => invoke<boolean>("account_remove_account", { uuid }),
     setActiveCape: (accountType: string, uuid: string, sha1: string) => invoke<void>("account_set_active_cape", { accountType, uuid, sha1 }),
     setActiveSkin: (accountType: string, uuid: string, sha1: string) => invoke<void>("account_set_active_skin", { accountType, uuid, sha1 }),
     setCurrentAccount: (uuid: string) => invoke<boolean>("account_set_current_account", { uuid }),
+    uploadSkin: (accountType: string, uuid: string, variant: string, path: string) => invoke<void>("account_upload_skin", { accountType, uuid, variant, path }),
   },
   add: {
     answerNameConflict: (id: number, answer: boolean) => invoke<void>("add_answer_name_conflict", { id, answer }),
@@ -71,6 +73,7 @@ export const commands = {
   },
   block: {
     list: (lang: string) => invoke<BlockItemDto[]>("block_list", { lang }),
+    renderCancel: () => invoke<boolean>("block_render_cancel"),
     renderStart: (force: boolean) => invoke<boolean>("block_render_start", { force }),
     setIcon: (uuid: string, id: string) => invoke<boolean>("block_set_icon", { uuid, id }),
     skinAdd: (input: string) => invoke<string>("block_skin_add", { input }),
@@ -85,6 +88,12 @@ export const commands = {
     removeItems: (uuids: string[], group: string | null) => invoke<void>("collect_remove_items", { uuids, group }),
     setGroupItems: (group: string, uuids: string[]) => invoke<void>("collect_set_group_items", { group, uuids }),
     star: (source: string, fileType: string, pid: string, name: string, icon: string | null, url: string, star: boolean) => invoke<void>("collect_star", { source, fileType, pid, name, icon, url, star }),
+  },
+  customHome: {
+    import: (path: string) => invoke<CustomHomeInfoDto>("custom_home_import", { path }),
+    openDir: () => invoke<void>("custom_home_open_dir"),
+    remove: () => invoke<void>("custom_home_remove"),
+    status: () => invoke<CustomHomeInfoDto>("custom_home_status"),
   },
   download: {
     cancelAll: () => invoke<number>("download_cancel_all"),
@@ -425,6 +434,21 @@ export type CollectDataDto = {
   groups: Record<string, string[]>,
 };
 
+export type CustomHomeInfoDto = {
+  installed: boolean,
+  enabled: boolean,
+  entryUrl: string,
+  version: string,
+  fileCount: number,
+};
+
+export type CustomHomeProgressDto = {
+  state: string,
+  now: number,
+  total: number,
+  subText: string,
+};
+
 export type DownloadTaskEvent = {
   type: string,
   id: number,
@@ -540,6 +564,8 @@ export type ClientConfigDto = {
   autoJoin: boolean,
   autoJoinServer: string,
   motdServer: string,
+  lockInstance: string,
+  customHome: boolean,
 };
 
 export type GuiConfigDto = {
@@ -690,7 +716,6 @@ export type BlockItemDto = {
 
 export type BlockStatusDto = {
   rendered: boolean,
-  optIn: boolean,
   version: string,
   running: boolean,
   now: number,

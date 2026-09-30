@@ -469,7 +469,7 @@ onMounted(async () => {
         <div v-else-if="!searching && items.length === 0" class="empty-tip">{{ t("addResource.empty") }}</div>
         <template v-else>
           <div v-for="item in items" :key="item.source.pid" class="pack-item">
-            <div class="pack-main" :title="t('modpack.detailHint')" @click="openVersions(item)">
+            <div class="pack-main" v-tip="t('modpack.detailHint')" @click="openVersions(item)">
               <AsyncImage v-if="item.image" class="pack-icon" :src="item.image" alt="" />
               <div v-else class="pack-icon pack-icon-fallback">{{ item.name.slice(0, 1).toUpperCase() }}</div>
               <div class="pack-info">

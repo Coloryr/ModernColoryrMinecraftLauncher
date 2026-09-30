@@ -656,9 +656,16 @@ pub fn render_items(archive: &BaseArchive, gui: ProgressGui) -> CoreResult<()> {
         static TEX_CACHE: RefCell<HashMap<String, Pixmap>> = RefCell::new(HashMap::new());
     }
 
+    // 本轮取消令牌：取消后跳过剩余条目（进度随之停住），
+    // 已写出的 PNG 留着，下次全量渲染覆盖（与渲染失败时的残留一致）
+    let cancel = crate::cancel_token();
+
     let rendered: Vec<Option<(String, String)>> = defs
         .par_iter()
         .map(|id| {
+            if cancel.is_cancelled() {
+                return None;
+            }
             LOCAL_ARCHIVE.with(|local_archive| {
                 TEX_CACHE.with(|tex_cache| {
                     let mut tex_cache = tex_cache.borrow_mut();
@@ -681,6 +688,12 @@ pub fn render_items(archive: &BaseArchive, gui: ProgressGui) -> CoreResult<()> {
             })
         })
         .collect();
+
+    // 取消：本轮作废。版本号由调用方在返回 Ok 后才写入，这里提前返回
+    // 不会把半成品标成「已渲染」
+    if cancel.is_cancelled() {
+        return Err(ErrorType::TaskCancel);
+    }
 
     // 完成时补一次100%，避免进度停在最后一个step前
     if let Some(gui) = &gui {

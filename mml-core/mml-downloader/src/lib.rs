@@ -136,8 +136,8 @@ static DOWNLOAD_PATH: OnceLock<PathBuf> = OnceLock::new();
 /// # 参数
 ///
 /// - `dir`: 程序运行根目录，下载文件夹将创建在 `{dir}/downloads/` 下
-pub fn init<P: AsRef<Path>>(dir: P) -> CoreResult<()> {
-    let cache = CACHE_PATH.get_or_init(|| dir.as_ref().join(names::CACHE_DIR));
+pub fn init<P: AsRef<Path>>(path: P) -> CoreResult<()> {
+    let cache = CACHE_PATH.get_or_init(|| path.as_ref().join(names::CACHE_DIR));
     if !cache.exists() {
         path_helper::create_dir_all(cache)?;
     } else {
@@ -155,7 +155,10 @@ pub fn init<P: AsRef<Path>>(dir: P) -> CoreResult<()> {
         }
     }
 
-    DOWNLOAD_PATH.get_or_init(|| dir.as_ref().join(names::DOWNLOAD_DIR));
+    let dir = DOWNLOAD_PATH.get_or_init(|| path.as_ref().join(names::DOWNLOAD_DIR));
+    if !dir.exists() {
+        path_helper::create_dir_all(dir)?;
+    }
 
     Ok(())
 }

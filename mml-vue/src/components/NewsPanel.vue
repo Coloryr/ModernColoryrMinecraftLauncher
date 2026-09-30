@@ -42,7 +42,7 @@ function tagColor(tag: string) {
         class="refresh-btn"
         :class="{ spinning: loading }"
         :disabled="loading"
-        :title="t('news.refresh')"
+        v-tip="t('news.refresh')"
         @click="emit('refresh')"
       >
         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -62,7 +62,7 @@ function tagColor(tag: string) {
         <img :src="item.image" class="banner" alt="" />
         <div class="news-meta">
           <span class="news-tag" :style="tagColor(item.tag)">{{ item.tag }}</span>
-          <span class="news-date" :title="item.date">{{ item.date }}</span>
+          <span class="news-date" v-tip="item.date">{{ item.date }}</span>
         </div>
         <h3 class="news-title">{{ item.title }}</h3>
       </div>
