@@ -57,8 +57,33 @@ function onSize(v: string) {
     <!-- 图标尺寸档：小 / 中 / 大 -->
     <SegmentedTabs :options="sizeOptions" :model-value="size" @update:model-value="onSize" />
 
-    <BaseButton @click="emit('add-skin')">{{ t("blocks.addSkin") }}</BaseButton>
-    <BaseButton :disabled="running" @click="emit('re-render')">{{ t("blocks.reRender") }}</BaseButton>
+    <!-- 图标按钮：标题栏里空间紧，文字放提示里（aria-label 给读屏） -->
+    <BaseButton
+      size="sm"
+      variant="ghost"
+      v-tip="t('blocks.addSkin')"
+      :aria-label="t('blocks.addSkin')"
+      @click="emit('add-skin')"
+    >
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+        <circle cx="9" cy="7" r="4" />
+        <path d="M19 8v6M22 11h-6" />
+      </svg>
+    </BaseButton>
+    <BaseButton
+      size="sm"
+      variant="ghost"
+      :disabled="running"
+      v-tip="t('blocks.reRender')"
+      :aria-label="t('blocks.reRender')"
+      @click="emit('re-render')"
+    >
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+        <polyline points="21 3 21 9 15 9" />
+      </svg>
+    </BaseButton>
   </div>
 </template>
 
@@ -70,6 +95,12 @@ function onSize(v: string) {
   /* 在标题栏里要能收缩：窗口最窄时优先挤搜索框，不去裁按钮 */
   flex-shrink: 1;
   min-width: 0;
+}
+
+/* 图标按钮与同行的搜索框 / 尺寸档统一高度（BaseButton 的 sm 是 28px，这里用 :deep 穿透进去） */
+.block-top :deep(.ui-btn) {
+  height: 35px;
+  padding: 0 10px;
 }
 
 .search-wrap {

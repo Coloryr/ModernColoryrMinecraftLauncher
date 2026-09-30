@@ -177,6 +177,31 @@ async function onDetailRemove() {
   gap: 12px;
   flex: 1;
   min-height: 0;
+  /* 上 / 右 / 下 三边抵消 WindowFrame .frame-body 的 22/26 内边距：
+     网格与它的滚动条顶到窗口右边缘、上下也一直延伸到窗口边（滚动条是整条）。
+     左内边距保持原样；上下的呼吸改由各自滚动内容自己的留白给
+     （网格见 BlockGrid 的 padding-top / BOTTOM_SPACE，分类栏见 .cat-rail 的 padding）——
+     那样空档只在滚到两端时出现，而不是把滚动区缩掉 */
+  margin-right: -26px;
+  margin-bottom: -22px;
+  margin-top: -22px;
+  padding-right: 0;
+}
+
+/* 只有网格 / 分类栏区域是"通栏"的，其余卡片保持和网格一致的留白：
+   进度行在第一行时要补回 22px（它在面板顶部）；提示卡只在自己是第一行、或作为最底元素时补 */
+.block-progress,
+.block-prompt {
+  margin-right: 16px;
+}
+
+.block-progress,
+.block-panel > .block-prompt:first-child {
+  margin-top: 22px;
+}
+
+.block-prompt {
+  margin-bottom: 22px;
 }
 
 /* ---------- 提示卡（未渲染 / 失败） ---------- */
