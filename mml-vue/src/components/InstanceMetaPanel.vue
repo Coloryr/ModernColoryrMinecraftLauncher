@@ -6,6 +6,7 @@ import { t, tErr } from "../lib/i18n";
 import { api, onAddLoaderProgress } from "../lib/api";
 import { showToast } from "../lib/toast";
 import BaseButton from "./ui/BaseButton.vue";
+import LoaderQueryProgress from "./LoaderQueryProgress.vue";
 import type { InstanceInfoDto, VersionInfoDto } from "../lib/bindings";
 
 const props = defineProps<{
@@ -23,6 +24,17 @@ const emit = defineEmits<{
 function change(patch: Partial<InstanceInfoDto>) {
   emit("update", patch);
 }
+
+/**
+ * 是不是整合包实例（整合包类型选了具体平台；"" / "none" 表示不是）
+ *
+ * 整合包的版本与加载器是整合包作者在包里定下的（版本、加载器、加载器版本都由 manifest
+ * 决定），不该在实例设置里随手改 —— 与"实例锁定"同一个理由，所以那一整块隐藏。
+ * 整合包类型本身仍可编辑（那是"这个实例挂在哪条更新线上"）。
+ */
+const isModpack = computed(
+  () => !!props.instance.modpackType && props.instance.modpackType !== "none",
+);
 
 // 版本类型显示名（独立 ID 走 i18n：add.type.*）
 function typeName(vt: string): string {
@@ -200,7 +212,12 @@ async function refreshLangs() {
   try {
     const list = await api.getInstanceLangs(props.instance.uuid);
     if (list.length) {
-      langs.value = list.map((code) => ({ value: code, label: code }));
+      // 显示名由后端从该语言文件里读（language.name，如 简体中文）；
+      // 资源没下全时后端回落成代码，这里再兜一层，反正别显示空串
+      langs.value = list.map((item) => ({
+        value: item.code,
+        label: item.name || item.code,
+      }));
     }
   } catch {
     langs.value = [...DEFAULT_LANGS];
@@ -248,27 +265,13 @@ function onPlatformChange(value: string) {
 
 <template>
   <div class="meta-panel">
-    <!-- 加载器查询进度（窗口正上方浮动提示）：支持列表为步进进度条，加载器版本为滚动条 -->
-    <Teleport to="body">
-      <Transition name="load-pop">
-        <div v-if="loadersLoading || lvLoading" class="load-float">
-          <span class="load-float-spinner"></span>
-          <span class="load-float-label">{{ loadersLoading ? t("add.loaderQuerying") : t("add.loaderVerLoading") }}</span>
-          <div class="load-float-bar">
-            <div
-              v-if="loadersLoading"
-              class="load-float-fill"
-              :style="{ width: progressTotal ? (progressStep / progressTotal) * 100 + '%' : '0%' }"
-            ></div>
-            <div v-else class="load-float-indet"></div>
-          </div>
-          <span v-if="loadersLoading" class="load-float-text">{{ progressStep }} / {{ progressTotal }}</span>
-        </div>
-      </Transition>
-    </Teleport>
+    <!-- 加载器查询进度不浮在窗口正上方：就地显示在各自字段下面（见下面的 .meta-progress），
+         与添加实例窗口同一套（LoaderQueryProgress） -->
 
-    <!-- 版本与加载器：实例锁定时整块隐藏，避免玩家改掉整合包作者选定的版本 -->
-    <template v-if="!locked">
+    <!-- 版本与加载器：实例锁定时整块隐藏（避免玩家改掉整合包作者选定的版本）；
+         整合包实例同样整块隐藏（版本 / 加载器 / 加载器版本都由整合包 manifest 决定，
+         这里给了也没法改对），版本类型跟着一起隐 —— 它只服务于那个版本下拉 -->
+    <template v-if="!locked && !isModpack">
       <!-- 版本类型 + 版本 -->
       <span class="meta-label">{{ t("meta.versionType") }}</span>
       <select
@@ -364,6 +367,20 @@ function onPlatformChange(value: string) {
           </svg>
         </BaseButton>
       </div>
+
+      <!-- 查询进度就地显示在字段下面（原来浮在窗口正上方）。
+           面板是 4 列网格，所以每行要显式跨满整行，否则会被塞进"加载器版本"那两格里 -->
+      <div v-if="loadersLoading" class="meta-progress">
+        <LoaderQueryProgress
+          kind="query"
+          :visible="true"
+          :step="progressStep"
+          :total="progressTotal"
+        />
+      </div>
+      <div v-if="lvLoading" class="meta-progress">
+        <LoaderQueryProgress kind="versions" :visible="true" :step="0" :total="0" />
+      </div>
     </template>
 
     <!-- 游戏内语言 + 日志编码 -->
@@ -455,97 +472,9 @@ function onPlatformChange(value: string) {
   text-align: right;
 }
 
-/* 加载器支持列表查询进度（窗口正上方浮动提示，Teleport 到 body，样式与添加实例窗口一致） */
-.load-float {
-  position: fixed;
-  top: 14px;
-  left: 0;
-  right: 0;
-  margin: 0 auto;
-  width: fit-content;
-  z-index: 500;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 16px;
-  background: var(--bg-card);
-  border: 1px solid var(--accent-border);
-  border-radius: 10px;
-  box-shadow: var(--shadow-lg);
-  font-size: 12.5px;
-  color: var(--text);
-  pointer-events: none;
-}
-
-.load-float-spinner {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  border: 2px solid var(--border);
-  border-top-color: var(--accent);
-  animation: load-float-spin 0.8s linear infinite;
-  flex-shrink: 0;
-}
-
-@keyframes load-float-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.load-float-label {
-  color: var(--text-dim);
-  white-space: nowrap;
-}
-
-.load-float-bar {
-  width: 90px;
-  height: 6px;
-  border-radius: 3px;
-  background: var(--border);
-  overflow: hidden;
-}
-
-.load-float-fill {
-  height: 100%;
-  border-radius: 3px;
-  background: var(--accent);
-  transition: width 0.2s;
-}
-
-/* 不确定进度：小色块来回滚动（无步数可报的任务，如加载器版本拉取） */
-.load-float-indet {
-  height: 100%;
-  width: 40%;
-  border-radius: 3px;
-  background: var(--accent);
-  animation: load-float-slide 1.1s ease-in-out infinite;
-}
-
-@keyframes load-float-slide {
-  from {
-    transform: translateX(-100%);
-  }
-  to {
-    transform: translateX(300%);
-  }
-}
-
-.load-float-text {
-  color: var(--text-dim);
-  min-width: 30px;
-  text-align: right;
-}
-
-.load-pop-enter-active,
-.load-pop-leave-active {
-  transition: opacity 0.2s, transform 0.2s;
-}
-
-.load-pop-enter-from,
-.load-pop-leave-to {
-  opacity: 0;
-  transform: translateY(-8px);
+/* 加载器查询进度所在的那一行：跨满整行，跟在字段下面 */
+.meta-progress {
+  grid-column: 1 / -1;
 }
 
 /* 下拉 + 刷新按钮（与添加实例窗口一致的排布） */

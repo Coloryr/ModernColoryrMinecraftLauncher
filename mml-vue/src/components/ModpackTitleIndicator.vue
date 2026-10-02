@@ -112,12 +112,13 @@ function onClick() {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
+  /* 与顶栏其它入口按钮（.topbar-icon-btn）同规格：并排时行高与间距才对得上 */
+  width: 36px;
+  height: 36px;
   flex-shrink: 0;
   padding: 0;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: 10px;
   background: transparent;
   color: var(--accent);
   cursor: pointer;
@@ -133,10 +134,10 @@ function onClick() {
   border-color: var(--border);
 }
 
-/* 安装中：图标持续旋转（"动态"的落点）。关掉"界面动画"时由 base.css 的
-   html.no-anim 全局停掉，不需要在这里判断 */
-.mp-indicator.busy .mp-ind-icon {
-  animation: mp-spin 1.6s linear infinite;
+/* 安装中：不旋转，靠颜色（强调色）+ 下方进度条表达"在动"。
+   两个指示器（这个与下载那个）都不转 —— 旋转容易晃眼，也容易让人以为点了会有别的动作 */
+.mp-indicator.busy {
+  color: var(--accent);
 }
 
 .mp-indicator.failed {
@@ -153,18 +154,12 @@ function onClick() {
   justify-content: center;
 }
 
-@keyframes mp-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 /* 进度条：压在图标下方那条 2px 的细线 */
 .mp-ind-track {
   position: absolute;
-  left: 5px;
-  right: 5px;
-  bottom: 3px;
+  left: 6px;
+  right: 6px;
+  bottom: 4px;
   height: 2px;
   border-radius: 1px;
   background: var(--bg-hover);

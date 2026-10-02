@@ -348,7 +348,18 @@ pub fn get_instance(uuid: &Uuid) -> Option<GameInstance> {
     Some(list.get(uuid)?.clone())
 }
 
-/// 获取实例的游戏内语言列表（从资源索引文件里查 minecraft/lang/*.json）
+/// 游戏内语言（语言代码 + 显示名）
+pub struct InstanceLangObj {
+    /// 语言代码：资源索引里 `minecraft/lang/<code>.json` 的 `<code>`，如 `zh_cn`
+    pub code: String,
+    /// 显示名：该语言文件里的 `language.name`（如“简体中文”）；读不到时为语言代码
+    pub name: String,
+}
+
+/// 获取实例的游戏内语言列表（从资源索引里查 minecraft/lang/*.json）
+///
+/// 每项的显示名就写在该语言文件里（`language.name`，如 zh_cn → “简体中文”），
+/// 与游戏内语言菜单同一份数据；资源没下全 / 文件里没有这个键时回落为语言代码本身。
 ///
 /// 资源索引未下载 / 版本数据缺失时返回空列表，由前端回退默认语言（中文 / 英文）。
 ///
@@ -356,8 +367,8 @@ pub fn get_instance(uuid: &Uuid) -> Option<GameInstance> {
 ///
 /// # 返回值
 ///
-/// 返回排序后的语言代码列表
-pub fn get_instance_langs(uuid: &Uuid) -> Vec<String> {
+/// 返回按语言代码排序的语言列表（代码 + 显示名）
+pub fn get_instance_langs(uuid: &Uuid) -> Vec<InstanceLangObj> {
     let Some(instance) = get_instance(uuid) else {
         return Vec::new();
     };
@@ -371,17 +382,99 @@ pub fn get_instance_langs(uuid: &Uuid) -> Vec<String> {
     let Ok(assets) = assets_path::get_index(index) else {
         return Vec::new();
     };
-    let mut langs: Vec<String> = assets
+    let mut langs: Vec<InstanceLangObj> = assets
         .objects
-        .keys()
-        .filter_map(|key| {
-            key.strip_prefix("minecraft/lang/")?
-                .strip_suffix(".json")
-                .map(String::from)
+        .iter()
+        .filter_map(|(key, item)| {
+            let code = key
+                .strip_prefix(names::LANG_KEY1)?
+                .strip_suffix(".json")?
+                .to_string();
+            let name = read_lang_name(&item.hash, &code).unwrap_or_else(|| code.clone());
+            Some(InstanceLangObj { code, name })
         })
         .collect();
-    langs.sort();
+    langs.sort_by(|a, b| a.code.cmp(&b.code));
     langs
+}
+
+/// 已解析出的语言显示名缓存（语言代码 → 显示名）
+///
+/// 打开一次实例设置要把上百个语言文件的 `language.name` 读出来（单个 500KB 上下），
+/// 而这份名单在所有实例之间是共用的 —— 读到的名字缓存起来，之后再开就直接命中。
+/// **只缓存真读到名字的项**：回落成代码的不进缓存，等资源下全了还能再补上。
+static LANG_NAMES: LazyLock<RwLock<HashMap<String, String>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
+
+/// 从资源对象里读出语言文件的显示名（`language.name`）
+///
+/// 资源对象按 sha1 前两位分目录存放。**读不到就静默返回 None**，不走
+/// [`assets_path::read_assets_text`] —— 那个失败时会记一条错误日志，而这里一次要读上百个
+/// 语言文件，资源没下全就会把日志刷满。
+///
+/// - `hash`: 语言文件在资源索引里的 sha1
+///
+/// # 返回值
+///
+/// 返回显示名；两处都读不到 / 解析失败 / 没有该键返回 `None`
+fn read_lang_name(hash: &str, code: &str) -> Option<String> {
+    if let Some(name) = LANG_NAMES.read().unwrap().get(code) {
+        return Some(name.clone());
+    }
+
+    // 1) 游戏资源对象（`assets/…/objects/<sha1>`）—— 与游戏内语言菜单同一来源，
+    //    资源下全时最权威；
+    // 2) 本地语言文件缓存 `langs/<code>.json`：mml-tex-draw 从客户端 jar 提取 /
+    //    按资源索引下载的那份（方块与物品名单也用它）。**玩家还没启动过游戏时
+    //    资源对象是空的**，就得靠它 —— 否则下拉里只会看到一堆 zh_cn 这样的代码。
+    let name = read_object_lang_name(hash).or_else(|| read_cached_lang_name(code))?;
+    LANG_NAMES
+        .write()
+        .unwrap()
+        .insert(code.to_string(), name.clone());
+    Some(name)
+}
+
+/// 从游戏资源对象里读语言名
+///
+/// 对象按 sha1 前两位分目录存放。**读不到就静默返回 None**，不走
+/// [`assets_path::read_assets_text`] —— 那个失败时会记一条错误日志，而这里一次要读上百个
+/// 语言文件，资源没下全就会把日志刷满。
+fn read_object_lang_name(hash: &str) -> Option<String> {
+    if hash.len() < 2 {
+        return None;
+    }
+    let file = assets_path::get_obj_dir().join(&hash[..2]).join(hash);
+    lang_name_from_file(&file)
+}
+
+/// 从 `langs/<code>.json`（mml-tex-draw 的语言文件缓存）里读语言名
+fn read_cached_lang_name(code: &str) -> Option<String> {
+    let file = mml_base::get_base_dir()
+        .join(names::LANG_DIR)
+        .join(format!("{code}.json"));
+    lang_name_from_file(&file)
+}
+
+/// 读一个语言 json 里的 `language.name`
+///
+/// - `file`: 语言文件路径
+///
+/// # 返回值
+///
+/// 返回显示名；文件不存在 / 解析失败 / 没有该键返回 `None`
+fn lang_name_from_file(file: &Path) -> Option<String> {
+    if !file.is_file() {
+        return None;
+    }
+    let text = path_helper::read_text(file).ok()?;
+    // 按 Value 解析而不是直接 HashMap<String, String>：语言文件里万一有个非字符串的值，
+    // 整份解析就废了 —— 这里只关心 language.name 一项，别被别处带崩
+    let map = mml_base::serialize_tools::json_from_str::<HashMap<String, serde_json::Value>>(&text)
+        .ok()?;
+    map.get(names::LANG_NAME_KEY)
+        .and_then(|item| item.as_str())
+        .map(String::from)
 }
 
 /// 获取所有分组名字

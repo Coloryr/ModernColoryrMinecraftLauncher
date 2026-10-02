@@ -127,7 +127,7 @@ export const commands = {
     getGameLog: (uuid: string) => invoke<LogLine[]>("main_get_game_log", { uuid }),
     getGroups: () => invoke<string[]>("main_get_groups"),
     getInstanceArgs: (uuid: string) => invoke<InstanceArgsDto>("main_get_instance_args", { uuid }),
-    getInstanceLangs: (uuid: string) => invoke<string[]>("main_get_instance_langs", { uuid }),
+    getInstanceLangs: (uuid: string) => invoke<InstanceLangDto[]>("main_get_instance_langs", { uuid }),
     getInstances: () => invoke<InstanceInfoDto[]>("main_get_instances"),
     getJavaList: () => invoke<JavaInfoDto[]>("main_get_java_list"),
     getMotd: (address: string) => invoke<MotdDto>("main_get_motd", { address }),
@@ -637,6 +637,11 @@ export type JavaImportProgressDto = {
 
 export type LogFocusDto = {
   uuid: string,
+};
+
+export type InstanceLangDto = {
+  code: string,
+  name: string,
 };
 
 export type LoadState = {

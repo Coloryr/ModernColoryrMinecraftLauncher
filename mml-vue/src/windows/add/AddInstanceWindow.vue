@@ -12,7 +12,6 @@ import GroupCombo from "./parts/GroupCombo.vue";
 import NameConflictModal from "./parts/NameConflictModal.vue";
 import ContinueModal from "./parts/ContinueModal.vue";
 import PackProgressModal from "./parts/PackProgressModal.vue";
-import LoaderQueryFloat from "./parts/LoaderQueryFloat.vue";
 import NewMode from "./modes/NewMode.vue";
 import ArchiveMode from "./modes/ArchiveMode.vue";
 import FolderMode from "./modes/FolderMode.vue";
@@ -91,7 +90,6 @@ const {
   loaderVerLoading,
   queryStep,
   queryTotal,
-  showQueryProgress,
   refreshSupportLoaders,
   refreshLoaderVersions,
   dropPending,
@@ -618,6 +616,8 @@ onUnmounted(() => {
           :loader="loader"
           :loaders="loaders"
           :loader-loading="loaderLoading"
+          :query-step="queryStep"
+          :query-total="queryTotal"
           :loader-version="loaderVersion"
           :loader-versions="loaderVersions"
           :loader-ver-loading="loaderVerLoading"
@@ -710,13 +710,8 @@ onUnmounted(() => {
     <!-- 整合包安装进度 -->
     <PackProgressModal v-if="packProgress" :progress="packProgress" />
 
-    <!-- 窗口正上方浮动进度：支持列表按步进，加载器版本为滚动条 -->
-    <LoaderQueryFloat
-      :visible="showQueryProgress || loaderVerLoading"
-      :kind="showQueryProgress ? 'query' : 'versions'"
-      :step="queryStep"
-      :total="queryTotal"
-    />
+    <!-- 加载器查询进度不再浮在窗口正上方：两条（查询支持的加载器 / 拉取加载器版本）
+         都改成就地显示在各自字段下面了，见 NewMode 里的 LoaderQueryProgress -->
   </WindowFrame>
 </template>
 

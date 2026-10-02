@@ -96,6 +96,8 @@ pub const COLLECT_FILE:&str = "collect.json";
 pub const MINECRAFT_KEY: &str = "minecraft";
 pub const LANG_KEY1: &str = "minecraft/lang/";
 pub const LANG_KEY2: &str = "lang";
+/// 语言文件里的显示名键：`language.name` → “简体中文”（游戏内语言菜单用的就是它）
+pub const LANG_NAME_KEY: &str = "language.name";
 pub const FML_KEY: &str = "fmlloader";
 pub const FORGE_KEY: &str = "forge";
 pub const MINECRAFT_FORGE_KEY: &str = "minecraftforge";

@@ -5,6 +5,7 @@
 import { computed, nextTick, onUnmounted, ref, watch } from "vue";
 import { t } from "../../../lib/i18n";
 import BaseButton from "../../../components/ui/BaseButton.vue";
+import LoaderQueryProgress from "../../../components/LoaderQueryProgress.vue";
 import type { VersionInfoDto } from "../../../lib/bindings";
 
 const props = defineProps<{
@@ -23,6 +24,9 @@ const props = defineProps<{
   loaders: string[];
   /** 支持列表查询中（查询期间下拉禁用） */
   loaderLoading: boolean;
+  /** 支持列表查询进度（查询支持的加载器时显示在加载器字段下面） */
+  queryStep: number;
+  queryTotal: number;
   loaderVersion: string;
   /** 可用加载器版本列表（由父组件按加载器 + 游戏版本拉取） */
   loaderVersions: string[];
@@ -208,10 +212,16 @@ function onLoaderPathPick(e: Event) {
           </svg>
         </BaseButton>
       </div>
-      <!-- 提示文字放下拉框下方，不作为列表项 -->
-      <div v-if="!newVersion || loaderLoading" class="field-hint">
-        {{ loaderLoading ? t("add.loaderQuerying") : t("add.pickVersionFirst") }}
-      </div>
+      <!-- 查询进度就地显示在这里（它属于"加载器类型"这个下拉；原来浮在窗口正上方，离得太远） -->
+      <LoaderQueryProgress
+        v-if="loaderLoading"
+        kind="query"
+        :visible="true"
+        :step="queryStep"
+        :total="queryTotal"
+      />
+      <!-- 没选版本时的提示放下拉框下方，不作为列表项 -->
+      <div v-else-if="!newVersion" class="field-hint">{{ t("add.pickVersionFirst") }}</div>
     </div>
     <div class="add-field">
       <label class="field-label">{{ t("add.loaderVersion") }}</label>
@@ -238,7 +248,14 @@ function onLoaderPathPick(e: Event) {
           </svg>
         </BaseButton>
       </div>
-      <div v-if="loaderVerLoading" class="field-hint">{{ t("add.loaderVerLoading") }}</div>
+      <!-- 拉取加载器版本：进度同样就地显示，别浮到窗口顶上 -->
+      <LoaderQueryProgress
+        v-if="loaderVerLoading"
+        kind="versions"
+        :visible="true"
+        :step="0"
+        :total="0"
+      />
     </div>
   </div>
 

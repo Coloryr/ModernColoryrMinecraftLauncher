@@ -7,6 +7,7 @@ import { isTauri, multiWindow } from "../../windows/windowManager";
 import { commands } from "../../lib/bindings";
 import WindowControls from "./WindowControls.vue";
 import ModpackTitleIndicator from "../ModpackTitleIndicator.vue";
+import DownloadTitleIndicator from "../DownloadTitleIndicator.vue";
 import { onTitleBarPointerDown, titleBarStyle } from "../../lib/titlebar";
 
 const props = defineProps<{
@@ -18,9 +19,11 @@ const props = defineProps<{
    *  按钮本身只画箭头，这段文案作为悬停提示（v-tip）与无障碍名称存在；
    *  两种用法共用同一个 `.back-btn`，外观完全一致 */
   back?: string;
-  /** 是否在标题栏显示整合包安装进度指示（多窗口模式下默认显示）。
+  /** 是否在标题栏显示整合包安装进度指示（默认显示）。
    *  整合包窗口整页就是进度，给它关掉，免得同一件事在标题栏里再出现一次 */
   hideModpackIndicator?: boolean;
+  /** 是否显示下载进度指示（默认显示）。下载窗口整页就是下载管理，同样关掉 */
+  hideDownloadIndicator?: boolean;
 }>();
 
 const emit = defineEmits<{ (e: "close"): void; (e: "back"): void }>();
@@ -76,10 +79,13 @@ watch(
       <span class="spacer"></span>
       <!-- 标题栏右侧扩展区（如查询进度指示） -->
       <slot name="head-right" />
-      <!-- 整合包安装进度指示：多窗口模式下挂在这里（各窗口自己那条标题栏）。
-           单窗口模式不挂 —— 那时各功能页共用主窗口，挂在主窗口顶栏一份就够，
-           见 MainTopbar 里的同名组件 -->
-      <ModpackTitleIndicator v-if="multiWindow && !hideModpackIndicator" />
+      <!-- 进度指示器：跟着**当时显示的那条标题栏**走。
+           多窗口模式下各功能是独立窗口，自然挂各自的；单窗口模式下功能页也各有自己的
+           标题栏（主页面才是 MainTopbar），所以这里照样得挂 —— 之前只在 multiWindow 时挂，
+           结果从"下载整合包"返回"添加实例"后两个指示器都不见了。
+           没有任务时各自整块不存在 -->
+      <ModpackTitleIndicator v-if="!hideModpackIndicator" />
+      <DownloadTitleIndicator v-if="!hideDownloadIndicator" />
 
       <!-- windows 样式：最小化 / 最大化 / 关闭在右端 -->
       <WindowControls v-if="titleBarStyle === 'windows'" :style="titleBarStyle" />
