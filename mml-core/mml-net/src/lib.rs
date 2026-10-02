@@ -631,9 +631,6 @@ static ABORT_GEN: AtomicU64 = AtomicU64::new(0);
 /// 世代广播通道（发送端）
 static ABORT_TX: OnceLock<tokio::sync::watch::Sender<u64>> = OnceLock::new();
 
-/// TEMP 诊断：给每个 abortable 等待点编号，便于对照日志
-static ABORT_DEBUG_SEQ: AtomicU64 = AtomicU64::new(0);
-
 /// 在途请求任务的取消句柄表
 ///
 /// [`abortable`] 每提交一个请求就把 `AbortHandle` 登记进来，任务结束后清理。
@@ -743,8 +740,6 @@ where
     T: Send + 'static,
 {
     let entered_gen = ABORT_GEN.load(Ordering::SeqCst);
-    let started = std::time::Instant::now();
-    let token = ABORT_DEBUG_SEQ.fetch_add(1, Ordering::SeqCst);
 
     // 进入时就已经过期（中断发生在提交之前）：直接失败，不用起任务
     if ABORT_GEN.load(Ordering::SeqCst) != entered_gen {
@@ -951,56 +946,12 @@ pub fn rebuild() {
 /// 返回自增后的世代号（用于日志排查"到底有没有真的中断"）
 pub fn abort_all() -> u64 {
     let generation = ABORT_GEN.fetch_add(1, Ordering::SeqCst) + 1;
-    let tx = abort_tx();
-    let receivers = tx.receiver_count();
-    let send_result = tx.send(generation);
+    // 广播最新世代（watch 存值，晚订阅的请求也能读到）；接收端已全部丢弃时返回 Err，忽略即可
+    let _ = abort_tx().send(generation);
     // **强制取消全部在途任务**：这是不依赖"请求被 poll"的硬手段
-    let aborted = abort_all_tasks();
-
-    // - 若这个任务也被卡住 → 全局性阻塞（锁 / 计划器被占死）
-    // - 若它正常完成 → 只是"原来那些 future 没被调度"，范围收窄到它们的 runtime
-    // 用独立线程是为了不受调用方所在 runtime 影响。
-    let (probe_tx, _probe_rx) = std::sync::mpsc::channel();
-    std::thread::spawn(move || {
-        let rt = tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build();
-        let outcome = match rt {
-            Ok(rt) => rt.block_on(async {
-                // 纯异步任务（不碰网络），能跑完说明新 runtime 健康
-                tokio::time::sleep(std::time::Duration::from_millis(1)).await;
-                "ok"
-            }),
-            Err(_) => "runtime_build_failed",
-        };
-        let _ = probe_tx.send(outcome);
-    });
+    abort_all_tasks();
 
     generation
-}
-
-/// TEMP 诊断②：探测当前异步上下文是否还能被调度
-///
-/// 在 [`abort_all`] 里通过独立线程起一个新的 `current_thread` runtime 跑一个
-/// 立即完成的任务：若它也卡住，说明是全局性阻塞。
-pub fn probe_scheduler() -> (String, std::time::Duration) {
-    let t = std::time::Instant::now();
-    let outcome = match tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-    {
-        Ok(rt) => rt.block_on(async {
-            tokio::time::sleep(std::time::Duration::from_millis(1)).await;
-            "ok".to_string()
-        }),
-        Err(e) => format!("build_failed: {e}"),
-    };
-    (outcome, t.elapsed())
-}
-
-/// 当前世代号（排查用：两次读取不同即说明期间发生过中断）
-pub fn abort_generation() -> u64 {
-    ABORT_GEN.load(Ordering::SeqCst)
 }
 
 /// 获取全局通用 HTTP 客户端（用于资源下载和一般 API 请求）

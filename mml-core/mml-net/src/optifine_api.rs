@@ -18,7 +18,7 @@ use itertools::Itertools;
 use mml_base::serialize_tools;
 use mml_config::config_obj::SourceLocal;
 use mml_names::i18_items::error_type::{CoreResult, DataNotFoundData, ErrorType};
-use scraper::{ElementRef, Html, Selector, selectable::Selectable};
+use scraper::{ElementRef, Html, Selector};
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -94,7 +94,7 @@ pub async fn get_optifine_version() -> CoreResult<Vec<GetOptifineObj>> {
         let select = Selector::parse("tr.downloadLine").unwrap();
         let rows: Vec<_> = html.select(&select).collect();
 
-        for (row_idx, row) in rows.iter().enumerate() {
+        for row in rows.iter() {
             let mut col_download = None;
             let mut col_mirror = None;
             let mut col_forge = None;

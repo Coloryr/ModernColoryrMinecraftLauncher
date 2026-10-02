@@ -3,12 +3,14 @@
 // - 状态快照来自 download_get_status（任务 + 线程 + 总体速度），按固定间隔轮询
 // - 任务 / 文件状态事件触发立即刷新（进度本身靠轮询，避免高频重绘）
 // - 每个任务可暂停 / 继续 / 停止
-import { computed, onMounted, onUnmounted, ref } from "vue";
+import { computed, onActivated, onDeactivated, onMounted, onUnmounted, ref } from "vue";
 import WindowFrame from "../../components/ui/WindowFrame.vue";
 import BaseModal from "../../components/ui/BaseModal.vue";
 import BaseButton from "../../components/ui/BaseButton.vue";
-import { api, onCloseBlocked, onDownloadItem, onDownloadTask } from "../../lib/api";
+import { useWindowRefresh } from "../../composables/useWindowRefresh";
+import { api, onDownloadItem, onDownloadTask } from "../../lib/api";
 import { t } from "../../lib/i18n";
+import { multiWindow } from "../windowManager";
 import type { DownloadStatusDto, DownloadTaskDto } from "../../lib/bindings";
 
 const emit = defineEmits<{ (e: "close"): void }>();
@@ -16,13 +18,34 @@ const emit = defineEmits<{ (e: "close"): void }>();
 /** 轮询间隔（毫秒） */
 const REFRESH_MS = 700;
 
+/**
+ * 外壳两用：多窗口模式下是独立窗口（`WindowFrame`）；单窗口模式下是**悬浮弹窗**
+ * （`BaseModal`：遮罩 + 标题 + 右上角 ✕，浮在当前页面之上，不把页面换掉）。
+ * 两者同形（title + close 事件 + 默认插槽），所以下面那整块下载内容两种形态共用一份。
+ */
+const shell = computed(() => (multiWindow.value ? WindowFrame : BaseModal));
+const shellProps = computed(() =>
+  multiWindow.value
+    ? { title: t("features.download") }
+    : {
+        title: t("features.download"),
+        // 线程行是固定列宽的网格（26 + 文件名 + 116 + 124 + 78 + 88，加间距与内边距约 612），
+        // 700 刚好还给文件名留一截；再窄就被压成省略号了（独立窗口最小宽是 670）
+        width: 700,
+        // 锁死高度：线程表每 700ms 都在增删行，不锁的话弹窗会跟着一直长高变矮
+        fixedHeight: "520px",
+        // 贴着自绘标题栏下沿，别盖住窗口按钮
+        belowTitlebar: true,
+        // 点遮罩不关：正在下载时误触一下就把任务面板关了很烦，关它有右上角的 ✕
+        overlayClose: false,
+      },
+);
+
 const status = ref<DownloadStatusDto>({ tasks: [], threads: [], speed: 0, paused: false });
 const loading = ref(true);
 
 /** 停止下载确认弹窗 */
 const confirmStop = ref(false);
-/** 关闭窗口确认弹窗（有下载任务时） */
-const confirmClose = ref(false);
 
 let timer: number | null = null;
 let unsubs: Array<() => void> = [];
@@ -184,20 +207,30 @@ async function confirmStopAll() {
   await stopAll();
 }
 
-/** 点关闭：有下载任务时先确认（无任务直接关） */
+/**
+ * 点关闭：直接收起弹窗 / 关掉窗口，不打断下载
+ *
+ * 单窗口模式下它只是浮在当前页上的一层壳，收起 ≠ 停止下载：任务照跑，
+ * 右下角的入口（DownloadChip）还在。真正会连带停掉下载的是"关下载窗口"和
+ * "退出启动器"——那两种情况由 Rust 侧的关闭保护拦下，再由根组件弹确认框
+ * （见 src-tauri 的 close_guarded 与 App.vue）
+ */
 function requestClose() {
-  if (hasTasks.value) {
-    confirmClose.value = true;
-    return;
-  }
   emit("close");
 }
 
-/** 确认停止所有下载并关闭窗口（停止后任务已清空，Rust 侧不再拦截关闭） */
-async function confirmCloseAll() {
-  confirmClose.value = false;
-  await stopAll();
-  emit("close");
+/** 轮询开关：单窗口模式下窗口会被 KeepAlive 缓存，切走必须停掉，否则 700ms 一直空转 */
+function startTimer() {
+  if (timer === null) {
+    timer = window.setInterval(refresh, REFRESH_MS);
+  }
+}
+
+function stopTimer() {
+  if (timer !== null) {
+    window.clearInterval(timer);
+    timer = null;
+  }
 }
 
 onMounted(async () => {
@@ -205,20 +238,19 @@ onMounted(async () => {
 
   unsubs.push(await onDownloadTask(() => void refresh()));
   unsubs.push(await onDownloadItem(() => void refresh()));
-  // 原生标题栏 X / 关闭命令被 Rust 拒绝时，弹确认框
-  unsubs.push(
-    await onCloseBlocked(() => {
-      confirmClose.value = true;
-    }),
-  );
+  // 关闭被 Rust 拦下（close-blocked）不在这里处理：关下载窗口 / 退出应用
+  // 共用根组件那一个确认框（App.vue）
 
-  timer = window.setInterval(refresh, REFRESH_MS);
+  startTimer();
 });
 
+// 切回本窗口先补一次数据，再继续轮询
+useWindowRefresh(refresh);
+onActivated(startTimer);
+onDeactivated(stopTimer);
+
 onUnmounted(() => {
-  if (timer !== null) {
-    window.clearInterval(timer);
-  }
+  stopTimer();
   unsubs.forEach((fn) => fn());
   unsubs = [];
 });
@@ -226,8 +258,8 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <WindowFrame :title="t('features.download')" @close="requestClose">
-    <div class="download-body">
+  <component :is="shell" v-bind="shellProps" @close="requestClose">
+    <div class="download-body" :class="{ fill: !multiWindow }">
       <!-- 总览：任务总量 / 文件数 / 大小 / 总体速度 + 总体进度条 -->
       <div class="overview">
         <div class="overview-head">
@@ -276,7 +308,7 @@ onUnmounted(() => {
       </div>
 
       <!-- 下载任务：只有一个任务时隐藏（信息与下方线程进度重复） -->
-      <div v-if="tasks.length !== 1" class="section">
+      <div v-if="tasks.length !== 1" class="section tasks">
         <div class="section-head">
           <span class="section-title">{{ t("winDownload.tasks") }}</span>
         </div>
@@ -315,7 +347,7 @@ onUnmounted(() => {
       </div>
 
       <!-- 下载线程：当前文件进度 + 速度 -->
-      <div class="section">
+      <div class="section threads">
         <div class="section-head">
           <span class="section-title">{{ t("winDownload.threads") }}</span>
         </div>
@@ -351,17 +383,7 @@ onUnmounted(() => {
       </div>
     </BaseModal>
 
-    <!-- 关闭窗口确认（有下载任务时） -->
-    <BaseModal v-if="confirmClose" :title="t('winDownload.closeTitle')" :closable="false" @close="confirmClose = false">
-      <p class="delete-tip">{{ t("winDownload.closeConfirm") }}</p>
-      <div class="modal-actions">
-        <BaseButton @click="confirmClose = false">{{ t("add.cancel") }}</BaseButton>
-        <BaseButton variant="danger" @click="confirmCloseAll">
-          {{ t("winDownload.stopAndClose") }}
-        </BaseButton>
-      </div>
-    </BaseModal>
-  </WindowFrame>
+  </component>
 </template>
 
 <style scoped>
@@ -369,6 +391,36 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+/* ---------- 弹窗形态：把锁死的高度分下去 ----------
+   面板高度由 shellProps 的 fixedHeight 定死，这里让两段列表各自滚。
+   不这么切的话，线程行的增删会一路顶到面板上，弹窗高度就跟着抽动 */
+.download-body.fill {
+  flex: 1;
+  min-height: 0;
+}
+
+/* 任务区：最多这么高，多了自己滚（任务数变化不再撑高面板） */
+.download-body.fill .section.tasks {
+  min-height: 0;
+}
+
+.download-body.fill .task-list {
+  max-height: 168px;
+  overflow-y: auto;
+}
+
+/* 线程区：吃掉剩余高度，行数变化只影响它自己的滚动条 */
+.download-body.fill .section.threads {
+  flex: 1;
+  min-height: 0;
+}
+
+.download-body.fill .thread-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 /* ---------- 总览 ---------- */

@@ -11,7 +11,10 @@ use mml_names::{
     i18_items::error_type::{CoreResult, DataNotFoundData, ErrorType},
     names,
 };
-use mml_net::curseforge_api::{self, file_obj::CurseForgeFileDataObj};
+use mml_net::{
+    curseforge_api::{self, file_obj::CurseForgeFileDataObj},
+    input_file::InputFile,
+};
 use mml_sys::path_helper;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
@@ -173,12 +176,17 @@ impl ModPackWorker for CurseForgeWorker {
                     loader_version: Some(self.base.loader_version.clone()),
                     ..Default::default()
                 };
-                Ok(game
-                    .create_instance(self.base.instance_gui.clone())
-                    .await?
-                    .read()
-                    .unwrap()
-                    .uuid)
+                let game = game.create_instance(self.base.instance_gui.clone()).await?;
+
+                // 与 Modrinth 安装器同一套：图标在实例建好后立刻写，写失败只记日志
+                if let Some(icon) = &self.base.icon {
+                    if let Err(err) =
+                        InstanceSettingObj::save_icon(&game, InputFile::Url(icon.clone())).await
+                    {
+                        mml_log::error_type(err);
+                    }
+                }
+                Ok(game.read().unwrap().uuid)
             }
             None => Err(ErrorType::DataNotFound(DataNotFoundData::Info)),
         }

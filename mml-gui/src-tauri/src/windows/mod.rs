@@ -385,19 +385,74 @@ pub fn window_model<T: Send + Sync + 'static>(window: &WebviewWindow) -> Option<
     model.downcast::<T>().ok()
 }
 
-/// 移除窗口模型（窗口销毁时调用）
+/// 按窗口 kind 取模型（单窗口模式下页面命令用）
+///
+/// 单窗口模式只有一个真实主窗口，"添加实例""下载整合包"都只是应用内的页面，
+/// 它们发命令时调用方窗口一律是主窗口 —— 用 [`window_model`] 会解析出主窗口的 uuid、
+/// 拿到 `MainWindowModel`，页面的命令便取不到自己的模型（表现为 `err.modelMissing`）。
+/// 这里由命令显式声明自己属于哪个 kind。
+///
+/// **不创建模型**：模型仍由"该 kind 的窗口被打开"来创建（多窗口模式走 [`create_window`]，
+/// 单窗口模式走前端的 [`window_ensure_model`] 命令），页面关掉时也会被释放，
+/// 不会因为这里取一次就常驻下来。
+pub fn model_for_kind<T: Send + Sync + 'static>(kind: &str) -> Option<Arc<T>> {
+    let uuid = uuid_for_kind(kind)?;
+    WINDOW_MODELS.read().unwrap().get(&uuid)?.clone().downcast::<T>().ok()
+}
+
+/// 确保某个 kind 的模型存在（单窗口模式下页面打开时由前端调用）
+///
+/// 单窗口模式没有真实窗口可挂，模型的生命周期改由前端页面的启停驱动：
+/// 页面挂载时建、切走/关闭时释放（见 [`window_drop_model`]）。不这么做的话，
+/// "添加实例"这类页面的模型要么取不到（`err.modelMissing`），要么只能常驻占内存。
+pub fn ensure_model_for_kind(app: &AppHandle, kind: &str) -> Result<(), String> {
+    let uuid = uuid_for_kind(kind).ok_or_else(|| format!("unknown window kind: {kind}"))?;
+    ensure_window_model(app, &uuid);
+    Ok(())
+}
+
+/// 释放某个 kind 的模型（单窗口模式下页面切走 / 关闭时由前端调用）
+pub fn drop_model_for_kind(kind: &str) -> Result<(), String> {
+    let uuid = uuid_for_kind(kind).ok_or_else(|| format!("unknown window kind: {kind}"))?;
+    // 该 kind 有真实窗口开着时不释放：多窗口模式下页面还在，模型得留着
+    if let Some(label) = WINDOWS_INFO.get(&uuid).map(|e| e.label) {
+        if app_has_window(label) {
+            return Ok(());
+        }
+    }
+    remove_window_model(&uuid);
+    Ok(())
+}
+
+/// 是否存在某个 label 的真实窗口（不经过 AppHandle，查句柄表）
+fn app_has_window(label: &str) -> bool {
+    OPEN_WINDOWS
+        .read()
+        .unwrap()
+        .values()
+        .any(|w| w.label() == label)
+}
+
+/// 移除窗口模型（窗口销毁 / 逻辑页关闭时调用）
 fn remove_window_model(uuid: &Uuid) {
     WINDOW_MODELS.write().unwrap().remove(uuid);
 }
 
 /// 窗口是否拒绝本次关闭
 ///
-/// - 下载窗口：仍有下载任务时拒绝（前端弹确认框，确认后停止下载再关窗）
+/// - 下载窗口 / 主窗口：仍有下载任务时拒绝（前端弹确认框，确认后停止下载再关窗 / 退出）
 /// - 添加实例 / 下载整合包窗口：模型侧关闭保护（查询数据期间）
 /// 其余窗口不保护。
 fn close_guarded(uuid: &Uuid) -> bool {
     // 下载窗口：任务未清空时不让直接关，避免后台下载被静默中断
     if *uuid == DOWNLOAD_WINDOW_UUID {
+        return !mml_downloader::get_tasks().is_empty();
+    }
+
+    // 主窗口：关它就是退出应用。单窗口模式下主窗口是唯一的真实窗口，任何页面的 ✕
+    // 最后都落到这里；多窗口模式下关主窗口同样是退出。两种情况都会连带停掉下载，
+    // 所以与下载窗口同一套处理：先拒绝、由前端问一句，确认后停下载再关
+    if *uuid == MAIN_WINDOW_UUID {
         return !mml_downloader::get_tasks().is_empty();
     }
 
@@ -886,6 +941,56 @@ pub fn window_is_maximized(window: WebviewWindow) -> bool {
 #[tauri::command]
 pub fn window_set_title(window: WebviewWindow, title: String) -> Result<(), String> {
     window.set_title(&title).map_err(|err| err.to_string())
+}
+
+/// 确保某个窗口 kind 的模型存在（单窗口模式下前端页面挂载时调用）
+///
+/// 多窗口模式下模型本来就跟着真实窗口创建，这里重复调用无副作用。
+#[tauri::command]
+pub fn window_ensure_model(app: AppHandle, kind: String) -> Result<(), String> {
+    ensure_model_for_kind(&app, &kind)
+}
+
+/// 释放某个窗口 kind 的模型（单窗口模式下前端页面切走 / 关闭时调用）
+///
+/// 单窗口模式没有"窗口关闭"这个事件可依赖 —— 页面切走时组件进 KeepAlive，
+/// 后端收不到任何通知。不显式释放的话模型会一直挂着（常驻内存），
+/// 而页面上的取消令牌 / 关闭保护 / 重名应答通道都是**就地失效**的：
+/// 下次回到该页会重新 ensure 一份干净的。
+#[tauri::command]
+pub fn window_drop_model(kind: String) -> Result<(), String> {
+    drop_model_for_kind(&kind)
+}
+
+/// 重启启动器（切换窗口模式这类"必须重启才干净生效"的设置后，由前端调用）
+///
+/// 顺序有讲究：
+/// 1. **先落盘**：`mml_core::stop()` 触发停止事件，其中 `config_save::stop` 是同步 join
+///    （返回即代表队列写完）。若放到拉起新进程之后，新进程可能读到旧配置、仍旧按旧模式打开；
+/// 2. **再拉起一份自己**（`current_exe()` 就是当前可执行文件）；
+/// 3. **最后退出本进程**：放在后台线程里延迟一下再退——开发模式下 `tauri dev` 的 vite 会随本进程
+///    退出而关闭，新进程得趁它活着把页面拉起来；release 没有这个依赖，稍等让新窗口先出现即可。
+///
+/// 本命令一定结束当前进程，是否提示由调用方决定。
+#[tauri::command]
+pub fn window_restart_app(app: AppHandle) {
+    mml_core::stop();
+
+    std::thread::spawn(move || {
+        match std::env::current_exe() {
+            Ok(exe) => {
+                if let Err(err) = std::process::Command::new(exe).spawn() {
+                    mml_log::error(format!("restart launcher failed: {err}"));
+                }
+            }
+            Err(err) => mml_log::error(format!("restart launcher: {err}")),
+        }
+
+        // debug（tauri dev）等新进程把页面从 vite 拉起来；release 下没有 dev server 这回事
+        let wait = if cfg!(debug_assertions) { 2000 } else { 150 };
+        std::thread::sleep(std::time::Duration::from_millis(wait));
+        app.exit(0);
+    });
 }
 
 /// 获取 GUI 状态（无文件时返回默认值；前端 wire 为 DTO，TS 命名 camelCase）

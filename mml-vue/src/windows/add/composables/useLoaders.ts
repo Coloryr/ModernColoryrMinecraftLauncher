@@ -175,9 +175,16 @@ export function useLoaders(gameVersion: Ref<string>, isLeaving: () => boolean) {
   });
 
   // 查询数据期间开启窗口关闭保护（后端在 CloseRequested 阶段拒绝关闭）
-  watch([loaderLoading, loaderVerLoading], ([a, b]) => {
-    api.setCloseGuard(a || b).catch(() => {});
-  });
+  //
+  // 只在"这一页正被用户看着、且真的在查"时才拦：这两个查询是后台跑的（单窗口模式下
+  // 页面被 KeepAlive 缓存、切走照样跑完），如果只看 loading 标志，用户切去安装整合包、
+  // 甚至过一会儿回来关窗口，守卫还按着，就会莫名其妙弹"正在获取数据，暂时无法关闭窗口"。
+  // 关窗不该被这种事拦住 —— 真拦下了也只是浪费一次点击。
+  watch(
+    [loaderLoading, loaderVerLoading],
+    () => syncCloseGuard(),
+    { immediate: true },
+  );
 
   // 支持列表查询进度（每查完一种加载器推一步）
   onMounted(() => {
@@ -197,6 +204,18 @@ export function useLoaders(gameVersion: Ref<string>, isLeaving: () => boolean) {
     showQueryProgress.value = false;
   }
 
+  /**
+   * 按当前状态重新判定关闭保护
+   *
+   * 页面被切走时调用方会直接把守卫关掉（见 AddInstanceWindow 的 onDeactivated），
+   * 切回来得按"这会儿还在不在查"再定一次，否则查询在途时窗口又能被随手关掉。
+   */
+  function syncCloseGuard() {
+    api.setCloseGuard((loaderLoading.value || loaderVerLoading.value) && !isLeaving()).catch(
+      () => {},
+    );
+  }
+
   return {
     loaders,
     loader,
@@ -211,5 +230,6 @@ export function useLoaders(gameVersion: Ref<string>, isLeaving: () => boolean) {
     refreshSupportLoaders,
     refreshLoaderVersions,
     dropPending,
+    syncCloseGuard,
   };
 }

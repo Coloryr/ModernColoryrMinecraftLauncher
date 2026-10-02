@@ -649,6 +649,7 @@ pub async fn upgrade_modpack(
         pack_gui.clone(),
         archive_gui.clone(),
         cancel.clone(),
+        None, // 升级不重建实例，图标保持原样
     ));
 
     worker.read_info()?;

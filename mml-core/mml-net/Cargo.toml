@@ -10,11 +10,9 @@ mml-base = { path = "../mml-base" }
 mml-sys = { path = "../mml-sys" }
 mml-config = { path = "../mml-config" }
 tokio = { workspace = true, features = ["rt", "macros"] }
-tokio-util.workspace = true
 reqwest.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-serde_repr.workspace = true
 scraper.workspace = true
 itertools.workspace = true
 rquickjs.workspace = true

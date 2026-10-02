@@ -4,7 +4,7 @@
 // 1. 渲染状态查询 / 事件订阅（渲染状态、下载任务补开下载窗口）/ 列表加载；
 // 2. 三态派生（未渲染 / 渲染中 / 已渲染）与进度；
 // 3. 分类聚合、搜索过滤、详情选中与前后切换；
-// 4. 渲染与皮肤方块操作（带提示）；
+// 4. 渲染与玩家头颅操作（带提示）；
 // 5. 视图偏好记忆（分类 / 搜索词 / 图标尺寸档，存 localStorage）。
 import { computed, onMounted, ref, watch } from "vue";
 import { locale, t, tErr } from "../../../lib/i18n";
@@ -211,7 +211,7 @@ export function useBlockList() {
     return map;
   });
 
-  // 当前分类消失（重渲染换版本 / 删掉最后一个皮肤方块）时回到「全部」
+  // 当前分类消失（重渲染换版本 / 删掉最后一个玩家头颅）时回到「全部」
   watch(cats, (list) => {
     if (cat.value && !list.includes(cat.value)) cat.value = "";
   });
@@ -245,7 +245,7 @@ export function useBlockList() {
     cat.value = "";
   }
 
-  // ---------- 详情（选中 + 前后切换） ----------
+  // ---------- 详情（选中） ----------
   //
   // 只存 id：列表刷新（换语言 / 重渲染）后对象会换新的，用 id 现查才不会指向旧对象。
 
@@ -253,14 +253,6 @@ export function useBlockList() {
 
   const detail = computed(() =>
     detailId.value ? (blocks.value.find((b) => b.id === detailId.value) ?? null) : null,
-  );
-  /** 详情方块在当前过滤结果里的位置（-1 = 不在筛选结果里，此时不提供前后切换） */
-  const detailIndex = computed(() =>
-    detailId.value ? filtered.value.findIndex((b) => b.id === detailId.value) : -1,
-  );
-  const canPrev = computed(() => detailIndex.value > 0);
-  const canNext = computed(
-    () => detailIndex.value >= 0 && detailIndex.value < filtered.value.length - 1,
   );
 
   function openDetail(b: BlockItemDto) {
@@ -271,13 +263,7 @@ export function useBlockList() {
     detailId.value = null;
   }
 
-  /** 详情里切到前 / 后一个（跟随当前过滤结果） */
-  function stepDetail(delta: number) {
-    const next = filtered.value[detailIndex.value + delta];
-    if (next) detailId.value = next.id;
-  }
-
-  // ---------- 皮肤方块 ----------
+  // ---------- 玩家头颅 ----------
 
   /** 按用户名或 UUID 添加（同名覆盖），成功后刷新列表；返回是否成功 */
   async function addSkin(input: string): Promise<boolean> {
@@ -292,7 +278,7 @@ export function useBlockList() {
     }
   }
 
-  /** 删除皮肤方块（名字不含 custom: 前缀） */
+  /** 删除玩家头颅（名字不含 custom: 前缀） */
   async function removeSkin(b: BlockItemDto) {
     try {
       await blockSkinRemove(b.id.slice("custom:".length));
@@ -337,12 +323,8 @@ export function useBlockList() {
     filtered,
     clearFilters,
     detail,
-    detailIndex,
-    canPrev,
-    canNext,
     openDetail,
     closeDetail,
-    stepDetail,
     addSkin,
     removeSkin,
     setIcon,

@@ -9,6 +9,7 @@ import { onMounted, ref } from "vue";
 import WindowFrame from "../../components/ui/WindowFrame.vue";
 import BaseButton from "../../components/ui/BaseButton.vue";
 import BaseModal from "../../components/ui/BaseModal.vue";
+import { useWindowRefresh } from "../../composables/useWindowRefresh";
 import { t, tErr } from "../../lib/i18n";
 import { showToast } from "../../lib/toast";
 import {
@@ -92,17 +93,25 @@ function pickMatch(list: string[], candidates: string[]): string | null {
   return null;
 }
 
-onMounted(async () => {
+/** 拉下载源并加载其选项（首次挂载与切回本窗口都走这里；保留用户已选的源） */
+async function loadSources() {
   if (!inTauri) return;
   try {
-    sources.value = await commands.javaDownload.getTypes();
-    // 默认选第一个源并加载其选项
-    source.value = sources.value[0] ?? null;
+    const list = await commands.javaDownload.getTypes();
+    sources.value = list;
+    if (!source.value || !list.includes(source.value)) {
+      source.value = list[0] ?? null;
+    }
     if (source.value) await loadOptions();
   } catch (e) {
     showToast(tErr(e));
   }
-});
+}
+
+onMounted(loadSources);
+
+// 单窗口模式：窗口被 KeepAlive 缓存，切回不会重新挂载 → 自己补一次
+useWindowRefresh(loadSources);
 
 async function loadOptions() {
   if (!source.value) return;

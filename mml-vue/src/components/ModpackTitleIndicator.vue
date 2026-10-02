@@ -1,0 +1,181 @@
+<script setup lang="ts">
+// 整合包安装进度：标题栏上的动态图标 + 细进度条（点击展开进度弹窗）
+//
+// 为什么放标题栏而不是右下角浮层：它是**跟着当前窗口走的常驻指示**，
+// 放标题栏既不占内容区，又不会像角落浮层那样在窄窗口里压住列表。
+//
+// 挂载位置**两种窗口模式不一样**（由调用方决定）：
+// - 单窗口模式：整个应用只有一个真实窗口，任何页面共用主窗口的顶栏 → 挂在 MainTopbar 上，
+//   这样切到哪一页都在（右下角那种全局浮层能做到，但占地方）；
+// - 多窗口模式：整合包安装可能发生在"下载整合包"那个独立窗口里，
+//   → 挂在 WindowFrame 的 head-right 插槽（各窗口自己那条标题栏）。
+//
+// 自包含状态：自己订阅安装任务，不依赖父组件传参（两处挂载点都能直接放）。
+import { computed, onUnmounted } from "vue";
+import { t } from "../lib/i18n";
+import { useModpackStatus } from "../lib/modpackTasks";
+import { openModpackPopup } from "../windows/windowManager";
+import type { ModPackTaskDto } from "../lib/bindings";
+
+const props = withDefaults(
+  defineProps<{
+    /** 点击图标时是否展开进度弹窗。多窗口模式下整合包窗口自己就是进度页，不需要弹窗 */
+    popup?: boolean;
+  }>(),
+  { popup: true },
+);
+
+const { status, init } = useModpackStatus(false);
+void init().then((unlisten) => onUnmounted(unlisten));
+
+const tasks = computed(() => status.value?.tasks ?? []);
+
+function isRunning(task: ModPackTaskDto): boolean {
+  return !task.done && !task.failed && !task.cancelled;
+}
+
+const running = computed(() => tasks.value.filter(isRunning));
+
+/** 有没有失败的任务（图标据此变成警示色） */
+const hasFailed = computed(() => tasks.value.some((task) => task.failed));
+
+/** 总进度 = 各进行中任务的主进度均值；全结束时 100 */
+const percent = computed(() => {
+  if (!running.value.length) return 100;
+  const sum = running.value.reduce(
+    (acc, task) => acc + (task.total ? (task.now / task.total) * 100 : 0),
+    0,
+  );
+  return sum / running.value.length;
+});
+
+/** 悬停提示：进行中报进度，结束后报结果 */
+const tipText = computed(() => {
+  if (running.value.length) {
+    return `${t("modpack.bar.running", { count: running.value.length })} · ${Math.round(percent.value)}%`;
+  }
+  return t("modpack.bar.finished", { count: tasks.value.length });
+});
+
+/** 图标状态：安装中转、失败警示、全部完成常态 */
+const iconState = computed(() => {
+  if (running.value.length) return "busy";
+  return hasFailed.value ? "failed" : "done";
+});
+
+/** 点一下：展开进度弹窗（关掉弹窗只收起，安装照跑） */
+const clickable = computed(() => props.popup);
+
+function onClick() {
+  if (clickable.value) openModpackPopup();
+}
+</script>
+
+<template>
+  <!-- 没有任务时整块不存在 -->
+  <button
+    v-if="tasks.length"
+    class="mp-indicator"
+    :class="iconState"
+    :disabled="!clickable"
+    v-tip="tipText"
+    :aria-label="tipText"
+    @click="onClick"
+  >
+    <span class="mp-ind-icon">
+      <svg
+        viewBox="0 0 24 24"
+        width="17"
+        height="17"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.9"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M21 8v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8" />
+        <path d="m3 8 2.5-4h13L21 8" />
+        <path d="M12 3v5" />
+        <path d="M9.5 11.5h5" />
+      </svg>
+    </span>
+    <!-- 进度：细条贴在图标下沿，进行中才显示（结束后它是满格，没信息量） -->
+    <span v-if="running.length" class="mp-ind-track">
+      <span class="mp-ind-fill" :style="{ width: percent + '%' }" />
+    </span>
+  </button>
+</template>
+
+<style scoped>
+.mp-indicator {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.mp-indicator:disabled {
+  cursor: default;
+}
+
+.mp-indicator:not(:disabled):hover {
+  background: var(--bg-card);
+  border-color: var(--border);
+}
+
+/* 安装中：图标持续旋转（"动态"的落点）。关掉"界面动画"时由 base.css 的
+   html.no-anim 全局停掉，不需要在这里判断 */
+.mp-indicator.busy .mp-ind-icon {
+  animation: mp-spin 1.6s linear infinite;
+}
+
+.mp-indicator.failed {
+  color: var(--red);
+}
+
+.mp-indicator.done {
+  color: var(--text-dim);
+}
+
+.mp-ind-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@keyframes mp-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 进度条：压在图标下方那条 2px 的细线 */
+.mp-ind-track {
+  position: absolute;
+  left: 5px;
+  right: 5px;
+  bottom: 3px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--bg-hover);
+  overflow: hidden;
+}
+
+.mp-ind-fill {
+  display: block;
+  height: 100%;
+  border-radius: 1px;
+  background: currentColor;
+  transition: width 0.3s ease;
+}
+</style>

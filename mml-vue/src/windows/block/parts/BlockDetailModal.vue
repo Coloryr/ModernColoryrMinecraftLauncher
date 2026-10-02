@@ -1,8 +1,7 @@
 <script setup lang="ts">
-// 方块列表 · 详情弹窗：大图预览 + ID（可复制）/ 分类 + 上一个 / 下一个 + 设为实例图标
+// 方块列表 · 详情弹窗：大图预览 + ID（可复制）/ 分类 + 设为实例图标
 //
-// `BaseModal` 不处理 Esc，且内容被 Teleport 到 body，所以键盘在这里自己接管：
-// Esc 关闭、← / → 在**当前过滤结果**里前后切换（与网格里的方向键同一顺序）。
+// `BaseModal` 不处理 Esc，且内容被 Teleport 到 body，所以键盘在这里自己接管（只有 Esc）。
 import { t } from "../../../lib/i18n";
 import { showToast } from "../../../lib/toast";
 import { copyText } from "../../../lib/clipboard";
@@ -19,9 +18,7 @@ const props = defineProps<{
   category: string;
   /** 搜索词：详情里同样高亮，方便看清为什么命中 */
   keyword: string;
-  canPrev: boolean;
-  canNext: boolean;
-  /** 皮肤方块（可删除） */
+  /** 玩家头颅（可删除） */
   removable: boolean;
   /** 正在设图标（父级控制，禁用按钮防连点） */
   busy?: boolean;
@@ -29,16 +26,12 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (e: "close"): void;
-  (e: "prev"): void;
-  (e: "next"): void;
   (e: "remove"): void;
   (e: "set-icon"): void;
 }>();
 
 useModalKeys((e) => {
   if (e.key === "Escape") emit("close");
-  else if (e.key === "ArrowLeft" && props.canPrev) emit("prev");
-  else if (e.key === "ArrowRight" && props.canNext) emit("next");
 });
 
 async function copyId() {
@@ -69,25 +62,10 @@ async function copyId() {
           <span class="detail-label">{{ t("blocks.detailCat") }}</span>
           <span class="cat-chip">{{ category }}</span>
         </div>
-        <p class="detail-nav-hint">{{ t("blocks.detailNavHint") }}</p>
       </div>
     </div>
 
     <div class="modal-actions">
-      <!-- 前后切换靠左，与右侧的关闭 / 设图标分开 -->
-      <span class="nav-group">
-        <BaseButton size="sm" :disabled="!canPrev" v-tip="t('blocks.prev')" @click="emit('prev')">
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="m15 18-6-6 6-6" />
-          </svg>
-        </BaseButton>
-        <BaseButton size="sm" :disabled="!canNext" v-tip="t('blocks.next')" @click="emit('next')">
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="m9 6 6 6-6 6" />
-          </svg>
-        </BaseButton>
-      </span>
-
       <BaseButton v-if="removable" variant="danger" @click="emit('remove')">
         {{ t("blocks.skinRemove") }}
       </BaseButton>
@@ -121,7 +99,8 @@ async function copyId() {
 .detail-img {
   width: 132px;
   height: 132px;
-  image-rendering: pixelated;
+  /* 同 BlockGrid 的 .block-img：256×256 的渲染图缩到 132px，用平滑插值，
+     不要 pixelated（最近邻会把方块斜边采成锯齿） */
 }
 
 .detail-info {
@@ -172,18 +151,5 @@ async function copyId() {
   color: var(--accent);
   font-size: 12px;
   font-weight: 600;
-}
-
-.detail-nav-hint {
-  margin-top: auto;
-  font-size: 11.5px;
-  color: var(--text-dim);
-  opacity: 0.8;
-}
-
-.nav-group {
-  margin-right: auto;
-  display: flex;
-  gap: 6px;
 }
 </style>

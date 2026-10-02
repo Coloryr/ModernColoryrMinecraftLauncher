@@ -75,9 +75,13 @@ impl AddWindowModel {
     }
 }
 
-/// 取添加实例窗口模型（模型跟随窗口生命周期，见 windows）
-fn model(window: &WebviewWindow) -> Result<Arc<Mutex<AddWindowModel>>, String> {
-    windows::window_model(window).ok_or_else(|| "err.modelMissing".to_string())
+/// 取添加实例窗口模型
+///
+/// 按 kind 取而不是按调用方窗口：单窗口模式下"添加实例"只是主窗口里的一页，
+/// 命令的调用方窗口是主窗口，按窗口取会拿到主窗口模型（表现为 `err.modelMissing`）。
+/// 模型由页面挂载时的 `window_ensure_model` 建立、切走时 `window_drop_model` 释放。
+fn model(_window: &WebviewWindow) -> Result<Arc<Mutex<AddWindowModel>>, String> {
+    windows::model_for_kind("add").ok_or_else(|| "err.modelMissing".to_string())
 }
 
 /// 前端加载器 ID -> LoaderType（ID 列表见 [`add_get_loaders`]）

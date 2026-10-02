@@ -10,10 +10,11 @@ use std::sync::{
 
 use tauri::{AppHandle, Emitter};
 
-use crate::dtos::{BlockItemDto, BlockStatusDto};
+use crate::dtos::{BlockItemDto, BlockStatusDto, IconSourceDto};
 use crate::{image_manager, listens};
+use mml_base::hash_helper;
 use mml_game::gui_hook::IProgressGui;
-use mml_names::{Lang, i18_items::error_type::ErrorType};
+use mml_names::{Lang, i18_items::error_type::ErrorType, names};
 
 use super::main::{core_instance, emit_instance_change};
 
@@ -99,7 +100,11 @@ pub fn set_gui_handel(app: &AppHandle) {
     mml_tex_draw::set_gui_handel(Some(gui));
 }
 
-/// 获取方块与物品列表（按请求语言翻译，cat + name 排序）
+/// 获取方块与物品列表（按请求语言翻译；顺序＝游戏创造栏顺序）
+///
+/// 顺序完全由 crate 给的合并序列决定（`mml_tex_draw::ordered_entries`）：
+/// **不要**在这里按分类名 / 方块名排序——显示名是翻译后的文字，按它排会随界面语言变化，
+/// 而且与游戏内顺序无关（这正是改之前的问题）。
 #[tauri::command]
 pub fn block_list(lang: String) -> Vec<BlockItemDto> {
     let lang = if lang == "en_us" {
@@ -117,39 +122,36 @@ pub fn block_list(lang: String) -> Vec<BlockItemDto> {
         mml_tex_draw::get_lang(lang, &format!("itemGroup.{cat}")).unwrap_or(cat)
     };
 
-    let block_ids: std::collections::HashSet<String> =
-        mml_tex_draw::blocks().into_iter().collect();
-
-    let mut list: Vec<BlockItemDto> = block_ids
-        .iter()
-        .map(|id| {
+    mml_tex_draw::ordered_entries()
+        .into_iter()
+        .map(|(kind, id)| {
+            // 方块与物品只差：分类来源、名称语言键、图标目录与版本号
+            let (cat, name_key, dir, ver) = match kind {
+                mml_tex_draw::EntryKind::Block => (
+                    mml_tex_draw::block_cat(&id),
+                    mml_tex_draw::block_name_key(&id),
+                    "block",
+                    &version,
+                ),
+                mml_tex_draw::EntryKind::Item => (
+                    mml_tex_draw::item_cat(&id),
+                    mml_tex_draw::item_name_key(&id),
+                    "item",
+                    &item_version,
+                ),
+            };
             // 显示名：语言键翻译，miss 回退 id 尾段（如 minecraft:stone → stone）
-            let name = mml_tex_draw::block_name_key(id)
+            let name = name_key
                 .and_then(|key| mml_tex_draw::get_lang(lang, &key))
-                .unwrap_or_else(|| id.rsplit(':').next().unwrap_or(id).to_string());
+                .unwrap_or_else(|| id.rsplit(':').next().unwrap_or(&id).to_string());
             BlockItemDto {
                 name,
-                cat: cat_name(mml_tex_draw::block_cat(id).unwrap_or_default()),
-                image: format!("{base}/block/{id}?v={version}"),
-                id: id.clone(),
+                cat: cat_name(cat.unwrap_or_default()),
+                image: format!("{base}/{dir}/{id}?v={ver}"),
+                id,
             }
         })
-        // 物品：跳过已作为方块出现的 id（如 minecraft:stone 方块/物品同 id），避免重复条目
-        .chain(mml_tex_draw::items().into_iter().filter(|id| !block_ids.contains(id))
-            .map(|id| {
-                let name = mml_tex_draw::item_name_key(&id)
-                    .and_then(|key| mml_tex_draw::get_lang(lang, &key))
-                    .unwrap_or_else(|| id.rsplit(':').next().unwrap_or(&id).to_string());
-                BlockItemDto {
-                    name,
-                    cat: cat_name(mml_tex_draw::item_cat(&id).unwrap_or_default()),
-                    image: format!("{base}/item/{id}?v={item_version}"),
-                    id,
-                }
-            }))
-        .collect();
-    list.sort_by(|a, b| a.cat.cmp(&b.cat).then_with(|| a.name.cmp(&b.name)));
-    list
+        .collect()
 }
 
 /// 获取方块贴图渲染状态
@@ -226,6 +228,182 @@ pub async fn block_set_icon(app: AppHandle, uuid: String, id: String) -> Result<
     tokio::fs::copy(&file, &dest)
         .await
         .map_err(|err| err.to_string())?;
+
+    image_manager::clear_instance_image(&id);
+    emit_instance_change(&app, "edit");
+    Ok(true)
+}
+
+/// 图标边长的默认值（px）
+///
+/// 图标框是圆角方块，显示最大 84px；256 已足够清晰，需要更锐利（如给整合包做缩略图）
+/// 时由前端在 [`ICON_SIZE_MIN`] ~ [`ICON_SIZE_MAX`] 之间另选。
+const ICON_SIZE_DEFAULT: u32 = 256;
+/// 图标边长下限（再小就糊了）
+const ICON_SIZE_MIN: u32 = 16;
+/// 图标边长上限（太大只是浪费磁盘与解码时间）
+const ICON_SIZE_MAX: u32 = 1024;
+
+/// 裁剪预览的最长边（px）
+///
+/// 预览只用于选范围，**不参与最终裁剪**：选区坐标会按「原图 / 预览」比例换算回原图，
+/// 裁的仍是原图，清晰度不受影响。降采样是为了不把十几 MB 的原图 PNG 塞进 IPC 与 `<img>`
+/// —— 那正是"打开弹窗就卡死"的原因。
+const PREVIEW_MAX: u32 = 1024;
+
+/// 解码前的像素数上限（防解压炸弹）
+///
+/// 文件头里声明一个 5 万见方的尺寸是几 KB 的事，真去解码却要 10GB 内存。
+/// 64MP 已高于常见手机照片（12~50MP），只挡病态输入。
+const MAX_SOURCE_PIXELS: u64 = 64 * 1024 * 1024;
+
+/// 把前端给的图标边长夹到合法范围（0 或越界都回落到默认值）
+fn clamp_icon_size(size: u32) -> u32 {
+    if size == 0 {
+        ICON_SIZE_DEFAULT
+    } else {
+        size.clamp(ICON_SIZE_MIN, ICON_SIZE_MAX)
+    }
+}
+
+/// 读图 → 生成预览 data URL + 原图尺寸（**阻塞**，调用方负责放到阻塞线程上跑）
+///
+/// 只把降采样后的预览编成 PNG：原图直接编 PNG 又慢又大（12MP 照片要几秒、出来几十 MB），
+/// 这一步以前跑在主线程上，界面会整片冻住。
+fn read_icon_preview(path: &str) -> Result<IconSourceDto, String> {
+    let bytes = std::fs::read(path).map_err(|_| "err.fileNotFound".to_string())?;
+    let format = image::guess_format(&bytes).map_err(|_| "err.imageInvalid".to_string())?;
+
+    // 先只读文件头拿尺寸：解压炸弹不必真解码就能挡掉（`into_dimensions` 不读像素）
+    let (width, height) = image::ImageReader::with_format(std::io::Cursor::new(&bytes), format)
+        .into_dimensions()
+        .map_err(|_| "err.imageInvalid".to_string())?;
+    if u64::from(width) * u64::from(height) > MAX_SOURCE_PIXELS {
+        return Err("err.imageInvalid".to_string());
+    }
+
+    let image = image::load_from_memory_with_format(&bytes, format)
+        .map_err(|_| "err.imageInvalid".to_string())?;
+    // thumbnail 先整数抽样再插值，比 resize 快得多；等比缩放到 PREVIEW_MAX 以内
+    let preview = if width > PREVIEW_MAX || height > PREVIEW_MAX {
+        image.thumbnail(PREVIEW_MAX, PREVIEW_MAX)
+    } else {
+        image
+    };
+
+    let mut out = std::io::Cursor::new(Vec::new());
+    preview
+        .write_to(&mut out, image::ImageFormat::Png)
+        .map_err(|err| err.to_string())?;
+    Ok(IconSourceDto {
+        src: format!(
+            "data:image/png;base64,{}",
+            hash_helper::gen_base64_bytes(out.get_ref())
+        ),
+        width,
+        height,
+    })
+}
+
+/// 读本地图片的**预览图**与原图尺寸（供"修改图标"的裁剪界面用）
+///
+/// 与资源图标同一套编码（`data:image/png;base64,`），前端可直接放进 `<img src>`。
+/// 只认 `image` crate 已启用特性的格式（png / jpeg / webp），解不出来的按无效图片处理。
+///
+/// 必须是 `async` 命令 + 阻塞线程池：同步命令会直接在**主线程**上解码 / 编码，
+/// 大图会让界面完全没响应（这个坑踩过一次）。
+#[tauri::command]
+pub async fn block_read_icon_source(path: String) -> Result<IconSourceDto, String> {
+    tauri::async_runtime::spawn_blocking(move || read_icon_preview(&path))
+        .await
+        .map_err(|err| err.to_string())?
+}
+
+/// 按选区裁出图标 PNG（**阻塞**，调用方负责放到阻塞线程上跑）
+///
+/// - `w == 0 || h == 0`：不裁，整图等比缩放到 `size` 见方，四周补透明（整图都保留）；
+/// - 否则按 `(x, y, w, h)`（**原图像素坐标**）裁剪后再缩放到 `size` 见方。
+fn render_icon_png(
+    path: &str,
+    x: u32,
+    y: u32,
+    w: u32,
+    h: u32,
+    size: u32,
+) -> Result<Vec<u8>, String> {
+    let bytes = std::fs::read(path).map_err(|_| "err.fileNotFound".to_string())?;
+    let image = image::load_from_memory(&bytes).map_err(|_| "err.imageInvalid".to_string())?;
+    let (img_w, img_h) = (image.width(), image.height());
+
+    let icon = if w == 0 || h == 0 {
+        // 不裁（"使用原图"）：等比缩放进方框，四周补透明，整图都保留
+        let scaled = image.resize(size, size, image::imageops::FilterType::Lanczos3);
+        let mut canvas = image::RgbaImage::new(size, size);
+        let ox = (size - scaled.width()) / 2;
+        let oy = (size - scaled.height()) / 2;
+        image::imageops::overlay(&mut canvas, &scaled.to_rgba8(), ox as i64, oy as i64);
+        image::DynamicImage::ImageRgba8(canvas)
+    } else {
+        // 选区按原图边界夹紧（前端已夹过，这里兜底，避免越界 panic）
+        let cx = x.min(img_w.saturating_sub(1));
+        let cy = y.min(img_h.saturating_sub(1));
+        let cw = w.min(img_w - cx);
+        let ch = h.min(img_h - cy);
+        // 选区：等比缩放后居中裁掉多余的边 → 正好是正方形图标
+        image
+            .crop_imm(cx, cy, cw, ch)
+            .resize_to_fill(size, size, image::imageops::FilterType::Lanczos3)
+    };
+
+    let mut out = std::io::Cursor::new(Vec::new());
+    icon.write_to(&mut out, image::ImageFormat::Png)
+        .map_err(|err| err.to_string())?;
+    Ok(out.into_inner())
+}
+
+/// 按选区把本地图片裁成实例图标：写实例目录下的 `icon.png`，并把实例配置的 `Icon` 指过去
+///
+/// - `size`：图标边长（px），0 或越界都回落到 [`ICON_SIZE_DEFAULT`]（夹在
+///   [`ICON_SIZE_MIN`] ~ [`ICON_SIZE_MAX`]）；
+/// - `w == 0 || h == 0`：不裁，整图等比缩放到 `size` 见方；
+/// - 否则按 `(x, y, w, h)`（**原图像素坐标**）裁剪后再缩放到 `size` 见方；
+/// - 解码 / 裁剪 / 缩放（Lanczos3）都放阻塞线程池，不占 async 运行时；
+/// - 写盘前先把终图编码好，不持锁 `await`（std 锁跨 await 破坏 `Send`）；
+/// - `icon.png` 就是 [`InstanceSettingObj::get_icon_file`] 的默认名，
+///   这里同时把配置里的 `Icon` 显式指过去，实例目录里一眼能看出图标文件是谁。
+#[tauri::command]
+pub async fn block_set_icon_area(
+    app: AppHandle,
+    uuid: String,
+    path: String,
+    x: u32,
+    y: u32,
+    w: u32,
+    h: u32,
+    size: u32,
+) -> Result<bool, String> {
+    let size = clamp_icon_size(size);
+    let png =
+        tauri::async_runtime::spawn_blocking(move || render_icon_png(&path, x, y, w, h, size))
+            .await
+            .map_err(|err| err.to_string())??;
+
+    let Some((id, instance)) = core_instance(&uuid) else {
+        return Err("err.gameNotFound".to_string());
+    };
+    let dest = instance.read().unwrap().get_icon_file();
+    tokio::fs::write(&dest, &png)
+        .await
+        .map_err(|err| err.to_string())?;
+
+    // 实例配置里把 Icon 指到 icon.png（与 get_icon_file 的默认值一致，显式写下来更清楚）
+    {
+        let mut inst = instance.write().unwrap();
+        if inst.icon.as_deref() != Some(names::ICON_FILE) {
+            inst.icon = Some(names::ICON_FILE.to_string());
+            inst.save();
+        }
+    }
 
     image_manager::clear_instance_image(&id);
     emit_instance_change(&app, "edit");

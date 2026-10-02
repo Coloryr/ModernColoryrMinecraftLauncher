@@ -7,7 +7,7 @@
 // 3. 背景图的加载 / 清除 / 缩放，以及滑杆草稿（拖动过程中不逐次落盘）；
 // 4. resetGroup(id)：分组级"恢复默认"。
 import { onUnmounted, ref, watch } from "vue";
-import { locale, setLocale, t } from "../../../lib/i18n";
+import { locale, setLocale, t, tErr } from "../../../lib/i18n";
 import {
   animations,
   setAnimations,
@@ -35,6 +35,7 @@ import {
   type Theme,
 } from "../../../lib/theme";
 import { fontFamily, setFontFamily } from "../../../lib/fonts";
+import { showToast } from "../../../lib/toast";
 import { isTauri, multiWindow, setMultiWindow } from "../../windowManager";
 import { commands } from "../../../lib/bindings";
 
@@ -78,9 +79,21 @@ export function useSettingsUi() {
 
   // ---------- 各项改动（都经各自 lib 落盘） ----------
 
-  function onModeChange(v: string) {
+  /** 窗口模式：切换后要重启进程才干净 —— 已开着的窗口是旧模式下建的，就地切换它们留在旧模式里 */
+  async function onModeChange(v: string) {
+    const multi = v === "Multi";
     windowMode.value = v;
-    setMultiWindow(v === "Multi");
+    if (multi === multiWindow.value) return;
+    // 先等配置真写下去：下面重启会立刻刷盘退出，写请求还在路上就白改了
+    await setMultiWindow(multi);
+    // 浏览器预览没有进程可重启
+    if (!inTauri) return;
+    showToast(t("winSettings.restarting"));
+    try {
+      await commands.windows.restartApp();
+    } catch (e) {
+      showToast(tErr(e));
+    }
   }
 
   function onLangChange(v: string) {
@@ -192,8 +205,8 @@ export function useSettingsUi() {
         setCustomAccent(DEFAULT_CUSTOM_ACCENT);
         return true;
       case "window":
-        setMultiWindow(true);
-        windowMode.value = "Multi";
+        // 与开关走同一条路：模式真变了就一起重启，否则会出现"设置显示多窗口、实际还是单窗口"
+        await onModeChange("Multi");
         return true;
       case "mainWindow":
         setSidebarSide(DEFAULT_SIDE);

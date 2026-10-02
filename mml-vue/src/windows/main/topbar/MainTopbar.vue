@@ -4,6 +4,8 @@
 import { t } from "../../../lib/i18n";
 import AccountSelector from "../../../components/AccountSelector.vue";
 import WindowControls from "../../../components/ui/WindowControls.vue";
+import ModpackTitleIndicator from "../../../components/ModpackTitleIndicator.vue";
+import { multiWindow } from "../../windowManager";
 import { onTitleBarPointerDown, titleBarStyle } from "../../../lib/titlebar";
 import type { AccountStoreDto } from "../../../lib/bindings";
 import type { FeatureId } from "../types";
@@ -73,6 +75,11 @@ const emit = defineEmits<{
         </svg>
       </button>
 
+      <!-- 整合包安装进度指示：单窗口模式下挂在这里（任何页面都在同一个主窗口里，
+           挂在主窗口顶栏切页不会消失）。多窗口模式交给各窗口自己的标题栏，
+           见 WindowFrame 里的同名组件 -->
+      <ModpackTitleIndicator v-if="!multiWindow" />
+
       <AccountSelector
         :account="currentAccount"
         :accounts="accounts"
@@ -86,10 +93,11 @@ const emit = defineEmits<{
 </template>
 
 <style scoped>
-/* 高度即标题栏高度：顶栏是 .main-window 的第一个 flex 子节点，改高度会让
-   顶栏以下的所有内容（含侧栏）整体下移 */
+/* 高度即标题栏高度：与子窗口框架（WindowFrame 的 .frame-head）共用 --titlebar-h，
+   两边必须一致，否则单窗口模式切换页面时标题栏会跳高（曾经这里写死 64px、那边 60px）
+   顶栏是 .main-window 的第一个 flex 子节点，改高度会让顶栏以下的所有内容（含侧栏）整体下移 */
 .topbar {
-  height: 64px;
+  height: var(--titlebar-h);
   flex-shrink: 0;
   display: flex;
   align-items: center;

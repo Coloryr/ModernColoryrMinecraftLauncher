@@ -12,6 +12,7 @@
 //! | [`gpu`] | GPU 渲染支持 |
 //! | [`item`] | 物品图标渲染（平面） |
 //! | [`model`] | 游戏模型解析 |
+//! | [`order`] | 创造分类顺序与列表排序键 |
 
 use std::{
     collections::HashMap,
@@ -47,6 +48,7 @@ pub mod block;
 pub mod gpu;
 pub mod item;
 pub mod model;
+pub mod order;
 
 /// 渲染防重入标志：load_blocks 可能被并发触发（界面按钮连点、界面与内核各起一轮），
 /// 不挡住的话会各自下发一次客户端 jar 下载任务，同一文件下两遍
@@ -498,7 +500,10 @@ async fn download_langs(obj: &GameArgObj, cancel: &CancellationToken) -> CoreRes
     Ok(())
 }
 
-/// 获取方块数据
+/// 获取方块数据（**集合语义，顺序无意义**）
+///
+/// 底层是 `HashMap::keys()`，每次调用顺序都可能不同。要能直接展示的顺序用
+/// [`ordered_blocks`]（按游戏创造栏分类顺序）。
 pub fn blocks() -> Vec<String> {
     BLOCKS
         .read()
@@ -569,7 +574,9 @@ pub(crate) fn get_item_dir() -> Option<PathBuf> {
     ITEM_DIR.get().cloned()
 }
 
-/// 获取物品数据
+/// 获取物品数据（**集合语义，顺序无意义**）
+///
+/// 同 [`blocks`]：要能直接展示的顺序用 [`ordered_items`]。
 pub fn items() -> Vec<String> {
     ITEMS
         .read()
@@ -583,6 +590,43 @@ pub fn items() -> Vec<String> {
 /// 锁定物品数据表（内部写入用）
 pub(crate) fn items_write() -> std::sync::RwLockWriteGuard<'static, ItemsObj> {
     ITEMS.write().unwrap()
+}
+
+/// 列表条目的来源（决定图标走 `block/` 还是 `item/`）
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EntryKind {
+    /// 方块（等轴测 3D 图标）
+    Block,
+    /// 物品（平面精灵图标）
+    Item,
+}
+
+/// 方块 + 物品合并后的**展示顺序**（列表窗口直接用这个）
+///
+/// - 全局按 [`order::order_key`] 排序，所以同一分类只出现一次、分类先后＝游戏创造栏标签页顺序；
+///   （方块与物品分开排再拼接是**错的**：只有物品的分类会被挤到最后）
+/// - 同一个 id 既是方块又是物品时（`minecraft:stone` 之类）只保留**方块**那条，避免重复条目；
+/// - 分类值来自 `block_cat` / `item_cat`，显示名由调用方按当前语言翻译（本函数不碰语言）。
+pub fn ordered_entries() -> Vec<(EntryKind, String)> {
+    let mut list: Vec<(String, EntryKind, String)> = Vec::new();
+
+    let all_blocks = blocks();
+    let block_ids: std::collections::HashSet<&str> =
+        all_blocks.iter().map(|id| id.as_str()).collect();
+    for id in &all_blocks {
+        let cat = block_cat(id).unwrap_or_default();
+        list.push((cat, EntryKind::Block, id.clone()));
+    }
+    for id in items() {
+        if block_ids.contains(id.as_str()) {
+            continue;
+        }
+        let cat = item_cat(&id).unwrap_or_default();
+        list.push((cat, EntryKind::Item, id));
+    }
+
+    list.sort_by(|a, b| order::order_key(&a.0, &a.2).cmp(&order::order_key(&b.0, &b.2)));
+    list.into_iter().map(|(_, kind, id)| (kind, id)).collect()
 }
 
 /// 锁定物品数据表（内部读取用）

@@ -1,11 +1,12 @@
 <script setup lang="ts">
 // 游戏统计窗口：汇总卡片 + 每实例启动次数 / 时长表
 // 数据来自 Rust 侧 stats_get_data（内核 game_count::CountObj 快照），运行中每 5 秒刷新
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref } from "vue";
 import WindowFrame from "../../components/ui/WindowFrame.vue";
 import InstanceIcon from "../../components/InstanceIcon.vue";
 import { api } from "../../lib/api";
 import { t } from "../../lib/i18n";
+import { useWindowRefresh } from "../../composables/useWindowRefresh";
 import type { StatsDataDto } from "../../lib/bindings";
 
 const data = ref<StatsDataDto | null>(null);
@@ -20,14 +21,31 @@ async function load() {
   }
 }
 
+function startTimer() {
+  if (timer === null) {
+    timer = window.setInterval(load, 5000);
+  }
+}
+
+function stopTimer() {
+  if (timer !== null) {
+    window.clearInterval(timer);
+    timer = null;
+  }
+}
+
 onMounted(async () => {
   await load();
-  timer = window.setInterval(load, 5000);
+  startTimer();
 });
 
-onBeforeUnmount(() => {
-  if (timer !== null) window.clearInterval(timer);
-});
+// 单窗口模式：组件被 KeepAlive 缓存，切走不卸载。切走停掉轮询（别在后台空转 IPC），
+// 切回先补一次数据再继续（useWindowRefresh 就是"切回时补一次"）
+useWindowRefresh(load);
+onActivated(startTimer);
+onDeactivated(stopTimer);
+
+onBeforeUnmount(stopTimer);
 
 /** 总游戏时长（小时） */
 const totalHours = computed(() =>

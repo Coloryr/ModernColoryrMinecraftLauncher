@@ -52,24 +52,40 @@ function tagColor(tag: string) {
       </button>
     </div>
 
-    <div class="news-list">
-      <div
-        v-for="item in items"
-        :key="item.id"
-        class="news-item"
-        @click="emit('open', item.url)"
-      >
-        <img :src="item.image" class="banner" alt="" />
-        <div class="news-meta">
-          <span class="news-tag" :style="tagColor(item.tag)">{{ item.tag }}</span>
-          <span class="news-date" v-tip="item.date">{{ item.date }}</span>
+    <div class="news-list" :class="{ 'is-loading-dim': loading && items.length > 0 }">
+      <!-- 首次加载：骨架卡片（与整合包列表同一套加载观感，形状照着新闻卡） -->
+      <template v-if="loading && items.length === 0">
+        <div v-for="n in 6" :key="n" class="news-item sk-card">
+          <div class="sk sk-banner"></div>
+          <div class="sk-meta">
+            <div class="sk sk-tag"></div>
+            <div class="sk sk-date"></div>
+          </div>
+          <div class="sk-title">
+            <div class="sk sk-line w90"></div>
+            <div class="sk sk-line w60"></div>
+          </div>
         </div>
-        <h3 class="news-title">{{ item.title }}</h3>
-      </div>
-      <div v-if="items.length === 0" class="empty-tip">
-        <span class="empty-icon">📰</span>
-        <span>{{ loading ? t("news.loading") : t("news.empty") }}</span>
-      </div>
+      </template>
+      <template v-else>
+        <div
+          v-for="item in items"
+          :key="item.id"
+          class="news-item"
+          @click="emit('open', item.url)"
+        >
+          <img :src="item.image" class="banner" alt="" />
+          <div class="news-meta">
+            <span class="news-tag" :style="tagColor(item.tag)">{{ item.tag }}</span>
+            <span class="news-date" v-tip="item.date">{{ item.date }}</span>
+          </div>
+          <h3 class="news-title">{{ item.title }}</h3>
+        </div>
+        <div v-if="items.length === 0" class="empty-tip">
+          <span class="empty-icon">📰</span>
+          <span>{{ t("news.empty") }}</span>
+        </div>
+      </template>
     </div>
 
     <!-- 分页（页码从 1 开始） -->
@@ -168,6 +184,53 @@ function tagColor(tag: string) {
   border-color: var(--accent);
   transform: translateY(-2px);
   box-shadow: var(--shadow-md);
+}
+
+/* ---------- 首次加载的骨架卡片 ----------
+   形状照着新闻卡：封面 110 高 + 标签/日期一行 + 两行标题。
+   占位块本身用全局 .sk（styles/skeleton.css），这里只拼形状 */
+.sk-card {
+  cursor: default;
+}
+
+.sk-card:hover {
+  /* 骨架不该有悬停反馈 */
+  border-color: var(--border);
+  transform: none;
+  box-shadow: none;
+}
+
+.sk-banner {
+  width: 100%;
+  height: 110px;
+  /* 跟着卡片的圆角裁，自己不用圆角 */
+  border-radius: 0;
+}
+
+.sk-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px 0;
+}
+
+.sk-tag {
+  width: 56px;
+  height: 15px;
+  border-radius: 20px;
+}
+
+.sk-date {
+  width: 72px;
+  height: 11px;
+}
+
+.sk-title {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
 }
 
 .banner {

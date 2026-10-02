@@ -8,7 +8,7 @@ use mml_names::{
     i18_items::error_type::{CoreResult, DataNotFoundData, ErrorType},
     names,
 };
-use mml_net::urls;
+use mml_net::{input_file::InputFile, urls};
 use mml_sys::path_helper;
 use uuid::Uuid;
 
@@ -137,12 +137,18 @@ impl ModPackWorker for ModrinthPackWorker {
                     loader_version: Some(self.base.loader_version.clone()),
                     ..Default::default()
                 };
-                Ok(game
-                    .create_instance(self.base.instance_gui.clone())
-                    .await?
-                    .read()
-                    .unwrap()
-                    .uuid)
+                let game = game.create_instance(self.base.instance_gui.clone()).await?;
+
+                if let Some(icon) = &self.base.icon {
+                    // 图标是装饰性的：写失败只记日志，不让整个安装失败
+                    // （与 add_game 里整合包安装的图标处理一致）
+                    if let Err(err) =
+                        InstanceSettingObj::save_icon(&game, InputFile::Url(icon.clone())).await
+                    {
+                        mml_log::error_type(err);
+                    }
+                }
+                Ok(game.read().unwrap().uuid)
             }
             None => Err(ErrorType::DataNotFound(DataNotFoundData::Info)),
         }

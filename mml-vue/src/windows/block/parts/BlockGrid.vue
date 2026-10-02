@@ -19,7 +19,7 @@ const props = defineProps<{
   size: BlockSize;
   /** 详情里正在看的方块（网格里高亮） */
   activeId: string | null;
-  /** 皮肤方块分类 ID：这类格子带悬停删除角标 */
+  /** 玩家头颅分类 ID：这类格子带悬停删除角标 */
   skinCat: string;
   /** 是否处于筛选态（决定空状态要不要给「清除筛选」） */
   filtered: boolean;
@@ -235,12 +235,11 @@ function onCellKey(e: KeyboardEvent, i: number) {
           :class="{ on: b.id === activeId }"
           :data-idx="startIndex + k"
           :tabindex="startIndex + k === tabbableIndex ? 0 : -1"
-          v-tip="b.id"
           @click="emit('open', b)"
           @focus="focusIndex = startIndex + k"
           @keydown="onCellKey($event, startIndex + k)"
         >
-          <!-- 皮肤方块：悬停角标删除 -->
+          <!-- 玩家头颅：悬停角标删除 -->
           <span
             v-if="b.cat === skinCat"
             class="block-del"
@@ -327,7 +326,7 @@ function onCellKey(e: KeyboardEvent, i: number) {
   background: var(--accent-soft);
 }
 
-/* 皮肤方块的删除角标（悬停或键盘聚焦时显示） */
+/* 玩家头颅的删除角标（悬停或键盘聚焦时显示） */
 .block-del {
   position: absolute;
   top: 4px;
@@ -358,8 +357,9 @@ function onCellKey(e: KeyboardEvent, i: number) {
   width: var(--cell-img);
   height: var(--cell-img);
   border-radius: 8px;
-  /* 贴图是小 PNG，不用平滑缩放的模糊感 */
-  image-rendering: pixelated;
+  /* 不要 image-rendering: pixelated：这里的图标是内核渲染好的 256×256 PNG
+     （mml-tex-draw 的 BLOCK_SIZE），显示时被缩到 40~88px，最近邻采样会把斜边采成
+     锯齿、细纹理采丢。pixelated 只适合像素画贴图（如玩家头颅），缩放渲染图要用平滑插值 */
 }
 
 .block-name {

@@ -6,6 +6,7 @@ import { t } from "../../lib/i18n";
 import { isTauri, multiWindow } from "../../windows/windowManager";
 import { commands } from "../../lib/bindings";
 import WindowControls from "./WindowControls.vue";
+import ModpackTitleIndicator from "../ModpackTitleIndicator.vue";
 import { onTitleBarPointerDown, titleBarStyle } from "../../lib/titlebar";
 
 const props = defineProps<{
@@ -13,12 +14,21 @@ const props = defineProps<{
   /** 内容区不整页滚动（overflow hidden + flex 列），滚动交给视图内部的容器，
    *  详情表格这类"工具栏固定、表格自己滚"的布局用 */
   bodyFill?: boolean;
+  /** 窗口内子页面的返回键文案（如"返回"）；不传则用单窗口模式那枚「返回上一页」。
+   *  按钮本身只画箭头，这段文案作为悬停提示（v-tip）与无障碍名称存在；
+   *  两种用法共用同一个 `.back-btn`，外观完全一致 */
+  back?: string;
+  /** 是否在标题栏显示整合包安装进度指示（多窗口模式下默认显示）。
+   *  整合包窗口整页就是进度，给它关掉，免得同一件事在标题栏里再出现一次 */
+  hideModpackIndicator?: boolean;
 }>();
 
-const emit = defineEmits<{ (e: "close"): void }>();
+const emit = defineEmits<{ (e: "close"): void; (e: "back"): void }>();
 
-/** 单窗口模式（仅浏览器存在）才显示返回按钮 */
-const showBack = computed(() => !isTauri() && !multiWindow.value);
+/** 单窗口模式（浏览器 / Tauri 都一样）才显示返回按钮：
+ *  这时功能页都在同一个窗口里切换，"返回"＝回上一层（见 windowManager 的返回栈）；
+ *  多窗口模式下每个功能是独立窗口，关掉它自然露出下面那个，不需要返回键 */
+const showBack = computed(() => !multiWindow.value);
 
 // 原生窗口标题（任务栏 / Alt+Tab）跟随自绘标题栏文案，语言切换时同步更新
 watch(
@@ -37,16 +47,39 @@ watch(
       <!-- macos 样式：红黄绿在左端 -->
       <WindowControls v-if="titleBarStyle === 'macos'" :style="titleBarStyle" />
 
-      <button v-if="showBack" class="back-btn" @click="emit('close')">
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <!-- 窗口内子页面的返回键（如整合包详情）：与下面的单窗口返回按钮共用一套外观。
+           按钮只画箭头，文案改由悬停提示给出（见 .back-btn 的说明） -->
+      <button
+        v-if="props.back"
+        class="back-btn"
+        v-tip="props.back"
+        :aria-label="props.back"
+        @click="emit('back')"
+      >
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
           <path d="m15 18-6-6 6-6" />
         </svg>
-        {{ t("winCommon.back") }}
+      </button>
+      <!-- 单窗口模式才显示返回按钮；子页面自带返回键时让位 -->
+      <button
+        v-else-if="showBack"
+        class="back-btn"
+        v-tip="t('winCommon.back')"
+        :aria-label="t('winCommon.back')"
+        @click="emit('close')"
+      >
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+          <path d="m15 18-6-6 6-6" />
+        </svg>
       </button>
       <h1>{{ title }}</h1>
       <span class="spacer"></span>
       <!-- 标题栏右侧扩展区（如查询进度指示） -->
       <slot name="head-right" />
+      <!-- 整合包安装进度指示：多窗口模式下挂在这里（各窗口自己那条标题栏）。
+           单窗口模式不挂 —— 那时各功能页共用主窗口，挂在主窗口顶栏一份就够，
+           见 MainTopbar 里的同名组件 -->
+      <ModpackTitleIndicator v-if="multiWindow && !hideModpackIndicator" />
 
       <!-- windows 样式：最小化 / 最大化 / 关闭在右端 -->
       <WindowControls v-if="titleBarStyle === 'windows'" :style="titleBarStyle" />
@@ -82,20 +115,23 @@ watch(
   padding-right: 10px;
 }
 
+/* 幽灵图标按钮：只有箭头，无边框、无底色，悬停才浮出一层淡底并提亮箭头——
+   与右侧窗口按钮"平时透明、悬停才出底"同一套逻辑。
+   文案（"返回"）不再画在按钮上，改由模板里的 v-tip 悬停提示给出。
+   两个用法（单窗口的返回 / 窗口内子页面的返回）共用这一套外观 */
 .back-btn {
   display: flex;
   align-items: center;
-  gap: 6px;
-  height: 28px;
-  padding: 0 14px;
-  border-radius: 9px;
-  border: 1px solid var(--border);
-  background: var(--bg-card);
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
   color: var(--text-dim);
-  font-size: 13px;
-  font-family: inherit;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background 0.15s, color 0.15s;
 }
 
 .back-btn:hover {

@@ -3,8 +3,8 @@
 //
 // 实例下拉的空白项 =「运行中的进程」：聚合当前所有运行中实例的实时日志
 // （LaunchState / GameExit 事件驱动列表刷新）。
-// 目标实例来源（按优先级）：openWindow 带入的 URL uuid 参数（新建窗口）→
-// `log-focus` 事件（窗口已存在时再次打开，壳层推送）→ 空白（运行中的进程）。
+// 目标实例来源（按优先级）：openWindow 带入的目标参数（单窗口模式走 windowParams，
+// 多窗口走 URL uuid）→ `log-focus` 事件（窗口已存在时再次打开，壳层推送）→ 空白（运行中的进程）。
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import WindowFrame from "../../components/ui/WindowFrame.vue";
@@ -12,7 +12,8 @@ import SegmentedTabs from "../../components/ui/SegmentedTabs.vue";
 import MonacoLogView from "../../components/MonacoLogView.vue";
 import { t } from "../../lib/i18n";
 import { api, onGameExit, onGameLog, onLaunchState, onLogFocus } from "../../lib/api";
-import { uuidFromUrl } from "../windowManager";
+import { targetUuid, windowParams } from "../windowManager";
+import { useWindowRefresh } from "../../composables/useWindowRefresh";
 import type { InstanceInfoDto, LogLine } from "../../lib/bindings";
 
 defineEmits<{ (e: "close"): void }>();
@@ -145,16 +146,32 @@ function pushLine(uuid: string, line: LogLine) {
   segmentLogs.value.set(uuid, seg);
 }
 
-onMounted(async () => {
+/** 定位到 openWindow 带入的目标实例（没有 / 不存在就保持空白＝运行中的进程） */
+function applyTarget() {
+  const uuid = targetUuid();
+  if (uuid && instances.value.some((i) => i.uuid === uuid)) {
+    currentUuid.value = uuid;
+  }
+}
+
+/** 重新拉实例列表并定位目标实例（首次挂载、切回本窗口都用） */
+async function syncInstances() {
   try {
     instances.value = await api.getInstances();
-    // 默认空白（运行中的进程）；带实例参数打开时定位到该实例
-    const urlUuid = uuidFromUrl();
-    currentUuid.value =
-      (urlUuid && instances.value.find((i) => i.uuid === urlUuid)?.uuid) || "";
+    applyTarget();
   } catch (e) {
     console.error("[LogWindow] 初始化失败", e);
   }
+}
+
+// 单窗口模式：窗口被 KeepAlive 缓存，切回不会重新挂载，自己补一次列表与定位
+useWindowRefresh(syncInstances);
+
+// 已经停在本窗口时又被打开（openWindow 只更新参数、不换组件）：跟着参数换实例
+watch(() => windowParams.value.uuid, applyTarget);
+
+onMounted(async () => {
+  await syncInstances();
 
   unlistenGameLog = await onGameLog((e) => {
     // 选定实例：只收该实例；空白：收所有运行中实例

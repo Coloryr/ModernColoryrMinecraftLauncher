@@ -6,7 +6,6 @@
 use std::sync::OnceLock;
 
 use mml_names::i18_items::error_type::ErrorType;
-use mml_sys::Os;
 use serde::{Deserialize, Serialize};
 
 use crate::{urls::ADOPTIUM_URL};

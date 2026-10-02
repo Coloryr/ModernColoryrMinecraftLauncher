@@ -315,6 +315,7 @@ pub async fn add_game_folder<P: AsRef<Path>>(
 /// - `pack_gui`: 安装进度回调
 /// - `archive_gui`: 解压进度回调
 /// - `cancel`: 取消令牌
+/// - `icon`: 整合包图标 URL（创建实例时写进实例；`None` 表示没有）
 ///
 /// # 返回值
 ///
@@ -329,6 +330,7 @@ async fn modpack<P: AsRef<Path>>(
     pack_gui: AddModPackGui,
     archive_gui: BaseArchiveGui,
     cancel: CancellationToken,
+    icon: Option<String>,
 ) -> CoreResult<Uuid> {
     if !file.as_ref().exists() || file.as_ref().is_dir() {
         return Err(ErrorType::PathNotExists(PathNotExistsData {
@@ -349,6 +351,7 @@ async fn modpack<P: AsRef<Path>>(
             pack_gui.clone(),
             archive_gui,
             cancel.clone(),
+            icon,
         )))
     } else {
         Box::new(ModrinthPackWorker::new(BaseModPackWorker::new(
@@ -357,6 +360,7 @@ async fn modpack<P: AsRef<Path>>(
             pack_gui.clone(),
             archive_gui,
             cancel.clone(),
+            icon,
         )))
     };
 
@@ -1385,6 +1389,7 @@ pub async fn install_archive_from_file<P: AsRef<Path>>(
                 pack_gui,
                 archive_gui,
                 cancel,
+                None, // 本地压缩包没有图标 URL
             )
             .await
         }
@@ -1399,6 +1404,7 @@ pub async fn install_archive_from_file<P: AsRef<Path>>(
                 pack_gui,
                 archive_gui,
                 cancel,
+                None, // 本地压缩包没有图标 URL
             )
             .await
         }
@@ -1533,7 +1539,7 @@ pub async fn install_archive_from_url(
 ///
 /// - `data`: Modrinth 版本信息
 /// - `group`: 实例分组
-/// - `icon`: 图标地址（下载失败仅记录错误）
+/// - `icon`: 整合包图标 URL（交给安装器，创建实例时写入；下载失败只记日志，不影响安装）
 /// - `instance_gui`: 实例创建界面回调
 /// - `pack_gui`: 安装进度回调
 /// - `archive_gui`: 解压进度回调
@@ -1560,16 +1566,19 @@ pub async fn install_modrinth(
         return Err(ErrorType::DownloadFileFail);
     }
 
-    let uuid = install_archive_from_file(
+    // 直接走 modpack，不走 install_archive_from_file：图标要一路塞给 worker，
+    // 让它在创建实例时一起写（那个 7 臂分发器吃不下这个参数，其中 5 个臂也用不到）
+    let uuid = modpack(
         file,
+        ModPackType::Modrinth,
         None,
         group,
         None,
         instance_gui,
         pack_gui,
         archive_gui,
-        PackType::Modrinth,
         cancel,
+        icon,
     )
     .await?;
 
@@ -1578,12 +1587,6 @@ pub async fn install_modrinth(
         write.pid = Some(data.project_id.clone());
         write.fid = Some(data.id.clone());
         write.save();
-
-        if let Some(icon) = icon {
-            if let Err(err) = write.set_icon(InputFile::Url(icon)).await {
-                mml_log::error_type(err);
-            }
-        }
     }
 
     Ok(uuid)
@@ -1595,7 +1598,7 @@ pub async fn install_modrinth(
 ///
 /// - `data`: CurseForge 文件信息（安装成功后回填项目与文件 ID）
 /// - `group`: 实例分组
-/// - `icon`: 图标地址（下载失败仅记录错误）
+/// - `icon`: 整合包图标 URL（交给安装器，创建实例时写入；下载失败只记日志，不影响安装）
 /// - `instance_gui`: 实例创建界面回调
 /// - `pack_gui`: 安装进度回调
 /// - `archive_gui`: 解压进度回调
@@ -1622,16 +1625,18 @@ pub async fn install_curseforge(
         return Err(ErrorType::DownloadFileFail);
     }
 
-    let uuid = install_archive_from_file(
+    // 直接走 modpack，不走 install_archive_from_file：理由同 install_modrinth
+    let uuid = modpack(
         file,
+        ModPackType::CurseForge,
         None,
         group,
         None,
         instance_gui,
         pack_gui,
         archive_gui,
-        PackType::CurseForge,
         cancel,
+        icon,
     )
     .await?;
 
@@ -1640,12 +1645,6 @@ pub async fn install_curseforge(
         write.pid = Some(data.mod_id.to_string());
         write.fid = Some(data.id.to_string());
         write.save();
-
-        if let Some(icon) = icon {
-            if let Err(err) = write.set_icon(InputFile::Url(icon)).await {
-                mml_log::error_type(err);
-            }
-        }
     }
 
     Ok(uuid)

@@ -41,11 +41,8 @@ const {
   filtered,
   clearFilters,
   detail,
-  canPrev,
-  canNext,
   openDetail,
   closeDetail,
-  stepDetail,
   removeSkin,
   setIcon,
 } = props.settings;
@@ -79,7 +76,7 @@ async function onIconPick(inst: InstanceInfoDto) {
   }
 }
 
-/** 详情弹窗里删除皮肤方块（详情会随 removeSkin 一起关掉） */
+/** 详情弹窗里删除玩家头颅（详情会随 removeSkin 一起关掉） */
 async function onDetailRemove() {
   const b = detail.value;
   if (b) await removeSkin(b);
@@ -157,13 +154,9 @@ async function onDetailRemove() {
       :block="detail"
       :category="catLabel(detail.cat)"
       :keyword="keyword"
-      :can-prev="canPrev"
-      :can-next="canNext"
       :removable="detail.cat === SKIN_CAT"
       :busy="iconBusy"
       @close="closeDetail"
-      @prev="stepDetail(-1)"
-      @next="stepDetail(1)"
       @remove="onDetailRemove"
       @set-icon="openIconPick"
     />

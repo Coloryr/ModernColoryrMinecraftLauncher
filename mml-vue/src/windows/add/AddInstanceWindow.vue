@@ -4,7 +4,7 @@
 //
 // 拆分：数据源与联动在 composables/（版本列表、加载器、文件树），
 // 局部 UI 在 parts/（模式切换、分组框、三个弹窗、浮动进度），四个模式表单在 modes/。
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, nextTick, onActivated, onDeactivated, onMounted, onUnmounted, ref, watch } from "vue";
 import WindowFrame from "../../components/ui/WindowFrame.vue";
 import BaseButton from "../../components/ui/BaseButton.vue";
 import ModeTabs from "./parts/ModeTabs.vue";
@@ -95,6 +95,7 @@ const {
   refreshSupportLoaders,
   refreshLoaderVersions,
   dropPending,
+  syncCloseGuard,
 } = useLoaders(newVersion, isLeaving);
 
 // ================= 分组 =================
@@ -493,8 +494,46 @@ function onKeyDown(e: KeyboardEvent) {
 
 const { track } = useUnlisteners();
 
-onMounted(async () => {
+/** 键盘监听：单窗口模式下窗口被 KeepAlive 缓存，切走时 onUnmounted 不会跑 ——
+ *  必须自己在停用 / 启用之间装卸，否则在别的窗口按 Esc 会被当成"关闭本窗口" */
+function bindKeys() {
   document.addEventListener("keydown", onKeyDown);
+}
+
+function unbindKeys() {
+  document.removeEventListener("keydown", onKeyDown);
+}
+
+// 单窗口模式：切走卸掉键盘监听，切回再装上（onActivated 首次挂载也会跑，重复 add 同一函数无副作用）。
+//
+// 这里刻意**不**动 `leaving`：切走只是"藏起来"，在途的重名确认 / 进度事件还得让用户能答上
+// （回到本窗口时弹窗还在），置 leaving 会把它们吞掉、把安装流程卡住。
+//
+// 但**关闭保护必须松手**：那两个查询在后台继续跑，而守卫是按窗口 uuid 挂在后端上的。
+// 用户在别的页面（比如下载整合包）关窗口时，不该因为这里还有个查询在跑就被拦下、
+// 弹一句"正在获取数据"。回到本页时下面的 watch 会按当时状态重新判定。
+//
+// 模型（取消令牌 / 关闭保护 / 重名应答通道）也跟着页面的启停走：
+// 挂载时建、切走时释放，别让它常驻占内存（见 api.ensureWindowModel / dropWindowModel）。
+// **创建任务在途时不释放** —— 取消令牌就在模型里，丢了就没法取消，回到本页也会拿到一份空模型。
+onActivated(() => {
+  bindKeys();
+  // 切回来时把模型补回来（切走时释放掉了），再按当时状态恢复守卫
+  void api.ensureWindowModel("add").catch(() => {});
+  syncCloseGuard();
+});
+onDeactivated(() => {
+  unbindKeys();
+  void api.setCloseGuard(false).catch(() => {});
+  if (creating.value || packProgress.value) return;
+  void api.dropWindowModel("add").catch(() => {});
+});
+
+onMounted(async () => {
+  bindKeys();
+  // 先把本页的模型准备好：创建 / 取消 / 关闭保护 / 重名确认都依赖它。
+  // 多窗口模式下真实窗口由后端建窗时已经建好，这里是幂等的
+  await api.ensureWindowModel("add").catch(() => {});
   // 关闭被拒绝（查询数据期间后端拒关）：弹提示说明原因
   track(onCloseBlocked(() => showToast(t("add.closeBlocked"))));
   // 实例重名确认（后端创建流程暂停等待答复）
@@ -527,7 +566,7 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
-  document.removeEventListener("keydown", onKeyDown);
+  unbindKeys();
   // 直接点标题栏关窗（不走 finishAdding）时也要停止轮询、丢弃在途结果
   leaving = true;
 });

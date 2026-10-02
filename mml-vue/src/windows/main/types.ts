@@ -33,5 +33,6 @@ export type InstMenuAction =
   | "openFolder"
   | "viewLog"
   | "editConfig"
+  | "changeIcon"
   | "rename"
   | "delete";
