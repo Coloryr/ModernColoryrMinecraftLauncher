@@ -8,11 +8,14 @@ import { invoke } from "@tauri-apps/api/core";
 export const commands = {
   windows: {
     closeWindow: (kind: string) => invoke<void>("window_close_window", { kind }),
+    dropModel: (kind: string) => invoke<void>("window_drop_model", { kind }),
+    ensureModel: (kind: string) => invoke<void>("window_ensure_model", { kind }),
     getGuiConfig: () => invoke<GuiConfigDto>("window_get_gui_config"),
     getWindowSizes: () => invoke<WindowSizeDto[]>("window_get_window_sizes"),
     isMaximized: () => invoke<boolean>("window_is_maximized"),
     minimize: () => invoke<void>("window_minimize"),
     openWindow: (kind: string, instance: string | null) => invoke<void>("window_open_window", { kind, instance }),
+    restartApp: () => invoke<void>("window_restart_app"),
     saveGuiConfig: (config: GuiConfigDto) => invoke<void>("window_save_gui_config", { config }),
     setTitle: (title: string) => invoke<void>("window_set_title", { title }),
     startDragging: () => invoke<void>("window_start_dragging"),
@@ -73,9 +76,11 @@ export const commands = {
   },
   block: {
     list: (lang: string) => invoke<BlockItemDto[]>("block_list", { lang }),
+    readIconSource: (path: string) => invoke<IconSourceDto>("block_read_icon_source", { path }),
     renderCancel: () => invoke<boolean>("block_render_cancel"),
     renderStart: (force: boolean) => invoke<boolean>("block_render_start", { force }),
     setIcon: (uuid: string, id: string) => invoke<boolean>("block_set_icon", { uuid, id }),
+    setIconArea: (uuid: string, path: string, x: number, y: number, w: number, h: number, size: number) => invoke<boolean>("block_set_icon_area", { uuid, path, x, y, w, h, size }),
     skinAdd: (input: string) => invoke<string>("block_skin_add", { input }),
     skinRemove: (name: string) => invoke<void>("block_skin_remove", { name }),
     status: () => invoke<BlockStatusDto>("block_status"),
@@ -706,6 +711,12 @@ export type BlockItemDto = {
   name: string,
   cat: string,
   image: string,
+};
+
+export type IconSourceDto = {
+  src: string,
+  width: number,
+  height: number,
 };
 
 export type BlockStatusDto = {

@@ -3,7 +3,7 @@
 // 当前实例从 gui_config 的选中实例恢复（与主窗口共享同一份配置）
 // 渲染进行中后端拒绝关闭（close-blocked 事件），这里弹二次确认：中断渲染再关
 //
-// 工具条（搜索 / 图标尺寸档 / 添加皮肤 / 重新渲染）放在标题栏的 head-right 槽里：
+// 工具条（搜索 / 图标尺寸档 / 添加玩家头颅 / 重新渲染）放在标题栏的 head-right 槽里：
 // 所以状态在这一层创建，面板与工具条共用同一份（BlockPanel 只接收它做排版）。
 import { onMounted, onUnmounted, ref } from "vue";
 import WindowFrame from "../../components/ui/WindowFrame.vue";
@@ -12,6 +12,7 @@ import BlockToolbar from "./parts/BlockToolbar.vue";
 import SkinAddModal from "./parts/SkinAddModal.vue";
 import BaseButton from "../../components/ui/BaseButton.vue";
 import BaseModal from "../../components/ui/BaseModal.vue";
+import { useWindowRefresh } from "../../composables/useWindowRefresh";
 import { t } from "../../lib/i18n";
 import { api, blockRenderCancel, onCloseBlocked } from "../../lib/api";
 import { loadGuiConfig } from "../../lib/guiConfig";
@@ -30,7 +31,7 @@ let unlisten: (() => void) | null = null;
 /** 关闭被渲染拦下时的二次确认框 */
 const confirmClose = ref(false);
 
-// ---------- 添加皮肤方块（入口在标题栏工具条上，所以弹窗跟着放这一层） ----------
+// ---------- 添加玩家头颅（入口在标题栏工具条上，所以弹窗跟着放这一层） ----------
 
 const skinOpen = ref(false);
 const skinBusy = ref(false);
@@ -47,6 +48,14 @@ async function onSkinSubmit(input: string) {
 }
 
 onMounted(async () => {
+  await syncInstance();
+  unlisten = await onCloseBlocked(() => {
+    confirmClose.value = true;
+  });
+});
+
+/** 当前实例（首次挂载与切回本窗口都走这里：实例可能已被主窗口切走） */
+async function syncInstance() {
   try {
     const [cfg, instances] = await Promise.all([loadGuiConfig(), api.getInstances()]);
     const uuid = cfg?.mainWindow.selectedInstance;
@@ -54,10 +63,10 @@ onMounted(async () => {
   } catch {
     currentInstance.value = null;
   }
-  unlisten = await onCloseBlocked(() => {
-    confirmClose.value = true;
-  });
-});
+}
+
+// 单窗口模式：窗口被 KeepAlive 缓存，切回不会重新挂载 → 自己补一次
+useWindowRefresh(syncInstance);
 
 onUnmounted(() => unlisten?.());
 
@@ -91,7 +100,7 @@ async function confirmCloseRender() {
 
     <BlockPanel :settings="list" :current-instance="currentInstance" />
 
-    <!-- 添加皮肤方块（用户名或 UUID） -->
+    <!-- 添加玩家头颅（用户名或 UUID） -->
     <SkinAddModal v-if="skinOpen" :busy="skinBusy" @submit="onSkinSubmit" @close="skinOpen = false" />
 
     <!-- 渲染中关窗：确认后中断渲染再关 -->

@@ -57,8 +57,8 @@ pub use gui_config_dto::{ClientConfigDto, GuiConfigDto, LoginLockItemDto, MainWi
 pub use motd_dto::{MotdDto, MotdSegmentDto};
 pub use window_dto::WindowSizeDto;
 pub use main_dto::{
-    BlockItemDto, BlockStatusDto, ErrorEvent, ExitEvent, InstanceChangeEvent, InstancePatch,
-    LogEvent, NewsItem, StateEvent,
+    BlockItemDto, BlockStatusDto, ErrorEvent, ExitEvent, IconSourceDto, InstanceChangeEvent,
+    InstancePatch, LogEvent, NewsItem, StateEvent,
 };
 pub use resource_dto::{
     DataPackItemDto, ModItemDto, PackItemDto, SaveItemDto, ScreenshotItemDto, ServerItemDto,

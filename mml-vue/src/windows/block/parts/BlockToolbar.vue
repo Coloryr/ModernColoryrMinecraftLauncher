@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 方块列表 · 工具条：搜索（可清空）+ 图标尺寸档 + 添加皮肤 / 重新渲染 + 计数
+// 方块列表 · 工具条：搜索（可清空）+ 图标尺寸档 + 添加玩家头颅 / 重新渲染 + 计数
 import { computed } from "vue";
 import { t } from "../../../lib/i18n";
 import BaseButton from "../../../components/ui/BaseButton.vue";

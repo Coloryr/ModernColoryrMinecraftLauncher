@@ -4,11 +4,11 @@
 // - windows 样式：右端三个小图标按钮（最小化 / 最大化 / 关闭），参照网易云音乐
 // - macos 样式：左端三个圆点（关闭 / 最小化 / 最大化），符号只在悬停整组时显示
 //
-// 自包含：命令与 closeWindow() 都在内部调用，宿主只需传 style。
+// 自包含：命令与 quitWindow() 都在内部调用，宿主只需传 style。
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { t } from "../../lib/i18n";
-import { closeWindow, isTauri } from "../../windows/windowManager";
+import { isTauri, quitWindow } from "../../windows/windowManager";
 import {
   isWindowMaximized,
   minimizeWindow,
@@ -47,7 +47,7 @@ const buttons = computed(() => {
   const close = {
     id: "close",
     label: () => t("titlebar.close"),
-    run: closeWindow,
+    run: quitWindow,
   };
   return props.style === "macos" ? [close, minimize, maximize] : [minimize, maximize, close];
 });

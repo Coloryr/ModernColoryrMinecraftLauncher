@@ -1,8 +1,8 @@
 <script setup lang="ts">
 // 实例导出窗口：把游戏实例打包为通用标准整合包（CurseForge zip / Modrinth .mrpack）
 //
-// 目标实例来源（按优先级）：openWindow 带入的 URL uuid 参数（新建窗口）→
-// `export-focus` 事件（窗口已存在时再次打开，壳层推送）→ 实例下拉。
+// 目标实例来源（按优先级）：openWindow 带入的目标参数（单窗口模式走 windowParams，
+// 多窗口走 URL uuid）→ `export-focus` 事件（窗口已存在时再次打开，壳层推送）→ 实例下拉。
 // 打包在 Rust 侧后台任务执行（export_run），进度经 export-progress 事件上报。
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import type { UnlistenFn } from "@tauri-apps/api/event";
@@ -12,7 +12,8 @@ import BaseSwitch from "../../components/ui/BaseSwitch.vue";
 import { t, tErr } from "../../lib/i18n";
 import { showToast } from "../../lib/toast";
 import { api, onExportFocus, onExportProgress } from "../../lib/api";
-import { isTauri, uuidFromUrl } from "../windowManager";
+import { isTauri, targetUuid, windowParams } from "../windowManager";
+import { useWindowRefresh } from "../../composables/useWindowRefresh";
 import type { ExportInfoDto, ExportProgressDto, InstanceInfoDto } from "../../lib/bindings";
 
 defineEmits<{ (e: "close"): void }>();
@@ -121,16 +122,32 @@ async function startExport() {
 let unlistenProgress: UnlistenFn | null = null;
 let unlistenFocus: UnlistenFn | null = null;
 
-onMounted(async () => {
+/** 定位到 openWindow 带入的目标实例（没有 / 不存在就保持下拉默认值） */
+function applyTarget() {
+  const uuid = targetUuid();
+  if (uuid && instances.value.some((i) => i.uuid === uuid)) {
+    currentUuid.value = uuid;
+  }
+}
+
+/** 重新拉实例列表并定位目标实例（首次挂载、切回本窗口都用） */
+async function syncInstances() {
   try {
     instances.value = await api.getInstances();
-    // 带实例参数打开时定位到该实例
-    const urlUuid = uuidFromUrl();
-    currentUuid.value =
-      (urlUuid && instances.value.find((i) => i.uuid === urlUuid)?.uuid) || "";
+    applyTarget();
   } catch (e) {
     console.error("[ExportWindow] 初始化失败", e);
   }
+}
+
+// 单窗口模式：窗口被 KeepAlive 缓存，切回不会重新挂载，自己补一次列表与定位
+useWindowRefresh(syncInstances);
+
+// 已经停在本窗口时又被打开（openWindow 只更新参数、不换组件）：跟着参数换实例
+watch(() => windowParams.value.uuid, applyTarget);
+
+onMounted(async () => {
+  await syncInstances();
 
   unlistenProgress = await onExportProgress((p) => {
     progress.value = p;

@@ -15,7 +15,7 @@ import { t, tErr } from "../../lib/i18n";
 import { showToast } from "../../lib/toast";
 import { loadGuiConfig } from "../../lib/guiConfig";
 import { useResourceStatus } from "../../lib/resourceTasks";
-import type { FileListItemDto, ProjectItemDto, ResourceSaveDto } from "../../lib/bindings";
+import type { FileListItemDto, ProjectItemDto, ResourceSaveDto, ResourceTaskDto } from "../../lib/bindings";
 
 defineEmits<{ (e: "close"): void }>();
 
@@ -328,34 +328,73 @@ function formatDate(date: string): string {
   return date ? date.slice(0, 10) : "";
 }
 
-/** 下载状态变化时同步列表角标：项目级「已下载」按 pid，文件级按 pid+fid */
-watch(resourceStatus, (status) => {
-  if (!status) return;
-  const doneFiles = new Set(
-    status.tasks.filter((task) => task.done).map((task) => `${task.pid}|${task.fid}`),
-  );
-  const doneProjects = new Set(status.tasks.filter((task) => task.done).map((task) => task.pid));
-  const runningFiles = new Set(
-    status.tasks.filter((task) => !task.done && !task.failed).map((task) => `${task.pid}|${task.fid}`),
-  );
-  const runningProjects = new Set(
-    status.tasks.filter((task) => !task.done && !task.failed).map((task) => task.pid),
-  );
+/**
+ * 本次会话里见过的「下载完成」标记（只增不减）
+ *
+ * 任务表的终态条目由后端延时移除，但文件确实已经装进实例了——
+ * 「已下载」角标不能跟着任务一起消失。只往集合里加，不做任何复位。
+ */
+const donePids = ref(new Set<string>());
+const doneFileKeys = ref(new Set<string>());
 
-  for (const item of items.value) {
-    if (doneProjects.has(item.source.pid)) item.download = true;
-    if (runningProjects.has(item.source.pid)) item.downloadNow = true;
-  }
-  for (const file of [...files.value, ...allFiles.value]) {
-    const key = `${file.source.pid}|${file.source.fid}`;
-    if (doneFiles.has(key)) {
-      file.isDownload = true;
-      file.downloadNow = false;
-    } else if (runningFiles.has(key)) {
-      file.downloadNow = true;
+watch(
+  resourceStatus,
+  (status) => {
+    const tasks = status?.tasks ?? [];
+    if (!tasks.some((task) => task.done)) return;
+    const pids = new Set(donePids.value);
+    const files = new Set(doneFileKeys.value);
+    for (const task of tasks) {
+      if (!task.done) continue;
+      pids.add(task.pid);
+      files.add(`${task.pid}|${task.fid}`);
     }
-  }
+    // 只在真新增时换引用：进度事件很频繁，无谓的赋值会带着模板一起重渲染
+    if (pids.size !== donePids.value.size) donePids.value = pids;
+    if (files.size !== doneFileKeys.value.size) doneFileKeys.value = files;
+  },
+  { immediate: true },
+);
+
+/**
+ * 进行中任务派生的角标状态
+ *
+ * 由 `resourceStatus` 直接**派生**，不再往列表项里写回 `download` / `downloadNow`：
+ * 写回是单向的（只置 true 不复位），任务失败或结束后角标会一直挂着。
+ * 「已下载」取实例侧来源（`item.download` / `file.isDownload`）与上面那张累计表的「或」。
+ */
+const taskState = computed(() => {
+  const running = (task: ResourceTaskDto) => !task.done && !task.failed;
+  const tasks = resourceStatus.value?.tasks ?? [];
+  return {
+    runningProjects: new Set(tasks.filter(running).map((task) => task.pid)),
+    runningFiles: new Set(tasks.filter(running).map((task) => `${task.pid}|${task.fid}`)),
+  };
 });
+
+function fileKey(file: FileListItemDto): string {
+  return `${file.source.pid}|${file.source.fid}`;
+}
+
+/** 项目级「已下载」（实例侧已装 + 本次会话装完） */
+function projectInstalled(item: ProjectItemDto): boolean {
+  return item.download || donePids.value.has(item.source.pid);
+}
+
+/** 项目级「下载中」：只看任务表——DTO 里那份是取列表时的快照，用它角标会粘住 */
+function projectRunning(item: ProjectItemDto): boolean {
+  return taskState.value.runningProjects.has(item.source.pid);
+}
+
+/** 文件级「已下载」 */
+function fileInstalled(file: FileListItemDto): boolean {
+  return file.isDownload || doneFileKeys.value.has(fileKey(file));
+}
+
+/** 文件级「下载中」 */
+function fileRunning(file: FileListItemDto): boolean {
+  return taskState.value.runningFiles.has(fileKey(file));
+}
 
 function formatSize(size: number): string {
   if (!size) return t("modpack.unknownSize");
@@ -408,34 +447,35 @@ onMounted(async () => {
       <!-- 资源类型 + 下载源 -->
       <div class="res-top">
         <div class="res-filters">
-          <SegmentedTabs v-model="type" :options="TYPES" />
+          <SegmentedTabs v-model="type" :options="TYPES" :disabled="searching" />
           <!-- 存档只有 CurseForge 有：锁定源，不显示页签 -->
-          <SegmentedTabs v-if="!isSaveType" v-model="source" :options="sourceOptions" />
+          <SegmentedTabs v-if="!isSaveType" v-model="source" :options="sourceOptions" :disabled="searching" />
           <div v-else class="res-source-lock">
             <span class="res-source-name">{{ t("modpack.curseforge") }}</span>
             <span class="res-source-hint">{{ t("addResource.saveSourceLimit") }}</span>
           </div>
         </div>
 
-        <!-- 过滤条件 + 搜索 -->
+        <!-- 过滤条件 + 搜索：加载期间整条锁死，避免半途改条件与在途请求打架 -->
         <div class="res-filters">
-          <select v-model="version" class="field-select sel-filter" @change="submitSearch">
+          <select v-model="version" class="field-select sel-filter" :disabled="searching" @change="submitSearch">
             <option value="">{{ t("modpack.allVersions") }}</option>
             <option v-for="v in versions" :key="v" :value="v">{{ v }}</option>
           </select>
-          <select v-model="sort" class="field-select sel-filter" @change="submitSearch">
+          <select v-model="sort" class="field-select sel-filter" :disabled="searching" @change="submitSearch">
             <option v-for="s in sorts" :key="s" :value="s">{{ t(`modpack.sort.${s}`) }}</option>
           </select>
           <select
             v-if="categories.length"
             v-model="category"
             class="field-select sel-filter"
+            :disabled="searching"
             @change="submitSearch"
           >
             <option value="">{{ t("modpack.allCategories") }}</option>
             <option v-for="c in categories" :key="c.value" :value="c.value">{{ c.label }}</option>
           </select>
-          <select v-if="type === 'mod'" v-model="loader" class="field-select sel-filter" @change="submitSearch">
+          <select v-if="type === 'mod'" v-model="loader" class="field-select sel-filter" :disabled="searching" @change="submitSearch">
             <option v-for="l in LOADERS" :key="l" :value="l">
               {{ l === "normal" ? t("addResource.loader.normal") : l }}
             </option>
@@ -448,9 +488,11 @@ onMounted(async () => {
             class="field-input search-input"
             :placeholder="t('addResource.searchHint')"
             spellcheck="false"
+            :disabled="searching"
             @keydown.enter="submitSearch"
           />
           <button class="search-btn" :disabled="searching" @click="submitSearch">
+            <span v-if="searching" class="btn-spinner"></span>
             {{ t("modpack.search") }}
           </button>
         </div>
@@ -463,13 +505,27 @@ onMounted(async () => {
         <span v-else class="res-no-instance">{{ t("addResource.noInstance") }}</span>
       </div>
 
-      <!-- 结果列表 -->
-      <div class="res-list">
-        <div v-if="error" class="empty-tip">{{ error }}</div>
-        <div v-else-if="!searching && items.length === 0" class="empty-tip">{{ t("addResource.empty") }}</div>
+      <!-- 列表加载指示：翻页 / 换筛选只在结果区上方走一条细进度，不再全窗口遮罩 -->
+      <div class="list-bar" :class="{ on: searching }" aria-hidden="true"><span /></div>
+
+      <!-- 结果列表（加载状态内联在本区，旧内容保留并压暗） -->
+      <div class="res-list" :class="{ 'is-loading-dim': searching }">
+        <!-- 首次加载（还没有内容）：骨架行 -->
+        <template v-if="searching && items.length === 0">
+          <div v-for="n in 6" :key="n" class="sk-row">
+            <div class="sk sk-icon"></div>
+            <div class="sk-lines">
+              <div class="sk sk-line w60"></div>
+              <div class="sk sk-line w90"></div>
+              <div class="sk sk-line w40"></div>
+            </div>
+          </div>
+        </template>
+        <div v-else-if="error" class="empty-tip">{{ error }}</div>
+        <div v-else-if="items.length === 0" class="empty-tip">{{ t("addResource.empty") }}</div>
         <template v-else>
           <div v-for="item in items" :key="item.source.pid" class="pack-item">
-            <div class="pack-main" v-tip="t('modpack.detailHint')" @click="openVersions(item)">
+            <div class="pack-main" @click="openVersions(item)">
               <AsyncImage v-if="item.image" class="pack-icon" :src="item.image" alt="" />
               <div v-else class="pack-icon pack-icon-fallback">{{ item.name.slice(0, 1).toUpperCase() }}</div>
               <div class="pack-info">
@@ -478,8 +534,8 @@ onMounted(async () => {
                   <span v-if="item.authors.length" class="pack-author">
                     {{ item.authors.map((a) => a.name).join(", ") }}
                   </span>
-                  <span v-if="item.download" class="pack-badge">{{ t("modpack.installed") }}</span>
-                  <span v-else-if="item.downloadNow" class="pack-badge busy">{{ t("modpack.downloading") }}</span>
+                  <span v-if="projectInstalled(item)" class="pack-badge">{{ t("modpack.installed") }}</span>
+                  <span v-else-if="projectRunning(item)" class="pack-badge busy">{{ t("modpack.downloading") }}</span>
                 </div>
                 <div class="pack-desc">{{ item.summary }}</div>
                 <div v-if="item.tag.length" class="pack-tags">
@@ -500,19 +556,11 @@ onMounted(async () => {
         <button class="page-btn" :disabled="page === 0 || searching" @click="turnPage(-1)">
           {{ t("modpack.prevPage") }}
         </button>
-        <span class="page-num">{{ page + 1 }} / {{ maxPage + 1 }}</span>
+        <span class="page-num">{{ page + 1 }} / {{ maxPage + 1 }} · {{ t("modpack.totalItems", { n: total }) }}</span>
         <button class="page-btn" :disabled="page >= maxPage || searching" @click="turnPage(1)">
           {{ t("modpack.nextPage") }}
         </button>
       </div>
-
-      <!-- 搜索期间锁定窗口 -->
-      <BaseModal v-if="searching" :width="240" :closable="false" below-titlebar>
-        <div class="search-lock">
-          <span class="search-spinner"></span>
-          <span>{{ t("modpack.loading") }}</span>
-        </div>
-      </BaseModal>
 
       <!-- 版本选择弹窗 -->
       <BaseModal v-if="versionItem" :width="620" below-titlebar @close="closeVersions">
@@ -527,7 +575,7 @@ onMounted(async () => {
           </div>
         </div>
         <div class="ver-tools">
-          <select v-model="fileVersion" class="field-select sel-file-version" @change="onFileVersionChange">
+          <select v-model="fileVersion" class="field-select sel-file-version" :disabled="filesLoading" @change="onFileVersionChange">
             <option value="">{{ t("modpack.allVersions") }}</option>
             <option v-for="v in versions" :key="v" :value="v">{{ v }}</option>
           </select>
@@ -535,34 +583,44 @@ onMounted(async () => {
             <button class="page-btn" :disabled="filePage === 0 || filesLoading" @click="turnFilePage(-1)">
               {{ t("modpack.prevPage") }}
             </button>
-            <span class="file-page-num">{{ filePage + 1 }} / {{ fileMaxPage }}</span>
+            <span class="file-page-num">{{ filePage + 1 }} / {{ fileMaxPage }} · {{ t("modpack.totalItems", { n: fileTotal }) }}</span>
             <button class="page-btn" :disabled="filePage >= fileMaxPage - 1 || filesLoading" @click="turnFilePage(1)">
               {{ t("modpack.nextPage") }}
             </button>
           </div>
         </div>
-        <div class="ver-files">
-          <div v-if="filesLoading" class="empty-tip">{{ t("modpack.loadingVersions") }}</div>
-          <div v-else-if="pageFiles.length === 0" class="empty-tip">{{ t("modpack.noVersions") }}</div>
-          <div v-for="file in pageFiles" :key="file.source.fid" class="file-row">
-            <div class="file-info">
-              <span class="file-name">
-                {{ file.name }}
-                <span v-if="file.isDownload" class="pack-badge">{{ t("modpack.installed") }}</span>
-                <span v-else-if="file.downloadNow" class="pack-badge busy">{{ t("modpack.downloading") }}</span>
-              </span>
-              <span class="file-meta">
-                {{ t("modpack.fileMeta", {
-                  n: file.download.toLocaleString(),
-                  date: formatDate(file.time),
-                  size: formatSize(file.size),
-                }) }}
-              </span>
+        <div class="ver-files" :class="{ 'is-loading-dim': filesLoading }">
+          <!-- 首次加载用骨架；翻页时保留旧内容并压暗（结果到了才整体替换） -->
+          <template v-if="filesLoading && pageFiles.length === 0">
+            <div v-for="n in 4" :key="n" class="sk-row compact">
+              <div class="sk-lines">
+                <div class="sk sk-line w70"></div>
+                <div class="sk sk-line w45"></div>
+              </div>
             </div>
-            <button class="install-btn" @click="download(file)">
-              {{ t("addResource.download") }}
-            </button>
-          </div>
+          </template>
+          <div v-else-if="pageFiles.length === 0" class="empty-tip">{{ t("modpack.noVersions") }}</div>
+          <template v-else>
+            <div v-for="file in pageFiles" :key="file.source.fid" class="file-row">
+              <div class="file-info">
+                <span class="file-name">
+                  {{ file.name }}
+                  <span v-if="fileInstalled(file)" class="pack-badge">{{ t("modpack.installed") }}</span>
+                  <span v-else-if="fileRunning(file)" class="pack-badge busy">{{ t("modpack.downloading") }}</span>
+                </span>
+                <span class="file-meta">
+                  {{ t("modpack.fileMeta", {
+                    n: file.download.toLocaleString(),
+                    date: formatDate(file.time),
+                    size: formatSize(file.size),
+                  }) }}
+                </span>
+              </div>
+              <button class="install-btn" @click="download(file)">
+                {{ t("addResource.download") }}
+              </button>
+            </div>
+          </template>
         </div>
       </BaseModal>
 
@@ -601,10 +659,17 @@ onMounted(async () => {
   height: 100%;
 }
 
+/* 下载进度条也是这一列里的卡片，同样回缩 8px（与下面筛选卡、资源卡对齐） */
+.res-mode > :deep(.res-bar) {
+  margin: 0 8px;
+}
+
+/* 左右各 8px 与下面列表里那圈内边距对齐 —— 列表要让出这 8px 给卡片悬停阴影 */
 .res-top {
   display: flex;
   flex-direction: column;
   gap: 10px;
+  margin: 0 8px;
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -626,7 +691,9 @@ onMounted(async () => {
 .sel-filter {
   flex: 1 1 120px;
   min-width: 120px;
-  padding: 8px 10px;
+  /* 纵向内边距别改小：下拉的高度由 --field-h（42）兜底，比"行高 + 内边距"多出来的
+     那几px在 <select> 里会全沉到底部，文字看着偏上（不变量见 forms.css） */
+  padding: 10px;
   font-size: 13px;
 }
 
@@ -668,6 +735,10 @@ select.sel-file-version {
 }
 
 .search-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   padding: 0 18px;
   border: none;
   border-radius: 10px;
@@ -683,11 +754,12 @@ select.sel-file-version {
   cursor: not-allowed;
 }
 
-/* 目标实例一行 */
+/* 目标实例一行（同样回缩 8px，与上下两张卡对齐） */
 .res-instance {
   display: flex;
   align-items: center;
   gap: 8px;
+  margin: 0 8px;
   padding: 8px 12px;
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -711,7 +783,8 @@ select.sel-file-version {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  padding-right: 2px;
+  /* 左右与下方留 8px：滚动容器会把自己的溢出裁掉，不留余量卡片悬停阴影会被齐边切掉 */
+  padding: 0 8px 8px;
 }
 
 .empty-tip {
@@ -726,6 +799,15 @@ select.sel-file-version {
   border: 1px solid var(--border);
   border-radius: 12px;
   overflow: hidden;
+  transition: box-shadow 0.15s ease;
+}
+
+/* 悬停：主题阴影（与主页卡片 .entry-card 同一套 token，也与整合包窗口一致）。
+   刻意不换颜色：底色换成 --bg-hover 在浅色主题下白卡会发灰，
+   描边染成强调色则跟着主题色走（红 / 粉主题下很跳）。
+   也不上浮：列表容器是滚动容器，会把自己的溢出裁掉，上浮会把卡片顶边切掉 */
+.pack-item:hover {
+  box-shadow: var(--shadow-md);
 }
 
 .pack-main {
@@ -733,10 +815,6 @@ select.sel-file-version {
   gap: 12px;
   padding: 10px 12px;
   cursor: pointer;
-}
-
-.pack-main:hover {
-  background: var(--bg-hover);
 }
 
 .pack-icon {
@@ -839,6 +917,7 @@ select.sel-file-version {
   font-size: 13px;
   font-family: inherit;
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .page-btn:disabled {
@@ -849,25 +928,19 @@ select.sel-file-version {
 .page-num {
   font-size: 13px;
   color: var(--text-dim);
+  /* 末尾带「共 N 个」，窄了会折行 */
+  white-space: nowrap;
 }
 
-.search-lock {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 12px 0;
-  font-size: 13px;
-  color: var(--text-dim);
-}
-
-.search-spinner {
-  width: 16px;
-  height: 16px;
-  border: 2px solid var(--border);
-  border-top-color: var(--text);
+/* 搜索按钮里的转圈（按钮是渐变底，圈用白色） */
+.btn-spinner {
+  width: 13px;
+  height: 13px;
+  border: 2px solid rgb(255 255 255 / 35%);
+  border-top-color: #fff;
   border-radius: 50%;
   animation: res-spin 0.8s linear infinite;
+  flex-shrink: 0;
 }
 
 @keyframes res-spin {
@@ -875,6 +948,8 @@ select.sel-file-version {
     transform: rotate(360deg);
   }
 }
+
+/* 结果区上方的细进度条与骨架行：样式在 styles/skeleton.css（跨窗口共用） */
 
 /* 版本选择弹窗 */
 .ver-head {
@@ -930,20 +1005,30 @@ select.sel-file-version {
   margin-bottom: 10px;
 }
 
+/* 版本筛选下拉：比列表页的筛选项小一号。
+   高度要跟着一起缩小：--field-h(42) 兜底时多出来的空间在 <select> 里会全沉到底部
+   （不变量见 forms.css：高度 = 行高 20 + 上下内边距 6×2 + 边框 1×2 = 34） */
 .sel-file-version {
+  height: 34px;
+  min-height: 0;
   padding: 6px 10px;
   font-size: 13px;
+  /* 选中的版本名可能很长：不让它在这条定高下拉里折成两行 */
+  white-space: nowrap;
 }
 
 .file-page {
   display: flex;
   align-items: center;
   gap: 8px;
+  /* 不参与收缩：被压窄的话里面的「1 / 2 · 共 43 个」会折成两行 */
+  flex-shrink: 0;
 }
 
 .file-page-num {
   font-size: 12px;
   color: var(--text-dim);
+  white-space: nowrap;
 }
 
 .ver-files {

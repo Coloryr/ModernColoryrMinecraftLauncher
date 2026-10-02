@@ -13,6 +13,11 @@ import ModpackMode from "./ModpackMode.vue";
 
 defineEmits<{ (e: "close"): void }>();
 
+/** 详情是否展开：详情铺满窗口后，返回键放到标题栏（标题栏由本组件持有） */
+const detailOpen = ref(false);
+/** 详情状态在子组件里，标题栏的返回键只能通过它暴露的 closeDetail 收起 */
+const modeRef = ref<InstanceType<typeof ModpackMode> | null>(null);
+
 /** 分组（空 = 默认分组），带已有分组作为候选 */
 const group = ref("");
 const groups = ref<string[]>([]);
@@ -48,17 +53,25 @@ onMounted(async () => {
 </script>
 
 <template>
-  <WindowFrame :title="t('winTitle.addModpack')" @close="$emit('close')">
+  <WindowFrame
+    :title="t('winTitle.addModpack')"
+    :back="detailOpen ? t('modpack.back') : ''"
+    hide-modpack-indicator
+    @back="modeRef?.closeDetail()"
+    @close="$emit('close')"
+  >
     <div class="modpack-body">
       <!-- 安装任务进度条（多任务，点击展开详情） -->
       <ModpackInstallBar v-if="modpackStatus?.tasks.length" :status="modpackStatus" />
 
       <ModpackMode
+        ref="modeRef"
         :group="group"
         :groups="groups"
         :status="modpackStatus"
         @update:group="group = $event"
         @install="install"
+        @detail="detailOpen = $event"
       />
     </div>
   </WindowFrame>
@@ -70,4 +83,7 @@ onMounted(async () => {
   flex-direction: column;
   gap: 12px;
 }
+
+/* 安装进度条也是这一列里的卡片：边缘与筛选卡、项目卡一样落在窗口内容区边距（26px）上，
+   不再单独回缩 8px —— 那 8px 是项目列表给悬停阴影留的，已在 ModpackMode 里用负外边距抵掉 */
 </style>

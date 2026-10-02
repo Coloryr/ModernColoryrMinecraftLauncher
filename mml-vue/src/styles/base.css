@@ -1,4 +1,4 @@
-﻿/* ---------------- 基础重置 ---------------- */
+/* ---------------- 基础重置 ---------------- */
 
 * {
   box-sizing: border-box;
@@ -59,6 +59,35 @@ html.no-anim *::before,
 html.no-anim *::after {
   transition: none !important;
   animation: none !important;
+}
+
+/* ---------------- 单窗口模式的页面切换动画（App.vue 的 <Transition name="win-page">） ----------------
+   只在这一层做：多窗口模式下每个窗口是独立 webview，窗口组件不会变、自然不触发。
+
+   动画**只作用到"标题栏以下的内容区"**（`WindowFrame` 的 `.frame-body` / 主窗口的 `.main`），
+   标题栏不参与——否则右上角最小化 / 最大化 / 关闭三个按钮会跟着一起淡出、缩放，看着像它们在闪。
+
+   用不透明度 + 极轻微缩放（而不是位移）：单窗口下前进 / 后退没有方向可言，同一套观感来回都成立；
+   也不会让 100vh 的窗口根元素移动、牵动内部 fixed 浮层的定位。
+   时长在 App.vue 上用 :duration 显式给出（根元素自身不产生过渡，Vue 推断不出来），改这里记得同步。
+
+   关掉"界面动画"时由上面的 html.no-anim 全局禁用。
+
+   注意选择器写法：win-page-* 这几个类是加在**窗口根元素自身**上的（.window-frame /
+   .main-window），所以要用"根元素.类 > 内容容器"，不是"祖先.类 后代内容容器"。 */
+.window-frame.win-page-enter-active > .frame-body,
+.window-frame.win-page-leave-active > .frame-body,
+.main-window.win-page-enter-active > .main,
+.main-window.win-page-leave-active > .main {
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+
+.window-frame.win-page-enter-from > .frame-body,
+.window-frame.win-page-leave-to > .frame-body,
+.main-window.win-page-enter-from > .main,
+.main-window.win-page-leave-to > .main {
+  opacity: 0;
+  transform: scale(0.99);
 }
 
 /* ---------------- 背景图层（App.vue 渲染，lib/appearance.ts 供参） ----------------

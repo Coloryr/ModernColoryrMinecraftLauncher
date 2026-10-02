@@ -33,4 +33,8 @@ export function isBlockSize(v: unknown): v is BlockSize {
   return v === "sm" || v === "md" || v === "lg";
 }
 
+/// 玩家头颅的分类 ID
+///
+/// 值沿用 crate 里的 `playerSkin`（`block/skin.rs` 写入 `Cat`，已写进 `block.json` 的渲染结果，
+/// 改名会让旧数据对不上），**只改显示文案**为「玩家头颅」。
 export const SKIN_CAT = "playerSkin";

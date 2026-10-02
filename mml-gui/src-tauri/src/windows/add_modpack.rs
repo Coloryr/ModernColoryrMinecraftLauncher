@@ -8,7 +8,7 @@
 //! 不允许重复安装），与窗口生命周期解耦——窗口关闭任务照跑，进度改由主窗口
 //! 显示；任务进度通过 `add-modpack-status` 事件广播（携带窗口开关状态）。
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, LazyLock, Mutex, RwLock};
 
@@ -231,25 +231,26 @@ pub async fn add_modpack_install(
         fid: file_id.clone(),
     };
 
-    // 显示名从列表缓存取（列表页已缓存过项目元数据）
-    let name = match source_type {
+    // 显示名与图标都从列表缓存取（列表页已缓存过项目元数据）。
+    // 单窗口模式下本页会被 KeepAlive 缓存，缓存一直在；万一没了（多窗口下直接开安装命令、
+    // 或窗口关了再装），退回项目 ID 作名字、图标留空 —— 都只是显示层面的事，不影响安装
+    let (name, icon) = match source_type {
         ModPackType::CurseForge => {
-            CURSEFOGRE_INFO
-                .read()
-                .await
-                .get(&project_id)
-                .map(|item| item.name.clone())
+            let cache = CURSEFOGRE_INFO.read().await;
+            match cache.get(&project_id) {
+                Some(item) => (item.name.clone(), item.logo.url.clone()),
+                None => (project_id.clone(), None),
+            }
         }
         ModPackType::Modrinth => {
-            MODRINTH_INFO
-                .read()
-                .await
-                .get(&project_id)
-                .map(|item| item.title.clone())
+            let cache = MODRINTH_INFO.read().await;
+            match cache.get(&project_id) {
+                Some(item) => (item.title.clone(), item.icon_url.clone()),
+                None => (project_id.clone(), None),
+            }
         }
-        _ => None,
-    }
-    .unwrap_or_else(|| project_id.clone());
+        _ => (project_id.clone(), None),
+    };
 
     // 登记任务：同 pid+fid 不允许重复安装
     let token = CancellationToken::new();
@@ -307,7 +308,7 @@ pub async fn add_modpack_install(
                             .next()
                             .ok_or_else(|| "err.fileNotFound".to_string())?;
                         add_game::install_curseforge(
-                            &mut data, group, None, gui, pack_gui, None, token,
+                            &mut data, group, icon, gui, pack_gui, None, token,
                         )
                         .await
                         .map_err(|e| e.to_string())
@@ -316,7 +317,7 @@ pub async fn add_modpack_install(
                         let data = modrinth_api::get_version(&project_id, &file_id)
                             .await
                             .map_err(|e| e.to_string())?;
-                        add_game::install_modrinth(&data, group, None, gui, pack_gui, None, token)
+                        add_game::install_modrinth(&data, group, icon, gui, pack_gui, None, token)
                             .await
                             .map_err(|e| e.to_string())
                     }
@@ -429,6 +430,10 @@ async fn list_projects(
 
             let mut list1 = Vec::new();
 
+            // 整页只构建一次集合，循环里只查表
+            let installed = installed_modpack_pids();
+            let running = running_pids();
+
             let mut map = CURSEFOGRE_INFO.write().await;
 
             for item in list.data {
@@ -436,10 +441,10 @@ async fn list_projects(
                 let temp = ProjectItemDto::new_curseforge(
                     &item,
                     FileType::Modpack,
-                    check_modpack_download(&pid),
+                    installed.contains(&pid),
                     true,
                     collect_utils::is_star(&pid),
-                    check_download_now(&item.id.to_string()).await,
+                    running.contains(&pid),
                     None,
                 );
 
@@ -472,6 +477,10 @@ async fn list_projects(
 
             let mut list1 = Vec::new();
 
+            // 同 CurseForge：整页一次集合构建
+            let installed = installed_modpack_pids();
+            let running = running_pids();
+
             let mut map = MODRINTH_INFO.write().await;
 
             for item in list.hits {
@@ -479,10 +488,10 @@ async fn list_projects(
                 let temp = ProjectItemDto::new_modrinth(
                     &item,
                     FileType::Modpack,
-                    check_modpack_download(&pid),
+                    installed.contains(&pid),
                     true,
                     collect_utils::is_star(&pid),
-                    check_download_now(&pid).await,
+                    running.contains(&pid),
                     None,
                 )
                 .await;
@@ -554,9 +563,26 @@ pub async fn add_modpack_file(
 
     match source {
         ModPackType::CurseForge => {
-            let data = curseforge_api::get_mod_info(&pid)
+            // 项目名优先取列表页 / 详情页的缓存：只为拿个名字再查一次 mod_info，
+            // 每次翻页都白多一个 HTTP 往返
+            let cached = CURSEFOGRE_INFO
+                .read()
                 .await
-                .map_err(|err| err.to_string())?;
+                .get(&pid)
+                .map(|item| item.name.clone());
+            let name = match cached {
+                Some(name) => name,
+                None => {
+                    let data = curseforge_api::get_mod_info(&pid)
+                        .await
+                        .map_err(|err| err.to_string())?;
+                    let name = data.data.name.clone();
+                    // 回填缓存：详情页与安装时的显示名都从这里取
+                    CURSEFOGRE_INFO.write().await.insert(pid.clone(), data.data);
+                    name
+                }
+            };
+
             let list = curseforge_api::get_files_page(CurseFogreArg {
                 id: Some(pid.clone()),
                 version,
@@ -569,31 +595,49 @@ pub async fn add_modpack_file(
             let mut list1 = Vec::new();
 
             {
+                // 版本列表同样一次构建集合
+                let installed = installed_modpack_files();
+                let running = running_files();
                 let mut lock = CURSEFOGRE_FILE.write().await;
                 let list2 = lock.entry(pid.clone()).or_default();
 
                 for item in list.data {
+                    let fid = item.id.to_string();
+                    let key = (pid.clone(), fid.clone());
                     list1.push(FileListItemDto::new_curseforge(
                         &item,
                         FileType::Modpack,
-                        check_modpack_version_download(&pid, &item.id.to_string()),
-                        check_version_download_now(&pid, &item.id.to_string()).await,
+                        installed.contains(&key),
+                        running.contains(&key),
                     ));
-                    list2.insert(item.id.to_string(), item);
+                    list2.insert(fid, item);
                 }
             }
 
             Ok(FileListDto {
                 list: list1,
                 count: list.pagination.total_count,
-                name: data.data.name,
+                name,
                 max_page: list.pagination.total_count / 50,
             })
         }
         ModPackType::Modrinth => {
-            let data = modrinth_api::get_project(&pid)
+            // 同上：列表页缓存里已有项目名（title），未命中才查 project。
+            // project 是 ModrinthProjectObj、与缓存的 HitObj 不同型，故不回填
+            let cached = MODRINTH_INFO
+                .read()
                 .await
-                .map_err(|err| err.to_string())?;
+                .get(&pid)
+                .map(|item| item.title.clone());
+            let name = match cached {
+                Some(name) => name,
+                None => {
+                    modrinth_api::get_project(&pid)
+                        .await
+                        .map_err(|err| err.to_string())?
+                        .title
+                }
+            };
 
             let list = modrinth_api::get_file_versions(
                 &pid,
@@ -611,15 +655,18 @@ pub async fn add_modpack_file(
             let len = list.len() as u64;
 
             {
+                let installed = installed_modpack_files();
+                let running = running_files();
                 let mut lock = MODRINTH_FILE.write().await;
                 let list2 = lock.entry(pid.clone()).or_default();
 
                 for item in list {
+                    let key = (pid.clone(), item.id.clone());
                     list1.push(FileListItemDto::new_modrinth(
                         &item,
                         FileType::Modpack,
-                        check_modpack_version_download(&pid, &item.id),
-                        check_version_download_now(&pid, &item.id).await,
+                        installed.contains(&key),
+                        running.contains(&key),
                     ));
                     list2.insert(item.id.to_string(), item);
                 }
@@ -628,7 +675,7 @@ pub async fn add_modpack_file(
             Ok(FileListDto {
                 list: list1,
                 count: len,
-                name: data.title,
+                name,
                 max_page: len / 50,
             })
         }
@@ -636,47 +683,52 @@ pub async fn add_modpack_file(
     }
 }
 
-/// 项目是否已安装过（实例表里有同 pid 的整合包实例）
-fn check_modpack_download(pid: &str) -> bool {
-    mml_game::get_instances().iter().any(|item| {
-        let temp = item.read().unwrap();
-        temp.is_modpack
-            && match temp.pid.as_ref() {
-                Some(data) => data == pid,
-                None => false,
-            }
-    })
+/// 已安装过的整合包 pid 集合（整页列表共用一次构建）
+///
+/// 逐项调用会让每个列表项各自遍历一遍实例表并加一次锁；一页 20 项就是 20 遍。
+fn installed_modpack_pids() -> HashSet<String> {
+    mml_game::get_instances()
+        .iter()
+        .filter_map(|item| {
+            let temp = item.read().unwrap();
+            if temp.is_modpack { temp.pid.clone() } else { None }
+        })
+        .collect()
 }
 
-/// 具体版本是否已安装过（实例表里有同 pid + fid 的整合包实例）
-fn check_modpack_version_download(pid: &str, fid: &str) -> bool {
-    mml_game::get_instances().iter().any(|item| {
-        let temp = item.read().unwrap();
-        temp.is_modpack
-            && match temp.pid.as_ref() {
-                Some(data) => data == pid,
-                None => false,
+/// 已安装过的整合包 (pid, fid) 集合（版本列表共用）
+fn installed_modpack_files() -> HashSet<(String, String)> {
+    mml_game::get_instances()
+        .iter()
+        .filter_map(|item| {
+            let temp = item.read().unwrap();
+            if !temp.is_modpack {
+                return None;
             }
-            && match temp.fid.as_ref() {
-                Some(data) => data == fid,
-                None => false,
+            match (temp.pid.clone(), temp.fid.clone()) {
+                (Some(pid), Some(fid)) => Some((pid, fid)),
+                _ => None,
             }
-    })
+        })
+        .collect()
 }
 
-/// 项目是否正在安装（列表角标：该项目任一版本在装）
-async fn check_download_now(pid: &str) -> bool {
+/// 正在安装的 pid 集合（列表角标：该项目任一版本在装）
+fn running_pids() -> HashSet<String> {
     DOWNLOAD_NOW
         .read()
         .unwrap()
         .keys()
-        .any(|key| key.pid == pid)
+        .map(|key| key.pid.clone())
+        .collect()
 }
 
-/// 具体版本是否正在安装
-async fn check_version_download_now(pid: &str, fid: &str) -> bool {
-    DOWNLOAD_NOW.read().unwrap().contains_key(&SourceInfo {
-        pid: pid.to_string(),
-        fid: fid.to_string(),
-    })
+/// 正在安装的 (pid, fid) 集合（版本列表角标）
+fn running_files() -> HashSet<(String, String)> {
+    DOWNLOAD_NOW
+        .read()
+        .unwrap()
+        .keys()
+        .map(|key| (key.pid.clone(), key.fid.clone()))
+        .collect()
 }

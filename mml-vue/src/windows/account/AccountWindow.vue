@@ -5,6 +5,7 @@ import WindowFrame from "../../components/ui/WindowFrame.vue";
 import BaseButton from "../../components/ui/BaseButton.vue";
 import BaseModal from "../../components/ui/BaseModal.vue";
 import SegmentedTabs from "../../components/ui/SegmentedTabs.vue";
+import { useWindowRefresh } from "../../composables/useWindowRefresh";
 import { t, tErr } from "../../lib/i18n";
 import { showToast } from "../../lib/toast";
 import AccountGrid from "./views/AccountGrid.vue";
@@ -84,6 +85,9 @@ onMounted(() => {
     }
   });
 });
+
+// 单窗口模式：窗口被 KeepAlive 缓存，切回不会重新挂载 → 自己补一次（账户可能在别处被加/删）
+useWindowRefresh(loadAccounts);
 
 const VIEW_OPTIONS = computed(() => [
   { value: "grid", label: t("account.view.grid"), icon: "grid" },
@@ -679,7 +683,10 @@ function tokenLabel(acc: AccountStoreDto): string {
 .toolbar-select {
   min-width: 110px;
   height: 35px;
-  padding: 0 28px 0 12px;
+  /* 定高时纵向内边距不能为 0：<select> 的文字是内容盒里的行盒，多出来的空间全部沉底、
+     看着就是文字贴顶。这里保持"行高 19 + 上下内边距 7×2 + 边框 1×2 = 35"（同 forms.css 的不变量） */
+  line-height: 19px;
+  padding: 7px 28px 7px 12px;
   border-radius: 9px;
   border: 1px solid var(--border);
   background: var(--bg-card);

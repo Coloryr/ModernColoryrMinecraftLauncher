@@ -11,6 +11,8 @@ interface SegOption {
 const props = defineProps<{
   options: SegOption[];
   modelValue: string;
+  /** 禁用整组（加载期间锁住筛选控件用） */
+  disabled?: boolean;
 }>();
 
 const emit = defineEmits<{ (e: "update:modelValue", value: string): void }>();
@@ -33,6 +35,7 @@ const ICONS: Record<string, string> = {
       :key="opt.value"
       class="seg-btn"
       :class="{ active: current === opt.value }"
+      :disabled="props.disabled"
       v-tip="opt.label"
       @click="emit('update:modelValue', opt.value)"
     >
@@ -94,5 +97,10 @@ const ICONS: Record<string, string> = {
 
 .seg-icon {
   flex-shrink: 0;
+}
+
+.seg-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 </style>

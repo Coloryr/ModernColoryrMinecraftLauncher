@@ -5,7 +5,7 @@
 // 这里只做编排：状态与保存逻辑全在 composables/（每个标签一份），
 // 排版在 parts/tabs/（每个标签一个组件），窗口级样式在 settings.css（非 scoped，子组件共用）。
 // 本文件负责：标签切换（记忆上次所在页）、Esc 关窗、分组级「恢复默认」的派发与高亮。
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, nextTick, onActivated, onDeactivated, onMounted, onUnmounted, ref, watch } from "vue";
 import WindowFrame from "../../components/ui/WindowFrame.vue";
 import BaseButton from "../../components/ui/BaseButton.vue";
 import BaseModal from "../../components/ui/BaseModal.vue";
@@ -122,8 +122,18 @@ async function onSearchSelect(hit: SettingsHit) {
 
 // ================= 初始化 =================
 
-onMounted(async () => {
+/** 键盘监听：单窗口模式下窗口被 KeepAlive 缓存，切走时 onUnmounted 不会跑 ——
+ *  必须自己在停用 / 启用之间装卸，否则在别的窗口按 Esc 会被当成"关闭本窗口" */
+function bindKeys() {
   document.addEventListener("keydown", onKeyDown);
+}
+
+function unbindKeys() {
+  document.removeEventListener("keydown", onKeyDown);
+}
+
+onMounted(async () => {
+  bindKeys();
   // 各区域的加载互不依赖，一起发（失败的各自留空）
   await Promise.all([
     network.load(),
@@ -135,8 +145,12 @@ onMounted(async () => {
   ]);
 });
 
+// 单窗口模式：切走卸掉键盘监听，切回再装上（onActivated 首次挂载也会跑，重复 add 同一函数无副作用）
+onActivated(bindKeys);
+onDeactivated(unbindKeys);
+
 onUnmounted(() => {
-  document.removeEventListener("keydown", onKeyDown);
+  unbindKeys();
   if (flashTimer !== null) clearTimeout(flashTimer);
 });
 

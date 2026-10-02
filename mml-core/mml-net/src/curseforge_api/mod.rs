@@ -451,7 +451,12 @@ pub async fn get_files(ids: Vec<u64>) -> CoreResult<Vec<CurseForgeFileDataObj>> 
 
     json(&mut req, &obj)?;
 
-    send(req).await
+    // 这个接口返回的是包装对象 `{"data": [...]}`，不是裸数组：
+    // 按 Vec 反序列化会得到 "invalid type: map, expected a sequence"。
+    // 复用分页那套结构装它（只有 data，没有 pagination —— 该字段有 serde(default) 兜底）
+    let res: CurseFogreFilePageObj = send(req).await?;
+
+    Ok(res.data)
 }
 
 /// 获取分类信息

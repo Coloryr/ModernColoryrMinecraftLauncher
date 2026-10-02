@@ -184,6 +184,21 @@ pub struct BlockItemDto {
     pub image: String,
 }
 
+/// 图标裁剪的源图预览（"修改图标"的截图弹窗用）
+///
+/// `src` 是**降采样后**的预览图 data URL（只用于选范围），而 `width` / `height` 是**原图**
+/// 尺寸：选区坐标按原图算，后端裁的也是原图，所以这里不能给预览尺寸。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct IconSourceDto {
+    /// 预览图 data URL（`data:image/png;base64,`，可直接放进 `<img src>`）
+    pub src: String,
+    /// 原图宽（px）
+    pub width: u32,
+    /// 原图高（px）
+    pub height: u32,
+}
+
 /// 方块贴图渲染状态
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]

@@ -47,6 +47,16 @@
   background-size: 12px;
 }
 
+/* <select> 的文字是内容盒里的一个行盒：盒子比行高高出来的部分**不会**被平分，
+   而是全部沉在底部——看起来就是文字偏上。<input> 由浏览器居中，没有这问题，
+   所以同一行里的下拉和输入框会明显不齐。
+   两条一起保：
+   1) 内容盒正好一行（高度 = 行高 20 + 上下内边距 + 上下边框，见 .field-input/.field-select）；
+   2) 块轴居中兜底，窗口里改小了纵向内边距也不会再偏。 */
+select.field-select {
+  align-content: center;
+}
+
 /* 原生下拉的自定义渲染（Chromium 135+）：弹层由系统原生弹窗变为页面内元素，
    于是可以跟随主题配色、并加上与其它浮层一致的展开动效。
    关闭态外观刻意保持不变：仍用上面的 data-URI 箭头，隐藏 base-select 自带的 ::picker-icon。
@@ -127,6 +137,13 @@
 .field-input:focus,
 .field-select:focus {
   border-color: var(--accent);
+}
+
+/* 禁用态（加载期间锁住筛选控件）：给个明确的外观，别只有光标变化 */
+.field-input:disabled,
+.field-select:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 /* 紧凑场景（日志工具条等）的小号下拉：外观对齐 field-select（同箭头 / 不透明底 / 主题边框），

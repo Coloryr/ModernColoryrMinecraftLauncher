@@ -38,7 +38,6 @@ import CustomHomePage from "../../components/CustomHomePage.vue";
 import CustomExecPanel from "../../components/CustomExecPanel.vue";
 import InstanceLogPanel from "../../components/InstanceLogPanel.vue";
 import ProxyPanel from "../../components/ProxyPanel.vue";
-import ModpackInstallBar from "../../components/ModpackInstallBar.vue";
 import { useModpackStatus } from "../../lib/modpackTasks";
 import ResourceDownloadBar from "../../components/ResourceDownloadBar.vue";
 import { useResourceStatus } from "../../lib/resourceTasks";
@@ -46,6 +45,7 @@ import SplashScreen from "../../components/ui/SplashScreen.vue";
 import MainTopbar from "./topbar/MainTopbar.vue";
 import MainSidebar from "./sidebar/MainSidebar.vue";
 import MainCtxMenu from "./ctxmenu/MainCtxMenu.vue";
+import IconPickModal from "./IconPickModal.vue";
 import { useInstanceDrag } from "../../composables/useInstanceDrag";
 import { useMultiSelect } from "../../composables/useMultiSelect";
 import { useFileDrop } from "../../composables/useFileDrop";
@@ -754,10 +754,15 @@ function onInstContext(e: MouseEvent, inst: InstanceInfoDto) {
 
 /** 实例右键菜单动作（与详情面板一致） */
 function onInstMenuAction(id: InstMenuAction) {
+  // 菜单一关 ctxMenu 就清空，右键目标要在这之前取出来（"修改图标"要用）
+  const target = ctxMenu.value?.instance ?? null;
   closeCtxMenu();
   switch (id) {
     case "launch":
       launch();
+      break;
+    case "changeIcon":
+      if (target) void pickIconFile(target);
       break;
     case "rename":
       onAction("rename");
@@ -767,6 +772,32 @@ function onInstMenuAction(id: InstMenuAction) {
       break;
     default:
       onAction(id);
+  }
+}
+
+/** "修改图标"的目标实例与已选图片（弹窗只在选到图之后才开） */
+const iconPickInst = ref<InstanceInfoDto | null>(null);
+const iconPickPath = ref("");
+
+/**
+ * 右键菜单「选择图片」：**直接开系统文件对话框**，不先弹一层自己的窗口
+ *
+ * 选到图才开截图弹窗（裁剪范围要用图片本身，那一步需要界面）；
+ * 取消选择就什么都不发生。
+ */
+async function pickIconFile(inst: InstanceInfoDto) {
+  try {
+    const { open } = await import("@tauri-apps/plugin-dialog");
+    const path = await open({
+      title: t("actions.pickImage"),
+      multiple: false,
+      filters: [{ name: "Image", extensions: ["png", "jpg", "jpeg", "webp"] }],
+    });
+    if (typeof path !== "string") return;
+    iconPickPath.value = path;
+    iconPickInst.value = inst;
+  } catch (e) {
+    showToast(tErr(e));
   }
 }
 
@@ -1138,11 +1169,10 @@ function onClientConfig(c: ClientConfig) {
 
 const unlistens: Array<() => void> = [];
 
-// 整合包安装任务（下载整合包窗口关闭后，进度条迁到主窗口显示）
-const { status: modpackStatus, init: initModpackStatus } = useModpackStatus(
-  false,
-  adoptAddedInstance,
-);
+// 整合包安装任务：进度本身已交给标题栏上的指示器（ModpackTitleIndicator），
+// 这里只借它做一件事 —— 安装成功后刷新实例列表并选中刚装好的那个（adoptAddedInstance）。
+// 所以不取 status，只用 init 返回的订阅。
+const { init: initModpackStatus } = useModpackStatus(false, adoptAddedInstance);
 
 // 资源下载任务（添加资源窗口关闭后，进度条迁到主窗口显示）
 const { status: resourceStatus, init: initResourceStatus } = useResourceStatus(false);
@@ -1415,12 +1445,9 @@ onMounted(async () => {
         @update:account="onAccountChange"
       />
 
-      <!-- 整合包安装进度（下载整合包窗口关闭后迁到这里显示） -->
-      <ModpackInstallBar
-        v-if="modpackStatus?.tasks.length && !modpackStatus.windowOpen"
-        :status="modpackStatus"
-        class="mpbar-in-main"
-      />
+      <!-- 整合包安装进度不再内嵌在这里：它改成了标题栏上的指示器 + 弹窗
+           （ModpackTitleIndicator / ModpackPopup），否则这条卡片会一直占着内容区的高度、把列表顶下去。
+           状态订阅在各处自己拿（标题栏指示器自包含），弹窗由 App.vue 渲染 -->
 
       <!-- 资源下载进度（添加资源窗口关闭后迁到这里显示） -->
       <ResourceDownloadBar
@@ -2072,6 +2099,15 @@ onMounted(async () => {
         </BaseButton>
       </div>
     </BaseModal>
+
+    <!-- ===== 修改实例图标（右键实例 → 选择图片 → 截图范围）===== -->
+    <IconPickModal
+      v-if="iconPickInst"
+      :uuid="iconPickInst.uuid"
+      :name="iconPickInst.name"
+      :path="iconPickPath"
+      @close="((iconPickInst = null), (iconPickPath = ''))"
+    />
 
     <!-- ===== 删除分组确认 ===== -->
     <BaseModal v-if="showDeleteGroup" :title="t('group.delete')" :closable="false" @close="showDeleteGroup = false">

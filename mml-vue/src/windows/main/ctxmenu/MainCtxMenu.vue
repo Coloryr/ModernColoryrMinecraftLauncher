@@ -1,10 +1,14 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 // 主窗口右键菜单：分组 / 实例 / 移动分组 / 多选 四种视图
 // 所有动作通过事件抛给父组件处理
+//
+// 定位：`position: fixed` 钉在点击处，但**渲染后要量一次并收进窗口**——
+// 否则靠近窗口下/右边缘点开时，菜单会超出可视区被裁掉（实例菜单 8 项约 285px 高）。
+import { nextTick, ref, watchEffect } from "vue";
 import { t } from "../../../lib/i18n";
 import type { CtxMenuState, GroupView, InstMenuAction } from "../types";
 
-defineProps<{
+const props = defineProps<{
   menu: CtxMenuState | null;
   moveGroupView: boolean;
   groups: GroupView[];
@@ -22,13 +26,41 @@ const emit = defineEmits<{
   (e: "multi-delete"): void;
   (e: "multi-launch"): void;
 }>();
+
+/** 菜单根元素与最终落点（先按点击处放，量完再修正） */
+const el = ref<HTMLElement | null>(null);
+const pos = ref({ x: 0, y: 0 });
+/** 与窗口边缘至少留这么宽（px） */
+const MARGIN = 8;
+
+watchEffect(async () => {
+  const menu = props.menu;
+  // 这几个依赖都会改变菜单高度（切换分组/实例/移动视图、目标分组增删），要跟着重新定位
+  void props.moveGroupView;
+  void props.groups.length;
+  if (!menu) return;
+
+  pos.value = { x: menu.x, y: menu.y };
+  // 等菜单渲染出来才有尺寸可量（内容由 v-if 分支决定，量不到就保持点击处）
+  await nextTick();
+  const rect = el.value?.getBoundingClientRect();
+  if (!rect) return;
+
+  const overX = rect.right - (window.innerWidth - MARGIN);
+  const overY = rect.bottom - (window.innerHeight - MARGIN);
+  pos.value = {
+    x: overX > 0 ? Math.max(MARGIN, menu.x - overX) : menu.x,
+    y: overY > 0 ? Math.max(MARGIN, menu.y - overY) : menu.y,
+  };
+});
 </script>
 
 <template>
   <div
     v-if="menu"
+    ref="el"
     class="ctx-menu"
-    :style="{ left: menu.x + 'px', top: menu.y + 'px' }"
+    :style="{ left: pos.x + 'px', top: pos.y + 'px' }"
     @contextmenu.prevent
     @click.stop
   >
@@ -53,7 +85,8 @@ const emit = defineEmits<{
       </button>
     </template>
 
-    <!-- 实例菜单：启动 / 打开文件夹 / 日志 / 配置 / 重命名 / 删除 -->
+    <!-- 实例菜单：启动 / 打开文件夹 / 日志 / 修改图标 / 重命名 / 删除
+         （「修改实例配置」已去掉：右侧面板本来就有设置区） -->
     <template v-else-if="menu.kind === 'instance'">
       <button class="ctx-item" @click="emit('inst-action', 'launch')">
         {{ t("launch.play") }}
@@ -64,8 +97,8 @@ const emit = defineEmits<{
       <button class="ctx-item" @click="emit('inst-action', 'viewLog')">
         {{ t("actions.viewLog") }}
       </button>
-      <button class="ctx-item" @click="emit('inst-action', 'editConfig')">
-        {{ t("actions.editConfig") }}
+      <button class="ctx-item" @click="emit('inst-action', 'changeIcon')">
+        {{ t("actions.pickImage") }}
       </button>
       <button class="ctx-item" @click="emit('inst-action', 'rename')">
         {{ t("actions.rename") }}
@@ -116,7 +149,8 @@ const emit = defineEmits<{
   position: fixed;
   z-index: 120;
   min-width: 180px;
-  max-height: 320px;
+  /* 屏幕很矮时（收进窗口后仍放不下）才内部滚动；正常窗口下列表项全部可见 */
+  max-height: calc(100vh - 16px);
   overflow-y: auto;
   padding: 6px;
   background: var(--bg-card);

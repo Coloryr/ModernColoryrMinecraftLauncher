@@ -16,6 +16,11 @@ use tokio::io::{AsyncRead, AsyncWriteExt};
 ///
 /// 封装了多种可能的文件输入形式，调用方可使用统一的 `save_file()`
 /// 方法将内容写入目标路径，无需关心具体来源类型。
+///
+/// 两个流变体都要求 `Send`：`save_file` 是 async 函数，调用方常在
+/// `#[async_trait]`（要求 `future: Send`）/ `tokio::spawn` 这类地方 await 它，
+/// 而 future 是否 `Send` 取决于它跨 await 持有的值 —— 不要求 `Send` 的话
+/// 整条调用链都不是 `Send`（整合包安装器里就撞过这个）。
 pub enum InputFile {
     /// 本地文件系统中的文件（异步复制）
     Path(PathBuf),
@@ -24,9 +29,9 @@ pub enum InputFile {
     /// 内存中的字节数据
     Data(Vec<u8>),
     /// 同步读取流
-    Stream(Box<dyn Read>),
+    Stream(Box<dyn Read + Send>),
     /// 异步读取流
-    StreamAsync(Box<dyn AsyncRead + Unpin>),
+    StreamAsync(Box<dyn AsyncRead + Send + Unpin>),
 }
 
 impl InputFile {

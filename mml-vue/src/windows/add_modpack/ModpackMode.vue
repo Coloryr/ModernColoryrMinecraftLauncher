@@ -4,13 +4,12 @@
 import { computed, onMounted, onUnmounted, ref, watch } from "vue";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
-import BaseModal from "../../components/ui/BaseModal.vue";
 import SegmentedTabs from "../../components/ui/SegmentedTabs.vue";
 import AsyncImage from "../../components/ui/AsyncImage.vue";
 import { api } from "../../lib/api";
 import { t, tErr } from "../../lib/i18n";
 import { showToast } from "../../lib/toast";
-import type { FileListItemDto, ModPackStatusDto, ProjectDetailDto, ProjectItemDto } from "../../lib/bindings";
+import type { FileListItemDto, ModPackStatusDto, ModPackTaskDto, ProjectDetailDto, ProjectItemDto } from "../../lib/bindings";
 
 const props = defineProps<{
   /** 安装到的分组（空 = 默认分组） */
@@ -24,6 +23,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: "install", payload: { source: string; projectId: string; fileId: string; fileName: string }): void;
   (e: "update:group", value: string): void;
+  /** 详情展开 / 收起（返回键由上层放到标题栏，需要知道当前有没有详情） */
+  (e: "detail", open: boolean): void;
 }>();
 
 /** 后端列表每页 20 个项目 */
@@ -84,6 +85,8 @@ const detailError = ref("");
 const files = ref<FileListItemDto[]>([]);
 const allFiles = ref<FileListItemDto[]>([]);
 const filesLoading = ref(false);
+/** 版本列表加载失败的原因（失败时列表区显示错误 + 重试，而不是当成"没有版本"） */
+const filesError = ref("");
 /** 版本列表页码（0 起）与总数 */
 const filePage = ref(0);
 const fileTotal = ref(0);
@@ -226,6 +229,7 @@ let fileSeq = 0;
 async function loadFiles(pid: string, page: number) {
   const mine = ++fileSeq;
   filesLoading.value = true;
+  filesError.value = "";
   try {
     const res = await api.getModpackFiles(source.value, pid, page, fileVersion.value || null);
     if (mine !== fileSeq) return;
@@ -239,8 +243,24 @@ async function loadFiles(pid: string, page: number) {
     if (page === 0) {
       latestFile.value = res.list[0] ?? null;
     }
+  } catch (e) {
+    // 旧一发的失败、或窗口关闭时后端取消，都不算失败
+    if (mine !== fileSeq || String(e) === "err.cancelled") return;
+    // 没有这个 catch 时，异常会变成未处理的 rejection，界面只剩"没有可用版本"
+    files.value = [];
+    allFiles.value = [];
+    fileTotal.value = 0;
+    latestFile.value = null;
+    filesError.value = tErr(e);
   } finally {
     if (mine === fileSeq) filesLoading.value = false;
+  }
+}
+
+/** 版本列表重试（失败提示里的按钮） */
+function reloadFiles() {
+  if (detailItem.value) {
+    loadFiles(detailItem.value.source.pid, filePage.value);
   }
 }
 
@@ -257,6 +277,7 @@ async function openDetail(item: ProjectItemDto) {
   latestFile.value = null;
   filePage.value = 0;
   fileTotal.value = 0;
+  emit("detail", true);
   // 版本列表的筛选沿用列表页选中的游戏版本
   fileVersion.value = version.value;
   detailLoading.value = true;
@@ -334,7 +355,11 @@ function closeDetail() {
   allFiles.value = [];
   latestFile.value = null;
   detailError.value = "";
+  emit("detail", false);
 }
+
+// 标题栏上的返回键由上层（AddModpackWindow）持有，通过 ref 调这里
+defineExpose({ closeDetail });
 
 function install(item: ProjectItemDto, file: FileListItemDto) {
   emit("install", {
@@ -353,9 +378,20 @@ const bodyHtml = computed(() => {
   return DOMPurify.sanitize(marked.parse(body, { async: false }));
 });
 
-/** Modrinth 分类图标：icon 字段是内联 svg 源码（stroke=currentColor），消毒后内联渲染 */
+/**
+ * Modrinth 分类图标：icon 字段是内联 svg 源码（stroke=currentColor），消毒后内联渲染
+ *
+ * 消毒结果按源码缓存：模板里直接调用函数，每次重渲染都会重跑一遍 DOMPurify，
+ * 而同一批分类图标的源码是不变的。
+ */
+const svgCache = new Map<string, string>();
+
 function svgIcon(svg: string): string {
-  return DOMPurify.sanitize(svg);
+  const hit = svgCache.get(svg);
+  if (hit !== undefined) return hit;
+  const safe = DOMPurify.sanitize(svg);
+  svgCache.set(svg, safe);
+  return safe;
 }
 
 /** 截图放大预览（当前预览的图片地址，空 = 关闭） */
@@ -364,20 +400,68 @@ const preview = ref("");
 /** 预览图缩放倍率（滚轮调节，1 = 适配大小） */
 const previewScale = ref(1);
 
+/** 预览图平移偏移（px，放大后拖动看局部） */
+const previewOffset = ref({ x: 0, y: 0 });
+
+/** 本次按下是否真的拖动过：拖动结束那一下的 click 不该关闭预览 */
+let previewDragged = false;
+let previewFrom = { x: 0, y: 0, ox: 0, oy: 0 };
+
 function openPreview(url: string) {
   preview.value = url;
   previewScale.value = 1;
+  previewOffset.value = { x: 0, y: 0 };
 }
 
 function closePreview() {
   preview.value = "";
   previewScale.value = 1;
+  previewOffset.value = { x: 0, y: 0 };
+}
+
+/** 按下开始拖动（未放大时没有可平移的余量，直接返回） */
+function onPreviewDown(e: PointerEvent) {
+  if (previewScale.value <= 1) return;
+  previewDragged = false;
+  previewFrom = {
+    x: e.clientX,
+    y: e.clientY,
+    ox: previewOffset.value.x,
+    oy: previewOffset.value.y,
+  };
+  window.addEventListener("pointermove", onPreviewMove);
+  window.addEventListener("pointerup", onPreviewUp);
+}
+
+function onPreviewMove(e: PointerEvent) {
+  const dx = e.clientX - previewFrom.x;
+  const dy = e.clientY - previewFrom.y;
+  // 3px 阈值：手抖不算拖动
+  if (Math.abs(dx) > 3 || Math.abs(dy) > 3) previewDragged = true;
+  previewOffset.value = { x: previewFrom.ox + dx, y: previewFrom.oy + dy };
+}
+
+function onPreviewUp() {
+  window.removeEventListener("pointermove", onPreviewMove);
+  window.removeEventListener("pointerup", onPreviewUp);
+}
+
+/** 点空白处关闭；刚拖过的那一下不算点击 */
+function onPreviewClick() {
+  if (previewDragged) {
+    previewDragged = false;
+    return;
+  }
+  closePreview();
 }
 
 /** 滚轮缩放预览图（向上放大、向下缩小，1~8 倍） */
 function onPreviewWheel(e: WheelEvent) {
   const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
-  previewScale.value = Math.min(8, Math.max(1, previewScale.value * factor));
+  const next = Math.min(8, Math.max(1, previewScale.value * factor));
+  previewScale.value = next;
+  // 缩回适配大小：偏移一并归零，否则图会停在屏幕外看不见
+  if (next === 1) previewOffset.value = { x: 0, y: 0 };
 }
 
 /** Esc：先关截图预览，再关详情页 */
@@ -395,43 +479,82 @@ watch(detailItem, (val) => {
   else window.removeEventListener("keydown", onDetailKey);
 });
 
-onUnmounted(() => window.removeEventListener("keydown", onDetailKey));
+onUnmounted(() => {
+  window.removeEventListener("keydown", onDetailKey);
+  onPreviewUp();
+});
 
 function formatDate(date: string): string {
   return date ? date.slice(0, 10) : "";
 }
 
-/** 安装状态变化时同步列表角标：项目级「已安装」按 pid，版本级按 pid+fid */
+/**
+ * 本次会话里见过的「安装完成」标记（只增不减）
+ *
+ * 任务表的条目会被清掉（用户点「清除已完成」），但实例确实已经建好了——
+ * 「已安装」角标不能跟着任务一起消失。只往集合里加，不做任何复位。
+ */
+const donePids = ref(new Set<string>());
+const doneFileKeys = ref(new Set<string>());
+
 watch(
   () => props.status,
   (status) => {
-    if (!status) return;
-    const isRunning = (t: { done: boolean; failed: boolean; cancelled: boolean }) =>
-      !t.done && !t.failed && !t.cancelled;
-    const doneFiles = new Set(
-      status.tasks.filter((t) => t.done).map((t) => `${t.pid}|${t.fid}`),
-    );
-    const doneProjects = new Set(status.tasks.filter((t) => t.done).map((t) => t.pid));
-    const runningFiles = new Set(
-      status.tasks.filter(isRunning).map((t) => `${t.pid}|${t.fid}`),
-    );
-    const runningProjects = new Set(status.tasks.filter(isRunning).map((t) => t.pid));
-
-    for (const item of items.value) {
-      if (doneProjects.has(item.source.pid)) item.download = true;
-      if (runningProjects.has(item.source.pid)) item.downloadNow = true;
+    const tasks = status?.tasks ?? [];
+    if (!tasks.some((task) => task.done)) return;
+    const pids = new Set(donePids.value);
+    const files = new Set(doneFileKeys.value);
+    for (const task of tasks) {
+      if (!task.done) continue;
+      pids.add(task.pid);
+      files.add(`${task.pid}|${task.fid}`);
     }
-    for (const file of [...files.value, ...allFiles.value]) {
-      const key = `${file.source.pid}|${file.source.fid}`;
-      if (doneFiles.has(key)) {
-        file.isDownload = true;
-        file.downloadNow = false;
-      } else if (runningFiles.has(key)) {
-        file.downloadNow = true;
-      }
-    }
+    // 只在真新增时换引用：进度事件很频繁，无谓的赋值会带着模板一起重渲染
+    if (pids.size !== donePids.value.size) donePids.value = pids;
+    if (files.size !== doneFileKeys.value.size) doneFileKeys.value = files;
   },
+  { immediate: true },
 );
+
+/**
+ * 进行中任务派生的角标状态
+ *
+ * 由 `props.status` 直接**派生**，不再往列表项里写回 `download` / `downloadNow`：
+ * 写回是单向的（只置 true 不复位），任务取消、失败或清除之后角标会一直挂着。
+ * 「已安装」取实例表来源（`item.download` / `file.isDownload`）与上面那张累计表的「或」。
+ */
+const taskState = computed(() => {
+  const running = (task: ModPackTaskDto) => !task.done && !task.failed && !task.cancelled;
+  const tasks = props.status?.tasks ?? [];
+  return {
+    runningProjects: new Set(tasks.filter(running).map((task) => task.pid)),
+    runningFiles: new Set(tasks.filter(running).map((task) => `${task.pid}|${task.fid}`)),
+  };
+});
+
+function fileKey(file: FileListItemDto): string {
+  return `${file.source.pid}|${file.source.fid}`;
+}
+
+/** 项目级「已安装」（实例表已装 + 本次会话装完） */
+function projectInstalled(item: ProjectItemDto): boolean {
+  return item.download || donePids.value.has(item.source.pid);
+}
+
+/** 项目级「下载中」：只看任务表——DTO 里那份是取列表时的快照，用它角标会粘住 */
+function projectRunning(item: ProjectItemDto): boolean {
+  return taskState.value.runningProjects.has(item.source.pid);
+}
+
+/** 版本级「已安装」 */
+function fileInstalled(file: FileListItemDto): boolean {
+  return file.isDownload || doneFileKeys.value.has(fileKey(file));
+}
+
+/** 版本级「下载中」 */
+function fileRunning(file: FileListItemDto): boolean {
+  return taskState.value.runningFiles.has(fileKey(file));
+}
 
 function formatSize(size: number): string {
   if (!size) return t("modpack.unknownSize");
@@ -446,18 +569,18 @@ watch(source, loadSource);
 
 <template>
   <div class="modpack-mode">
-    <!-- 过滤条件 + 搜索：同一块白底卡片 -->
+    <!-- 过滤条件 + 搜索：同一块白底卡片。加载期间整条锁死，避免半途改条件与在途请求打架 -->
     <div class="modpack-top">
     <div class="modpack-filters">
-      <SegmentedTabs v-model="source" :options="sources" />
-      <select v-model="version" class="field-select sel-version" @change="submitSearch">
+      <SegmentedTabs v-model="source" :options="sources" :disabled="searching" />
+      <select v-model="version" class="field-select sel-version" :disabled="searching" @change="submitSearch">
         <option value="">{{ t("modpack.allVersions") }}</option>
         <option v-for="v in versions" :key="v" :value="v">{{ v }}</option>
       </select>
-      <select v-model="sort" class="field-select sel-sort" @change="submitSearch">
+      <select v-model="sort" class="field-select sel-sort" :disabled="searching" @change="submitSearch">
         <option v-for="s in sorts" :key="s" :value="s">{{ t(`modpack.sort.${s}`) }}</option>
       </select>
-      <select v-model="category" class="field-select sel-category" @change="submitSearch">
+      <select v-model="category" class="field-select sel-category" :disabled="searching" @change="submitSearch">
         <option value="">{{ t("modpack.allCategories") }}</option>
         <option v-for="c in categories" :key="c.value" :value="c.value">{{ c.label }}</option>
       </select>
@@ -467,6 +590,7 @@ watch(source, loadSource);
           class="field-input"
           :placeholder="t('modpack.groupPlaceholder')"
           spellcheck="false"
+          :disabled="searching"
           @focus="groupOpen = true"
           @input="onGroupInput"
           @blur="groupOpen = false"
@@ -493,18 +617,34 @@ watch(source, loadSource);
         class="field-input search-input"
         :placeholder="t('modpack.searchHint')"
         spellcheck="false"
+        :disabled="searching"
         @keydown.enter="submitSearch"
       />
       <button class="search-btn" :disabled="searching" @click="submitSearch">
+        <span v-if="searching" class="btn-spinner"></span>
         {{ t("modpack.search") }}
       </button>
     </div>
     </div>
 
-    <!-- 结果列表（搜索中由锁定弹窗提示，这里不再重复显示） -->
-    <div class="modpack-list">
-      <div v-if="error" class="empty-tip">{{ error }}</div>
-      <div v-else-if="!searching && items.length === 0" class="empty-tip">{{ t("modpack.empty") }}</div>
+    <!-- 列表加载指示：翻页 / 换筛选只在结果区上方走一条细进度，不再全窗口遮罩 -->
+    <div class="list-bar" :class="{ on: searching }" aria-hidden="true"><span /></div>
+
+    <!-- 结果列表（加载状态内联在本区，旧内容保留并压暗） -->
+    <div class="modpack-list" :class="{ 'is-loading-dim': searching }">
+      <!-- 首次加载（还没有内容）：骨架行 -->
+      <template v-if="searching && items.length === 0">
+        <div v-for="n in 6" :key="n" class="sk-row">
+          <div class="sk sk-icon"></div>
+          <div class="sk-lines">
+            <div class="sk sk-line w60"></div>
+            <div class="sk sk-line w90"></div>
+            <div class="sk sk-line w40"></div>
+          </div>
+        </div>
+      </template>
+      <div v-else-if="error" class="empty-tip">{{ error }}</div>
+      <div v-else-if="items.length === 0" class="empty-tip">{{ t("modpack.empty") }}</div>
       <template v-else>
         <div v-for="item in items" :key="item.source.pid" class="pack-item">
           <!-- 收藏星标（右上角）：点击收藏 / 取消收藏 -->
@@ -518,7 +658,7 @@ watch(source, loadSource);
               <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
             </svg>
           </button>
-          <div class="pack-main" v-tip="t('modpack.detailHint')" @dblclick="openDetail(item)">
+          <div class="pack-main" @click="openDetail(item)">
             <AsyncImage v-if="item.image" class="pack-icon" :src="item.image" alt="" />
             <div v-else class="pack-icon pack-icon-fallback">{{ item.name.slice(0, 1).toUpperCase() }}</div>
             <div class="pack-info">
@@ -527,8 +667,8 @@ watch(source, loadSource);
                 <span v-if="item.authors.length" class="pack-author">
                   {{ item.authors.map((a) => a.name).join(", ") }}
                 </span>
-                <span v-if="item.download" class="pack-badge">{{ t("modpack.installed") }}</span>
-                <span v-else-if="item.downloadNow" class="pack-badge busy">{{ t("modpack.downloading") }}</span>
+                <span v-if="projectInstalled(item)" class="pack-badge">{{ t("modpack.installed") }}</span>
+                <span v-else-if="projectRunning(item)" class="pack-badge busy">{{ t("modpack.downloading") }}</span>
               </div>
               <div class="pack-desc">{{ item.summary }}</div>
               <div v-if="item.tag.length" class="pack-tags">
@@ -553,42 +693,42 @@ watch(source, loadSource);
       <button class="page-btn" :disabled="page === 0 || searching" @click="turnPage(-1)">
         {{ t("modpack.prevPage") }}
       </button>
-      <span class="page-num">{{ page + 1 }} / {{ maxPage + 1 }}</span>
+      <span class="page-num">{{ page + 1 }} / {{ maxPage + 1 }} · {{ t("modpack.totalItems", { n: total }) }}</span>
       <button class="page-btn" :disabled="page >= maxPage || searching" @click="turnPage(1)">
         {{ t("modpack.nextPage") }}
       </button>
     </div>
 
-    <!-- 搜索期间锁定窗口：不置 closable 也不接 close，点击遮罩无效 -->
-    <BaseModal v-if="searching" :width="240" :closable="false" below-titlebar>
-      <div class="search-lock">
-        <span class="search-spinner"></span>
-        <span>{{ t("modpack.loading") }}</span>
-      </div>
-    </BaseModal>
-
-    <!-- 截图放大预览：滚轮缩放，点任意处或 Esc 关闭 -->
+    <!-- 截图放大预览：滚轮缩放，拖动平移，点空白处或 Esc 关闭 -->
     <Teleport to="body">
       <transition name="shot-fade">
-        <div v-if="preview" class="shot-preview" @click="closePreview" @wheel.prevent="onPreviewWheel">
-          <img :src="preview" alt="" :style="{ transform: `scale(${previewScale})` }" />
+        <div
+          v-if="preview"
+          class="shot-preview"
+          :class="{ pannable: previewScale > 1, panning: previewDragged }"
+          @click="onPreviewClick"
+          @wheel.prevent="onPreviewWheel"
+          @pointerdown="onPreviewDown"
+        >
+          <img
+            :src="preview"
+            alt=""
+            :style="{
+              transform: `translate(${previewOffset.x}px, ${previewOffset.y}px) scale(${previewScale})`,
+            }"
+          />
+          <div class="shot-hint">{{ t("modpack.previewHint") }}</div>
         </div>
       </transition>
     </Teleport>
 
-    <!-- 项目详情（双击列表项打开）：整页覆盖 + 进出场动画，有正文只显示正文，没有才显示简介 -->
+    <!-- 项目详情（单击列表项打开）：铺满标题栏以下的整个窗口，返回键在标题栏上 -->
     <Teleport to="body">
       <transition name="detail-page">
         <div v-if="detailItem" class="detail-page">
-          <!-- 头部 + 内容合在一块面板里：头部固定、内容滚动，滚动条贴面板右缘 -->
+          <!-- 头部固定、内容滚动；没有外层卡片，直接用窗口底色 -->
           <div class="detail-panel">
           <div class="detail-head">
-            <button class="detail-back" v-tip="t('modpack.back')" @click="closeDetail">
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="19" y1="12" x2="5" y2="12" />
-                <polyline points="12 19 5 12 12 5" />
-              </svg>
-            </button>
             <AsyncImage v-if="detailItem.image" class="detail-icon" :src="detailItem.image" alt="" />
             <div v-else class="detail-icon detail-icon-fallback">
               {{ detailItem.name.slice(0, 1).toUpperCase() }}
@@ -596,8 +736,8 @@ watch(source, loadSource);
             <div class="detail-title">
               <div class="detail-name">
                 {{ detailItem.name }}
-                <span v-if="detailItem.download" class="pack-badge">{{ t("modpack.installed") }}</span>
-                <span v-else-if="detailItem.downloadNow" class="pack-badge busy">{{ t("modpack.downloading") }}</span>
+                <span v-if="projectInstalled(detailItem)" class="pack-badge">{{ t("modpack.installed") }}</span>
+                <span v-else-if="projectRunning(detailItem)" class="pack-badge busy">{{ t("modpack.downloading") }}</span>
               </div>
               <div class="detail-sub">
                 <span v-if="detailItem.authors.length">{{ detailItem.authors.map((a) => a.name).join(", ") }}</span>
@@ -651,13 +791,12 @@ watch(source, loadSource);
           </div>
 
           <div class="detail-scroll">
-            <div v-if="detailLoading" class="empty-tip">{{ t("modpack.loading") }}</div>
+            <!-- 详情正文的加载 / 失败只在这里提示一次；版本列表是并行的另一份加载，自己管自己 -->
+            <div v-if="detailLoading" class="empty-tip">{{ t("modpack.loadingDetail") }}</div>
             <div v-else-if="detailError" class="empty-tip">{{ detailError }}</div>
             <!-- 简介 / 截图 / 版本列表合并为一块大卡片，分区间距隔开，避免多框割裂 -->
             <div class="detail-card">
-              <div v-if="detailLoading" class="empty-tip">{{ t("modpack.loading") }}</div>
-              <div v-else-if="detailError" class="empty-tip">{{ detailError }}</div>
-              <template v-else-if="detail">
+              <template v-if="detail">
                 <!-- Modrinth：正文；CurseForge：简介。标题都用「项目简介」 -->
                 <div class="detail-section">{{ t("modpack.summary") }}</div>
                 <article v-if="bodyHtml" class="detail-md" v-html="bodyHtml"></article>
@@ -682,7 +821,7 @@ watch(source, loadSource);
                 <div class="detail-section detail-versions-head">
                   <span>{{ t("modpack.versions") }}</span>
                   <div class="version-tools">
-                    <select v-model="fileVersion" class="field-select sel-file-version" @change="onFileVersionChange">
+                    <select v-model="fileVersion" class="field-select sel-file-version" :disabled="filesLoading" @change="onFileVersionChange">
                       <option value="">{{ t("modpack.allVersions") }}</option>
                       <option v-for="v in versions" :key="v" :value="v">{{ v }}</option>
                     </select>
@@ -690,35 +829,50 @@ watch(source, loadSource);
                       <button class="page-btn" :disabled="filePage === 0 || filesLoading" @click="turnFilePage(-1)">
                         {{ t("modpack.prevPage") }}
                       </button>
-                      <span class="file-page-num">{{ filePage + 1 }} / {{ fileMaxPage }}</span>
+                      <span class="file-page-num">{{ filePage + 1 }} / {{ fileMaxPage }} · {{ t("modpack.totalItems", { n: fileTotal }) }}</span>
                       <button class="page-btn" :disabled="filePage >= fileMaxPage - 1 || filesLoading" @click="turnFilePage(1)">
                         {{ t("modpack.nextPage") }}
                       </button>
                     </div>
                   </div>
                 </div>
-                <div class="detail-files">
-                  <div v-if="filesLoading" class="empty-tip">{{ t("modpack.loadingVersions") }}</div>
-                  <div v-else-if="pageFiles.length === 0" class="empty-tip">{{ t("modpack.noVersions") }}</div>
-                  <div v-for="file in pageFiles" :key="file.source.fid" class="file-row">
-                    <div class="file-info">
-                      <span class="file-name">
-                        {{ file.name }}
-                        <span v-if="file.isDownload" class="pack-badge">{{ t("modpack.installed") }}</span>
-                        <span v-else-if="file.downloadNow" class="pack-badge busy">{{ t("modpack.downloading") }}</span>
-                      </span>
-                      <span class="file-meta">
-                        {{ t("modpack.fileMeta", {
-                          n: file.download.toLocaleString(),
-                          date: formatDate(file.time),
-                          size: formatSize(file.size),
-                        }) }}
-                      </span>
+                <div class="detail-files" :class="{ 'is-loading-dim': filesLoading }">
+                  <!-- 首次加载用骨架；翻页时保留旧内容并压暗（结果到了才整体替换） -->
+                  <template v-if="filesLoading && pageFiles.length === 0">
+                    <div v-for="n in 5" :key="n" class="sk-row compact">
+                      <div class="sk-lines">
+                        <div class="sk sk-line w70"></div>
+                        <div class="sk sk-line w45"></div>
+                      </div>
                     </div>
-                    <button class="install-btn" @click="install(detailItem, file)">
-                      {{ t("modpack.install") }}
-                    </button>
+                  </template>
+                  <!-- 失败与"没有版本"必须分开：前者可重试，后者是空结果 -->
+                  <div v-else-if="filesError" class="empty-tip">
+                    {{ t("modpack.versionFail") }}
+                    <button class="retry-btn" @click="reloadFiles">{{ t("modpack.retry") }}</button>
                   </div>
+                  <div v-else-if="pageFiles.length === 0" class="empty-tip">{{ t("modpack.noVersions") }}</div>
+                  <template v-else>
+                    <div v-for="file in pageFiles" :key="file.source.fid" class="file-row">
+                      <div class="file-info">
+                        <span class="file-name">
+                          {{ file.name }}
+                          <span v-if="fileInstalled(file)" class="pack-badge">{{ t("modpack.installed") }}</span>
+                          <span v-else-if="fileRunning(file)" class="pack-badge busy">{{ t("modpack.downloading") }}</span>
+                        </span>
+                        <span class="file-meta">
+                          {{ t("modpack.fileMeta", {
+                            n: file.download.toLocaleString(),
+                            date: formatDate(file.time),
+                            size: formatSize(file.size),
+                          }) }}
+                        </span>
+                      </div>
+                      <button class="install-btn" @click="install(detailItem, file)">
+                        {{ t("modpack.install") }}
+                      </button>
+                    </div>
+                  </template>
                 </div>
               </div>
             </div>
@@ -752,7 +906,9 @@ watch(source, loadSource);
 .sel-group {
   flex: 1 1 110px;
   min-width: 110px;
-  padding: 8px 10px;
+  /* 纵向内边距别改小：下拉的高度由 --field-h（42）兜底，比"行高 + 内边距"多出来的
+     那几px在 <select> 里会全沉到底部，文字看着偏上（不变量见 forms.css） */
+  padding: 10px;
   font-size: 13px;
 }
 
@@ -770,7 +926,7 @@ select.sel-file-version {
 }
 
 .sel-group .field-input {
-  padding: 8px 10px;
+  padding: 10px;
   font-size: 13px;
 }
 
@@ -812,7 +968,9 @@ select.sel-file-version {
   background: var(--bg-hover);
 }
 
-/* 顶部一块白底卡片：筛选行 + 搜索行都框在里面 */
+/* 顶部一块白底卡片：筛选行 + 搜索行都框在里面。
+   左右不再缩进：卡片边缘和添加实例窗口等各处的卡片一样，都落在窗口内容区边距（26px）上；
+   里面的控件靠 18px 内边距落到 44px，与项目列表的图标、详情页同一条竖线 */
 .modpack-top {
   display: flex;
   flex-direction: column;
@@ -820,7 +978,7 @@ select.sel-file-version {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 12px;
-  padding: 10px;
+  padding: 10px 18px;
 }
 
 /* 不设 align-items：靠默认 stretch 让按钮（无固定高、无纵向 padding）与输入框等高 */
@@ -836,6 +994,10 @@ select.sel-file-version {
 }
 
 .search-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   padding: 0 18px;
   border: none;
   border-radius: 10px;
@@ -854,21 +1016,13 @@ select.sel-file-version {
   cursor: not-allowed;
 }
 
-/* 搜索期间锁定窗口的弹窗内容 */
-.search-lock {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 13px;
-  color: var(--text);
-}
-
-.search-spinner {
-  width: 16px;
-  height: 16px;
+/* 搜索按钮里的转圈（按钮是渐变底，圈用白色） */
+.btn-spinner {
+  width: 13px;
+  height: 13px;
   border-radius: 50%;
-  border: 2px solid var(--border);
-  border-top-color: var(--accent);
+  border: 2px solid rgb(255 255 255 / 35%);
+  border-top-color: #fff;
   animation: search-spin 0.8s linear infinite;
   flex-shrink: 0;
 }
@@ -878,6 +1032,8 @@ select.sel-file-version {
     transform: rotate(360deg);
   }
 }
+
+/* 结果区上方的细进度条与骨架行：样式在 styles/skeleton.css（跨窗口共用） */
 
 /* 截图放大预览 */
 .shot-preview {
@@ -892,6 +1048,17 @@ select.sel-file-version {
   cursor: zoom-out;
   /* 放大后溢出部分裁掉 */
   overflow: hidden;
+  user-select: none;
+  touch-action: none;
+}
+
+/* 放大后可拖动看局部：光标换成抓手 */
+.shot-preview.pannable {
+  cursor: grab;
+}
+
+.shot-preview.panning {
+  cursor: grabbing;
 }
 
 .shot-preview img {
@@ -899,6 +1066,23 @@ select.sel-file-version {
   max-height: 92%;
   object-fit: contain;
   box-shadow: var(--shadow-lg);
+  /* 拖动时不要触发系统拖图；transform 交给 GPU */
+  -webkit-user-drag: none;
+  will-change: transform;
+}
+
+/* 底部操作提示 */
+.shot-hint {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 55%);
+  color: rgb(255 255 255 / 85%);
+  font-size: 12px;
+  pointer-events: none;
 }
 
 .shot-fade-enter-active,
@@ -918,10 +1102,14 @@ select.sel-file-version {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 10px;
+  /* 不再给整块列表铺卡片底色：白底放在每个项目自己身上，列表只是滚动容器。
+     左右与下方留 8px：滚动容器会把自己的溢出裁掉（overflow-y:auto 时另一轴也算 auto），
+     不留这点余量的话卡片悬停阴影会被齐边切掉、只剩下面一条黑带。
+     这 8px 用负外边距从外面借回来：滚动容器向外扩 8px、内边距再收回 8px，
+     卡片边缘就与上方筛选卡对齐（都在 26px 上），而不是整体往里缩 8px。
+     上边刻意不留：卡片与上方筛选卡的间距是调过的，加了会又变远 */
+  margin: 0 -8px;
+  padding: 0 8px 8px;
 }
 
 .empty-tip {
@@ -935,14 +1123,18 @@ select.sel-file-version {
   position: relative;
   border: 1px solid var(--border);
   border-radius: 10px;
-  background: var(--bg-side);
+  /* 白底在项目自己身上（列表容器不再铺底色） */
+  background: var(--bg-card);
   overflow: hidden;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition: box-shadow 0.15s ease;
 }
 
+/* 悬停：主题阴影（与主页卡片 .entry-card 同一套 token）。
+   刻意不换颜色：底色换成 --bg-hover 在浅色主题下白卡会发灰，
+   描边染成强调色则跟着主题色走（红 / 粉主题下很跳），两处一起动更显杂。
+   也不上浮：列表容器是滚动容器，会把自己的溢出裁掉，上浮会把卡片顶边切掉 */
 .pack-item:hover {
-  border-color: var(--accent-border);
-  box-shadow: 0 4px 14px rgb(0 0 0 / 12%);
+  box-shadow: var(--shadow-md);
 }
 
 /* 收藏星标（右上角）：悬停卡片时出现，已收藏则常显；可点击收藏 / 取消收藏。
@@ -992,22 +1184,19 @@ select.sel-file-version {
   fill: currentColor;
 }
 
+/* 左内边距 18px：卡片边缘 26 + 18 = 44，图标与上方筛选控件、详情页对齐 */
 .pack-main {
   width: 100%;
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 10px 12px;
+  padding: 10px 18px;
   border: none;
   background: transparent;
   color: inherit;
   font-family: inherit;
   text-align: left;
   cursor: pointer;
-}
-
-.pack-main:hover {
-  background: var(--bg-hover);
 }
 
 .pack-icon {
@@ -1141,17 +1330,14 @@ select.sel-file-version {
   background: var(--bg);
   display: flex;
   flex-direction: column;
-  padding: 12px;
 }
 
+/* 不再套一层卡片：详情铺满整个窗口，头部下沿一条分隔线就够了 */
 .detail-panel {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
   overflow: hidden;
 }
 
@@ -1166,32 +1352,14 @@ select.sel-file-version {
   transform: translateY(14px);
 }
 
-.detail-back {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 36px;
-  height: 36px;
-  border: none;
-  border-radius: 10px;
-  background: transparent;
-  color: var(--text-dim);
-  cursor: pointer;
-  flex-shrink: 0;
-}
-
-.detail-back:hover {
-  background: var(--bg-hover);
-  color: var(--text);
-}
-
-/* 面板头部：固定在面板顶部，用分隔线与内容区分开 */
+/* 面板头部：固定在面板顶部，用分隔线与内容区分开（返回键在标题栏，这里不再是第一个控件）。
+   左右内边距与其它窗口的卡片边缘同值（26px）——详情是整页覆盖，这就是它那一层的边距 */
 .detail-head {
   display: flex;
   align-items: center;
   gap: 14px;
   flex-shrink: 0;
-  padding: 12px 16px;
+  padding: 14px 26px;
   border-bottom: 1px solid var(--border);
 }
 
@@ -1317,10 +1485,12 @@ select.sel-file-version {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 12px 14px 16px;
+  /* 左右内边距对齐头部（26px），也与其它的卡片边缘同值：
+     详情没有卡片，正文直接从这个边距起排 */
+  padding: 16px 26px 22px;
 }
 
-/* 内容区容器（无边框，面板本身就是卡片） */
+/* 内容区容器（详情不再套卡片，这里只作分区容器） */
 .detail-card {
   padding: 0;
 }
@@ -1341,19 +1511,43 @@ select.sel-file-version {
   line-height: 1.65;
 }
 
+/* 分区标题（项目简介 / 截图 / 版本列表）：左侧强调色竖条 + 底部分隔线，
+   与设置窗口的分组标题（settings.css 的 .group-title）同一套观感。
+   注意只写 margin-bottom：.detail-block 的 margin-top 不能被这里的简写冲掉 */
 .detail-section {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 14px;
   font-weight: 600;
   color: var(--text);
-  margin-bottom: 8px;
+  /* 标题不折行：这一行左右都有东西，被压窄了会裂成两行 */
+  white-space: nowrap;
+  margin-bottom: 12px;
+  padding-bottom: 9px;
+  border-bottom: 1px solid var(--border);
 }
 
-/* 版本列表标题行：标题 + 版本筛选 + 翻页控件 */
+.detail-section::before {
+  content: "";
+  width: 3px;
+  height: 13px;
+  border-radius: 2px;
+  background: var(--accent);
+  flex-shrink: 0;
+}
+
+/* 版本列表标题行：标题 + 版本筛选 + 翻页控件（分隔线由 .detail-section 提供）。
+   不能用 space-between：竖条也是 flex 子项，那样会把竖条与标题之间也拉开一截；
+   改成标题 margin-right:auto 把右侧工具条顶到最右。 */
 .detail-versions-head {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  gap: 8px;
+}
+
+.detail-versions-head > span {
+  margin-right: auto;
 }
 
 .version-tools {
@@ -1362,17 +1556,25 @@ select.sel-file-version {
   gap: 8px;
 }
 
-/* 版本筛选下拉：比列表页的筛选项小一号 */
+/* 版本筛选下拉：比列表页的筛选项小一号。
+   高度要跟着一起缩小：--field-h(42) 兜底时多出来的空间在 <select> 里会全沉到底部
+   （不变量见 forms.css：高度 = 行高 20 + 上下内边距 5×2 + 边框 1×2 = 32） */
 .sel-file-version {
   max-width: 150px;
+  height: 32px;
+  min-height: 0;
   padding: 5px 8px;
   font-size: 12px;
+  /* 选中的版本名可能很长：不让它在这条定高下拉里折成两行 */
+  white-space: nowrap;
 }
 
 .file-page {
   display: flex;
   align-items: center;
   gap: 8px;
+  /* 不参与收缩：被压窄的话里面的「1 / 2 · 共 43 个」会折成两行 */
+  flex-shrink: 0;
 }
 
 .file-page-num {
@@ -1380,6 +1582,7 @@ select.sel-file-version {
   color: var(--text-dim);
   min-width: 48px;
   text-align: center;
+  white-space: nowrap;
 }
 
 /* 头部「版本列表」跳转按钮：点击滚动到版本区 */
@@ -1451,6 +1654,26 @@ select.sel-file-version {
 .detail-files {
   display: flex;
   flex-direction: column;
+}
+
+/* 失败提示里的重试按钮 */
+.retry-btn {
+  margin-left: 8px;
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-raised);
+  color: var(--text);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: color 0.12s ease, border-color 0.12s ease;
+}
+
+.retry-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 /* Modrinth 正文 markdown 排版（v-html 注入，需要 :deep 穿透） */
@@ -1635,6 +1858,7 @@ select.sel-file-version {
   font-size: 12px;
   font-family: inherit;
   cursor: pointer;
+  white-space: nowrap;
   transition: color 0.12s ease, border-color 0.12s ease, opacity 0.12s ease;
 }
 
@@ -1653,5 +1877,7 @@ select.sel-file-version {
   color: var(--text-dim);
   min-width: 60px;
   text-align: center;
+  /* 同上：末尾带「共 N 个」，窄了会折行 */
+  white-space: nowrap;
 }
 </style>

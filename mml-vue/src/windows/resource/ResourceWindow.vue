@@ -6,6 +6,7 @@ import WindowFrame from "../../components/ui/WindowFrame.vue";
 import SegmentedTabs from "../../components/ui/SegmentedTabs.vue";
 import AsyncImage from "../../components/ui/AsyncImage.vue";
 import BaseModal from "../../components/ui/BaseModal.vue";
+import { useWindowRefresh } from "../../composables/useWindowRefresh";
 import { t, tErr } from "../../lib/i18n";
 import { showToast } from "../../lib/toast";
 import {
@@ -387,6 +388,11 @@ function clearShotsAsk() {
 }
 
 onMounted(async () => {
+  await sync();
+});
+
+/** 当前实例 + 当前分类数据（首次挂载与切回本窗口都走这里） */
+async function sync() {
   try {
     // 当前实例取自 gui_config.json（主窗口选中时写入），本窗口是独立 webview，需自己读一次
     const [list, cfg] = await Promise.all([api.getInstances(), loadGuiConfig()]);
@@ -399,7 +405,10 @@ onMounted(async () => {
     instance.value = null;
   }
   await load();
-});
+}
+
+// 单窗口模式：窗口被 KeepAlive 缓存，切回不会重新挂载 → 自己补一次（实例可能已被主窗口切走）
+useWindowRefresh(sync);
 </script>
 
 <template>

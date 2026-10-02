@@ -108,6 +108,8 @@ pub struct BaseModPackWorker {
     pub downloads: Mutex<Vec<FileItemObj>>,
     /// 取消
     pub cancel: CancellationToken,
+    /// 图标
+    pub icon: Option<String>,
 }
 
 impl BaseModPackWorker {
@@ -120,12 +122,14 @@ impl BaseModPackWorker {
     /// - `pack_gui`: 整合包安装界面回调
     /// - `archive_gui`: 压缩包操作界面回调
     /// - `cancel`: 取消令牌
+    /// - `icon`: 整合包图标 URL（在线安装时由调用方给；创建实例时写进实例，`None` 表示没有）
     pub fn new(
         archive: BaseArchive,
         instance_gui: AddInstanceGui,
         pack_gui: AddModPackGui,
         archive_gui: BaseArchiveGui,
         cancel: CancellationToken,
+        icon: Option<String>,
     ) -> Self {
         Self {
             archive,
@@ -138,6 +142,7 @@ impl BaseModPackWorker {
             game: None,
             downloads: Mutex::new(Vec::new()),
             cancel,
+            icon,
         }
     }
 

@@ -321,6 +321,20 @@ export const api = {
     await commands.add.setCloseGuard(enabled);
   },
 
+  /**
+   * 确保某个窗口 kind 的模型存在（单窗口模式下页面挂载时调用）
+   *
+   * 多窗口模式下模型跟着真实窗口走，这里重复调用无副作用。
+   */
+  async ensureWindowModel(kind: string): Promise<void> {
+    await commands.windows.ensureModel(kind);
+  },
+
+  /** 释放某个窗口 kind 的模型（单窗口模式下页面切走 / 关闭时调用，别让模型常驻） */
+  async dropWindowModel(kind: string): Promise<void> {
+    await commands.windows.dropModel(kind);
+  },
+
   /** 获取压缩包类型 ID 列表 */
   async addGetPackTypes(): Promise<string[]> {
     return commands.add.getPackTypes();

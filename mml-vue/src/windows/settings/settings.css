@@ -142,7 +142,7 @@
   width: 280px;
 }
 
-/* 标题栏高 60px：输入框压到 32px，和标题、窗口按钮在同一视觉水平线上 */
+/* 标题栏高 64px（--titlebar-h）：输入框压到 32px，和标题、窗口按钮在同一视觉水平线上 */
 .frame-head .set-search-input {
   height: 32px;
   min-height: 0;

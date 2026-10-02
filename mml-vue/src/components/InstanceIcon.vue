@@ -33,17 +33,46 @@ const palette = computed(() => {
 
 const char = computed(() => props.name.trim().charAt(0).toUpperCase() || "M");
 
+/**
+ * 容器样式
+ *
+ * 真图加载成功后**不再画占位底色**（按 uuid 取色的渐变）：方块图标是透明底 PNG
+ * （实测 94%~97% 像素 alpha=0），留着渐变会从透明处透出来，看着就是"占位图没隐藏、
+ * 方块图叠在绿色底上"。加载中 / 失败时仍是渐变底 + 字母。
+ */
+const iconStyle = computed(() => ({
+  width: props.size + "px",
+  height: props.size + "px",
+  background: loaded.value ? "transparent" : palette.value,
+  fontSize: Math.round(props.size * 0.42) + "px",
+  borderRadius: Math.round(props.size * 0.24) + "px",
+}));
+
 // ---------- 真实图标加载 ----------
 
 // mml-image 协议前缀（浏览器预览无 IPC 时取不到，走回退渐变）
 const base = ref("");
 const failed = ref(false);
+/**
+ * 真图是否已成功加载
+ *
+ * 加载后必须把字母占位藏掉：方块图标是**透明底** PNG（实测 94%~97% 像素 alpha=0），
+ * 字母留在 DOM 里会从透明处透出来，看着就是"设了图标但占位图没消失"。
+ * 加载中/失败时仍显示字母（原设计意图：不让图标区空着）。
+ */
+const loaded = ref(false);
 /** 缓存破坏参数（图标被更换后刷新） */
 const ver = ref(0);
 
 const url = computed(() =>
   base.value ? `${base.value}/instance/${props.uuid}?v=${ver.value}` : "",
 );
+
+/** 加载失败：退回字母占位 */
+function onError() {
+  failed.value = true;
+  loaded.value = false;
+}
 
 // onUnmounted 必须在 setup 同步期注册，await 后再调会失去组件实例，
 // 所以注销函数先存下来，由同步注册的钩子代为调用
@@ -62,6 +91,8 @@ onUnmounted(() => unlistenChange?.());
     if (type !== "edit") return;
     ver.value = Date.now();
     failed.value = false;
+    // 换图期间先回到字母，新图到了再藏（否则旧图会一直挂着）
+    loaded.value = false;
   });
 })();
 
@@ -69,21 +100,13 @@ watch(
   () => props.uuid,
   () => {
     failed.value = false;
+    loaded.value = false;
   },
 );
 </script>
 
 <template>
-  <div
-    class="inst-icon"
-    :style="{
-      width: size + 'px',
-      height: size + 'px',
-      background: palette,
-      fontSize: Math.round(size * 0.42) + 'px',
-      borderRadius: Math.round(size * 0.24) + 'px',
-    }"
-  >
+  <div class="inst-icon" :class="{ 'has-icon': loaded }" :style="iconStyle">
     <img
       v-if="url && !failed"
       class="inst-icon-img"
@@ -91,9 +114,11 @@ watch(
       alt=""
       loading="lazy"
       decoding="async"
-      @error="failed = true"
+      @load="loaded = true"
+      @error="onError"
     />
-    <span class="inst-icon-char">{{ char }}</span>
+    <!-- 字母只是回退：真图加载成功后必须移除，透明处不会再透出占位 -->
+    <span v-if="!loaded" class="inst-icon-char">{{ char }}</span>
   </div>
 </template>
 
@@ -112,8 +137,7 @@ watch(
   position: relative;
 }
 
-/* 首字母始终在 DOM 里：真图是绝对定位、盖在它上面，图没到之前就先显示字母，
-   避免等图标请求返回时整块只剩渐变底 */
+/* 字母占位：加载中 / 失败时才存在（真图加载成功后由 v-if 移除） */
 .inst-icon-char {
   line-height: 1;
 }
@@ -128,12 +152,23 @@ watch(
   image-rendering: pixelated;
 }
 
-/* 简单的高光装饰 */
+/* 简单的高光装饰（只有占位态才画：真图上方不该再压一层白高光） */
 .inst-icon::after {
   content: "";
   position: absolute;
   inset: 0;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0) 45%);
   pointer-events: none;
+}
+
+.inst-icon.has-icon::after {
+  display: none;
+}
+
+/* 真图加载后连边框与阴影也去掉：底色没了但这两样还在时，整块会读成"白底 + 深色描边"的方框。
+   保留 1px 透明边框（不是 border: none），盒模型尺寸不变，图标不会比占位态偏移 1px。 */
+.inst-icon.has-icon {
+  border-color: transparent;
+  box-shadow: none;
 }
 </style>

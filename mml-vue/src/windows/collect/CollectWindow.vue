@@ -8,6 +8,7 @@ import { computed, onMounted, onUnmounted, ref } from "vue";
 import WindowFrame from "../../components/ui/WindowFrame.vue";
 import BaseButton from "../../components/ui/BaseButton.vue";
 import BaseModal from "../../components/ui/BaseModal.vue";
+import { useWindowRefresh } from "../../composables/useWindowRefresh";
 import { api, onCollectChange } from "../../lib/api";
 import { loadGuiConfig, saveGuiConfig, type CollectConfig } from "../../lib/guiConfig";
 import { t, tErr } from "../../lib/i18n";
@@ -86,6 +87,14 @@ onMounted(async () => {
   reload().catch((e) => showToast(tErr(e)));
 });
 
+/** 重拉收藏列表（首次挂载与切回本窗口都走这里） */
+function refresh() {
+  // 收藏数据可能被别的窗口（整合包 / 资源窗口的星标）改过
+  reload().catch((e) => showToast(tErr(e)));
+}
+
+// 单窗口模式：窗口被 KeepAlive 缓存，切回不会重新挂载 → 自己补一次
+useWindowRefresh(refresh);
 // ---------------- 类型过滤 ----------------
 
 async function toggleFilter(key: keyof CollectConfig, value: boolean) {
