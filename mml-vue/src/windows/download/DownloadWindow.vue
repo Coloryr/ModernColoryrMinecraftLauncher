@@ -26,7 +26,11 @@ const REFRESH_MS = 700;
 const shell = computed(() => (multiWindow.value ? WindowFrame : BaseModal));
 const shellProps = computed(() =>
   multiWindow.value
-    ? { title: t("features.download") }
+    ? {
+        title: t("features.download"),
+        // 本窗口整页就是下载管理，标题栏不用再放一个下载指示器（整合包那个照留）
+        hideDownloadIndicator: true,
+      }
     : {
         title: t("features.download"),
         // 线程行是固定列宽的网格（26 + 文件名 + 116 + 124 + 78 + 88，加间距与内边距约 612），
@@ -211,7 +215,7 @@ async function confirmStopAll() {
  * 点关闭：直接收起弹窗 / 关掉窗口，不打断下载
  *
  * 单窗口模式下它只是浮在当前页上的一层壳，收起 ≠ 停止下载：任务照跑，
- * 右下角的入口（DownloadChip）还在。真正会连带停掉下载的是"关下载窗口"和
+ * 顶栏的入口（DownloadTitleIndicator）还在。真正会连带停掉下载的是"关下载窗口"和
  * "退出启动器"——那两种情况由 Rust 侧的关闭保护拦下，再由根组件弹确认框
  * （见 src-tauri 的 close_guarded 与 App.vue）
  */

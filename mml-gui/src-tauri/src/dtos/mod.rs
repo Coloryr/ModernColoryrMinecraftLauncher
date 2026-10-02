@@ -58,7 +58,7 @@ pub use motd_dto::{MotdDto, MotdSegmentDto};
 pub use window_dto::WindowSizeDto;
 pub use main_dto::{
     BlockItemDto, BlockStatusDto, ErrorEvent, ExitEvent, IconSourceDto, InstanceChangeEvent,
-    InstancePatch, LogEvent, NewsItem, StateEvent,
+    InstanceLangDto, InstancePatch, LogEvent, NewsItem, StateEvent,
 };
 pub use resource_dto::{
     DataPackItemDto, ModItemDto, PackItemDto, SaveItemDto, ScreenshotItemDto, ServerItemDto,

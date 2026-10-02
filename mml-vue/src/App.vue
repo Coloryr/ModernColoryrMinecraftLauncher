@@ -20,7 +20,6 @@ import { setModpackFallbackToast, useModpackStatus } from "./lib/modpackTasks";
 import AppToast from "./components/ui/AppToast.vue";
 import BaseButton from "./components/ui/BaseButton.vue";
 import BaseModal from "./components/ui/BaseModal.vue";
-import DownloadChip from "./components/DownloadChip.vue";
 import ModpackPopup from "./components/ModpackPopup.vue";
 
 applyTheme();
@@ -145,8 +144,9 @@ const closeAskButton = computed(() =>
     :status="modpackStatus"
     @close="closeModpackPopup"
   />
-  <!-- 单窗口模式：有下载任务时右下角的入口（兼进度指示） -->
-  <DownloadChip v-if="!multiWindow" />
+  <!-- 下载入口不再用右下角浮层：改成主窗口顶栏上的动态图标 + 进度条
+       （DownloadTitleIndicator，与整合包那个并排、排在主页按钮左边）；
+       下载管理弹窗仍在这里渲染 -->
   <!-- 全局轻提示（所有窗口统一） -->
   <AppToast />
 

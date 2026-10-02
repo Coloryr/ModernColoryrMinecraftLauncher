@@ -11,8 +11,8 @@ use tauri::{AppHandle, Emitter, WebviewWindow};
 
 use crate::dtos::main_dto::{LoadState, LogLine, NewsItem};
 use crate::dtos::{
-    EnvVarLineDto, ErrorEvent, ExitEvent, InstanceArgsDto, InstanceChangeEvent,
-    InstanceInfoDto, InstancePatch, JavaInfoDto, LogEvent, MotdDto, StateEvent, VersionInfoDto,
+    EnvVarLineDto, ErrorEvent, ExitEvent, InstanceArgsDto, InstanceChangeEvent, InstanceInfoDto,
+    InstanceLangDto, InstancePatch, JavaInfoDto, LogEvent, MotdDto, StateEvent, VersionInfoDto,
 };
 use crate::{image_manager, listens, windows};
 use mml_config::config_obj::{GCType, RunArgObj, WindowSettingObj};
@@ -177,15 +177,24 @@ pub fn main_get_groups() -> Vec<String> {
 
 /// 获取实例的游戏内语言列表（从资源索引查 minecraft/lang/*.json，资源未下载时为空）
 ///
-/// 查询要读整份资源索引 JSON 再反序列化，是同步重活：丢到阻塞线程执行，
+/// 每项带显示名：名字取自对应语言文件里的 `language.name`（如 zh_cn → 简体中文），
+/// 读不到时回落为语言代码（见 `mml_game::get_instance_langs`）。
+///
+/// 查询要读整份资源索引 JSON、再逐个读语言文件，是同步重活：丢到阻塞线程执行，
 /// 不要占住 async runtime —— 否则同期的其它 IPC 与图片协议请求会被一起拖住。
 #[tauri::command]
-pub async fn main_get_instance_langs(uuid: String) -> Vec<String> {
+pub async fn main_get_instance_langs(uuid: String) -> Vec<InstanceLangDto> {
     let res = tauri::async_runtime::spawn_blocking(move || {
         let Ok(id) = Uuid::parse_str(&uuid) else {
             return Vec::new();
         };
         mml_game::get_instance_langs(&id)
+            .into_iter()
+            .map(|item| InstanceLangDto {
+                code: item.code,
+                name: item.name,
+            })
+            .collect()
     })
     .await;
 

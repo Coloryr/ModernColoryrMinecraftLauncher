@@ -25,6 +25,19 @@ where
     Deserialize::deserialize(de).map(Some)
 }
 
+/// 游戏内语言条目（语言设置下拉用）
+///
+/// `name` 是给人看的显示名（取自该语言文件里的 `language.name`，如“简体中文”）；
+/// 资源没下全时它就是 `code`，所以前端直接用 `name` 显示即可。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InstanceLangDto {
+    /// 语言代码（如 zh_cn）
+    pub code: String,
+    /// 显示名（如 简体中文）
+    pub name: String,
+}
+
 /// 核心数据加载完成事件
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]

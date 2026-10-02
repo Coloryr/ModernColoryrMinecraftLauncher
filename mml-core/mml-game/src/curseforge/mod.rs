@@ -25,7 +25,8 @@ use crate::{
     modpack::{BaseModPackWorker, ModPackWorker, curseforge_worker::CurseForgeWorker},
 };
 use mml_base::{
-    archives::{BaseArchive, BaseArchiveGui}, file_item::{FileHash, FileItemObj, LaterRun},
+    archives::{BaseArchive, BaseArchiveGui},
+    file_item::{FileHash, FileItemObj, LaterRun},
 };
 use mml_names::{
     i18_items::error_type::{CoreResult, ErrorType},

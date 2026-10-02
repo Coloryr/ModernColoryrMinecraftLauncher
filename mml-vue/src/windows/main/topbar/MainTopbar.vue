@@ -5,7 +5,7 @@ import { t } from "../../../lib/i18n";
 import AccountSelector from "../../../components/AccountSelector.vue";
 import WindowControls from "../../../components/ui/WindowControls.vue";
 import ModpackTitleIndicator from "../../../components/ModpackTitleIndicator.vue";
-import { multiWindow } from "../../windowManager";
+import DownloadTitleIndicator from "../../../components/DownloadTitleIndicator.vue";
 import { onTitleBarPointerDown, titleBarStyle } from "../../../lib/titlebar";
 import type { AccountStoreDto } from "../../../lib/bindings";
 import type { FeatureId } from "../types";
@@ -38,6 +38,13 @@ const emit = defineEmits<{
     </div>
 
     <div class="topbar-right">
+      <!-- 进度指示器：排在主页按钮左边（整排的最前面）。
+           主页面在两种窗口模式下都是这个顶栏，所以两种模式都挂；
+           功能页（用 WindowFrame 那套标题栏）也有同名组件，跟着当时的标题栏走。
+           没有任务时各自整块不存在，不留空位 -->
+      <ModpackTitleIndicator />
+      <DownloadTitleIndicator />
+
       <!-- 启动器主页（切换按钮） -->
       <button
         class="topbar-icon-btn"
@@ -74,11 +81,6 @@ const emit = defineEmits<{
           <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" />
         </svg>
       </button>
-
-      <!-- 整合包安装进度指示：单窗口模式下挂在这里（任何页面都在同一个主窗口里，
-           挂在主窗口顶栏切页不会消失）。多窗口模式交给各窗口自己的标题栏，
-           见 WindowFrame 里的同名组件 -->
-      <ModpackTitleIndicator v-if="!multiWindow" />
 
       <AccountSelector
         :account="currentAccount"

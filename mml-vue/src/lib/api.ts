@@ -23,6 +23,7 @@ import type {
   ExportProgressDto,
   InstanceArgsDto,
   InstanceInfoDto,
+  InstanceLangDto,
   JavaInfoDto,
   LoadState,
   LogEvent,
@@ -77,8 +78,13 @@ export const api = {
     return commands.main.getGroups();
   },
 
-  /** 获取实例的游戏内语言列表（从资源索引查 minecraft/lang/*.json，资源未下载时为空） */
-  async getInstanceLangs(uuid: string): Promise<string[]> {
+  /**
+   * 获取实例的游戏内语言列表（从资源索引查 minecraft/lang/*.json，资源未下载时为空）
+   *
+   * 每项带显示名 `name`（取自语言文件里的 `language.name`，如 zh_cn → 简体中文），
+   * 读不到时它就是 `code`，所以直接显示 `name` 即可。
+   */
+  async getInstanceLangs(uuid: string): Promise<InstanceLangDto[]> {
     return commands.main.getInstanceLangs(uuid);
   },
 

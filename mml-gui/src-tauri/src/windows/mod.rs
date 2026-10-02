@@ -397,7 +397,13 @@ pub fn window_model<T: Send + Sync + 'static>(window: &WebviewWindow) -> Option<
 /// 不会因为这里取一次就常驻下来。
 pub fn model_for_kind<T: Send + Sync + 'static>(kind: &str) -> Option<Arc<T>> {
     let uuid = uuid_for_kind(kind)?;
-    WINDOW_MODELS.read().unwrap().get(&uuid)?.clone().downcast::<T>().ok()
+    WINDOW_MODELS
+        .read()
+        .unwrap()
+        .get(&uuid)?
+        .clone()
+        .downcast::<T>()
+        .ok()
 }
 
 /// 确保某个 kind 的模型存在（单窗口模式下页面打开时由前端调用）

@@ -44,8 +44,8 @@ export const windowParams = ref<{ uuid: string | null }>({ uuid: null });
  * 单窗口模式：下载管理以"悬浮弹窗"出现，而不是把当前页面换掉
  *
  * 它是个工具型窗口——下载在后台跑，用户常常要一边看别的页面一边盯进度，
- * 所以浮在任意页面之上（见 [`openWindow`] 的特例）；有任务时右下角另有入口
- * （`components/DownloadChip.vue`）。
+ * 所以浮在任意页面之上（见 [`openWindow`] 的特例）；有任务时主窗口顶栏另有入口
+ * （`components/DownloadTitleIndicator.vue`）。
  */
 export const downloadPopupOpen = ref(false);
 
