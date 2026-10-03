@@ -5,6 +5,8 @@
 // 冲突出现时把焦点落到"要改小"的最小内存上（NumberStepper 的输入框在组件内部，取 $el 里的 input）。
 import { nextTick, ref, watch } from "vue";
 import { t } from "../../../../lib/i18n";
+import { COMMON_MEMORY, COMMON_RESOLUTIONS } from "../../../../lib/resolutions";
+import { useSystemMemory } from "../../../../lib/systemMemory";
 import BaseSwitch from "../../../../components/ui/BaseSwitch.vue";
 import NumberStepper from "../../../../components/ui/NumberStepper.vue";
 import SegmentedTabs from "../../../../components/ui/SegmentedTabs.vue";
@@ -29,6 +31,22 @@ const {
   removeEnvLine,
   saveState,
 } = props.settings;
+
+/** 本机内存参考值（与实例设置的启动参数共用同一份逻辑） */
+const { text: memoryText } = useSystemMemory();
+
+/** 预设按钮上的文字：整数 GB 显示 `8 GB`，否则按 MB 显示 */
+function memoryLabel(mib: number): string {
+  return mib % 1024 === 0 ? `${mib / 1024} GB` : `${mib} MB`;
+}
+
+/** 应用一个内存预设：填最大内存；最小内存高于它时一并顶上去 */
+function applyMemory(mib: number) {
+  // run 在设置加载完成前可能为空（模板用 v-if="run && win" 挡住渲染）
+  if (!run.value) return;
+  run.value.maxMemory = mib;
+  if (run.value.minMemory > mib) run.value.minMemory = mib;
+}
 
 /** 内存冲突时聚焦最小内存（要改的就是它） */
 const minMemoryRef = ref<InstanceType<typeof NumberStepper> | null>(null);
@@ -61,6 +79,20 @@ watch(memoryConflict, async (bad) => {
           <NumberStepper v-model="win!.height" :min="100" :max="65535" />
         </div>
       </div>
+      <!-- 常用分辨率：一点即填宽 / 高（当前值匹配时高亮），与实例设置里那排共用同一份预设 -->
+      <div class="res-row">
+        <span class="res-label">{{ t("args.commonRes") }}</span>
+        <button
+          v-for="r in COMMON_RESOLUTIONS"
+          :key="`${r.w}x${r.h}`"
+          type="button"
+          class="res-btn"
+          :class="{ on: win!.width === r.w && win!.height === r.h }"
+          @click="((win!.width = r.w), (win!.height = r.h))"
+        >
+          {{ r.w }}×{{ r.h }}
+        </button>
+      </div>
     </SettingsGroup>
 
     <SettingsGroup
@@ -77,6 +109,23 @@ watch(memoryConflict, async (bad) => {
           <label class="field-label">{{ t("winSettings.maxMemory") }}</label>
           <NumberStepper v-model="run!.maxMemory" :min="256" :max="65536" :step="256" />
         </div>
+      </div>
+      <!-- 本机内存参考值：给设最大内存一个依据（始终占一行，拿不到会写明原因） -->
+      <p class="mem-hint">{{ memoryText }}</p>
+      <!-- 常用内存：一点即填「最大内存」（当前值匹配时高亮）。
+           最小内存跟着顶上去，免得点了预设反而触发"最小 > 最大"的冲突 -->
+      <div class="res-row">
+        <span class="res-label">{{ t("args.commonMemory") }}</span>
+        <button
+          v-for="m in COMMON_MEMORY"
+          :key="m"
+          type="button"
+          class="res-btn"
+          :class="{ on: run!.maxMemory === m }"
+          @click="applyMemory(m)"
+        >
+          {{ memoryLabel(m) }}
+        </button>
       </div>
       <!-- 冲突时明确说清"没保存"，避免用户以为改上了 -->
       <p v-if="memoryConflict" class="lock-server-hint">{{ t("winSettings.memoryConflict") }}</p>

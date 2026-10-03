@@ -1,27 +1,32 @@
 <script setup lang="ts">
-// 加载器查询进度（就地一行，跟在触发它的字段下面）
+// 就地一行加载进度（跟在触发它的字段 / 控件下面）
 //
-// 两处用：添加实例窗口的"从头新建"（加载器类型 / 加载器版本）、实例设置面板。
-// 两种任务：有总数（查询支持的加载器，按加载器步进）走确定进度条；
-// 无总数（拉取加载器版本）走不确定滚动条。
+// 用处：添加实例窗口的"从头新建"（加载器类型 / 加载器版本）、实例设置面板、
+// 添加文件夹的目录扫描。
+// 两种形态：有总数（如查询支持的加载器，按加载器步进）走确定进度条；
+// 无总数（拉取加载器版本、扫描目录）走**不确定滚动条**（小色块来回滚）。
 //
 // 摆放：**就地**，铺满所在字段那一列的宽度（由调用方那边排布）。
 // 早先是 Teleport 到 body、固定在窗口正上方的一条浮层，但它对应的字段就在下面几行，
-// 浮在窗口顶上离得太远，两处都改成内联了。
+// 浮在窗口顶上离得太远，几处都改成内联了。
 import { computed } from "vue";
 import { t } from "../lib/i18n";
 
 const props = defineProps<{
   /** 是否显示 */
   visible: boolean;
-  /** 任务类型：query = 查询支持的加载器；versions = 拉取加载器版本 */
+  /** 任务类型（决定默认文案与是否有步进）：query = 查询支持的加载器；versions = 拉取加载器版本等无步进任务 */
   kind: "query" | "versions";
   step: number;
   total: number;
+  /** 自定义文案；不传则按 `kind` 取默认文案 */
+  label?: string;
 }>();
 
-const label = computed(() =>
-  props.kind === "query" ? t("add.loaderQuerying") : t("add.loaderVerLoading"),
+const label = computed(
+  () =>
+    props.label ??
+    (props.kind === "query" ? t("add.loaderQuerying") : t("add.loaderVerLoading")),
 );
 /** 没有步数可报时用不确定动画（进度条宽度也没有意义） */
 const determinate = computed(() => props.kind === "query" && props.total > 0);

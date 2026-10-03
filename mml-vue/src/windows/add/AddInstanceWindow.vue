@@ -7,6 +7,7 @@
 import { computed, nextTick, onActivated, onDeactivated, onMounted, onUnmounted, ref, watch } from "vue";
 import WindowFrame from "../../components/ui/WindowFrame.vue";
 import BaseButton from "../../components/ui/BaseButton.vue";
+import BaseModal from "../../components/ui/BaseModal.vue";
 import ModeTabs from "./parts/ModeTabs.vue";
 import GroupCombo from "./parts/GroupCombo.vue";
 import NameConflictModal from "./parts/NameConflictModal.vue";
@@ -32,7 +33,7 @@ import { showToast } from "../../lib/toast";
 import { t, tErr } from "../../lib/i18n";
 import { isTauri, openWindow } from "../windowManager";
 import { commands } from "../../lib/bindings";
-import type { PackProgressDto } from "../../lib/bindings";
+import type { FolderInstanceDto, PackProgressDto } from "../../lib/bindings";
 import { ADD_MODES, type AddMode } from "./types";
 
 const emit = defineEmits<{ (e: "close"): void }>();
@@ -164,27 +165,33 @@ async function applyArchivePath(path: string) {
     detectMockPack(path);
     return;
   }
-  // 读取压缩包真实条目（目录以 / 结尾，buildTree 直接解析）
+  // 读条目 + 识别类型都是磁盘活，期间给个滚动进度条并挡住模式切换
+  archiveScanning.value = true;
   try {
-    const list = await commands.add.listArchive(path);
-    if (isLeaving()) return;
-    resetArchive(buildTree(list), true);
-  } catch {
-    if (isLeaving()) return;
-    resetArchive();
-    addError.value = t("add.archiveReadFail");
-    return;
-  }
-  // 识别整合包类型，自动填入类型和实例名（用户改过名字则不动）
-  try {
-    const detected = await api.addDetectArchive(path);
-    if (isLeaving()) return;
-    addPackType.value = detected.packType;
-    if (!nameEdited && detected.name) {
-      newName.value = detected.name;
+    // 读取压缩包真实条目（目录以 / 结尾，buildTree 直接解析）
+    try {
+      const list = await commands.add.listArchive(path);
+      if (isLeaving()) return;
+      resetArchive(buildTree(list), true);
+    } catch {
+      if (isLeaving()) return;
+      resetArchive();
+      addError.value = t("add.archiveReadFail");
+      return;
     }
-  } catch {
-    // 识别失败保持手动选择
+    // 识别整合包类型，自动填入类型和实例名（用户改过名字则不动）
+    try {
+      const detected = await api.addDetectArchive(path);
+      if (isLeaving()) return;
+      addPackType.value = detected.packType;
+      if (!nameEdited && detected.name) {
+        newName.value = detected.name;
+      }
+    } catch {
+      // 识别失败保持手动选择
+    }
+  } finally {
+    archiveScanning.value = false;
   }
 }
 
@@ -213,10 +220,23 @@ async function pickArchive() {
   archiveInput.value?.click();
 }
 
-// ================= 模式三：添加文件夹（路径框 + 内容树，懒加载） =================
+/** 压缩包读取 / 类型识别中（整合包条目多 + 要解析 manifest，会明显耗时） */
+const archiveScanning = ref(false);
+
+// ================= 模式三：添加文件夹（路径框 + 扫描出的实例列表 / 内容树，懒加载） =================
 
 const addFolderPath = ref("");
 const folderInput = ref<HTMLInputElement | null>(null);
+
+/** 扫描出的可导入实例（空 = 目录本身就是一个实例目录，走内容树那条路） */
+const folderFound = ref<FolderInstanceDto[]>([]);
+/** 已勾选要导入的实例路径 */
+const folderPicked = ref<Set<string>>(new Set());
+const folderScanning = ref(false);
+/** 扫描失败的原因（扫描命令报错时显示出来，别静默当成"没扫到"） */
+const folderScanError = ref("");
+/** 待确认"是否允许读取"的目录（非空 = 确认框打开着） */
+const scanAsk = ref("");
 
 const {
   tree: folderTree,
@@ -239,7 +259,12 @@ function onFolderPick(e: Event) {
   resetFolder(buildTree(MOCK_FOLDER_FILES));
 }
 
-/** 选择文件夹：Tauri 用系统目录对话框，选中后列出文件夹内容树 */
+/**
+ * 选择文件夹：Tauri 用系统目录对话框
+ *
+ * 选完先弹确认框问"是否允许读取这个目录"，允许了才扫（见 confirmScan）。
+ * 手动输入 / 粘贴路径不走这里，用路径框右边的「扫描目录」按钮自己触发。
+ */
 async function pickFolder() {
   if (isTauri()) {
     const { open } = await import("@tauri-apps/plugin-dialog");
@@ -250,12 +275,70 @@ async function pickFolder() {
     });
     if (typeof picked === "string") {
       addFolderPath.value = picked;
-      await loadFolderTree(picked);
+      scanAsk.value = picked;
     }
     return;
   }
   folderInput.value?.click();
 }
+
+/** 确认框里点了"允许"：真去扫 */
+function confirmScan() {
+  const path = scanAsk.value;
+  scanAsk.value = "";
+  if (path) void scanFolder();
+}
+
+/**
+ * 扫描选中的目录，找出其中可导入的实例（默认全选）
+ *
+ * 没扫到实例说明这个目录**本身就是实例目录**，退回"整目录当一个实例"的内容树。
+ */
+async function scanFolder() {
+  const path = addFolderPath.value.trim();
+  if (!path) return;
+  folderScanning.value = true;
+  folderScanError.value = "";
+  try {
+    const found = await api.addScanFolder(path);
+    // 扫描期间路径又被改了：这次结果作废，别把它贴到新路径上
+    if (addFolderPath.value.trim() !== path) return;
+    folderFound.value = found;
+    folderPicked.value = new Set(found.map((item) => item.path));
+    if (!found.length) await loadFolderTree(path);
+  } catch (e) {
+    if (addFolderPath.value.trim() !== path) return;
+    folderFound.value = [];
+    folderPicked.value = new Set();
+    // 扫描失败要说出来：以前是静默当"没扫到"，界面看起来像功能没生效
+    folderScanError.value = tErr(e);
+  } finally {
+    folderScanning.value = false;
+  }
+}
+
+/** 勾选 / 取消某个扫到的实例 */
+function toggleFoundInstance(path: string, on: boolean) {
+  const next = new Set(folderPicked.value);
+  if (on) next.add(path);
+  else next.delete(path);
+  folderPicked.value = next;
+}
+
+function setAllFoundInstances(on: boolean) {
+  folderPicked.value = on ? new Set(folderFound.value.map((item) => item.path)) : new Set();
+}
+
+/** 文件夹模式扫到了实例：此时实例名由各自的目录名决定，「实例名称」那个输入框无意义 */
+const folderScanned = computed(() => addMode.value === "folder" && folderFound.value.length > 0);
+
+/**
+ * 有在途的耗时操作（创建中 / 扫描目录中 / 读压缩包中）
+ *
+ * 期间禁用模式切换与创建按钮：切换会把正在跑的流程丢在半路，
+ * 创建则还没拿到扫描结果（比如剩下的实例），都不该点得动。
+ */
+const busy = computed(() => creating.value || folderScanning.value || archiveScanning.value);
 
 /** 列出目录直接内容为树节点（目录标记 lazy，展开时再加载） */
 async function listDirNodes(dirPath: string, rel: string): Promise<FileNode[]> {
@@ -348,7 +431,19 @@ function clearFieldError(field: Exclude<ErrorField, "">) {
 watch(newName, () => clearFieldError("name"));
 watch(newVersion, () => clearFieldError("version"));
 watch(addArchivePath, () => clearFieldError("archive"));
-watch(addFolderPath, () => clearFieldError("folder"));
+/**
+ * 路径一变就把上一次的扫描结果清掉
+ *
+ * **不自动扫描**：选目录走"确认框 → 允许了再扫"（pickFolder → scanAsk → confirmScan），
+ * 手输 / 粘贴路径用路径框右边的「扫描目录」按钮触发。扫描要读磁盘，不该在用户
+ * 还在敲路径的时候就自己跑起来。
+ */
+watch(addFolderPath, () => {
+  clearFieldError("folder");
+  folderFound.value = [];
+  folderPicked.value = new Set();
+  folderScanError.value = "";
+});
 watch(addUrl, () => clearFieldError("url"));
 
 // 名称错误：聚焦输入框（版本 / 路径的聚焦交给各模式组件自己处理）
@@ -364,8 +459,10 @@ async function create() {
   // 防重复提交：按钮 disabled 之外，Enter / 连续点击也在这里挡住
   if (creating.value || nameConflict.value || askContinue.value || packProgress.value) return;
 
+  // 文件夹模式扫到了实例时：每个实例用自己目录的名字，不用用户填实例名
+  const scanned = folderScanned.value;
   const name = newName.value.trim();
-  if (!name) return failField("name", t("add.nameEmpty"));
+  if (!scanned && !name) return failField("name", t("add.nameEmpty"));
   if (addMode.value === "new" && !newVersion.value) {
     return failField("version", t("add.versionEmpty"));
   }
@@ -374,6 +471,9 @@ async function create() {
   }
   if (addMode.value === "folder" && !addFolderPath.value.trim()) {
     return failField("folder", t("add.folderEmpty"));
+  }
+  if (scanned && !folderPicked.value.size) {
+    return failField("folder", t("add.folderPickNone"));
   }
   if (addMode.value === "online" && !addUrl.value.trim()) {
     return failField("url", t("add.urlEmpty"));
@@ -385,6 +485,8 @@ async function create() {
   creating.value = true;
   try {
     let uuid: string;
+    // 询问"是否继续添加"时显示的名字：单个导入用实例名，批量用数量
+    let doneName = name;
     if (addMode.value === "new") {
       uuid = await api.addCreateNew(
         name,
@@ -404,14 +506,24 @@ async function create() {
         unselected.length ? unselected : null,
       );
     } else if (addMode.value === "folder") {
-      uuid = await api.addImportFolder(addFolderPath.value.trim(), name, group);
+      if (scanned) {
+        // 逐个导入：每个扫到的实例各建一个，名字取它自己的目录名
+        const targets = folderFound.value.filter((item) => folderPicked.value.has(item.path));
+        uuid = "";
+        for (const item of targets) {
+          uuid = await api.addImportFolder(item.path, item.name, group);
+        }
+        doneName = t("add.folderImported", { n: targets.length });
+      } else {
+        uuid = await api.addImportFolder(addFolderPath.value.trim(), name, group);
+      }
     } else {
       uuid = await api.addImportUrl(addUrl.value.trim(), name, group);
     }
     if (isLeaving()) return;
     // 通知主窗口选中新实例（后端已发 instance-change 刷新列表），然后询问是否继续添加
     localStorage.setItem("mml.addedInstance", uuid);
-    addedName.value = name;
+    addedName.value = doneName;
     askContinue.value = true;
   } catch (e) {
     packProgress.value = null;
@@ -446,6 +558,8 @@ function continueAdding() {
   resetArchive();
   addFolderPath.value = "";
   resetFolder();
+  folderFound.value = [];
+  folderPicked.value = new Set();
   addUrl.value = "";
 }
 
@@ -574,14 +688,14 @@ onUnmounted(() => {
   <WindowFrame :title="t('add.title')" @close="$emit('close')">
     <!-- 内容区：撑满窗口，底部按钮靠 margin-top:auto 钉在右下角 -->
     <div class="add-body">
-      <ModeTabs v-model="addMode" :tabs="ADD_MODES" :disabled="creating" />
+      <ModeTabs v-model="addMode" :tabs="ADD_MODES" :disabled="busy" />
 
       <!-- 实例名称 + 分组 -->
       <div class="add-card">
         <div class="field-row-2">
           <div class="add-field">
             <label class="field-label" for="add-name">
-              {{ t("add.name") }} <span class="req">*</span>
+              {{ t("add.name") }} <span v-if="!folderScanned" class="req">*</span>
             </label>
             <input
               id="add-name"
@@ -589,12 +703,15 @@ onUnmounted(() => {
               :value="newName"
               class="field-input"
               :class="{ 'is-invalid': addErrorField === 'name' }"
-              :placeholder="t('add.namePlaceholder')"
+              :placeholder="folderScanned ? t('add.folderNameHint') : t('add.namePlaceholder')"
+              :disabled="folderScanned"
               spellcheck="false"
               autocomplete="off"
               @input="onNameInput"
               @keydown.enter="create"
             />
+            <!-- 扫到实例时逐个导入，名字各自取目录名，这里填了也没用 -->
+            <p v-if="folderScanned" class="field-hint">{{ t("add.folderNameHint") }}</p>
           </div>
           <div class="add-field">
             <label class="field-label">{{ t("add.group") }}</label>
@@ -641,6 +758,7 @@ onUnmounted(() => {
           :expanded="archiveExpanded"
           :pack-types="packTypes"
           :pack-type="addPackType"
+          :scanning="archiveScanning"
           :invalid="addErrorField === 'archive'"
           @update:path="addArchivePath = $event"
           @pick="pickArchive"
@@ -656,9 +774,16 @@ onUnmounted(() => {
           :tree="folderTree"
           :checked="folderChecked"
           :expanded="folderExpanded"
+          :found="folderFound"
+          :picked="folderPicked"
+          :scanning="folderScanning"
+          :scan-error="folderScanError"
           :invalid="addErrorField === 'folder'"
           @update:path="addFolderPath = $event"
           @pick="pickFolder"
+          @rescan="scanFolder"
+          @toggle-instance="toggleFoundInstance"
+          @set-all-instances="setAllFoundInstances"
           @toggle-file="onFolderToggleFile"
           @toggle-dir="onFolderToggleDir"
           @toggle-expand="onFolderToggleExpand"
@@ -681,7 +806,7 @@ onUnmounted(() => {
           {{ t("add.downloadModpack") }}
         </BaseButton>
         <BaseButton variant="accent" @click="$emit('close')">{{ t("add.cancel") }}</BaseButton>
-        <BaseButton variant="primary" :disabled="creating" @click="create">
+        <BaseButton variant="primary" :disabled="busy" @click="create">
           {{ createLabel }}
         </BaseButton>
       </div>
@@ -698,6 +823,20 @@ onUnmounted(() => {
       :name="nameConflict.name"
       @answer="answerConflict"
     />
+
+    <!-- 选完目录的二次确认：读目录 = 读磁盘，先问一句再扫 -->
+    <BaseModal
+      v-if="scanAsk"
+      :title="t('add.folderAskTitle')"
+      :closable="false"
+      @close="scanAsk = ''"
+    >
+      <p class="confirm-text">{{ t("add.folderAskText", { path: scanAsk }) }}</p>
+      <div class="modal-actions">
+        <BaseButton variant="accent" @click="scanAsk = ''">{{ t("actions.cancel") }}</BaseButton>
+        <BaseButton variant="primary" @click="confirmScan">{{ t("add.folderAllow") }}</BaseButton>
+      </div>
+    </BaseModal>
 
     <!-- 创建成功：询问是否继续添加 -->
     <ContinueModal
@@ -753,5 +892,14 @@ onUnmounted(() => {
 /* 模式内容卡片：四个模式保持同一高度，切换时不跳动 */
 .add-card-content {
   min-height: 180px;
+}
+
+/* 确认弹窗正文（如"是否允许读取目录 xxx"）：路径可能很长，允许换行 */
+.confirm-text {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.6;
+  word-break: break-all;
 }
 </style>

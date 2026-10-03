@@ -4,7 +4,7 @@
 // 从主界面「添加资源」按钮打开，目标实例取 gui_config.json 里主窗口
 // 当前选中的实例（与资源管理窗口一致）。数据包下载前必须先选存档。
 // 下载走全局下载器（命令立即返回，进度在下载窗口里看）。
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, onDeactivated, onMounted, onUnmounted, ref, watch } from "vue";
 import WindowFrame from "../../components/ui/WindowFrame.vue";
 import BaseModal from "../../components/ui/BaseModal.vue";
 import SegmentedTabs from "../../components/ui/SegmentedTabs.vue";
@@ -62,6 +62,14 @@ const category = ref("");
 /** 加载器（仅模组；normal = 全部） */
 const loader = ref("normal");
 const filter = ref("");
+
+// 离开本窗口时清掉搜索词（来源 / 类型 / 版本等**筛选**留着：那是浏览上下文，
+// 搜索词只是"找某样东西"的一次性输入）。
+// 单窗口模式下这一页被 KeepAlive 缓存，切走不销毁，不清的话再打开时输入框里
+// 还压着上次搜的词，用户早忘了自己搜过什么，只会觉得界面不对劲。
+onDeactivated(() => {
+  filter.value = "";
+});
 
 const items = ref<ProjectItemDto[]>([]);
 const total = ref(0);

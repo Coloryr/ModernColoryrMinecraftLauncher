@@ -789,7 +789,7 @@ pub async fn add_resource_download(
                 }
             }
 
-            let mut game = instance.write().unwrap();
+            let game = instance.read().unwrap();
             let mut list = game.read_online_info();
             list.insert(pid2, online_info);
             game.save_online_info(&list);

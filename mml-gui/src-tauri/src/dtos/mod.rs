@@ -37,7 +37,8 @@ pub use log_dto::LogFocusDto;
 pub use stats_dto::{StatsDataDto, StatsInstanceDto};
 pub use version_dto::VersionInfoDto;
 pub use add_dto::{
-    DetectedPackDto, DirEntry, LoaderProgressDto, ModpackItemDto, NameConflictDto, PackProgressDto,
+    DetectedPackDto, DirEntry, FolderInstanceDto, LoaderProgressDto, ModpackItemDto,
+    NameConflictDto, PackProgressDto,
 };
 pub use add_modpack_dto::{ModPackStatusDto, ModPackTaskDto};
 pub use add_resource_dto::{
@@ -58,7 +59,7 @@ pub use motd_dto::{MotdDto, MotdSegmentDto};
 pub use window_dto::WindowSizeDto;
 pub use main_dto::{
     BlockItemDto, BlockStatusDto, ErrorEvent, ExitEvent, IconSourceDto, InstanceChangeEvent,
-    InstanceLangDto, InstancePatch, LogEvent, NewsItem, StateEvent,
+    InstanceLangDto, InstancePatch, LogEvent, NewsItem, StateEvent, SystemMemoryDto,
 };
 pub use resource_dto::{
     DataPackItemDto, ModItemDto, PackItemDto, SaveItemDto, ScreenshotItemDto, ServerItemDto,

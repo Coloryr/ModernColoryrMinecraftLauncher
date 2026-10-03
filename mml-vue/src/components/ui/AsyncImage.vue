@@ -1,5 +1,10 @@
 <script setup lang="ts">
-// 带加载占位的图片：加载中显示流光动画，失败显示灰底；父级把尺寸类挂在组件上即可
+// 带加载占位的图片：加载中显示流光动画，失败显示占位（图标 + 可选文案）。
+// 父级把尺寸类挂在组件上即可。
+//
+// 失败兜底与全局那套（lib/imageFallback.ts）是一回事，区别在这里能画得更讲究：
+// 全局兜底只是把 <img> 换成一张灰底占位图（够用，且覆盖所有直接写 <img> 的地方），
+// 而走本组件的地方还能显示一行说明文字、并且不留破图痕迹。
 import { ref, watch } from "vue";
 
 const props = defineProps<{
@@ -34,6 +39,23 @@ watch(
       @error="failed = true"
     />
     <span v-if="!loaded && !failed" class="async-shimmer"></span>
+    <!-- 加载失败：换成"灰底 + 图片图标"的占位，别留破图图标 -->
+    <span v-else-if="failed" class="async-fail" aria-hidden="true">
+      <svg
+        viewBox="0 0 24 24"
+        width="22"
+        height="22"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="1.6"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <rect x="3" y="3" width="18" height="18" rx="3" />
+        <circle cx="8.5" cy="9" r="1.5" />
+        <path d="m21 15-5-5L5 21" />
+      </svg>
+    </span>
   </span>
 </template>
 
@@ -69,5 +91,18 @@ watch(
   to {
     background-position: -200% 0;
   }
+}
+
+/* 失败占位：灰底 + 居中图标（不放文字：各种尺寸下图标都稳，文字在小图标里会挤） */
+.async-fail {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8%;
+  box-sizing: border-box;
+  background: var(--bg-hover);
+  color: var(--text-dim);
 }
 </style>

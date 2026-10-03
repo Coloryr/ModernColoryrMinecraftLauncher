@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 账户管理窗口：平铺 / 列表 / 详情 三种展示 + 类型筛选 + 搜索 + 添加账户
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onDeactivated, onMounted, ref, watch } from "vue";
 import WindowFrame from "../../components/ui/WindowFrame.vue";
 import BaseButton from "../../components/ui/BaseButton.vue";
 import BaseModal from "../../components/ui/BaseModal.vue";
@@ -31,6 +31,11 @@ import type { AccountOAuthDto, AccountOAuthStateDto } from "../../lib/bindings";
 import { loadGuiConfig, type LoginLockItem } from "../../lib/guiConfig";
 import { bumpImageVersion, resetImageState } from "../../lib/accountImages";
 import SkinModal from "./SkinModal.vue";
+
+// 必须显式声明 close：不声明的话 Vue 会把父级的 @close 当 attrs 透传到根组件（WindowFrame），
+// 与模板里的 @close="$emit('close')" 合并成两个处理器 —— 一次"返回"会调两遍 closeWindow()，
+// 第二遍时 currentKind 已经回到 main，于是"返回"变成退出应用
+defineEmits<{ (e: "close"): void }>();
 
 /** 皮肤预览弹窗（原独立皮肤窗口已并入） */
 const showSkin = ref(false);
@@ -98,6 +103,13 @@ const VIEW_OPTIONS = computed(() => [
 // 类型筛选 + 搜索
 const typeFilter = ref("all");
 const searchText = ref("");
+
+// 离开账户窗口时清掉搜索词（类型筛选留着：那是浏览上下文）。
+// 单窗口模式下这一页被 KeepAlive 缓存，切走不销毁，不清的话再打开时输入框里
+// 还压着上次搜的词，用户早忘了自己搜过什么，只会觉得界面不对劲。
+onDeactivated(() => {
+  searchText.value = "";
+});
 
 const filtered = computed(() => {
   const q = searchText.value.trim().toLowerCase();

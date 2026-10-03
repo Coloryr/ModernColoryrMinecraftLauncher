@@ -22,7 +22,10 @@ use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
-use crate::dtos::{DetectedPackDto, DirEntry, LoaderProgressDto, NameConflictDto, PackProgressDto};
+use crate::dtos::{
+    DetectedPackDto, DirEntry, FolderInstanceDto, LoaderProgressDto, NameConflictDto,
+    PackProgressDto,
+};
 use crate::{listens, windows};
 
 /// 添加实例窗口模型：只存运行态，不落盘
@@ -266,21 +269,65 @@ pub fn add_list_dir(path: String) -> Result<Vec<DirEntry>, String> {
     Ok(entries)
 }
 
-/// 列出压缩包内的条目路径（目录以 `/` 结尾，添加实例窗口预览内容树用）
+/// 扫描文件夹里可导入的实例（官方启动器 `versions/*` 与 MMC `instances/*`）
+///
+/// 选到 `.minecraft` 这类**装着若干实例**的目录时用：一个目录一个实例，
+/// 由前端列出来让用户勾选要导入哪些（而不是把整个 `.minecraft` 当成一个实例）。
+/// 扫描规则见 `mml_game::scan_game_from_path`。
+///
+/// **必须异步**：扫描是纯磁盘活（要读并解析各候选目录里的 json，modded 实例的
+/// `config/` 下可能几百个），同步命令会占着主线程，窗口直接卡死 ——
+/// 放 `spawn_blocking` 里跑，界面照常响应。
 #[tauri::command]
-pub fn add_list_archive(path: String) -> Result<Vec<String>, String> {
-    let archive = mml_base::archives::BaseArchive::open(&path).map_err(|e| e.to_string())?;
-    Ok(archive.entries().iter().map(|e| e.name.clone()).collect())
+pub async fn add_scan_folder(path: String) -> Result<Vec<FolderInstanceDto>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        mml_game::scan_game::scan_game_from_path(&path)
+            .into_iter()
+            .map(|item| FolderInstanceDto {
+                name: item
+                    .file_name()
+                    .map(|name| name.to_string_lossy().into_owned())
+                    .unwrap_or_default(),
+                path: item.display().to_string(),
+            })
+            .collect::<Vec<FolderInstanceDto>>()
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
+/// 列出压缩包内的条目路径（目录以 `/` 结尾，添加实例窗口预览内容树用）
+///
+/// **必须异步**：要打开压缩包并读出全部条目，整合包里几千个文件时会明显耗时，
+/// 同步命令占主线程会把窗口冻住。
+#[tauri::command]
+pub async fn add_list_archive(path: String) -> Result<Vec<String>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let archive = mml_base::archives::BaseArchive::open(&path).map_err(|e| e.to_string())?;
+        Ok(archive
+            .entries()
+            .iter()
+            .map(|e| e.name.clone())
+            .collect::<Vec<String>>())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// 检测压缩包的整合包类型与推荐实例名（选择压缩包后自动填表用）
+///
+/// **必须异步**：要打开压缩包扫条目、再解析包内 manifest，同 `add_list_archive`。
 #[tauri::command]
-pub fn add_detect_archive(path: String) -> Result<DetectedPackDto, String> {
-    let pack = mml_game::add_game::detect_pack(&path).map_err(|e| e.to_string())?;
-    Ok(DetectedPackDto {
-        pack_type: pack.pack_type.id().to_string(),
-        name: pack.name,
+pub async fn add_detect_archive(path: String) -> Result<DetectedPackDto, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let pack = mml_game::add_game::detect_pack(&path).map_err(|e| e.to_string())?;
+        Ok(DetectedPackDto {
+            pack_type: pack.pack_type.id().to_string(),
+            name: pack.name,
+        })
     })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// 从头新建实例（版本 + 加载器）

@@ -12,7 +12,8 @@ use tauri::{AppHandle, Emitter, WebviewWindow};
 use crate::dtos::main_dto::{LoadState, LogLine, NewsItem};
 use crate::dtos::{
     EnvVarLineDto, ErrorEvent, ExitEvent, InstanceArgsDto, InstanceChangeEvent, InstanceInfoDto,
-    InstanceLangDto, InstancePatch, JavaInfoDto, LogEvent, MotdDto, StateEvent, VersionInfoDto,
+    InstanceLangDto, InstancePatch, JavaInfoDto, LogEvent, MotdDto, StateEvent, SystemMemoryDto,
+    VersionInfoDto,
 };
 use crate::{image_manager, listens, windows};
 use mml_config::config_obj::{GCType, RunArgObj, WindowSettingObj};
@@ -388,6 +389,21 @@ pub fn main_update_instance_args(
 #[tauri::command]
 pub fn main_get_java_list() -> Vec<JavaInfoDto> {
     java_list()
+}
+
+/// 获取本机内存（MiB），供启动参数里的内存设置显示参考值
+///
+/// 前端拿不到物理内存，只能问后端；查询失败时核心返回 `u64::MAX` 哨兵值，
+/// 这里统一折算成 0，由前端决定不显示。
+#[tauri::command]
+pub fn main_get_system_memory() -> SystemMemoryDto {
+    let total = mml_sys::memory_helper::get_memory_size();
+    let free = mml_sys::memory_helper::get_memory_free();
+
+    SystemMemoryDto {
+        total: if total == u64::MAX { 0 } else { total },
+        free: if free == u64::MAX { 0 } else { free },
+    }
 }
 
 /// 版本列表缓存（进程级：主窗口 / 添加实例窗口共用，不挂在窗口模型上）

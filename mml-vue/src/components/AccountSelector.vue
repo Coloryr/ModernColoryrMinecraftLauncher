@@ -51,6 +51,7 @@ function pick(account: AccountStoreDto) {
             :class="{ pending: imageLoading(account, 'avatar') }"
             :src="accountAvatarUrl(account)"
             alt=""
+            data-no-fallback
             @load="markImageLoaded(account, 'avatar')"
             @error="markImageFailed(account, 'avatar')"
           />
@@ -105,6 +106,7 @@ function pick(account: AccountStoreDto) {
               :class="{ pending: imageLoading(acc, 'avatar') }"
               :src="accountAvatarUrl(acc)"
               alt=""
+              data-no-fallback
               @load="markImageLoaded(acc, 'avatar')"
               @error="markImageFailed(acc, 'avatar')"
             />

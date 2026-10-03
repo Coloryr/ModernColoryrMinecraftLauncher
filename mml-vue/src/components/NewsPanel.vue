@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // 新闻面板：公告卡片列表（分类标签 + 封面 + 标题）与分页，数据由父组件拉取
 import { t } from "../lib/i18n";
+import AsyncImage from "./ui/AsyncImage.vue";
 import type { NewsItem } from "../lib/bindings";
 
 withDefaults(
@@ -74,7 +75,8 @@ function tagColor(tag: string) {
           class="news-item"
           @click="emit('open', item.url)"
         >
-          <img :src="item.image" class="banner" alt="" />
+          <!-- 新闻配图来自网络，挂了就换成占位（灰底图片图标），不留破图 -->
+          <AsyncImage class="banner" :src="item.image" />
           <div class="news-meta">
             <span class="news-tag" :style="tagColor(item.tag)">{{ item.tag }}</span>
             <span class="news-date" v-tip="item.date">{{ item.date }}</span>
@@ -233,10 +235,10 @@ function tagColor(tag: string) {
   padding: 14px;
 }
 
+/* 新闻配图外框（AsyncImage 组件根；图片本身的 object-fit 在组件内部） */
 .banner {
   width: 100%;
   height: 110px;
-  object-fit: cover;
   display: block;
 }
 

@@ -1,5 +1,9 @@
 <script setup lang="ts">
 // 设置窗口 · 保存状态文字（配合 composables/useSaveState）
+//
+// **不显示"已保存"**：设置里大部分改动是即时落盘的，成功本来就是常态，
+// 每改一处就冒一句"已保存"只是噪音。只在需要用户注意时才出声：
+// 保存中 / 保存失败 / 有未保存的改动（后者见 `pending`）。
 import { computed } from "vue";
 import { t } from "../../../lib/i18n";
 import type { SaveState } from "../composables/useSaveState";
@@ -14,11 +18,10 @@ const text = computed(() => {
   switch (props.state) {
     case "saving":
       return t("winSettings.stateSaving");
-    case "saved":
-      return t("winSettings.stateSaved");
     case "error":
       return t("winSettings.stateFailed");
     default:
+      // saved 与 idle 一样安静（成功不需要播报）
       return props.pending ? t("winSettings.statePending") : "";
   }
 });

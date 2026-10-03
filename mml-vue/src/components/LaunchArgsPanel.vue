@@ -1,10 +1,13 @@
 <script setup lang="ts">
 // 实例启动参数面板：
-//   启动参数：内存大小（最小/最大 + 右侧输入）/ 窗口大小 / 使用的 Java（自定义时显示路径 + 选择文件）
+//   启动参数：内存大小（最小/最大 + 右侧输入，并显示本机总量 / 可用量）/ 窗口大小（带常用分辨率）
+//            / 使用的 Java（自定义时显示路径 + 选择文件）
 //   扩展参数：GC / 自定义主类 / 附加 JVM 参数 / 附加游戏参数 / 附加 classpath（多行列表）
 //            / 附加环境变量（键值对列表）
 import { ref } from "vue";
 import { t } from "../lib/i18n";
+import { COMMON_MEMORY, COMMON_RESOLUTIONS } from "../lib/resolutions";
+import { useSystemMemory } from "../lib/systemMemory";
 import type { InstanceArgsDto, JavaInfoDto } from "../lib/bindings";
 import BaseButton from "./ui/BaseButton.vue";
 import NumberStepper from "./ui/NumberStepper.vue";
@@ -21,6 +24,23 @@ const emit = defineEmits<{ (e: "update:args", v: InstanceArgsDto): void }>();
 
 const advancedOpen = ref(false);
 const fileInput = ref<HTMLInputElement | null>(null);
+
+/** 本机内存参考值（与设置窗口的「游戏启动」共用同一份逻辑） */
+const { text: memoryText } = useSystemMemory();
+
+function applyResolution(w: number, h: number) {
+  update({ width: w, height: h });
+}
+
+/** 预设按钮上的文字：整数 GB 显示 `8 GB`，否则按 MB 显示 */
+function memoryLabel(mib: number): string {
+  return mib % 1024 === 0 ? `${mib / 1024} GB` : `${mib} MB`;
+}
+
+/** 应用一个内存预设：填最大内存；最小内存高于它时一并顶上去 */
+function applyMemory(mib: number) {
+  update({ memory: mib, minMemory: Math.min(props.args.minMemory, mib) });
+}
 
 function update(patch: Partial<InstanceArgsDto>) {
   emit("update:args", { ...props.args, ...patch });
@@ -88,28 +108,6 @@ const gcOptions = [
   <div class="args-panel">
     <!-- 启动参数 -->
     <div class="args-block">
-      <!-- 内存：最小 / 最大（输入框，与窗口行对齐） -->
-      <div class="args-row">
-        <span class="args-label">{{ t("args.memory") }}</span>
-        <span class="sub-tag">{{ t("args.minMemory") }}</span>
-        <NumberStepper
-          :model-value="args.minMemory"
-          :min="512"
-          :max="args.memory"
-          :step="256"
-          @update:model-value="(v: number) => update({ minMemory: v })"
-        />
-        <span class="sub-tag">{{ t("args.maxMemory") }}</span>
-        <NumberStepper
-          :model-value="args.memory"
-          :min="args.minMemory"
-          :max="16384"
-          :step="256"
-          @update:model-value="(v: number) => update({ memory: v })"
-        />
-        <span class="mem-unit">MB</span>
-      </div>
-
       <!-- 窗口大小：宽 / 高 + 全屏（与内存行对齐） -->
       <div class="args-row">
         <span class="args-label">{{ t("args.windowSize") }}</span>
@@ -137,6 +135,58 @@ const gcOptions = [
           />
           {{ t("args.fullscreen") }}
         </label>
+      </div>
+      <!-- 常用分辨率：一点即填宽 / 高（当前值匹配时高亮） -->
+      <div class="args-hint res-hint">
+        <span class="res-label">{{ t("args.commonRes") }}</span>
+        <button
+          v-for="r in COMMON_RESOLUTIONS"
+          :key="`${r.w}x${r.h}`"
+          type="button"
+          class="res-btn"
+          :class="{ on: args.width === r.w && args.height === r.h }"
+          @click="applyResolution(r.w, r.h)"
+        >
+          {{ r.w }}×{{ r.h }}
+        </button>
+      </div>
+
+      <!-- 内存：最小 / 最大（输入框，与窗口行对齐） -->
+      <div class="args-row">
+        <span class="args-label">{{ t("args.memory") }}</span>
+        <span class="sub-tag">{{ t("args.minMemory") }}</span>
+        <NumberStepper
+          :model-value="args.minMemory"
+          :min="512"
+          :max="args.memory"
+          :step="256"
+          @update:model-value="(v: number) => update({ minMemory: v })"
+        />
+        <span class="sub-tag">{{ t("args.maxMemory") }}</span>
+        <NumberStepper
+          :model-value="args.memory"
+          :min="args.minMemory"
+          :max="16384"
+          :step="256"
+          @update:model-value="(v: number) => update({ memory: v })"
+        />
+        <span class="mem-unit">MB</span>
+      </div>
+      <!-- 本机内存参考值：给设最大内存一个依据（始终占一行，拿不到会写明原因） -->
+      <div class="args-hint mem-hint">{{ memoryText }}</div>
+      <!-- 常用内存：一点即填最大内存（当前值匹配时高亮），最小内存高于它时一并顶上去 -->
+      <div class="args-hint">
+        <span class="res-label">{{ t("args.commonMemory") }}</span>
+        <button
+          v-for="m in COMMON_MEMORY"
+          :key="m"
+          type="button"
+          class="res-btn"
+          :class="{ on: args.memory === m }"
+          @click="applyMemory(m)"
+        >
+          {{ memoryLabel(m) }}
+        </button>
       </div>
 
       <div class="args-row">
@@ -334,6 +384,50 @@ const gcOptions = [
   color: var(--text-dim);
   white-space: nowrap;
   text-align: right;
+}
+
+/* 字段下方的辅助行（内存参考值 / 常用分辨率），与 .args-label 的 84px 缩进对齐 */
+.args-hint {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+  padding-left: 84px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.mem-hint {
+  font-variant-numeric: tabular-nums;
+}
+
+.res-label {
+  flex: 0 0 auto;
+}
+
+/* 常用分辨率：小方块按钮，当前值匹配时高亮 */
+.res-btn {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-dim);
+  font-family: inherit;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  padding: 3px 9px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.res-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.res-btn.on {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
 .grow {

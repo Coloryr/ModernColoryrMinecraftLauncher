@@ -3,7 +3,7 @@
 //
 // 索引在 ../search.ts（静态表，覆盖 6 个标签）。这里只负责输入与结果列表：
 // ↑/↓ 选择、Enter 跳转、点击跳转；Esc 有内容时先清空（不关窗口）。
-import { computed, ref, watch } from "vue";
+import { computed, onDeactivated, ref, watch } from "vue";
 import { t } from "../../../lib/i18n";
 import HighlightText from "../../../components/ui/HighlightText.vue";
 import { searchSettings, type SettingsHit } from "../search";
@@ -17,6 +17,20 @@ const active = ref(0);
 const hits = computed(() => searchSettings(query.value));
 
 watch(hits, () => {
+  active.value = 0;
+});
+
+/**
+ * 离开设置窗口时清掉搜索状态
+ *
+ * 单窗口模式下 App.vue 用 `<KeepAlive>` 缓存窗口组件：切走只是 deactivate，
+ * 组件不销毁，`query` 会一直留着 —— 再打开设置时输入框里还压着上次搜的词，
+ * 用户早忘了自己搜过什么，只会觉得界面"不对劲"。回来就该是干净的一页。
+ * （标签页/滚动位置是另一回事，那些是用户主动留在那儿的，不清。）
+ */
+onDeactivated(() => {
+  query.value = "";
+  open.value = false;
   active.value = 0;
 });
 

@@ -90,6 +90,16 @@ html.no-anim *::after {
   transform: scale(0.99);
 }
 
+/* ---------------- 图片加载失败的兜底（见 lib/imageFallback.ts） ----------------
+   失败的图会被换成一张灰底图片图标：这里补一层淡底、按 contain 缩放并留出内边距，
+   让它在深/浅两套主题、以及各种尺寸（28px 头像到 110px 新闻大图）下都像"占位"而不像破图。
+   内边距用百分比：跟着容器宽度走，头像那种小尺寸才不会把图标挤没 */
+img[data-mml-fallback] {
+  object-fit: contain;
+  padding: 10%;
+  background: var(--bg-hover);
+}
+
 /* ---------------- 背景图层（App.vue 渲染，lib/appearance.ts 供参） ----------------
    z-index: -1 落在所有内容之后、画布底色之前；表面半透明见 themes.css 的 has-bg */
 .app-bg {

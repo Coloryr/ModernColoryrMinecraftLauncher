@@ -193,7 +193,7 @@ export function useSettingsLaunch() {
       default:
         return false;
     }
-    // 直接落盘（不等防抖），恢复默认要让用户立刻看到"已保存"
+    // 直接落盘（不等防抖），恢复默认要立即生效
     await saveNow();
     return true;
   }

@@ -4,6 +4,7 @@ import { nextTick, ref, watch } from "vue";
 import { t } from "../../../lib/i18n";
 import BaseButton from "../../../components/ui/BaseButton.vue";
 import FileTreePanel from "../parts/FileTreePanel.vue";
+import LoaderQueryProgress from "../../../components/LoaderQueryProgress.vue";
 import type { FileNode } from "../../../lib/fileTree";
 
 const props = defineProps<{
@@ -13,6 +14,8 @@ const props = defineProps<{
   expanded: Set<string>;
   packTypes: string[];
   packType: string;
+  /** 正在读压缩包条目 / 识别整合包类型 */
+  scanning: boolean;
   /** 校验失败：压缩包必填（高亮 + 自动聚焦） */
   invalid?: boolean;
 }>();
@@ -53,8 +56,18 @@ watch(
       autocomplete="off"
       @input="emit('update:path', ($event.target as HTMLInputElement).value)"
     />
-    <BaseButton size="sm" variant="accent" @click="emit('pick')">{{ t("add.browse") }}</BaseButton>
+    <BaseButton class="pick-btn" size="sm" variant="accent" @click="emit('pick')">{{ t("add.browse") }}</BaseButton>
   </div>
+
+  <!-- 读取条目 / 识别类型中：不确定滚动进度条（与加载器查询、目录扫描同一套观感） -->
+  <LoaderQueryProgress
+    v-if="scanning"
+    kind="versions"
+    :visible="true"
+    :step="0"
+    :total="0"
+    :label="t('add.archiveReading')"
+  />
 
   <template v-if="tree.length">
     <FileTreePanel

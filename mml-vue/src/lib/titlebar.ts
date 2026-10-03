@@ -8,11 +8,36 @@
 // 唯一的例外是「关闭」——它复用 windowManager 的 quitWindow()，那条链路才会跑
 // 关闭保护（下载中 / 查询中拒关）与几何保存。收起当前页是 closeWindow()，别混。
 
+import { onActivated, onMounted, watch } from "vue";
 import { commands } from "./bindings";
 import { isTauri } from "../windows/windowManager";
 
 export type OsKind = "windows" | "linux" | "macos";
 export type TitleBarStyle = "windows" | "macos";
+
+/**
+ * 让原生窗口标题（任务栏 / Alt+Tab）跟着自绘标题栏走
+ *
+ * 关键是**每次激活都要重设**，不能只在挂载时设一次：单窗口模式下窗口组件被
+ * `<KeepAlive>` 缓存，切走再回来只是 deactivate / activate，**不会重新挂载** ——
+ * 只在 `onMounted` 里设标题的写法再也不会执行，于是从子窗口切回主页面时，
+ * 任务栏上仍挂着子窗口的标题。
+ *
+ * - `title`: 取值函数（每次现取，语言切换后拿到的是新文案）
+ */
+export function useWindowTitle(title: () => string) {
+  function apply() {
+    if (!isTauri()) return;
+    commands.windows.setTitle(title()).catch(() => {});
+  }
+
+  // 标题本身变化（语言切换 / 窗口内标题变化）
+  watch(title, apply);
+  // KeepAlive 内：挂载与每次切回都会触发。两类都挂上，
+  // 不依赖调用方是否恰好被缓存（重复设一次同样的标题无副作用）
+  onMounted(apply);
+  onActivated(apply);
+}
 
 /** 运行平台。用 UA 判定——Tauri 与浏览器预览（dev-frontend.bat）都可用，
  *  不必引入 tauri-plugin-os 依赖，也不必加一个异步命令 */

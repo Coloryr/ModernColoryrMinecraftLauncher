@@ -12,6 +12,16 @@ pub struct DirEntry {
     pub is_dir: bool,
 }
 
+/// 扫描文件夹时找到的可导入实例（`add_scan_folder` 返回）
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct FolderInstanceDto {
+    /// 实例目录路径
+    pub path: String,
+    /// 显示名（目录名，如 `1.20.1`）
+    pub name: String,
+}
+
 /// 加载器支持列表查询进度（前端弹窗显示进度条）
 #[derive(Clone, Serialize)]
 pub struct LoaderProgressDto {

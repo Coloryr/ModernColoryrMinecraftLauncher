@@ -22,27 +22,33 @@ pub fn get_memory_free() -> u64 {
 
 #[cfg(target_os = "windows")]
 fn get_memory_size_inner() -> u64 {
-    use windows::Win32::System::SystemInformation::GlobalMemoryStatusEx;
-    use windows::Win32::System::SystemInformation::MEMORYSTATUSEX;
-
-    let mut ex = MEMORYSTATUSEX::default();
-    if unsafe { GlobalMemoryStatusEx(&mut ex) }.is_ok() {
-        ex.ullTotalPhys / 1024 / 1024
-    } else {
-        u64::MAX
-    }
+    memory_status()
+        .map(|ex| ex.ullTotalPhys / 1024 / 1024)
+        .unwrap_or(u64::MAX)
 }
 
 #[cfg(target_os = "windows")]
 fn get_memory_free_inner() -> u64 {
+    memory_status()
+        .map(|ex| ex.ullAvailPhys / 1024 / 1024)
+        .unwrap_or(u64::MAX)
+}
+
+/// 查询一次内存状态
+///
+/// `dwLength` **必须先填成结构体大小**：`MEMORYSTATUSEX::default()` 给的是 0，
+/// 而 `GlobalMemoryStatusEx` 拿它做版本校验，为 0 会直接失败（`ERROR_INVALID_PARAMETER`），
+/// 那样总量与可用量永远只能拿到哨兵值 `u64::MAX`。
+#[cfg(target_os = "windows")]
+fn memory_status() -> Option<windows::Win32::System::SystemInformation::MEMORYSTATUSEX> {
     use windows::Win32::System::SystemInformation::{GlobalMemoryStatusEx, MEMORYSTATUSEX};
 
-    let mut ex = MEMORYSTATUSEX::default();
-    if unsafe { GlobalMemoryStatusEx(&mut ex) }.is_ok() {
-        ex.ullAvailPhys / 1024 / 1024
-    } else {
-        u64::MAX
-    }
+    let mut ex = MEMORYSTATUSEX {
+        dwLength: size_of::<MEMORYSTATUSEX>() as u32,
+        ..Default::default()
+    };
+
+    unsafe { GlobalMemoryStatusEx(&mut ex) }.ok().map(|_| ex)
 }
 
 #[cfg(target_os = "linux")]
@@ -179,27 +185,27 @@ fn get_memory_free_inner() -> u64 {
 mod tests {
     use super::*;
 
-    /// 获取内存大小：结果应为有效数值（单位 MiB）
+    /// 获取内存大小：必须是真实数值，**不能是哨兵值**
     ///
-    /// 注意：各平台实现失败时返回 u64::MAX 作为哨兵值，
-    /// 因此仅当非哨兵值时才做进一步断言。
+    /// 这里刻意断言 `!= u64::MAX`：以前只断言 `!= 0`，而哨兵值也能通过 ——
+    /// Windows 上 `dwLength` 没填导致 `GlobalMemoryStatusEx` 次次失败的问题因此长期没被发现。
     #[test]
     fn test_get_memory_size() {
         let total = get_memory_size();
-        assert!(total != 0, "内存总量不应为 0");
-        if total != u64::MAX {
-            // 现代机器至少 256 MiB 内存
-            assert!(total >= 256, "内存总量过小: {total} MiB");
-        }
+        assert_ne!(total, u64::MAX, "内存总量查询失败（返回了哨兵值）");
+        // 现代机器至少 256 MiB 内存
+        assert!(total >= 256, "内存总量过小: {total} MiB");
     }
 
-    /// 剩余内存不应超过总内存
+    /// 剩余内存：必须是真实数值，且不超过总量
     #[test]
     fn test_get_memory_free() {
         let total = get_memory_size();
         let free = get_memory_free();
-        if free != u64::MAX && total != u64::MAX {
-            assert!(free <= total, "剩余内存 {free} 不应大于总量 {total}");
-        }
+        assert_ne!(free, u64::MAX, "可用内存查询失败（返回了哨兵值）");
+        assert!(
+            free <= total,
+            "剩余内存 {free} 不应大于总量 {total}"
+        );
     }
 }
