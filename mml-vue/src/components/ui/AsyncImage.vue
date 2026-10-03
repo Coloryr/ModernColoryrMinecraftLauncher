@@ -13,6 +13,9 @@ const props = defineProps<{
   title?: string;
 }>();
 
+/** 加载失败时抛出去（调用方可据此重试 / 换地址；不接就是纯展示） */
+const emit = defineEmits<{ (e: "error"): void }>();
+
 const loaded = ref(false);
 const failed = ref(false);
 
@@ -36,7 +39,7 @@ watch(
       loading="lazy"
       :class="{ show: loaded }"
       @load="loaded = true"
-      @error="failed = true"
+      @error="failed = true; emit('error')"
     />
     <span v-if="!loaded && !failed" class="async-shimmer"></span>
     <!-- 加载失败：换成"灰底 + 图片图标"的占位，别留破图图标 -->

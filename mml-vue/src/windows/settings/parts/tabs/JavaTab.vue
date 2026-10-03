@@ -5,6 +5,7 @@ import { useModalKeys } from "../../../../composables/useModalKeys";
 import BaseButton from "../../../../components/ui/BaseButton.vue";
 import BaseModal from "../../../../components/ui/BaseModal.vue";
 import CollapsePanel from "../../../../components/ui/CollapsePanel.vue";
+import GlyphIcon from "../../../../components/ui/GlyphIcon.vue";
 import SettingsGroup from "../SettingsGroup.vue";
 import type { useSettingsJava } from "../../composables/useSettingsJava";
 
@@ -107,7 +108,7 @@ useModalKeys((e) => {
       <!-- 按发行类型（JDK / JRE）分组：类型行展开后，该类型的 Java 以卡片网格平铺 -->
       <div v-for="g in javaGroups" :key="g.type" class="java-type">
         <button class="java-type-head" @click="toggleType(g.type)">
-          <span class="chev" :class="{ up: typeOpen(g.type) }">▾</span>
+          <GlyphIcon class="chev" :class="{ up: typeOpen(g.type) }" name="chevron-down" :size="11" :weight="2.4" />
           <span class="java-type-name">{{ g.type }}</span>
           <span class="java-count">{{ g.items.length }}</span>
         </button>

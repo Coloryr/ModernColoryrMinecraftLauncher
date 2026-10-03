@@ -3,6 +3,7 @@
 import { computed } from "vue";
 import { t } from "../../../lib/i18n";
 import BaseButton from "../../../components/ui/BaseButton.vue";
+import GlyphIcon from "../../../components/ui/GlyphIcon.vue";
 import SegmentedTabs from "../../../components/ui/SegmentedTabs.vue";
 import { BLOCK_SIZE_ORDER, isBlockSize, type BlockSize } from "../types";
 
@@ -50,7 +51,7 @@ function onSize(v: string) {
         v-tip="t('blocks.searchClear')"
         @click="emit('update:keyword', '')"
       >
-        ✕
+        <GlyphIcon name="close" :size="12" :weight="2.4" />
       </button>
     </div>
 

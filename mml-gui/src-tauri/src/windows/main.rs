@@ -1,7 +1,10 @@
 //! 主窗口：新闻 / 游戏事件模型 + 实例数据存储 + IPC 命令（窗口按钮调用的方法）
 //!
-//! 数据从 Rust 侧获取：实例 / 分组 / Java / 版本存储在 `MainWindowModel`，
+//! 数据从 Rust 侧获取：实例 / Java / 版本存储在 `MainWindowModel`，
 //! 持久化到应用数据目录的 `main_data.json`；前端通过 IPC 调用本模块命令。
+//!
+//! **分组不在这里**：组名归属与两种顺序都由内核分组表持有
+//! （`mml_game::game_group` 的 `group_save.json`），本模块只转发。
 
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, LazyLock, Mutex, RwLock};
@@ -10,11 +13,10 @@ use std::time::Duration;
 use tauri::{AppHandle, Emitter, WebviewWindow};
 
 use crate::dtos::main_dto::{LoadState, LogLine, NewsItem};
-use crate::gui_setting;
 use crate::dtos::{
-    EnvVarLineDto, ErrorEvent, ExitEvent, InstanceArgsDto, InstanceChangeEvent, InstanceInfoDto,
-    InstanceLangDto, InstancePatch, JavaInfoDto, LogEvent, MotdDto, StateEvent, SystemMemoryDto,
-    VersionInfoDto,
+    EnvVarLineDto, ErrorEvent, ExitEvent, GroupDto, InstanceArgsDto, InstanceChangeEvent,
+    InstanceInfoDto, InstanceLangDto, InstancePatch, JavaInfoDto, LogEvent, MotdDto, StateEvent,
+    SystemMemoryDto, VersionInfoDto,
 };
 use crate::{image_manager, listens, windows};
 use mml_config::config_obj::{GCType, RunArgObj, WindowSettingObj};
@@ -41,16 +43,12 @@ pub fn emit_load_done(app: &AppHandle, data: Option<String>) {
     );
 }
 
-/// 主窗口数据存储：实例 / 启动参数 / 分组 / 运行状态 / 日志
+/// 主窗口数据存储：实例 / 启动参数 / 运行状态 / 日志
 pub struct MainWindowModel {
     /// 实例列表（遗留数据的兜底存储；核心实例以 mml-game 为准）
     pub instances: Vec<InstanceInfoDto>,
     /// 遗留实例的启动参数（uuid → 参数）
     pub args: HashMap<String, InstanceArgsDto>,
-    /// 手动创建的空分组（不含实例自带分组）
-    pub extra_groups: Vec<String>,
-    /// 分组显示顺序（新建分组按出现顺序追加在末尾）
-    pub group_order: Vec<String>,
     /// 运行中的实例 uuid
     pub running: HashSet<String>,
 }
@@ -60,36 +58,8 @@ impl MainWindowModel {
         Self {
             instances: Vec::new(),
             args: HashMap::new(),
-            extra_groups: Vec::new(),
-            group_order: Vec::new(),
             running: HashSet::new(),
         }
-    }
-
-    /// 全部分组（实例分组 + 手动空分组），保持顺序
-    fn all_groups(&self) -> Vec<String> {
-        let mut names = Vec::new();
-        for inst in &self.instances {
-            if let Some(g) = &inst.group {
-                if !names.contains(g) {
-                    names.push(g.clone());
-                }
-            }
-        }
-        for g in &self.extra_groups {
-            if !names.contains(g) {
-                names.push(g.clone());
-            }
-        }
-        // 按持久顺序排序，新出现的排在末尾
-        let ordered: Vec<String> = self
-            .group_order
-            .iter()
-            .filter(|n| names.contains(n))
-            .cloned()
-            .collect();
-        let rest: Vec<String> = names.into_iter().filter(|n| !ordered.contains(n)).collect();
-        [ordered, rest].concat()
     }
 }
 
@@ -145,7 +115,9 @@ pub fn main_get_instances() -> Vec<InstanceInfoDto> {
             InstanceInfoDto {
                 uuid: inst.uuid.to_string(),
                 name: inst.name.clone(),
-                group: inst.group.clone(),
+                // 分组归属与组内次序都在 mml-game 的分组表里（group_save.json）：
+                // 实例配置（game.json）与 guisetting.json 都没有这两个字段了
+                group: mml_game::get_instance_group(&inst.uuid).map(|g| g.to_string()),
                 version: inst.version.clone(),
                 version_type: Some(inst.game_type.id().to_string()),
                 loader: String::from(inst.loader.to_string()),
@@ -166,17 +138,26 @@ pub fn main_get_instances() -> Vec<InstanceInfoDto> {
                     .to_string(),
                 ),
                 source: None,
-                // 组内次序存在实例自己的 guisetting.json 里（归属 GUI，内核不管）
-                order: gui_setting::load(&inst).order,
+                // 组内次序 = 分组表里的 `order`（实例 uuid → 次序）；不在任何分组里时排到最后
+                order: mml_game::get_instance_order(&inst.uuid).unwrap_or(i32::MAX),
             }
         })
         .collect()
 }
 
-/// 获取分组列表（mml-game::get_group_keys 对接）
+/// 获取分组列表（含空分组）
+///
+/// 返回 uuid + 组名：分组以 uuid 为身份、组名只是显示数据，
+/// 前端要用 uuid 回传（移动实例 / 删组 / 调序）。
 #[tauri::command]
-pub fn main_get_groups() -> Vec<String> {
-    mml_game::get_group_keys()
+pub fn main_get_groups() -> Vec<GroupDto> {
+    mml_game::get_group_list()
+        .into_iter()
+        .map(|g| GroupDto {
+            uuid: g.uuid.to_string(),
+            name: g.name,
+        })
+        .collect()
 }
 
 /// 获取实例的游戏内语言列表（从资源索引查 minecraft/lang/*.json，资源未下载时为空）
@@ -727,70 +708,59 @@ fn emit_launch_error(app: &AppHandle, event: ErrorEvent) {
     let _ = app.emit(listens::LAUNCH_ERROR, event);
 }
 
-/// 添加空分组
+/// 新建分组
+///
+/// 分组表在 mml-game（`group_save.json`），GUI 不再自己另存一份 ——
+/// 之前模型里那份 `extra_groups` 既不落盘、又与内核表各说各话，
+/// 新建的空分组下一次 `getGroups` 就被内核列表覆盖掉了。
+///
+/// # 返回值
+///
+/// 返回新分组的 uuid；名字为空或重名返回 `None`（前端据此提示"已存在"）
 #[tauri::command]
-pub fn main_add_group(app: AppHandle, window: WebviewWindow, name: String) -> Result<bool, String> {
-    let n = name.trim().to_string();
-    if n.is_empty() {
+pub fn main_add_group(app: AppHandle, name: String) -> Result<Option<String>, String> {
+    let Some(uuid) = mml_game::add_group(&name) else {
+        return Ok(None);
+    };
+    emit_instance_change(&app, "group");
+    Ok(Some(uuid.to_string()))
+}
+
+/// 删除分组（组内实例移入默认分组）
+#[tauri::command]
+pub fn main_remove_group(app: AppHandle, uuid: String) -> Result<bool, String> {
+    // 空白 uuid 就是默认分组，不允许删除
+    let Some(uuid) = windows::parse_group_id(Some(uuid)) else {
         return Ok(false);
-    }
-    // 核心分组表：同名已存在则拒绝
-    if !mml_game::add_group(&n) {
+    };
+    // 核心分组表：组内实例移入默认分组，并逐个发变更通知
+    if !mml_game::remove_group(&uuid) {
         return Ok(false);
-    }
-    let store = model(&window)?;
-    let mut store = store.lock().unwrap();
-    if !store.all_groups().contains(&n) {
-        store.extra_groups.push(n.clone());
     }
     emit_instance_change(&app, "group");
     Ok(true)
 }
 
-/// 删除空分组
+/// 调整分组显示顺序（默认分组恒在首位，不参与排序）
+///
+/// 顺序由内核分组表保存：拿当前顺序、把该组挪到 `index` 位，再整表提交。
+/// 只改内存里的数组是不行的 —— 文件里存的还是旧顺序，重启就回来了。
 #[tauri::command]
-pub fn main_remove_group(
-    app: AppHandle,
-    window: WebviewWindow,
-    name: String,
-) -> Result<bool, String> {
-    if name.trim().is_empty() {
-        // 空白分组即默认分组，不允许删除
-        return Ok(false);
-    }
-    // 核心分组表：组内实例移入默认分组
-    mml_game::remove_group(&name);
-    let store = model(&window)?;
-    let mut store = store.lock().unwrap();
-    let before = store.extra_groups.len();
-    store.extra_groups.retain(|g| g != &name);
-    store.group_order.retain(|g| g != &name);
-    let ok = store.extra_groups.len() < before;
-    if ok {
-        emit_instance_change(&app, "group");
-    }
-    Ok(ok)
-}
+pub fn main_move_group(app: AppHandle, uuid: String, index: i64) -> Result<bool, String> {
+    let Some(uuid) = windows::parse_group_id(Some(uuid)) else {
+        return Err("err.uuid".to_string());
+    };
 
-/// 调整分组显示顺序
-#[tauri::command]
-pub fn main_move_group(
-    app: AppHandle,
-    window: WebviewWindow,
-    name: String,
-    index: i64,
-) -> Result<bool, String> {
-    let store = model(&window)?;
-    let mut store = store.lock().unwrap();
-    let mut list = store.all_groups();
+    let mut list: Vec<Uuid> = mml_game::get_group_list().into_iter().map(|g| g.uuid).collect();
     let from = list
         .iter()
-        .position(|g| g == &name)
+        .position(|g| *g == uuid)
         .ok_or_else(|| "err.groupNotFound".to_string())?;
     list.remove(from);
-    let at = (index as usize).min(list.len());
-    list.insert(at, name.clone());
-    store.group_order = list;
+    let at = (index.max(0) as usize).min(list.len());
+    list.insert(at, uuid);
+
+    mml_game::reorder_groups(&list);
     emit_instance_change(&app, "group");
     Ok(true)
 }
@@ -892,14 +862,10 @@ pub fn main_update_instance(
                 mml_game::rename_instance(&id, n).map_err(|e| e.to_string())?;
             }
         }
-        // 分组切换走 mml-game（自动建组 + 保存实例 + 发事件）
+        // 分组切换走 mml-game 的分组表（追加到目标组末尾、发事件）
         if let Some(v) = patch.group.clone() {
-            // 空白分组即默认分组
-            let group = match v {
-                Some(g) if !g.trim().is_empty() => Some(g),
-                _ => None,
-            };
-            mml_game::move_group(vec![id], group);
+            // 前端传的是分组 uuid；空 / 非法 = 默认分组
+            mml_game::move_group(vec![id], windows::parse_group_id(v));
         }
         {
             let mut obj = instance.write().unwrap();
@@ -1026,12 +992,11 @@ pub async fn main_delete_instance(
 
 /// 移动实例到 (分组, 组内位置)：支持同组排序与跨组移动
 ///
-/// 组内次序由每个实例自己的 `guisetting.json` 里的 `Order` 决定（升序），
-/// 与 `main_get_instances` 下发的 `order` 字段一致。
+/// 归属与组内次序都在内核分组表（`group_save.json`）：内核一次完成"落组 + 插到 index 位"，
+/// 前端下次拉列表就按表的数组顺序拿到新的 `order`。
 ///
-/// 这里把目标组内**除被移动者以外**的实例按现有顺序取出，在 `index` 处插入被移动者，
-/// 然后整组重新编号 0..n —— 重新编号而不是只改一个值，是因为旧数据里 `Order`
-/// 全是默认 0（并列），只改一个值排不出确定顺序。
+/// 这里不再改各实例的 `guisetting.json` —— 那个 `Order` 已经是旧机制，
+/// 两份顺序各写各的正是"拖完看着对了、重启就乱"的来源。
 #[tauri::command]
 pub fn main_move_instance(
     app: AppHandle,
@@ -1042,48 +1007,14 @@ pub fn main_move_instance(
     let Ok(id) = Uuid::parse_str(&uuid) else {
         return Err("err.uuid".to_string());
     };
-    let Some(instance) = mml_game::get_instance(&id) else {
+    if mml_game::get_instance(&id).is_none() {
         return Err("err.gameNotFound".to_string());
-    };
-
-    // 空白分组即默认分组
-    let group = if group.as_deref().map_or(true, |g| g.trim().is_empty()) {
-        None
-    } else {
-        group.clone()
-    };
-
-    // 分组切换走 mml-game（自动建组 + 保存实例 + 发事件）
-    mml_game::move_group(vec![id], group.clone());
-
-    // 收齐目标组内的实例（按当前 Order 升序），把被移动者插到 index 位后整组重编号
-    let mut others: Vec<GameInstance> = mml_game::get_instances()
-        .into_iter()
-        .filter(|i| {
-            let i = i.read().unwrap();
-            i.uuid != id && i.group == group
-        })
-        .collect();
-
-    // Order 存在各自实例的 guisetting.json 里（归属 GUI，内核不认识它）
-    // 同名时按名字兜底，保证顺序确定（旧数据 Order 全是默认 0，会并列）
-    others.sort_by_key(|i| {
-        let inst = i.read().unwrap().clone();
-        (gui_setting::load(&inst).order, inst.name.clone())
-    });
-
-    let at = (index.max(0) as usize).min(others.len());
-    let mut ordered: Vec<GameInstance> = others;
-    ordered.insert(at, instance);
-
-    for (i, inst) in ordered.iter().enumerate() {
-        let inst = inst.read().unwrap().clone();
-        let mut gui = gui_setting::load(&inst);
-        if gui.order != i as i32 {
-            gui.order = i as i32;
-            gui_setting::save(&inst, &gui);
-        }
     }
+
+    // 前端传的是分组 uuid；空 / 非法 = 默认分组
+    let group = windows::parse_group_id(group);
+
+    mml_game::move_instance(&id, group, index.max(0) as usize);
 
     emit_instance_change(&app, "edit");
     Ok(true)

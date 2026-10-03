@@ -49,6 +49,13 @@ pub const LANG_FILE: &str = "lang.txt";
 pub const MOD_INFO_FILE: &str = "modfileinfo.json";
 pub const GAME_FILE: &str = "game.json";
 pub const GUI_SETTING_FILE: &str = "guisetting.json";
+/// 分组表（`{ "组名": ["实例uuid", ...] }`）
+///
+/// 放在**实例根目录**下（与各实例目录并列），不再是每个实例配置里的一个字段：
+/// 分组是"实例集合"的概念，空分组也必须能存在 —— 而归属信息存在实例里时，
+/// 空分组没有任何实例可以承载它（这正是之前"空分组留不住"的原因）。
+/// 组内顺序也由本表的数组顺序表达。
+pub const GROUP_FILE: &str = "group_save.json";
 pub const MOD_PACK_FILE: &str = "Modpack.json";
 pub const CONFIG_FILE: &str = "config.json";
 pub const SHA_FILE: &str = "sha1";
@@ -271,6 +278,8 @@ mod tests {
             LANG_FILE,
             MOD_INFO_FILE,
             GAME_FILE,
+            GUI_SETTING_FILE,
+            GROUP_FILE,
             MOD_PACK_FILE,
             CONFIG_FILE,
             SHA_FILE,

@@ -11,6 +11,7 @@ import { ref } from "vue";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { commands } from "../lib/bindings";
+import type { ProjectItemDto } from "../lib/bindings";
 import { saveGuiConfig } from "../lib/guiConfig";
 import { isWindowKind, type WindowKind, WINDOW_REGISTRY } from "./registry";
 
@@ -33,12 +34,33 @@ const backStack = ref<WindowKind[]>([]);
 const BACK_STACK_MAX = 16;
 
 /**
+ * 打开下载窗口时要直接跳转到的项目（收藏窗口的「下载」用）
+ *
+ * 下载整合包 / 下载资源两个窗口都是"按实例取数"的：光有项目还拉不出版本列表，
+ * 所以目标窗口拿到这份参数后，等实例就绪再调自己那套 openDetail / openVersions。
+ */
+export interface WindowProjectParam {
+  /** 下载源（`ModPackType::to_string()`：curseforge / modrinth） */
+  source: string;
+  /** 项目 ID */
+  pid: string;
+  /** 资源类型线串（`FileType::to_string()`） */
+  fileType: string;
+  name: string;
+  icon: string | null;
+  url: string;
+}
+
+/**
  * 单窗口模式下"本次打开带入的参数"
  *
  * 单窗口既没有新窗口、也没有新 URL（Tauri 下连 pushState 都不做），壳层的 focus 事件更是
  * 无从触发，所以目标实例只能这样送达：openWindow 写进来，窗口组件 watch / onActivated 读走。
  */
-export const windowParams = ref<{ uuid: string | null }>({ uuid: null });
+export const windowParams = ref<{ uuid: string | null; project: WindowProjectParam | null }>({
+  uuid: null,
+  project: null,
+});
 
 /**
  * 单窗口模式：下载管理以"悬浮弹窗"出现，而不是把当前页面换掉
@@ -82,11 +104,16 @@ export function targetUuid(): string | null {
   return multiWindow.value ? uuidFromUrl() : windowParams.value.uuid;
 }
 
+/** 本次要直接打开的项目：单窗口取 openWindow 带入的参数，多窗口取本窗口 URL 上的参数 */
+export function targetProject(): WindowProjectParam | null {
+  return multiWindow.value ? projectFromUrl() : windowParams.value.project;
+}
+
 export function setMultiWindow(v: boolean): Promise<void> {
   multiWindow.value = v;
   // 换了模式，之前的返回栈与带入参数都不再成立
   backStack.value = [];
-  windowParams.value = { uuid: null };
+  windowParams.value = { uuid: null, project: null };
   localStorage.setItem(MODE_KEY, v ? "Multi" : "Single");
   // 返回保存的 Promise：要紧接着重启进程的调用方必须等这次写入真的落盘
   // （重启会立刻刷盘并退出，写请求还在路上就丢了 —— 见 useSettingsUi 的窗口模式切换）
@@ -117,7 +144,20 @@ function resolveKind(): WindowKind {
   return isWindowKind(k) ? k : "main";
 }
 
-function urlFor(kind: WindowKind, params?: { uuid?: string }): string {
+/** 项目参数在 URL 上的键（多窗口模式下新窗口只能从 URL 拿到"要打开哪个项目"） */
+const PROJ_PARAMS = {
+  source: "psource",
+  pid: "ppid",
+  fileType: "ptype",
+  name: "pname",
+  icon: "picon",
+  url: "purl",
+} as const;
+
+function urlFor(
+  kind: WindowKind,
+  params?: { uuid?: string; project?: WindowProjectParam },
+): string {
   const url = new URL(window.location.href);
   if (kind === "main") {
     url.searchParams.delete(WIN_PARAM);
@@ -128,6 +168,23 @@ function urlFor(kind: WindowKind, params?: { uuid?: string }): string {
     url.searchParams.set(UUID_PARAM, params.uuid);
   } else {
     url.searchParams.delete(UUID_PARAM);
+  }
+  if (params?.project) {
+    const p = params.project;
+    url.searchParams.set(PROJ_PARAMS.source, p.source);
+    url.searchParams.set(PROJ_PARAMS.pid, p.pid);
+    url.searchParams.set(PROJ_PARAMS.fileType, p.fileType);
+    url.searchParams.set(PROJ_PARAMS.name, p.name);
+    url.searchParams.set(PROJ_PARAMS.url, p.url);
+    if (p.icon) {
+      url.searchParams.set(PROJ_PARAMS.icon, p.icon);
+    } else {
+      url.searchParams.delete(PROJ_PARAMS.icon);
+    }
+  } else {
+    for (const key of Object.values(PROJ_PARAMS)) {
+      url.searchParams.delete(key);
+    }
   }
   return url.toString();
 }
@@ -142,11 +199,56 @@ export function uuidFromUrl(): string | null {
   return new URLSearchParams(window.location.search).get(UUID_PARAM);
 }
 
+/** 从 URL 读取"要直接打开的项目"（下载整合包 / 下载资源窗口用），没有返回 null */
+export function projectFromUrl(): WindowProjectParam | null {
+  const q = new URLSearchParams(window.location.search);
+  const source = q.get(PROJ_PARAMS.source);
+  const pid = q.get(PROJ_PARAMS.pid);
+  const fileType = q.get(PROJ_PARAMS.fileType);
+  if (!source || !pid || !fileType) {
+    return null;
+  }
+  return {
+    source,
+    pid,
+    fileType,
+    name: q.get(PROJ_PARAMS.name) ?? "",
+    icon: q.get(PROJ_PARAMS.icon),
+    url: q.get(PROJ_PARAMS.url) ?? "",
+  };
+}
+
+/**
+ * 把窗口参数里的项目还原成窗口能直接用的项目条目
+ *
+ * 只有收藏夹存下来的那几项（名字 / 图标 / 网址 / 源 / 项目 ID），其余字段（作者、标签、
+ * 截图、下载次数…）留空 —— 两个窗口的"打开项目"只用到 name / image / url / source.pid。
+ */
+export function projectParamToItem(p: WindowProjectParam): ProjectItemDto {
+  return {
+    name: p.name,
+    summary: "",
+    image: p.icon,
+    authors: [],
+    tag: [],
+    screenshots: [],
+    downloadCount: 0,
+    date: "",
+    download: false,
+    canStar: false,
+    isStar: false,
+    downloadNow: false,
+    url: p.url,
+    mcmod: null,
+    source: { fileType: p.fileType, source: p.source, pid: p.pid, fid: "" },
+  };
+}
+
 /** 打开一个窗口（功能入口等调用）
  *
  * - `params.uuid`：目标实例 uuid（游戏日志窗口用，定位要查看的实例）
  */
-export function openWindow(kind: WindowKind, params?: { uuid?: string }) {
+export function openWindow(kind: WindowKind, params?: { uuid?: string; project?: WindowProjectParam }) {
   console.log("[windowManager] openWindow", kind, {
     multiWindow: multiWindow.value,
     tauri: isTauri(),
@@ -166,8 +268,8 @@ export function openWindow(kind: WindowKind, params?: { uuid?: string }) {
       if (backStack.value.length > BACK_STACK_MAX) backStack.value.shift();
       currentKind.value = kind;
     }
-    // 目标实例只能靠这里送达：单窗口没有新窗口 / 新 URL，也没有壳层的 focus 事件
-    windowParams.value = { uuid: params?.uuid ?? null };
+    // 目标实例 / 目标项目只能靠这里送达：单窗口没有新窗口 / 新 URL，也没有壳层的 focus 事件
+    windowParams.value = { uuid: params?.uuid ?? null, project: params?.project ?? null };
     if (!isTauri()) window.history.pushState({}, "", urlFor(kind, params));
     return;
   }
@@ -314,8 +416,8 @@ export function closeWindow() {
 /** 单窗口模式的应用内跳转（同步返回栈之外的显示状态与 URL） */
 function goTo(kind: WindowKind) {
   currentKind.value = kind;
-  // 返回后不再带着上一次的目标实例，避免窗口"记得"不该记的东西
-  windowParams.value = { uuid: null };
+  // 返回后不再带着上一次的目标实例 / 目标项目，避免窗口"记得"不该记的东西
+  windowParams.value = { uuid: null, project: null };
   if (!isTauri()) window.history.pushState({}, "", urlFor(kind));
 }
 

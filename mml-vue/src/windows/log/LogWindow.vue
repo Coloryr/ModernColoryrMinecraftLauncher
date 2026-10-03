@@ -298,13 +298,23 @@ onBeforeUnmount(() => {
 .inst-select {
   flex: 1;
   min-width: 0;
-  padding: 6px 8px;
+  /* 与 .filter-select 对齐（同箭头 / 不透明底 / 主题边框），只保留自己的字号：
+     原来没有 appearance: none 也没配箭头，用的是系统原生下拉箭头，和别处不是一个观感 */
+  padding: 6px 24px 6px 8px;
   font-size: 13px;
   color: var(--text);
-  background: var(--bg);
+  background: var(--bg-solid, var(--bg-card));
   border: 1px solid var(--border);
   border-radius: 8px;
   cursor: pointer;
+  outline: none;
+  font-family: inherit;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: var(--select-arrow);
+  background-repeat: no-repeat;
+  background-position: right 6px center;
+  background-size: 12px;
 }
 
 .topbar .seg-tabs {

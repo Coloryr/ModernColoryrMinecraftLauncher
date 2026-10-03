@@ -9,7 +9,7 @@ pub struct InstanceInfoDto {
     pub uuid: String,
     /// 实例名
     pub name: String,
-    /// 分组名
+    /// 分组 uuid（`null` = 默认分组）
     pub group: Option<String>,
     /// 游戏版本号
     pub version: String,
@@ -37,16 +37,24 @@ pub struct InstanceInfoDto {
     pub log_encoding: Option<String>,
     /// 来源：导入的压缩包 / 文件夹 / 在线网址
     pub source: Option<String>,
-    /// 组内排列顺序（来自实例的 guisetting.json，升序；同值按名字兜底）
+    /// 组内排列次序（来自分组表 `group_save.json` 的 `order`，升序）
     pub order: i32,
 }
 
-impl InstanceInfoDto {
-    /// 分组名（无分组时为 None，前端映射为“默认分组”）
-    pub fn group_key(&self) -> Option<&str> {
-        self.group.as_deref()
-    }
+/// 分组条目
+///
+/// 分组以 **uuid 为身份**、组名为显示数据（见 mml-game 的 `game_group`），
+/// 所以跨 IPC 传的是这一对，而不是光一个组名。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct GroupDto {
+    /// 分组 uuid
+    pub uuid: String,
+    /// 分组显示名（默认分组是空白，由前端翻译成"默认分组"）
+    pub name: String,
+}
 
+impl InstanceInfoDto {
     /// 是否正在运行
     pub fn is_running(&self) -> bool {
         self.running

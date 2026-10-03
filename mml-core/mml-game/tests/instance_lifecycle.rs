@@ -35,10 +35,12 @@ fn ensure_init() {
 static TEST_LOCK: Mutex<()> = Mutex::new(());
 
 /// 用唯一前缀构造实例设置
-fn setting(name: &str, group: Option<&str>) -> InstanceSettingObj {
+///
+/// 分组**不在**实例配置里（已迁到内核的 `group_save.json`），
+/// 要指定分组得走 `create_instance_in_group`。
+fn setting(name: &str) -> InstanceSettingObj {
     InstanceSettingObj {
         name: name.to_string(),
-        group: group.map(String::from),
         version: "1.20.1".to_string(),
         ..Default::default()
     }
@@ -52,8 +54,9 @@ async fn create_instance_makes_dirs() {
 
     let suffix = Uuid::new_v4().simple().to_string();
     let name = format!("生命周期-{suffix}");
-    let game = setting(&name, Some("测试组"))
-        .create_instance(None)
+    let group = mml_game::add_group("测试组").expect("建组失败");
+    let game = setting(&name)
+        .create_instance_in_group(None, Some(group))
         .await
         .expect("创建实例失败");
     let uuid = game.read().unwrap().uuid;
@@ -61,7 +64,12 @@ async fn create_instance_makes_dirs() {
     // 全局表登记
     assert!(mml_game::have_instance_name(&name));
     assert!(mml_game::get_instance_by_name(&name).is_some());
-    assert!(mml_game::get_group_keys().iter().any(|g| g == "测试组"));
+    // 分组归属在独立的分组表里（实例配置上没有这个字段），按 uuid 记录
+    assert_eq!(mml_game::get_instance_group(&uuid), Some(group));
+    assert!(
+        mml_game::get_group_list().iter().any(|g| g.uuid == group),
+        "分组表里应当有这个组"
+    );
 
     // 目录结构齐全
     let game2 = mml_game::get_instance(&uuid).unwrap();
@@ -91,10 +99,10 @@ async fn create_duplicate_name_auto_renames() {
     let suffix = Uuid::new_v4().simple().to_string();
     let name = format!("重名-{suffix}");
 
-    let game1 = setting(&name, None).create_instance(None).await.unwrap();
+    let game1 = setting(&name).create_instance(None).await.unwrap();
     let uuid1 = game1.read().unwrap().uuid;
 
-    let game2 = setting(&name, None).create_instance(None).await.unwrap();
+    let game2 = setting(&name).create_instance(None).await.unwrap();
     let uuid2 = game2.read().unwrap().uuid;
     let name2 = game2.read().unwrap().name.clone();
 
@@ -115,7 +123,7 @@ async fn rename_instance_rules() {
     let suffix = Uuid::new_v4().simple().to_string();
     let name = format!("改名-{suffix}");
 
-    let game = setting(&name, None).create_instance(None).await.unwrap();
+    let game = setting(&name).create_instance(None).await.unwrap();
     let uuid = game.read().unwrap().uuid;
 
     // 改名成功，目录跟随
@@ -132,7 +140,7 @@ async fn rename_instance_rules() {
 
     // 改成别人占用的名字 → 拒绝
     let other = format!("改名占位-{suffix}");
-    let game2 = setting(&other, None).create_instance(None).await.unwrap();
+    let game2 = setting(&other).create_instance(None).await.unwrap();
     let uuid2 = game2.read().unwrap().uuid;
     assert!(mml_game::rename_instance(&uuid, &other).is_err());
 
@@ -153,25 +161,70 @@ async fn delete_instance_removes_everywhere() {
     ensure_init();
 
     let suffix = Uuid::new_v4().simple().to_string();
-    let group = format!("删除组-{suffix}");
-    let game = setting(&format!("待删-{suffix}"), Some(&group))
-        .create_instance(None)
+    let group = mml_game::add_group(&format!("删除组-{suffix}")).expect("建组失败");
+    let game = setting(&format!("待删-{suffix}"))
+        .create_instance_in_group(None, Some(group))
         .await
         .unwrap();
     let uuid = game.read().unwrap().uuid;
     let base = game.read().unwrap().get_base_path();
 
-    assert!(mml_game::get_group_keys().iter().any(|g| *g == group));
+    assert!(mml_game::get_group_list().iter().any(|g| g.uuid == group));
 
     mml_game::delete_instance(&uuid).unwrap();
 
     assert!(mml_game::get_instance(&uuid).is_none());
+    // 实例从组里摘掉，但**空分组保留** —— 这正是分组独立存储的目的：
+    // 归属挂在实例上时，删掉最后一个成员就再没有任何实例承载这个组，只能跟着消失
+    assert!(mml_game::get_group(&group).is_empty(), "被删实例不应还在组里");
     assert!(
-        !mml_game::get_group_keys().iter().any(|g| *g == group),
-        "删除唯一成员后空分组应被回收"
+        mml_game::get_group_list().iter().any(|g| g.uuid == group),
+        "空分组应当保留"
     );
     assert!(!base.exists(), "实例目录应被清理（回收站）");
 
     // 重复删除 → 报错（uuid 已不存在）
     assert!(mml_game::delete_instance(&uuid).is_err());
+}
+
+/// 分组归属与组内次序：内核一次完成"落组 + 定位"，前端拿到的 `order` 就是组内位置
+#[tokio::test]
+async fn move_instance_sets_group_and_order() {
+    let _guard = TEST_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    ensure_init();
+
+    let suffix = Uuid::new_v4().simple().to_string();
+    let group = mml_game::add_group(&format!("排序组-{suffix}")).expect("建组失败");
+
+    let a = setting(&format!("排序A-{suffix}"))
+        .create_instance(None)
+        .await
+        .unwrap();
+    let b = setting(&format!("排序B-{suffix}"))
+        .create_instance(None)
+        .await
+        .unwrap();
+    let ua = a.read().unwrap().uuid;
+    let ub = b.read().unwrap().uuid;
+
+    // 先后移进同一个组（每次插入到第 0 位），最终顺序应为 B、A
+    mml_game::move_instance(&ua, Some(group), 0);
+    mml_game::move_instance(&ub, Some(group), 0);
+
+    assert_eq!(mml_game::get_instance_group(&ua), Some(group));
+    assert_eq!(mml_game::get_instance_order(&ub), Some(0), "B 应排在第 0 位");
+    assert_eq!(mml_game::get_instance_order(&ua), Some(1), "A 应被挤到第 1 位");
+
+    // 分组顺序可调：默认分组恒在首位，被提到的组紧跟其后
+    mml_game::reorder_groups(&[group]);
+    let keys: Vec<Uuid> = mml_game::get_group_list().iter().map(|g| g.uuid).collect();
+    assert_eq!(
+        keys.first(),
+        Some(&mml_game::game_group::DEFAULT_GROUP_UUID),
+        "默认分组恒在首位"
+    );
+    assert_eq!(keys.get(1), Some(&group), "重排后本组应紧跟默认分组");
+
+    mml_game::delete_instance(&ua).unwrap();
+    mml_game::delete_instance(&ub).unwrap();
 }

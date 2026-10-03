@@ -33,7 +33,7 @@ import { showToast } from "../../lib/toast";
 import { t, tErr } from "../../lib/i18n";
 import { isTauri, openWindow } from "../windowManager";
 import { commands } from "../../lib/bindings";
-import type { FolderInstanceDto, PackProgressDto } from "../../lib/bindings";
+import type { FolderInstanceDto, GroupDto, PackProgressDto } from "../../lib/bindings";
 import { ADD_MODES, type AddMode } from "./types";
 
 const emit = defineEmits<{ (e: "close"): void }>();
@@ -99,7 +99,7 @@ const {
 
 // ================= 分组 =================
 
-const groups = ref<string[]>([]);
+const groups = ref<GroupDto[]>([]);
 const groupOpen = ref(false);
 
 // ================= 实例名（自动填写） =================
@@ -479,12 +479,14 @@ async function create() {
     return failField("url", t("add.urlEmpty"));
   }
 
-  const group = addGroup.value.trim() === "" ? null : addGroup.value.trim();
+  const group = addGroup.value;
   addError.value = "";
   addErrorField.value = "";
   creating.value = true;
   try {
     let uuid: string;
+    // 分组按 uuid 传给后端：手输的组名可能已有、也可能要现建一个
+    const groupId = await api.resolveGroupId(group);
     // 询问"是否继续添加"时显示的名字：单个导入用实例名，批量用数量
     let doneName = name;
     if (addMode.value === "new") {
@@ -493,7 +495,7 @@ async function create() {
         newVersion.value,
         loader.value,
         loader.value === "custom" ? loaderPath.value || null : loaderVersion.value || null,
-        group,
+        groupId,
       );
     } else if (addMode.value === "archive") {
       // 文件树未勾选的文件按压缩包内条目名排除（全选时传 null）
@@ -502,7 +504,7 @@ async function create() {
         addArchivePath.value.trim(),
         addPackType.value,
         name,
-        group,
+        groupId,
         unselected.length ? unselected : null,
       );
     } else if (addMode.value === "folder") {
@@ -511,14 +513,14 @@ async function create() {
         const targets = folderFound.value.filter((item) => folderPicked.value.has(item.path));
         uuid = "";
         for (const item of targets) {
-          uuid = await api.addImportFolder(item.path, item.name, group);
+          uuid = await api.addImportFolder(item.path, item.name, groupId);
         }
         doneName = t("add.folderImported", { n: targets.length });
       } else {
-        uuid = await api.addImportFolder(addFolderPath.value.trim(), name, group);
+        uuid = await api.addImportFolder(addFolderPath.value.trim(), name, groupId);
       }
     } else {
-      uuid = await api.addImportUrl(addUrl.value.trim(), name, group);
+      uuid = await api.addImportUrl(addUrl.value.trim(), name, groupId);
     }
     if (isLeaving()) return;
     // 通知主窗口选中新实例（后端已发 instance-change 刷新列表），然后询问是否继续添加
@@ -667,8 +669,8 @@ onMounted(async () => {
   );
 
   try {
-    // 默认分组（空白键）不进下拉：输入框留空即默认分组
-    groups.value = (await api.getGroups()).filter((g) => g.trim());
+    // 默认分组（空白名字）不进下拉：输入框留空即默认分组
+    groups.value = (await api.getGroups()).filter((g) => g.name.trim());
   } catch {
     groups.value = [];
   }
@@ -805,7 +807,6 @@ onUnmounted(() => {
         <BaseButton class="modpack-entry" @click="openWindow('add_modpack')">
           {{ t("add.downloadModpack") }}
         </BaseButton>
-        <BaseButton variant="accent" @click="$emit('close')">{{ t("add.cancel") }}</BaseButton>
         <BaseButton variant="primary" :disabled="busy" @click="create">
           {{ createLabel }}
         </BaseButton>
@@ -866,7 +867,7 @@ onUnmounted(() => {
   margin-top: auto;
 }
 
-/* 整合包入口靠左，与右侧的取消 / 创建分开；绿色软底，和侧边栏「添加分组」同色系。
+/* 整合包入口靠左，与右侧的创建按钮分开；绿色软底，和侧边栏「添加分组」同色系。
    加 .ui-btn 提高优先级，稳定压过 BaseButton 的 .v-plain 底色 */
 .ui-btn.modpack-entry {
   margin-right: auto;

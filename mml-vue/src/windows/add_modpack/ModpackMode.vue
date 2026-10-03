@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 整合包模式：CurseForge / Modrinth 在线搜索 + 选版本安装
 // 实例名取自整合包元数据（安装后端自动处理），分组沿用窗口顶部的分组输入框
-import { computed, onDeactivated, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, nextTick, onActivated, onDeactivated, onMounted, onUnmounted, ref, watch } from "vue";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 import SegmentedTabs from "../../components/ui/SegmentedTabs.vue";
@@ -9,13 +9,14 @@ import AsyncImage from "../../components/ui/AsyncImage.vue";
 import { api } from "../../lib/api";
 import { t, tErr } from "../../lib/i18n";
 import { showToast } from "../../lib/toast";
-import type { FileListItemDto, ModPackStatusDto, ModPackTaskDto, ProjectDetailDto, ProjectItemDto } from "../../lib/bindings";
+import { projectParamToItem, targetProject } from "../windowManager";
+import type { FileListItemDto, GroupDto, ModPackStatusDto, ModPackTaskDto, ProjectDetailDto, ProjectItemDto } from "../../lib/bindings";
 
 const props = defineProps<{
-  /** 安装到的分组（空 = 默认分组） */
+  /** 安装到的分组名（空 = 默认分组；提交时由上层转成分组 uuid） */
   group: string;
-  /** 已有分组候选（datalist 下拉用） */
-  groups: string[];
+  /** 已有分组候选（uuid + 名字；下拉显示名字） */
+  groups: GroupDto[];
   /** 安装任务状态（同步列表的「已安装 / 安装中」角标） */
   status: ModPackStatusDto | null;
 }>();
@@ -57,7 +58,7 @@ const filter = ref("");
 /** 分组组合框：点击输入框即展开已有分组（与添加实例窗口一致） */
 const groupOpen = ref(false);
 const groupQuery = computed(() =>
-  props.groups.filter((g) => g.toLowerCase().includes(props.group.trim().toLowerCase())),
+  props.groups.filter((g) => g.name.toLowerCase().includes(props.group.trim().toLowerCase())),
 );
 
 // 离开本窗口时清掉搜索词与分组下拉（来源 / 版本 / 排序 / 分类等筛选留着：那是浏览上下文）。
@@ -137,8 +138,16 @@ async function loadSources() {
   source.value = sources.value[0].value;
 }
 
+/**
+ * 重载代次：换下载源会连着跑几发 loadSource（比如收藏跳转同时改源与类型），
+ * 旧的一发**后回来**会把新的排序表覆盖掉 —— 于是后续搜索带着上一个源的排序名
+ * 发出去，后端报 err.sortTypeNotFound。每发记下自己的编号，回来时不是最新就丢掉。
+ */
+let sourceSeq = 0;
+
 /** 切换下载源：清空搜索词与结果，重新拉排序 / 版本 / 分类，然后搜第一页 */
 async function loadSource() {
+  const mine = ++sourceSeq;
   items.value = [];
   total.value = 0;
   page.value = 0;
@@ -165,6 +174,9 @@ async function loadSource() {
       api.getModpackCategories(source.value),
     ]);
 
+    // 已经换源了：这一发的排序 / 版本 / 分类都是上一个源的，丢
+    if (mine !== sourceSeq) return;
+
     sorts.value = sortList;
     sort.value = sortList[0] ?? "";
     // 版本列表里后端已经插了一个空串表示“全部”，这里统一由前端的选项提供
@@ -173,11 +185,13 @@ async function loadSource() {
       .map(([value, label]) => ({ value, label }))
       .sort((a, b) => a.label.localeCompare(b.label));
   } catch (e) {
+    if (mine !== sourceSeq) return;
     error.value = tErr(e);
     searching.value = false;
     return;
   }
 
+  if (mine !== sourceSeq) return;
   searching.value = false;
 
   await search();
@@ -188,6 +202,16 @@ let searchSeq = 0;
 
 /** 搜索期间置 `searching`（弹窗锁住窗口），成败都清掉 */
 async function search() {
+  // 排序列表还没拉回来时别发请求：换下载源时它是**异步**拉回来的
+  // （loadSource 里 await 若干请求），这中间发出去必然带不上合法排序
+  // —— 空串后端也不认（err.sortTypeNotFound）。那次 loadSource 拉完会自己再搜一次。
+  if (sorts.value.length === 0) {
+    return;
+  }
+  if (!sorts.value.includes(sort.value)) {
+    sort.value = sorts.value[0];
+  }
+
   const mine = ++searchSeq;
   searching.value = true;
   try {
@@ -206,6 +230,21 @@ async function search() {
   } catch (e) {
     // 被更新的一发顶掉、或窗口关闭时后端取消，都不算失败，不弹错
     if (mine !== searchSeq || String(e) === "err.cancelled") return;
+    // 后端不认排序 → 打出实际值（数组拼成字符串，控制台折叠也能一眼看到）
+    if (String(e).includes("err.sortTypeNotFound")) {
+      // [TEMP] 排查「未知的排序方式」
+      console.warn(
+        `[TEMP] sort 被拒（modpack）source=${source.value} type=- sort=${sort.value} 可用=[${sorts.value.join(", ")}] page=${page.value}`,
+      );
+      // 只在**真的换成了别的值**时重试一次，否则同一个值会来回刷成死循环
+      const fallback = sorts.value[0];
+      if (fallback && fallback !== sort.value) {
+        sort.value = fallback;
+        searching.value = false;
+        await search();
+        return;
+      }
+    }
     items.value = [];
     total.value = 0;
     error.value = tErr(e);
@@ -570,7 +609,51 @@ function formatSize(size: number): string {
   return `${Math.max(1, Math.round(size / 1024))} KB`;
 }
 
-onMounted(loadSources);
+onMounted(async () => {
+  await loadSources();
+  consumeTargetProject();
+});
+
+/**
+ * 收藏窗口点「下载」跳进来的整合包：进页面就直接打开它的详情（版本列表在里面）
+ *
+ * 与下载资源窗口同理 —— 本页在单窗口模式下也被 KeepAlive 缓存，先把上一次留下的
+ * 视图状态清掉再打开新项目（`closeDetail()` 同时把上层的"返回"状态复位），
+ * 改完 source 会触发列表刷新，所以等一轮再开详情，免得被那批刷新盖掉。
+ */
+async function consumeTargetProject() {
+  const p = targetProject();
+  if (!p || p.fileType !== "modpack") {
+    return;
+  }
+  closeDetail();
+  filter.value = "";
+  // 换源会让排序表作废：**同步**清掉（不能等 watch 里那次异步重载），
+  // 否则中间那几发搜索会带着上一个源的排序名发出去（后端不认 → 报未知排序）
+  sorts.value = [];
+  sort.value = "";
+  if (p.source) {
+    source.value = p.source;
+  }
+
+  await nextTick();
+
+  // 精简条目只够定位项目（下载次数 / 更新时间 / 收藏状态都是空的）→ 现取一次真的；
+  // 取不到（离线等）就退回精简条目，至少详情能打开
+  let item = projectParamToItem(p);
+  try {
+    const real = await api.collectProjectItem(p.source, p.pid, p.fileType);
+    if (real) {
+      item = real;
+    }
+  } catch {
+    // 用精简条目兜底
+  }
+
+  void openDetail(item);
+}
+
+onActivated(consumeTargetProject);
 
 watch(source, loadSource);
 </script>
@@ -606,12 +689,12 @@ watch(source, loadSource);
         <div v-if="groupOpen" class="group-drop">
           <button
             v-for="g in groupQuery"
-            :key="g"
+            :key="g.uuid"
             class="group-opt"
             @mousedown.prevent
-            @click="pickGroup(g)"
+            @click="pickGroup(g.name)"
           >
-            {{ g }}
+            {{ g.name }}
           </button>
           <div v-if="!groupQuery.length" class="empty-tip">{{ t("add.groupNone") }}</div>
         </div>

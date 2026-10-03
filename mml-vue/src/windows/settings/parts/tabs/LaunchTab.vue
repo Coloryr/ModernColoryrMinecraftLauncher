@@ -8,6 +8,7 @@ import { t } from "../../../../lib/i18n";
 import { COMMON_MEMORY, COMMON_RESOLUTIONS } from "../../../../lib/resolutions";
 import { useSystemMemory } from "../../../../lib/systemMemory";
 import BaseSwitch from "../../../../components/ui/BaseSwitch.vue";
+import GlyphIcon from "../../../../components/ui/GlyphIcon.vue";
 import NumberStepper from "../../../../components/ui/NumberStepper.vue";
 import SegmentedTabs from "../../../../components/ui/SegmentedTabs.vue";
 import SettingsGroup from "../SettingsGroup.vue";
@@ -174,9 +175,13 @@ watch(memoryConflict, async (bad) => {
             autocomplete="off"
             :placeholder="t('winSettings.envValue')"
           />
-          <button class="line-del" aria-label="remove" v-tip="t('args.removeLine')" @click="removeEnvLine(i)">✕</button>
+          <button class="line-del" aria-label="remove" v-tip="t('args.removeLine')" @click="removeEnvLine(i)">
+            <GlyphIcon name="close" :size="13" />
+          </button>
         </div>
-        <button class="line-add" @click="addEnvLine">＋ {{ t("args.addLine") }}</button>
+        <button class="line-add" @click="addEnvLine">
+          <GlyphIcon name="plus" :size="13" :weight="2.2" /> {{ t("args.addLine") }}
+        </button>
       </div>
 
       <label class="field-label">{{ t("winSettings.jvmArgs") }}</label>

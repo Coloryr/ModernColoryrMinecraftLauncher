@@ -4,11 +4,15 @@
 // 组内插入占位（淡化的实例）→ 松开提交；支持同组排序与跨组移动。
 import { computed, onMounted, onUnmounted, ref, type Ref } from "vue";
 import { api } from "../lib/api";
-import { t } from "../lib/i18n";
 import type { InstanceInfoDto } from "../lib/bindings";
 
 export interface GroupView {
+  /** 分组 uuid（身份） */
+  id: string;
+  /** 分组显示名 */
   name: string;
+  /** 是否默认分组 */
+  isDefault: boolean;
   items: InstanceInfoDto[];
 }
 
@@ -23,6 +27,9 @@ interface DragDeps {
 interface DragCandidate {
   kind: "instance" | "group";
   instance?: InstanceInfoDto;
+  /** 分组 uuid（拖动与落点判断都用它） */
+  groupId?: string;
+  /** 分组显示名（只用于拖拽占位上的文案） */
   groupName?: string;
 }
 
@@ -35,8 +42,8 @@ export function useInstanceDrag(deps: DragDeps) {
       ? (dragActive.value.instance?.uuid ?? null)
       : null,
   );
-  /** 实例拖拽插入位置（组名 + 组内下标） */
-  const dragInsert = ref<{ group: string; index: number } | null>(null);
+  /** 实例拖拽插入位置（分组 uuid + 组内下标） */
+  const dragInsert = ref<{ groupId: string; index: number } | null>(null);
   /** 分组拖拽插入位置 */
   const dragGroupInsert = ref<{ index: number } | null>(null);
 
@@ -102,7 +109,8 @@ export function useInstanceDrag(deps: DragDeps) {
         dragInsert.value = null;
         return;
       }
-      const groupName = block.dataset.group ?? "";
+      // data-group 存的是分组 uuid（身份；组名可改）
+      const groupId = block.dataset.group ?? "";
       // 插入位置按组内实例计算（排除正在拖拽的实例本身）
       const rows = [...block.querySelectorAll(".inst-row")].filter(
         (r) => (r as HTMLElement).dataset.uuid !== active.instance?.uuid,
@@ -115,7 +123,7 @@ export function useInstanceDrag(deps: DragDeps) {
           break;
         }
       }
-      dragInsert.value = { group: groupName, index };
+      dragInsert.value = { groupId, index };
     } else {
       const list = el?.closest?.(".group-list") ?? null;
       const blocks = list ? [...list.querySelectorAll(".group-block")] : [];
@@ -135,30 +143,29 @@ export function useInstanceDrag(deps: DragDeps) {
     if (active.kind === "instance" && active.instance) {
       const ins = dragInsert.value;
       if (!ins) return;
-      const target = ins.group === t("group.default") ? null : ins.group;
-      // 落点由后端记进各实例的 guisetting.json（Order），重拉列表即拿到新次序
-      await api.moveInstance(active.instance.uuid, target, ins.index);
+      // 落点由后端记进内核分组表（归属 + 组内次序），重拉列表即拿到新次序。
+      // 这里直接给分组 uuid：默认分组也有自己的 uuid，与 null 等价
+      await api.moveInstance(active.instance.uuid, ins.groupId, ins.index);
       await deps.loadInstances();
       // 展开目标分组
-      const key = target || t("group.default");
-      deps.collapsedGroups.value = { ...deps.collapsedGroups.value, [key]: false };
-    } else if (active.kind === "group" && active.groupName) {
+      deps.collapsedGroups.value = { ...deps.collapsedGroups.value, [ins.groupId]: false };
+    } else if (active.kind === "group" && active.groupId) {
       const ins = dragGroupInsert.value;
       if (!ins) return;
-      await api.moveGroup(active.groupName, ins.index);
+      await api.moveGroup(active.groupId, ins.index);
       await deps.loadGroups();
     }
   }
 
-  /** 实例插入占位：分组 groupName 中第 idx 个实例之前（末尾由 isInstInsertEnd 渲染，避免同组拖动出现双占位） */
-  function isInstInsert(groupName: string, idx: number): boolean {
+  /** 实例插入占位：分组 groupId 中第 idx 个实例之前（末尾由 isInstInsertEnd 渲染，避免同组拖动出现双占位） */
+  function isInstInsert(groupId: string, idx: number): boolean {
     const ins = dragInsert.value;
-    if (!ins || ins.group !== groupName) return false;
+    if (!ins || ins.groupId !== groupId) return false;
     const active = dragActive.value;
     if (active?.kind !== "instance") return false;
     const dragging = active.instance;
     if (!dragging) return false;
-    const items = deps.groups.value.find((g) => g.name === groupName)?.items ?? [];
+    const items = deps.groups.value.find((g) => g.id === groupId)?.items ?? [];
     // 组内非拖拽实例总数
     const total = items.filter((i) => i.uuid !== dragging.uuid).length;
     let before = 0;
@@ -169,14 +176,14 @@ export function useInstanceDrag(deps: DragDeps) {
   }
 
   /** 实例插入占位：分组末尾 */
-  function isInstInsertEnd(groupName: string): boolean {
+  function isInstInsertEnd(groupId: string): boolean {
     const ins = dragInsert.value;
-    if (!ins || ins.group !== groupName) return false;
+    if (!ins || ins.groupId !== groupId) return false;
     const active = dragActive.value;
     if (active?.kind !== "instance") return false;
     const dragging = active.instance;
     if (!dragging) return false;
-    const items = deps.groups.value.find((g) => g.name === groupName)?.items ?? [];
+    const items = deps.groups.value.find((g) => g.id === groupId)?.items ?? [];
     const before = items.filter((i) => i.uuid !== dragging.uuid).length;
     return before === ins.index;
   }

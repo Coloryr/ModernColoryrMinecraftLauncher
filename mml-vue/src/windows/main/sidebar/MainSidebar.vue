@@ -1,7 +1,8 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 // 主窗口侧栏：模式切换 / 搜索 / 分组列表（拖拽排序）/ 平铺
 // 状态与交互全部通过 props / emits 与 MainWindow 联通
 import SegmentedTabs from "../../../components/ui/SegmentedTabs.vue";
+import GlyphIcon from "../../../components/ui/GlyphIcon.vue";
 import InstanceIcon from "../../../components/InstanceIcon.vue";
 import { t } from "../../../lib/i18n";
 import type { InstanceInfoDto } from "../../../lib/bindings";
@@ -22,14 +23,14 @@ const props = defineProps<{
   collapsedGroups: Record<string, boolean>;
   dragActive: DragCandidate | null;
   draggingUuid: string | null;
-  isCollapsed: (name: string) => boolean;
+  isCollapsed: (id: string) => boolean;
   onDragPointerDown: (e: PointerEvent, cand: DragCandidate) => void;
   onInstClick: (inst: InstanceInfoDto) => void;
   onInstContext: (e: MouseEvent, inst: InstanceInfoDto) => void;
-  onGroupContext: (e: MouseEvent, groupName: string) => void;
-  onGroupTitleClick: (name: string) => void;
-  isInstInsert: (groupName: string, idx: number) => boolean;
-  isInstInsertEnd: (groupName: string) => boolean;
+  onGroupContext: (e: MouseEvent, groupId: string) => void;
+  onGroupTitleClick: (id: string) => void;
+  isInstInsert: (groupId: string, idx: number) => boolean;
+  isInstInsertEnd: (groupId: string) => boolean;
   isGroupInsert: (index: number) => boolean;
 }>();
 
@@ -46,9 +47,9 @@ function onSearchInput(e: Event) {
 }
 
 /** 分组的实例列表是否展开：拖拽实例 / 搜索时强制展开，便于投放与查看结果 */
-function isGroupOpen(name: string) {
+function isGroupOpen(id: string) {
   return (
-    !props.isCollapsed(name) || props.searching || props.dragActive?.kind === "instance"
+    !props.isCollapsed(id) || props.searching || props.dragActive?.kind === "instance"
   );
 }
 </script>
@@ -62,7 +63,9 @@ function isGroupOpen(name: string) {
         @update:model-value="emit('update:mode', $event as ViewMode)"
       />
       <div class="sidebar-head-actions">
-        <button class="icon-btn" v-tip="t('sidebar.collapse')" @click="emit('collapse')">‹</button>
+        <button class="icon-btn" v-tip="t('sidebar.collapse')" @click="emit('collapse')">
+          <GlyphIcon name="chevron-left" :size="16" />
+        </button>
       </div>
     </div>
 
@@ -79,26 +82,28 @@ function isGroupOpen(name: string) {
         spellcheck="false"
         @input="onSearchInput"
       />
-      <button v-if="searchText" class="search-clear" @click="emit('update:searchText', '')">✕</button>
+      <button v-if="searchText" class="search-clear" @click="emit('update:searchText', '')">
+        <GlyphIcon name="close" :size="12" :weight="2.4" />
+      </button>
     </div>
 
     <!-- 分组：可收缩，组内顶部有添加 -->
     <div v-if="mode === 'group'" class="group-list">
-      <template v-for="(g, gi) in filteredGroups" :key="g.name">
+      <template v-for="(g, gi) in filteredGroups" :key="g.id">
         <!-- 分组拖拽插入占位 -->
         <div v-if="isGroupInsert(gi)" class="drop-ghost-group">
           <span class="drop-ghost-group-name">{{ dragActive?.groupName }}</span>
         </div>
-        <div class="group-block" :data-group="g.name">
+        <div class="group-block" :data-group="g.id">
         <div
           class="group-title-row"
-          @contextmenu.prevent="onGroupContext($event, g.name)"
-          @pointerdown="onDragPointerDown($event, { kind: 'group', groupName: g.name })"
+          @contextmenu.prevent="onGroupContext($event, g.id)"
+          @pointerdown="onDragPointerDown($event, { kind: 'group', groupId: g.id, groupName: g.name })"
         >
-          <button class="group-title" v-tip="t('group.collapse')" @click="onGroupTitleClick(g.name)">
+          <button class="group-title" v-tip="t('group.collapse')" @click="onGroupTitleClick(g.id)">
             <svg
               class="group-chevron"
-              :class="{ collapsed: isCollapsed(g.name) }"
+              :class="{ collapsed: isCollapsed(g.id) }"
               viewBox="0 0 24 24"
               width="13"
               height="13"
@@ -114,7 +119,7 @@ function isGroupOpen(name: string) {
         </div>
 
         <!-- 拖拽实例时自动展开，便于投放；展开 / 收起走高度动画（grid-template-rows 0fr↔1fr） -->
-        <div class="group-items-wrap" :class="{ collapsed: !isGroupOpen(g.name) }">
+        <div class="group-items-wrap" :class="{ collapsed: !isGroupOpen(g.id) }">
         <div class="group-items">
           <!-- 添加实例（与实例行同尺寸；多选时隐藏，拖拽实例时禁用并变色） -->
           <button
@@ -123,14 +128,14 @@ function isGroupOpen(name: string) {
             :disabled="dragActive?.kind === 'instance'"
             @click="emit('add-instance')"
           >
-            <span class="add-inst-icon">＋</span>
+            <span class="add-inst-icon"><GlyphIcon name="plus" :size="18" /></span>
             <span class="add-inst-text">{{ t("list.add") }}</span>
           </button>
           <template v-for="(inst, idx) in g.items" :key="inst.uuid">
             <!-- 正在拖拽的实例行不渲染（位置由插入占位显示），避免出现空位 / 双占位 -->
             <template v-if="inst.uuid !== draggingUuid">
               <!-- 实例拖拽插入占位（淡化的实例，位于鼠标对应位置） -->
-              <div v-if="isInstInsert(g.name, idx)" class="drop-ghost-row">
+              <div v-if="isInstInsert(g.id, idx)" class="drop-ghost-row">
                 <InstanceIcon :name="dragActive?.instance?.name ?? ''" :uuid="dragActive?.instance?.uuid ?? '0'" :size="38" />
                 <span class="inst-name">{{ dragActive?.instance?.name ?? "" }}</span>
               </div>
@@ -145,16 +150,18 @@ function isGroupOpen(name: string) {
                 @click="onInstClick(inst)"
                 @contextmenu.prevent="onInstContext($event, inst)"
               >
-                <span v-if="multiSelect" class="row-check" :class="{ on: selectedIds.has(inst.uuid) }">✓</span>
+                <span v-if="multiSelect" class="row-check" :class="{ on: selectedIds.has(inst.uuid) }">
+                  <GlyphIcon name="check" :size="12" :weight="2.6" />
+                </span>
                 <InstanceIcon :name="inst.name" :uuid="inst.uuid" :size="38" />
-                <span v-if="inst.loader !== 'normal'" class="loader-text">{{ t(`add.loader.${inst.loader}`) }}</span>
+                <span v-if="inst.loader !== 'normal'" class="loader-text" :class="`loader-${inst.loader}`">{{ t(`add.loader.${inst.loader}`) }}</span>
                 <span class="inst-name">{{ inst.name }}</span>
                 <span v-if="inst.running" class="run-dot" v-tip="'running'"></span>
               </div>
             </template>
           </template>
           <!-- 分组末尾插入占位 -->
-          <div v-if="isInstInsertEnd(g.name)" class="drop-ghost-row">
+          <div v-if="isInstInsertEnd(g.id)" class="drop-ghost-row">
             <InstanceIcon :name="dragActive?.instance?.name ?? ''" :uuid="dragActive?.instance?.uuid ?? '0'" :size="38" />
             <span class="inst-name">{{ dragActive?.instance?.name ?? "" }}</span>
           </div>
@@ -175,7 +182,7 @@ function isGroupOpen(name: string) {
         :disabled="dragActive?.kind === 'instance'"
         @click="emit('add-group')"
       >
-        <span class="add-inst-icon">＋</span>
+        <span class="add-inst-icon"><GlyphIcon name="plus" :size="18" /></span>
         <span>{{ t("group.addGroup") }}</span>
       </button>
     </div>
@@ -183,7 +190,7 @@ function isGroupOpen(name: string) {
     <!-- 平铺：首格为添加 -->
     <div v-else class="tile-list">
       <div v-show="!multiSelect" class="tile add-tile" @click="emit('add-instance')">
-        <span class="add-plus">＋</span>
+        <span class="add-plus"><GlyphIcon name="plus" :size="24" :weight="1.8" /></span>
         <span class="tile-name">{{ t("group.add") }}</span>
       </div>
       <div
@@ -197,11 +204,14 @@ function isGroupOpen(name: string) {
         @click="onInstClick(inst)"
         @contextmenu.prevent="onInstContext($event, inst)"
       >
-        <span v-if="multiSelect" class="row-check" :class="{ on: selectedIds.has(inst.uuid) }">✓</span>
+        <span v-if="multiSelect" class="row-check" :class="{ on: selectedIds.has(inst.uuid) }">
+          <GlyphIcon name="check" :size="12" :weight="2.6" />
+        </span>
         <InstanceIcon :name="inst.name" :uuid="inst.uuid" :size="44" />
         <span
           v-if="inst.loader !== 'normal'"
           class="loader-corner loader-text"
+          :class="`loader-${inst.loader}`"
         >{{ t(`add.loader.${inst.loader}`) }}</span>
         <span class="tile-name">{{ inst.name }}</span>
         <span v-if="inst.running" class="run-dot" v-tip="'running'"></span>
@@ -683,10 +693,36 @@ function isGroupOpen(name: string) {
   font-size: 10px;
   padding: 1px 7px;
   border-radius: 8px;
-  background: var(--accent-soft);
-  color: var(--accent);
+  /* 实心色（同账户窗口的「当前」角标）：选中态用的是**淡**强调色底 --accent-soft，
+     角标若也用淡底，平铺模式下就和"已选中"混在一起分不出来了。
+     底色由下面的 per-loader 类给；这里是兜底（未知加载器） */
+  background: var(--accent);
+  color: #fff;
   white-space: nowrap;
   flex-shrink: 0;
   line-height: 1.6;
+}
+
+/* 4 种加载器各一色：蓝 / 黄 / 紫 / 青（色相彼此拉开，一眼能分）。
+   黄是浅底 → 配深字；其余三个深底配白字。
+   类名必须与模板里的 `loader-${inst.loader}` 一致（loader-forge / loader-fabric …） */
+.loader-text.loader-forge {
+  background: #1d4ed8; /* 蓝 */
+  color: #fff;
+}
+
+.loader-text.loader-fabric {
+  background: #a16207; /* 黄（压深到能配白字的金褐） */
+  color: #fff;
+}
+
+.loader-text.loader-quilt {
+  background: #7c3aed; /* 紫 */
+  color: #fff;
+}
+
+.loader-text.loader-neoforge {
+  background: #0d9488; /* 青 */
+  color: #fff;
 }
 </style>

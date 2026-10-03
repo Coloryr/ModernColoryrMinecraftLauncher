@@ -27,8 +27,9 @@ import {
   setViewMode,
   viewMode,
 } from "../../lib/settings";
-import type { AccountStoreDto, CustomHomeInfoDto, InstanceArgsDto, InstanceInfoDto, JavaInfoDto, MotdDto, MotdSegmentDto, NewsItem, VersionInfoDto } from "../../lib/bindings";
+import type { AccountStoreDto, CustomHomeInfoDto, GroupDto, InstanceArgsDto, InstanceInfoDto, JavaInfoDto, MotdDto, MotdSegmentDto, NewsItem, VersionInfoDto } from "../../lib/bindings";
 import InstanceIcon from "../../components/InstanceIcon.vue";
+import GlyphIcon from "../../components/ui/GlyphIcon.vue";
 import InstanceSelect from "../../components/InstanceSelect.vue";
 import InstanceMetaPanel from "../../components/InstanceMetaPanel.vue";
 import LaunchArgsPanel from "../../components/LaunchArgsPanel.vue";
@@ -48,7 +49,7 @@ import { useInstanceDrag } from "../../composables/useInstanceDrag";
 import { useMultiSelect } from "../../composables/useMultiSelect";
 import { useFileDrop } from "../../composables/useFileDrop";
 import type { ViewMode } from "../../lib/bindings";
-import type { CtxMenuState, FeatureId, InstMenuAction } from "./types";
+import type { CtxMenuState, FeatureId, GroupView, InstMenuAction } from "./types";
 import BaseButton from "../../components/ui/BaseButton.vue";
 import BaseModal from "../../components/ui/BaseModal.vue";
 import SegmentedTabs from "../../components/ui/SegmentedTabs.vue";
@@ -86,7 +87,7 @@ function matchInst(inst: InstanceInfoDto, q: string): boolean {
     inst.versionType ?? "",
     inst.loader,
     inst.loaderVersion ?? "",
-    inst.group ?? "",
+    groupNameOf(groupIdOf(inst)),
   ].some((s) => s.toLowerCase().includes(q));
 }
 
@@ -101,7 +102,7 @@ const filteredGroups = computed(() => {
   if (!q) return groups.value;
   return groups.value
     .map((g) => ({
-      name: g.name,
+      ...g,
       items: g.name.toLowerCase().includes(q)
         ? g.items
         : g.items.filter((i) => matchInst(i, q)),
@@ -118,7 +119,7 @@ function select(inst: InstanceInfoDto) {
   newsActive.value = false;
   // 分组模式下展开所在分组
   if (mode.value === "group") {
-    const key = groupKeyOf(inst.group);
+    const key = groupIdOf(inst);
     if (collapsedGroups.value[key]) {
       collapsedGroups.value = { ...collapsedGroups.value, [key]: false };
     }
@@ -135,57 +136,73 @@ const MODE_OPTIONS = computed(() => [
   { value: "list", label: t("mode.list"), icon: "list" },
 ]);
 
-// 手动添加的空分组（来自 api.getGroups）
-const extraGroups = ref<string[]>([]);
+/**
+ * 分组注册表（含空分组；顺序即显示顺序）
+ *
+ * 分组以 **uuid 为身份**、组名只是显示数据（见 mml-game 的 `game_group`），
+ * 所以界面上一律按 uuid 认组：改名、重复显示名都不会混淆，也不怕组名留白。
+ */
+const groupList = ref<GroupDto[]>([]);
 
-/** 空白分组名（后端默认分组的 key 是空格）统一视为默认分组 */
-function groupKeyOf(group?: string | null): string {
-  return group && group.trim() ? group : t("group.default");
+/** 默认分组：后端保证它恒存在、排在首位且名字留白；表拿不到时退回首位那个 */
+const defaultGroupId = computed(
+  () => groupList.value.find((g) => !g.name.trim())?.uuid ?? groupList.value[0]?.uuid ?? "",
+);
+
+/**
+ * 实例所在分组的 uuid
+ *
+ * 归属为空（默认分组）或指向一个已经不在表里的组（界面上是过期数据）时，
+ * 一律算默认分组 —— 宁可归错组，也不能让实例从界面上消失。
+ */
+function groupIdOf(inst: InstanceInfoDto): string {
+  const id = inst.group;
+  if (id && groupList.value.some((g) => g.uuid === id)) return id;
+  return defaultGroupId.value;
 }
 
-const groups = computed(() => {
-  const defaultKey = t("group.default");
+/** 分组 uuid → 显示名（默认分组按界面语言翻译） */
+function groupNameOf(id: string): string {
+  const g = groupList.value.find((x) => x.uuid === id);
+  return g && g.name.trim() ? g.name : t("group.default");
+}
+
+const groups = computed<GroupView[]>(() => {
   const map = new Map<string, InstanceInfoDto[]>();
   for (const inst of instances.value) {
-    const key = groupKeyOf(inst.group);
+    const key = groupIdOf(inst);
     if (!map.has(key)) map.set(key, []);
     map.get(key)!.push(inst);
   }
-  for (const g of extraGroups.value) {
-    // 空白分组就是默认分组，不重复展示
-    if (!g.trim() || map.has(g)) continue;
-    map.set(g, []);
-  }
-  // 默认分组永远存在且置顶
-  if (!map.has(defaultKey)) map.set(defaultKey, []);
-  // 分组顺序：默认分组 → extraGroups（持久顺序，空白跳过）→ 其余按首次出现顺序
-  const order = [
-    defaultKey,
-    ...extraGroups.value.filter((k) => k.trim() && k !== defaultKey),
-    ...[...map.keys()].filter(
-      (k) => k !== defaultKey && !extraGroups.value.includes(k),
-    ),
-  ];
-  return order.map((name) => {
-    const items = map.get(name) ?? [];
-    // 组内次序由后端下发（实例自己的 guisetting.json 里的 Order，见 gui_setting.rs）：
-    // 同值（旧数据全是默认 0）时按名字兜底，保证顺序确定而不是随 HashMap 抖动
+  // 分组表拿不到时（命令失败）退回"只有一个默认分组"，别让实例从界面上消失
+  const list: GroupDto[] = groupList.value.length
+    ? groupList.value
+    : [{ uuid: "", name: "" }];
+  // 顺序就是内核表给的顺序：默认分组在前，其余按用户排定的先后
+  return list.map((g) => {
+    // 组内次序由后端下发（分组表 group_save.json 的 order）；
+    // 同值时按名字兜底，保证顺序确定而不是随 HashMap 抖动
+    const items = [...(map.get(g.uuid) ?? [])].sort(
+      (a, b) => a.order - b.order || a.name.localeCompare(b.name),
+    );
     return {
-      name,
-      items: [...items].sort((a, b) => a.order - b.order || a.name.localeCompare(b.name)),
+      id: g.uuid,
+      name: g.name.trim() ? g.name : t("group.default"),
+      isDefault: !g.name.trim(),
+      items,
     };
   });
 });
 
-// 分组收缩状态
+// 分组收缩状态（键是分组 uuid）
 const collapsedGroups = ref<Record<string, boolean>>({});
 
-function isCollapsed(name: string): boolean {
-  return collapsedGroups.value[name] ?? false;
+function isCollapsed(id: string): boolean {
+  return collapsedGroups.value[id] ?? false;
 }
 
-function toggleGroup(name: string) {
-  collapsedGroups.value = { ...collapsedGroups.value, [name]: !isCollapsed(name) };
+function toggleGroup(id: string) {
+  collapsedGroups.value = { ...collapsedGroups.value, [id]: !isCollapsed(id) };
 }
 
 // ================= 侧栏：收起 / 展开 =================
@@ -547,9 +564,9 @@ function onVersionsRefreshed(list: VersionInfoDto[]) {
 // ================= 自定义拖拽（useInstanceDrag，见下方多选初始化之后） =================
 
 /** 点击分组标题（拖拽结束后抑制误触折叠） */
-function onGroupTitleClick(name: string) {
+function onGroupTitleClick(id: string) {
   if (consumeSuppressClick()) return;
-  toggleGroup(name);
+  toggleGroup(id);
 }
 
 // ================= 多选模式（逻辑见 composables/useMultiSelect） =================
@@ -594,33 +611,33 @@ function onInstClick(inst: InstanceInfoDto) {
 // ----- 自定义右键菜单 -----
 
 const ctxMenu = ref<CtxMenuState | null>(null);
-/** 移动分组二级视图（列出所有分组） */
-const moveGroupView = ref(false);
-/** 转移分组的源分组（null 表示多选实例移动） */
+/** 目标分组选择弹窗是否打开（转移分组 / 移动选中实例共用） */
+const showMoveGroupPick = ref(false);
+/** 要转移的源分组（null 表示"移动选中的实例"） */
 const groupMoveSource = ref<string | null>(null);
+/** 弹窗下拉框里选中的目标分组 uuid */
+const moveGroupTarget = ref("");
 
 function openCtxMenu(e: MouseEvent, payload: Omit<CtxMenuState, "x" | "y">) {
   // 简单边界钳制，避免菜单超出窗口
   const x = Math.min(e.clientX, window.innerWidth - 200);
   const y = Math.min(e.clientY, window.innerHeight - 180);
   ctxMenu.value = { x, y, ...payload };
-  moveGroupView.value = false;
   groupMoveSource.value = null;
 }
 
 function closeCtxMenu() {
   ctxMenu.value = null;
-  moveGroupView.value = false;
 }
 
 /** 右键分组标题：菜单提供“全选”进入多选 */
-function onGroupContext(e: MouseEvent, groupName: string) {
-  openCtxMenu(e, { kind: "group", group: groupName });
+function onGroupContext(e: MouseEvent, groupId: string) {
+  openCtxMenu(e, { kind: "group", groupId });
 }
 
 /** 分组菜单“全选”：选中该分组全部实例并进入多选 */
-function onGroupSelectAll(groupName?: string) {
-  const g = groups.value.find((x) => x.name === groupName);
+function onGroupSelectAll(groupId?: string) {
+  const g = groups.value.find((x) => x.id === groupId);
   closeCtxMenu();
   if (!g || g.items.length === 0) return;
   enterMultiSelect(g.items.map((i) => i.uuid));
@@ -628,8 +645,8 @@ function onGroupSelectAll(groupName?: string) {
 }
 
 /** 分组菜单“启动全部”：启动该分组全部实例 */
-async function launchGroupAll(groupName?: string) {
-  const g = groups.value.find((x) => x.name === groupName);
+async function launchGroupAll(groupId?: string) {
+  const g = groups.value.find((x) => x.id === groupId);
   closeCtxMenu();
   if (!g || g.items.length === 0) return;
   for (const inst of g.items) {
@@ -643,47 +660,104 @@ async function launchGroupAll(groupName?: string) {
   showToast(t("multi.launched", { count: g.items.length }));
 }
 
-/** 分组菜单“转移分组”：打开目标分组选择视图 */
-function openGroupMoveView(groupName?: string) {
-  const g = groups.value.find((x) => x.name === groupName);
-  if (!g) return;
-  groupMoveSource.value = g.name;
-  moveGroupView.value = true;
+/** 分组菜单“转移分组”：源分组就是当前右键的那个分组 */
+function onMoveGroupClick() {
+  // 菜单一关 ctxMenu 就清空，右键目标要在这之前取出来
+  const id = ctxMenu.value?.groupId;
+  if (id) openMoveGroupPicker(id);
 }
 
-/** 把源分组的全部实例合并到目标分组（默认分组 = null），保留空分组 */
-async function moveGroupTo(sourceName: string, targetName: string | null) {
-  const g = groups.value.find((x) => x.name === sourceName);
-  const target = targetName === t("group.default") ? null : targetName;
+/** 打开"选择目标分组"弹窗（`sourceId` 为 null 表示移动当前多选的实例） */
+function openMoveGroupPicker(sourceId: string | null) {
+  // 顺序有讲究：closeCtxMenu 之后才记源分组，否则会被菜单的复位清掉
   closeCtxMenu();
-  if (!g || g.items.length === 0 || target === sourceName) return;
+  groupMoveSource.value = sourceId;
+  // 预设第一个候选（候选里已经排掉了源分组本身），免得"确定"下去等于没动
+  moveGroupTarget.value = movePickOptions.value[0]?.id ?? "";
+  showMoveGroupPick.value = true;
+}
+
+/** 候选里的具名分组（默认分组在候选里单独占一项） */
+const moveTargets = computed(() => groups.value.filter((g) => !g.isDefault));
+
+/** 有没有"别的分组"可去：只有默认分组一个组时，改分组这件事本身就无从谈起 */
+const canChangeGroup = computed(() => groups.value.length > 1);
+
+/** 默认分组的视图（候选里要显示它的实例数） */
+const defaultGroupView = computed(() => groups.value.find((g) => g.isDefault));
+
+/**
+ * 下拉框里的候选：默认分组在前，其余按显示顺序
+ *
+ * **源分组自己不进候选**：选它等于没动，留在下拉里只会让人犹豫一下。
+ * 所以"转移默认分组"时这里只剩具名分组，"转移具名分组"时默认分组也在。
+ */
+const movePickOptions = computed(() => {
+  const list = [
+    {
+      id: defaultGroupId.value,
+      name: t("group.default"),
+      count: defaultGroupView.value?.items.length ?? 0,
+    },
+    ...moveTargets.value.map((g) => ({ id: g.id, name: g.name, count: g.items.length })),
+  ];
+  return list.filter((o) => o.id !== groupMoveSource.value);
+});
+
+/** 弹窗里那句说明：按"转移整个分组"或"移动选中实例"两种来源取文案 */
+const movePickDesc = computed(() => {
+  const source = groupMoveSource.value;
+  if (!source) return t("group.pickMultiDesc", { count: selectedIds.value.size });
+  const g = groups.value.find((x) => x.id === source);
+  return t("group.pickGroupDesc", { name: g?.name ?? "", count: g?.items.length ?? 0 });
+});
+
+/** 弹窗里点"确定"：把下拉框选中的目标交出去 */
+async function confirmMoveTarget() {
+  const id = moveGroupTarget.value;
+  if (!id) return;
+  // 默认分组按后端口径用 null 表示
+  await pickMoveTarget(id === defaultGroupId.value ? null : id);
+}
+
+/** 弹窗里选定目标分组 */
+async function pickMoveTarget(targetId: string | null) {
+  const source = groupMoveSource.value;
+  showMoveGroupPick.value = false;
+  groupMoveSource.value = null;
+  if (source) await moveGroupTo(source, targetId);
+  else await moveSelectedToGroup(targetId);
+}
+
+/** 把源分组的全部实例合并到目标分组（null = 默认分组），保留空分组 */
+async function moveGroupTo(sourceId: string, targetId: string | null) {
+  const g = groups.value.find((x) => x.id === sourceId);
+  const target = targetId ?? defaultGroupId.value;
+  if (!g || g.items.length === 0 || target === sourceId) return;
   for (const inst of g.items) {
-    // 空白分组名与默认分组（null）等价
-    if (groupKeyOf(inst.group) !== groupKeyOf(target)) {
-      await api.updateInstance(inst.uuid, { group: target });
+    // 已经在目标组里的不必再发一次（一次一条 IPC，省掉无谓往返）
+    if (groupIdOf(inst) !== target) {
+      await api.updateInstance(inst.uuid, { group: targetId });
     }
   }
   await loadInstances();
   showToast(t("multi.moved", { count: g.items.length }));
 }
 
-/** 移动目标点击：按当前视图路由到分组转移或多选实例移动 */
-function onMoveTarget(targetName: string | null) {
-  if (groupMoveSource.value) moveGroupTo(groupMoveSource.value, targetName);
-  else moveSelectedToGroup(targetName);
-}
-
 /** 删除分组（组内实例移至默认分组） */
 const showDeleteGroup = ref(false);
+const deleteGroupId = ref("");
 const deleteGroupName = ref("");
 const deleteGroupCount = ref(0);
 const deleteGroupBusy = ref(false);
 
-function onDeleteGroup(groupName?: string) {
-  if (!groupName || groupName === t("group.default")) return;
-  const g = groups.value.find((x) => x.name === groupName);
+function onDeleteGroup(groupId?: string) {
+  // 默认分组删不得（它的名字是空白，按 uuid 判，不看名字）
+  if (!groupId || groupId === defaultGroupId.value) return;
+  const g = groups.value.find((x) => x.id === groupId);
   closeCtxMenu();
   if (!g) return;
+  deleteGroupId.value = g.id;
   deleteGroupName.value = g.name;
   deleteGroupCount.value = g.items.length;
   showDeleteGroup.value = true;
@@ -691,13 +765,14 @@ function onDeleteGroup(groupName?: string) {
 
 async function doDeleteGroup() {
   deleteGroupBusy.value = true;
+  const id = deleteGroupId.value;
   const name = deleteGroupName.value;
   for (const inst of instances.value) {
-    if (groupKeyOf(inst.group) === name) {
+    if (groupIdOf(inst) === id) {
       await api.updateInstance(inst.uuid, { group: null });
     }
   }
-  await api.removeGroup(name);
+  await api.removeGroup(id);
   deleteGroupBusy.value = false;
   showDeleteGroup.value = false;
   await Promise.all([loadInstances(), loadGroups()]);
@@ -772,27 +847,24 @@ async function pickIconFile(inst: InstanceInfoDto) {
   }
 }
 
-/** 顶部工具栏的“移动分组”直接打开分组列表视图 */
-function openMoveFromBar(e: MouseEvent) {
-  openCtxMenu(e, { kind: "multi" });
-  moveGroupView.value = true;
+/** 顶部工具栏的“修改分组”：直接开目标分组弹窗（源 = 当前多选的实例） */
+function openMoveFromBar() {
+  openMoveGroupPicker(null);
 }
 
 /** 把选中的实例移动到指定分组（null = 默认分组） */
-async function moveSelectedToGroup(groupName: string | null) {
+async function moveSelectedToGroup(targetId: string | null) {
   const ids = [...selectedIds.value];
-  const target = groupName === t("group.default") ? null : groupName;
+  const target = targetId ?? defaultGroupId.value;
   for (const uuid of ids) {
     const inst = instances.value.find((i) => i.uuid === uuid);
-    // 空白分组名与默认分组（null）等价
-    if (inst && groupKeyOf(inst.group) !== groupKeyOf(target)) {
-      await api.updateInstance(uuid, { group: target });
+    if (inst && groupIdOf(inst) !== target) {
+      await api.updateInstance(uuid, { group: targetId });
     }
   }
   closeCtxMenu();
   await loadInstances();
-  const key = groupKeyOf(target);
-  collapsedGroups.value = { ...collapsedGroups.value, [key]: false };
+  collapsedGroups.value = { ...collapsedGroups.value, [target]: false };
   showToast(t("multi.moved", { count: ids.length }));
 }
 
@@ -1243,9 +1315,9 @@ function restoreSelection() {
 
 async function loadGroups() {
   try {
-    extraGroups.value = await api.getGroups();
+    groupList.value = await api.getGroups();
   } catch {
-    extraGroups.value = [];
+    groupList.value = [];
   }
 }
 
@@ -1313,8 +1385,8 @@ async function createGroup() {
   }
   groupAdding.value = true;
   groupError.value = "";
-  const ok = await api.addGroup(groupName.value.trim());
-  if (!ok) {
+  const uuid = await api.addGroup(groupName.value.trim());
+  if (!uuid) {
     groupError.value = t("group.exists");
     groupAdding.value = false;
     return;
@@ -1323,6 +1395,8 @@ async function createGroup() {
   groupName.value = "";
   showAddGroup.value = false;
   await loadGroups();
+  // 新组默认是展开的，别让用户以为没建上
+  collapsedGroups.value = { ...collapsedGroups.value, [uuid]: false };
 }
 
 // ================= 生命周期 =================
@@ -1440,7 +1514,12 @@ onMounted(async () => {
         <!-- 多选模式浮动工具栏 -->
         <div v-if="multiSelect" class="multi-bar" @contextmenu.prevent @click.stop>
           <span class="multi-count">{{ t("multi.selected", { count: selectedIds.size }) }}</span>
-          <button class="multi-btn" @click="openMoveFromBar($event)">{{ t("multi.moveGroup") }}</button>
+          <button
+            class="multi-btn"
+            :disabled="!canChangeGroup"
+            v-tip="canChangeGroup ? '' : t('group.pickNone')"
+            @click="openMoveFromBar"
+          >{{ t("multi.moveGroup") }}</button>
           <button class="multi-btn danger" @click="onMultiDelete">{{ t("multi.delete") }}</button>
           <button class="multi-btn" @click="multiLaunch">{{ t("multi.launch") }}</button>
           <span class="multi-sep"></span>
@@ -1541,15 +1620,15 @@ onMounted(async () => {
                 @click="launch"
               >
                 <span v-if="selected?.running" class="btn-spinner"></span>
-                <span v-else>▶</span> {{ t("launch.play") }}
+                <GlyphIcon v-else name="play" :size="15" /> {{ t("launch.play") }}
               </BaseButton>
               <!-- 实例设置：含启动参数（与分组模式下的设置面板一致） -->
               <BaseButton :disabled="!selected" @click="toggleSettings">
-                ⚙ {{ t("detail.settings") }}
+                <GlyphIcon name="gear" :size="14" :weight="1.8" /> {{ t("detail.settings") }}
               </BaseButton>
               <!-- 实例日志：主页面不展示日志内容，直接开独立日志窗口 -->
               <BaseButton :disabled="!selected" @click="openLogWindow">
-                📄 {{ t("detail.logs") }}
+                <GlyphIcon name="document" :size="14" :weight="1.8" /> {{ t("detail.logs") }}
               </BaseButton>
             </div>
             <!-- 设置面板整体展开/收起；宽度与居中由外层槽位承担，与原 .list-args 的占位一致 -->
@@ -1613,7 +1692,9 @@ onMounted(async () => {
               class="sidebar-expand"
               v-tip="t('sidebar.expand')"
               @click="collapseSidebar(false)"
-            >›</button>
+            >
+              <GlyphIcon name="chevron-right" :size="18" />
+            </button>
           </div>
 
           <!-- 右侧内容区：实例详情 / 启动器主页（进出都走动画） -->
@@ -1666,7 +1747,7 @@ onMounted(async () => {
                       @click="launch"
                     >
                       <span v-if="selected.running" class="btn-spinner"></span>
-                      <span v-else>▶</span> {{ t("launch.play") }}
+                      <GlyphIcon v-else name="play" :size="15" /> {{ t("launch.play") }}
                     </BaseButton>
                     <div class="side-row">
                       <BaseButton size="sm" variant="accent" @click="onAction('addResource')">{{ t("actions.addResource") }}</BaseButton>
@@ -1761,7 +1842,7 @@ onMounted(async () => {
                 <!-- 自定义执行 -->
                 <div class="args-section">
                   <button class="args-toggle" @click="execOpen = !execOpen">
-                    <span>⚙ {{ t("exec.title") }}</span>
+                    <span><GlyphIcon name="gear" :size="14" :weight="1.8" /> {{ t("exec.title") }}</span>
                     <svg
                       class="args-chevron"
                       :class="{ flip: execOpen }"
@@ -1783,7 +1864,7 @@ onMounted(async () => {
                 <!-- 自定义服务器（自动加入 + MOTD 展示） -->
                 <div class="args-section">
                   <button class="args-toggle" @click="serverOpen = !serverOpen">
-                    <span>⚙ {{ t("server.title") }}</span>
+                    <span><GlyphIcon name="gear" :size="14" :weight="1.8" /> {{ t("server.title") }}</span>
                     <svg
                       class="args-chevron"
                       :class="{ flip: serverOpen }"
@@ -1856,7 +1937,7 @@ onMounted(async () => {
                 <!-- 游戏内代理 -->
                 <div class="args-section">
                   <button class="args-toggle" @click="proxyOpen = !proxyOpen">
-                    <span>⚙ {{ t("proxy.title") }}</span>
+                    <span><GlyphIcon name="gear" :size="14" :weight="1.8" /> {{ t("proxy.title") }}</span>
                     <svg
                       class="args-chevron"
                       :class="{ flip: proxyOpen }"
@@ -1882,7 +1963,7 @@ onMounted(async () => {
               <template v-if="!selected">
               <template v-if="multiSelect">
                 <div class="multi-detail">
-                  <div class="multi-detail-icon">☑</div>
+                  <div class="multi-detail-icon"><GlyphIcon name="check-square" :size="32" :weight="1.8" /></div>
                   <h2>{{ t("multi.detailTitle") }}</h2>
                   <p>{{ t("multi.detailDesc", { count: selectedIds.size }) }}</p>
                 </div>
@@ -1946,16 +2027,13 @@ onMounted(async () => {
       <!-- ===== 右键菜单（MainCtxMenu 组件） ===== -->
       <MainCtxMenu
         :menu="ctxMenu"
-        :move-group-view="moveGroupView"
         :groups="groups"
         @select-all="onGroupSelectAll"
         @launch-group="launchGroupAll"
-        @open-move-view="openGroupMoveView"
+        @move-group="onMoveGroupClick"
         @delete-group="onDeleteGroup"
         @inst-action="onInstMenuAction"
-        @back="moveGroupView = false"
-        @move-target="onMoveTarget"
-        @multi-move="moveGroupView = true"
+        @multi-move="openMoveGroupPicker(null)"
         @multi-delete="onMultiDelete"
         @multi-launch="multiLaunch"
       />
@@ -2024,6 +2102,39 @@ onMounted(async () => {
       :path="iconPickPath"
       @close="((iconPickInst = null), (iconPickPath = ''))"
     />
+
+    <!-- ===== 选择目标分组（转移分组 / 移动选中实例共用）===== -->
+    <BaseModal
+      v-if="showMoveGroupPick"
+      :title="t('group.pickTitle')"
+      :closable="false"
+      @close="showMoveGroupPick = false"
+    >
+      <p class="delete-tip">{{ movePickDesc }}</p>
+
+      <!-- 目标分组：候选里已排掉源分组自己，所以"确定"下去一定有实际动作 -->
+      <select
+        v-model="moveGroupTarget"
+        class="field-select pick-select"
+        :disabled="!movePickOptions.length"
+      >
+        <option v-for="o in movePickOptions" :key="o.id" :value="o.id">
+          {{ t("group.pickOption", { name: o.name, count: o.count }) }}
+        </option>
+      </select>
+      <p v-if="!movePickOptions.length" class="modal-sub">{{ t("group.pickNone") }}</p>
+
+      <div class="modal-actions">
+        <BaseButton @click="showMoveGroupPick = false">{{ t("add.cancel") }}</BaseButton>
+        <BaseButton
+          variant="primary"
+          :disabled="!movePickOptions.length"
+          @click="confirmMoveTarget"
+        >
+          {{ t("actions.confirm") }}
+        </BaseButton>
+      </div>
+    </BaseModal>
 
     <!-- ===== 删除分组确认 ===== -->
     <BaseModal v-if="showDeleteGroup" :title="t('group.delete')" :closable="false" @close="showDeleteGroup = false">
@@ -2864,6 +2975,11 @@ onMounted(async () => {
 
 /* ----- 弹窗 / 轻提示：统一使用全局样式（theme.css） ----- */
 
+/* "选择目标分组"弹窗里的下拉框：与上面的说明文字拉开一点距离 */
+.pick-select {
+  margin-top: 12px;
+}
+
 .placeholder {
   flex: 1;
   display: flex;
@@ -2996,6 +3112,17 @@ onMounted(async () => {
 .multi-btn.danger:hover {
   border-color: var(--red);
   color: var(--red);
+}
+
+/* 禁用的按钮（如"没有别的分组可去"时的修改分组）：别让它看起来还能点 */
+.multi-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.multi-btn:disabled:hover {
+  background: var(--bg);
+  border-color: var(--border);
 }
 
 .multi-sep {

@@ -338,6 +338,16 @@ fn uuid_for_kind(kind: &str) -> Option<Uuid> {
         .map(|(uuid, _)| *uuid)
 }
 
+/// 解析前端传来的分组 uuid（空白 / 非法一律按"默认分组"处理）
+///
+/// 分组以 uuid 为身份（见 mml-game 的 `game_group`），但 IPC 参数照例是字符串，
+/// 所以各处统一在这里转一次。宁可落到默认分组，也不要因为一个过期 id 让整条命令失败。
+pub fn parse_group_id(group: Option<String>) -> Option<Uuid> {
+    group
+        .filter(|g| !g.trim().is_empty())
+        .and_then(|g| Uuid::parse_str(&g).ok())
+}
+
 /// 窗口几何状态（uuid → 几何），内存中的唯一数据源
 static WINDOWS_STATE: LazyLock<RwLock<HashMap<Uuid, WindowState>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));

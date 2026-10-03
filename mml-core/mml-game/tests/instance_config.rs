@@ -53,7 +53,6 @@ fn make_instance(dir: &str) -> InstanceSettingObj {
     InstanceSettingObj {
         uuid: Uuid::new_v4(),
         name: format!("inst-{dir}"),
-        group: Some("test-group".to_string()),
         dir: dir.to_string(),
         version: "1.20.4".to_string(),
         loader: LoaderType::Fabric,
@@ -103,7 +102,8 @@ fn instance_save_to_disk() {
     assert_eq!(value["Loader"], 2); // LoaderType::Fabric
     assert_eq!(value["ModPackType"], 1); // ModPackType::Modrinth
     assert_eq!(value["Encoding"], 1); // LogEncoding::GBK
-    assert_eq!(value["GroupName"], "test-group");
+    // 分组已迁到独立的 group_save.json，实例配置里不该再出现 GroupName
+    assert!(value.get("GroupName").is_none());
 
     // 从磁盘还原
     let restored: InstanceSettingObj = serde_json::from_value(value).unwrap();

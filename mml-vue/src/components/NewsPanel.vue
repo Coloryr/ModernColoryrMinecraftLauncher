@@ -2,6 +2,7 @@
 // 新闻面板：公告卡片列表（分类标签 + 封面 + 标题）与分页，数据由父组件拉取
 import { t } from "../lib/i18n";
 import AsyncImage from "./ui/AsyncImage.vue";
+import GlyphIcon from "./ui/GlyphIcon.vue";
 import type { NewsItem } from "../lib/bindings";
 
 withDefaults(
@@ -84,7 +85,7 @@ function tagColor(tag: string) {
           <h3 class="news-title">{{ item.title }}</h3>
         </div>
         <div v-if="items.length === 0" class="empty-tip">
-          <span class="empty-icon">📰</span>
+          <span class="empty-icon"><GlyphIcon name="news" :size="32" :weight="1.6" /></span>
           <span>{{ t("news.empty") }}</span>
         </div>
       </template>

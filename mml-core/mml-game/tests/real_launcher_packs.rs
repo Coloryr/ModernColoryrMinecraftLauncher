@@ -155,16 +155,21 @@ async fn mml_instance_archive_roundtrip() {
     ensure_init();
 
     // ---------- 创建原始实例并写入文件 ----------
-    let mut setting = InstanceSettingObj {
+    let setting = InstanceSettingObj {
         name: "导出测试实例".to_string(),
-        group: Some("导出分组".to_string()),
         version: "1.20.1".to_string(),
         loader: LoaderType::Forge,
         loader_version: Some("47.3.0".to_string()),
         ..Default::default()
     };
-    let game = setting.create_instance(None).await.unwrap();
+    // 分组不在实例配置里（导出包也不带 GroupName 了），创建时单独指定
+    let group = mml_game::add_group("导出分组").expect("建组失败");
+    let game = setting
+        .create_instance_in_group(None, Some(group))
+        .await
+        .unwrap();
     let original_uuid = game.read().unwrap().uuid;
+    assert_eq!(mml_game::get_instance_group(&original_uuid), Some(group));
     let original_name = game.read().unwrap().name.clone();
     let base = game.read().unwrap().get_base_path();
     std::fs::write(base.join("options.txt"), "lang:zh_cn\n").unwrap();

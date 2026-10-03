@@ -5,6 +5,7 @@
 import { t } from "../../../../lib/i18n";
 import BaseButton from "../../../../components/ui/BaseButton.vue";
 import BaseSwitch from "../../../../components/ui/BaseSwitch.vue";
+import GlyphIcon from "../../../../components/ui/GlyphIcon.vue";
 import NumberStepper from "../../../../components/ui/NumberStepper.vue";
 import SegmentedTabs from "../../../../components/ui/SegmentedTabs.vue";
 import SettingsGroup from "../SettingsGroup.vue";
@@ -178,9 +179,13 @@ const {
               @change="commitDns(); applyNetwork();"
               @keydown.enter="($event.target as HTMLInputElement).blur()"
             />
-            <button class="line-del" aria-label="remove" v-tip="'✕'" @click="removeDnsLine(i)">✕</button>
+            <button class="line-del" aria-label="remove" v-tip="t('args.removeLine')" @click="removeDnsLine(i)">
+              <GlyphIcon name="close" :size="13" />
+            </button>
           </div>
-          <button class="line-add" @click="addDnsLine">＋ {{ t("args.addLine") }}</button>
+          <button class="line-add" @click="addDnsLine">
+            <GlyphIcon name="plus" :size="13" :weight="2.2" /> {{ t("args.addLine") }}
+          </button>
         </div>
       </template>
     </SettingsGroup>

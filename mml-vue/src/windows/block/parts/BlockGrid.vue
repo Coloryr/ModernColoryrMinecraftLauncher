@@ -9,6 +9,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { t } from "../../../lib/i18n";
 import AsyncImage from "../../../components/ui/AsyncImage.vue";
+import GlyphIcon from "../../../components/ui/GlyphIcon.vue";
 import HighlightText from "../../../components/ui/HighlightText.vue";
 import type { BlockItemDto } from "../../../lib/bindings";
 import { BLOCK_SIZES, type BlockSize } from "../types";
@@ -245,7 +246,9 @@ function onCellKey(e: KeyboardEvent, i: number) {
             class="block-del"
             v-tip="t('blocks.skinRemove')"
             @click.stop="emit('remove-skin', b)"
-          >✕</span>
+          >
+            <GlyphIcon name="close" :size="11" :weight="2.6" />
+          </span>
           <AsyncImage class="block-img" :src="b.image" :alt="b.name" />
           <span class="block-name">
             <HighlightText :text="b.name" :query="keyword" />

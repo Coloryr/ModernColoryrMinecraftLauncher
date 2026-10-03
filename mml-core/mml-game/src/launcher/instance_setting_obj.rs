@@ -121,9 +121,6 @@ pub struct InstanceSettingObj {
     /// 实例名
     #[serde(rename = "Name")]
     pub name: String,
-    /// 实例组名
-    #[serde(rename = "GroupName")]
-    pub group: Option<String>,
     /// 路径名
     #[serde(rename = "DirName")]
     pub dir: String,
@@ -191,7 +188,6 @@ impl Default for InstanceSettingObj {
         Self {
             uuid: Default::default(),
             name: Default::default(),
-            group: Default::default(),
             dir: Default::default(),
             version: Default::default(),
             loader: Default::default(),

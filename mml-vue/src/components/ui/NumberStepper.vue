@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // 数字输入：[- 输入框 +]，可手动输入数字，也可用左右按钮
 import { ref } from "vue";
+import GlyphIcon from "./GlyphIcon.vue";
 
 const props = withDefaults(
   defineProps<{
@@ -51,7 +52,7 @@ function onCommit() {
 
 <template>
   <div class="stepper">
-    <button class="step-btn" @click="dec">−</button>
+    <button class="step-btn" @click="dec"><GlyphIcon name="minus" :size="14" /></button>
     <input
       class="step-input"
       type="number"
@@ -65,7 +66,7 @@ function onCommit() {
       @keyup.enter="($event.target as HTMLInputElement).blur()"
       @blur="onCommit"
     />
-    <button class="step-btn" @click="inc">＋</button>
+    <button class="step-btn" @click="inc"><GlyphIcon name="plus" :size="14" /></button>
   </div>
 </template>
 

@@ -65,7 +65,8 @@ pub(crate) fn init_watch() -> CoreResult<()> {
                                     if let Some(obj) = instance_path::load_instance(path)
                                         && crate::get_instance(&obj.uuid).is_none()
                                     {
-                                        crate::add_to_group(obj);
+                                        // 外部新建的实例不知道原分组，落默认分组
+                                        crate::add_to_group(obj, None);
                                     }
                                 }
                             }

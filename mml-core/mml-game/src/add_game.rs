@@ -218,7 +218,7 @@ pub fn detect_pack<P: AsRef<Path>>(file: P) -> CoreResult<DetectedPack> {
 ///
 /// - `dir`: 游戏文件夹
 /// - `name`: 实例名（覆盖原名字）
-/// - `group`: 实例分组
+/// - `group`: 目标分组 uuid（`None` = 默认分组；不存在/已删的组会落到默认分组）
 /// - `unselect`: 不复制的文件列表
 /// - `instance_gui`: 实例创建界面回调
 /// - `progress_gui`: 复制进度回调
@@ -230,7 +230,7 @@ pub fn detect_pack<P: AsRef<Path>>(file: P) -> CoreResult<DetectedPack> {
 pub async fn add_game_folder<P: AsRef<Path>>(
     dir: P,
     name: Option<String>,
-    group: Option<String>,
+    group: Option<Uuid>,
     unselect: Option<Vec<PathBuf>>,
     instance_gui: AddInstanceGui,
     progress_gui: ProgressGui,
@@ -272,7 +272,6 @@ pub async fn add_game_folder<P: AsRef<Path>>(
         Some(data) => data,
         None => InstanceSettingObj {
             version: version_path::get_latest_version(),
-            group,
             ..Default::default()
         },
     };
@@ -292,7 +291,10 @@ pub async fn add_game_folder<P: AsRef<Path>>(
         return Err(ErrorType::TaskCancel);
     }
 
-    let res = instance.create_instance(instance_gui.clone()).await?;
+    // 分组不在实例配置里（见 game_group），创建时一并交给分组表
+    let res = instance
+        .create_instance_in_group(instance_gui.clone(), group)
+        .await?;
 
     res.read()
         .unwrap()
@@ -309,7 +311,7 @@ pub async fn add_game_folder<P: AsRef<Path>>(
 /// - `file`: 整合包压缩包
 /// - `source`: 整合包类型
 /// - `name`: 实例名（覆盖包内元数据里的名字）
-/// - `group`: 实例分组
+/// - `group`: 目标分组 uuid（`None` = 默认分组；不存在/已删的组会落到默认分组）
 /// - `unselect`: 不导入的文件列表
 /// - `instance_gui`: 实例创建界面回调
 /// - `pack_gui`: 安装进度回调
@@ -324,7 +326,7 @@ async fn modpack<P: AsRef<Path>>(
     file: P,
     source: ModPackType,
     name: Option<String>,
-    group: Option<String>,
+    group: Option<Uuid>,
     unselect: Option<Vec<String>>,
     instance_gui: AddInstanceGui,
     pack_gui: AddModPackGui,
@@ -460,7 +462,7 @@ fn extract_pack<P: AsRef<Path>>(
 ///
 /// - `file`: 压缩包
 /// - `name`: 实例名（覆盖 `game.json` 里的名字）
-/// - `group`: 实例分组
+/// - `group`: 目标分组 uuid（`None` = 默认分组；不存在/已删的组会落到默认分组）
 /// - `unselect`: 不导入的文件列表
 /// - `instance_gui`: 实例创建界面回调
 /// - `pack_gui`: 安装进度回调
@@ -473,7 +475,7 @@ fn extract_pack<P: AsRef<Path>>(
 async fn archive<P: AsRef<Path>>(
     file: P,
     name: Option<String>,
-    group: Option<String>,
+    group: Option<Uuid>,
     unselect: Option<Vec<String>>,
     instance_gui: AddInstanceGui,
     pack_gui: AddModPackGui,
@@ -505,11 +507,7 @@ async fn archive<P: AsRef<Path>>(
         obj.name = name;
     }
 
-    if let Some(group) = group {
-        obj.group = Some(group);
-    }
-
-    let game = obj.create_instance(instance_gui).await?;
+    let game = obj.create_instance_in_group(instance_gui, group).await?;
     let uuid = game.read().unwrap().uuid;
     if let Some(pack_gui) = &pack_gui {
         pack_gui.set_state(AddModPackState::Extract);
@@ -555,7 +553,7 @@ async fn archive<P: AsRef<Path>>(
 ///
 /// - `file`: 压缩包
 /// - `name`: 实例名（覆盖包内元数据里的名字）
-/// - `group`: 实例分组
+/// - `group`: 目标分组 uuid（`None` = 默认分组；不存在/已删的组会落到默认分组）
 /// - `unselect`: 不导入的文件列表
 /// - `instance_gui`: 实例创建界面回调
 /// - `pack_gui`: 安装进度回调
@@ -568,7 +566,7 @@ async fn archive<P: AsRef<Path>>(
 async fn mmc_archive<P: AsRef<Path>>(
     file: P,
     name: Option<String>,
-    group: Option<String>,
+    group: Option<Uuid>,
     unselect: Option<Vec<String>>,
     instance_gui: AddInstanceGui,
     pack_gui: AddModPackGui,
@@ -619,10 +617,6 @@ async fn mmc_archive<P: AsRef<Path>>(
         obj.name = name;
     }
 
-    if let Some(group) = group {
-        obj.group = Some(group);
-    }
-
     if obj.name.is_empty() {
         obj.name = file
             .as_ref()
@@ -641,7 +635,7 @@ async fn mmc_archive<P: AsRef<Path>>(
         pack_gui.set_now(2, Some(3));
     }
 
-    let game = obj.create_instance(instance_gui).await?;
+    let game = obj.create_instance_in_group(instance_gui, group).await?;
     let uuid = game.read().unwrap().uuid;
 
     if cancel.is_cancelled() {
@@ -688,7 +682,7 @@ async fn mmc_archive<P: AsRef<Path>>(
 ///
 /// - `file`: 压缩包
 /// - `name`: 实例名（覆盖包内元数据里的名字）
-/// - `group`: 实例分组
+/// - `group`: 目标分组 uuid（`None` = 默认分组；不存在/已删的组会落到默认分组）
 /// - `unselect`: 不导入的文件列表
 /// - `instance_gui`: 实例创建界面回调
 /// - `pack_gui`: 安装进度回调
@@ -701,7 +695,7 @@ async fn mmc_archive<P: AsRef<Path>>(
 async fn hmcl_archive<P: AsRef<Path>>(
     file: P,
     name: Option<String>,
-    group: Option<String>,
+    group: Option<Uuid>,
     unselect: Option<Vec<String>>,
     instance_gui: AddInstanceGui,
     pack_gui: AddModPackGui,
@@ -753,10 +747,6 @@ async fn hmcl_archive<P: AsRef<Path>>(
         obj.name = name;
     }
 
-    if let Some(group) = group {
-        obj.group = Some(group);
-    }
-
     if obj.name.is_empty() {
         obj.name = file
             .as_ref()
@@ -775,7 +765,7 @@ async fn hmcl_archive<P: AsRef<Path>>(
         pack_gui.set_now(2, Some(3));
     }
 
-    let game = obj.create_instance(instance_gui).await?;
+    let game = obj.create_instance_in_group(instance_gui, group).await?;
     let uuid = game.read().unwrap().uuid;
 
     if cancel.is_cancelled() {
@@ -823,7 +813,7 @@ async fn hmcl_archive<P: AsRef<Path>>(
 ///
 /// - `file`: 压缩包
 /// - `name`: 实例名（覆盖包内元数据里的名字）
-/// - `group`: 实例分组
+/// - `group`: 目标分组 uuid（`None` = 默认分组；不存在/已删的组会落到默认分组）
 /// - `unselect`: 不导入的文件列表
 /// - `instance_gui`: 实例创建界面回调
 /// - `pack_gui`: 安装进度回调
@@ -836,7 +826,7 @@ async fn hmcl_archive<P: AsRef<Path>>(
 async fn hmcl_server_archive<P: AsRef<Path>>(
     file: P,
     name: Option<String>,
-    group: Option<String>,
+    group: Option<Uuid>,
     unselect: Option<Vec<String>>,
     instance_gui: AddInstanceGui,
     pack_gui: AddModPackGui,
@@ -882,10 +872,6 @@ async fn hmcl_server_archive<P: AsRef<Path>>(
         obj.name = name;
     }
 
-    if let Some(group) = group {
-        obj.group = Some(group);
-    }
-
     if obj.name.is_empty() {
         obj.name = file
             .as_ref()
@@ -904,7 +890,7 @@ async fn hmcl_server_archive<P: AsRef<Path>>(
         pack_gui.set_now(2, Some(3));
     }
 
-    let game = obj.create_instance(instance_gui).await?;
+    let game = obj.create_instance_in_group(instance_gui, group).await?;
     let uuid = game.read().unwrap().uuid;
 
     let mut online = game.read().unwrap().read_online_info();
@@ -1187,7 +1173,7 @@ pub fn pick_primary(
 ///
 /// - `file`: 压缩包
 /// - `name`: 实例名（覆盖版本 json 解析出的名字）
-/// - `group`: 实例分组
+/// - `group`: 目标分组 uuid（`None` = 默认分组；不存在/已删的组会落到默认分组）
 /// - `unselect`: 不导入的文件列表
 /// - `instance_gui`: 实例创建界面回调
 /// - `pack_gui`: 安装进度回调
@@ -1200,7 +1186,7 @@ pub fn pick_primary(
 async fn launcher_pack<P: AsRef<Path>>(
     file: P,
     name: Option<String>,
-    group: Option<String>,
+    group: Option<Uuid>,
     unselect: Option<Vec<String>>,
     instance_gui: AddInstanceGui,
     pack_gui: AddModPackGui,
@@ -1269,17 +1255,12 @@ async fn launcher_pack<P: AsRef<Path>>(
     } else {
         InstanceSettingObj {
             version: version_path::get_latest_version(),
-            group: group.clone(),
             ..Default::default()
         }
     };
 
     if let Some(name) = name {
         obj.name = name;
-    }
-
-    if let Some(group) = group {
-        obj.group = Some(group);
     }
 
     if obj.name.is_empty() {
@@ -1300,7 +1281,7 @@ async fn launcher_pack<P: AsRef<Path>>(
         pack_gui.set_now(2, Some(3));
     }
 
-    let game = obj.create_instance(instance_gui).await?;
+    let game = obj.create_instance_in_group(instance_gui, group).await?;
     let uuid = game.read().unwrap().uuid;
 
     if cancel.is_cancelled() {
@@ -1355,7 +1336,7 @@ async fn launcher_pack<P: AsRef<Path>>(
 ///
 /// - `file`: 压缩包
 /// - `name`: 实例名（覆盖包内元数据里的名字）
-/// - `group`: 实例分组
+/// - `group`: 目标分组 uuid（`None` = 默认分组；不存在/已删的组会落到默认分组）
 /// - `unselect`: 不导入的文件列表
 /// - `instance_gui`: 实例创建界面回调
 /// - `pack_gui`: 安装进度回调
@@ -1369,7 +1350,7 @@ async fn launcher_pack<P: AsRef<Path>>(
 pub async fn install_archive_from_file<P: AsRef<Path>>(
     file: P,
     name: Option<String>,
-    group: Option<String>,
+    group: Option<Uuid>,
     unselect: Option<Vec<String>>,
     instance_gui: AddInstanceGui,
     pack_gui: AddModPackGui,
@@ -1482,7 +1463,7 @@ pub async fn install_archive_from_file<P: AsRef<Path>>(
 ///
 /// - `url`: 压缩包下载地址
 /// - `name`: 实例名（覆盖包内元数据里的名字）
-/// - `group`: 实例分组
+/// - `group`: 目标分组 uuid（`None` = 默认分组；不存在/已删的组会落到默认分组）
 /// - `unselect`: 不导入的文件列表
 /// - `instance_gui`: 实例创建界面回调
 /// - `pack_gui`: 安装进度回调
@@ -1496,7 +1477,7 @@ pub async fn install_archive_from_file<P: AsRef<Path>>(
 pub async fn install_archive_from_url(
     url: &str,
     name: Option<String>,
-    group: Option<String>,
+    group: Option<Uuid>,
     unselect: Option<Vec<String>>,
     instance_gui: AddInstanceGui,
     pack_gui: AddModPackGui,
@@ -1538,7 +1519,7 @@ pub async fn install_archive_from_url(
 /// # 参数
 ///
 /// - `data`: Modrinth 版本信息
-/// - `group`: 实例分组
+/// - `group`: 目标分组 uuid（`None` = 默认分组；不存在/已删的组会落到默认分组）
 /// - `icon`: 整合包图标 URL（交给安装器，创建实例时写入；下载失败只记日志，不影响安装）
 /// - `instance_gui`: 实例创建界面回调
 /// - `pack_gui`: 安装进度回调
@@ -1550,7 +1531,7 @@ pub async fn install_archive_from_url(
 /// 返回新实例 uuid，下载或安装失败返回对应错误。
 pub async fn install_modrinth(
     data: &ModrinthVersionObj,
-    group: Option<String>,
+    group: Option<Uuid>,
     icon: Option<String>,
     instance_gui: AddInstanceGui,
     pack_gui: AddModPackGui,
@@ -1597,7 +1578,7 @@ pub async fn install_modrinth(
 /// # 参数
 ///
 /// - `data`: CurseForge 文件信息（安装成功后回填项目与文件 ID）
-/// - `group`: 实例分组
+/// - `group`: 目标分组 uuid（`None` = 默认分组；不存在/已删的组会落到默认分组）
 /// - `icon`: 整合包图标 URL（交给安装器，创建实例时写入；下载失败只记日志，不影响安装）
 /// - `instance_gui`: 实例创建界面回调
 /// - `pack_gui`: 安装进度回调
@@ -1609,7 +1590,7 @@ pub async fn install_modrinth(
 /// 返回新实例 uuid，下载或安装失败返回对应错误。
 pub async fn install_curseforge(
     data: &mut CurseForgeFileDataObj,
-    group: Option<String>,
+    group: Option<Uuid>,
     icon: Option<String>,
     instance_gui: AddInstanceGui,
     pack_gui: AddModPackGui,

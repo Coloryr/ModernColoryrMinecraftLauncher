@@ -91,6 +91,9 @@ export const commands = {
     addGroup: (name: string) => invoke<void>("collect_add_group", { name }),
     clear: (group: string | null) => invoke<void>("collect_clear", { group }),
     getData: () => invoke<CollectDataDto>("collect_get_data"),
+    imageUrl: (url: string) => invoke<string>("collect_image_url", { url }),
+    projectIcon: (source: string, pid: string) => invoke<string | null>("collect_project_icon", { source, pid }),
+    projectItem: (source: string, pid: string, fileType: string) => invoke<ProjectItemDto | null>("collect_project_item", { source, pid, fileType }),
     removeGroup: (name: string) => invoke<void>("collect_remove_group", { name }),
     removeItems: (uuids: string[], group: string | null) => invoke<void>("collect_remove_items", { uuids, group }),
     setGroupItems: (group: string, uuids: string[]) => invoke<void>("collect_set_group_items", { group, uuids }),
@@ -123,11 +126,11 @@ export const commands = {
     readFile: (uuid: string, path: string) => invoke<LogLine[]>("log_read_file", { uuid, path }),
   },
   main: {
-    addGroup: (name: string) => invoke<boolean>("main_add_group", { name }),
+    addGroup: (name: string) => invoke<string | null>("main_add_group", { name }),
     createInstance: (name: string, version: string, loader: string | null, loaderVersion: string | null, group: string | null, modpackType: string | null, source: string | null) => invoke<InstanceInfoDto>("main_create_instance", { name, version, loader, loaderVersion, group, modpackType, source }),
     deleteInstance: (uuid: string) => invoke<boolean>("main_delete_instance", { uuid }),
     getGameLog: (uuid: string) => invoke<LogLine[]>("main_get_game_log", { uuid }),
-    getGroups: () => invoke<string[]>("main_get_groups"),
+    getGroups: () => invoke<GroupDto[]>("main_get_groups"),
     getInstanceArgs: (uuid: string) => invoke<InstanceArgsDto>("main_get_instance_args", { uuid }),
     getInstanceLangs: (uuid: string) => invoke<InstanceLangDto[]>("main_get_instance_langs", { uuid }),
     getInstances: () => invoke<InstanceInfoDto[]>("main_get_instances"),
@@ -140,11 +143,11 @@ export const commands = {
     imageBaseUrl: () => invoke<string>("main_image_base_url"),
     launchGame: (uuid: string) => invoke<void>("main_launch_game", { uuid }),
     loadState: () => invoke<LoadState>("main_load_state"),
-    moveGroup: (name: string, index: number) => invoke<boolean>("main_move_group", { name, index }),
+    moveGroup: (uuid: string, index: number) => invoke<boolean>("main_move_group", { uuid, index }),
     moveInstance: (uuid: string, group: string | null, index: number) => invoke<boolean>("main_move_instance", { uuid, group, index }),
     openUrl: (url: string) => invoke<void>("main_open_url", { url }),
     refreshVersions: () => invoke<VersionInfoDto[]>("main_refresh_versions"),
-    removeGroup: (name: string) => invoke<boolean>("main_remove_group", { name }),
+    removeGroup: (uuid: string) => invoke<boolean>("main_remove_group", { uuid }),
     renameInstance: (uuid: string, name: string) => invoke<boolean>("main_rename_instance", { uuid, name }),
     stopGame: (uuid: string) => invoke<void>("main_stop_game", { uuid }),
     updateInstance: (uuid: string, patch: InstancePatch) => invoke<boolean>("main_update_instance", { uuid, patch }),
@@ -609,6 +612,11 @@ export type InstanceInfoDto = {
   logEncoding: string | null,
   source: string | null,
   order: number,
+};
+
+export type GroupDto = {
+  uuid: string,
+  name: string,
 };
 
 export type JavaTypes = "adoptium" | "zulu" | "openj9" | "foojay";

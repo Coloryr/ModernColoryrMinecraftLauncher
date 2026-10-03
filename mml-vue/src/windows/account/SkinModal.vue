@@ -5,6 +5,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import BaseModal from "../../components/ui/BaseModal.vue";
 import BaseButton from "../../components/ui/BaseButton.vue";
 import BaseSwitch from "../../components/ui/BaseSwitch.vue";
+import GlyphIcon from "../../components/ui/GlyphIcon.vue";
 import SegmentedTabs from "../../components/ui/SegmentedTabs.vue";
 import { t, tErr } from "../../lib/i18n";
 import { showToast } from "../../lib/toast";
@@ -564,7 +565,9 @@ onBeforeUnmount(destroyViewer);
           <BaseButton size="sm" :disabled="uploading" @click="doUpload('slim')">
             {{ t("winSkin.skinSlim") }}
           </BaseButton>
-          <BaseButton variant="ghost" size="sm" :disabled="uploading" @click="uploadFile = ''">✕</BaseButton>
+          <BaseButton variant="ghost" size="sm" :disabled="uploading" @click="uploadFile = ''">
+            <GlyphIcon name="close" :size="14" :weight="2.2" />
+          </BaseButton>
         </div>
         <div class="tex-list">
           <div

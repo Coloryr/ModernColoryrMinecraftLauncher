@@ -6,6 +6,7 @@ import WindowFrame from "../../components/ui/WindowFrame.vue";
 import SegmentedTabs from "../../components/ui/SegmentedTabs.vue";
 import AsyncImage from "../../components/ui/AsyncImage.vue";
 import BaseModal from "../../components/ui/BaseModal.vue";
+import GlyphIcon from "../../components/ui/GlyphIcon.vue";
 import { useWindowRefresh } from "../../composables/useWindowRefresh";
 import { t, tErr } from "../../lib/i18n";
 import { showToast } from "../../lib/toast";
@@ -543,7 +544,9 @@ useWindowRefresh(sync);
           <div v-if="shots.length" class="shot-grid">
             <div v-for="item in shots" :key="item.name" class="shot-cell">
               <AsyncImage class="shot-img" :src="shotUrl(item)" :alt="item.name" :title="item.name" @click="preview = item" />
-              <button class="shot-del" v-tip="t('resource.delete')" @click="deleteShotAsk(item)">×</button>
+              <button class="shot-del" v-tip="t('resource.delete')" @click="deleteShotAsk(item)">
+                <GlyphIcon name="close" :size="13" :weight="2.4" />
+              </button>
             </div>
           </div>
           <div v-else class="empty-tip">{{ t("resource.empty") }}</div>
@@ -1026,16 +1029,23 @@ useWindowRefresh(sync);
   opacity: 0.9;
 }
 
-/* 数据包子页的存档下拉 */
+/* 数据包子页的存档下拉：外观对齐 .field-select（同箭头 / 不透明底 / 主题边框）
+   —— 原来没配箭头，用的是系统原生那个，和别处不是一个观感 */
 .dp-select {
-  padding: 8px 10px;
+  padding: 8px 28px 8px 10px;
   border-radius: 8px;
   border: 1px solid var(--border);
-  background: var(--bg-side);
+  background: var(--bg-solid, var(--bg-card));
   color: var(--text);
   font-size: 13px;
   font-family: inherit;
   cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: var(--select-arrow);
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 12px;
 }
 
 .dp-select:focus {

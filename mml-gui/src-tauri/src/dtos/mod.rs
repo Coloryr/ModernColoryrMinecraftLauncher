@@ -29,7 +29,7 @@ pub mod skin_dto;
 
 pub use account_dto::{AccountStoreDto, AccountStoreViewDto};
 pub use args_dto::{EnvVarLineDto, InstanceArgsDto};
-pub use instance_dto::InstanceInfoDto;
+pub use instance_dto::{GroupDto, InstanceInfoDto};
 pub use java_dto::{JavaImportProgressDto, JavaInfoDto};
 pub use java_download_dto::{JavaDownloadItemDto, JavaDownloadOptionsDto, JavaTypes};
 pub use export_dto::{ExportConfigDto, ExportInfoDto, ExportModDto, ExportProgressDto};
