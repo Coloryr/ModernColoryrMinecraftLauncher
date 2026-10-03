@@ -122,13 +122,12 @@ impl ModPackWorker for ModrinthPackWorker {
     async fn create_instance(
         &self,
         name: Option<String>,
-        group: Option<String>,
+        group: Option<Uuid>,
     ) -> CoreResult<Uuid> {
         match &self.info {
             Some(info) => {
                 let name = name.unwrap_or(format!("{}-{}", info.name, info.version_id));
                 let game = InstanceSettingObj {
-                    group,
                     name,
                     version: self.base.game_version.clone(),
                     is_modpack: true,
@@ -137,7 +136,10 @@ impl ModPackWorker for ModrinthPackWorker {
                     loader_version: Some(self.base.loader_version.clone()),
                     ..Default::default()
                 };
-                let game = game.create_instance(self.base.instance_gui.clone()).await?;
+                // 分组不在实例配置里，创建时一并交给分组表（不存在的组会被建出来）
+                let game = game
+                    .create_instance_in_group(self.base.instance_gui.clone(), group)
+                    .await?;
 
                 if let Some(icon) = &self.base.icon {
                     // 图标是装饰性的：写失败只记日志，不让整个安装失败

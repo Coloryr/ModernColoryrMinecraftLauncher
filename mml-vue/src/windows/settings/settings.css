@@ -667,6 +667,10 @@
 .settings-layout .line-del {
   width: 28px;
   height: 28px;
+  /* 图标是 SVG：用 flex 精确居中（原来靠字形在行盒里居中） */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 8px;
   border: 1px solid var(--border);
   background: var(--bg-raised);
@@ -685,6 +689,8 @@
   align-self: flex-start;
   display: inline-flex;
   align-items: center;
+  /* 图标是 SVG（原来是字形，靠一个空格隔开），间距改由 gap 给 */
+  gap: 6px;
   height: 28px;
   padding: 0 22px;
   border-radius: 9px;

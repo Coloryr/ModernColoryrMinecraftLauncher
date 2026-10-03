@@ -47,7 +47,7 @@ pub(crate) trait ModPackWorker {
     /// # 参数
     ///
     /// - `name`: 实例名（`None` 时用整合包名）
-    /// - `group`: 分组名
+    /// - `group`: 目标分组 uuid（`None` = 默认分组）
     ///
     /// # 返回值
     ///
@@ -55,7 +55,7 @@ pub(crate) trait ModPackWorker {
     async fn create_instance(
         &self,
         name: Option<String>,
-        group: Option<String>,
+        group: Option<Uuid>,
     ) -> CoreResult<Uuid>;
     /// 解压文件
     ///

@@ -22,6 +22,7 @@ import type {
   ExportConfigDto,
   ExportInfoDto,
   ExportProgressDto,
+  GroupDto,
   InstanceArgsDto,
   InstanceInfoDto,
   InstanceLangDto,
@@ -54,6 +55,7 @@ import { AddLoaderProgress, AddModpackStatus, AddNameConflict, AddPackProgress, 
 export interface CreateInstanceOpts {
   loader?: string;
   loaderVersion?: string | null;
+  /** 目标分组 uuid（null / 缺省 = 默认分组） */
   group?: string | null;
   modpackType?: string;
   source?: string;
@@ -75,9 +77,24 @@ export const api = {
     return commands.main.getMotd(address);
   },
 
-  /** 获取分组列表 */
-  async getGroups(): Promise<string[]> {
+  /** 获取分组列表（含空分组；uuid 为身份、name 只是显示名，默认分组排在最前且名字为空白） */
+  async getGroups(): Promise<GroupDto[]> {
     return commands.main.getGroups();
+  },
+
+  /**
+   * 把"用户输入的分组名"解析成分组 uuid
+   *
+   * 添加实例 / 安装整合包两处都是**手输或选一个组名**（还能顺手建新组），
+   * 而 IPC 一律按 uuid 传，所以在这个边界上转一次：
+   * 已有同名分组就用它，没有就现建一个。空名 = 默认分组（null）。
+   */
+  async resolveGroupId(name: string): Promise<string | null> {
+    const trimmed = name.trim();
+    if (!trimmed) return null;
+    const found = (await commands.main.getGroups()).find((g) => g.name === trimmed);
+    if (found) return found.uuid;
+    return await commands.main.addGroup(trimmed);
   },
 
   /**
@@ -124,7 +141,7 @@ export const api = {
     return commands.main.openUrl(url);
   },
 
-  /** 从头新建实例（版本 + 加载器），返回新实例 uuid */
+  /** 从头新建实例（版本 + 加载器），返回新实例 uuid（group 是分组 uuid，null = 默认分组） */
   async addCreateNew(
     name: string,
     version: string,
@@ -135,12 +152,12 @@ export const api = {
     return commands.add.createNew(name, version, loader, loaderVersion, group);
   },
 
-  /** 导入文件夹为实例 */
+  /** 导入文件夹为实例（group 是分组 uuid，null = 默认分组） */
   async addImportFolder(path: string, name: string, group: string | null): Promise<string> {
     return commands.add.importFolder(path, name, group);
   },
 
-  /** 导入整合包压缩包（packType：CurseForge / Modrinth / McMod / 本地） */
+  /** 导入整合包压缩包（packType：CurseForge / Modrinth / McMod / 本地；group 是分组 uuid） */
   async addImportArchive(
     path: string,
     packType: string,
@@ -151,7 +168,7 @@ export const api = {
     return commands.add.importArchive(path, packType, name, group, unselect);
   },
 
-  /** 从网址安装实例 */
+  /** 从网址安装实例（group 是分组 uuid，null = 默认分组） */
   async addImportUrl(url: string, name: string, group: string | null): Promise<string> {
     return commands.add.importUrl(url, name, group);
   },
@@ -210,7 +227,7 @@ export const api = {
     return commands.addModpack.detail(source, projectId);
   },
 
-  /** 安装在线整合包（多任务：命令立即返回，任务后台安装，进度走 add-modpack-status 事件） */
+  /** 安装在线整合包（多任务：命令立即返回，任务后台安装，进度走 add-modpack-status 事件；group 是分组 uuid） */
   async installModpack(
     source: string,
     projectId: string,
@@ -372,18 +389,19 @@ export const api = {
   },
 
   /** 添加空分组（重名返回 false） */
-  async addGroup(name: string): Promise<boolean> {
+  /** 新建分组，返回新分组的 uuid（名字为空 / 重名返回 null） */
+  async addGroup(name: string): Promise<string | null> {
     return commands.main.addGroup(name);
   },
 
-  /** 删除空分组（组内实例移入默认分组；空白分组名即默认分组，不可删） */
-  async removeGroup(name: string): Promise<boolean> {
-    return commands.main.removeGroup(name);
+  /** 删除分组（组内实例移入默认分组；分组 uuid 为空 / 非法即默认分组，不可删） */
+  async removeGroup(uuid: string): Promise<boolean> {
+    return commands.main.removeGroup(uuid);
   },
 
-  /** 调整分组显示顺序（index 为目标位置） */
-  async moveGroup(name: string, index: number): Promise<boolean> {
-    return commands.main.moveGroup(name, index);
+  /** 调整分组显示顺序（uuid 是分组 uuid，index 为目标位置） */
+  async moveGroup(uuid: string, index: number): Promise<boolean> {
+    return commands.main.moveGroup(uuid, index);
   },
 
   /** 创建实例（占位数据），返回实例信息 */
@@ -420,7 +438,7 @@ export const api = {
     return commands.main.deleteInstance(uuid);
   },
 
-  /** 移动实例到 (分组, 组内位置)，支持同组排序与跨组移动 */
+  /** 移动实例到 (分组 uuid, 组内位置)，支持同组排序与跨组移动（group 为 null = 默认分组） */
   async moveInstance(uuid: string, group: string | null, index: number): Promise<boolean> {
     return commands.main.moveInstance(uuid, group, index);
   },
@@ -490,6 +508,26 @@ export const api = {
   /** 获取收藏数据（收藏项 + 分组） */
   async collectGetData(): Promise<CollectDataDto> {
     return commands.collect.getData();
+  },
+
+  /** 取项目图标地址（收藏时没存到图标的老条目回源用），取不到返回 null */
+  async collectProjectIcon(source: string, pid: string): Promise<string | null> {
+    return commands.collect.projectIcon(source, pid);
+  },
+
+  /** 登记一个原始图片网址，返回可直接放到 src 上的地址（收藏里存的是原始网址） */
+  async collectImageUrl(url: string): Promise<string> {
+    return commands.collect.imageUrl(url);
+  },
+
+  /**
+   * 取项目条目（收藏窗口跳转到下载窗口时用）
+   *
+   * 收藏条目只有 名字 / 图标 / 网址 / 源 / 项目ID，下载次数、更新时间、收藏状态
+   * 得现取一次 —— 详情页要显示它们。
+   */
+  async collectProjectItem(source: string, pid: string, fileType: string) {
+    return commands.collect.projectItem(source, pid, fileType);
   },
 
   /** 添加分组（重名会抛错） */

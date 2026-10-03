@@ -13,7 +13,6 @@ use std::collections::{HashMap, HashSet};
 use mml_base::serialize_tools;
 use mml_config::config_save;
 use mml_game::launcher::instance_setting_obj::InstanceSettingObj;
-use mml_names::{i18_items::error_type::CoreResult, names};
 use serde::{Deserialize, Serialize};
 
 /// 游戏日志窗口设置（对应 ColorMC `GameLogSettingObj`）
@@ -86,6 +85,11 @@ pub struct GameGuiSettingObj {
     #[serde(rename = "LogAutoShow")]
     pub log_auto_show: bool,
     /// 排列顺序
+    ///
+    /// **本启动器已不再使用**：组内次序改由内核分组表的数组顺序表达
+    /// （`group_save.json`，见 `mml_game::game_group`），项目里既不读也不写它。
+    /// 字段保留是为了与 ColorMC 互认同一个 `guisetting.json`
+    /// —— 去掉它的话，下次保存会把 ColorMC 写的 `Order` 抹掉。
     #[serde(rename = "Order")]
     pub order: i32,
 }
@@ -126,9 +130,6 @@ pub fn save(instance: &InstanceSettingObj, obj: &GameGuiSettingObj) {
     config_save::save(instance.uuid, obj, &instance.get_gui_setting_file());
 }
 
-/// GUI 设置文件的默认名（供外部拼路径 / 识别用）
-pub const FILE_NAME: &str = names::GUI_SETTING_FILE;
-
 /// 读-改-写：把方块 ID 设为 `block`，并按二选一规则清掉 `Icon`
 ///
 /// 图标与方块 ID 二选一：
@@ -156,16 +157,4 @@ pub fn clear_block(instance: &InstanceSettingObj) {
 /// 给 `image_manager` 的图标取图分支用。
 pub fn block_icon_id(instance: &InstanceSettingObj) -> Option<String> {
     load(instance).block
-}
-
-/// 读取结果：包一层是为了让调用方区分"文件不存在"与"解析失败"
-///
-/// 对界面来说两者都表现为默认值（见 [`load`]），但保存前的读-改-写需要
-/// 知道原文件是否真的坏掉，否则会把用户的设置静默覆盖成默认值。
-pub fn load_checked(instance: &InstanceSettingObj) -> CoreResult<GameGuiSettingObj> {
-    let file = instance.get_gui_setting_file();
-    if !file.exists() || !file.is_file() {
-        return Ok(GameGuiSettingObj::default());
-    }
-    serialize_tools::json_from_file::<GameGuiSettingObj>(&file)
 }

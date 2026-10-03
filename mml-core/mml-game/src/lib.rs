@@ -26,6 +26,7 @@
 //! | [`game_check`] | 实例文件校验 |
 //! | [`game_count`] | 启动与游戏时长统计 |
 //! | [`game_export`] | 实例导出 |
+//! | [`game_group`] | 分组表（独立于实例配置的 `group_save.json`） |
 //! | [`game_lan`] | 局域网联机 |
 //! | [`game_launch`] | 游戏实例启动 |
 //! | [`game_libraries`] | 实例运行库处理 |
@@ -89,6 +90,8 @@ pub mod game_arg;
 pub mod game_check;
 pub mod game_count;
 pub mod game_export;
+/// 分组表（独立于实例配置，见模块文档）
+pub mod game_group;
 pub mod game_lan;
 pub mod game_launch;
 pub mod game_libraries;
@@ -132,8 +135,8 @@ pub enum InstanceChange {
     AddInstance(Uuid),
     /// 删除实例
     RemoveInstance(Uuid),
-    /// 移动分组
-    MoveGroup(Uuid, Option<String>),
+    /// 移动分组（第二个是分组 uuid，`None` 表示默认分组）
+    MoveGroup(Uuid, Option<Uuid>),
 }
 
 /// 实例日志事件参数
@@ -160,12 +163,9 @@ static RUNTIME_LOGS: LazyLock<RwLock<HashMap<Uuid, InstanceRuntimeLog>>> =
 static HANDELS: LazyLock<RwLock<HashMap<Uuid, InstanceHandle>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 
-/// 分组信息
-static GROUPS: LazyLock<RwLock<HashMap<String, Vec<Uuid>>>> = LazyLock::new(|| {
-    let mut group = HashMap::new();
-    group.insert(names::DEFAULT_GROUP.to_string(), Vec::new());
-    RwLock::new(group)
-});
+// 分组表已拆到 [`game_group`]：分组不再存在实例配置里（也没有 GROUPS 静态表），
+// 而是独立的 group_save.json —— 这样空分组才能存在、组内顺序也有了落点。
+// 对外接口保留在下面几个函数里，委托给该模块。
 
 /// 实例列表
 static INSTANCES: LazyLock<RwLock<HashMap<Uuid, GameInstance>>> =
@@ -276,6 +276,10 @@ pub fn init<P: AsRef<Path>>(dir: P) -> CoreResult<()> {
 pub fn load() -> CoreResult<()> {
     version_path::load();
 
+    // 分组表（group_save.json，放实例根目录下）：必须在实例登记前读，
+    // 否则 register_instance 看不到已有归属、会把它们冲回默认分组
+    game_group::init(instance_path::get_instance_dir())?;
+
     path_watch::init_watch()?;
 
     thread::spawn(|| {
@@ -313,8 +317,12 @@ pub fn load() -> CoreResult<()> {
 
     let installs = instance_path::load_instance_dir()?;
 
+    // 先把表里指向已删实例的悬空 uuid 清掉
+    let loaded: Vec<Uuid> = installs.iter().map(|i| i.uuid).collect();
+    game_group::prune(&loaded);
+
     for item in installs {
-        add_to_group(item);
+        add_to_group(item, None);
     }
 
     Ok(())
@@ -477,19 +485,77 @@ fn lang_name_from_file(file: &Path) -> Option<String> {
         .map(String::from)
 }
 
-/// 获取所有分组名字
+/// 获取所有分组（含空分组）
 ///
 /// # 返回值
 ///
-/// 返回分组名列表
-pub fn get_group_keys() -> Vec<String> {
-    let mut list = Vec::new();
+/// 返回分组条目（uuid + 显示名）列表；默认分组置顶，其余按用户排定的顺序
+pub fn get_group_list() -> Vec<game_group::GroupInfoObj> {
+    game_group::group_list()
+}
 
-    for (key, _) in GROUPS.read().unwrap().iter() {
-        list.push(key.clone());
+/// 取某个实例所属的分组 uuid
+///
+/// 分组归属存在独立的 `group_save.json`（实例配置里没有这个字段），
+/// 所以想显示"这个实例在哪个组"必须来这里查。
+///
+/// - `uuid`: 实例 UUID
+///
+/// # 返回值
+///
+/// 返回分组 uuid；属于默认分组时返回 `None`（"没有分组"就是默认分组的表示）
+pub fn get_instance_group(uuid: &Uuid) -> Option<Uuid> {
+    let group = game_group::group_of(uuid);
+    if group == game_group::DEFAULT_GROUP_UUID {
+        None
+    } else {
+        Some(group)
+    }
+}
+
+/// 取某个实例在它所属分组里的显示次序（0 起）
+///
+/// 组内次序存在独立的 `group_save.json` 里（`order`：实例 uuid → 次序），
+/// 不再写各实例的 `guisetting.json`。
+///
+/// - `uuid`: 实例 UUID
+///
+/// # 返回值
+///
+/// 返回组内位置；实例不在任何分组里时返回 `None`
+pub fn get_instance_order(uuid: &Uuid) -> Option<i32> {
+    game_group::index_of(uuid)
+}
+
+/// 按给定顺序重排分组（默认分组恒在首位，不参与排序）
+///
+/// - `order`: 期望的分组 uuid 顺序；不存在的忽略，没提到的组保持在后
+pub fn reorder_groups(order: &[Uuid]) {
+    game_group::reorder_groups(order);
+}
+
+/// 把某个实例移到分组的第 `index` 位（跨组移动 + 组内排序一次到位）
+///
+/// 归属与组内次序都在 `group_save.json`：拖拽落点既可能换组、也可能只是同组内换位置，
+/// 统一由这一个入口处理。
+///
+/// - `uuid`: 实例 UUID（不存在时什么都不做，也不发事件）
+/// - `group`: 目标分组 uuid；`None` 表示默认分组
+/// - `index`: 目标下标（超出范围则排到末尾）
+///
+/// # 返回值
+///
+/// 无返回值；移动完成后发 `MoveGroup` 事件
+pub fn move_instance(uuid: &Uuid, group: Option<Uuid>, index: usize) {
+    if !INSTANCES.read().unwrap().contains_key(uuid) {
+        return;
     }
 
-    list
+    game_group::place_in_group(uuid, group, index);
+
+    // 用回读到的实际分组发事件：目标组不存在时内核会落到默认分组，
+    // 拿传进来的那个 uuid 发就跟实际状态不符了
+    invoke_change(InstanceChange::MoveGroup(*uuid, get_instance_group(uuid)));
 }
 
 /// 获取游戏版本类型列表（Mojang 版本清单的 type 字段取值）
@@ -504,21 +570,18 @@ pub fn get_version_types() -> Vec<&'static str> {
     vec!["release", "snapshot", "old_beta", "old_alpha"]
 }
 
-/// 从分组名字获取对应的实例
-/// - `key`: 分组名字
+/// 从分组 uuid 获取对应的实例
+/// - `uuid`: 分组 uuid
 ///
 /// # 返回值
 ///
 /// 返回该分组下的实例列表
-pub fn get_group(key: &str) -> Vec<GameInstance> {
+pub fn get_group(uuid: &Uuid) -> Vec<GameInstance> {
     let mut list = Vec::new();
 
-    let group = GROUPS.read().unwrap();
-    if let Some(group) = group.get(key) {
-        for item in group {
-            if let Some(instance) = get_instance(item) {
-                list.push(instance.clone());
-            }
+    for item in game_group::group_items(uuid) {
+        if let Some(instance) = get_instance(&item) {
+            list.push(instance.clone());
         }
     }
 
@@ -530,92 +593,53 @@ pub fn get_group(key: &str) -> Vec<GameInstance> {
 ///
 /// # 返回值
 ///
-/// 添加成功返回 `true`；分组已存在返回 `false`
-pub fn add_group(name: &str) -> bool {
-    let mut groups = GROUPS.write().unwrap();
-    if groups.contains_key(name) {
-        false
-    } else {
-        groups.insert(name.to_string(), Vec::new());
-        true
-    }
+/// 添加成功返回新分组的 uuid；分组已存在或名字为空返回 `None`
+pub fn add_group(name: &str) -> Option<Uuid> {
+    game_group::add_group(name)
 }
 
 /// 删除分组
-/// - `name`: 分组名
+/// - `uuid`: 分组 uuid
 ///
 /// # 返回值
 ///
-/// 删除成功返回 `true`（组内实例移入默认分组）；分组不存在返回 `false`
-pub fn remove_group(name: &str) -> bool {
-    let mut groups = GROUPS.write().unwrap();
-    let items = groups.remove(name);
-    match items {
-        Some(items) => {
-            let def = groups.get_mut(names::DEFAULT_GROUP).unwrap();
-            def.extend(items);
-            true
-        }
-        None => false,
+/// 删除成功返回 `true`（组内实例移入默认分组）；分组不存在或为默认分组返回 `false`
+pub fn remove_group(uuid: &Uuid) -> bool {
+    // 只通知**被移入默认分组的那些**实例（不是整个默认分组）
+    let Some(moved) = game_group::remove_group(uuid) else {
+        return false;
+    };
+    for instance in moved {
+        invoke_change(InstanceChange::MoveGroup(instance, None));
     }
+    true
 }
 
-/// 移动分组
-/// - `list`: 需要移动的列表
-/// - `new`: 新分组名字
+/// 移动实例到分组
+/// - `list`: 需要移动的实例列表
+/// - `new`: 目标分组 uuid（`None` = 默认分组）
 ///
 /// # 返回值
 ///
-/// 无返回值；移动完成后保存各实例并发 `MoveGroup` 事件
-pub fn move_group(list: Vec<Uuid>, new: Option<String>) {
-    let mut changes: Vec<(Uuid, Option<String>)> = Vec::new();
-
-    {
-        let mut groups = GROUPS.write().unwrap();
-        let instances = INSTANCES.read().unwrap();
-
-        for item in list.iter() {
-            let game_arc = match instances.get(item) {
-                Some(game) => game.clone(),
-                None => continue,
-            };
-
-            let mut game = game_arc.write().unwrap();
-
-            if let Some(name) = &game.group {
-                let group = groups.get_mut(name);
-                if let Some(group) = group {
-                    group.retain(|g| g != &game.uuid);
-                }
-            } else {
-                let group = groups.get_mut(names::DEFAULT_GROUP).unwrap();
-                group.retain(|g| g != &game.uuid);
-            }
-
-            match new {
-                Some(ref name) => {
-                    if !groups.contains_key(name) {
-                        groups.insert(name.to_string(), Vec::new());
-                    }
-                    let group = groups.get_mut(name).unwrap();
-                    group.push(game.uuid);
-                }
-                None => {
-                    let group = groups.get_mut(names::DEFAULT_GROUP).unwrap();
-                    group.push(game.uuid);
-                }
-            }
-
-            game.group = new.clone();
-            changes.push((game.uuid, game.group.clone()));
-        }
+/// 无返回值；移动完成后发 `MoveGroup` 事件
+///
+/// 分组表是独立存储（`group_save.json`），实例配置里不再有 group 字段，
+/// 所以这里只需改表 + 通知，不必逐个 `save()` 实例。
+pub fn move_group(list: Vec<Uuid>, new: Option<Uuid>) {
+    // 只处理真实存在的实例，避免把不存在的 uuid 写进分组表
+    let moved: Vec<Uuid> = list
+        .into_iter()
+        .filter(|u| INSTANCES.read().unwrap().contains_key(u))
+        .collect();
+    if moved.is_empty() {
+        return;
     }
 
-    for (uuid, group) in changes {
-        if let Some(instance) = get_instance(&uuid) {
-            instance.write().unwrap().save();
-        }
-        invoke_change(InstanceChange::MoveGroup(uuid, group));
+    game_group::move_group(moved.clone(), new);
+
+    // 回读实际分组发事件（目标组不存在时内核会把实例落到默认分组）
+    for uuid in moved {
+        invoke_change(InstanceChange::MoveGroup(uuid, get_instance_group(&uuid)));
     }
 }
 
@@ -665,48 +689,26 @@ pub fn have_instance_uuid(uuid: &Uuid) -> bool {
 ///
 /// UUID 为空或冲突时自动重新生成。
 ///
-/// - `obj`: 实例设置
+/// - `obj`: 实例配置（其中**没有**分组字段）
+/// - `group`: 要登记到哪个分组（分组 uuid）；`None` 表示默认分组
 ///
 /// # 返回值
 ///
 /// 返回加入列表后的实例句柄
-fn add_to_group(mut obj: InstanceSettingObj) -> GameInstance {
+fn add_to_group(obj: InstanceSettingObj, group: Option<Uuid>) -> GameInstance {
+    let mut obj = obj;
     while obj.uuid.is_nil() || matches!(get_instance(&obj.uuid), Some(_)) {
         obj.uuid = Uuid::new_v4();
     }
 
     obj.save();
     let key = obj.uuid.clone();
-    let group = obj.group.clone();
     let game: Arc<RwLock<InstanceSettingObj>> = Arc::new(RwLock::new(obj));
 
-    let mut groups = GROUPS.write().unwrap();
-    if let Some(ref g) = group {
-        if !groups.contains_key(g) {
-            groups.insert(g.clone(), Vec::new());
-        }
-    } else {
-        if !groups.contains_key(names::DEFAULT_GROUP) {
-            groups.insert(names::DEFAULT_GROUP.to_string(), Vec::new());
-        }
-    }
+    INSTANCES.write().unwrap().insert(key, game.clone());
 
-    let mut instances = INSTANCES.write().unwrap();
-    instances.insert(key, game.clone());
-
-    // ---- 更新分组列表 ----
-    if let Some(ref g) = group {
-        if let Some(list) = groups.get_mut(g) {
-            list.push(key);
-        }
-    } else {
-        if let Some(list) = groups.get_mut(names::DEFAULT_GROUP) {
-            list.push(key);
-        }
-    }
-
-    drop(groups);
-    drop(instances);
+    // 登记到分组表（分组已独立存储；不存在的组会被自动创建）
+    game_group::register_instance(key, group);
 
     invoke_change(InstanceChange::AddInstance(key));
     game
@@ -735,17 +737,11 @@ pub fn delete_instance(uuid: &Uuid) -> CoreResult<()> {
 ///
 /// - `uuid`: 实例 UUID
 pub(crate) fn remove_instance_record(uuid: &Uuid) {
-    {
-        let mut groups = GROUPS.write().unwrap();
-        let mut instances = INSTANCES.write().unwrap();
-
-        // 从所有分组中移除 uuid
-        for (_, list) in groups.iter_mut() {
-            list.retain(|&u| u != *uuid);
-        }
-        groups.retain(|_, list| !list.is_empty());
-        instances.remove(uuid);
-    }
+    INSTANCES.write().unwrap().remove(uuid);
+    // 从分组表里摘掉它，但**不删空分组** —— 空分组是合法状态
+    // （之前这里有 `groups.retain(|_, list| !list.is_empty())`，
+    //  正是"空分组留不住"的原因）
+    game_group::forget_instance(uuid);
 
     invoke_change(InstanceChange::RemoveInstance(*uuid));
 }
@@ -797,7 +793,9 @@ pub fn rename_instance(uuid: &Uuid, name: &str) -> CoreResult<()> {
         obj.save();
     }
 
-    invoke_change(InstanceChange::MoveGroup(*uuid, instance.read().unwrap().group.clone()));
+    // 重命名不改分组归属（分组表按 uuid 记录，与名字无关），
+    // 但要让前端刷新那一行，所以照旧发一次带当前分组的变更事件
+    invoke_change(InstanceChange::MoveGroup(*uuid, get_instance_group(uuid)));
     Ok(())
 }
 
@@ -889,7 +887,7 @@ pub fn stop_game(uuid: &Uuid) {
 }
 
 impl InstanceSettingObj {
-    /// 创建实例
+    /// 创建实例（落默认分组）
     ///
     /// 重名实例经 GUI 询问覆盖或改名；创建实例目录结构并保存设置。
     ///
@@ -898,7 +896,27 @@ impl InstanceSettingObj {
     /// # 返回值
     ///
     /// 返回新实例句柄；名字为空或用户取消返回对应错误
-    pub async fn create_instance(mut self, gui: AddInstanceGui) -> CoreResult<GameInstance> {
+    pub async fn create_instance(self, gui: AddInstanceGui) -> CoreResult<GameInstance> {
+        self.create_instance_in_group(gui, None).await
+    }
+
+    /// 创建实例并指定分组
+    ///
+    /// 与 [`create_instance`](Self::create_instance) 只差分组：分组归属不在实例配置里
+    /// （见 [`crate::game_group`]），只能在登记时一并指定，所以导入 / 安装整合包这类
+    /// "用户已经选了目标分组"的流程走这里。
+    ///
+    /// - `gui`: 添加实例界面回调（无界面时重名实例自动改名）
+    /// - `group`: 目标分组 uuid；`None` 表示默认分组（不存在/已删的组会落到默认分组）
+    ///
+    /// # 返回值
+    ///
+    /// 返回新实例句柄；名字为空或用户取消返回对应错误
+    pub async fn create_instance_in_group(
+        mut self,
+        gui: AddInstanceGui,
+        group: Option<Uuid>,
+    ) -> CoreResult<GameInstance> {
         path_watch::stop_watch();
 
         let old = get_instance_by_name(&self.name);
@@ -966,7 +984,8 @@ impl InstanceSettingObj {
 
         path_watch::start_watch();
 
-        Ok(add_to_group(self))
+        // 分组归属不在实例配置里，落在独立的 group_save.json（`None` 即默认分组）
+        Ok(add_to_group(self, group))
     }
 
     /// 删除实例文件
@@ -986,7 +1005,6 @@ impl InstanceSettingObj {
         Self {
             uuid: self.uuid,
             name: self.name.clone(),
-            group: self.group.clone(),
             dir: self.dir.clone(),
             version: self.version.clone(),
             loader: self.loader,
@@ -1018,9 +1036,12 @@ impl InstanceSettingObj {
     ///
     /// 返回新实例句柄
     pub async fn copy_to_other(&self, name: &str, gui: AddInstanceGui) -> CoreResult<GameInstance> {
+        // 复制品与原实例同组：分组不在实例配置里，得单独问一次
+        let group = get_instance_group(&self.uuid);
+
         let mut instance = self.copy_self();
         instance.name = name.to_string();
-        let instance = instance.create_instance(gui).await?;
+        let instance = instance.create_instance_in_group(gui, group).await?;
 
         let online = self.read_online_info();
         let custom = self.read_custom_json();

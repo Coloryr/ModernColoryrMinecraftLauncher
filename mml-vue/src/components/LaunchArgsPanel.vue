@@ -10,6 +10,7 @@ import { COMMON_MEMORY, COMMON_RESOLUTIONS } from "../lib/resolutions";
 import { useSystemMemory } from "../lib/systemMemory";
 import type { InstanceArgsDto, JavaInfoDto } from "../lib/bindings";
 import BaseButton from "./ui/BaseButton.vue";
+import GlyphIcon from "./ui/GlyphIcon.vue";
 import NumberStepper from "./ui/NumberStepper.vue";
 import CollapsePanel from "./ui/CollapsePanel.vue";
 
@@ -278,9 +279,9 @@ const gcOptions = [
               spellcheck="false"
               @input="setLine('jvmArgs', i, ($event.target as HTMLInputElement).value)"
             />
-            <button class="line-del" v-tip="'✕'" @click="removeLine('jvmArgs', i)">✕</button>
+            <button class="line-del" v-tip="t('args.removeLine')" @click="removeLine('jvmArgs', i)"><GlyphIcon name="close" :size="13" /></button>
           </div>
-          <button class="line-add" @click="addLine('jvmArgs')">＋ {{ t("args.addLine") }}</button>
+          <button class="line-add" @click="addLine('jvmArgs')"><GlyphIcon name="plus" :size="13" :weight="2.2" /> {{ t("args.addLine") }}</button>
 
           <!-- 附加游戏参数 -->
           <label class="args-label">{{ t("args.gameExtra") }}</label>
@@ -292,9 +293,9 @@ const gcOptions = [
               spellcheck="false"
               @input="setLine('gameArgs', i, ($event.target as HTMLInputElement).value)"
             />
-            <button class="line-del" v-tip="'✕'" @click="removeLine('gameArgs', i)">✕</button>
+            <button class="line-del" v-tip="t('args.removeLine')" @click="removeLine('gameArgs', i)"><GlyphIcon name="close" :size="13" /></button>
           </div>
-          <button class="line-add" @click="addLine('gameArgs')">＋ {{ t("args.addLine") }}</button>
+          <button class="line-add" @click="addLine('gameArgs')"><GlyphIcon name="plus" :size="13" :weight="2.2" /> {{ t("args.addLine") }}</button>
 
           <!-- 附加 classpath -->
           <label class="args-label">{{ t("args.classPath") }}</label>
@@ -306,9 +307,9 @@ const gcOptions = [
               spellcheck="false"
               @input="setLine('classPath', i, ($event.target as HTMLInputElement).value)"
             />
-            <button class="line-del" v-tip="'✕'" @click="removeLine('classPath', i)">✕</button>
+            <button class="line-del" v-tip="t('args.removeLine')" @click="removeLine('classPath', i)"><GlyphIcon name="close" :size="13" /></button>
           </div>
-          <button class="line-add" @click="addLine('classPath')">＋ {{ t("args.addLine") }}</button>
+          <button class="line-add" @click="addLine('classPath')"><GlyphIcon name="plus" :size="13" :weight="2.2" /> {{ t("args.addLine") }}</button>
 
           <!-- 附加环境变量（键值对） -->
           <label class="args-label">{{ t("args.env") }}</label>
@@ -327,9 +328,9 @@ const gcOptions = [
               spellcheck="false"
               @input="setEnvValue(i, ($event.target as HTMLInputElement).value)"
             />
-            <button class="line-del" v-tip="'✕'" @click="removeEnv(i)">✕</button>
+            <button class="line-del" v-tip="t('args.removeLine')" @click="removeEnv(i)"><GlyphIcon name="close" :size="13" /></button>
           </div>
-          <button class="line-add" @click="addEnv">＋ {{ t("args.addLine") }}</button>
+          <button class="line-add" @click="addEnv"><GlyphIcon name="plus" :size="13" :weight="2.2" /> {{ t("args.addLine") }}</button>
         </div>
       </CollapsePanel>
     </div>
@@ -508,6 +509,10 @@ const gcOptions = [
 .line-del {
   width: 28px;
   height: 28px;
+  /* 图标是 SVG：用 flex 精确居中（原来靠字形在行盒里居中） */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border-radius: 8px;
   border: 1px solid var(--border);
   background: var(--bg-raised);
@@ -528,6 +533,8 @@ const gcOptions = [
   align-self: flex-start;
   display: inline-flex;
   align-items: center;
+  /* 图标是 SVG（原来是字形，靠一个空格隔开），间距改由 gap 给 */
+  gap: 6px;
   height: 28px;
   padding: 0 22px;
   border-radius: 9px;

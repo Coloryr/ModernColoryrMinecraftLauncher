@@ -31,6 +31,11 @@ pub const GUI_CONFIG_FILE_UUID: Uuid = uuid!("00000000-0000-0000-0000-0000000000
 pub const AUTH_SELECT_UUID: Uuid = uuid!("00000000-0000-0000-0000-00000000000b");
 /// 收藏夹（collect.json）保存任务
 pub const COLLECT_UUID: Uuid = uuid!("00000000-0000-0000-0000-00000000000c");
+/// 分组表（group_save.json）保存任务
+///
+/// 用 `...0011`：`...0001`~`...0010` 已被 GUI 各窗口的 uuid 占用
+/// （见 mml-gui/src-tauri/src/windows/mod.rs 的 WINDOWS_INFO）
+pub const GROUP_UUID: Uuid = uuid!("00000000-0000-0000-0000-000000000011");
 
 static UUIDS: LazyLock<Vec<Uuid>> = LazyLock::new(|| {
     vec![
@@ -46,6 +51,7 @@ static UUIDS: LazyLock<Vec<Uuid>> = LazyLock::new(|| {
         GUI_CONFIG_FILE_UUID,
         AUTH_SELECT_UUID,
         COLLECT_UUID,
+        GROUP_UUID,
     ]
 });
 

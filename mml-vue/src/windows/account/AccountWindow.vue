@@ -3,6 +3,7 @@
 import { computed, onDeactivated, onMounted, ref, watch } from "vue";
 import WindowFrame from "../../components/ui/WindowFrame.vue";
 import BaseButton from "../../components/ui/BaseButton.vue";
+import GlyphIcon from "../../components/ui/GlyphIcon.vue";
 import BaseModal from "../../components/ui/BaseModal.vue";
 import SegmentedTabs from "../../components/ui/SegmentedTabs.vue";
 import { useWindowRefresh } from "../../composables/useWindowRefresh";
@@ -454,7 +455,10 @@ function tokenLabel(acc: AccountStoreDto): string {
          标题本身不删 —— 「账户管理」是这一页的身份，删掉窗口标题就只剩一排控件，
          用户分不清自己在哪一页 -->
     <template #head-right>
-      <select v-model="typeFilter" class="head-select">
+      <!-- 同时挂 .field-select：尺寸以外的观感（不透明底 / 主题描边 / 共享箭头 /
+           以及 Chromium 135+ 的 base-select 页内弹层）全部由它统一提供，
+           这里只覆盖标题栏要的尺寸。之前单独写一套，弹层还是系统原生那个 -->
+      <select v-model="typeFilter" class="field-select head-select">
         <option v-for="o in TYPE_OPTIONS" :key="o.value" :value="o.value">{{ o.label }}</option>
       </select>
       <div class="head-search">
@@ -465,7 +469,7 @@ function tokenLabel(acc: AccountStoreDto): string {
         </svg>
         <input v-model="searchText" :placeholder="t('account.search')" spellcheck="false" />
         <button v-if="searchText" class="head-search-clear" :aria-label="t('account.search')" @click="searchText = ''">
-          ✕
+          <GlyphIcon name="close" :size="12" :weight="2.4" />
         </button>
       </div>
       <SegmentedTabs class="head-tabs" :model-value="view" :options="VIEW_OPTIONS" @update:model-value="view = $event as ViewMode" />
@@ -669,21 +673,22 @@ function tokenLabel(acc: AccountStoreDto): string {
    又不至于像 28px 那样局促。**36 是三个用 head-right 的窗口（账户 / 方块 / 设置）
    共同的约定**，改这里记得同步另外两处，否则并排看时高度会参差 */
 .head-select {
-  min-width: 104px;
+  /* 尺寸以外的一切都交给 .field-select（同一个元素上挂了两个类）：
+     不透明底、主题描边、共享箭头、聚焦色、以及 base-select 的页内弹层。
+     这里只写标题栏要的尺寸差异 */
+  width: auto;
+  min-width: 128px;
+  /* 必须显式覆盖 .field-select 的 min-height: var(--field-h)（42px）——
+     min-height 优先于 height，不覆盖就会被撑到 42，比旁边的 36px 控件高一截 */
+  min-height: 0;
   height: 36px;
-  /* 定高时纵向内边距不能为 0（同 forms.css 的不变量）：行高 19 + 内边距 8×2 + 边框 1×2 = 36 */
-  line-height: 19px;
+  /* 定高时高度要和"行高 + 上下内边距 + 上下边框"严格对上（36 = 18 + 8×2 + 1×2），
+     对不上文字就会偏离上下中心 */
+  line-height: 18px;
   padding: 8px 28px 8px 12px;
   border-radius: 9px;
-  border: 1px solid var(--border);
-  background: var(--bg-card);
-  color: var(--text);
   font-size: 12.5px;
-  outline: none;
-  font-family: inherit;
-  appearance: none;
-  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239aa3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
+  /* 箭头比标准下拉略小、离右边略近（标题栏空间紧） */
   background-position: right 7px center;
   background-size: 11px;
 }

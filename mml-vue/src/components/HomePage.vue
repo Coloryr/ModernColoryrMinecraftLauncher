@@ -7,6 +7,7 @@ import { openWindow } from "../windows/windowManager";
 import type { InstanceInfoDto, NewsItem } from "../lib/bindings";
 import NewsPanel from "./NewsPanel.vue";
 import InstanceIcon from "./InstanceIcon.vue";
+import GlyphIcon from "./ui/GlyphIcon.vue";
 
 withDefaults(
   defineProps<{
@@ -45,7 +46,7 @@ function entry(name: string) {
     <div v-if="!empty" class="page-head">
       <h2 class="page-title">{{ t("home.entry") }}</h2>
       <button class="page-back" @click="emit('back')">
-        <span class="page-back-arrow">‹</span>
+        <GlyphIcon class="page-back-arrow" name="chevron-left" :size="16" />
         {{ t("home.backToList") }}
       </button>
     </div>
@@ -53,18 +54,19 @@ function entry(name: string) {
     <!-- 无实例：空实例引导块（融合空状态设计） -->
     <div v-if="empty" class="empty-block">
       <div class="empty-block-icon">
-        <svg viewBox="0 0 24 24" width="44" height="44" fill="none" stroke="#fff" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <!-- 图标跟随所在色块的文字色（.empty-block-icon 已把 color 定为 #fff） -->
+        <svg viewBox="0 0 24 24" width="44" height="44" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
           <path d="M12 3 4.5 7.5v9L12 21l7.5-4.5v-9L12 3z" />
           <path d="M4.5 7.5 12 12l7.5-4.5" />
           <path d="M12 12v9" />
         </svg>
-        <span class="empty-block-badge">＋</span>
+        <span class="empty-block-badge"><GlyphIcon name="plus" :size="16" :weight="2.6" /></span>
       </div>
       <h2 class="empty-block-title">{{ t("empty.title") }}</h2>
       <p class="empty-block-desc">{{ t("empty.desc") }}</p>
       <div class="empty-block-actions">
         <button class="empty-block-btn primary" @click="emit('add-instance')">
-          ＋ {{ t("list.add") }}
+          <GlyphIcon name="plus" :size="14" :weight="2.2" /> {{ t("list.add") }}
         </button>
         <button class="empty-block-btn" @click="emit('add-account')">
           {{ t("empty.addAccount") }}
@@ -80,9 +82,11 @@ function entry(name: string) {
       <InstanceIcon :name="currentInstance.name" :uuid="currentInstance.uuid" :size="52" />
       <span class="last-name">{{ currentInstance.name }}</span>
       <button class="last-play" @click="emit('quick-launch')">
-        ▶ {{ t("home.lastPlay") }}
+        <GlyphIcon name="play" :size="12" /> {{ t("home.lastPlay") }}
       </button>
-      <button class="last-open" @click="emit('select', currentInstance)">›</button>
+      <button class="last-open" @click="emit('select', currentInstance)">
+        <GlyphIcon name="chevron-right" :size="18" />
+      </button>
     </div>
 
     <div class="entry-cards">
@@ -99,7 +103,7 @@ function entry(name: string) {
           <span class="entry-title">{{ t("home.lobby") }}</span>
           <span class="entry-desc">{{ t("home.lobbyDesc") }}</span>
         </span>
-        <span class="entry-arrow">›</span>
+        <GlyphIcon class="entry-arrow" name="chevron-right" :size="18" />
       </button>
 
       <!-- 方块列表：独立窗口 -->
@@ -116,7 +120,7 @@ function entry(name: string) {
           <span class="entry-title">{{ t("home.blocks") }}</span>
           <span class="entry-desc">{{ t("home.blocksDesc") }}</span>
         </span>
-        <span class="entry-arrow">›</span>
+        <GlyphIcon class="entry-arrow" name="chevron-right" :size="18" />
       </button>
     </div>
 

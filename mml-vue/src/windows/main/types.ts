@@ -7,7 +7,12 @@ export type { ViewMode } from "../../lib/guiConfig";
 export type FeatureId = "settings" | "stats" | "help" | "collect";
 
 export interface GroupView {
+  /** 分组 uuid（身份；改名不影响它） */
+  id: string;
+  /** 分组显示名（默认分组已翻译成"默认分组"） */
   name: string;
+  /** 是否默认分组（它的名字是空白，不能靠名字判断） */
+  isDefault: boolean;
   items: InstanceInfoDto[];
 }
 
@@ -16,7 +21,8 @@ export interface CtxMenuState {
   x: number;
   y: number;
   kind: "group" | "multi" | "instance";
-  group?: string;
+  /** 分组 uuid（kind === "group" 时） */
+  groupId?: string;
   instance?: InstanceInfoDto;
 }
 
@@ -24,6 +30,9 @@ export interface CtxMenuState {
 export interface DragCandidate {
   kind: "instance" | "group";
   instance?: InstanceInfoDto;
+  /** 分组 uuid（身份：拖动与落点判断都用它） */
+  groupId?: string;
+  /** 分组显示名（只用于拖拽时那块占位上的文案） */
   groupName?: string;
 }
 

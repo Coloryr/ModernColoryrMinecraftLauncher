@@ -41,7 +41,9 @@
   appearance: none;
   -webkit-appearance: none;
   padding-right: 28px;
-  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239aa3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  /* 箭头是 data-URI 图片，颜色按主题各嵌一份（见 themes.css 的 --select-arrow）：
+     内联 SVG 图片拿不到 currentColor，所以走变量而不是写死 gray */
+  background-image: var(--select-arrow);
   background-repeat: no-repeat;
   background-position: right 8px center;
   background-size: 12px;
@@ -162,7 +164,7 @@ select.field-select {
   font-family: inherit;
   appearance: none;
   -webkit-appearance: none;
-  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239aa3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-image: var(--select-arrow);
   background-repeat: no-repeat;
   background-position: right 6px center;
   background-size: 12px;

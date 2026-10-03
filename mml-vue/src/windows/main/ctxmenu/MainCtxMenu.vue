@@ -1,27 +1,55 @@
 <script setup lang="ts">
-// 主窗口右键菜单：分组 / 实例 / 移动分组 / 多选 四种视图
+// 主窗口右键菜单：分组 / 实例 / 多选 三种视图
 // 所有动作通过事件抛给父组件处理
 //
+// 目标分组的选择**不在这里**：那是个弹窗（见 MainWindow 的"选择目标分组"）。
+// 早先把它做成菜单的第二级视图（`moveGroupView`）时，因为 `menu.kind` 仍是 'group'，
+// 渲染时永远轮不到它，表现就是"点了转移分组没反应"——所以改成了弹窗。
+//
 // 定位：`position: fixed` 钉在点击处，但**渲染后要量一次并收进窗口**——
-// 否则靠近窗口下/右边缘点开时，菜单会超出可视区被裁掉（实例菜单 8 项约 285px 高）。
-import { nextTick, ref, watchEffect } from "vue";
+// 否则靠近窗口下/右边缘点开时，菜单会超出可视区被裁掉（实例菜单 6 项约 285px 高）。
+import { computed, nextTick, ref, watchEffect } from "vue";
 import { t } from "../../../lib/i18n";
 import type { CtxMenuState, GroupView, InstMenuAction } from "../types";
 
 const props = defineProps<{
   menu: CtxMenuState | null;
-  moveGroupView: boolean;
   groups: GroupView[];
 }>();
 
+/** 当前右键的分组（空分组时"全选 / 启动全部"无意义，置灰；"转移分组"另见 canMoveGroup） */
+const currentGroup = computed(() =>
+  props.menu?.kind === "group"
+    ? props.groups.find((x) => x.id === props.menu?.groupId)
+    : undefined,
+);
+const groupEmpty = computed(() => !currentGroup.value || currentGroup.value.items.length === 0);
+
+/** 默认分组不能删（它的名字留白，用 isDefault 判，不看名字） */
+const canDeleteGroup = computed(() => !!currentGroup.value && !currentGroup.value.isDefault);
+
+/**
+ * 分组菜单"转移分组"能不能点
+ *
+ * 两个前提缺一不可：组里有实例可转移，**而且除它自己以外还有别的组可去**。
+ * 后者以前没判——只有一个默认分组时点开弹窗才发现下拉是空的，
+ * 所以现在直接置灰（工具提示见 MainWindow 的工具栏按钮）。
+ */
+const canMoveGroup = computed(() => {
+  const source = currentGroup.value;
+  if (!source || source.items.length === 0) return false;
+  return props.groups.some((g) => g.id !== source.id);
+});
+
+/** 多选"修改分组"：表里只有默认分组一个组时同样无处可去 */
+const canMultiMove = computed(() => props.groups.length > 1);
+
 const emit = defineEmits<{
-  (e: "select-all", group?: string): void;
-  (e: "launch-group", group?: string): void;
-  (e: "open-move-view", group?: string): void;
-  (e: "delete-group", group?: string): void;
+  (e: "select-all", groupId?: string): void;
+  (e: "launch-group", groupId?: string): void;
+  (e: "move-group"): void;
+  (e: "delete-group", groupId?: string): void;
   (e: "inst-action", id: InstMenuAction): void;
-  (e: "back"): void;
-  (e: "move-target", name: string | null): void;
   (e: "multi-move"): void;
   (e: "multi-delete"): void;
   (e: "multi-launch"): void;
@@ -34,10 +62,8 @@ const pos = ref({ x: 0, y: 0 });
 const MARGIN = 8;
 
 watchEffect(async () => {
+  // 菜单高度随视图（分组 / 实例 / 多选）变化，读一下 menu 就能在切换时重新定位
   const menu = props.menu;
-  // 这几个依赖都会改变菜单高度（切换分组/实例/移动视图、目标分组增删），要跟着重新定位
-  void props.moveGroupView;
-  void props.groups.length;
   if (!menu) return;
 
   pos.value = { x: menu.x, y: menu.y };
@@ -64,22 +90,25 @@ watchEffect(async () => {
     @contextmenu.prevent
     @click.stop
   >
-    <!-- 分组菜单：全选 / 启动全部 / 转移分组 / 删除分组 -->
+    <!-- 分组菜单：全选 / 启动全部 / 转移分组 / 删除分组
+         空分组时"全选 / 启动全部"没有实例可操作，置灰而不是让用户点了没反应；
+         "转移分组"还要多一条：除本组外得有别的组可去（见 canMoveGroup）；
+         "删除分组"对默认分组永远置灰 -->
     <template v-if="menu.kind === 'group'">
-      <button class="ctx-item" @click="emit('select-all', menu.group)">
+      <button class="ctx-item" :disabled="groupEmpty" @click="emit('select-all', menu.groupId)">
         {{ t("multi.selectAll") }}
       </button>
-      <button class="ctx-item" @click="emit('launch-group', menu.group)">
+      <button class="ctx-item" :disabled="groupEmpty" @click="emit('launch-group', menu.groupId)">
         {{ t("multi.launch") }}
       </button>
-      <button class="ctx-item" @click="emit('open-move-view', menu.group)">
+      <button class="ctx-item" :disabled="!canMoveGroup" @click="emit('move-group')">
         {{ t("group.moveTo") }}
       </button>
       <div class="ctx-sep"></div>
       <button
         class="ctx-item danger"
-        :disabled="menu.group === t('group.default')"
-        @click="emit('delete-group', menu.group)"
+        :disabled="!canDeleteGroup"
+        @click="emit('delete-group', menu.groupId)"
       >
         {{ t("group.delete") }}
       </button>
@@ -109,29 +138,9 @@ watchEffect(async () => {
       </button>
     </template>
 
-    <!-- 移动 / 转移分组：选择目标分组 -->
-    <template v-else-if="moveGroupView">
-      <button class="ctx-item ctx-back" @click="emit('back')">
-        {{ t("multi.back") }}
-      </button>
-      <div class="ctx-sep"></div>
-      <button class="ctx-item" @click="emit('move-target', null)">
-        <span class="ctx-label">{{ t("group.default") }}</span>
-      </button>
-      <button
-        v-for="g in groups"
-        :key="g.name"
-        class="ctx-item"
-        @click="emit('move-target', g.name)"
-      >
-        <span class="ctx-label">{{ g.name }}</span>
-        <span class="ctx-count">{{ g.items.length }}</span>
-      </button>
-    </template>
-
     <!-- 多选实例操作菜单 -->
     <template v-else>
-      <button class="ctx-item" @click="emit('multi-move')">
+      <button class="ctx-item" :disabled="!canMultiMove" @click="emit('multi-move')">
         {{ t("multi.moveGroup") }}
       </button>
       <button class="ctx-item danger" @click="emit('multi-delete')">

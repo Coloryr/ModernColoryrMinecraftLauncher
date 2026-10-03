@@ -260,7 +260,7 @@ pub fn clear_group(name: &str) {
     save();
 }
 
-/// 从分组移除若干收藏（条目本身保留）
+/// 从分组移除若干收藏（条目本身保留，之后会回到默认分组）
 pub fn remove_group_items(group: &str, uuids: &[String]) {
     {
         let mut collect = COLLECT.write().unwrap();
@@ -275,10 +275,28 @@ pub fn remove_group_items(group: &str, uuids: &[String]) {
     save();
 }
 
-/// 把若干收藏加入分组（分组不存在时不做任何事）
+/// 把若干收藏移入分组（**移动语义**：先从其它分组里摘掉；分组不存在时不做任何事）
+///
+/// 界面上的「默认分组」不是这里的一个分组，而是"不在任何具名分组里"的那批收藏
+/// （收藏时没有分组参数，所以新收藏天然落在那边）。既然同一个具名分组之外还有个
+/// 默认分组，一项就只能属于一个具名分组 —— 否则各组计数相加不等于收藏总数。
 pub fn set_group_items(group: &str, uuids: &[String]) {
     {
         let mut collect = COLLECT.write().unwrap();
+
+        if !collect.groups.contains_key(group) {
+            return;
+        }
+
+        // 先摘出其它分组
+        for (name, value) in collect.groups.iter_mut() {
+            if name == group {
+                continue;
+            }
+            for uuid in uuids {
+                value.remove(uuid);
+            }
+        }
 
         if let Some(value) = collect.groups.get_mut(group) {
             for uuid in uuids {

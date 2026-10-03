@@ -342,12 +342,13 @@ pub async fn add_create_new(
     group: Option<String>,
 ) -> Result<String, String> {
     let (_store, _token) = prepare(&window)?;
+    // 前端传的是分组 uuid；空 / 非法 = 默认分组
+    let group = crate::windows::parse_group_id(group);
     let loader = parse_loader(&loader)?;
     let obj = InstanceSettingObj {
         uuid: Uuid::new_v4(),
         name,
         version,
-        group,
         loader,
         loader_version,
         ..Default::default()
@@ -355,7 +356,8 @@ pub async fn add_create_new(
     // mml-game 的安装 future 非 Send，放阻塞线程上 block_on 执行
     let gui = instance_gui(&window);
     let res = tauri::async_runtime::spawn_blocking(move || {
-        tauri::async_runtime::block_on(obj.create_instance(gui))
+        // 分组不在实例配置里（kernel 的 group_save.json 管），创建时一并指定
+        tauri::async_runtime::block_on(obj.create_instance_in_group(gui, group))
     })
     .await
     .map_err(|e| e.to_string())?
@@ -375,6 +377,8 @@ pub async fn add_import_folder(
     group: Option<String>,
 ) -> Result<String, String> {
     let (_store, token) = prepare(&window)?;
+    // 前端传的是分组 uuid；空 / 非法 = 默认分组
+    let group = crate::windows::parse_group_id(group);
     // 安装 future 非 Send：阻塞线程 block_on；读锁在块内释放后再发事件
     let gui = instance_gui(&window);
     let res = tauri::async_runtime::spawn_blocking(move || {
@@ -403,6 +407,8 @@ pub async fn add_import_archive(
     unselect: Option<Vec<String>>,
 ) -> Result<String, String> {
     let (_store, token) = prepare(&window)?;
+    // 前端传的是分组 uuid；空 / 非法 = 默认分组
+    let group = crate::windows::parse_group_id(group);
     let pack = parse_pack_type(&pack_type)?;
     let gui = instance_gui(&window);
     let progress = pack_gui(&window);
@@ -431,6 +437,8 @@ pub async fn add_import_url(
     group: Option<String>,
 ) -> Result<String, String> {
     let (_store, token) = prepare(&window)?;
+    // 前端传的是分组 uuid；空 / 非法 = 默认分组
+    let group = crate::windows::parse_group_id(group);
     let gui = instance_gui(&window);
     let progress = pack_gui(&window);
     let uuid = tauri::async_runtime::spawn_blocking(move || {

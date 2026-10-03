@@ -196,7 +196,6 @@ fn instance_setting_round_trip() {
     let instance = InstanceSettingObj {
         uuid: uuid::Uuid::parse_str("f47ac10b-58cc-4372-a567-0e02b2c3d479").unwrap(),
         name: "test-inst".to_string(),
-        group: Some("group1".to_string()),
         dir: "test-inst".to_string(),
         version: "1.20.4".to_string(),
         loader: LoaderType::Forge,
@@ -214,7 +213,8 @@ fn instance_setting_round_trip() {
     assert_eq!(json["Loader"], 1); // LoaderType::Forge
     assert_eq!(json["ModPackType"], 0); // ModPackType::CurseForge
     assert_eq!(json["Encoding"], 1); // LogEncoding::GBK
-    assert_eq!(json["GroupName"], "group1");
+    // 分组已迁到独立的 group_save.json，实例配置里不该再出现 GroupName
+    assert!(json.get("GroupName").is_none());
     assert_eq!(json["UUID"], "f47ac10b-58cc-4372-a567-0e02b2c3d479");
 
     // 反序列化：还原字段

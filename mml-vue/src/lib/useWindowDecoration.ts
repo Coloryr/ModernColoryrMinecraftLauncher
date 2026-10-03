@@ -9,9 +9,8 @@
 // 之后再补报也改不回已完成的那次。而窗口是按 `visible(false)` 建出来的，
 // 激活同时负责显示 —— 所以顺序错了窗口表现会很怪。
 //
-// 启动时机：窗口建出来时是隐藏的，前端挂载后才显示。功能窗口没有启动画面，
-// 标题栏随组件一起渲染，所以这里直接 nextTick 后量即可（主窗口走 MainWindow
-// 自己的路径，它要等启动画面切走）。
+// 窗口建出来时是隐藏的，前端挂载后才显示。主窗口多一层启动画面：它的标题栏要等
+// 核心 load 完成才渲染 —— 这一点由 waitForSnapTarget 兜住（它会一直等到按钮出现）。
 import { nextTick, onMounted, onUnmounted, ref, type Ref } from "vue";
 import { commands } from "./bindings";
 import { isTauri } from "../windows/windowManager";

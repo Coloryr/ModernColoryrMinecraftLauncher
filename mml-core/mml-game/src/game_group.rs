@@ -1,0 +1,827 @@
+//! 分组表：`group_save.json`
+//!
+//! 分组以 **uuid 为身份**，组名只是可改的显示数据：
+//! - 一个分组可以没有任何实例（空分组）—— 归属信息若存在实例里，空分组就没有
+//!   任何实例可以承载它，这正是之前"空分组留不住"的根因；
+//! - 组内次序、分组自身的顺序也都由本表表达，不再散落在各实例的 `guisetting.json` 里；
+//! - 组名不进任何"身份"位置（键、顺序表），改名不会牵连归属与顺序。
+//!
+//! 文件放**实例根目录**下、与各实例目录并列（下面用默认分组举例）：
+//! ```json
+//! {
+//!   "group_order": [],
+//!   "names": { "00000000-0000-0000-0000-000000000000": " " },
+//!   "groups": { "00000000-0000-0000-0000-000000000000": ["8bb5fca2-...", "6a6af958-..."] },
+//!   "order": { "8bb5fca2-...": 0, "6a6af958-...": 1 }
+//! }
+//! ```
+//! 四列各管一件事：
+//! - `group_order` — 分组 uuid 的显示顺序（默认分组恒在首位，不进这一列）
+//! - `names` — 分组 uuid → 组名（**显示数据**；空白名字就是默认分组）
+//! - `groups` — 分组 uuid → 组内实例（**只表达归属**，先后一律看 `order`）
+//! - `order` — 实例 uuid → 组内次序
+//!
+//! 实例配置（`game.json`）里**没有** `group` 字段；判断某个实例属于哪一组，
+//! 靠在本表里查它的 uuid（见 [`group_of`]）。
+
+use std::{
+    collections::{HashMap, HashSet},
+    path::PathBuf,
+    sync::{LazyLock, RwLock},
+};
+
+use mml_base::serialize_tools;
+use mml_config::config_save;
+use mml_names::{i18_items::error_type::CoreResult, names, uuids};
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
+
+/// 默认分组的固定 uuid（**全 0**）
+///
+/// 全 0 就是"没有分组"本身：对外 `Option<Uuid>` 的 `None` 即指向它，
+/// 重启后也必须还是同一个身份。
+///
+/// **不放进 `mml_names::uuids`**：那张表登记的是配置文件保存任务的 id，
+/// 这里是数据身份；混在一起会让"uuid 有没有重复"的检查失去意义。
+pub const DEFAULT_GROUP_UUID: Uuid = Uuid::nil();
+
+/// 分组条目（uuid + 显示名）
+pub struct GroupInfoObj {
+    /// 分组 uuid
+    pub uuid: Uuid,
+    /// 分组显示名（默认分组是空白，由界面翻译成"默认分组"）
+    pub name: String,
+}
+
+/// 分组表（内存与磁盘共用同一个结构）
+///
+/// 单独再定义一个"落盘用"的镜像结构没有意义 —— 字段完全一样，只会多一份要同步的东西，
+/// 所以 `Default`（空表）与 `Serialize` / `Deserialize`（文件）都落在本类型上。
+#[derive(Debug, Default, Serialize, Deserialize)]
+struct GroupStore {
+    /// 非默认分组的显示顺序（分组 uuid；默认分组恒在首位，不在这个列表里）
+    #[serde(default)]
+    group_order: Vec<String>,
+    /// 分组 uuid → 组名
+    #[serde(default)]
+    names: HashMap<String, String>,
+    /// 分组 uuid → 组内实例（只表达归属，先后看 `order`）
+    #[serde(default)]
+    groups: HashMap<String, Vec<Uuid>>,
+    /// 实例 uuid → 组内次序
+    #[serde(default)]
+    order: HashMap<String, i32>,
+}
+
+impl GroupStore {
+    /// 归一化：补默认分组、清悬空项、把每个组的组内次序压实成 `0..n-1`
+    ///
+    /// 读盘后（以及手改过文件后）必须跑一次：文件里的次序可能缺项、并列、是负数，
+    /// 也可能指向早就删掉的实例。压实之后"次序"才是一个确定的全序。
+    fn normalize(&mut self) {
+        let default = DEFAULT_GROUP_UUID.to_string();
+
+        // 默认分组恒存在：身份是固定 uuid，名字留白（界面自行翻译）
+        self.names
+            .entry(default.clone())
+            .or_insert_with(|| names::DEFAULT_GROUP.to_string());
+        self.groups.entry(default.clone()).or_default();
+
+        // 没有名字的分组视为损坏（只有 add_group 会建组，一定带名字）
+        let named: HashSet<String> = self.names.keys().cloned().collect();
+        self.groups.retain(|key, _| named.contains(key));
+        // 反向也要补齐：有名字但少了成员数组（手改过文件）的组补一个空数组。
+        // 缺了它，实例会被从原组摘下来却推不进目标组 —— 直接从界面上消失
+        let keys: Vec<String> = self.names.keys().cloned().collect();
+        for key in keys {
+            self.groups.entry(key).or_default();
+        }
+
+        // 分组顺序：默认分组不进这一列；不存在的名字丢掉，存在但漏掉的补在末尾
+        let mut next: Vec<String> = Vec::with_capacity(self.names.len());
+        for key in &self.group_order {
+            if key != &default && self.names.contains_key(key) && !next.contains(key) {
+                next.push(key.clone());
+            }
+        }
+        for key in self.names.keys() {
+            if key != &default && !next.contains(key) {
+                next.push(key.clone());
+            }
+        }
+        self.group_order = next;
+
+        // 一个实例只能属于一个组：按分组顺序保留第一次出现的那个
+        let order: Vec<String> = self.group_order.clone();
+        let mut seen: HashSet<Uuid> = HashSet::new();
+        for key in std::iter::once(default.clone()).chain(order) {
+            if let Some(items) = self.groups.get_mut(&key) {
+                items.retain(|uuid| seen.insert(*uuid));
+            }
+        }
+
+        // 每个组按 (次序, uuid) 排一遍再重新编号：次序并列/缺失的旧数据也能排出确定顺序
+        let groups = std::mem::take(&mut self.groups);
+        let mut fixed: HashMap<String, Vec<Uuid>> = HashMap::with_capacity(groups.len());
+        for (key, mut items) in groups {
+            items.sort_by_key(|uuid| (self.rank(*uuid), uuid.to_string()));
+            for (i, uuid) in items.iter().enumerate() {
+                self.order.insert(uuid.to_string(), i as i32);
+            }
+            fixed.insert(key, items);
+        }
+        self.groups = fixed;
+
+        // 悬空次序（实例已不在任何组里）清掉
+        let alive: HashSet<String> = self
+            .groups
+            .values()
+            .flatten()
+            .map(|uuid| uuid.to_string())
+            .collect();
+        self.order.retain(|key, _| alive.contains(key));
+    }
+
+    /// 实例的组内次序（表里缺这一项时排到最后）
+    fn rank(&self, uuid: Uuid) -> i32 {
+        self.order
+            .get(&uuid.to_string())
+            .copied()
+            .unwrap_or(i32::MAX)
+    }
+
+    /// 全部分组 uuid（默认分组恒在首位）
+    fn keys(&self) -> Vec<Uuid> {
+        let mut list = Vec::with_capacity(self.group_order.len() + 1);
+        list.push(DEFAULT_GROUP_UUID);
+        for key in &self.group_order {
+            if let Ok(uuid) = Uuid::parse_str(key)
+                && uuid != DEFAULT_GROUP_UUID
+                && !list.contains(&uuid)
+            {
+                list.push(uuid);
+            }
+        }
+        // 兜底：表里有、顺序表里没有的分组也得能被看到。
+        // 正常路径（init 的 normalize / new_group）不会出现这种状态，这里只是别让它悄悄消失
+        for key in self.names.keys() {
+            if let Ok(uuid) = Uuid::parse_str(key)
+                && !list.contains(&uuid)
+            {
+                list.push(uuid);
+            }
+        }
+        list
+    }
+
+    /// 分组名（默认分组是空白）
+    fn name_of(&self, uuid: Uuid) -> Option<String> {
+        self.names.get(&uuid.to_string()).cloned()
+    }
+
+    /// 是否存在这个分组
+    fn exists(&self, uuid: Uuid) -> bool {
+        self.names.contains_key(&uuid.to_string())
+    }
+
+    /// 是否已经有同名的分组（组名保持唯一，免得界面上分不清）
+    fn has_name(&self, name: &str) -> bool {
+        self.names.values().any(|n| n == name)
+    }
+
+    /// 某分组的成员，按组内次序排好
+    fn members(&self, uuid: Uuid) -> Vec<Uuid> {
+        let mut items = self
+            .groups
+            .get(&uuid.to_string())
+            .cloned()
+            .unwrap_or_default();
+        items.sort_by_key(|instance| (self.rank(*instance), instance.to_string()));
+        items
+    }
+
+    /// 某个实例所属的分组 uuid；不在任何组里时回落到默认分组
+    fn group_of(&self, uuid: &Uuid) -> Uuid {
+        for key in self.keys() {
+            if self
+                .groups
+                .get(&key.to_string())
+                .is_some_and(|items| items.contains(uuid))
+            {
+                return key;
+            }
+        }
+        DEFAULT_GROUP_UUID
+    }
+
+    /// 实例在它所属分组里的位置（0 起）：由次序编号算出来，不是直接读编号
+    ///
+    /// 直接读编号是不行的 —— 文件被手改过后编号可能并列、跳号或为负。
+    fn position_of(&self, uuid: &Uuid) -> Option<usize> {
+        let group = self.group_of(uuid);
+        self.members(group).iter().position(|u| u == uuid)
+    }
+
+    /// 是否有任何分组已经收了这个实例
+    fn contains(&self, uuid: &Uuid) -> bool {
+        self.groups.values().any(|items| items.contains(uuid))
+    }
+
+    /// 新建分组（返回新分组的 uuid；名字为空或重名返回 `None`）
+    fn new_group(&mut self, name: &str) -> Option<Uuid> {
+        let name = name.trim();
+        if name.is_empty() || self.has_name(name) {
+            return None;
+        }
+
+        let uuid = Uuid::new_v4();
+        let key = uuid.to_string();
+        self.names.insert(key.clone(), name.to_string());
+        self.groups.insert(key.clone(), Vec::new());
+        self.group_order.push(key);
+
+        Some(uuid)
+    }
+
+    /// 把一批实例移入目标分组（从所有旧分组里摘掉，按次序追加到目标组末尾）
+    ///
+    /// 目标分组不存在（界面上拿到的是过期数据，或者表还没 init）时落到默认分组，
+    /// 不凭空造一个没名字的组。
+    ///
+    /// # 返回值
+    ///
+    /// 返回实际落到的分组 uuid（调用方接着排序时要用它，别拿原来那个）
+    fn move_items(&mut self, list: &[Uuid], target: Uuid) -> Uuid {
+        let target = if self.exists(target) {
+            target
+        } else {
+            DEFAULT_GROUP_UUID
+        };
+        let key = target.to_string();
+
+        // 落点必须真的存在（名字 + 成员数组都要有）：只摘不放会让实例从界面上消失
+        self.names
+            .entry(key.clone())
+            .or_insert_with(|| names::DEFAULT_GROUP.to_string());
+        self.groups.entry(key.clone()).or_default();
+
+        // 追加位置：接在目标组现有最大次序之后
+        let mut next = self
+            .groups
+            .get(&key)
+            .and_then(|items| items.iter().map(|uuid| self.rank(*uuid)).max())
+            .map_or(0, |max| max.saturating_add(1));
+
+        for uuid in list {
+            for items in self.groups.values_mut() {
+                items.retain(|u| u != uuid);
+            }
+            if let Some(items) = self.groups.get_mut(&key) {
+                items.push(*uuid);
+            }
+            self.order.insert(uuid.to_string(), next);
+            next = next.saturating_add(1);
+        }
+
+        target
+    }
+
+    /// 把已在组内的实例挪到第 `index` 位（整组重新编号 `0..n-1`）
+    ///
+    /// 重新编号而不是只改这一个值：旧数据里次序全是默认 0（并列），只改一个值排不出顺序。
+    fn reposition(&mut self, group: Uuid, uuid: &Uuid, index: usize) {
+        // 组不存在就什么都不做 —— 别在这里 insert 出一个没有名字的组
+        if !self.exists(group) {
+            return;
+        }
+
+        let mut items = self.members(group);
+        items.retain(|u| u != uuid);
+        let at = index.min(items.len());
+        items.insert(at, *uuid);
+
+        for (i, u) in items.iter().enumerate() {
+            self.order.insert(u.to_string(), i as i32);
+        }
+        self.groups.insert(group.to_string(), items);
+    }
+
+    /// 按给定顺序重排分组（默认分组恒在首位，不参与排序）
+    ///
+    /// 传进来的 uuid 里不存在的忽略；表里存在但没提到的保持原相对顺序、排在后面。
+    fn reorder_groups(&mut self, order: &[Uuid]) {
+        let mut next: Vec<String> = Vec::with_capacity(self.group_order.len());
+
+        for uuid in order {
+            let key = uuid.to_string();
+            if *uuid != DEFAULT_GROUP_UUID && self.names.contains_key(&key) && !next.contains(&key) {
+                next.push(key);
+            }
+        }
+        for key in &self.group_order {
+            if !next.contains(key) {
+                next.push(key.clone());
+            }
+        }
+
+        self.group_order = next;
+    }
+
+    /// 把某个实例从所有分组里摘掉（连同它的组内次序）
+    ///
+    /// # 返回值
+    ///
+    /// 有改动返回 `true`（调用方据此决定要不要落盘）
+    fn forget(&mut self, uuid: &Uuid) -> bool {
+        self.order.remove(&uuid.to_string());
+
+        let mut changed = false;
+        for items in self.groups.values_mut() {
+            let before = items.len();
+            items.retain(|u| u != uuid);
+            changed |= items.len() != before;
+        }
+        changed
+    }
+}
+
+/// 分组表（内存中的唯一数据源）
+static STORE: LazyLock<RwLock<GroupStore>> = LazyLock::new(|| RwLock::new(GroupStore::default()));
+
+/// 分组文件路径（`init` 时确定）
+static GROUP_FILE: LazyLock<RwLock<Option<PathBuf>>> = LazyLock::new(|| RwLock::new(None));
+
+/// 初始化分组存储（在实例目录确定后调用）
+///
+/// - `dir`: 实例根目录（`launcher_path::get_instance_dir()`）
+///
+/// # 返回值
+///
+/// 读取失败返回对应错误；文件不存在时按空表开始（首次运行）
+pub fn init(dir: PathBuf) -> CoreResult<()> {
+    let file = dir.join(names::GROUP_FILE);
+    *GROUP_FILE.write().unwrap() = Some(file.clone());
+
+    // 读失败不致命：分组是可重建的辅助数据，宁可空着也不让实例加载整个失败
+    let mut store: GroupStore = if file.exists() && file.is_file() {
+        serialize_tools::json_from_file(&file).unwrap_or_default()
+    } else {
+        GroupStore::default()
+    };
+    store.normalize();
+
+    *STORE.write().unwrap() = store;
+
+    Ok(())
+}
+
+/// 保存分组表到磁盘（异步落盘）
+pub fn save() {
+    let file = GROUP_FILE.read().unwrap().clone();
+    let Some(file) = file else {
+        return;
+    };
+
+    // config_save 入队前就把对象序列化好了（见 `ConfigSaveObj::new`），
+    // 所以直接交引用即可，不必再拷一份整表
+    let store = STORE.read().unwrap();
+    config_save::save(uuids::GROUP_UUID, &*store, &file);
+}
+
+/// 全部分组（含空分组）
+///
+/// # 返回值
+///
+/// 返回分组条目列表；默认分组排在最前，其余按用户排定的顺序
+pub fn group_list() -> Vec<GroupInfoObj> {
+    let store = STORE.read().unwrap();
+    store
+        .keys()
+        .into_iter()
+        .map(|uuid| GroupInfoObj {
+            uuid,
+            name: store.name_of(uuid).unwrap_or_default(),
+        })
+        .collect()
+}
+
+/// 某个分组的显示名
+///
+/// - `uuid`: 分组 uuid
+///
+/// # 返回值
+///
+/// 返回分组名；分组不存在返回 `None`（默认分组的名字是空白）
+pub fn group_name(uuid: &Uuid) -> Option<String> {
+    STORE.read().unwrap().name_of(*uuid)
+}
+
+/// 某分组内的实例 uuid（按组内次序）
+///
+/// - `uuid`: 分组 uuid
+///
+/// # 返回值
+///
+/// 返回该组的 uuid 列表；分组不存在返回空列表
+pub fn group_items(uuid: &Uuid) -> Vec<Uuid> {
+    STORE.read().unwrap().members(*uuid)
+}
+
+/// 某个实例所属的分组 uuid
+///
+/// 在表里反查实例；查不到时回落到默认分组（实例刚建好、还没登记时就是这种情况）
+///
+/// - `uuid`: 实例 uuid
+///
+/// # 返回值
+///
+/// 返回分组 uuid（可能是 [`DEFAULT_GROUP_UUID`]）
+pub fn group_of(uuid: &Uuid) -> Uuid {
+    STORE.read().unwrap().group_of(uuid)
+}
+
+/// 某个实例在它所属分组里的显示次序（0 起）
+///
+/// - `uuid`: 实例 uuid
+///
+/// # 返回值
+///
+/// 返回组内位置；该实例不在任何分组里时返回 `None`
+pub fn index_of(uuid: &Uuid) -> Option<i32> {
+    STORE.read().unwrap().position_of(uuid).map(|i| i as i32)
+}
+
+/// 新建分组
+///
+/// - `name`: 分组名（首尾空白会被去掉）
+///
+/// # 返回值
+///
+/// 新建成功返回新分组的 uuid；已存在或名字为空返回 `None`
+pub fn add_group(name: &str) -> Option<Uuid> {
+    let mut store = STORE.write().unwrap();
+    let uuid = store.new_group(name)?;
+    drop(store);
+
+    save();
+    Some(uuid)
+}
+
+/// 删除分组（组内实例移入默认分组）
+///
+/// 空分组也能删 —— 这正是把分组独立存的目的
+///
+/// - `uuid`: 分组 uuid
+///
+/// # 返回值
+///
+/// 删除成功返回被移入默认分组的实例 uuid；分组不存在或试图删除默认分组返回 `None`
+pub fn remove_group(uuid: &Uuid) -> Option<Vec<Uuid>> {
+    if *uuid == DEFAULT_GROUP_UUID {
+        return None;
+    }
+    let key = uuid.to_string();
+
+    let mut store = STORE.write().unwrap();
+    store.names.remove(&key)?;
+    let items = store.groups.remove(&key).unwrap_or_default();
+    store.group_order.retain(|k| k != &key);
+    // 组内实例移入默认分组（接在默认分组末尾），而不是凭空丢失归属
+    store.move_items(&items, DEFAULT_GROUP_UUID);
+    drop(store);
+
+    save();
+    Some(items)
+}
+
+/// 把一批实例移入某分组（追加到目标组末尾）
+///
+/// - `list`: 要移动的实例 uuid
+/// - `new`: 目标分组 uuid；`None` 表示默认分组
+pub fn move_group(list: Vec<Uuid>, new: Option<Uuid>) {
+    let target = new.unwrap_or(DEFAULT_GROUP_UUID);
+
+    let mut store = STORE.write().unwrap();
+    store.move_items(&list, target);
+    drop(store);
+
+    save();
+}
+
+/// 把一个实例放到目标分组的第 `index` 位
+///
+/// 跨组移动与组内排序在这里是**同一件事**：先确保目标分组存在（不存在则落到默认分组），
+/// 再把它从原分组摘掉、插到目标下标。分两步调（先 [`move_group`] 再排序）会落两次盘，
+/// 调用方也容易漏掉后一半。
+///
+/// - `uuid`: 实例 uuid
+/// - `new`: 目标分组 uuid；`None` 表示默认分组
+/// - `index`: 目标下标（超出范围则排到末尾）
+pub fn place_in_group(uuid: &Uuid, new: Option<Uuid>, index: usize) {
+    let target = new.unwrap_or(DEFAULT_GROUP_UUID);
+
+    let mut store = STORE.write().unwrap();
+    // 落组与定位必须连着做，且排序要针对**实际落到**的那个组：
+    // move_items 在目标组不存在时会把实例放进默认分组
+    let target = store.move_items(&[*uuid], target);
+    store.reposition(target, uuid, index);
+    drop(store);
+
+    save();
+}
+
+/// 调整分组本身的顺序（按给定的完整列表重排）
+///
+/// - `order`: 期望的分组 uuid 顺序；不在表里的忽略，表里没提到的组保持在后
+pub fn reorder_groups(order: &[Uuid]) {
+    let mut store = STORE.write().unwrap();
+    store.reorder_groups(order);
+    drop(store);
+
+    save();
+}
+
+/// 删除实例后的清理：把它从所有分组里摘掉
+///
+/// 不删空分组 —— 空分组是合法状态（用户可以手工建一个空组）
+///
+/// - `uuid`: 实例 uuid
+pub(crate) fn forget_instance(uuid: &Uuid) {
+    let mut store = STORE.write().unwrap();
+    let changed = store.forget(uuid);
+    drop(store);
+
+    if changed {
+        save();
+    }
+}
+
+/// 登记一个新实例到某分组（创建实例后调用）
+///
+/// **已经在表里的实例保持原分组** —— 加载流程会对每个实例都调一次，
+/// 无条件移动会把用户分好的组全部冲回默认分组。
+///
+/// - `uuid`: 实例 uuid
+/// - `group`: 目标分组 uuid；`None` 表示默认分组
+pub fn register_instance(uuid: Uuid, group: Option<Uuid>) {
+    {
+        let store = STORE.read().unwrap();
+        if store.contains(&uuid) {
+            return;
+        }
+    }
+    move_group(vec![uuid], group);
+}
+
+/// 剔除表里指向已不存在实例的悬空项（归属与组内次序一起清）
+///
+/// 实例可能在别处被删（外部改动目录、别的进程），那时不会有删除事件；
+/// 加载完成后调一次即可保持表与实际数据一致。
+///
+/// - `alive`: 当前实际存在的实例 uuid 集合
+pub fn prune(alive: &[Uuid]) {
+    let live: HashSet<Uuid> = alive.iter().copied().collect();
+
+    let mut store = STORE.write().unwrap();
+
+    let mut changed = false;
+    for items in store.groups.values_mut() {
+        let before = items.len();
+        items.retain(|u| live.contains(u));
+        changed |= items.len() != before;
+    }
+
+    let before = store.order.len();
+    store
+        .order
+        .retain(|key, _| Uuid::parse_str(key).is_ok_and(|uuid| live.contains(&uuid)));
+    changed |= store.order.len() != before;
+
+    drop(store);
+
+    if changed {
+        save();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Once;
+    use std::time::{Duration, Instant};
+
+    use super::*;
+
+    /// 文件四列（分组顺序 / 组名 / 归属 / 组内次序）都要能原样往返
+    ///
+    /// 这几种顺序都只由本表的字段表达，丢哪一列都会让对应的那一种变成随机 ——
+    /// 而这是纯序列化行为，不用碰全局状态就能测。
+    #[test]
+    fn store_round_trip_keeps_all_columns() {
+        let pack = Uuid::new_v4();
+        let test = Uuid::new_v4();
+        let a = Uuid::new_v4();
+        let b = Uuid::new_v4();
+        let store = GroupStore {
+            group_order: vec![pack.to_string(), test.to_string()],
+            names: HashMap::from([
+                (DEFAULT_GROUP_UUID.to_string(), " ".to_string()),
+                (pack.to_string(), "整合包".to_string()),
+                (test.to_string(), "测试".to_string()),
+            ]),
+            groups: HashMap::from([
+                (DEFAULT_GROUP_UUID.to_string(), vec![a, b]),
+                (pack.to_string(), Vec::new()),
+                (test.to_string(), Vec::new()),
+            ]),
+            order: HashMap::from([(a.to_string(), 0), (b.to_string(), 1)]),
+        };
+
+        let text = serde_json::to_string(&store).unwrap();
+        let back: GroupStore = serde_json::from_str(&text).unwrap();
+
+        assert_eq!(back.group_order, store.group_order, "分组顺序必须原样回来");
+        assert_eq!(back.names, store.names, "组名必须原样回来");
+        assert_eq!(back.groups, store.groups);
+        assert_eq!(back.order, store.order, "组内次序必须原样回来");
+    }
+
+    /// 归一化：补默认分组、清悬空项、把组内次序压实成 0..n-1
+    #[test]
+    fn normalize_repairs_inconsistent_file() {
+        let pack = Uuid::new_v4();
+        let test = Uuid::new_v4();
+        let a = Uuid::new_v4();
+        let b = Uuid::new_v4();
+        let dead = Uuid::new_v4();
+
+        let mut store = GroupStore {
+            // "幽灵组"没有名字（只在 groups 里）：视为损坏，连成员一起丢掉
+            // "整合包"在顺序表里重复一次；"测试"存在但漏在顺序外
+            group_order: vec![
+                "幽灵组".to_string(),
+                pack.to_string(),
+                pack.to_string(),
+            ],
+            names: HashMap::from([
+                (pack.to_string(), "整合包".to_string()),
+                (test.to_string(), "测试".to_string()),
+            ]),
+            // b 有次序、a 缺次序（应排到 b 后面）、dead 只挂在"幽灵组"上
+            order: HashMap::from([(b.to_string(), 0), (dead.to_string(), 7)]),
+            groups: HashMap::from([
+                (pack.to_string(), vec![a, b]),
+                (test.to_string(), Vec::new()),
+                ("幽灵组".to_string(), vec![dead]),
+            ]),
+        };
+
+        store.normalize();
+
+        let keys = store.keys();
+        assert_eq!(keys[0], DEFAULT_GROUP_UUID, "默认分组恒在首位");
+        assert_eq!(keys[1], pack);
+        assert_eq!(keys[2], test);
+        assert_eq!(store.groups[&pack.to_string()], vec![b, a], "组内数组应排成次序");
+        assert_eq!(store.order.get(&b.to_string()), Some(&0));
+        assert_eq!(store.order.get(&a.to_string()), Some(&1), "缺次序的排到最后");
+        assert!(!store.groups.contains_key("幽灵组"), "没名字的分组应清掉");
+        assert!(!store.order.contains_key(&dead.to_string()), "悬空次序应清掉");
+    }
+
+    /// 重排：默认分组恒在首位；提到的不存在的组忽略；未提到的组保持在后
+    #[test]
+    fn reorder_groups_keeps_default_first() {
+        let a = Uuid::new_v4();
+        let b = Uuid::new_v4();
+        let c = Uuid::new_v4();
+
+        let mut store = GroupStore::default();
+        for (uuid, name) in [(a, "a"), (b, "b"), (c, "c")] {
+            store.names.insert(uuid.to_string(), name.to_string());
+            store.groups.insert(uuid.to_string(), Vec::new());
+            store.group_order.push(uuid.to_string());
+        }
+
+        store.reorder_groups(&[c, Uuid::new_v4(), a]);
+
+        assert_eq!(store.keys(), vec![DEFAULT_GROUP_UUID, c, a, b]);
+    }
+
+    /// 跨组移动必须从原组摘掉，并在目标组末尾拿到次序
+    #[test]
+    fn move_items_moves_out_of_the_old_group() {
+        let uuid = Uuid::new_v4();
+
+        let mut store = GroupStore::default();
+        store.normalize();
+        // 先把它放进默认分组，再移到一个新组
+        store
+            .groups
+            .get_mut(&DEFAULT_GROUP_UUID.to_string())
+            .unwrap()
+            .push(uuid);
+        store.order.insert(uuid.to_string(), 0);
+        let other = store.new_group("b").expect("建组失败");
+
+        store.move_items(&[uuid], other);
+
+        assert!(
+            store.groups[&DEFAULT_GROUP_UUID.to_string()].is_empty(),
+            "原分组必须摘干净"
+        );
+        assert_eq!(store.groups[&other.to_string()], vec![uuid]);
+        assert_eq!(store.group_of(&uuid), other);
+        assert_eq!(store.position_of(&uuid), Some(0));
+    }
+
+    /// 有名字但少了成员数组的分组（手改过文件）也要能收人
+    ///
+    /// 只摘不放会让实例从界面上直接消失，所以落点必须能自己补出来。
+    #[test]
+    fn move_items_fills_missing_member_slot() {
+        let pack = Uuid::new_v4();
+        let uuid = Uuid::new_v4();
+
+        let mut store = GroupStore::default();
+        store.normalize();
+        // 造出"有名字、没有成员数组"的组，实例先待在默认分组
+        store.names.insert(pack.to_string(), "整合包".to_string());
+        store.group_order.push(pack.to_string());
+        store
+            .groups
+            .get_mut(&DEFAULT_GROUP_UUID.to_string())
+            .unwrap()
+            .push(uuid);
+
+        store.move_items(&[uuid], pack);
+
+        assert_eq!(store.members(pack), vec![uuid], "实例必须真的进了目标组");
+        assert!(store.groups[&DEFAULT_GROUP_UUID.to_string()].is_empty());
+        assert_eq!(store.position_of(&uuid), Some(0));
+    }
+
+    /// 落盘 → 读回：分组顺序与组内次序都必须真的写进文件、重启后还在
+    ///
+    /// 覆盖"拖完看着对了、重启就乱"的完整链路 —— 只断言内存里的顺序是抓不到这类问题的。
+    #[test]
+    fn orders_survive_save_and_reload() {
+        // 与 mml_core::init 相同的初始化链：异步保存线程必须先起来
+        static INIT: Once = Once::new();
+        INIT.call_once(|| {
+            let run = std::env::temp_dir().join(format!("mml-group-test-{}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&run);
+            std::fs::create_dir_all(&run).unwrap();
+
+            mml_base::init(&run);
+            mml_names::init(mml_base::get_base_dir()).unwrap();
+            mml_log::start(mml_base::get_base_dir()).unwrap();
+            mml_config::init(mml_base::get_base_dir()).unwrap();
+            mml_config::config_save::start();
+        });
+
+        let dir = std::env::temp_dir().join(format!("mml-group-store-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        init(dir.clone()).unwrap();
+        let first = add_group("甲组").expect("建组失败");
+        let second = add_group("乙组").expect("建组失败");
+        // 乙组拖到默认分组之后（非默认组的第一位）
+        reorder_groups(&[second, first]);
+
+        // 两个实例进乙组，再把 a 挪到 b 前面
+        let a = Uuid::new_v4();
+        let b = Uuid::new_v4();
+        move_group(vec![b, a], Some(second));
+        place_in_group(&a, Some(second), 0);
+
+        // 保存走异步线程，而且要等**内容**到位：文件可能先被前一次 save 建出来
+        let file = dir.join(names::GROUP_FILE);
+        let saved = || {
+            serialize_tools::json_from_file::<GroupStore>(&file).is_ok_and(|back| {
+                back.group_order == vec![second.to_string(), first.to_string()]
+                    && back.names.get(&second.to_string()) == Some(&"乙组".to_string())
+                    && back.order.get(&a.to_string()) == Some(&0)
+                    && back.order.get(&b.to_string()) == Some(&1)
+            })
+        };
+        let start = Instant::now();
+        while start.elapsed() < Duration::from_secs(10) && !saved() {
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        assert!(saved(), "分组表未在限时内落盘: {}", file.display());
+
+        // 模拟重启：重新 init，只从文件读回来
+        init(dir).unwrap();
+        let list = group_list();
+        assert_eq!(
+            list.iter().map(|g| g.uuid).collect::<Vec<_>>(),
+            vec![DEFAULT_GROUP_UUID, second, first]
+        );
+        assert_eq!(list[1].name, "乙组");
+        assert_eq!(group_items(&second), vec![a, b], "组内次序应保持 a、b");
+        assert_eq!(index_of(&a), Some(0));
+        assert_eq!(index_of(&b), Some(1));
+        assert_eq!(group_of(&a), second);
+    }
+}

@@ -790,7 +790,14 @@ async fn load_icon_image(uri: &[&str], res: UriSchemeResponder) {
 
     let url = URL_IMAGE.read().unwrap().get(name).cloned();
     let Some(url) = url else {
-        send_bad(res);
+        // 映射里没有 ≠ 图片没有：`sha → 远程网址` 只在内存里，重启后就空了，
+        // 但图片字节是按 sha256 落在磁盘缓存上的 —— 先按 name 查盘（收藏夹里存下来的
+        // 老地址就是这种情况），查不到才算真的没有
+        let file = icon_file_by_name(name);
+        match read_icon_bytes(&file) {
+            Some(icon) => send_icon(res, &icon),
+            None => send_bad(res),
+        }
         return;
     };
 
@@ -887,6 +894,42 @@ fn set_icon_image(info: &str, data: Vec<u8>, mime: &'static str) {
 /// 初始化图标磁盘缓存目录（启动时调用）
 pub fn init() {
     ICON_DIR.get_or_init(|| mml_downloader::get_cache_path().join(names::IMAGE_DIR));
+    // 登记表也读回来：没有它，收藏夹里存下来的 `.../icon/<sha>` 地址就找不回远程网址，
+    // 既回不了源、也做不了过期校验，只能一直吃磁盘缓存
+    load_url_image();
+}
+
+/// 登记表落盘文件（`<图标缓存目录>/urls.json`）
+const ICON_URLS_FILE: &str = "urls.json";
+
+fn url_image_file() -> Option<PathBuf> {
+    ICON_DIR.get().map(|dir| dir.join(ICON_URLS_FILE))
+}
+
+/// 把「sha256 → 远程网址」登记表写到磁盘
+fn save_url_image() {
+    let Some(file) = url_image_file() else {
+        return;
+    };
+    let Ok(json) = serde_json::to_vec(&*URL_IMAGE.read().unwrap()) else {
+        return;
+    };
+    let _ = path_helper::write_bytes(&file, &json);
+}
+
+/// 启动时读回登记表（首次运行没有这个文件，忽略即可）
+fn load_url_image() {
+    let Some(file) = url_image_file() else {
+        return;
+    };
+    let Ok(data) = path_helper::read_byte(&file) else {
+        return;
+    };
+    let Ok(map) = serde_json::from_slice::<HashMap<String, String>>(&data) else {
+        return;
+    };
+
+    URL_IMAGE.write().unwrap().extend(map);
 }
 
 /// 方块贴图（`mml-image/block/<方块ID>`）：
@@ -1002,10 +1045,15 @@ fn icon_name(url: &str) -> String {
 
 /// 远程图片的磁盘缓存位置（`<网址 sha256>.png`）
 fn icon_file(url: &str) -> PathBuf {
-    ICON_DIR
-        .get()
-        .unwrap()
-        .join(format!("{}.png", icon_name(url)))
+    icon_file_by_name(&icon_name(url))
+}
+
+/// 已知 sha256 名字时的磁盘缓存位置
+///
+/// 内存里的「sha → 远程网址」映射是重启就没的，而缓存文件就叫这个名字 ——
+/// 所以拿到 name 就能直接查盘，不必先知道远程网址。
+fn icon_file_by_name(name: &str) -> PathBuf {
+    ICON_DIR.get().unwrap().join(format!("{name}.png"))
 }
 
 /// 图标的 ETag 旁车文件（`<网址 sha256>.etag`）
@@ -1113,10 +1161,33 @@ pub fn image_base_url() -> &'static str {
 pub fn push_image_url(url: &str) -> String {
     let name = icon_name(url);
 
-    URL_IMAGE
-        .write()
-        .unwrap()
-        .insert(name.clone(), url.to_string());
+    // 登记表要落盘：只放内存里的话，重启后收藏夹存下来的 `.../icon/<sha>` 地址
+    // 就查不回远程网址了（既回不了源、也走不了 ETag 过期校验）。
+    // 同一个网址重复登记很常见（各窗口渲染），所以只在真的变了才写
+    let changed = {
+        let mut lock = URL_IMAGE.write().unwrap();
+        lock.insert(name.clone(), url.to_string()).as_deref() != Some(url)
+    };
+    if changed {
+        save_url_image();
+    }
 
     format!("{}/icon/{}", image_base_url(), name)
+}
+
+/// 把"本地图片协议地址"还原成登记时的远程网址
+///
+/// [`push_image_url`] 返回的 `.../icon/<sha256>` 只是个**进程内**的映射键。
+/// 凡是要落盘的地方都得先用这个换回原始网址 —— 存下来的话重启后就是个死地址
+/// （既回不了源，也走不了 ETag 过期校验）。
+pub fn remote_url(local: &str) -> Option<String> {
+    // 去掉可能的 `?v=…` 查询串，再取最后一段（就是 sha256）
+    let name = local
+        .split('?')
+        .next()?
+        .trim_end_matches('/')
+        .rsplit('/')
+        .next()?;
+
+    URL_IMAGE.read().unwrap().get(name).cloned()
 }

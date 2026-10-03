@@ -1,5 +1,6 @@
 <script setup lang="ts">
 // 统一弹窗：标题 + 内容插槽 + 关闭
+import GlyphIcon from "./GlyphIcon.vue";
 const props = withDefaults(
   defineProps<{
     title?: string;
@@ -42,7 +43,9 @@ const emit = defineEmits<{ (e: "close"): void }>();
       >
         <div v-if="title" class="modal-head">
           <h3>{{ title }}</h3>
-          <button v-if="closable" class="modal-x" @click="emit('close')">✕</button>
+          <button v-if="closable" class="modal-x" @click="emit('close')">
+            <GlyphIcon name="close" :size="14" :weight="2.2" />
+          </button>
         </div>
         <div class="modal-body">
           <slot />

@@ -221,6 +221,9 @@ pub async fn add_modpack_install(
     file_id: String,
     group: Option<String>,
 ) -> Result<(), String> {
+    // 前端传的是分组 uuid；空 / 非法 = 默认分组
+    let group = crate::windows::parse_group_id(group);
+
     let source_type = ModPackType::from_string(&source);
     if !matches!(source_type, ModPackType::CurseForge | ModPackType::Modrinth) {
         return Err(String::from("err.sourceType"));

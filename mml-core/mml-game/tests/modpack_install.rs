@@ -199,10 +199,12 @@ async fn install_curseforge_pack_end_to_end() {
 
     let recorder = StateRecorder::default();
     let token = CancellationToken::new();
+    // 目标分组：安装流程按 uuid 收，先建好组
+    let group = mml_game::add_group("e2e组").expect("建组失败");
     let uuid = add_game::install_archive_from_file(
         &zip,
         Some("cf-e2e-实例".to_string()),
-        Some("e2e组".to_string()),
+        Some(group),
         None,
         Some(Arc::new(TestGui)),
         Some(Arc::new(recorder.clone())),
@@ -222,8 +224,10 @@ async fn install_curseforge_pack_end_to_end() {
     assert!(matches!(game.loader, LoaderType::Forge));
     assert_eq!(game.loader_version.as_deref(), Some("41.0.100"));
     assert!(matches!(game.modpack_type, ModPackType::CurseForge));
-    assert_eq!(game.group.as_deref(), Some("e2e组"));
     drop(game);
+
+    // 分组不在实例配置里：归属得去内核分组表查（安装时选的分组不能丢）
+    assert_eq!(mml_game::get_instance_group(&uuid), Some(group));
 
     // overrides 解压到游戏目录
     let game_path = mml_game::get_instance(&uuid)

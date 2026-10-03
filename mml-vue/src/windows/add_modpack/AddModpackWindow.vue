@@ -9,6 +9,7 @@ import { api } from "../../lib/api";
 import { t, tErr } from "../../lib/i18n";
 import { showToast } from "../../lib/toast";
 import { useModpackStatus } from "../../lib/modpackTasks";
+import type { GroupDto } from "../../lib/bindings";
 import ModpackMode from "./ModpackMode.vue";
 
 defineEmits<{ (e: "close"): void }>();
@@ -18,9 +19,9 @@ const detailOpen = ref(false);
 /** 详情状态在子组件里，标题栏的返回键只能通过它暴露的 closeDetail 收起 */
 const modeRef = ref<InstanceType<typeof ModpackMode> | null>(null);
 
-/** 分组（空 = 默认分组），带已有分组作为候选 */
+/** 分组（空 = 默认分组）：输入框里是组名，提交时由 api.resolveGroupId 转成 uuid */
 const group = ref("");
-const groups = ref<string[]>([]);
+const groups = ref<GroupDto[]>([]);
 
 /** 安装任务状态（本窗口是"负责显示"的窗口，终态 toast 由这里弹） */
 const { status: modpackStatus, init: initModpackStatus } = useModpackStatus(true);
@@ -32,9 +33,10 @@ async function install(p: {
   fileId: string;
   fileName: string;
 }) {
-  const name = group.value.trim() === "" ? null : group.value.trim();
   try {
-    await api.installModpack(p.source, p.projectId, p.fileId, name);
+    // 分组按 uuid 传：手输的组名可能已有、也可能要现建一个
+    const groupId = await api.resolveGroupId(group.value);
+    await api.installModpack(p.source, p.projectId, p.fileId, groupId);
   } catch (e) {
     showToast(t("add.createFail", { msg: tErr(e) }));
   }
@@ -45,7 +47,8 @@ onMounted(async () => {
   onUnmounted(unlisten);
 
   try {
-    groups.value = (await api.getGroups()).filter((g) => g.trim());
+    // 默认分组（空白名字）不进下拉：输入框留空即默认分组
+    groups.value = (await api.getGroups()).filter((g) => g.name.trim());
   } catch {
     groups.value = [];
   }

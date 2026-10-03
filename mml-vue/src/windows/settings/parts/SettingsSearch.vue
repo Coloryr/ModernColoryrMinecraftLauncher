@@ -6,6 +6,7 @@
 import { computed, onDeactivated, ref, watch } from "vue";
 import { t } from "../../../lib/i18n";
 import HighlightText from "../../../components/ui/HighlightText.vue";
+import GlyphIcon from "../../../components/ui/GlyphIcon.vue";
 import { searchSettings, type SettingsHit } from "../search";
 
 const emit = defineEmits<{ (e: "select", hit: SettingsHit): void }>();
@@ -90,7 +91,9 @@ function onKey(e: KeyboardEvent) {
           <HighlightText :text="h.label" :query="query" />
         </span>
         <span class="set-search-path">
-          {{ h.tabLabel }} › <HighlightText :text="h.groupLabel" :query="query" />
+          {{ h.tabLabel }}
+          <GlyphIcon name="chevron-right" :size="10" :weight="2.6" />
+          <HighlightText :text="h.groupLabel" :query="query" />
         </span>
       </button>
       <div v-if="!hits.length" class="empty-tip">{{ t("winSettings.searchNone") }}</div>

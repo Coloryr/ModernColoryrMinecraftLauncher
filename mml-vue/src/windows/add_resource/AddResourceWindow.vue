@@ -4,7 +4,7 @@
 // 从主界面「添加资源」按钮打开，目标实例取 gui_config.json 里主窗口
 // 当前选中的实例（与资源管理窗口一致）。数据包下载前必须先选存档。
 // 下载走全局下载器（命令立即返回，进度在下载窗口里看）。
-import { computed, onDeactivated, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, nextTick, onActivated, onDeactivated, onMounted, onUnmounted, ref, watch } from "vue";
 import WindowFrame from "../../components/ui/WindowFrame.vue";
 import BaseModal from "../../components/ui/BaseModal.vue";
 import SegmentedTabs from "../../components/ui/SegmentedTabs.vue";
@@ -15,6 +15,7 @@ import { t, tErr } from "../../lib/i18n";
 import { showToast } from "../../lib/toast";
 import { loadGuiConfig } from "../../lib/guiConfig";
 import { useResourceStatus } from "../../lib/resourceTasks";
+import { projectParamToItem, targetProject, type WindowProjectParam } from "../windowManager";
 import type { FileListItemDto, ProjectItemDto, ResourceSaveDto, ResourceTaskDto } from "../../lib/bindings";
 
 defineEmits<{ (e: "close"): void }>();
@@ -131,8 +132,16 @@ async function loadSources() {
   source.value = sourceOptions.value[0]?.value ?? sources.value[0].value;
 }
 
+/**
+ * 重载代次：换源 / 换类型会连着跑几发 loadSource（收藏跳转会同时改源与类型），
+ * 旧的一发**后回来**会把新的排序表覆盖掉 —— 后续搜索就会带着上一个源的排序名
+ * 发出去，后端报 err.sortTypeNotFound。每发记下编号，回来时不是最新就丢掉。
+ */
+let sourceSeq = 0;
+
 /** 切换类型 / 下载源：清空搜索词与结果，重新拉排序 / 版本 / 分类，然后搜第一页 */
 async function loadSource() {
+  const mine = ++sourceSeq;
   items.value = [];
   total.value = 0;
   page.value = 0;
@@ -154,6 +163,9 @@ async function loadSource() {
       api.getResourceCategories(source.value, type.value),
     ]);
 
+    // 已经换源 / 换类型了：这一发的排序 / 版本 / 分类都是上一个的，丢
+    if (mine !== sourceSeq) return;
+
     sorts.value = sortList;
     sort.value = sortList[0] ?? "";
     versions.value = versionList.filter((item) => item !== "");
@@ -161,11 +173,13 @@ async function loadSource() {
       .map(([value, label]) => ({ value, label }))
       .sort((a, b) => a.label.localeCompare(b.label));
   } catch (e) {
+    if (mine !== sourceSeq) return;
     error.value = tErr(e);
     searching.value = false;
     return;
   }
 
+  if (mine !== sourceSeq) return;
   searching.value = false;
 
   await search();
@@ -178,6 +192,15 @@ async function search() {
   if (!instanceUuid.value) {
     error.value = t("addResource.noInstance");
     return;
+  }
+  // 排序列表还没拉回来时别发请求：换下载源 / 换类型时它是**异步**拉回来的
+  // （loadSource 里 await 三个请求），这中间发出去必然带不上合法排序
+  // —— 空串后端也不认（err.sortTypeNotFound）。那次 loadSource 拉完会自己再搜一次。
+  if (sorts.value.length === 0) {
+    return;
+  }
+  if (!sorts.value.includes(sort.value)) {
+    sort.value = sorts.value[0];
   }
   const mine = ++searchSeq;
   searching.value = true;
@@ -199,6 +222,21 @@ async function search() {
     error.value = "";
   } catch (e) {
     if (mine !== searchSeq) return;
+    // 后端不认排序 → 打出实际值（数组拼成字符串，控制台折叠也能一眼看到）
+    if (String(e).includes("err.sortTypeNotFound")) {
+      // [TEMP] 排查「未知的排序方式」
+      console.warn(
+        `[TEMP] sort 被拒 source=${source.value} type=${type.value} sort=${sort.value} 可用=[${sorts.value.join(", ")}] page=${page.value}`,
+      );
+      // 只在**真的换成了别的值**时重试一次，否则同一个值会来回刷成死循环
+      const fallback = sorts.value[0];
+      if (fallback && fallback !== sort.value) {
+        sort.value = fallback;
+        searching.value = false;
+        await search();
+        return;
+      }
+    }
     items.value = [];
     total.value = 0;
     error.value = tErr(e);
@@ -443,7 +481,66 @@ onMounted(async () => {
   }
 
   await loadSources();
+  consumeTargetProject();
 });
+
+/**
+ * 收藏窗口点「下载」跳进来的项目
+ *
+ * 本窗口是"按实例取数"的（没实例拉不出版本列表），所以参数先存着：
+ * 实例已选就直接打开版本列表，没选就等用户选好实例再打开（见下面的 watch）。
+ *
+ * 进去之前**先把上一次留下的视图状态清掉**：这页在单窗口模式下是 KeepAlive 缓存的，
+ * 不清的话会带着上个项目的版本弹窗 / 文件列表 / 搜索词跳转（看着就像"跳错了/没跳"）。
+ * 清完还要等一轮 —— 改 type / source 会触发各自的 watch 去刷新列表，
+ * 紧接着就开弹窗的话可能被那批刷新顺手盖掉。
+ */
+const pendingProject = ref<WindowProjectParam | null>(null);
+
+async function consumeTargetProject() {
+  const p = targetProject();
+  if (!p || p.fileType === "modpack") {
+    return;
+  }
+  closeVersions();
+  filter.value = "";
+  // 换源会让排序表作废：**同步**清掉，否则中间那几发搜索会带着上一个源的排序名
+  sorts.value = [];
+  sort.value = "";
+  type.value = p.fileType;
+  source.value = p.source;
+
+  await nextTick();
+
+  // 精简条目只够定位项目（下载次数等是空的）→ 现取一次真的，取不到就退回精简条目
+  let item = projectParamToItem(p);
+  try {
+    const real = await api.collectProjectItem(p.source, p.pid, p.fileType);
+    if (real) {
+      item = real;
+    }
+  } catch {
+    // 用精简条目兜底
+  }
+
+  if (instanceUuid.value) {
+    openVersions(item);
+  } else {
+    pendingProject.value = p;
+  }
+}
+
+watch(instanceUuid, async () => {
+  if (instanceUuid.value && pendingProject.value) {
+    const p = pendingProject.value;
+    pendingProject.value = null;
+    await nextTick();
+    openVersions(projectParamToItem(p));
+  }
+});
+
+// 单窗口模式下本页被 KeepAlive 缓存：切回来不会重新挂载，得在激活时再取一次参数
+onActivated(consumeTargetProject);
 </script>
 
 <template>

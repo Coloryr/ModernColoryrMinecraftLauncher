@@ -162,7 +162,13 @@ pub struct InstanceChangeEvent {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InstancePatch {
-    /// 分组名
+    /// 分组 uuid（`null` = 默认分组）
+    ///
+    /// `Option<Option<String>>`：外层区分"改不改"，内层是"改成什么"。
+    /// **必须带 `double_option`** —— 否则前端发 `{ group: null }`（移到默认分组）
+    /// 会被 serde 解成外层 `None`，被当成"这个字段不修改"，切换分组静默失效。
+    /// （删分组时前端正是逐个把实例的 group 置 null，缺了它整段等于没执行。）
+    #[serde(default, deserialize_with = "double_option")]
     pub group: Option<Option<String>>,
     /// 实例名
     pub name: Option<String>,
