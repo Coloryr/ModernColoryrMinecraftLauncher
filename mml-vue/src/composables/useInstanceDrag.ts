@@ -136,6 +136,7 @@ export function useInstanceDrag(deps: DragDeps) {
       const ins = dragInsert.value;
       if (!ins) return;
       const target = ins.group === t("group.default") ? null : ins.group;
+      // 落点由后端记进各实例的 guisetting.json（Order），重拉列表即拿到新次序
       await api.moveInstance(active.instance.uuid, target, ins.index);
       await deps.loadInstances();
       // 展开目标分组

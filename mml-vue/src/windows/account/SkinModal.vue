@@ -11,6 +11,7 @@ import { showToast } from "../../lib/toast";
 import { currentAccount } from "../../lib/accountStore";
 import { getImageBaseUrl } from "../../lib/api";
 import { commands, type TexturesDto, type TextureItemDto } from "../../lib/bindings";
+import type { AccountStoreDto } from "../../lib/bindings";
 import * as skinview3d from "skinview3d";
 
 /** 展示模式 */
@@ -87,20 +88,26 @@ const listLoading = ref(false);
 /** 待上传的本地皮肤文件路径（空 = 无），选中后选型号直传（须在下方 immediate watch 之前声明） */
 const uploadFile = ref("");
 
+// 目标账户：由入口传进来（账户条目上的「查看皮肤」按钮点的是哪一条就预览哪一条）。
+// 不传时回退到全局当前账户，兼容旧的「只看当前账户」用法
+const props = defineProps<{ account?: AccountStoreDto | null }>();
+
+const target = computed(() => props.account ?? currentAccount.value);
+
 /** 当前账户的皮肤 / 披风纹理列表（离线 / 查询失败为 null，走占位图） */
 const textures = ref<TexturesDto | null>(null);
 
 /** 是否正版账户（第三方规范只有单皮肤单披风，无装备操作） */
-const isOauth = computed(() => currentAccount.value?.authType === "microsoft");
+const isOauth = computed(() => target.value?.authType === "microsoft");
 
 /** 是否第三方在线账户（皮肤站 / 统一通行证 / 外置登录，皮肤管理在对应网页完成） */
 const isThirdParty = computed(
-  () => !!currentAccount.value && !isOauth.value && currentAccount.value.authType !== "offline",
+  () => !!target.value && !isOauth.value && target.value.authType !== "offline",
 );
 
 /** 用系统浏览器打开账户对应皮肤站的网页 */
 async function openSkinSite() {
-  const acc = currentAccount.value;
+  const acc = target.value;
   if (!acc) return;
   try {
     await commands.account.openSkinSite(acc.authType, acc.uuid);
@@ -153,7 +160,7 @@ watch(selectedSkin, (s) => {
 // 旧列表继续显示，避免预览区整个塌掉重载）；换账户才在失败时清空
 let texturesUuid = "";
 watch(
-  currentAccount,
+  target,
   async (acc) => {
     if (!acc) {
       textures.value = null;
@@ -237,7 +244,7 @@ async function pickSkinFile() {
 
 /** 上传选中的皮肤文件并装备（variant = 经典 / 纤细） */
 async function doUpload(variant: "classic" | "slim") {
-  const acc = currentAccount.value;
+  const acc = target.value;
   if (!acc || !uploadFile.value || uploading.value) return;
   uploading.value = true;
   try {
@@ -253,7 +260,7 @@ async function doUpload(variant: "classic" | "slim") {
 }
 
 async function equip(kind: "skin" | "cape", item: TextureItemDto) {
-  const acc = currentAccount.value;
+  const acc = target.value;
   if (!acc || equipBusy.value) return;
   equipBusy.value = item.sha1;
   try {
@@ -336,8 +343,8 @@ function setupViewer() {
     loading.value = false;
   });
 
-  if (showNametag.value && currentAccount.value) {
-    viewer.nameTag = currentAccount.value.userName;
+  if (showNametag.value && target.value) {
+    viewer.nameTag = target.value.userName;
   }
 }
 
@@ -366,9 +373,9 @@ watch([caperawUrl, showCape], () => {
 });
 
 // 名牌开关：跟随账户名
-watch([showNametag, currentAccount], () => {
+watch([showNametag, target], () => {
   if (!viewer || mode.value !== "3d") return;
-  viewer.nameTag = showNametag.value && currentAccount.value ? currentAccount.value.userName : null;
+  viewer.nameTag = showNametag.value && target.value ? target.value.userName : null;
 });
 
 // 自动旋转开关：直接开关观察器的自转，不重建
@@ -450,7 +457,7 @@ onBeforeUnmount(destroyViewer);
 </script>
 
 <template>
-  <BaseModal :title="t('account.viewSkin')" :width="780" below-titlebar @close="emit('close')">
+  <BaseModal :title="t('account.viewSkin')" :width="780" fixed-height="520px" below-titlebar @close="emit('close')">
     <div class="skin-layout">
       <!-- 预览区：2D / 3D 切换在展示区上方 -->
       <div class="preview">
@@ -721,8 +728,8 @@ onBeforeUnmount(destroyViewer);
   color: var(--text-dim);
 }
 
-/* 滚动只发生在右侧列表面板内部：弹窗体自身不出滚动条，
-   预览区不会跟着滚走；高度与左列（切换 + 380px 舞台 + 提示）对齐 */
+/* 滚动只发生在右侧列表面板内部：弹窗体高度已被 fixed-height 锁死，
+   不会再有第二条滚动条；预览区不会跟着滚走 */
 .skin-side {
   width: 260px;
   max-height: 430px;

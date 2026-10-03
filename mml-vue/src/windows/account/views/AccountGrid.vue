@@ -9,6 +9,7 @@ import {
   accountSkinUrl,
   imageFailed,
   imageLoading,
+  hasNoSkin,
   markImageFailed,
   markImageLoaded,
 } from "../../../lib/accountImages";
@@ -26,8 +27,10 @@ const props = defineProps<{
 const isSkin3D = computed(() => skinDisplay.value === "Skin3D" || skinDisplay.value === "Skin3DD");
 
 const emit = defineEmits<{
+  (e: "add"): void;
   (e: "switch", acc: AccountStoreDto): void;
   (e: "refresh", acc: AccountStoreDto): void;
+  (e: "viewSkin", acc: AccountStoreDto): void;
   (e: "refreshSkin", acc: AccountStoreDto): void;
   (e: "relogin", acc: AccountStoreDto): void;
   (e: "edit", acc: AccountStoreDto): void;
@@ -82,6 +85,18 @@ function hidePreview() {
 
 <template>
   <div class="acc-grid">
+    <!-- 添加账户：作为网格的第一项，与账户卡片同一套尺寸和观感 -->
+    <button class="acc-card add-card" v-tip="t('account.addTitle')" :aria-label="t('account.addTitle')"
+      @click="emit('add')">
+      <span class="add-icon">
+        <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round">
+          <path d="M12 5v14M5 12h14" />
+        </svg>
+      </span>
+      <span class="add-text">{{ t("account.add") }}</span>
+    </button>
+
     <div
       v-for="acc in accounts"
       :key="acc.uuid"
@@ -166,7 +181,9 @@ function hidePreview() {
           :can-refresh="acc.canRefresh"
           :can-relogin="acc.canRelogin"
           :can-edit="acc.canEdit"
+          :has-skin="!hasNoSkin(acc)"
           @refresh="emit('refresh', acc)"
+          @view-skin="emit('viewSkin', acc)"
           @refresh-skin="emit('refreshSkin', acc)"
           @relogin="emit('relogin', acc)"
           @edit="emit('edit', acc)"
@@ -369,6 +386,41 @@ function hidePreview() {
 .acc-card.current {
   border-color: var(--accent);
   box-shadow: 0 0 0 1px var(--accent);
+}
+
+/* 添加账户卡片：虚线边框、内容居中，与账户卡片同尺寸同观感，一眼看去是"再来一个"。
+   底色取 --bg-side（比账户卡片的 --bg-card 暗一档）：全透明会"陷进去"显得不能点，
+   而 --accent-soft 又太抢眼（那是给选中态用的浓度），中性暗一档正好。
+   悬停时虚线转实线：虚线是"这里还空着"的语义，鼠标上来就说明已经选中它了，
+   留着虚线会显得没响应 */
+.add-card {
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  border-style: dashed;
+  border-color: var(--accent-border);
+  background: var(--bg-side);
+  color: var(--accent);
+  cursor: pointer;
+  font-family: inherit;
+  transition: border-color 0.15s, color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+
+.add-card:hover {
+  border-style: solid;
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.add-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 1px dashed currentColor;
 }
 
 /* 悬停图片时的大图（Teleport 到 body，跟随鼠标），按图片类型取不同尺寸 */

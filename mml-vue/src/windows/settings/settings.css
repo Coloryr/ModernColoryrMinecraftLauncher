@@ -239,9 +239,16 @@
   margin-top: 10px;
 }
 
-/* 设置项搜索命中后跳到的分组：短暂高亮，让用户看清落点 */
+/* 设置项搜索命中后跳到的分组：短暂高亮，让用户看清落点
+ *
+ * 必须自己补上下内边距：分组本身没有 padding，组内所有间距都靠子元素的
+ * margin-top（见本节开头那条约定），而 **margin 不被背景色覆盖** ——
+ * 高亮块会紧贴着首尾两行内容截止，上下看着像被切掉一块（"蓝色底没有往下多几px"）。
+ * 负外边距把补进去的空间还回去，闪烁前后布局不跳动。 */
 .settings-layout .setting-group.flash {
   border-radius: 12px;
+  padding: 10px 12px;
+  margin: -10px -12px;
   animation: set-group-flash 1.1s ease-out;
 }
 

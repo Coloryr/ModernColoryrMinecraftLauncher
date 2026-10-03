@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 账户操作：刷新 Token / 重新登录 / 编辑 / 删除（单色 SVG 图标按钮）
+// 账户操作：查看皮肤 / 刷新皮肤 / 刷新 Token / 重新登录 / 编辑 / 删除（单色 SVG 图标按钮）
 // 按钮显隐由后端给的能力标志决定（哪些账户类型有什么操作是业务规则，不由前端硬编码）
 import { t } from "../lib/i18n";
 
@@ -10,10 +10,16 @@ defineProps<{
   canRelogin?: boolean;
   /** 是否可编辑（AccountStoreDto.canEdit） */
   canEdit?: boolean;
+  /** 该账户是否有皮肤：false 时隐藏「查看皮肤 / 刷新皮肤」两个按钮
+   *  （没皮肤时两个按钮点了也没内容，留着只是噪音） */
+  hasSkin?: boolean;
 }>();
 
 defineEmits<{
   (e: "refresh"): void;
+  /** 打开皮肤查看弹窗 */
+  (e: "viewSkin"): void;
+  /** 重新拉取皮肤渲染图 */
   (e: "refreshSkin"): void;
   (e: "relogin"): void;
   (e: "edit"): void;
@@ -28,15 +34,25 @@ defineEmits<{
         <path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z" />
       </svg>
     </button>
-    <button class="icon-btn" v-tip="t('account.refreshSkin')" @click="$emit('refreshSkin')">
+    <!-- 查看皮肤：眼睛图标（"看一眼"的通用语义，与"刷新"的循环箭头不会混）。
+         没有皮肤时整个按钮不出现 -->
+    <button v-if="hasSkin" class="icon-btn" v-tip="t('account.viewSkin')" @click="$emit('viewSkin')">
       <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="8" r="4" />
-        <path d="M4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5" />
+        <path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z" />
+        <circle cx="12" cy="12" r="2.6" />
+      </svg>
+    </button>
+    <!-- 刷新皮肤：循环箭头 + 中间一个小人（与「刷新 Token」的纯循环箭头区分开） -->
+    <button v-if="hasSkin" class="icon-btn" v-tip="t('account.refreshSkin')" @click="$emit('refreshSkin')">
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M20.5 12a8.5 8.5 0 1 1-2.5-6M20.5 4v5h-5" />
+        <circle cx="12" cy="11" r="1.9" />
+        <path d="M8.6 16.4c.5-1.7 1.9-2.6 3.4-2.6s2.9.9 3.4 2.6" />
       </svg>
     </button>
     <button v-if="canRefresh" class="icon-btn" v-tip="t('account.refresh')" @click="$emit('refresh')">
       <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6" />
+        <path d="M20.5 12a8.5 8.5 0 1 1-2.5-6M20.5 4v5h-5" />
       </svg>
     </button>
     <button v-if="canRelogin" class="icon-btn" v-tip="t('account.relogin')" @click="$emit('relogin')">

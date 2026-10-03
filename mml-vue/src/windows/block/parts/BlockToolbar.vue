@@ -97,10 +97,16 @@ function onSize(v: string) {
   min-width: 0;
 }
 
-/* 图标按钮与同行的搜索框 / 尺寸档统一高度（BaseButton 的 sm 是 28px，这里用 :deep 穿透进去） */
+/* 图标按钮与同行的搜索框 / 尺寸档统一高度（BaseButton 的 sm 是 28px，这里用 :deep 穿透进去）。
+   36px 是三个用 head-right 的窗口（账户 / 方块 / 设置）共同的约定，改这里记得同步另外两处 */
 .block-top :deep(.ui-btn) {
-  height: 35px;
+  height: 36px;
   padding: 0 10px;
+}
+
+/* 尺寸档（SegmentedTabs）默认 35px，跟着这一排一起到 36 */
+.block-top :deep(.seg-btn) {
+  height: 28px;
 }
 
 .search-wrap {
@@ -113,12 +119,12 @@ function onSize(v: string) {
   display: flex;
 }
 
-/* 压到与工具条按钮同高（BaseButton md / SegmentedTabs 都是 35px）：
+/* 压到与工具条按钮同高（这一排统一 36px）：
    .field-input 默认 min-height: var(--field-h) = 42px，这里显式覆盖 */
 .block-top .block-search {
   flex: 1;
   min-width: 0;
-  height: 35px;
+  height: 36px;
   min-height: 0;
   padding: 0 30px 0 12px;
   font-size: 13px;

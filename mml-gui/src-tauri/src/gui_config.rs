@@ -244,7 +244,7 @@ pub struct ClientConfig {
 impl Default for ClientConfig {
     fn default() -> Self {
         Self {
-            motd_card: true,
+            motd_card: false,
             motd_interval: 15,
             login_lock_on: false,
             login_lock: Vec::new(),

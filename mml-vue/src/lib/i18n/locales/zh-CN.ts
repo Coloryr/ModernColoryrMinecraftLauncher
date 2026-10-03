@@ -196,7 +196,7 @@ export default {
   "server.players": "在线 {now} / {max} 人",
   "server.version": "版本 {v}",
   "server.ping": "延迟 {ms}ms",
-  "server.address": "mml.example.com:25565",
+  "server.ipPlaceholder": "mml.example.com:25565",
   "server.refresh": "刷新服务器信息",
   "server.refreshing": "刷新中…",
   "server.offline": "服务器无法连接",
@@ -359,6 +359,7 @@ export default {
   "args.classPath": "附加 classpath",
   "args.env": "附加环境变量",
   "args.addLine": "添加",
+  "args.removeLine": "删除该行",
   "args.envKey": "键",
   "args.envValue": "值",
 

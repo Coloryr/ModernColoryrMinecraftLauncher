@@ -203,7 +203,11 @@ fn read_as_png<P: AsRef<Path>>(file: P) -> Option<Vec<u8>> {
     decode_as_png(&fs::read(file).ok()?)
 }
 
-/// 实例图标（`instance/<uuid>`）：内存缓存命中直接回，未命中读实例图标文件
+/// 实例图标（`instance/<uuid>`）：内存缓存命中直接回，未命中按图标来源取图
+///
+/// 图标与「方块 ID」二选一（见 `InstanceSettingObj::get_icon_file`）：
+/// 设了方块 ID 就按 ID 现渲染（方块贴图未渲染完时拿不到图，返回占位失败），
+/// 否则读 `icon.png`（上传的自定义图片、以及老实例都走这条）。
 fn load_instance_image(uri: &[&str], res: UriSchemeResponder) {
     if uri.len() != 2 {
         send_bad(res);
@@ -229,7 +233,28 @@ fn load_instance_image(uri: &[&str], res: UriSchemeResponder) {
 
     let instance = instance.unwrap();
 
-    let icon = instance.read().unwrap().get_icon_file();
+    // 分支一：设了方块 ID → 用方块渲染结果
+    let block_id = {
+        let inst = instance.read().unwrap().clone();
+        crate::gui_setting::block_icon_id(&inst)
+    };
+    if let Some(id) = block_id {
+        let file = mml_tex_draw::get_block_path(&id).or_else(|| mml_tex_draw::get_item_path(&id));
+        let Some(file) = file else {
+            // 方块贴图还没渲染 / 该 id 不存在：此时没有可用的图标
+            send_bad(res);
+            return;
+        };
+        let Some(image) = read_as_png(file) else {
+            send_bad(res);
+            return;
+        };
+        cache_and_send(uuid, image, res);
+        return;
+    }
+
+    // 分支二：没有方块 ID → 读图标文件（Icon 已清空的实例按默认 icon.png 找）
+    let icon = instance.read().unwrap().get_icon_file_or_default();
     if !icon.exists() || !icon.is_file() {
         send_bad(res);
         return;
@@ -240,7 +265,11 @@ fn load_instance_image(uri: &[&str], res: UriSchemeResponder) {
         return;
     }
 
-    let image = image.unwrap();
+    cache_and_send(uuid, image.unwrap(), res);
+}
+
+/// 把实例图标写进内存缓存并回给请求方
+fn cache_and_send(uuid: Uuid, image: Vec<u8>, res: UriSchemeResponder) {
     INSTANCE_IMAGE
         .write()
         .unwrap()

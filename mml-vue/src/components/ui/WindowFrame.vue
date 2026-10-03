@@ -1,13 +1,14 @@
 <script setup lang="ts">
 // 子窗口通用框架：标题（兼作自绘标题栏）+ 内容区
 // 头部整条可拖动，两端按平台样式放窗口按钮；「返回主页面」按钮只在单窗口模式下显示。
-import { computed } from "vue";
+import { computed, ref } from "vue";
 import { t } from "../../lib/i18n";
 import { multiWindow } from "../../windows/windowManager";
 import WindowControls from "./WindowControls.vue";
 import ModpackTitleIndicator from "../ModpackTitleIndicator.vue";
 import DownloadTitleIndicator from "../DownloadTitleIndicator.vue";
 import { onTitleBarPointerDown, titleBarStyle, useWindowTitle } from "../../lib/titlebar";
+import { useWindowDecoration } from "../../lib/useWindowDecoration";
 
 const props = defineProps<{
   title: string;
@@ -37,13 +38,18 @@ const showBack = computed(() => !multiWindow.value);
 // 单窗口模式下本页被 KeepAlive 缓存，切走再回来不重新挂载，只设一次的话
 // 从别的页面切回来时，任务栏上还挂着上一个页面的标题
 useWindowTitle(() => props.title);
+
+// 窗口装饰：激活插件装饰（原生 frame → 自绘）+ 把贴靠热区交给插件。
+// 每个功能窗口都要做，放这里统一处理（见 lib/useWindowDecoration.ts）
+const rootEl = ref<HTMLElement | null>(null);
+const { decorated } = useWindowDecoration(rootEl);
 </script>
 
 <template>
-  <div class="window-frame">
+  <div class="window-frame" ref="rootEl">
     <header class="frame-head" :class="titleBarStyle" @pointerdown="onTitleBarPointerDown">
-      <!-- macos 样式：红黄绿在左端 -->
-      <WindowControls v-if="titleBarStyle === 'macos'" :style="titleBarStyle" />
+      <!-- macos 样式：红黄绿在左端。插件接管时由它画原生圆点，这里不重复渲染 -->
+      <WindowControls v-if="titleBarStyle === 'macos' && !decorated" :style="titleBarStyle" />
 
       <!-- 窗口内子页面的返回键（如整合包详情）：与下面的单窗口返回按钮共用一套外观。
            按钮只画箭头，文案改由悬停提示给出（见 .back-btn 的说明） -->
@@ -82,7 +88,9 @@ useWindowTitle(() => props.title);
       <ModpackTitleIndicator v-if="!hideModpackIndicator" />
       <DownloadTitleIndicator v-if="!hideDownloadIndicator" />
 
-      <!-- windows 样式：最小化 / 最大化 / 关闭在右端 -->
+      <!-- windows 样式：最小化 / 最大化 / 关闭在右端。
+           插件不再画自己的按钮（vendor patch），热区按这三颗的位置摆，
+           所以这里照常渲染，悬停反馈由插件转发的事件驱动 -->
       <WindowControls v-if="titleBarStyle === 'windows'" :style="titleBarStyle" />
     </header>
     <div class="frame-body" :class="{ fill: props.bodyFill }">

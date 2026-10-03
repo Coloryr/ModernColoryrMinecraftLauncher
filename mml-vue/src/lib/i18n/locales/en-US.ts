@@ -196,7 +196,7 @@ export default {
   "server.players": "{now} / {max} online",
   "server.version": "Version {v}",
   "server.ping": "Ping {ms}ms",
-  "server.address": "mml.example.com:25565",
+  "server.ipPlaceholder": "mml.example.com:25565",
   "server.refresh": "Refresh server info",
   "server.refreshing": "Refreshing…",
   "server.offline": "Server unreachable",
@@ -359,6 +359,7 @@ export default {
   "args.classPath": "Extra classpath",
   "args.env": "Extra env vars",
   "args.addLine": "Add",
+  "args.removeLine": "Remove this line",
   "args.envKey": "Key",
   "args.envValue": "Value",
 

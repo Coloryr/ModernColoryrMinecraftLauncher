@@ -7,6 +7,7 @@ import { invoke } from "@tauri-apps/api/core";
 /** 命令，按来源 .rs 模块分组（参数顺序与 Rust 一致，Tauri 注入的 AppHandle/WebviewWindow 已剔除）*/
 export const commands = {
   windows: {
+    activateDecoration: () => invoke<string>("window_activate_decoration"),
     closeWindow: (kind: string) => invoke<void>("window_close_window", { kind }),
     dropModel: (kind: string) => invoke<void>("window_drop_model", { kind }),
     ensureModel: (kind: string) => invoke<void>("window_ensure_model", { kind }),
@@ -607,6 +608,7 @@ export type InstanceInfoDto = {
   lang: string | null,
   logEncoding: string | null,
   source: string | null,
+  order: number,
 };
 
 export type JavaTypes = "adoptium" | "zulu" | "openj9" | "foojay";

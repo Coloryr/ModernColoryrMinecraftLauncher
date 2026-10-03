@@ -1137,8 +1137,8 @@ impl InstanceSettingObj {
     pub async fn save_icon(game: &GameInstance, icon: InputFile) -> CoreResult<()> {
         let (file, name) = {
             let game = game.read().unwrap();
-            let file = game.get_icon_file();
-            // 字段原本可能指向别的文件名，先按实际路径记下来，写盘成功后原样写回
+            // 上传图片 = 图标二选一里的"图片"那一支：写默认的 icon.png
+            let file = game.get_icon_file_or_default();
             let name = file
                 .file_name()
                 .map(|item| item.to_string_lossy().into_owned());

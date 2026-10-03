@@ -2,7 +2,7 @@
 // 账户列表视图：头像 / 名字 / 类型 / UUID + 操作
 import { ref } from "vue";
 import { t } from "../../../lib/i18n";
-import { accountAvatarUrl, imageFailed, imageLoading, markImageFailed, markImageLoaded } from "../../../lib/accountImages";
+import { accountAvatarUrl, hasNoSkin, imageFailed, imageLoading, markImageFailed, markImageLoaded } from "../../../lib/accountImages";
 import AccountActions from "../../../components/AccountActions.vue";
 import AccountTypeBadge from "../../../components/AccountTypeBadge.vue";
 import type { AccountStoreDto } from "../../../lib/bindings";
@@ -15,8 +15,10 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
+  (e: "add"): void;
   (e: "switch", acc: AccountStoreDto): void;
   (e: "refresh", acc: AccountStoreDto): void;
+  (e: "viewSkin", acc: AccountStoreDto): void;
   (e: "refreshSkin", acc: AccountStoreDto): void;
   (e: "relogin", acc: AccountStoreDto): void;
   (e: "edit", acc: AccountStoreDto): void;
@@ -49,6 +51,18 @@ function hidePreview() {
 
 <template>
   <div class="acc-list">
+    <!-- 添加账户：作为列表的第一行，与账户行同一套布局 -->
+    <button class="acc-row add-row" v-tip="t('account.addTitle')" :aria-label="t('account.addTitle')"
+      @click="emit('add')">
+      <span class="add-icon">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round">
+          <path d="M12 5v14M5 12h14" />
+        </svg>
+      </span>
+      <span class="row-name add-text">{{ t("account.add") }}</span>
+    </button>
+
     <div
       v-for="acc in accounts"
       :key="acc.uuid"
@@ -89,7 +103,9 @@ function hidePreview() {
         :can-refresh="acc.canRefresh"
         :can-relogin="acc.canRelogin"
         :can-edit="acc.canEdit"
+        :has-skin="!hasNoSkin(acc)"
         @refresh="emit('refresh', acc)"
+        @view-skin="emit('viewSkin', acc)"
         @refresh-skin="emit('refreshSkin', acc)"
         @relogin="emit('relogin', acc)"
         @edit="emit('edit', acc)"
@@ -132,6 +148,44 @@ function hidePreview() {
 .acc-row.current {
   border-color: var(--accent);
   box-shadow: 0 0 0 1px var(--accent);
+}
+
+/* 添加账户行：虚线边框，与账户行同布局（图标占头像槽的位置）。
+   底色取 --bg-side（比账户行的 --bg-card 暗一档）：全透明显得不能点，
+   --accent-soft 又太抢眼（那是选中态的浓度）。
+   悬停时虚线转实线：虚线是"这里还空着"的语义，鼠标上来就该是实心的选中感 */
+.add-row {
+  border-style: dashed;
+  border-color: var(--accent-border);
+  background: var(--bg-side);
+  color: var(--accent);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  text-align: left;
+  transition: border-color 0.15s, color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+
+.add-row:hover {
+  border-style: solid;
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.add-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 1px dashed currentColor;
+}
+
+.add-text {
+  font-weight: 600;
 }
 
 /* 头像槽容器：相对定位，加载中时上面叠转圈 */

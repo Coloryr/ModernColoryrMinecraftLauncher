@@ -210,26 +210,38 @@ pub fn block_render_cancel(app: AppHandle) -> bool {
     true
 }
 
-/// 把方块/物品贴图设为实例图标
+/// 把方块/物品设为实例图标：**记方块 ID**，不再复制贴图
+///
+/// 图标与方块 ID 二选一（见 `InstanceSettingObj::get_icon_file`）：这里把 `Block` 写上、
+/// `Icon` 清空，之后 `mml-image://instance/<uuid>` 按 ID 现渲染。
+/// 这样图标会跟随方块渲染结果更新（换材质包 / 重新渲染后自动变），
+/// 而不是像以前那样定格一张 PNG。
 #[tauri::command]
 pub async fn block_set_icon(app: AppHandle, uuid: String, id: String) -> Result<bool, String> {
     // 方块优先，物品（未作为方块出现的 id）回退物品贴图
-    let Some(file) = mml_tex_draw::get_block_path(&id).or_else(|| mml_tex_draw::get_item_path(&id))
+    let Some(_) = mml_tex_draw::get_block_path(&id).or_else(|| mml_tex_draw::get_item_path(&id))
     else {
         return Err("err.fileNotFound".to_string());
     };
 
-    // 锁内只取需要的路径，drop 后再 await（std 锁跨 await 破坏 Send）
-    let Some((id, instance)) = core_instance(&uuid) else {
+    let Some((uid, instance)) = core_instance(&uuid) else {
         return Err("err.gameNotFound".to_string());
     };
-    let dest = instance.read().unwrap().get_icon_file();
 
-    tokio::fs::copy(&file, &dest)
-        .await
-        .map_err(|err| err.to_string())?;
+    // 写方块 ID 并清空 Icon：两步必须一起做，只写一个会让图标读取走错分支
+    {
+        let inst = instance.read().unwrap().clone();
+        crate::gui_setting::set_block(&inst, id.clone());
+    }
+    {
+        let mut inst = instance.write().unwrap();
+        if inst.icon.is_some() {
+            inst.icon = None;
+            inst.save();
+        }
+    }
 
-    image_manager::clear_instance_image(&id);
+    image_manager::clear_instance_image(&uid);
     emit_instance_change(&app, "edit");
     Ok(true)
 }
@@ -391,12 +403,16 @@ pub async fn block_set_icon_area(
     let Some((id, instance)) = core_instance(&uuid) else {
         return Err("err.gameNotFound".to_string());
     };
-    let dest = instance.read().unwrap().get_icon_file();
+    let dest = instance.read().unwrap().get_icon_file_or_default();
     tokio::fs::write(&dest, &png)
         .await
         .map_err(|err| err.to_string())?;
 
-    // 实例配置里把 Icon 指到 icon.png（与 get_icon_file 的默认值一致，显式写下来更清楚）
+    // 上传图片 = 图标二选一里的"图片"那一支：Icon 指到 icon.png，并把方块 ID 清掉
+    {
+        let inst = instance.read().unwrap().clone();
+        crate::gui_setting::clear_block(&inst);
+    }
     {
         let mut inst = instance.write().unwrap();
         if inst.icon.as_deref() != Some(names::ICON_FILE) {

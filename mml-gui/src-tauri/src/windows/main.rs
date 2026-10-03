@@ -10,6 +10,7 @@ use std::time::Duration;
 use tauri::{AppHandle, Emitter, WebviewWindow};
 
 use crate::dtos::main_dto::{LoadState, LogLine, NewsItem};
+use crate::gui_setting;
 use crate::dtos::{
     EnvVarLineDto, ErrorEvent, ExitEvent, InstanceArgsDto, InstanceChangeEvent, InstanceInfoDto,
     InstanceLangDto, InstancePatch, JavaInfoDto, LogEvent, MotdDto, StateEvent, SystemMemoryDto,
@@ -165,6 +166,8 @@ pub fn main_get_instances() -> Vec<InstanceInfoDto> {
                     .to_string(),
                 ),
                 source: None,
+                // 组内次序存在实例自己的 guisetting.json 里（归属 GUI，内核不管）
+                order: gui_setting::load(&inst).order,
             }
         })
         .collect()
@@ -825,6 +828,8 @@ pub fn main_create_instance(
         lang: None,
         log_encoding: None,
         source,
+        // 新建的实例排到组末：给一个足够大的值，下次整组重编号时会被压回正常区间
+        order: i32::MAX,
     };
     let store = model(&window)?;
     let mut store = store.lock().unwrap();
@@ -1020,49 +1025,66 @@ pub async fn main_delete_instance(
 }
 
 /// 移动实例到 (分组, 组内位置)：支持同组排序与跨组移动
+///
+/// 组内次序由每个实例自己的 `guisetting.json` 里的 `Order` 决定（升序），
+/// 与 `main_get_instances` 下发的 `order` 字段一致。
+///
+/// 这里把目标组内**除被移动者以外**的实例按现有顺序取出，在 `index` 处插入被移动者，
+/// 然后整组重新编号 0..n —— 重新编号而不是只改一个值，是因为旧数据里 `Order`
+/// 全是默认 0（并列），只改一个值排不出确定顺序。
 #[tauri::command]
 pub fn main_move_instance(
     app: AppHandle,
-    window: WebviewWindow,
     uuid: String,
     group: Option<String>,
     index: i64,
 ) -> Result<bool, String> {
-    // 核心实例：分组切换走 mml-game（自动建组 + 保存实例 + 发事件）
-    if let Ok(id) = Uuid::parse_str(&uuid) {
-        if mml_game::get_instance(&id).is_some() {
-            // 空白分组即默认分组
-            let group = if group.as_deref().map_or(true, |g| g.trim().is_empty()) {
-                None
-            } else {
-                group.clone()
-            };
-            mml_game::move_group(vec![id], group);
+    let Ok(id) = Uuid::parse_str(&uuid) else {
+        return Err("err.uuid".to_string());
+    };
+    let Some(instance) = mml_game::get_instance(&id) else {
+        return Err("err.gameNotFound".to_string());
+    };
+
+    // 空白分组即默认分组
+    let group = if group.as_deref().map_or(true, |g| g.trim().is_empty()) {
+        None
+    } else {
+        group.clone()
+    };
+
+    // 分组切换走 mml-game（自动建组 + 保存实例 + 发事件）
+    mml_game::move_group(vec![id], group.clone());
+
+    // 收齐目标组内的实例（按当前 Order 升序），把被移动者插到 index 位后整组重编号
+    let mut others: Vec<GameInstance> = mml_game::get_instances()
+        .into_iter()
+        .filter(|i| {
+            let i = i.read().unwrap();
+            i.uuid != id && i.group == group
+        })
+        .collect();
+
+    // Order 存在各自实例的 guisetting.json 里（归属 GUI，内核不认识它）
+    // 同名时按名字兜底，保证顺序确定（旧数据 Order 全是默认 0，会并列）
+    others.sort_by_key(|i| {
+        let inst = i.read().unwrap().clone();
+        (gui_setting::load(&inst).order, inst.name.clone())
+    });
+
+    let at = (index.max(0) as usize).min(others.len());
+    let mut ordered: Vec<GameInstance> = others;
+    ordered.insert(at, instance);
+
+    for (i, inst) in ordered.iter().enumerate() {
+        let inst = inst.read().unwrap().clone();
+        let mut gui = gui_setting::load(&inst);
+        if gui.order != i as i32 {
+            gui.order = i as i32;
+            gui_setting::save(&inst, &gui);
         }
     }
-    let store = model(&window)?;
-    let mut store = store.lock().unwrap();
-    let Some(pos) = store.instances.iter().position(|i| i.uuid == uuid) else {
-        return Ok(true);
-    };
-    let mut inst = store.instances.remove(pos);
-    inst.group = group.clone();
-    let others: Vec<String> = store
-        .instances
-        .iter()
-        .filter(|i| i.group == group)
-        .map(|i| i.uuid.clone())
-        .collect();
-    let anchor = others.get((index as usize).min(others.len())).cloned();
-    let at = match &anchor {
-        Some(a) => store
-            .instances
-            .iter()
-            .position(|i| &i.uuid == a)
-            .unwrap_or(store.instances.len()),
-        None => store.instances.len(),
-    };
-    store.instances.insert(at, inst);
+
     emit_instance_change(&app, "edit");
     Ok(true)
 }

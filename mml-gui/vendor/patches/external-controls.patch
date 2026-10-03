@@ -1,0 +1,277 @@
+diff --git a/src/js/controls.js b/src/js/controls.js
+index 511ab31..55003f2 100644
+--- a/src/js/controls.js
++++ b/src/js/controls.js
+@@ -67,20 +67,28 @@
+       return { button, run };
+     };
+ 
+-    if (controls.has("minimize")) {
++    // ==== M²L 本地修改：注册了外部控件提供者时**不创建自己的按钮** ====
++    //
++    // 应用接管了按钮外观（用自己的组件），插件只需按它给的矩形摆原生热区。
++    // 此时再建一套按钮只会重叠。这里直接跳过创建，而不是"建了再隐藏" ——
++    // 少一套 DOM 也就没有样式覆盖之争。
++    const usesExternalControls =
++      typeof runtime?.externalControlProvider === "function";
++
++    if (controls.has("minimize") && !usesExternalControls) {
+       createButton("minimize", "Minimize window", "\uE921", () =>
+         context.windowControl("minimize"),
+       );
+     }
+ 
+     let maximize = null;
+-    if (controls.has("maximize")) {
++    if (controls.has("maximize") && !usesExternalControls) {
+       maximize = createButton("maximize", "Maximize window size", "\uE922", () =>
+         context.windowControl("toggleMaximize"),
+       );
+     }
+ 
+-    if (controls.has("close")) {
++    if (controls.has("close") && !usesExternalControls) {
+       createButton("close", "Close window", "\uE8BB", () =>
+         context.windowControl("close"),
+       );
+@@ -110,7 +118,34 @@
+     };
+ 
+     const snapGeometry = () => {
+-      if (!maximize || fullscreen) return null;
++      if (fullscreen) return null;
++
++      // ==== M²L 本地修改：优先用应用提供的外部控件矩形 ====
++      //
++      // 应用注册了提供者时，热区完全由它给的坐标决定，不再要求插件自己的
++      // maximize 按钮存在 —— 这样应用能用自己的窗口按钮，同时保留贴靠布局。
++      // 坐标口径与插件内部一致（物理像素）。
++      const external = runtime?.externalControlProvider;
++      if (typeof external === "function") {
++        const provided = external();
++        if (!provided) return null;
++        const externalGeometry = {
++          controlBandWidth: provided.controlBandWidth,
++          height: provided.height,
++          titlebarHeight: provided.titlebarHeight,
++          width: provided.width,
++          x: provided.x,
++          y: provided.y,
++        };
++        return externalGeometry.width > 0 &&
++          externalGeometry.height > 0 &&
++          externalGeometry.titlebarHeight > 0 &&
++          externalGeometry.controlBandWidth > 0
++          ? externalGeometry
++          : null;
++      }
++
++      if (!maximize) return null;
+       const rectangle = maximize.button.getBoundingClientRect();
+       const titlebar = context.root.getBoundingClientRect();
+       const controlBand = host.getBoundingClientRect();
+@@ -183,7 +218,13 @@
+     };
+ 
+     const measureGeometryState = () => {
+-      if (!maximize) return null;
++      // M²L 本地修改：注册了外部提供者时，即使插件自己没有 maximize 按钮也要继续测量 ——
++      // 否则这里返回 null、几何报不上去，Rust 侧 apply_decorations 会在
++      // "maximize geometry state was not reported" 上提前 return Err，
++      // **原生 frame 就摘不掉**，结果是系统标题栏 + 插件按钮 + 应用按钮三套并存。
++      const hasExternalProvider =
++        typeof runtime?.externalControlProvider === "function";
++      if (!maximize && !hasExternalProvider) return null;
+       const geometry = snapGeometry();
+       return geometry
+         ? { geometry, kind: "geometry" }
+@@ -364,7 +405,13 @@
+     };
+ 
+     const publishGeometry = () => {
+-      if (!maximize) return;
++      // M²L 本地修改：注册了外部提供者时，即使插件自己没有 maximize 按钮也要继续 ——
++      // 外部模式下 maximize 恒为 null，原来这里直接 return，会让
++      // pendingActivationMeasurement 永远为空，激活时（initialGeometryState）
++      // 报不出几何 → Rust 侧以 kind="disabled" 完成激活，原生 frame 就不摘了。
++      const hasExternalProvider =
++        typeof runtime?.externalControlProvider === "function";
++      if (!maximize && !hasExternalProvider) return;
+       if (!geometryDeliveryActive) {
+         pendingActivationMeasurement = measureGeometryState();
+         return;
+@@ -445,6 +492,19 @@
+     observer.observe(context.root);
+     observer.observe(host);
+     if (maximize) observer.observe(maximize.button);
++
++    // M²L 本地修改：注册外部提供者后主动重测一次
++    //
++    // ResizeObserver 只观察插件自己的节点（root / host / 它的 maximize 按钮），
++    // 应用注册提供者时这些节点尺寸都不会变 —— 不主动推一把，新矩形要等到
++    // 下次窗口缩放才生效。应用侧在注册后调一次即可。
++    context.addDisposer(
++      runtime.registerExternalGeometryRefresh(() => {
++        if (!context.isCurrent()) return;
++        publishClearance();
++        publishGeometry();
++      }),
++    );
+     context.addDisposer(() => {
+       geometryDeliveryActive = false;
+       pendingActivationMeasurement = null;
+@@ -473,6 +533,30 @@
+       },
+       snapGeometry: initialGeometryState,
+       handle(event, payload) {
++        // ==== M²L 本地修改：外部提供者模式下把热区鼠标事件转给应用 ====
++        //
++        // 原生命中区是个真实的 WS_CHILD 窗口，盖在 webview 之上并吃掉
++        // WM_NCMOUSEMOVE（见 src/snap.rs，return 0 不透传）—— 所以应用自己的
++        // 最大化按钮**永远收不到 DOM 的 mouseenter**，:hover 悬停样式不会生效。
++        // 插件原本用这些事件点亮它自己的按钮；外部模式下它没有按钮，
++        // 事件就白派发了，这里改成通知应用，由应用自己表现悬停态。
++        if (typeof runtime?.externalControlProvider === "function") {
++          switch (event) {
++            case "snap-mouseenter":
++            case "snap-mousedown":
++            case "snap-mouseup":
++              runtime.notifyExternalControlHover?.(true);
++              return true;
++            case "snap-mouseleave":
++              runtime.notifyExternalControlHover?.(false);
++              return true;
++            case "snap-click":
++              runtime.notifyExternalControlClick?.();
++              return true;
++            default:
++              break;
++          }
++        }
+         switch (event) {
+           case "snap-mouseenter":
+           case "snap-mousedown":
+diff --git a/src/js/titlebar.js b/src/js/titlebar.js
+index b51bf6f..a4f2405 100644
+--- a/src/js/titlebar.js
++++ b/src/js/titlebar.js
+@@ -694,6 +694,69 @@
+     dispatch,
+     install,
+     installForDocument,
++    // ==== M²L 本地修改：外部控件提供者 ====
++    //
++    // 让应用**用自己的窗口按钮**（保留既有外观与组件），同时仍然拿到 Win11 贴靠布局。
++    //
++    // 背景：贴靠热区靠的是原生 `WM_NCHITTEST → HTMAXBUTTON`，而那个矩形的来源是
++    // 插件自己那套按钮的 getBoundingClientRect()。于是想换外观就只能覆盖它的按钮样式 ——
++    // 而它的样式表是运行时注入 <head> 末尾的，覆盖不可靠（实测两套按钮并存）。
++    //
++    // 这里改为：应用可以注册一个"提供最大化按钮矩形"的回调。注册后插件不再要求
++    // 自己那套按钮存在（也不再因几何为 null 而中止激活），矩形由应用给出，
++    // 应用爱画什么按钮就画什么按钮。
++    //
++    // - `provider`: () => ({ x, y, width, height, titlebarHeight, controlBandWidth } | null)
++    //   坐标为**物理像素**（与插件内部口径一致，即 CSS 像素 × devicePixelRatio）。
++    //   返回 null 表示当前不该有热区（如全屏），插件会照常把热区撤掉。
++    // - 传 null 取消注册，回到插件自带的按钮实现。
++    externalControlProvider: null,
++    setExternalControlProvider(provider) {
++      if (provider !== null && typeof provider !== "function") {
++        throw new TypeError(
++          "tauri-plugin-decoration: external control provider must be a function or null",
++        );
++      }
++      window[GLOBAL_NAME].externalControlProvider = provider;
++      // 立即让平台适配器重测一次：ResizeObserver 只盯插件自己的节点，
++      // 应用注册提供者不会改变它们，不推一把新矩形要等下次窗口缩放才生效
++      for (const refresh of window[GLOBAL_NAME].externalGeometryRefreshers) {
++        try {
++          refresh();
++        } catch {
++          /* 单个刷新失败不影响注册本身 */
++        }
++      }
++    },
++
++    /** 平台适配器注册的"重测几何"回调（外部提供者变更时由上面调用） */
++    externalGeometryRefreshers: new Set(),
++    registerExternalGeometryRefresh(refresh) {
++      window[GLOBAL_NAME].externalGeometryRefreshers.add(refresh);
++      return () => window[GLOBAL_NAME].externalGeometryRefreshers.delete(refresh);
++    },
++
++    // ==== M²L 本地修改：热区鼠标事件转发给应用 ====
++    //
++    // 原生命中区盖在 webview 上并吃掉 WM_NCMOUSEMOVE，应用自己的最大化按钮
++    // 收不到 DOM mouseenter —— 悬停样式不会亮。应用注册以下回调即可自行表现。
++    // （见 src/js/controls.js 的 handle()）
++    externalControlHoverListener: null,
++    externalControlClickListener: null,
++    notifyExternalControlHover(hovered) {
++      try {
++        window[GLOBAL_NAME].externalControlHoverListener?.(Boolean(hovered));
++      } catch {
++        /* 应用侧异常不影响插件 */
++      }
++    },
++    notifyExternalControlClick() {
++      try {
++        window[GLOBAL_NAME].externalControlClickListener?.();
++      } catch {
++        /* 同上 */
++      }
++    },
+     status() {
+       return { ...lastStatus };
+     },
+diff --git a/src/snap.rs b/src/snap.rs
+index 115a578..18cc450 100644
+--- a/src/snap.rs
++++ b/src/snap.rs
+@@ -238,9 +238,27 @@ fn trusted_caption_region(
+     }
+     let top = u64::try_from(geometry.y).unwrap_or(u64::MAX);
+     let distance_from_right = u64::try_from(i64::from(client_right) - right).unwrap_or(u64::MAX);
+-    distance_from_right.saturating_add(width) <= u64::from(control_band_width)
++
++    // ==== M²L 本地修改：放宽"控件带宽度"这条约束 ====
++    //
++    // 原式：distance_from_right + width <= control_band_width
++    //
++    // 它的本意是"热区应落在标题栏控件带之内"，作为防止几何报错的启发式校验。
++    // 但应用自带窗口按钮时（本仓库的用法）这条会误伤：
++    //   - 想让热区**只盖最大化按钮那一格**（否则会吃掉关闭键的鼠标消息，
++    //     导致关闭键点不动、"鼠标在关闭键上却高亮最大化按钮"）；
++    //   - 而 control_band_width 是**整组按钮**的宽度（约 106），
++    //     右边距(46) + 按钮宽(34) = 80，本应成立 —— 但只要应用把
++    //     control_band_width 也报成按钮宽（34）就会失败，并让**整个激活**回退。
++    //
++    // 判据改成：热区必须落在**窗口客户区内**且横向不越过控件带右缘之外太多
++    // （用窗口宽度兜底），不再要求它窄于 control_band_width。
++    // 前两条（非空、不越界）与纵向约束（贴住标题栏底）保持不变。
++    let within_client = right <= i64::from(client_right);
++    within_client
+         && height <= u64::from(titlebar_height)
+         && top.saturating_add(height) <= u64::from(titlebar_height)
++        && distance_from_right <= u64::from(control_band_width.max(u32::try_from(geometry.width).unwrap_or(u32::MAX)))
+ }
+ 
+ pub(crate) fn apply_update<R: Runtime>(
+@@ -305,6 +323,16 @@ unsafe fn install_hwnd(
+             0,
+             SNAP_CLASS.as_ptr(),
+             SNAP_CLASS.as_ptr(),
++            // 热区子窗口：WS_CHILD 覆盖在父窗口客户区之上，自己接收鼠标消息
++            // （WM_NCHITTEST 答 HTMAXBUTTON、WM_NCMOUSEMOVE 转发悬停给前端）。
++            // 这是**方案一**：不动父窗口的 caption 结构，靠一个浮动原生控件
++            // 让系统知道"这里有最大化按钮"，贴靠面板即会弹出。
++            //
++            // 已知限制：面板弹出后**跟随鼠标**而非锚在按钮下方。原因是系统锚定
++            // 时认的是"顶层窗口有没有 caption 按钮"，而子窗口对系统只是碰巧答了
++            // HTMAXBUTTON 的独立控件；要让锚定正确需要让窗口保留 WS_CAPTION 并用
++            // WM_NCCALCSIZE 抹掉非客户区（Avalonia 的做法，见其 CustomCaptionProc），
++            // 那是另一条更大的路，当前不走。
+             WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS,
+             0,
+             0,
