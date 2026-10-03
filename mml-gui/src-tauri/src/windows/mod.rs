@@ -53,11 +53,17 @@ use crate::dtos::{GuiConfigDto, LogFocusDto, WindowSizeDto};
 ///
 /// 全仓统一这一套口径：
 /// - `x / y`：**外框**位置，物理像素（与 `outer_position()` 同源）
-/// - `width / height`：**客户区**尺寸，物理像素（与 `inner_size()` 同源），且不小于注册表里的最小客户区
+/// - `width / height`：**客户区**尺寸，物理像素（与 `inner_size()` 同源），
+///   且不小于注册表里的最小客户区
 ///
 /// 注册表 `WINDOWS_INFO` 里的最小 / 默认尺寸则是**客户区 + 逻辑像素**，两者之间只差显示器的
 /// 缩放系数一次换算（见 [`min_inner_physical`]）；只有下发给 Windows 的外框最小尺寸
 /// 才需要再加上那圈边框带（见 [`reconcile_min_size`]）。
+///
+/// ⚠ `inner_size()` 的含义**随装饰状态变化**：有原生 frame 时是客户区，
+/// 插件 `set_decorations(false)` 之后同一块窗口会把标题栏并进客户区（外框不变）。
+/// 而保存动作在两种状态下都会发生，直接存它会让窗口高度每次开关都涨一截。
+/// 所以存盘前统一折算回**带装饰口径**，见 [`decoration_growth`]。
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct WindowState {
@@ -351,6 +357,26 @@ static OPEN_WINDOWS: LazyLock<RwLock<HashMap<Uuid, WebviewWindow<tauri::Wry>>>> 
 static WINDOW_MODELS: LazyLock<RwLock<HashMap<Uuid, Arc<dyn Any + Send + Sync>>>> =
     LazyLock::new(|| RwLock::new(HashMap::new()));
 
+/// 「带装饰」状态下「外框 − 客户区」的差值缓存（uuid → (宽, 高)，物理像素）
+///
+/// 用途见 [`decoration_growth`]：存盘要把无装饰时被撑大的客户区折算回带装饰口径，
+/// 需要知道标题栏有多高；而关窗保存时窗口已无装饰、量不到它，只能在**建窗那一刻**
+/// （仍是 `decorations(true)`）先量下来。
+static DECORATED_INSET: LazyLock<RwLock<HashMap<Uuid, (u32, u32)>>> =
+    LazyLock::new(|| RwLock::new(HashMap::new()));
+
+/// 量并缓存「带装饰」状态下的外框 − 客户区差值（建窗后立即调用）
+fn remember_decorated_inset(uuid: &Uuid, window: &WebviewWindow) {
+    let (Ok(inner), Ok(outer)) = (window.inner_size(), window.outer_size()) else {
+        return;
+    };
+    let inset = (
+        outer.width.saturating_sub(inner.width),
+        outer.height.saturating_sub(inner.height),
+    );
+    DECORATED_INSET.write().unwrap().insert(*uuid, inset);
+}
+
 /// 确保指定窗口的模型已创建（尚无则初始化）
 ///
 /// 当前仅主窗口有模型（`MainWindowModel`），其余窗口无状态；
@@ -554,26 +580,29 @@ fn create_window(
         .map(|e| (e.min_width, e.min_height))
         .unwrap_or((600.0, 400.0));
 
+    // 所有窗口都走插件装饰：必须以 decorations(true) 建出来，插件才能在原生 frame 上
+    // 激活自绘装饰；激活前先藏起来，由前端挂载后调 window_activate_decoration 显示。
+    //
+    // 这样做的收益是 **Win11 贴靠布局**（悬停最大化按钮弹出窗口位置选择面板）。
+    // 它靠的是原生 WM_NCHITTEST → HTMAXBUTTON，而插件用一个原生小子窗口盖在
+    // 最大化按钮的位置上回答这个消息；矩形由前端量出来交给它
+    // （见 mml-vue/src/lib/decoration.ts）。所以按钮外观仍是 M²L 自己的 WindowControls。
+
     // webview 铺不透明暗色底，避免加载首帧透出桌面（与暗色主题 --bg 一致）
     let builder = WebviewWindowBuilder::new(app, label, WebviewUrl::App(url_path.into()))
         .title(names::MML)
         .min_inner_size(min_w, min_h)
-        // 自绘标题栏：关掉系统装饰，最小化 / 最大化 / 关闭由前端 WindowControls 调下面的命令实现
-        .decorations(false)
-        // 保留系统阴影（tao 的默认值）：Win11 下窗口投影与圆角都由 DWM 画。
-        // 代价是客户区被缩进一圈：这是 Windows 的**边框 / 非客户区带**
-        // （SM_CXSIZEFRAME + SM_CXPADDEDBORDER，96 DPI 下每边 8px；投影本身画在外框之外），
-        // 顶部按 tao 对 Win11 的经验值是 1px。只有 Windows 有这个带，也只有开着无边框阴影时才有。
-        // 这一圈归 DWM 画边框 / 圆角，webview 不再铺满外框；拖边缘调整大小走系统非客户区。
-        // 若在关掉「透明效果」的机器上这一圈又变成黑边，改回 `.shadow(false)` 即可。
-        .shadow(true)
-        .background_color(tauri::window::Color(0x14, 0x16, 0x1a, 0xff));
+        // 原生 frame 起步 + 隐藏：装饰激活成功后再显示（失败则退回原生 frame 显示）
+        .decorations(true)
+        .visible(false);
+
+    let builder = builder.background_color(tauri::window::Color(0x14, 0x16, 0x1a, 0xff));
     let win = match geom {
         Some(g) => {
-            // 恢复端（builder.position / inner_size）用逻辑像素，保存端（outer_position /
-            // inner_size()）是物理像素：按目标显示器的缩放系数换算。否则带缩放（125%/150%）
-            // 的屏幕上每开一次窗都乘一遍缩放系数，窗口逐次变大、位置漂移。
-            // monitor_from_point 吃物理坐标，与保存的值同坐标系
+            // 恢复端（builder.position / inner_size）用逻辑像素，保存端是物理像素：
+            // 按目标显示器的缩放系数换算。否则带缩放（125%/150%）的屏幕上每开一次窗
+            // 都乘一遍缩放系数，窗口逐次变大、位置漂移。
+            // monitor_from_point 吃物理坐标，与保存的值同坐标系。
             let scale = app
                 .monitor_from_point(g.x as f64, g.y as f64)
                 .ok()
@@ -581,9 +610,13 @@ fn create_window(
                 .or_else(|| app.primary_monitor().ok().flatten())
                 .map(|m| m.scale_factor())
                 .unwrap_or(1.0);
+
             // 恢复前先夹一次最小客户区：历史几何可能小于当前最小尺寸（旧版本存的，或最小尺寸
-            // 后来调大过），直接创建会得到一个比最小值还小的窗口，而且这个非法值又会被原样写回
-            // 文件、一直循环。这里按客户区口径夹（不含边框带）。
+            // 后来调大过），直接创建会得到一个比最小值还小的窗口，而且这个非法值又会被原样
+            // 写回文件、一直循环。这里按客户区口径夹（不含边框带）。
+            //
+            // 口径：save_window_state 存的是 `inner_size()`（客户区），与这里 `.inner_size()`
+            // 同源；建窗这一刻是 decorations(true)，与保存时若无装饰则含义一致（都是客户区）。
             let (min_pw, min_ph) = min_inner_physical((min_w, min_h), scale);
             builder
                 .inner_size(
@@ -596,6 +629,14 @@ fn create_window(
         None => builder.inner_size(min_w, min_h).center().build(),
     };
     let win = win.map_err(|e| e.to_string())?;
+
+    // 记下「带装饰」状态下外框 − 客户区的差值，供存盘时折算用。
+    //
+    // 必须在**这一刻**量：此时窗口还是 decorations(true)，量到的差值包含原生标题栏
+    // （实测 16×39）；插件激活调 set_decorations(false) 之后标题栏并进客户区、
+    // 差值只剩边框带（实测 16×9），那时就再也量不到标题栏有多高了 ——
+    // 而关窗保存正发生在那个状态。
+    remember_decorated_inset(uuid, &win);
 
     // 无边框 + 系统阴影时，客户区比外框小一圈：那是 Windows 的边框 / 非客户区带
     // （96 DPI 下左右下各 8px、顶部 1px；投影画在外框之外，不在这一圈里）。
@@ -669,13 +710,22 @@ fn reconcile_min_size(win: &WebviewWindow, min_w: f64, min_h: f64) {
 
 /// 保存窗口几何到状态表
 ///
-/// 坐标系须与恢复端（`WebviewWindowBuilder`）一致：
-/// `.position()` 设置的是外框位置 → 存 `outer_position()`；
-/// `.inner_size()` 设置的是客户区尺寸 → 存 `inner_size()`。
-/// 混用会导致每次开窗位置漂移、窗口逐次变大。
+/// **全部按外框口径**（位置与尺寸都用外框）：
+/// - `.position()` 设置的是外框位置 → 存 `outer_position()`
+/// - 尺寸也存 `outer_size()`，**不再存 `inner_size()`**
+///
+/// 为什么尺寸必须用外框：`inner_size()` 的**含义随装饰状态变化** ——
+/// 有原生 frame 时它是"客户区"，插件激活调 `set_decorations(false)` 之后，
+/// 同一块窗口的客户区会多出标题栏那一段。而本函数在两种状态下都会被调用
+/// （建窗后立刻存一次、关窗时再存一次），于是存进去的高度会在
+/// 600 / 621 / 630 之间来回漂，用户看到的就是"每次开关高度都变"
+/// （实测主窗口注册表定义 600，文件里出现过 621 与 630）。
+///
+/// `outer_size()` 不含这个口径差：装饰开关只会改变"外框 − 客户区"的分配，
+/// 外框本身不变，所以它是唯一在两种状态下都稳定的量。
 ///
 /// 两条统一规则：
-/// - 尺寸夹到不小于注册表里的最小客户区（见 [`min_inner_physical`]），保证文件里的值能直接开窗；
+/// - 尺寸夹到不小于注册表里的最小尺寸（已换算到外框口径，见 [`min_outer_physical`]）；
 /// - `maximized`（最大化 / 全屏）为真时**不覆盖几何**，只记下这个标志。最大化窗口的
 ///   `outer_position()` 带着框外偏移（常见是 −8），当成普通位置存下来，下次开窗
 ///   `monitor_from_point` 可能解析到**另一块显示器**，而且开出来还不是最大化。
@@ -695,15 +745,65 @@ fn save_window_state(uuid: &Uuid, window: &WebviewWindow, maximized: bool) -> Re
     let (min_w, min_h) = min_inner_physical(min_size_of(uuid).unwrap_or((0.0, 0.0)), scale);
 
     if !maximized {
+        // ==== 高度漂移的修复：统一折算到「带装饰」口径再存 ====
+        //
+        // 实测同一窗口的两种状态：
+        //   inner=968x639  外框−客户区 = 16x39  ← 带装饰（含边框带 + 标题栏）
+        //   inner=968x669  外框−客户区 = 16x9   ← 摘装饰后，外框不变、客户区 +30
+        // 也就是说 `set_decorations(false)` 会**撑大客户区**（把标题栏那 30px 并进去），
+        // 而保存动作在两种状态下都会发生（建窗后立刻存一次、关窗时再存一次），于是：
+        //   存 639 → 下次按 639 建窗 → 激活后客户区变 669 → 存 669 → 再 +30 …
+        // 每轮净增 30，就是"高度持续变高"。
+        //
+        // 修法：把无装饰状态下的 inner 折算回带装饰口径（与建窗时 `.inner_size()`
+        // 一致），循环即收敛。折算量见 [`decoration_growth`]。
+        let (dw, dh) = decoration_growth(uuid, window);
         geom.x = pos.x;
         geom.y = pos.y;
-        geom.width = size.width.max(min_w);
-        geom.height = size.height.max(min_h);
+        geom.width = size.width.saturating_sub(dw).max(min_w);
+        geom.height = size.height.saturating_sub(dh).max(min_h);
     }
     geom.maximized = maximized;
     window_state_set(uuid, geom);
 
     Ok(())
+}
+
+/// 当前窗口因「摘掉原生装饰」而多出来、需要从 `inner` 里减掉的客户区尺寸（物理像素）
+///
+/// 原理：`set_decorations(false)` 会**保持外框不变**、把标题栏那一段并进客户区
+/// （实测：同一窗口外框恒为 984×678，`inset` 从 16×39 变成 16×9，客户区 +30）。
+/// 要存的口径是**带装饰时的客户区**（与建窗时 `.inner_size()` 一致），
+/// 所以无装饰时得把这个增量减掉。
+///
+/// 增量 = 当前 `(外框 − 客户区)` 与**带装饰时** `(外框 − 客户区)` 的差：
+/// 带装饰时该差值含标题栏，无装饰时不含，两者相减正好是标题栏那一段。
+/// 带装饰的值从 [`DECORATED_INSET`] 取（建窗那一刻量的）。
+///
+/// 所以：
+/// - 带装饰时：当前 == 缓存 → 增量 0（本来就是对的口径，不动）
+/// - 无装饰时：当前比缓存小一个标题栏 → 增量 = 标题栏高度（减掉它）
+///
+/// 不用写死 30：标题栏与边框带都随 DPI 变，这里全部现量。
+fn decoration_growth(uuid: &Uuid, window: &WebviewWindow) -> (u32, u32) {
+    let (Ok(inner), Ok(outer)) = (window.inner_size(), window.outer_size()) else {
+        return (0, 0);
+    };
+    let now_inset = (
+        outer.width.saturating_sub(inner.width),
+        outer.height.saturating_sub(inner.height),
+    );
+
+    let cached = DECORATED_INSET.read().unwrap().get(uuid).copied();
+    let Some(decorated) = cached else {
+        // 没缓存到（本进程没经过建窗路径）：不折算，保持原值
+        return (0, 0);
+    };
+
+    (
+        decorated.0.saturating_sub(now_inset.0),
+        decorated.1.saturating_sub(now_inset.1),
+    )
 }
 
 /// 关闭指定 uuid 的窗口：先保存几何，再真正关闭窗口
@@ -914,6 +1014,32 @@ pub fn window_close_window(app: AppHandle, kind: String) -> Result<(), String> {
 #[tauri::command]
 pub fn window_start_dragging(window: WebviewWindow) -> Result<(), String> {
     window.start_dragging().map_err(|err| err.to_string())
+}
+
+/// 主窗口：激活插件装饰并显示窗口（**试点，只服务主窗口**）
+///
+/// 窗口建出来时是 `decorations: true` + 隐藏的（见 `create_window`），
+/// 这里在原生 frame 上激活自绘装饰、再显示。激活成功即由**插件的控件**接管标题栏右侧，
+/// Windows 11 的贴靠布局 flyout 挂在它的最大化按钮上 —— 这正是本命令存在的理由。
+///
+/// 失败时退回原生 frame 并照样显示窗口：宁可露出系统标题栏，也不能让主窗口打不开。
+///
+/// # 返回值
+///
+/// 返回实际生效的模式（`"custom"` 自绘装饰 / `"native"` 原生 frame）
+#[tauri::command]
+pub async fn window_activate_decoration(window: WebviewWindow) -> Result<&'static str, String> {
+    use tauri_plugin_decoration::WebviewWindowExt;
+
+    if let Err(error) = window.activate_decoration().await {
+        // 回退：先确保原生 frame 还在，再显示，最后把原因带回前端
+        let _ = window.restore_decoration().await;
+        let _ = window.show();
+        return Err(format!("decoration activate failed: {error}"));
+    }
+
+    window.show().map_err(|err| err.to_string())?;
+    Ok("custom")
 }
 
 /// 最小化窗口

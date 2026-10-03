@@ -37,6 +37,8 @@ pub struct InstanceInfoDto {
     pub log_encoding: Option<String>,
     /// 来源：导入的压缩包 / 文件夹 / 在线网址
     pub source: Option<String>,
+    /// 组内排列顺序（来自实例的 guisetting.json，升序；同值按名字兜底）
+    pub order: i32,
 }
 
 impl InstanceInfoDto {

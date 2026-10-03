@@ -22,6 +22,7 @@ gui-ipc-gen = { path = "../ipc-gen" }
 tauri = { version = "~2.11.5", features = [] }
 base64.workspace = true
 tauri-plugin-dialog = "~2.7.2"
+tauri-plugin-decoration = { path = "../../target/vendor/tauri-plugin-decoration" }
 async-trait = "~0.1.92"
 gui-macros = { path = "../macros" }
 serde = { version = "1", features = ["derive"] }

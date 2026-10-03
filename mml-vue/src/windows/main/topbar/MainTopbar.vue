@@ -7,6 +7,7 @@ import WindowControls from "../../../components/ui/WindowControls.vue";
 import ModpackTitleIndicator from "../../../components/ModpackTitleIndicator.vue";
 import DownloadTitleIndicator from "../../../components/DownloadTitleIndicator.vue";
 import { onTitleBarPointerDown, titleBarStyle } from "../../../lib/titlebar";
+import { pluginDecorated } from "../../../lib/decoration";
 import type { AccountStoreDto } from "../../../lib/bindings";
 import type { FeatureId } from "../types";
 
@@ -26,8 +27,10 @@ const emit = defineEmits<{
 
 <template>
   <header class="topbar" :class="titleBarStyle" @pointerdown="onTitleBarPointerDown">
-    <!-- macos 样式：红黄绿在左端 -->
-    <WindowControls v-if="titleBarStyle === 'macos'" :style="titleBarStyle" />
+    <!-- macos 样式：红黄绿在左端。
+         主窗口接插件装饰时，插件在 macOS 上用的是**原生红黄绿**（不是 HTML 按钮），
+         所以这里不渲染自己的圆点，免得与原生控件重叠 -->
+    <WindowControls v-if="titleBarStyle === 'macos' && !pluginDecorated" :style="titleBarStyle" />
 
     <div class="brand">
       <div class="brand-logo">MC</div>
@@ -89,7 +92,10 @@ const emit = defineEmits<{
       />
     </div>
 
-    <!-- windows 样式：最小化 / 最大化 / 关闭在右端 -->
+    <!-- windows 样式：最小化 / 最大化 / 关闭在右端。
+         主窗口接了插件装饰时，这里**照常渲染**自己的按钮（外观与其它窗口一致），
+         插件的按钮被 .topbar 下的样式隐藏成透明占位、只负责给系统量贴靠热区，
+         见 <style> 里 data-tauri-decoration-* 那一段 -->
     <WindowControls v-if="titleBarStyle === 'windows'" :style="titleBarStyle" />
   </header>
 </template>
@@ -110,7 +116,10 @@ const emit = defineEmits<{
 }
 
 /* windows 样式的窗口按钮是小方块、不贴边，右侧留一点呼吸空间；
-   macos 样式的圆点留在左内边距之后（与系统一致的 ~18px 留白） */
+   macos 样式的圆点留在左内边距之后（与系统一致的 ~18px 留白）。
+   注意：**不要**在这里叠加插件的 --tauri-plugin-decoration-right-clearance ——
+   插件的按钮已被做成透明占位（见 styles/decoration.css），
+   视觉与占位都由 M²L 自己的 WindowControls 提供，再让一次宽度会多出一段空白 */
 .topbar.windows {
   padding-right: 10px;
 }

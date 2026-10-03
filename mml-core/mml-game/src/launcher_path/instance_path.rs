@@ -281,13 +281,30 @@ impl InstanceSettingObj {
             .join(names::GAME_FILE)
     }
 
-    /// 获取图标文件
-    pub fn get_icon_file(&self) -> PathBuf {
+    /// 获取实例 GUI 设置文件（guisetting.json，与 game.json 并列）
+    ///
+    /// **归属 GUI**：实例 GUI 设置（日志窗口 / 模组分组 / 方块背景 / 自开日志窗 /
+    /// 排列顺序）是界面状态，内核不读也不写它，读写实现在
+    /// `mml-gui/src-tauri/src/gui_setting.rs`。这里只提供路径——
+    /// "实例目录在哪"是内核的知识，"目录里放什么 GUI 文件"不是。
+    pub fn get_gui_setting_file(&self) -> PathBuf {
         BASE_DIR
             .get()
             .unwrap()
             .join(&self.dir)
-            .join(self.icon.as_ref().map_or(names::ICON_FILE, |item| item))
+            .join(names::GUI_SETTING_FILE)
+    }
+
+    /// 获取图标文件（兼容老数据：`Icon` 为空时回退到默认的 `icon.png`）
+    ///
+    /// 给"显示图标"用。区分两种 `None` 是做不到的（配置里就是个空字段），
+    /// 所以这里一律给默认名，由调用方判断文件是否存在。
+    pub fn get_icon_file_or_default(&self) -> PathBuf {
+        BASE_DIR
+            .get()
+            .unwrap()
+            .join(&self.dir)
+            .join(self.icon.as_deref().unwrap_or(names::ICON_FILE))
     }
 
     /// 获取存档备份信息文件

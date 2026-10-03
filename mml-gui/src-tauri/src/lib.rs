@@ -6,6 +6,7 @@
 //! | [`dtos`] | 跨 IPC DTO（Rust 结构转 camelCase） |
 //! | [`err_box`] | 致命错误弹窗 |
 //! | [`gui_config`] | GUI 配置读写 |
+//! | [`gui_setting`] | 实例 GUI 设置读写（guisetting.json，归属 GUI 而非内核） |
 //! | [`image_manager`] | 图片资源加载（`mml-image://` 协议） |
 //! | [`windows`] | 各窗口的规格 / IPC 命令 / 事件，窗口创建 / 聚焦 / 关闭统一处理 |
 //!
@@ -20,6 +21,7 @@ pub mod collect_utils;
 pub mod dtos;
 pub mod err_box;
 pub mod gui_config;
+pub mod gui_setting;
 pub mod image_manager;
 pub mod windows;
 
@@ -32,6 +34,9 @@ include!(concat!(env!("OUT_DIR"), "/invokes_gen.rs"));
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        // 必须在任何 webview 创建之前注册：插件要拿到窗口的原生句柄才能替换装饰。
+        // 只服务主窗口（试点），其余窗口不调 activate_decoration，自然无影响
+        .plugin(tauri_plugin_decoration::init())
         .register_asynchronous_uri_scheme_protocol("mml-image", move |_app, request, responder| {
             tauri::async_runtime::spawn(async move {
                 image_manager::url_image(request, responder).await;

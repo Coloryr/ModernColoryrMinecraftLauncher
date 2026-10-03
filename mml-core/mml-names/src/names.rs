@@ -39,17 +39,16 @@ pub const NATIVE_DIR: &str = "native";
 pub const MML_DIR: &str = "mml";
 pub const MML_INNER_DIR: &str = ".mml";
 pub const BLOCK_DIR: &str = "block";
-/// 方块/物品共用的语言文件目录（zh_cn/en_us，随渲染从客户端jar提取）
 pub const LANG_DIR: &str = "langs";
 pub const ITEM_DIR: &str = "items";
 pub const MINECRAFT_DIR: &str = "minecraft";
-/// GUI 图片缓存目录
 pub const IMAGE_DIR: &str = "image";
 
 pub const LOG_FILE: &str = "logs.log";
 pub const LANG_FILE: &str = "lang.txt";
 pub const MOD_INFO_FILE: &str = "modfileinfo.json";
 pub const GAME_FILE: &str = "game.json";
+pub const GUI_SETTING_FILE: &str = "guisetting.json";
 pub const MOD_PACK_FILE: &str = "Modpack.json";
 pub const CONFIG_FILE: &str = "config.json";
 pub const SHA_FILE: &str = "sha1";
@@ -96,7 +95,6 @@ pub const COLLECT_FILE:&str = "collect.json";
 pub const MINECRAFT_KEY: &str = "minecraft";
 pub const LANG_KEY1: &str = "minecraft/lang/";
 pub const LANG_KEY2: &str = "lang";
-/// 语言文件里的显示名键：`language.name` → “简体中文”（游戏内语言菜单用的就是它）
 pub const LANG_NAME_KEY: &str = "language.name";
 pub const FML_KEY: &str = "fmlloader";
 pub const FORGE_KEY: &str = "forge";

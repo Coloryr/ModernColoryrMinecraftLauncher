@@ -52,9 +52,9 @@ import type { CtxMenuState, FeatureId, InstMenuAction } from "./types";
 import BaseButton from "../../components/ui/BaseButton.vue";
 import BaseModal from "../../components/ui/BaseModal.vue";
 import SegmentedTabs from "../../components/ui/SegmentedTabs.vue";
-import NumberStepper from "../../components/ui/NumberStepper.vue";
 import CollapsePanel from "../../components/ui/CollapsePanel.vue";
 import { useWindowTitle } from "../../lib/titlebar";
+import { useWindowDecoration } from "../../lib/useWindowDecoration";
 
 // 注意：不能用顶层 await —— 会让 <script setup> 变成 async setup，
 // App.vue 没有 <Suspense> 包裹，Vue 将不渲染该组件（窗口白屏）
@@ -166,7 +166,15 @@ const groups = computed(() => {
       (k) => k !== defaultKey && !extraGroups.value.includes(k),
     ),
   ];
-  return order.map((name) => ({ name, items: map.get(name) ?? [] }));
+  return order.map((name) => {
+    const items = map.get(name) ?? [];
+    // 组内次序由后端下发（实例自己的 guisetting.json 里的 Order，见 gui_setting.rs）：
+    // 同值（旧数据全是默认 0）时按名字兜底，保证顺序确定而不是随 HashMap 抖动
+    return {
+      name,
+      items: [...items].sort((a, b) => a.order - b.order || a.name.localeCompare(b.name)),
+    };
+  });
 });
 
 // 分组收缩状态
@@ -419,10 +427,6 @@ function patchArgs(patch: Partial<InstanceArgsDto>) {
 
 function onServerIp(value: string) {
   patchArgs({ serverIp: value });
-}
-
-function onServerPort(v: number) {
-  patchArgs({ serverPort: v });
 }
 
 function onServerJoin(checked: boolean) {
@@ -1323,6 +1327,14 @@ async function createGroup() {
 
 // ================= 生命周期 =================
 
+/** 主窗口根元素：贴靠热区在里面惰性查找自己的最大化按钮 */
+const rootEl = ref<HTMLElement | null>(null);
+
+// 窗口装饰（激活插件装饰 + 交出贴靠热区）：与其它窗口共用同一套逻辑。
+// 主窗口的特别之处只在"启动画面"——标题栏要等核心 load 完成才渲染，
+// waitForSnapTarget 会一直等到那时，所以这里无需额外处理
+useWindowDecoration(rootEl);
+
 onMounted(async () => {
   subscribeEvents();
   initModpackStatus().then((unlisten) => unlistens.push(unlisten));
@@ -1373,7 +1385,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="main-window">
+  <div class="main-window" ref="rootEl">
     <!-- ===== 启动画面 / 初始化失败错误页（SplashScreen 组件） ===== -->
     <SplashScreen
       v-if="splashVisible || splashError"

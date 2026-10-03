@@ -76,6 +76,21 @@ export function markImageFailed(acc: AccountStoreDto, kind: string): void {
   failedImages.value = next;
 }
 
+/**
+ * 某账户是否确认"没有皮肤"（用于隐藏依赖皮肤的按钮）
+ *
+ * 与 [`imageFailed`] 的区别在于**协议前缀未就绪时不算没有皮肤**：
+ * `imageFailed` 把 base 为空串也当作失败（那是给渲染逻辑用的），但 base 是进窗口后
+ * 异步取的，页面刚打开那一瞬间它还是空的 —— 直接拿 imageFailed 当判据，会让
+ * 「查看皮肤 / 刷新皮肤」在加载完成前先闪一下或干脆不出现。
+ *
+ * 这里只在**图片真的加载失败过**（服务端返回 400 / 解码失败）时才认定没有皮肤，
+ * 宁可多显示两个按钮，也不要让它们抖动。
+ */
+export function hasNoSkin(acc: AccountStoreDto): boolean {
+  return !imageBase.value ? false : failedImages.value.has(`${acc.uuid}:skin`);
+}
+
 /** 已成功加载的图（key 同 failedImages），加载中转圈用 */
 export const loadedImages = ref(new Set<string>());
 

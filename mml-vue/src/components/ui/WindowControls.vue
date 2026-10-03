@@ -164,6 +164,22 @@ onMounted(async () => {
   color: var(--text);
 }
 
+/* 贴靠热区接管时的悬停态（主窗口）
+ *
+ * 原生命中区是个真实的 Win32 子窗口，盖在 webview 之上并吃掉 WM_NCMOUSEMOVE，
+ * 所以鼠标进到最大化按钮上时 **DOM 的 :hover 不会触发**。插件把该事件转发给我们，
+ * 由 decoration.ts 给按钮打上 .snap-hover —— 外观与 :hover 完全一致，两条并列写。
+ * 关闭键的红色悬停同理。 */
+.window-controls.windows .wc-btn.snap-hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.window-controls.windows .wc-btn.close.snap-hover {
+  background: #e81123;
+  color: #fff;
+}
+
 .window-controls.windows .wc-btn.close:hover {
   background: #e81123;
   color: #fff;

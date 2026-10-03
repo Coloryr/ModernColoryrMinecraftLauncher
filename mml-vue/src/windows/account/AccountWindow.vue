@@ -326,6 +326,14 @@ async function refreshSkin(acc: AccountStoreDto) {
   }
 }
 
+/** 查看皮肤：预览被点击的那一条账户（不要求它同时是"当前使用"的账户） */
+const skinTarget = ref<AccountStoreDto | null>(null);
+
+function viewSkin(acc: AccountStoreDto) {
+  skinTarget.value = acc;
+  showSkin.value = true;
+}
+
 /** 重新登录：微软账户直接走设备码流程；其余类型弹窗重输密码重新认证 */
 function relogin(acc: AccountStoreDto) {
   if (acc.authType === "microsoft") {
@@ -440,40 +448,41 @@ function tokenLabel(acc: AccountStoreDto): string {
 
 <template>
   <WindowFrame :title="t('account.manage')" :body-fill="view === 'detail'" @close="$emit('close')">
-    <!-- 工具栏 -->
-    <div class="toolbar">
-      <div class="toolbar-left">
-        <select v-model="typeFilter" class="toolbar-select">
-          <option v-for="o in TYPE_OPTIONS" :key="o.value" :value="o.value">{{ o.label }}</option>
-        </select>
-        <div class="search-box">
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"
-            stroke-linecap="round">
-            <circle cx="11" cy="11" r="7" />
-            <path d="m20 20-3.5-3.5" />
-          </svg>
-          <input v-model="searchText" class="search-input" :placeholder="t('account.search')" spellcheck="false" />
-          <button v-if="searchText" class="search-clear" @click="searchText = ''">✕</button>
-        </div>
+    <!-- 工具栏整体搬进标题栏右侧：类型筛选 + 搜索 + 视图切换 + 添加账户。
+         「查看皮肤」不在这里 —— 它是针对某个账户的动作，放在各账户条目的操作按钮里。
+         标题栏高度是固定的 --titlebar-h，这一排必须比它矮，否则会把整条顶栏撑高。
+         标题本身不删 —— 「账户管理」是这一页的身份，删掉窗口标题就只剩一排控件，
+         用户分不清自己在哪一页 -->
+    <template #head-right>
+      <select v-model="typeFilter" class="head-select">
+        <option v-for="o in TYPE_OPTIONS" :key="o.value" :value="o.value">{{ o.label }}</option>
+      </select>
+      <div class="head-search">
+        <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round">
+          <circle cx="11" cy="11" r="7" />
+          <path d="m20 20-3.5-3.5" />
+        </svg>
+        <input v-model="searchText" :placeholder="t('account.search')" spellcheck="false" />
+        <button v-if="searchText" class="head-search-clear" :aria-label="t('account.search')" @click="searchText = ''">
+          ✕
+        </button>
       </div>
-      <div class="toolbar-right">
-        <SegmentedTabs :model-value="view" :options="VIEW_OPTIONS" @update:model-value="view = $event as ViewMode" />
-        <!-- 皮肤查看从账户管理进入（不再放主页面顶栏） -->
-        <BaseButton size="md" class="view-skin-btn" :disabled="!currentAccount" @click="showSkin = true">{{ t("account.viewSkin") }}</BaseButton>
-        <BaseButton variant="accent" size="md" class="add-btn" @click="openAdd">＋ {{ t("account.add") }}</BaseButton>
-      </div>
-    </div>
+      <SegmentedTabs class="head-tabs" :model-value="view" :options="VIEW_OPTIONS" @update:model-value="view = $event as ViewMode" />
+      <!-- 添加账户已移到账户列表里（作为列表的第一项，三种视图都是），
+           标题栏只留筛选 / 搜索 / 视图切换这些"看"的控件 -->
+    </template>
 
     <!-- 视图：平铺 / 列表 / 详情（见 views/ 目录）；详情模式下视图区自己管理滚动 -->
     <div class="view-area" :class="{ fill: view === 'detail' }">
       <AccountGrid v-if="view === 'grid'" :accounts="filtered" :current-uuid="currentAccount?.uuid ?? ''"
-        @switch="switchAccount" @refresh="refreshToken" @refresh-skin="refreshSkin" @relogin="relogin"
+        @add="openAdd" @switch="switchAccount" @refresh="refreshToken" @view-skin="viewSkin" @refresh-skin="refreshSkin" @relogin="relogin"
         @edit="openEdit" @delete="deleteTarget = $event" />
       <AccountList v-else-if="view === 'list'" :accounts="filtered" :current-uuid="currentAccount?.uuid ?? ''"
-        :token-label="tokenLabel" :seed-of="seedOf" @switch="switchAccount"
-        @refresh="refreshToken" @refresh-skin="refreshSkin" @relogin="relogin" @edit="openEdit" @delete="deleteTarget = $event" />
+        :token-label="tokenLabel" :seed-of="seedOf" @add="openAdd" @switch="switchAccount"
+        @refresh="refreshToken" @view-skin="viewSkin" @refresh-skin="refreshSkin" @relogin="relogin" @edit="openEdit" @delete="deleteTarget = $event" />
       <AccountDetail v-else :accounts="filtered" :current-uuid="currentAccount?.uuid ?? ''"
-        :token-label="tokenLabel" @switch="switchAccount" @refresh="refreshToken" @refresh-skin="refreshSkin"
+        :token-label="tokenLabel" @add="openAdd" @switch="switchAccount" @refresh="refreshToken" @view-skin="viewSkin" @refresh-skin="refreshSkin"
         @relogin="relogin" @edit="openEdit" @delete="deleteTarget = $event" />
     </div>
 
@@ -632,21 +641,13 @@ function tokenLabel(acc: AccountStoreDto): string {
       </div>
     </BaseModal>
 
-    <!-- 皮肤 / 披风预览弹窗（2D / 3D 预览 + 纹理列表 + 正版装备） -->
-    <SkinModal v-if="showSkin" @close="showSkin = false" />
+    <!-- 皮肤 / 披风预览弹窗（2D / 3D 预览 + 纹理列表 + 正版装备）。
+         目标账户由点开它的那一条决定，不是"当前使用"的账户 -->
+    <SkinModal v-if="showSkin" :account="skinTarget" @close="showSkin = false" />
   </WindowFrame>
 </template>
 
 <style scoped>
-.toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin-bottom: 14px;
-}
-
 /* 详情模式下视图区占满剩余高度，滚动交给表格容器 */
 .view-area.fill {
   flex: 1;
@@ -656,35 +657,6 @@ function tokenLabel(acc: AccountStoreDto): string {
   flex-direction: column;
 }
 
-.toolbar-left {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.toolbar-right {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-/* 查看皮肤按钮：plain 变体默认透明底，这里给个底色融入工具栏 */
-.view-skin-btn {
-  background: var(--bg-card);
-  color: var(--text);
-  border: 1px solid var(--border);
-}
-
-.view-skin-btn:hover {
-  background: var(--bg-hover);
-  color: var(--text);
-}
-
-/* 添加按钮收窄左右内边距（md 默认 20px） */
-.add-btn {
-  padding: 0 12px;
-}
-
 /* UUID 输入 + 随机按钮 */
 .uuid-row {
   display: flex;
@@ -692,62 +664,77 @@ function tokenLabel(acc: AccountStoreDto): string {
   gap: 8px;
 }
 
-.toolbar-select {
-  min-width: 110px;
-  height: 35px;
-  /* 定高时纵向内边距不能为 0：<select> 的文字是内容盒里的行盒，多出来的空间全部沉底、
-     看着就是文字贴顶。这里保持"行高 19 + 上下内边距 7×2 + 边框 1×2 = 35"（同 forms.css 的不变量） */
+/* ===== 标题栏右侧控件（head-right 插槽）=====
+   标题栏里这几个控件统一 36px：比 --titlebar-h（64px）矮一截、上下留得出呼吸，
+   又不至于像 28px 那样局促。**36 是三个用 head-right 的窗口（账户 / 方块 / 设置）
+   共同的约定**，改这里记得同步另外两处，否则并排看时高度会参差 */
+.head-select {
+  min-width: 104px;
+  height: 36px;
+  /* 定高时纵向内边距不能为 0（同 forms.css 的不变量）：行高 19 + 内边距 8×2 + 边框 1×2 = 36 */
   line-height: 19px;
-  padding: 7px 28px 7px 12px;
+  padding: 8px 28px 8px 12px;
   border-radius: 9px;
   border: 1px solid var(--border);
   background: var(--bg-card);
   color: var(--text);
-  font-size: 13px;
+  font-size: 12.5px;
   outline: none;
   font-family: inherit;
   appearance: none;
   background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239aa3af' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  background-position: right 8px center;
-  background-size: 12px;
+  background-position: right 7px center;
+  background-size: 11px;
 }
 
-.grow {
-  flex: 1;
-  min-width: 140px;
+/* 视图切换（grid / list / detail）：SegmentedTabs 默认 35px（27 + 3×2 + 1×2），
+   在标题栏里跟旁边的 36px 控件差 1px，单独拉齐 */
+.head-tabs :deep(.seg-btn) {
+  height: 28px;
 }
 
-.search-box {
+.head-search {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 0 10px;
-  height: 35px;
+  padding: 0 11px;
+  height: 36px;
   border-radius: 9px;
   border: 1px solid var(--border);
   background: var(--bg-card);
   color: var(--text-dim);
-  width: 185px;
+  width: 168px;
 }
 
-.search-input {
+.head-search input {
   flex: 1;
   min-width: 0;
   border: none;
   background: transparent;
   color: var(--text);
-  font-size: 12.5px;
+  font-size: 13px;
   outline: none;
   font-family: inherit;
 }
 
-.search-clear {
+.head-search-clear {
   border: none;
   background: transparent;
   color: var(--text-dim);
   font-size: 12px;
   cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+}
+
+.head-search-clear:hover {
+  color: var(--text);
+}
+
+.grow {
+  flex: 1;
+  min-width: 140px;
 }
 
 /* 平铺 */
