@@ -74,6 +74,18 @@ function onError() {
   loaded.value = false;
 }
 
+/**
+ * 真图加载完成
+ *
+ * 失败过就忽略：`data-no-fallback` 已经让全局图片兜底不插手了，但万一有别的
+ * 来源再触发一次 load（占位图被换进来之类），也不能把 failed 的状态翻回去 ——
+ * 那会把字母占位藏掉、图标区变成一片空白。
+ */
+function onLoad() {
+  if (failed.value) return;
+  loaded.value = true;
+}
+
 // onUnmounted 必须在 setup 同步期注册，await 后再调会失去组件实例，
 // 所以注销函数先存下来，由同步注册的钩子代为调用
 let unlistenChange: (() => void) | null = null;
@@ -114,7 +126,8 @@ watch(
       alt=""
       loading="lazy"
       decoding="async"
-      @load="loaded = true"
+      data-no-fallback
+      @load="onLoad"
       @error="onError"
     />
     <!-- 字母只是回退：真图加载成功后必须移除，透明处不会再透出占位 -->

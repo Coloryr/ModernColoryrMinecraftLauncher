@@ -299,14 +299,20 @@ pub fn get_latest_version() -> String {
 
 /// 判断游戏版本是否存在
 ///
+/// 版本清单平时由 [`get_version_obj_online`] 加载（并落盘缓存），但这个函数是**同步**的，
+/// 调用它的地方（外部启动器实例导入、Forge 坐标识别等）可能在清单加载**之前**就跑到这里 ——
+/// 那样会恒为 false，把明明认识的版本判成未知版本。所以内存里没有时，这里先从本地缓存
+/// [`names::VERSION_FILE`] 同步读一次；读不到（没缓存过、也没加载过）才算真的不知道。
+///
 /// # 参数
 ///
 /// - `version`: 游戏版本号
 ///
 /// # 返回值
 ///
-/// 返回该版本是否存在于版本列表中；无缓存返回 `false`
+/// 返回该版本是否存在于版本列表中；清单不可用返回 `false`
 pub fn have_version(version: &str) -> bool {
+    ensure_version_loaded();
     let read = VERSION.read().unwrap();
     let versions = read.as_ref();
     match versions {
@@ -316,6 +322,29 @@ pub fn have_version(version: &str) -> bool {
             .find(|data| data.id == version)
             .is_some(),
         None => false,
+    }
+}
+
+/// 内存里没有版本清单时，从本地缓存文件同步读一次
+///
+/// 只读文件、不发请求：联网刷新那条异步路径（[`read_version`]）仍由需要清单的地方触发。
+/// 读到之后进 [`VERSION`] 缓存，后续调用不再读盘。
+fn ensure_version_loaded() {
+    if VERSION.read().unwrap().is_some() {
+        return;
+    }
+
+    let Some(dir) = BASE_DIR.get() else {
+        return;
+    };
+
+    let file = dir.join(names::VERSION_FILE);
+    if !file.is_file() {
+        return;
+    }
+
+    if let Ok(json) = serialize_tools::json_from_file::<VersionObj>(&file) {
+        *VERSION.write().unwrap() = Some(Arc::new(json));
     }
 }
 

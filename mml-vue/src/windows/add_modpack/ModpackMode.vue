@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 整合包模式：CurseForge / Modrinth 在线搜索 + 选版本安装
 // 实例名取自整合包元数据（安装后端自动处理），分组沿用窗口顶部的分组输入框
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, onDeactivated, onMounted, onUnmounted, ref, watch } from "vue";
 import { marked } from "marked";
 import DOMPurify from "dompurify";
 import SegmentedTabs from "../../components/ui/SegmentedTabs.vue";
@@ -59,6 +59,14 @@ const groupOpen = ref(false);
 const groupQuery = computed(() =>
   props.groups.filter((g) => g.toLowerCase().includes(props.group.trim().toLowerCase())),
 );
+
+// 离开本窗口时清掉搜索词与分组下拉（来源 / 版本 / 排序 / 分类等筛选留着：那是浏览上下文）。
+// 单窗口模式下这一页被 KeepAlive 缓存，切走不销毁，不清的话再打开时输入框里
+// 还压着上次搜的词，用户早忘了自己搜过什么，只会觉得界面不对劲。
+onDeactivated(() => {
+  filter.value = "";
+  groupOpen.value = false;
+});
 
 function onGroupInput(e: Event) {
   emit("update:group", (e.target as HTMLInputElement).value);

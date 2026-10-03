@@ -10,56 +10,112 @@ use crate::{add_game::PackType, other_launcher};
 
 /// 扫描文件夹下的游戏版本
 ///
+/// 按"越像越先试"的顺序，**先认启动器布局、最后才逐个目录嗅探** —— 顺序就是性能：
+/// 官方/MMC 的数据目录会在前两步命中，不会去解析 `config` / `mods` 里的杂项 json。
+///
+/// 1. 传进来的目录是**启动器数据目录**（其下有 `versions` / `instances`），
+///    或者它的**直接子目录**才是 —— 后者是为了"选了 `.minecraft` 的上级目录"也能扫到
+///    （`<上级>/.minecraft/versions/*`）；
+/// 2. 传进来的目录**本身就是实例**（直接选了某个版本目录 / MMC 实例目录）；
+/// 3. 传进来的目录就是 `versions` / `instances` 本身（它下面一个个就是实例）；
+/// 4. 兜底：直接子目录本身就是实例目录。
+///
 /// # 参数
 ///
-/// - `path`: 待扫描的目录（连同一级子目录一起检查）
+/// - `path`: 待扫描的目录
 ///
 /// # 返回值
 ///
 /// 返回可导入的游戏实例路径列表
 pub fn scan_game_from_path<P: AsRef<Path>>(path: P) -> Vec<PathBuf> {
+    let root = path.as_ref();
     let mut list = Vec::new();
-    let mut dirs = path_helper::get_dirs(&path);
-    dirs.insert(0, path.as_ref().to_path_buf());
 
-    for item in dirs {
-        if item.ends_with(names::VERSION_DIR) {
-            let dir1 = path_helper::get_dirs(&item);
-            for item in dir1 {
-                if other_launcher::is_minecraft_version(&item) {
-                    list.push(item.to_path_buf());
-                }
-            }
+    // 1. 这个目录 / 它的直接子目录，当作启动器数据目录去找 versions、instances
+    let mut roots = vec![root.to_path_buf()];
+    roots.extend(path_helper::get_dirs(root));
+    for item in &roots {
+        collect_launcher_instances(item, &mut list);
+        if !list.is_empty() {
+            return list;
+        }
+    }
 
-            if !list.is_empty() {
-                return list;
+    // 2. 目录本身就是实例
+    if other_launcher::is_minecraft_version(root) {
+        return vec![root.to_path_buf()];
+    }
+    if other_launcher::is_mmc_version(root) {
+        return vec![root.to_path_buf()];
+    }
+
+    // 3. 选的就是 versions / instances 目录本身：它下面一个个就是实例
+    if root.ends_with(names::VERSION_DIR) {
+        for item in path_helper::get_dirs(root) {
+            if other_launcher::is_minecraft_version(&item) {
+                list.push(item);
             }
         }
-
-        if item.ends_with(names::INSTANCE_DIR) {
-            let dir1 = path_helper::get_dirs(&item);
-            for item in dir1 {
-                if other_launcher::is_mmc_version(&item) {
-                    list.push(item.to_path_buf());
-                }
-            }
-
-            if !list.is_empty() {
-                return list;
+        if !list.is_empty() {
+            return list;
+        }
+    }
+    if root.ends_with(names::INSTANCE_DIR) {
+        for item in path_helper::get_dirs(root) {
+            if other_launcher::is_mmc_version(&item) {
+                list.push(item);
             }
         }
+        if !list.is_empty() {
+            return list;
+        }
+    }
 
+    // 4. 兜底：直接子目录本身就是实例目录
+    for item in path_helper::get_dirs(root) {
         if other_launcher::is_minecraft_version(&item) {
-            list.push(item.to_path_buf());
+            list.push(item);
             continue;
         }
-
         if other_launcher::is_mmc_version(&item) {
-            list.push(item.to_path_buf());
+            list.push(item);
         }
     }
 
     list
+}
+
+/// 从"启动器数据目录"里收集实例：`versions/*`（官方）与 `instances/*`（MMC）
+///
+/// 走到这里说明目录**确实有这个布局**（`versions` / `instances` 是存在的目录），
+/// 所以下面的每个子目录都按实例去判定，不做额外过滤 ——
+/// 目录名与 json 名不一致的版本目录（`1.20.1-forge/` 里是 `1.20.1-forge-47.2.0.json`）
+/// 也得认出来。
+///
+/// - `root`: 启动器数据目录
+/// - `out`: 结果追加到这里
+fn collect_launcher_instances(root: &Path, out: &mut Vec<PathBuf>) {
+    let versions = root.join(names::VERSION_DIR);
+    if versions.is_dir() {
+        for item in path_helper::get_dirs(&versions) {
+            if other_launcher::is_minecraft_version(&item) {
+                out.push(item);
+            }
+        }
+        // 这个目录下已经找到版本了，就不用再看 MMC 的 instances
+        if !out.is_empty() {
+            return;
+        }
+    }
+
+    let instances = root.join(names::INSTANCE_DIR);
+    if instances.is_dir() {
+        for item in path_helper::get_dirs(&instances) {
+            if other_launcher::is_mmc_version(&item) {
+                out.push(item);
+            }
+        }
+    }
 }
 
 /// 检测压缩包类型

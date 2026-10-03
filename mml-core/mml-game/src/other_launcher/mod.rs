@@ -63,7 +63,7 @@ pub fn is_minecraft_version<P: AsRef<Path>>(dir: P) -> bool {
     let files = path_helper::get_files(dir);
 
     for item in files {
-        if !item.ends_with(names::JSON_DOT_EXT) {
+        if !item.extension().is_some_and(|ext| ext == names::JSON_EXT) {
             continue;
         }
 
@@ -238,6 +238,8 @@ impl OfficialObj {
         };
 
         if self.patches.is_empty() {
+            // 版本号取自 json 自己，但要用 `have_version()` 确认这个版本在本启动器已知的
+            // 版本清单里（清单见 [`version_path::have_version`]：内存没有时会读本地缓存）
             if !self.inherits_from.is_empty() {
                 if version_path::have_version(&self.inherits_from) {
                     instance.version = self.inherits_from

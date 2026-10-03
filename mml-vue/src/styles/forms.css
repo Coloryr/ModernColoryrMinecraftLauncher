@@ -217,6 +217,13 @@ select.field-select {
   height: var(--field-h);
 }
 
+/* 路径选择按钮（"选择" / Browse）：只有两个字时按钮太窄，跟旁边的输入框不成比例；
+   给个最小宽度并居中（添加实例窗口的压缩包 / 文件夹两处共用） */
+.path-row .ui-btn.pick-btn {
+  min-width: 84px;
+  justify-content: center;
+}
+
 /* 两列字段行：左右各一个字段 */
 .field-row-2 {
   display: grid;

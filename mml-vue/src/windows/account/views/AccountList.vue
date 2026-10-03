@@ -63,6 +63,7 @@ function hidePreview() {
           class="row-avatar"
           :class="{ pending: imageLoading(acc, 'avatar') }"
           alt=""
+          data-no-fallback
           @load="markImageLoaded(acc, 'avatar')"
           @error="markImageFailed(acc, 'avatar')"
           @mouseenter="showPreview($event, acc)"

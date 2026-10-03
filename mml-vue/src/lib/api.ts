@@ -17,6 +17,7 @@ import type {
   ErrorEvent,
   ExitEvent,
   FileListDto,
+  FolderInstanceDto,
   ClientConfigDto,
   ExportConfigDto,
   ExportInfoDto,
@@ -45,6 +46,7 @@ import type {
   SchematicItemDto,
   StatsDataDto,
   StateEvent,
+  SystemMemoryDto,
   VersionInfoDto,
 } from "./bindings";
 import { AddLoaderProgress, AddModpackStatus, AddNameConflict, AddPackProgress, AddResourceStatus, BlockRender, ClientConfigChange, CloseBlocked, CollectChange, CustomHomeChange, DownloadItem, DownloadTask, ExportFocus, ExportProgress, GameExit, GameLog, InstanceChange, JavaChange, LaunchError, LaunchState, LogFocus } from "./listens";
@@ -91,6 +93,15 @@ export const api = {
   /** 获取 Java 列表（配置加载 / 扫描异步进行，未完成时为空） */
   async getJavaList(): Promise<JavaInfoDto[]> {
     return commands.main.getJavaList();
+  },
+
+  /**
+   * 获取本机内存（MiB），用于内存设置显示的参考值
+   *
+   * 查询失败时后端返回 0，调用方按"不可用"处理（不显示）
+   */
+  async getSystemMemory(): Promise<SystemMemoryDto> {
+    return commands.main.getSystemMemory();
   },
 
   /** 获取游戏版本列表（后端进程级缓存） */
@@ -341,10 +352,19 @@ export const api = {
     await commands.windows.dropModel(kind);
   },
 
+  /**
+   * 扫描文件夹里可导入的实例（官方启动器 `versions/*` 与 MMC `instances/*`）
+   *
+   * 选到 `.minecraft` 这类装着若干实例的目录时用：返回的每一项都是一个可导入的实例目录，
+   * 由前端列出来让用户勾选（而不是把整个 `.minecraft` 当成一个实例）
+   */
+  async addScanFolder(path: string): Promise<FolderInstanceDto[]> {
+    return commands.add.scanFolder(path);
+  },
+
   /** 获取压缩包类型 ID 列表 */
   async addGetPackTypes(): Promise<string[]> {
-    return commands.add.getPackTypes();
-  },
+    return commands.add.getPackTypes();  },
 
   /** 获取游戏版本类型 ID 列表（release / snapshot / old_beta / old_alpha） */
   async addGetVersionTypes(): Promise<string[]> {

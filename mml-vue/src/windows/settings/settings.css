@@ -31,9 +31,12 @@
   margin-top: 16px;
 }
 
-/* 标签紧贴自己的控件 */
+/* 标签只管"贴住自己的控件"（下边距由下面那条给 8px）；
+   上边距**必须留着**：标签往往跟在别的东西后面（GC 模式那行、＋添加按钮……），
+   归零会让它贴在上一个控件上，"JVM 环境变量 / JVM 参数"这类标签就看着很挤。
+   真正的首行标签由最后那条 :first-child 顶格 */
 .settings-layout .setting-group > .field-label {
-  margin: 0;
+  margin-bottom: 0;
 }
 
 .settings-layout .setting-group > .field-label + * {
@@ -68,7 +71,8 @@
   margin-top: 6px;
 }
 
-/* 两列行 / 网格单元里的标签顶格（它们不是分组的直接子元素，上面那套节奏管不到） */
+/* 首行标签顶格：既管"两列行 / 网格单元里的标签"（它们不是分组的直接子元素，
+   上面那套节奏管不到），也管"分组的第一个子元素就是标签"那种 */
 .settings-layout .setting-group .field-label:first-child {
   margin-top: 0;
 }
@@ -544,6 +548,51 @@
   margin: 6px 0 0;
 }
 
+/* 本机内存参考值（内存设置下方一行说明） */
+.settings-layout .mem-hint {
+  color: var(--text-dim);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  margin: 8px 0 0;
+}
+
+/* 常用分辨率：小方块按钮，当前值匹配时高亮（与实例设置里那排一致） */
+.settings-layout .res-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.settings-layout .res-label {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.settings-layout .res-btn {
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-dim);
+  font-family: inherit;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  padding: 3px 9px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+
+.settings-layout .res-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.settings-layout .res-btn.on {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
 /* ---------- 动作行 / 保存反馈 ---------- */
 
 .settings-layout .set-save-row {
@@ -558,7 +607,7 @@
   justify-content: flex-end;
 }
 
-/* 保存状态文字：已保存 / 保存失败 / 有未保存的改动 */
+/* 保存状态文字：保存中 / 保存失败 / 有未保存的改动（"已保存"不再显示） */
 .settings-layout .save-state {
   display: inline-flex;
   align-items: center;
@@ -592,6 +641,9 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+  /* 标签 → 行列表 之间留出与其它控件一致的呼吸感；
+     这块自己是一叠行，太贴标签会看不出"这些行属于上面那个标签" */
+  margin-top: 10px;
 }
 
 .settings-layout .line-row {
@@ -634,6 +686,9 @@
   color: var(--text-dim);
   cursor: pointer;
   font-family: inherit;
+  /* 「＋ 添加」是独立操作、不是又一行输入：跟上一行输入拉开一点，
+     否则和上面的行同距（8px）会看着像同一组的一部分 */
+  margin-top: 6px;
 }
 
 .settings-layout .line-add:hover {

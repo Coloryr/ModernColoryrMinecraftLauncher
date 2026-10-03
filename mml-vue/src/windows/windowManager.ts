@@ -243,6 +243,19 @@ export function quitWindow() {
 }
 
 /**
+ * 同一次事件派发内的去重标志（见 [`closeWindow`]）
+ *
+ * 这是踩过的坑：窗口组件若没声明 `defineEmits`，Vue 会把父级的 `@close` 当 attrs
+ * 透传到根组件上，与模板里的 `@close="$emit('close')"` 合并成**两个**处理器 ——
+ * 一次"返回"会同步调两遍 closeWindow()：第一遍切回主页（currentKind 变成 main），
+ * 第二遍就撞上"在主页 = 关窗口 = 退出应用"，于是点返回直接把程序关了。
+ *
+ * 用微任务窗口去重：同一次事件派发里的重复调用被丢掉，用户连点两次返回（两个独立任务）
+ * 仍然照常逐层后退。
+ */
+let closing = false;
+
+/**
  * 收起当前页面 / 窗口（各窗口的「取消」按钮、标题栏的 ‹ 箭头触发）
  *
  * - 多窗口模式：每个功能就是一个独立窗口，收起 = 关掉它
@@ -251,6 +264,13 @@ export function quitWindow() {
  * ✕ 不走这里，走 quitWindow：单窗口模式下 ✕ 是真的退出应用，不是退一层
  */
 export function closeWindow() {
+  // 同一次事件里的重复调用直接丢掉（原因见上面 closing 的说明）
+  if (closing) return;
+  closing = true;
+  queueMicrotask(() => {
+    closing = false;
+  });
+
   const kind = currentKind.value;
 
   // 单窗口模式：先回上一层（谁打开的），没有上一层再回主页面

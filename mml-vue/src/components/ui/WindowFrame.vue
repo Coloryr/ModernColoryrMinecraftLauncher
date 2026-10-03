@@ -1,14 +1,13 @@
 <script setup lang="ts">
 // 子窗口通用框架：标题（兼作自绘标题栏）+ 内容区
 // 头部整条可拖动，两端按平台样式放窗口按钮；「返回主页面」按钮只在单窗口模式下显示。
-import { computed, watch } from "vue";
+import { computed } from "vue";
 import { t } from "../../lib/i18n";
-import { isTauri, multiWindow } from "../../windows/windowManager";
-import { commands } from "../../lib/bindings";
+import { multiWindow } from "../../windows/windowManager";
 import WindowControls from "./WindowControls.vue";
 import ModpackTitleIndicator from "../ModpackTitleIndicator.vue";
 import DownloadTitleIndicator from "../DownloadTitleIndicator.vue";
-import { onTitleBarPointerDown, titleBarStyle } from "../../lib/titlebar";
+import { onTitleBarPointerDown, titleBarStyle, useWindowTitle } from "../../lib/titlebar";
 
 const props = defineProps<{
   title: string;
@@ -33,15 +32,11 @@ const emit = defineEmits<{ (e: "close"): void; (e: "back"): void }>();
  *  多窗口模式下每个功能是独立窗口，关掉它自然露出下面那个，不需要返回键 */
 const showBack = computed(() => !multiWindow.value);
 
-// 原生窗口标题（任务栏 / Alt+Tab）跟随自绘标题栏文案，语言切换时同步更新
-watch(
-  () => props.title,
-  (title) => {
-    if (!isTauri()) return;
-    commands.windows.setTitle(title).catch(() => {});
-  },
-  { immediate: true },
-);
+// 原生窗口标题（任务栏 / Alt+Tab）跟随自绘标题栏文案。
+// 必须走 useWindowTitle：它**每次激活都重设**，而不是只在挂载时设一次 ——
+// 单窗口模式下本页被 KeepAlive 缓存，切走再回来不重新挂载，只设一次的话
+// 从别的页面切回来时，任务栏上还挂着上一个页面的标题
+useWindowTitle(() => props.title);
 </script>
 
 <template>

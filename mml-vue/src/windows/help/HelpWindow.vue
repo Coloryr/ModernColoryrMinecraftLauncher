@@ -6,6 +6,11 @@ import { t, locale } from "../../lib/i18n";
 import { faqs as zhFaqs } from "../../lib/i18n/locales/zh-CN";
 import { faqs as enFaqs } from "../../lib/i18n/locales/en-US";
 
+// 必须显式声明 close：不声明的话 Vue 会把父级的 @close 当 attrs 透传到根组件（WindowFrame），
+// 与模板里的 @close="$emit('close')" 合并成两个处理器 —— 一次返回会调两遍 closeWindow()，
+// 第二遍时 currentKind 已经回到 main，于是"返回"变成退出应用
+defineEmits<{ (e: "close"): void }>();
+
 const faqs = computed(() => (locale.value === "en_us" ? enFaqs : zhFaqs));
 
 const openIndex = ref<number | null>(0);

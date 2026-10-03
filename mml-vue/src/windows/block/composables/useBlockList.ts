@@ -5,8 +5,8 @@
 // 2. 三态派生（未渲染 / 渲染中 / 已渲染）与进度；
 // 3. 分类聚合、搜索过滤、详情选中与前后切换；
 // 4. 渲染与玩家头颅操作（带提示）；
-// 5. 视图偏好记忆（分类 / 搜索词 / 图标尺寸档，存 localStorage）。
-import { computed, onMounted, ref, watch } from "vue";
+// 5. 视图偏好记忆（分类 / 图标尺寸档，存 localStorage；**搜索词离开本页即清空**）。
+import { computed, onDeactivated, onMounted, ref, watch } from "vue";
 import { locale, t, tErr } from "../../../lib/i18n";
 import { showToast } from "../../../lib/toast";
 import { useUnlisteners } from "../../../composables/useUnlisteners";
@@ -195,6 +195,14 @@ export function useBlockList() {
     } catch {
       // 存储不可用（隐私模式等）时不影响使用
     }
+  });
+
+  // 离开方块列表时清掉搜索词（分类 / 图标尺寸档留着：那是浏览上下文）。
+  // 单窗口模式下这一页被 KeepAlive 缓存，切走不销毁，不清的话再打开时
+  // 列表还筛着上次搜的词，用户早忘了自己搜过什么，只会觉得"怎么东西少了"。
+  // 清空会经上面的 watch 写回偏好，所以重启后也不会又冒出来。
+  onDeactivated(() => {
+    keyword.value = "";
   });
 
   // ---------- 分类与过滤 ----------

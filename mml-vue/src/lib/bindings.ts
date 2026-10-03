@@ -52,6 +52,7 @@ export const commands = {
     importUrl: (url: string, name: string | null, group: string | null) => invoke<string>("add_import_url", { url, name, group }),
     listArchive: (path: string) => invoke<string[]>("add_list_archive", { path }),
     listDir: (path: string) => invoke<DirEntry[]>("add_list_dir", { path }),
+    scanFolder: (path: string) => invoke<FolderInstanceDto[]>("add_scan_folder", { path }),
     setCloseGuard: (enabled: boolean) => invoke<void>("add_set_close_guard", { enabled }),
   },
   addModpack: {
@@ -133,6 +134,7 @@ export const commands = {
     getMotd: (address: string) => invoke<MotdDto>("main_get_motd", { address }),
     getNews: (page: number | null) => invoke<NewsItem[]>("main_get_news", { page }),
     getRunning: () => invoke<string[]>("main_get_running"),
+    getSystemMemory: () => invoke<SystemMemoryDto>("main_get_system_memory"),
     getVersions: () => invoke<VersionInfoDto[]>("main_get_versions"),
     imageBaseUrl: () => invoke<string>("main_image_base_url"),
     launchGame: (uuid: string) => invoke<void>("main_launch_game", { uuid }),
@@ -234,6 +236,11 @@ export type AccountOAuthStateDto = {
 export type DirEntry = {
   name: string,
   isDir: boolean,
+};
+
+export type FolderInstanceDto = {
+  path: string,
+  name: string,
 };
 
 export type LoaderProgressDto = {
@@ -642,6 +649,11 @@ export type LogFocusDto = {
 export type InstanceLangDto = {
   code: string,
   name: string,
+};
+
+export type SystemMemoryDto = {
+  total: number,
+  free: number,
 };
 
 export type LoadState = {

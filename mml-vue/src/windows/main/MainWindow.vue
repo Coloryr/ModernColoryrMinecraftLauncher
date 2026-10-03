@@ -8,7 +8,6 @@ import {
   onClientConfigChange,
   onCustomHomeChange,
   onGameExit,
-  onGameLog,
   onInstanceChange,
   onJavaChange,
   onLaunchError,
@@ -28,7 +27,7 @@ import {
   setViewMode,
   viewMode,
 } from "../../lib/settings";
-import type { AccountStoreDto, CustomHomeInfoDto, InstanceArgsDto, InstanceInfoDto, JavaInfoDto, LogLine, MotdDto, MotdSegmentDto, NewsItem, VersionInfoDto } from "../../lib/bindings";
+import type { AccountStoreDto, CustomHomeInfoDto, InstanceArgsDto, InstanceInfoDto, JavaInfoDto, MotdDto, MotdSegmentDto, NewsItem, VersionInfoDto } from "../../lib/bindings";
 import InstanceIcon from "../../components/InstanceIcon.vue";
 import InstanceSelect from "../../components/InstanceSelect.vue";
 import InstanceMetaPanel from "../../components/InstanceMetaPanel.vue";
@@ -36,7 +35,6 @@ import LaunchArgsPanel from "../../components/LaunchArgsPanel.vue";
 import HomePage from "../../components/HomePage.vue";
 import CustomHomePage from "../../components/CustomHomePage.vue";
 import CustomExecPanel from "../../components/CustomExecPanel.vue";
-import InstanceLogPanel from "../../components/InstanceLogPanel.vue";
 import ProxyPanel from "../../components/ProxyPanel.vue";
 import { useModpackStatus } from "../../lib/modpackTasks";
 import ResourceDownloadBar from "../../components/ResourceDownloadBar.vue";
@@ -56,12 +54,15 @@ import BaseModal from "../../components/ui/BaseModal.vue";
 import SegmentedTabs from "../../components/ui/SegmentedTabs.vue";
 import NumberStepper from "../../components/ui/NumberStepper.vue";
 import CollapsePanel from "../../components/ui/CollapsePanel.vue";
+import { useWindowTitle } from "../../lib/titlebar";
 
 // 注意：不能用顶层 await —— 会让 <script setup> 变成 async setup，
 // App.vue 没有 <Suspense> 包裹，Vue 将不渲染该组件（窗口白屏）
-// 写系统窗口标题（任务栏 / Alt+Tab）走自定义命令 window_set_title：
-// JS API setTitle 需要 core:window:allow-set-title 权限（capabilities 未放行）
-commands.windows.setTitle(t("winTitle.main")).catch(() => { /* 忽略 */ });
+// 系统窗口标题（任务栏 / Alt+Tab）走自定义命令 window_set_title：
+// JS API setTitle 需要 core:window:allow-set-title 权限（capabilities 未放行）。
+// 必须用 useWindowTitle 而不是在这里直接设一次：单窗口模式下本页被 KeepAlive 缓存，
+// 从子窗口切回来不重新挂载，只设一次的话任务栏上会一直挂着子窗口的标题
+useWindowTitle(() => t("winTitle.main"));
 
 // ================= 基础状态 =================
 
@@ -320,22 +321,11 @@ function onAccountChange(account: AccountStoreDto) {
 // ================= 启动状态 =================
 
 const statusText = ref(t("launch.ready"));
-const logs = ref<LogLine[]>([]);
 
 function stateText(state: string): string {
   const key = `state.${state}`;
   const msg = t(key);
   return msg === key ? state : msg;
-}
-
-function appendLog(line: LogLine) {
-  logs.value.push(line);
-  if (logs.value.length > 3000) logs.value.splice(0, logs.value.length - 3000);
-}
-
-/** 追加一行无结构的启动器消息（无线程/级别/分类） */
-function appendLogText(text: string) {
-  appendLog({ time: "", text, thread: "", level: "", category: "" });
 }
 
 // ================= 启动进度（顶部进度条） =================
@@ -355,30 +345,7 @@ const execOpen = ref(false);
 const serverOpen = ref(false);
 const proxyOpen = ref(false);
 
-// 实例日志：列表模式走弹窗，分组模式走设置内的折叠节；打开时从核心拉一次完整历史
-const logOpen = ref(false);
-const detailLogOpen = ref(false);
-
-async function refreshLogs() {
-  if (!selected.value) return;
-  try {
-    logs.value = await api.getGameLog(selected.value.uuid);
-  } catch {
-    // 核心侧还没有该实例的日志时忽略
-  }
-}
-
-function openLogModal() {
-  logOpen.value = true;
-  refreshLogs();
-}
-
-function toggleDetailLog() {
-  detailLogOpen.value = !detailLogOpen.value;
-  if (detailLogOpen.value) refreshLogs();
-}
-
-/** 在独立日志窗口中打开当前实例的日志 */
+/** 打开独立日志窗口（实例日志只在那个窗口里看，主页面不展示日志内容） */
 function openLogWindow() {
   if (selected.value) openWindow("log", { uuid: selected.value.uuid });
 }
@@ -930,6 +897,10 @@ function onAction(id: ActionId) {
       // 跳转到添加资源窗口（当前实例已持久化在 gui_config.json，窗口自己读）
       openWindow("add_resource");
       break;
+    case "viewLog":
+      // 日志只在独立窗口里看（主页面不展示日志内容）
+      openLogWindow();
+      break;
     default:
       showToast(t("actions.wip", { name: t(ACTION_LABELS[id]) }));
   }
@@ -1179,20 +1150,6 @@ const { status: resourceStatus, init: initResourceStatus } = useResourceStatus(f
 
 async function subscribeEvents() {
   const fns = await Promise.all([
-    onGameLog((e) => {
-      if (e.uuid !== selected.value?.uuid) return;
-      if (e.clear) {
-        logs.value = [];
-        return;
-      }
-      appendLog({
-        time: e.time,
-        text: e.text,
-        thread: e.thread,
-        level: e.level,
-        category: e.category,
-      });
-    }),
     onLaunchState((e) => {
       if (e.uuid !== selected.value?.uuid) return;
       statusText.value = stateText(e.state);
@@ -1205,11 +1162,6 @@ async function subscribeEvents() {
         e.code === 0 ? t("launch.exited") : t("launch.exitedCode", { code: e.code });
       launchStage.value = "";
       launchPct.value = null;
-      appendLogText(
-        e.code === 0
-          ? t("launch.processExited")
-          : t("launch.processExitedCode", { code: e.code }),
-      );
       const inst = instances.value.find((i) => i.uuid === e.uuid);
       if (inst) inst.running = false;
     }),
@@ -1218,7 +1170,6 @@ async function subscribeEvents() {
       statusText.value = t("launch.failed");
       launchStage.value = "";
       launchPct.value = null;
-      appendLogText(t("launch.error", { msg: e.message }));
       if (e.uuid) {
         const inst = instances.value.find((i) => i.uuid === e.uuid);
         if (inst) inst.running = false;
@@ -1327,13 +1278,12 @@ async function launch() {
   statusText.value = t("launch.launching");
   launchStage.value = "";
   launchPct.value = null;
-  logs.value = [];
   try {
     await api.launchGame(uuid);
   } catch (e) {
     if (selected.value) selected.value.running = false;
     statusText.value = t("launch.failed");
-    appendLogText(t("launch.error", { msg: tErr(e) }));
+    showToast(t("launch.error", { msg: tErr(e) }));
   }
 }
 
@@ -1585,8 +1535,8 @@ onMounted(async () => {
               <BaseButton :disabled="!selected" @click="toggleSettings">
                 ⚙ {{ t("detail.settings") }}
               </BaseButton>
-              <!-- 实例日志：从设置入口旁打开（弹窗），主页面不显示日志 -->
-              <BaseButton :disabled="!selected" @click="openLogModal">
+              <!-- 实例日志：主页面不展示日志内容，直接开独立日志窗口 -->
+              <BaseButton :disabled="!selected" @click="openLogWindow">
                 📄 {{ t("detail.logs") }}
               </BaseButton>
             </div>
@@ -1724,12 +1674,6 @@ onMounted(async () => {
                         <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />
                       </svg>
                     </button>
-                    <button class="icon-btn" v-tip="t('actions.viewLog')" @click="onAction('viewLog')">
-                      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z" />
-                        <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" />
-                      </svg>
-                    </button>
                     <button class="icon-btn" v-tip="t('actions.editConfig')" @click="onAction('editConfig')">
                       <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3" />
@@ -1802,36 +1746,6 @@ onMounted(async () => {
                   />
                 </div>
 
-                <!-- 实例日志（设置内的折叠节：线程 / 级别 / 分类筛选 + 实时日志） -->
-                <div class="args-section">
-                  <button class="args-toggle" @click="toggleDetailLog">
-                    <span>📄 {{ t("detail.logs") }}</span>
-                    <svg
-                      class="args-chevron"
-                      :class="{ flip: detailLogOpen }"
-                      viewBox="0 0 24 24"
-                      width="13"
-                      height="13"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                    >
-                      <path d="m6 9 6 6 6-6" />
-                    </svg>
-                  </button>
-                  <button
-                    v-if="selected"
-                    class="args-toggle"
-                    v-tip="t('logWindow.openInWindow')"
-                    @click="openLogWindow"
-                  >
-                    <span>🗔 {{ t("logWindow.openInWindow") }}</span>
-                  </button>
-                  <CollapsePanel :open="detailLogOpen">
-                    <InstanceLogPanel :logs="logs" />
-                  </CollapsePanel>
-                </div>
-
                 <!-- 自定义执行 -->
                 <div class="args-section">
                   <button class="args-toggle" @click="execOpen = !execOpen">
@@ -1873,23 +1787,15 @@ onMounted(async () => {
                   </button>
                   <CollapsePanel :open="serverOpen">
                     <div class="server-config">
-                      <!-- 自动加入服务器设置：地址 + 端口 + 启动时加入（一行） -->
+                      <!-- 自动加入服务器设置：地址（可带 `:端口`，不写用 25565）+ 启动时加入 -->
                       <div class="server-row">
                         <span class="server-label">{{ t("server.ip") }}</span>
                         <input
                           class="field-input grow"
                           :value="argsOf(selected.uuid).serverIp"
-                          placeholder="127.0.0.1"
+                          :placeholder="t('server.ipPlaceholder')"
                           spellcheck="false"
                           @input="onServerIp(($event.target as HTMLInputElement).value)"
-                        />
-                        <span class="server-label small">{{ t("server.port") }}</span>
-                        <NumberStepper
-                          :model-value="argsOf(selected.uuid).serverPort"
-                          :min="1"
-                          :max="65535"
-                          :step="1"
-                          @update:model-value="onServerPort"
                         />
                         <label class="chk">
                           <input
@@ -1901,18 +1807,21 @@ onMounted(async () => {
                         </label>
                       </div>
 
-                      <!-- MOTD 展示：两行服务器信息 + 一行状态（查实例配置的服务器地址） -->
-                      <div class="motd-card">
+                      <!-- MOTD 展示：只在**填了服务器地址**时出现。
+                           没填时整块不显示 —— 原来会渲染一张只有兜底文案的卡片
+                           （"M²L 服务器 / 欢迎来到 M²L 服务器大厅"），看着像查询成功了，其实没查 -->
+                      <div v-if="argsOf(selected.uuid).serverIp.trim()" class="motd-card">
                         <img v-if="faviconOf(instMotd)" class="motd-icon" :src="faviconOf(instMotd)!" alt="" />
                         <div v-else class="motd-icon">MC</div>
                         <div class="motd-info">
-                          <div class="motd-name">{{ instMotd?.ip || argsOf(selected.uuid).serverIp || t("server.name") }}</div>
+                          <div class="motd-name">{{ instMotd?.ip || argsOf(selected.uuid).serverIp }}</div>
                           <div class="motd-text">
                             <template v-if="instMotd && instMotd.state === 'ok' && instMotd.segments.length">
                               <span v-for="(seg, i) in instMotd.segments" :key="i" :style="motdSegStyle(seg)">{{ seg.text }}</span>
                             </template>
                             <span v-else-if="instMotd">{{ instMotd.message || t("server.offline") }}</span>
-                            <span v-else>{{ t("server.motd") }}</span>
+                            <!-- 有地址但结果还没回来（这一块只在填了地址时才渲染） -->
+                            <span v-else>{{ t("server.refreshing") }}</span>
                           </div>
                           <div class="motd-meta">
                             <template v-if="instMotd && instMotd.state === 'ok'">
@@ -2045,11 +1954,6 @@ onMounted(async () => {
     <!-- ===== 添加实例：独立窗口（openAdd 打开） ===== -->
 
     <!-- ===== 重命名实例弹窗 ===== -->
-    <!-- 实例日志弹窗（列表模式）：筛选 + 实时日志 -->
-    <BaseModal v-if="logOpen && selected" :title="t('detail.logs')" :width="860" @close="logOpen = false">
-      <InstanceLogPanel :logs="logs" />
-    </BaseModal>
-
     <BaseModal v-if="showRename && selected" :title="t('actions.renameTitle')" :closable="false" @close="showRename = false">
       <label class="field-label">{{ t("add.name") }}</label>
       <input v-model="renameName" class="field-input" @keyup.enter="doRename" spellcheck="false" />
@@ -2871,6 +2775,12 @@ onMounted(async () => {
   min-width: 0;
   margin-left: 8px;
   margin-right: 14px;
+}
+
+/* 端口步进器不许被压扁：这一行是 nowrap 的 flex，步进器作为 flex item 默认可收缩，
+   会被挤到只剩一条缝（"端口"右边的框看着就不对了） */
+.server-row .server-port {
+  flex-shrink: 0;
 }
 
 .server-row .chk {

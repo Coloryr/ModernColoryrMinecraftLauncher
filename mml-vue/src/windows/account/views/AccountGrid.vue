@@ -98,6 +98,7 @@ function hidePreview() {
             class="img-avatar"
             :class="{ pending: imageLoading(acc, 'avatar') }"
             :alt="t('account.avatar')"
+            data-no-fallback
             @load="markImageLoaded(acc, 'avatar')"
             @error="markImageFailed(acc, 'avatar')"
             @mouseenter="showPreview($event, acc, 'avatar')"
@@ -120,6 +121,7 @@ function hidePreview() {
             class="img-skin"
             :class="{ 'mode-3d': isSkin3D, pending: imageLoading(acc, 'skin') }"
             :alt="t('account.skin')"
+            data-no-fallback
             @load="markImageLoaded(acc, 'skin')"
             @error="markImageFailed(acc, 'skin')"
             @mouseenter="showPreview($event, acc, 'skin')"
@@ -141,6 +143,7 @@ function hidePreview() {
             class="img-cape"
             :class="{ pending: imageLoading(acc, 'cape') }"
             :alt="t('account.cape')"
+            data-no-fallback
             @load="markImageLoaded(acc, 'cape')"
             @error="markImageFailed(acc, 'cape')"
             @mouseenter="showPreview($event, acc, 'cape')"

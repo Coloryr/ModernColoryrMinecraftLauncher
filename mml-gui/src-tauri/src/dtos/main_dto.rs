@@ -38,6 +38,16 @@ pub struct InstanceLangDto {
     pub name: String,
 }
 
+/// 本机内存（MiB），供启动参数里的内存设置显示参考值
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SystemMemoryDto {
+    /// 物理内存总量；查询失败为 0（前端不显示）
+    pub total: u64,
+    /// 当前可用内存；查询失败为 0（前端不显示）
+    pub free: u64,
+}
+
 /// 核心数据加载完成事件
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
