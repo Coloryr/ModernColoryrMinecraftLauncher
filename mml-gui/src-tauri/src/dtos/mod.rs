@@ -62,6 +62,6 @@ pub use main_dto::{
     InstanceLangDto, InstancePatch, LogEvent, NewsItem, StateEvent, SystemMemoryDto,
 };
 pub use resource_dto::{
-    DataPackItemDto, ModItemDto, PackItemDto, SaveItemDto, ScreenshotItemDto, ServerItemDto,
-    ShaderItemDto, SchematicItemDto,
+    DataPackItemDto, ModGroupDto, ModItemDto, PackItemDto, SaveItemDto, ScreenshotItemDto,
+    ServerItemDto, ShaderItemDto, SchematicItemDto,
 };

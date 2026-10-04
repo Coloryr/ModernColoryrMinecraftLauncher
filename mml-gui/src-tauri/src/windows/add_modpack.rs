@@ -210,6 +210,95 @@ pub fn cancel_search(label: &str) {
     }
 }
 
+/// 本地压缩包导入用的占位项目 ID
+///
+/// 任务表以 pid + fid 为键，而本地包**没有**项目 ID（也不该假装有）。用这个固定值占位、
+/// 把包路径当文件 ID（同一个包不重复安装）。它只活在任务表里：`running_pids` /
+/// `installed_modpack_pids` 那边只拿它给**在线列表**打角标，不会与真实项目 ID 撞车。
+pub(crate) const LOCAL_PACK_PID: &str = "local";
+
+/// 登记一个整合包安装任务（同 pid+fid 不重复安装），返回任务句柄与安装进度回调
+///
+/// 在线安装（[`add_modpack_install`]）与本地压缩包导入（[`super::add::add_import_archive`]）
+/// 共用它：两条路径产生的任务、进度事件、取消与终态处理完全一致
+/// （标题栏指示器、进度弹窗、主窗口列表刷新都复用那一套）。
+///
+/// `cancel` 由调用方给：本地导入复用**添加实例窗口**那份令牌，
+/// 这样窗口上的取消按钮与任务上的取消停掉的是同一次安装。
+pub(crate) fn register_task(
+    app: &AppHandle,
+    key: SourceInfo,
+    source: &str,
+    name: String,
+    cancel: CancellationToken,
+) -> Result<(Arc<ModPackTask>, AddModPackGui), String> {
+    let task = Arc::new(ModPackTask {
+        uuid: Uuid::new_v4(),
+        source: source.to_string(),
+        pid: key.pid.clone(),
+        fid: key.fid.clone(),
+        name,
+        cancel: cancel.clone(),
+        progress: Mutex::new(ModPackProgress {
+            state: pack_state_id(AddModPackState::DownloadPack).into(),
+            now: 0,
+            total: 0,
+            sub_text: None,
+            sub_now: 0,
+            sub_total: 0,
+        }),
+        done: AtomicBool::new(false),
+        failed: AtomicBool::new(false),
+        cancelled: AtomicBool::new(false),
+        error: Mutex::new(None),
+        instance_uuid: Mutex::new(None),
+    });
+
+    {
+        let mut map = DOWNLOAD_NOW.write().unwrap();
+        if map.contains_key(&key) {
+            return Err(String::from("err.alreadyDownloading"));
+        }
+        map.insert(key, task.clone());
+    }
+    emit_add_modpack_status(app, build_status(app));
+
+    let pack_gui: AddModPackGui = Some(Arc::new(TaskPackGui {
+        task: task.clone(),
+        app: app.clone(),
+    }));
+    Ok((task, pack_gui))
+}
+
+/// 记录安装终态并广播
+///
+/// - `Ok(uuid)`：安装成功 —— 回填新实例 uuid 并广播 instance-change（主窗口据此刷新并选中）
+/// - `Err(err)`：失败 —— **令牌已取消时记为"已取消"**（取消可能来自别的入口，
+///   例如添加实例窗口自己的取消按钮，那条路径不会去置 cancelled 标记），否则记失败原因
+pub(crate) fn finish_task(
+    app: &AppHandle,
+    task: &ModPackTask,
+    cancel: &CancellationToken,
+    res: Result<Uuid, String>,
+) {
+    match res {
+        Ok(uuid) => {
+            *task.instance_uuid.lock().unwrap() = Some(uuid.to_string());
+            task.done.store(true, Ordering::Release);
+            crate::windows::main::emit_instance_change(app, "add");
+        }
+        Err(err) => {
+            if cancel.is_cancelled() {
+                task.cancelled.store(true, Ordering::Release);
+            } else {
+                *task.error.lock().unwrap() = Some(err);
+                task.failed.store(true, Ordering::Release);
+            }
+        }
+    }
+    emit_add_modpack_status(app, build_status(app));
+}
+
 /// 安装在线整合包（多任务：命令立即返回，任务在后台跑，
 /// 进度走 `add-modpack-status` 事件；name 取自整合包元数据）
 #[tauri::command]
@@ -255,46 +344,15 @@ pub async fn add_modpack_install(
         _ => (project_id.clone(), None),
     };
 
-    // 登记任务：同 pid+fid 不允许重复安装
+    // 登记任务：同 pid+fid 不允许重复安装（进度回调与任务一起给出）
     let token = CancellationToken::new();
-    let task = Arc::new(ModPackTask {
-        uuid: Uuid::new_v4(),
-        source: source.clone(),
-        pid: project_id.clone(),
-        fid: file_id.clone(),
-        name,
-        cancel: token.clone(),
-        progress: Mutex::new(ModPackProgress {
-            state: pack_state_id(AddModPackState::DownloadPack).into(),
-            now: 0,
-            total: 0,
-            sub_text: None,
-            sub_now: 0,
-            sub_total: 0,
-        }),
-        done: AtomicBool::new(false),
-        failed: AtomicBool::new(false),
-        cancelled: AtomicBool::new(false),
-        error: Mutex::new(None),
-        instance_uuid: Mutex::new(None),
-    });
-    {
-        let mut map = DOWNLOAD_NOW.write().unwrap();
-        if map.contains_key(&key) {
-            return Err(String::from("err.alreadyDownloading"));
-        }
-        map.insert(key, task.clone());
-    }
-    emit_add_modpack_status(&app, build_status(&app));
+    let (task, pack_gui) = register_task(&app, key, &source, name, token.clone())?;
 
     let gui = instance_gui(&window);
-    let pack_gui: AddModPackGui = Some(Arc::new(TaskPackGui {
-        task: task.clone(),
-        app: app.clone(),
-    }));
 
     // 后台安装：命令不等安装结束（安装 future 非 Send，放阻塞线程上 block_on）
     let app_task = app.clone();
+    let install_token = token.clone();
     tauri::async_runtime::spawn(async move {
         let res = tauri::async_runtime::spawn_blocking(move || {
             tauri::async_runtime::block_on(async {
@@ -311,7 +369,13 @@ pub async fn add_modpack_install(
                             .next()
                             .ok_or_else(|| "err.fileNotFound".to_string())?;
                         add_game::install_curseforge(
-                            &mut data, group, icon, gui, pack_gui, None, token,
+                            &mut data,
+                            group,
+                            icon,
+                            gui,
+                            pack_gui,
+                            None,
+                            install_token,
                         )
                         .await
                         .map_err(|e| e.to_string())
@@ -320,9 +384,17 @@ pub async fn add_modpack_install(
                         let data = modrinth_api::get_version(&project_id, &file_id)
                             .await
                             .map_err(|e| e.to_string())?;
-                        add_game::install_modrinth(&data, group, icon, gui, pack_gui, None, token)
-                            .await
-                            .map_err(|e| e.to_string())
+                        add_game::install_modrinth(
+                            &data,
+                            group,
+                            icon,
+                            gui,
+                            pack_gui,
+                            None,
+                            install_token,
+                        )
+                        .await
+                        .map_err(|e| e.to_string())
                     }
                     _ => Err(String::from("err.unknownSource")),
                 }
@@ -331,19 +403,7 @@ pub async fn add_modpack_install(
         .await
         .unwrap_or_else(|e| Err(e.to_string()));
 
-        // 记终态并广播（cancelled 标记已由取消命令置位，优先于 failed）
-        match res {
-            Ok(uuid) => {
-                *task.instance_uuid.lock().unwrap() = Some(uuid.to_string());
-                task.done.store(true, Ordering::Release);
-                crate::windows::main::emit_instance_change(&app_task, "add");
-            }
-            Err(e) => {
-                *task.error.lock().unwrap() = Some(e);
-                task.failed.store(true, Ordering::Release);
-            }
-        }
-        emit_add_modpack_status(&app_task, build_status(&app_task));
+        finish_task(&app_task, &task, &token, res);
     });
 
     Ok(())

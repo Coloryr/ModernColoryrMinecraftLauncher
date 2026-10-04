@@ -9,11 +9,20 @@ import BaseModal from "../../components/ui/BaseModal.vue";
 import BaseButton from "../../components/ui/BaseButton.vue";
 import { useWindowRefresh } from "../../composables/useWindowRefresh";
 import { api, onDownloadItem, onDownloadTask } from "../../lib/api";
+import {
+  byProjectCount,
+  downloadOverallPercent,
+  downloadTaskPercent,
+} from "../../lib/progress";
 import { t } from "../../lib/i18n";
+import { usePageActive } from "../../lib/pageActive";
 import { multiWindow } from "../windowManager";
 import type { DownloadStatusDto, DownloadTaskDto } from "../../lib/bindings";
 
 const emit = defineEmits<{ (e: "close"): void }>();
+
+/** 本页面是否在前台（单窗口模式下切走只是被 KeepAlive 停用，见 lib/pageActive.ts） */
+const pageActive = usePageActive();
 
 /** 轮询间隔（毫秒） */
 const REFRESH_MS = 700;
@@ -59,30 +68,11 @@ const tasks = computed(() => [...status.value.tasks].sort((a, b) => a.id - b.id)
 const threads = computed(() => status.value.threads.filter((x) => x.state !== "done"));
 
 // ================= 进度计算 =================
+// 口径见 lib/progress.ts：多文件按项目数、单文件按字节。总览与单任务、标题栏指示器共用它，
+// 三处必须同源，否则同一个任务在列表和顶栏上会显示成两个进度
 
-/** 单任务进度：优先按字节，元信息未知时退回文件数 */
-function taskProgress(task: DownloadTaskDto): number {
-  if (task.allBytes > 0) {
-    return Math.min(100, (task.nowBytes / task.allBytes) * 100);
-  }
-  if (task.total > 0) {
-    return Math.min(100, ((task.completed + task.failed) / task.total) * 100);
-  }
-  return 0;
-}
-
-/** 总体进度：按字节加权，未知时按文件数 */
-const overall = computed(() => {
-  const list = tasks.value;
-  const all = list.reduce((n, x) => n + x.allBytes, 0);
-  if (all > 0) {
-    const now = list.reduce((n, x) => n + x.nowBytes, 0);
-    return Math.min(100, (now / all) * 100);
-  }
-  const total = list.reduce((n, x) => n + x.total, 0);
-  const done = list.reduce((n, x) => n + x.completed + x.failed, 0);
-  return total > 0 ? Math.min(100, (done / total) * 100) : 0;
-});
+/** 总体进度（与单任务同一口径，汇总全部任务） */
+const overall = computed(() => downloadOverallPercent(tasks.value));
 
 /** 总体字节：已下载 / 总大小 */
 const overallBytes = computed(() => ({
@@ -95,6 +85,16 @@ const overallFiles = computed(() => ({
   done: tasks.value.reduce((n, x) => n + x.completed, 0),
   total: tasks.value.reduce((n, x) => n + x.total, 0),
 }));
+
+/** 计数文案：多文件任务数「项目」，单文件才数「文件」（与进度条同一口径） */
+const countKey = computed(() =>
+  byProjectCount(overallFiles.value.total) ? "winDownload.projects" : "winDownload.files",
+);
+
+/** 单个任务的计数文案（同 `countKey`） */
+function taskCountKey(task: DownloadTaskDto): string {
+  return byProjectCount(task.total) ? "winDownload.projects" : "winDownload.files";
+}
 
 // ================= 任务状态（标签文案 + 配色） =================
 
@@ -172,10 +172,12 @@ async function refresh() {
     return;
   }
   // 任务全部结束（下载完成后清空）：自动关窗，不用手动点关闭；
-  // 有失败或用户主动停止时保留窗口
+  // 有失败或用户主动停止时保留窗口。
+  // 页面已切走时不发这条关闭（见 lib/pageActive.ts）：此刻"关窗"会被当成关掉当前页面，
+  // 而在主页面就是退出启动器 —— 轮询虽已停，收尾那一发仍可能落到这里
   if (hadTasks && !keepOpen && !lastFailed) {
     hadTasks = false;
-    emit("close");
+    if (pageActive.value) emit("close");
   }
 }
 
@@ -269,7 +271,7 @@ onUnmounted(() => {
         <div class="overview-head">
           <span class="ov-item">{{ t("winDownload.taskCount", { n: tasks.length }) }}</span>
           <span class="ov-item">
-            {{ t("winDownload.files", { done: overallFiles.done, total: overallFiles.total }) }}
+            {{ t(countKey, { done: overallFiles.done, total: overallFiles.total }) }}
           </span>
           <span v-if="overallBytes.all > 0" class="ov-item">
             {{ sizeText(overallBytes.now, overallBytes.all) }}
@@ -326,7 +328,7 @@ onUnmounted(() => {
                 {{ t(`winDownload.taskState.${taskState(task)}`) }}
               </span>
               <span class="task-meta">
-                {{ t("winDownload.files", { done: task.completed, total: task.total }) }}
+                {{ t(taskCountKey(task), { done: task.completed, total: task.total }) }}
               </span>
               <span class="task-meta right">
                 <template v-if="task.failed > 0">{{ t("winDownload.failed", { n: task.failed }) }}</template>
@@ -341,10 +343,10 @@ onUnmounted(() => {
                 <span
                   class="progress-fill"
                   :class="{ failed: task.failed > 0, paused: task.paused }"
-                  :style="{ width: taskProgress(task) + '%' }"
+                  :style="{ width: downloadTaskPercent(task) + '%' }"
                 />
               </span>
-              <span class="task-percent">{{ taskProgress(task).toFixed(1) }}%</span>
+              <span class="task-percent">{{ downloadTaskPercent(task).toFixed(1) }}%</span>
             </div>
           </div>
         </div>

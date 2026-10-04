@@ -11,7 +11,7 @@
 //   → 挂在 WindowFrame 的 head-right 插槽（各窗口自己那条标题栏）。
 //
 // 自包含状态：自己订阅安装任务，不依赖父组件传参（两处挂载点都能直接放）。
-import { computed, onUnmounted } from "vue";
+import { computed, onMounted, onUnmounted } from "vue";
 import { t } from "../lib/i18n";
 import { useModpackStatus } from "../lib/modpackTasks";
 import { openModpackPopup } from "../windows/windowManager";
@@ -26,7 +26,23 @@ const props = withDefaults(
 );
 
 const { status, init } = useModpackStatus(false);
-void init().then((unlisten) => onUnmounted(unlisten));
+
+/**
+ * 状态订阅的退订函数
+ *
+ * 赋值与注册分开：`onUnmounted` 只能在 setup 的**同步阶段**注册（写在 `init()` 的
+ * `await` 之后就注册不上了，订阅会一直挂着），所以退订函数存这里、由下面的同步钩子调用。
+ */
+let unlistenStatus: (() => void) | null = null;
+
+onMounted(async () => {
+  unlistenStatus = await init();
+});
+
+onUnmounted(() => {
+  unlistenStatus?.();
+  unlistenStatus = null;
+});
 
 const tasks = computed(() => status.value?.tasks ?? []);
 

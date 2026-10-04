@@ -174,6 +174,11 @@ export const commands = {
     listShaderpacks: (uuid: string) => invoke<ShaderItemDto[]>("resource_list_shaderpacks", { uuid }),
     modDisable: (uuid: string, modUuid: string) => invoke<void>("resource_mod_disable", { uuid, modUuid }),
     modEnable: (uuid: string, modUuid: string) => invoke<void>("resource_mod_enable", { uuid, modUuid }),
+    modGroupAdd: (uuid: string, name: string) => invoke<void>("resource_mod_group_add", { uuid, name }),
+    modGroupRemove: (uuid: string, name: string) => invoke<void>("resource_mod_group_remove", { uuid, name }),
+    modGroupRename: (uuid: string, name: string, newName: string) => invoke<void>("resource_mod_group_rename", { uuid, name, newName }),
+    modGroupSet: (uuid: string, group: string | null, keys: string[]) => invoke<void>("resource_mod_group_set", { uuid, group, keys }),
+    modGroups: (uuid: string) => invoke<ModGroupDto[]>("resource_mod_groups", { uuid }),
     openFolder: (uuid: string, kind: string, name: string | null, parent: string | null) => invoke<void>("resource_open_folder", { uuid, kind, name, parent }),
     serverAdd: (uuid: string, name: string, ip: string) => invoke<void>("resource_server_add", { uuid, name, ip }),
     serverDelete: (uuid: string, name: string, ip: string) => invoke<void>("resource_server_delete", { uuid, name, ip }),
@@ -781,6 +786,7 @@ export type MotdDto = {
 
 export type ModItemDto = {
   uuid: string,
+  sha1: string,
   file: string,
   disable: boolean,
   fail: boolean,
@@ -791,6 +797,12 @@ export type ModItemDto = {
   author: string,
   description: string,
   icon: string,
+  jarInJar: ModItemDto[],
+};
+
+export type ModGroupDto = {
+  name: string,
+  mods: string[],
 };
 
 export type PackItemDto = {

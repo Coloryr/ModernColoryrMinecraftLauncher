@@ -22,3 +22,17 @@ export const ADD_MODES: AddModeTab[] = [
   { id: "folder", labelKey: "add.modeFolder", icon: "folder" },
   { id: "online", labelKey: "add.modeOnline", icon: "globe" },
 ];
+
+/**
+ * 真·整合包（内核里走整合包安装 worker 的两种 manifest）
+ *
+ * 这两种压缩包导入时走「下载整合包」那条安装任务路径：进度在标题栏的整合包指示器上，
+ * 装完自动出现并选中新实例；MMC / HMCL / 直接解压等只是"别人的包格式"，
+ * 内核按普通压缩包解，没有在线安装那套元数据（见 add.rs 的 is_modpack）。
+ */
+const MODPACK_PACK_TYPES = new Set(["curseforge", "modrinth"]);
+
+/** 该压缩包类型是否为整合包 */
+export function isModpackPackType(packType: string): boolean {
+  return MODPACK_PACK_TYPES.has(packType);
+}

@@ -1,0 +1,642 @@
+/* 资源管理窗口的窗口级样式（**非 scoped**）
+ *
+ * 这个窗口拆成了「薄外壳 + 十个 parts + 两个 composable」，而 scoped 样式跨不过组件边界
+ * （各 pane 里的 .item-row / .badge / .mini-btn 拿不到外壳的 scoped 规则），所以公共样式集中
+ * 放这里，由 ResourceWindow.vue 注入一次 —— 与 windows/settings/settings.css 同一做法。
+ *
+ * 反外溢：**所有规则都挂在 `.resource-layout` 之下**（这个类只属于本窗口），
+ * 因此即使类名很通用（.badge / .mini-btn / .item-row…），也不会影响其它窗口里同名的
+ * scoped 类。新增规则请保持这个前缀。
+ *
+ * 例外：弹窗内容是 Teleport 到 body 的，不在 .resource-layout 里 —— 那几处的样式由各自
+ * 的弹窗组件自带（ConfirmModal / ServerFormModal / ScreenshotPane 的大图预览），
+ * 按钮一律用全仓通用的 BaseButton + 全局 .modal-actions。
+ */
+
+.resource-layout {
+  display: flex;
+  gap: 18px;
+  height: 100%;
+}
+
+/* ---------- 左侧分类栏 ---------- */
+
+.resource-layout .cat-nav {
+  width: 190px;
+  min-width: 190px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.resource-layout .cat-item {
+  text-align: left;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.resource-layout .cat-item:hover {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.resource-layout .cat-item.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* 正被拖的分类：留在原位但淡下去（顺序由下面那条插入线表达） */
+.resource-layout .cat-item.dragging {
+  opacity: 0.45;
+}
+
+/* 拖拽插入线：一条 2px 的强调色横线，画在"松手后落到的位置" */
+.resource-layout .cat-insert {
+  display: block;
+  height: 2px;
+  margin: 1px 6px;
+  border-radius: 1px;
+  background: var(--accent);
+}
+
+/* ---------- 右侧内容区 ---------- */
+
+.resource-layout .cat-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.resource-layout .content-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.resource-layout .head-title {
+  font-size: 15px;
+  font-weight: 700;
+  padding: 4px 0;
+}
+
+.resource-layout .head-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* 工具条里的控件统一 35px：视图切换（SegmentedTabs）就是 35，
+   而 .mini-btn 默认 28 —— 同一行里两种高度看着就是"没对齐"（用户点名） */
+.resource-layout .head-actions .mini-btn {
+  height: 35px;
+  padding: 0 14px;
+}
+
+/* ---------- 列表与行 ---------- */
+
+/* 列表容器：只负责滚动与间距，**自己不画框** ——
+   行本身就是卡片，外层再套一层带边框的容器就成了"框框套框框"（用户明确点名不要） */
+.resource-layout .item-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  /* 右边留一点：卡片描边不被滚动条压住 */
+  padding-right: 2px;
+}
+
+.resource-layout .item-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 9px;
+  /* 行自己就是卡片：用"抬起来的面"（--bg-card）而不是 --bg-side ——
+     去掉外层容器之后，行直接贴在窗口底色上，--bg-side 在亮色下跟页面底几乎一样 */
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+}
+
+.resource-layout .item-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 7px;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: var(--bg-hover);
+}
+
+.resource-layout .item-icon-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-dim);
+}
+
+.resource-layout .item-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.resource-layout .item-name-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.resource-layout .item-name {
+  font-size: 13px;
+  color: var(--text);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.resource-layout .item-sub {
+  font-size: 11px;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.resource-layout .badge {
+  flex-shrink: 0;
+  padding: 1px 7px;
+  border-radius: 6px;
+  font-size: 10px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.resource-layout .badge-dim {
+  background: var(--bg-hover);
+  color: var(--text-dim);
+}
+
+.resource-layout .badge-red {
+  background: rgba(220, 38, 38, 0.14);
+  color: var(--red);
+}
+
+.resource-layout .item-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* 列表行与树行的操作按钮：**浮**在行的右端，平时不占宽度
+   （三个文字按钮横着一排会把名字/副标题挤窄，见用户截图），
+   悬停该行才淡入；同时用 pointer-events 挡住"看不见却能点"的误触。
+   表格视图不适用：那里本来就有独立的操作列 */
+.resource-layout .item-row .item-actions,
+.resource-layout .mod-tree-row .item-actions {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 3px 4px;
+  border-radius: 8px;
+  /* 垫上行的底色，免得按钮压住下面的文件名 */
+  background: var(--bg-card);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s;
+}
+
+.resource-layout .item-row:hover .item-actions,
+.resource-layout .item-row:focus-within .item-actions,
+.resource-layout .mod-tree-row:hover .item-actions,
+.resource-layout .mod-tree-row:focus-within .item-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.resource-layout .mini-btn {
+  height: 28px;
+  padding: 0 12px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  background: var(--bg-raised);
+  color: var(--text-dim);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.resource-layout .mini-btn:hover:not(:disabled) {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.resource-layout .mini-btn.danger:hover:not(:disabled) {
+  color: var(--red);
+  border-color: var(--red);
+}
+
+.resource-layout .mini-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* ---------- 截图网格 ---------- */
+
+/* 同样不套外框：格子自己就是框 */
+.resource-layout .shot-list {
+  flex: 1;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.resource-layout .shot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.resource-layout .shot-cell {
+  position: relative;
+  border-radius: 9px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+}
+
+.resource-layout .shot-img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  cursor: zoom-in;
+}
+
+.resource-layout .shot-del {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.55);
+  color: #fff;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.resource-layout .shot-cell:hover .shot-del {
+  opacity: 1;
+}
+
+.resource-layout .shot-del:hover {
+  background: var(--red);
+}
+
+/* ---------- 模组：分组块 ---------- */
+
+/* 分组模式下的容器：不再给每个分组各套一张卡片，避免"框套框" */
+.resource-layout .item-list.mod-groups {
+  gap: 12px;
+}
+
+.resource-layout .mod-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-radius: 12px;
+}
+
+/* 拖拽落点：整块描一圈虚线强调色（松手就把拖着的模组归到这一组） */
+.resource-layout .mod-group.drop-target {
+  outline: 1px dashed var(--accent);
+  outline-offset: 4px;
+}
+
+.resource-layout .mod-group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 11px;
+  border-radius: 9px;
+  background: var(--bg-raised);
+  outline: 1px solid transparent;
+  outline-offset: -1px;
+}
+
+.resource-layout .mod-group-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.resource-layout .mod-group-count {
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+
+/* 分组操作：悬停该行才浮出来 */
+.resource-layout .mod-group .group-acts {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.resource-layout .mod-group-head:hover .group-acts,
+.resource-layout .mod-group .group-acts:focus-within {
+  opacity: 1;
+}
+
+.resource-layout .group-act {
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-dim);
+  font-size: 11.5px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.resource-layout .group-act:hover:not(:disabled) {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.resource-layout .group-act.danger:hover:not(:disabled) {
+  color: var(--red);
+  border-color: var(--red);
+}
+
+.resource-layout .group-act:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.resource-layout .mod-group-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-left: 2px;
+}
+
+/* 「分组」开关打开时按钮保持强调色 */
+.resource-layout .mini-btn.on {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+/* 模组搜索框：工具条里的小号输入（与同一行的按钮同高 35px，见上面的说明） */
+.resource-layout .mod-search {
+  height: 35px;
+  width: 140px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-side);
+  color: var(--text);
+  font-size: 12.5px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.12s, width 0.15s;
+}
+
+.resource-layout .mod-search:focus {
+  width: 180px;
+  border-color: var(--accent);
+}
+
+.resource-layout .mod-search::placeholder {
+  color: var(--text-dim);
+}
+
+/* 正被拖拽的模组行（三个视图共用一个类） */
+.resource-layout .mod-dragging {
+  opacity: 0.4;
+}
+
+/* ---------- 模组：表格视图 ---------- */
+
+.resource-layout .mod-table {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* 表头行 + 数据行同一套栅格：名称 / 版本 / 作者 / 文件名 / 简介 / 操作 */
+.resource-layout .mod-tr {
+  display: grid;
+  grid-template-columns:
+    minmax(150px, 1.3fr) 82px 100px minmax(120px, 1.1fr) minmax(110px, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  font-size: 12px;
+}
+
+.resource-layout .mod-tr.mod-th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 0 10px;
+  background: var(--bg-card);
+  border-color: transparent;
+}
+
+/* 分组模式下每组各有一张表：表头再做「浮起来的条」就成三层框了，
+   所以这里只留列名（不吸顶、不铺底），排序照旧可以点 */
+.resource-layout .mod-groups .mod-tr.mod-th {
+  position: static;
+  background: transparent;
+  padding-left: 2px;
+}
+
+.resource-layout .mod-th-cell {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  font-size: 11.5px;
+  font-weight: 600;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.resource-layout .mod-th-cell:hover {
+  color: var(--accent);
+}
+
+.resource-layout .mod-th-actions {
+  justify-content: flex-end;
+  cursor: default;
+}
+
+.resource-layout .mod-sort {
+  font-size: 9px;
+}
+
+.resource-layout .mod-cell {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-dim);
+}
+
+.resource-layout .mod-name-cell {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.resource-layout .mod-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+  font-weight: 600;
+  font-size: 12.5px;
+}
+
+.resource-layout .mod-desc {
+  color: var(--text-dim);
+}
+
+.resource-layout .mod-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* 行操作容器：接住 pointerdown（阻止起拖拽），内部仍是一排按钮 */
+.resource-layout .item-actions .acts-stop {
+  display: flex;
+  gap: 6px;
+}
+
+/* ---------- 模组：树视图（jar-in-jar） ---------- */
+
+.resource-layout .mod-tree-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+}
+
+/* 内置模组的行：底色压暗一档（它在父 jar 里面，视觉上"凹进去"），缩进由行内 paddingLeft 控制 */
+.resource-layout .mod-tree-row.child {
+  background: var(--bg-side);
+  border-style: dashed;
+}
+
+.resource-layout .mod-tree-caret {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+
+.resource-layout .mod-tree-caret.collapsed {
+  transform: rotate(-90deg);
+}
+
+.resource-layout .mod-tree-caret-placeholder {
+  width: 18px;
+  flex-shrink: 0;
+}
+
+.resource-layout .mod-tree-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+  font-weight: 600;
+  font-size: 12.5px;
+}
+
+.resource-layout .mod-tree-sub {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+/* ---------- 数据包子页 ---------- */
+
+/* 存档下拉：外观对齐 .field-select（同箭头 / 不透明底 / 主题边框），
+   只是尺寸比表单那条小一号 */
+.resource-layout .dp-select {
+  padding: 8px 28px 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-solid, var(--bg-card));
+  color: var(--text);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: var(--select-arrow);
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 12px;
+}
+
+.resource-layout .dp-select:focus {
+  outline: none;
+  border-color: var(--accent);
+}

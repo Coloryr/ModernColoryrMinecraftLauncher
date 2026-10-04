@@ -30,6 +30,7 @@ import type {
   LoadState,
   LogEvent,
   LogFocusDto,
+  ModGroupDto,
   ModItemDto,
   MotdDto,
   ModPackStatusDto,
@@ -738,6 +739,27 @@ export function disableMod(uuid: string, modUuid: string): Promise<void> {
 /** 删除模组（进回收站） */
 export function deleteMod(uuid: string, modUuid: string): Promise<void> {
   return commands.resource.deleteMod(uuid, modUuid);
+}
+
+/** 取该实例的模组自定义分组（按用户建立顺序） */
+export function getModGroups(uuid: string): Promise<ModGroupDto[]> {
+  return commands.resource.modGroups(uuid);
+}
+/** 新建模组分组（重名会抛错） */
+export function addModGroup(uuid: string, name: string): Promise<void> {
+  return commands.resource.modGroupAdd(uuid, name);
+}
+/** 删除模组分组（组内模组回到"未分组"，不动磁盘文件） */
+export function removeModGroup(uuid: string, name: string): Promise<void> {
+  return commands.resource.modGroupRemove(uuid, name);
+}
+/** 重命名模组分组（重名会抛错） */
+export function renameModGroup(uuid: string, name: string, newName: string): Promise<void> {
+  return commands.resource.modGroupRename(uuid, name, newName);
+}
+/** 把若干模组移到某个分组；group 传 null = 移出所有分组（回到"未分组"） */
+export function setModGroup(uuid: string, group: string | null, keys: string[]): Promise<void> {
+  return commands.resource.modGroupSet(uuid, group, keys);
 }
 
 /** 材质包列表 */

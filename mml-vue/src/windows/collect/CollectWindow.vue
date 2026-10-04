@@ -11,6 +11,7 @@ import BaseModal from "../../components/ui/BaseModal.vue";
 import AsyncImage from "../../components/ui/AsyncImage.vue";
 import GlyphIcon from "../../components/ui/GlyphIcon.vue";
 import { useWindowRefresh } from "../../composables/useWindowRefresh";
+import { useCollectDrag } from "../../composables/useCollectDrag";
 import { api, onCollectChange } from "../../lib/api";
 import { loadGuiConfig, saveGuiConfig, type CollectConfig } from "../../lib/guiConfig";
 import { t, tErr } from "../../lib/i18n";
@@ -449,6 +450,61 @@ function toggleCard(item: CollectItemDto) {
   openDownloadWindow(item);
 }
 
+// ---------------- 拖拽改分组 ----------------
+
+/**
+ * 拖卡片到分组上 = 移到那个分组（逻辑见 composables/useCollectDrag）
+ *
+ * 与拖动游戏实例同一套做法：指针拖拽、落点用 `data-group` 反查、多选模式下拖已勾选的
+ * 卡片整批一起走。收藏的分组没有组内次序（数据层是集合），所以只做归属、不做排序。
+ */
+const { draggingUuids, dropGroup, onCardPointerDown, consumeSuppressClick } = useCollectDrag({
+  checked,
+  multiSelect,
+  // 传取值函数而不是 computed 本身：这里只在松手那一刻读一次，不需要是 Ref
+  groupOf: () => groupOfUuid.value,
+  defaultGroup: DEFAULT_GROUP,
+});
+
+/** 卡片点击：刚拖完的那一下不算点击（否则一松手就顺手打开了下载窗口） */
+function onCardClick(item: CollectItemDto) {
+  if (consumeSuppressClick()) return;
+  toggleCard(item);
+}
+
+/**
+ * 拖拽幽灵卡片的内容（与实例拖拽的 `.drop-ghost-row` 同一观感：图标 + 名字）
+ *
+ * 分组没有组内次序，所以幽灵只落在**落点分组的末尾**（实例那边要算"插到第几行"）。
+ * 已经在目标组里的项不会被移动，一件都不动时不给幽灵 —— 否则看着像"松手会变"，
+ * 实际是空操作（见 useCollectDrag 的 commitDrag）。
+ */
+const dragGhostCard = computed(() => {
+  const group = dropGroup.value;
+  if (group === null) return null;
+  const moved = [...draggingUuids.value].filter(
+    (uuid) => (groupOfUuid.value.get(uuid) ?? DEFAULT_GROUP) !== group,
+  );
+  if (!moved.length) return null;
+  const item = items.value.find((i) => i.uuid === moved[0]);
+  if (!item) return null;
+  return {
+    group,
+    name: item.name,
+    icon: iconOf(item),
+    // 多选整批拖动时说清是几项；单项就照常显示源与类型
+    meta:
+      moved.length > 1
+        ? t("collect.count", { n: moved.length })
+        : `${item.source} · ${item.fileType}`,
+  };
+});
+
+/** 幽灵卡片是否画在这一组（空分组也要渲染网格时同样用它判断） */
+function isGhostGroup(key: string): boolean {
+  return dragGhostCard.value?.group === key;
+}
+
 // ---------------- 下载 ----------------
 
 /**
@@ -578,7 +634,13 @@ function closeMenu() {
 
       <!-- 折叠分组列表：默认分组在前，最后一项是「添加分组」 -->
       <div v-else class="collect-groups">
-        <section v-for="g in groupSections" :key="g.key" class="group-block">
+        <section
+          v-for="g in groupSections"
+          :key="g.key"
+          class="group-block"
+          :class="{ 'drop-target': dropGroup === g.key }"
+          :data-group="g.key"
+        >
           <div class="group-head">
             <button class="group-title" @click="toggleGroupOpen(g.key)">
               <GlyphIcon
@@ -611,21 +673,23 @@ function closeMenu() {
           </div>
 
           <div v-show="isGroupOpen(g.key)" class="group-items">
-            <p v-if="!g.items.length" class="empty-tip">
+            <!-- 空分组：只有"没有收藏、也没有拖过来的幽灵卡片"时才只给提示 -->
+            <p v-if="!g.items.length && !isGhostGroup(g.key)" class="empty-tip">
               {{ g.isDefault ? t("collect.emptyDefault") : t("collect.emptyGroup") }}
             </p>
-            <div v-else class="collect-grid">
+            <div v-if="g.items.length || isGhostGroup(g.key)" class="collect-grid">
               <div
                 v-for="item in g.items"
                 :key="item.uuid"
                 class="collect-card"
-                :class="{ active: checked.has(item.uuid) }"
-                @click="toggleCard(item)"
+                :class="{ active: checked.has(item.uuid), dragging: draggingUuids.has(item.uuid) }"
+                @pointerdown="onCardPointerDown($event, item)"
+                @click="onCardClick(item)"
                 @mouseenter="focus = item"
                 @mouseleave="focus = null"
                 @contextmenu.prevent="openMenu($event, item)"
               >
-                <span v-if="multiSelect" class="card-box" @click.stop>
+                <span v-if="multiSelect" class="card-box" @click.stop @pointerdown.stop>
                   <input
                     type="checkbox"
                     class="card-check"
@@ -652,6 +716,7 @@ function closeMenu() {
                 <span
                   v-if="focus?.uuid === item.uuid || checked.has(item.uuid)"
                   class="card-acts"
+                  @pointerdown.stop
                 >
                   <button
                     class="card-act"
@@ -664,6 +729,19 @@ function closeMenu() {
                     </svg>
                   </button>
                 </span>
+              </div>
+
+              <!-- 拖拽幽灵卡片：与实例拖拽的 .drop-ghost-row 同一观感（虚框 + 淡强调底 +
+                   淡化），摆在落点分组的末尾。分组没有组内次序，所以不跟着鼠标插行 -->
+              <div v-if="isGhostGroup(g.key)" class="collect-card ghost">
+                <div class="card-icon">
+                  <AsyncImage v-if="dragGhostCard?.icon" :src="dragGhostCard.icon" />
+                  <GlyphIcon v-else class="card-icon-none" name="image" :size="22" :weight="1.6" />
+                </div>
+                <div class="card-text">
+                  <div class="card-name">{{ dragGhostCard?.name }}</div>
+                  <div class="card-meta">{{ dragGhostCard?.meta }}</div>
+                </div>
               </div>
             </div>
           </div>
@@ -702,9 +780,12 @@ function closeMenu() {
 
     <!-- 添加分组 -->
     <BaseModal v-if="showAddGroup" :title="t('collect.addGroupTitle')" :closable="false" @close="showAddGroup = false">
+      <!-- 纯文本输入：用 .field-input。别挂 .field-select —— 那个类除了尺寸还带
+           右侧下拉箭头（padding-right: 28px + --select-arrow 背景图），输入框上会
+           凭空多出一个"能点开下拉"的箭头（主窗口同款弹窗用的就是 .field-input） -->
       <input
         v-model="newGroupName"
-        class="field-select"
+        class="field-input"
         :placeholder="t('collect.groupPlaceholder')"
         spellcheck="false"
         @keydown.enter="confirmAddGroup"
@@ -926,6 +1007,16 @@ function closeMenu() {
 /* 分组：**只给标题行加底色**，内容区不铺底（卡片自己就是框，铺底会变"框套框"） */
 .group-block {
   min-width: 0;
+  /* 拖拽落点的高亮框要贴着整块（标题行 + 卡片区）画，所以这里留出圆角与内缩基准 */
+  border-radius: 12px;
+}
+
+/* 拖拽投放目标：整块描一圈虚线强调色 —— 松手就把拖着的收藏归到这一组。
+   虚线而不是实线，跟"已勾选""悬停"那两种实线状态区分开；
+   outline 不占布局，拖拽经过时不会把下面的分组顶动 */
+.group-block.drop-target {
+  outline: 1px dashed var(--accent);
+  outline-offset: 4px;
 }
 
 .group-head {
@@ -1189,6 +1280,21 @@ function closeMenu() {
 .collect-card.active {
   border-color: var(--accent);
   background: var(--accent-soft);
+}
+
+/* 正被拖着的卡片：留在原位但淡下去（卡片网格去掉一张会整片重排，反而看不清拖的是哪个），
+   落点由目标分组那圈虚线 + 幽灵卡片表达 */
+.collect-card.dragging {
+  opacity: 0.4;
+}
+
+/* 拖拽幽灵卡片：与实例拖拽的 .drop-ghost-row 同一套观感 —— 虚框 + 淡强调底 + 整体淡化，
+   摆在落点分组的末尾表示"松手就归到这一组"。纯展示，不参与命中判定 */
+.collect-card.ghost {
+  border: 1.5px dashed var(--accent-border);
+  background: var(--accent-soft);
+  opacity: 0.75;
+  pointer-events: none;
 }
 
 .card-icon {

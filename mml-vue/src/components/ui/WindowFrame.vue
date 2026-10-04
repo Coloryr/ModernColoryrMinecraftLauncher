@@ -151,6 +151,10 @@ const { decorated } = useWindowDecoration(rootEl);
 .frame-head h1 {
   font-size: 16px;
   font-weight: 700;
+  /* 标题不被挤掉：窗口窄时先压右边的上下文与按钮（资源窗口那个实例 chip 就是这么挤掉过
+     "资源管理" 的），标题本身不缩、不换行 */
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .spacer {

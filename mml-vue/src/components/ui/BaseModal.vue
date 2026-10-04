@@ -1,6 +1,13 @@
 <script setup lang="ts">
 // 统一弹窗：标题 + 内容插槽 + 关闭
+//
+// 只在**所属页面处于前台**时渲染（见 lib/pageActive.ts）：单窗口模式下 App.vue 把窗口组件
+// KeepAlive 缓存，切走只是停用，页面 DOM 被挪走，可本弹窗是 `Teleport to="body"` 的 ——
+// 不挡住的话它会留在别的页面上照常显示、还能点，而点下去的执行上下文是原页面
+// （"是否继续添加"的"否"就这么把启动器关掉过）。状态在父组件里，回到那一页它自然还在。
 import GlyphIcon from "./GlyphIcon.vue";
+import { usePageActive } from "../../lib/pageActive";
+
 const props = withDefaults(
   defineProps<{
     title?: string;
@@ -27,11 +34,15 @@ const props = withDefaults(
 );
 
 const emit = defineEmits<{ (e: "close"): void }>();
+
+/** 所属页面是否在前台（隐藏时连遮罩一起收掉，别盖到别的页面上） */
+const active = usePageActive();
 </script>
 
 <template>
   <Teleport to="body">
     <div
+      v-if="active"
       class="modal-mask"
       :class="{ 'below-titlebar': props.belowTitlebar }"
       @click.self="props.overlayClose && emit('close')"

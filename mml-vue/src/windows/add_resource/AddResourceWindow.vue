@@ -222,12 +222,8 @@ async function search() {
     error.value = "";
   } catch (e) {
     if (mine !== searchSeq) return;
-    // 后端不认排序 → 打出实际值（数组拼成字符串，控制台折叠也能一眼看到）
+    // 后端不认排序 → 换成该类型的第一个可用排序重试一次
     if (String(e).includes("err.sortTypeNotFound")) {
-      // [TEMP] 排查「未知的排序方式」
-      console.warn(
-        `[TEMP] sort 被拒 source=${source.value} type=${type.value} sort=${sort.value} 可用=[${sorts.value.join(", ")}] page=${page.value}`,
-      );
       // 只在**真的换成了别的值**时重试一次，否则同一个值会来回刷成死循环
       const fallback = sorts.value[0];
       if (fallback && fallback !== sort.value) {

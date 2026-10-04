@@ -26,6 +26,8 @@ use crate::dtos::{
     DetectedPackDto, DirEntry, FolderInstanceDto, LoaderProgressDto, NameConflictDto,
     PackProgressDto,
 };
+use crate::windows::add_modpack::{LOCAL_PACK_PID, finish_task, register_task};
+use crate::windows::add_resource::SourceInfo;
 use crate::{listens, windows};
 
 /// 添加实例窗口模型：只存运行态，不落盘
@@ -396,6 +398,15 @@ pub async fn add_import_folder(
 
 /// 导入整合包压缩包为实例（packType：CurseForge / Modrinth / McMod / 本地；
 /// unselect：按压缩包内完整条目名排除的文件，来自前端文件树未勾选项）
+///
+/// CurseForge / Modrinth 两种是**真整合包**：登记成「下载整合包」那套安装任务
+/// （任务表与进度事件见 [`super::add_modpack`]），于是标题栏的整合包指示器、
+/// 进度弹窗、取消、装完刷新并选中新实例全部复用同一条路径，
+/// 与在线安装的差别只剩"包从哪来"（所以它没有项目 ID，用占位 pid）。
+/// 其余类型（MMC / HMCL / 直接解压等）行为不变：进度发到本窗口的进度弹窗。
+///
+/// 命令**等安装结束**再返回（新实例 uuid 得交给添加实例窗口做后续交互），
+/// 期间进度由整合包任务那一套显示。
 #[tauri::command]
 pub async fn add_import_archive(
     window: WebviewWindow,
@@ -411,20 +422,73 @@ pub async fn add_import_archive(
     let group = crate::windows::parse_group_id(group);
     let pack = parse_pack_type(&pack_type)?;
     let gui = instance_gui(&window);
-    let progress = pack_gui(&window);
-    let uuid = tauri::async_runtime::spawn_blocking(move || {
+    let name = name.filter(|item| !item.trim().is_empty());
+
+    // 整合包：进度回调换成任务那一份 —— 本窗口的安装进度弹窗不再出现，
+    // 进度改由标题栏的整合包指示器 / 进度弹窗显示（与在线安装一致）
+    let (progress, task) = if is_modpack(&pack) {
+        let key = SourceInfo {
+            pid: LOCAL_PACK_PID.to_string(),
+            fid: path.clone(),
+        };
+        let display = name.clone().unwrap_or_else(|| pack_file_stem(&path));
+        let (task, progress) = register_task(&app, key, "local", display, token.clone())?;
+        (progress, Some(task))
+    } else {
+        (pack_gui(&window), None)
+    };
+
+    // 安装 future 非 Send：放阻塞线程上 block_on（与 add_create_new 等同一条路子）
+    let install_token = token.clone();
+    let file = path.clone();
+    let res: Result<Uuid, String> = match tauri::async_runtime::spawn_blocking(move || {
         tauri::async_runtime::block_on(async {
             add_game::install_archive_from_file(
-                &path, name, group, unselect, gui, progress, None, pack, token,
+                &file,
+                name,
+                group,
+                unselect,
+                gui,
+                progress,
+                None,
+                pack,
+                install_token,
             )
             .await
         })
     })
     .await
-    .map_err(|e| e.to_string())?
-    .map_err(|e| e.to_string())?;
-    crate::windows::main::emit_instance_change(&app, "add");
-    Ok(uuid.to_string())
+    {
+        Ok(Ok(uuid)) => Ok(uuid),
+        Ok(Err(err)) => Err(err.to_string()),
+        Err(err) => Err(err.to_string()),
+    };
+
+    // 终态：整合包任务自己记录并广播（成功时连同 instance-change 一起发），
+    // 其它类型跟以前一样只补一条 instance-change
+    match &task {
+        Some(task) => finish_task(&app, task, &token, res.clone()),
+        None => {
+            if res.is_ok() {
+                crate::windows::main::emit_instance_change(&app, "add");
+            }
+        }
+    }
+
+    res.map(|uuid| uuid.to_string())
+}
+
+/// 该压缩包类型是否为整合包（即内核里走整合包安装 worker 的那两种 manifest）
+fn is_modpack(pack: &PackType) -> bool {
+    matches!(pack, PackType::CurseForge | PackType::Modrinth)
+}
+
+/// 压缩包文件名（去路径与扩展名）：本地包没有项目元数据，任务显示名只能取它
+fn pack_file_stem(path: &str) -> String {
+    std::path::Path::new(path)
+        .file_stem()
+        .map(|item| item.to_string_lossy().into_owned())
+        .unwrap_or_else(|| path.to_string())
 }
 
 /// 从网址安装实例（默认按直接解压处理）

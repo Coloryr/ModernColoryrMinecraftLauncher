@@ -13,6 +13,7 @@
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import { t } from "../lib/i18n";
 import { api, onDownloadItem, onDownloadTask } from "../lib/api";
+import { downloadOverallPercent } from "../lib/progress";
 import { openWindow } from "../windows/windowManager";
 import type { DownloadStatusDto, DownloadTaskDto } from "../lib/bindings";
 
@@ -54,18 +55,8 @@ const showBar = computed(() => status.value.tasks.some(isIncomplete));
 /** 有失败的任务（图标变警示色） */
 const hasFailed = computed(() => status.value.tasks.some((task) => task.failed > 0));
 
-/** 总体进度：与下载窗口同一口径（优先按字节，元信息未知时退回文件数） */
-const percent = computed(() => {
-  const list = status.value.tasks;
-  const all = list.reduce((n, x) => n + x.allBytes, 0);
-  if (all > 0) {
-    const now = list.reduce((n, x) => n + x.nowBytes, 0);
-    return Math.min(100, (now / all) * 100);
-  }
-  const total = list.reduce((n, x) => n + x.total, 0);
-  const done = list.reduce((n, x) => n + x.completed + x.failed, 0);
-  return total > 0 ? Math.min(100, (done / total) * 100) : 0;
-});
+/** 总体进度：与下载窗口同一口径（见 lib/progress.ts，多文件按项目数、单文件按字节） */
+const percent = computed(() => downloadOverallPercent(status.value.tasks));
 
 const tipText = computed(() =>
   busy.value

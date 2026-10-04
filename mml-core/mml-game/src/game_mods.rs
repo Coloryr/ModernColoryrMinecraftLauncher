@@ -648,6 +648,9 @@ fn read_core_mod(
 
     let manifest = parse_manifest(&content);
 
+    // 只有真的识别出 core mod 标记才算 core mod
+    let mut is_core = false;
+
     // 检查 FMLCorePlugin（Forge core mod 主类）
     if let Some(core_plugin) = manifest.get("FMLCorePlugin") {
         info.mod_id = core_plugin.clone();
@@ -657,6 +660,7 @@ fn read_core_mod(
             .unwrap_or(core_plugin)
             .to_string();
         info.loaders = LoaderType::Forge;
+        is_core = true;
     }
 
     // 检查 TweakClass（LaunchWrapper 注入类）
@@ -670,10 +674,15 @@ fn read_core_mod(
                 .to_string();
         }
         info.loaders = LoaderType::Forge;
+        is_core = true;
     }
 
     mod_info.info.push(info);
-    mod_info.core = true;
+    // 原先这里无条件置 true，而 MANIFEST.MF 几乎每个 Forge / NeoForge jar 都有 ——
+    // 结果界面上**每个**模组都挂着"核心"徽标。core 只表示"用老式 core mod 机制加载"，
+    // 没有上面两个标记就不是
+    mod_info.core = is_core;
+
     Ok(())
 }
 
@@ -804,7 +813,169 @@ fn parse_mod_archive(archive: &mut ZipArchive<impl Read + Seek>) -> CoreResult<M
     // 扫描jar-in-jar
     read_jar_in_jar(archive, &mut mod_info)?;
 
+    // 读图标（放在最后：此时 info 里的条目已经齐了，图标挂在第一条上）
+    read_mod_icon(archive, &mut mod_info);
+
     Ok(mod_info)
+}
+
+/// 图标体积上限（512 KiB）：图标是装饰性的，有人往里塞过整张高清图，不值得读进内存
+const MAX_ICON_SIZE: u64 = 512 * 1024;
+
+/// 读模组图标
+///
+/// 各加载器把图标路径放在不同字段里（见 [`find_mod_icon_path`]），这里再按条目名把
+/// **图片字节**读出来 —— `ModItemObj::icon` 存的是字节，界面那边转 data URL。
+///
+/// # 参数
+///
+/// - `archive`: 模组压缩包
+/// - `mod_info`: 模组信息（图标写到第一条 info 上）
+fn read_mod_icon(archive: &mut ZipArchive<impl Read + Seek>, mod_info: &mut ModObj) {
+    let Some(path) = find_mod_icon_path(archive) else {
+        return;
+    };
+
+    let Ok(mut entry) = archive.by_name(&path) else {
+        return;
+    };
+    if entry.size() == 0 || entry.size() > MAX_ICON_SIZE {
+        return;
+    }
+
+    let mut data = Vec::with_capacity(entry.size() as usize);
+    if entry.read_to_end(&mut data).is_err() || data.is_empty() {
+        return;
+    }
+
+    match mod_info.info.first_mut() {
+        Some(info) => info.icon = Some(data),
+        // 只认得出图标、没有别的元数据的包：补一条，别把图标丢了
+        None => mod_info.info.push(ModItemObj {
+            icon: Some(data),
+            ..Default::default()
+        }),
+    }
+}
+
+/// 找出图标在包里的条目名（没有返回 `None`）
+///
+/// 支持：Fabric / Quilt 的 `icon`（字符串，或 `{"64": "…png"}` 这种按尺寸分的对象）、
+/// Forge / NeoForge 的 `logoFile`。
+///
+/// # 参数
+///
+/// - `archive`: 模组压缩包
+///
+/// # 返回值
+///
+/// 返回包内条目名；元数据缺失或没写图标时返回 `None`
+fn find_mod_icon_path(archive: &mut ZipArchive<impl Read + Seek>) -> Option<String> {
+    // Forge / NeoForge：mods.toml 的 logoFile
+    for name in [
+        names::MC_MOD_TOML_FILE,
+        names::NEO_TOML_FILE,
+        names::NEO_TOML1_FILE,
+    ] {
+        let Ok(mut file) = archive.by_name(name) else {
+            continue;
+        };
+        let mut text = String::new();
+        if file.read_to_string(&mut text).is_err() {
+            continue;
+        }
+        if let Some(path) = forge_logo_file(&text) {
+            return Some(path);
+        }
+    }
+
+    // Fabric / Quilt：JSON 的 icon（quilt 在 quilt_loader.metadata.icon 下）
+    for name in [names::FABRIC_MOD_FILE, names::QUILT_MOD_FILE] {
+        let Ok(file) = archive.by_name(name) else {
+            continue;
+        };
+        let Ok(obj) = MiniJsonObj::from_stream(file) else {
+            continue;
+        };
+        let Some(root) = obj.as_object() else {
+            continue;
+        };
+        let holder = if name == names::QUILT_MOD_FILE {
+            root.get_object("quilt_loader")
+                .and_then(|loader| loader.get_object("metadata"))
+        } else {
+            Some(root)
+        };
+        let Some(holder) = holder else {
+            continue;
+        };
+
+        // 字符串形式
+        if let Some(value) = holder.get_opt_string("icon") {
+            return Some(value);
+        }
+        // 对象形式（按尺寸分档）：取第一个非空值，够用
+        if let Some(map) = holder.get_object("icon") {
+            for (_, value) in map.iter() {
+                if let Some(value) = value.as_string() {
+                    return Some(value);
+                }
+            }
+        }
+    }
+
+    None
+}
+
+/// 从 mods.toml 文本里取未被注释的 `logoFile`
+///
+/// Forge 的 mods.toml 模板里那行 `logoFile` **基本都是注释掉的**
+/// （`#logoFile="examplemod.png"`），照读会去开一个不存在的条目 —— 所以跳过注释行，
+/// 并去掉行尾的行内注释。
+fn forge_logo_file(text: &str) -> Option<String> {
+    for line in text.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let Some(rest) = line.strip_prefix("logoFile") else {
+            continue;
+        };
+        let Some(rest) = rest.trim_start().strip_prefix('=') else {
+            continue;
+        };
+        // 去掉引号与行内注释（`logoFile="a.png" # 图标`）
+        let value = rest.split('#').next().unwrap_or(rest).trim();
+        let value = value.trim_matches(|c| c == '"' || c == '\'').trim();
+        if !value.is_empty() {
+            return Some(value.to_string());
+        }
+    }
+
+    None
+}
+
+#[cfg(test)]
+mod icon_tests {
+    use super::*;
+
+    /// 模板里被注释掉的 logoFile 必须跳过（这是最常见的形态）
+    #[test]
+    fn logo_file_ignores_comments() {
+        let text = "#logoFile=\"examplemod.png\"\nmodId=\"demo\"\n";
+        assert_eq!(forge_logo_file(text), None);
+    }
+
+    /// 真写上的 logoFile 取得到，引号与行内注释都去掉
+    #[test]
+    fn logo_file_reads_value() {
+        assert_eq!(
+            forge_logo_file("modId=\"demo\"\nlogoFile=\"icon/logo.png\"\n").unwrap(),
+            "icon/logo.png"
+        );
+        assert_eq!(forge_logo_file("logoFile = 'a.png' # 图标").unwrap(), "a.png");
+        assert_eq!(forge_logo_file("  logoFile=\"b.png\"  ").unwrap(), "b.png");
+    }
 }
 
 /// 读取模组信息

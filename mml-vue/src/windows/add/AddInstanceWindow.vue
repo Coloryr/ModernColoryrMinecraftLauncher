@@ -30,11 +30,12 @@ import {
   answerNameConflict,
 } from "../../lib/api";
 import { showToast } from "../../lib/toast";
+import { usePageActive } from "../../lib/pageActive";
 import { t, tErr } from "../../lib/i18n";
 import { isTauri, openWindow } from "../windowManager";
 import { commands } from "../../lib/bindings";
 import type { FolderInstanceDto, GroupDto, PackProgressDto } from "../../lib/bindings";
-import { ADD_MODES, type AddMode } from "./types";
+import { ADD_MODES, isModpackPackType, type AddMode } from "./types";
 
 const emit = defineEmits<{ (e: "close"): void }>();
 
@@ -63,9 +64,15 @@ const BUTTON_KEYS: Record<AddMode, string> = {
   folder: "add.btnFolder",
   online: "add.btnOnline",
 };
-const createLabel = computed(() =>
-  creating.value ? t("add.creating") : t(BUTTON_KEYS[addMode.value]),
-);
+const createLabel = computed(() => {
+  if (creating.value) return t("add.creating");
+  // 压缩包模式选了整合包类型：这一步实际是"安装整合包"（走的是下载整合包那套安装任务，
+  // 见后端 add_import_archive），按钮上直说，别让用户以为只是解开压缩包
+  if (addMode.value === "archive" && isModpackPackType(addPackType.value)) {
+    return t("add.installPack");
+  }
+  return t(BUTTON_KEYS[addMode.value]);
+});
 
 // ================= 数据源 =================
 
@@ -455,6 +462,17 @@ watch(addErrorField, async (field) => {
 
 // ================= 创建 =================
 
+/**
+ * 本页面是否在前台
+ *
+ * 单窗口模式下 App.vue 把窗口组件 KeepAlive 缓存，切走只是藏起来 —— 安装却在后台继续跑，
+ * 异步回来时（装完 / 后端要重名答复）必须先问一句"这个上下文还在不在"：
+ * 弹窗由 BaseModal 自己收起来（见 lib/pageActive.ts），而**关窗动作**得在这里挡住
+ * —— 页面已切走时 `emit('close')` 会被 App.vue 当成"关掉当前窗口"，当前页是主页面，
+ * 那就是退出启动器。
+ */
+const pageActive = usePageActive();
+
 async function create() {
   // 防重复提交：按钮 disabled 之外，Enter / 连续点击也在这里挡住
   if (creating.value || nameConflict.value || askContinue.value || packProgress.value) return;
@@ -568,6 +586,8 @@ function continueAdding() {
 /** 不继续：丢掉本窗口的查询状态（加载器支持列表 / 加载器版本）并直接关窗 */
 async function finishAdding() {
   askContinue.value = false;
+  // 页面已经切走：没有"本窗口"可关（见 pageActive 的说明），本次添加到此为止即可
+  if (!pageActive.value) return;
   leaving = true;
   // 查询在途时后端有关闭保护（CloseRequested 被拒），先解除再关，否则窗关不掉
   dropPending();
@@ -654,6 +674,9 @@ onMounted(async () => {
   track(
     onAddNameConflict((e) => {
       nameConflict.value = e;
+      // 页面被切走时弹窗要等用户回来才看得见，而后端正停在这一步等答复
+      // （安装看着像卡住了）—— 先在当前页面上提示一句，让人知道要回去确认
+      if (!pageActive.value) showToast(t("add.conflictAway"));
     }),
   );
   // 整合包安装进度（压缩包 / 网址 / 在线整合包安装共用）

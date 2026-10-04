@@ -391,7 +391,7 @@ fn remember_decorated_inset(uuid: &Uuid, window: &WebviewWindow) {
 ///
 /// 当前仅主窗口有模型（`MainWindowModel`），其余窗口无状态；
 /// 新增窗口模型时在此按 uuid 分派。
-fn ensure_window_model(app: &AppHandle, uuid: &Uuid) {
+fn ensure_window_model(uuid: &Uuid) {
     let mut models = WINDOW_MODELS.write().unwrap();
     if *uuid == MAIN_WINDOW_UUID {
         models
@@ -447,9 +447,9 @@ pub fn model_for_kind<T: Send + Sync + 'static>(kind: &str) -> Option<Arc<T>> {
 /// 单窗口模式没有真实窗口可挂，模型的生命周期改由前端页面的启停驱动：
 /// 页面挂载时建、切走/关闭时释放（见 [`window_drop_model`]）。不这么做的话，
 /// "添加实例"这类页面的模型要么取不到（`err.modelMissing`），要么只能常驻占内存。
-pub fn ensure_model_for_kind(app: &AppHandle, kind: &str) -> Result<(), String> {
+pub fn ensure_model_for_kind(kind: &str) -> Result<(), String> {
     let uuid = uuid_for_kind(kind).ok_or_else(|| format!("unknown window kind: {kind}"))?;
-    ensure_window_model(app, &uuid);
+    ensure_window_model(&uuid);
     Ok(())
 }
 
@@ -574,7 +574,7 @@ fn create_window(
             .write()
             .unwrap()
             .insert(uuid.clone(), win.clone());
-        ensure_window_model(app, uuid);
+        ensure_window_model(uuid);
         return Ok(win);
     }
 
@@ -659,7 +659,7 @@ fn create_window(
         .write()
         .unwrap()
         .insert(uuid.clone(), win.clone());
-    ensure_window_model(app, uuid);
+    ensure_window_model(uuid);
     // 开窗即记录初始几何（文件始终反映当前所有窗口；后续缩放/移动会持续更新）。
     // 带上 restore_maximized：下面 maximize() 触发的 Resized 会被跳过（最大化时不记几何），
     // 否则文件里的最大化标志会被这次初始保存清掉。
@@ -1089,8 +1089,8 @@ pub fn window_set_title(window: WebviewWindow, title: String) -> Result<(), Stri
 ///
 /// 多窗口模式下模型本来就跟着真实窗口创建，这里重复调用无副作用。
 #[tauri::command]
-pub fn window_ensure_model(app: AppHandle, kind: String) -> Result<(), String> {
-    ensure_model_for_kind(&app, &kind)
+pub fn window_ensure_model(kind: String) -> Result<(), String> {
+    ensure_model_for_kind(&kind)
 }
 
 /// 释放某个窗口 kind 的模型（单窗口模式下前端页面切走 / 关闭时调用）

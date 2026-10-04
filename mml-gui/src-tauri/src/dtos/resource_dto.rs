@@ -7,7 +7,15 @@ use serde::Serialize;
 #[serde(rename_all = "camelCase")]
 pub struct ModItemDto {
     /// 模组稳定标识（文件路径的 uuid v5，启用/禁用/删除按此定位）
+    ///
+    /// 注意：启用 / 禁用会改文件名 → 这个 uuid 跟着变，**不能拿它存分组**（见 `key`）。
+    /// 内置模组（`jar_in_jar` 里的）没有独立文件，这里为空串。
     pub uuid: String,
+    /// 文件 SHA1：**自定义分组的键**（与 `guisetting.json` 的 `Mod.Groups` 一致）
+    ///
+    /// 用内容哈希而不是 uuid：启用 / 禁用只是给文件名加减后缀，uuid（文件路径的 v5）会变，
+    /// 而 SHA1 不变 —— 否则一禁用就掉出分组。读不出元数据的坏 jar 没有哈希，为空串（不可归组）。
+    pub sha1: String,
     /// mods 目录下的文件名（显示与打开文件夹定位用）
     pub file: String,
     /// 是否被禁用
@@ -28,6 +36,20 @@ pub struct ModItemDto {
     pub description: String,
     /// 图标 data URL（无图标为空串）
     pub icon: String,
+    /// 内置模组（jar-in-jar / jarjar，递归）
+    ///
+    /// 它们装在父 jar 里，没有独立文件：前端只展示，不提供启用 / 删除。
+    pub jar_in_jar: Vec<ModItemDto>,
+}
+
+/// 模组自定义分组（存在实例的 `guisetting.json` 里，与 ColorMC 互通）
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModGroupDto {
+    /// 分组名
+    pub name: String,
+    /// 组内模组的 **SHA1** 列表（有序：下发前排过序，`Groups` 本身是无序集合）
+    pub mods: Vec<String>,
 }
 
 /// 材质包条目

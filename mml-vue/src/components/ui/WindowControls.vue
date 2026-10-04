@@ -52,6 +52,14 @@ const buttons = computed(() => {
   return props.style === "macos" ? [close, minimize, maximize] : [minimize, maximize, close];
 });
 
+/**
+ * 窗口尺寸监听的退订函数
+ *
+ * 赋值与注册分开：`onUnmounted` 只能在 setup 的**同步阶段**注册（写在 `await` 之后就
+ * 注册不上了，监听会一直挂着摘不掉），所以退订函数存这里、由下面那个同步钩子调用。
+ */
+let unlistenResize: (() => void) | null = null;
+
 onMounted(async () => {
   if (!isTauri()) {
     return;
@@ -59,13 +67,17 @@ onMounted(async () => {
   await refresh();
   // 外部操作也会改最大化状态（Win+↑、系统贴靠），窗口尺寸变化时重新查一次
   try {
-    const unlisten = await getCurrentWindow().onResized(() => {
+    unlistenResize = await getCurrentWindow().onResized(() => {
       void refresh();
     });
-    onUnmounted(unlisten);
   } catch {
     /* 拿不到窗口事件时只是图标不更新，不影响按钮本身 */
   }
+});
+
+onUnmounted(() => {
+  unlistenResize?.();
+  unlistenResize = null;
 });
 </script>
 

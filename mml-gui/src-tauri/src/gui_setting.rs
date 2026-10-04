@@ -60,7 +60,7 @@ impl Default for GameLogSettingObj {
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 #[serde(default)]
 pub struct GameModSettingObj {
-    /// 模组分组列表：分组名 → 该组下的模组文件名集合
+    /// 模组分组列表：分组名 → 该组下的模组SHA1集合
     #[serde(rename = "Groups")]
     pub groups: HashMap<String, HashSet<String>>,
     /// 备注：模组文件名 → 用户写的说明

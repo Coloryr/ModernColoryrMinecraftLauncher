@@ -7,6 +7,7 @@
 
 use std::path::{Path, PathBuf};
 
+use mml_base::file_item::FileHash;
 use mml_base::hash_helper;
 use mml_game::game_mods::ModObj;
 use mml_game::game_saves::SaveObj;
@@ -18,8 +19,8 @@ use mml_sys::{open_helper, path_helper};
 use uuid::Uuid;
 
 use crate::dtos::{
-    DataPackItemDto, ModItemDto, PackItemDto, SaveItemDto, ScreenshotItemDto, ServerItemDto,
-    ShaderItemDto, SchematicItemDto,
+    DataPackItemDto, ModGroupDto, ModItemDto, PackItemDto, SaveItemDto, ScreenshotItemDto,
+    ServerItemDto, ShaderItemDto, SchematicItemDto,
 };
 
 /// 实例资源目录类别（open_folder 的 kind 入参）
@@ -134,31 +135,57 @@ pub async fn resource_list_mods(uuid: String) -> Result<Vec<ModItemDto>, String>
     })
     .await?;
 
-    Ok(list
-        .iter()
-        .filter_map(|item| {
-            let file = item.file.file_name()?.to_string_lossy().to_string();
-            if file.is_empty() {
-                return None;
-            }
-            // 显示信息取第一个解析出的元数据条目；图标取任一非空的
-            let info = item.info.first();
-            let icon = item.info.iter().find_map(|i| i.icon.as_ref());
-            Some(ModItemDto {
-                uuid: item.uuid.to_string(),
-                file,
-                disable: item.disable,
-                fail: item.fail,
-                core: item.core,
-                mod_id: info.map(|i| i.mod_id.clone()).unwrap_or_default(),
-                name: info.map(|i| i.name.clone()).unwrap_or_default(),
-                version: info.and_then(|i| i.version.clone()).unwrap_or_default(),
-                author: info.map(|i| i.author.join(", ")).unwrap_or_default(),
-                description: info.and_then(|i| i.description.clone()).unwrap_or_default(),
-                icon: data_url(icon),
-            })
-        })
-        .collect())
+    Ok(list.iter().filter_map(mod_item).collect())
+}
+
+/// 一个（可能带内置模组的）模组条目 → DTO
+///
+/// 顶层条目取文件名；内置模组（`jar_in_jar`）没有独立文件，用显示名兜底 ——
+/// 它们装在父 jar 里，只用于展示（树形视图），不提供启用 / 删除。
+fn mod_item(item: &ModObj) -> Option<ModItemDto> {
+    let file = item
+        .file
+        .file_name()
+        .map(|name| name.to_string_lossy().to_string())
+        .unwrap_or_default();
+    // 顶层条目必须有文件名（拿不到就说明不是 mods 目录下的文件，跳过）；
+    // 内置模组 file 为空，靠 modid / 名字展示
+    let info = item.info.first();
+    let mod_id = info.map(|i| i.mod_id.clone()).unwrap_or_default();
+    let name = info.map(|i| i.name.clone()).unwrap_or_default();
+    if file.is_empty() && mod_id.is_empty() && name.is_empty() {
+        return None;
+    }
+    let icon = item.info.iter().find_map(|i| i.icon.as_ref());
+
+    Some(ModItemDto {
+        uuid: item.uuid.to_string(),
+        sha1: sha1_of(&item.hash),
+        file,
+        disable: item.disable,
+        fail: item.fail,
+        core: item.core,
+        mod_id,
+        name,
+        version: info.and_then(|i| i.version.clone()).unwrap_or_default(),
+        author: info.map(|i| i.author.join(", ")).unwrap_or_default(),
+        description: info.and_then(|i| i.description.clone()).unwrap_or_default(),
+        icon: data_url(icon),
+        jar_in_jar: item.jar_in_jar.iter().filter_map(mod_item).collect(),
+    })
+}
+
+/// 取文件 SHA1（没有哈希时返回空串）
+///
+/// 模组的自定义分组按 SHA1 记（与 `guisetting.json` 的 `Mod.Groups` 一致）：
+/// 它是**内容哈希**，启用 / 禁用（改文件名）之后不变，而 uuid 会跟着路径变。
+fn sha1_of(hash: &FileHash) -> String {
+    match hash {
+        FileHash::Sha1(value)
+        | FileHash::Sha1Sha256(value, _)
+        | FileHash::Sha1Sha512(value, _) => value.clone(),
+        _ => String::new(),
+    }
 }
 
 /// 在 mods 目录扫描结果里按 uuid 找模组（启用 / 禁用 / 删除需要带状态的 ModObj）
@@ -687,4 +714,160 @@ pub fn resource_open_folder(
 
     open_helper::open_file_with_explorer(&target);
     Ok(())
+}
+
+// ==================== 模组自定义分组 ====================
+//
+// 分组**不是这里的数据**：它属于实例的 GUI 设置（`guisetting.json` 的 `Mod.Groups`，
+// 分组名 → 模组 SHA1 集合，见 crate::gui_setting），与 ColorMC 互通。
+// 这里只做"读-改-写 + 转 DTO"：
+// - 每个命令都是 load → 改 → save（那份文件还存着日志设置、方块图标等，不能整份覆盖）
+// - 分组顺序按名字排序下发（`Groups` 是 HashMap，没有"建立顺序"可言）
+// - 成员用 SHA1 而不是 uuid：启用/禁用会改文件名，uuid 跟着变，SHA1 不变
+
+/// 模组的自定义分组（按名字排序；`guisetting.json` 里是 HashMap，没有顺序）
+fn mod_groups_of(instance: &InstanceSettingObj) -> Vec<ModGroupDto> {
+    let setting = crate::gui_setting::load(instance);
+    let mut list: Vec<ModGroupDto> = setting
+        .mods
+        .groups
+        .into_iter()
+        .map(|(name, mods)| {
+            let mut mods: Vec<String> = mods.into_iter().collect();
+            // HashSet 迭代顺序不定，排一下让前端展示稳定
+            mods.sort();
+            ModGroupDto { name, mods }
+        })
+        .collect();
+    list.sort_by(|a, b| a.name.cmp(&b.name));
+    list
+}
+
+/// 读出实例设置 → 交给 `edit` 改 → 存回去
+fn edit_mod_groups(
+    instance: &GameInstance,
+    edit: impl FnOnce(&mut crate::gui_setting::GameModSettingObj),
+) {
+    let game = instance.read().unwrap();
+    let mut setting = crate::gui_setting::load(&game);
+    edit(&mut setting.mods);
+    crate::gui_setting::save(&game, &setting);
+}
+
+/// 取某个实例的模组分组
+#[tauri::command]
+pub fn resource_mod_groups(uuid: String) -> Result<Vec<ModGroupDto>, String> {
+    let instance = parse_instance(&uuid)?;
+    let game = instance.read().unwrap();
+
+    Ok(mod_groups_of(&game))
+}
+
+/// 新建模组分组（重名返回错误，前端提示）
+#[tauri::command]
+pub fn resource_mod_group_add(uuid: String, name: String) -> Result<(), String> {
+    let name = name.trim();
+    if name.is_empty() {
+        return Err(String::from("err.groupEmpty"));
+    }
+    let instance = parse_instance(&uuid)?;
+    if mod_groups_of(&instance.read().unwrap())
+        .iter()
+        .any(|item| item.name == name)
+    {
+        return Err(String::from("err.groupExists"));
+    }
+
+    edit_mod_groups(&instance, |mods| {
+        mods.groups.insert(name.to_string(), Default::default());
+    });
+
+    Ok(())
+}
+
+/// 删除模组分组（组内模组回到"未分组"，磁盘上的文件一个都不动）
+#[tauri::command]
+pub fn resource_mod_group_remove(uuid: String, name: String) -> Result<(), String> {
+    let instance = parse_instance(&uuid)?;
+    edit_mod_groups(&instance, |mods| {
+        mods.groups.remove(&name);
+    });
+
+    Ok(())
+}
+
+/// 重命名模组分组（重名返回错误；只改分组名，成员照搬）
+#[tauri::command]
+pub fn resource_mod_group_rename(
+    uuid: String,
+    name: String,
+    new_name: String,
+) -> Result<(), String> {
+    let new_name = new_name.trim();
+    if new_name.is_empty() {
+        return Err(String::from("err.groupEmpty"));
+    }
+    if new_name == name {
+        return Ok(());
+    }
+    let instance = parse_instance(&uuid)?;
+    if mod_groups_of(&instance.read().unwrap())
+        .iter()
+        .any(|item| item.name == new_name)
+    {
+        return Err(String::from("err.groupExists"));
+    }
+
+    edit_mod_groups(&instance, |mods| {
+        if let Some(members) = mods.groups.remove(&name) {
+            mods.groups.insert(new_name.to_string(), members);
+        }
+    });
+
+    Ok(())
+}
+
+/// 把若干模组移到某个分组；`group` 为空 / null = 移出所有分组（回到"未分组"）
+///
+/// 移动语义：先从其它组里摘掉，再进目标组 —— 一个模组同时只属于一个组。
+#[tauri::command]
+pub fn resource_mod_group_set(uuid: String, group: Option<String>, keys: Vec<String>) {
+    let Ok(instance) = parse_instance(&uuid) else {
+        return;
+    };
+    let group = group
+        .as_deref()
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        .map(str::to_string);
+
+    // 目标组不存在就直接返回（别把它们从原组摘出来之后无处可去）；
+    // 先判再改，省掉一次没有改动的写盘
+    if let Some(name) = &group {
+        let exists = mod_groups_of(&instance.read().unwrap())
+            .iter()
+            .any(|item| item.name == *name);
+        if !exists {
+            return;
+        }
+    }
+
+    edit_mod_groups(&instance, |mods| {
+        for (name, members) in mods.groups.iter_mut() {
+            if Some(name) == group.as_ref() {
+                continue;
+            }
+            for key in &keys {
+                members.remove(key);
+            }
+        }
+
+        if let Some(name) = &group {
+            if let Some(members) = mods.groups.get_mut(name) {
+                for key in &keys {
+                    members.insert(key.clone());
+                }
+            }
+        }
+    });
 }
