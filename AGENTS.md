@@ -110,6 +110,18 @@
 
 - 中间产物（下载、解包、日志、试验脚本）统一放根目录 `target/temp`（`target\` 已被 git
   忽略），不要写进版本控制；也不要放系统盘 `%TEMP%`（会被清理）。
+- **测试的临时目录同样放 `target/temp`**：不要用 `std::env::temp_dir()`（系统 `%TEMP%`）——
+  它会被清理，测试留下的样本下次就找不到了，散在系统临时目录里也根本没法排查。
+  统一走 `mml_testutil::temp_dir()` / `temp_path(..)`（`mml-core/mml-testutil`，
+  按 `[dev-dependencies]` 引入），不要在测试里自己拼 `CARGO_MANIFEST_DIR/../..`。
+  - **只改测试代码**：生产代码里的临时目录（如 `base_archive` 解包时的中转目录）本来就该用
+    系统临时目录，不要换成 `mml_testutil` —— 那是 dev-dependency，正式产物里不存在。
+  - 每个用例**各用各的子目录**（名字带用例特征 + `Uuid` / 进程 id）：落盘是异步的，
+    两个用例共用一个目录时，先跑完的那个可能在另一个 `remove_dir_all` 之后才写文件，
+    于是后者读到前者的数据（表现为随机失败、单独跑就过）。
+  - 内核那几个系统（`mml_base` / `mml_names` / `mml_log` / `mml_config`）是**进程级单例**，
+    测试里不要各自写一份启动代码：`mml_log::STREAM` 是 `OnceLock`，第二次 `start()` 会
+    **panic**。同一 crate 内共用一个 boot（见 `mml-game/src/test_support.rs`）。
 
 ## 6.1 TASK.md（临时任务文件）
 

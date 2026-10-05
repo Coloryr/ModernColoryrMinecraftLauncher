@@ -9,7 +9,7 @@ use std::sync::OnceLock;
 fn init_all() -> PathBuf {
     static INIT: OnceLock<PathBuf> = OnceLock::new();
     INIT.get_or_init(|| {
-        let run_dir = std::env::temp_dir().join("mml-game-online-test");
+        let run_dir = mml_testutil::temp_dir().join("mml-game-online-test");
         let _ = std::fs::remove_dir_all(&run_dir);
         std::fs::create_dir_all(&run_dir).expect("创建测试运行目录失败");
 

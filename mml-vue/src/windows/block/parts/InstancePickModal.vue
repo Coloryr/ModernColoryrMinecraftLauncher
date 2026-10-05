@@ -81,6 +81,7 @@ onMounted(async () => {
   gap: 4px;
   max-height: 320px;
   overflow-y: auto;
+  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
 }
 
 .pick-item {

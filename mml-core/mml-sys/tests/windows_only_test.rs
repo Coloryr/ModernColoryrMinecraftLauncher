@@ -12,7 +12,7 @@ use std::path::PathBuf;
 
 /// 在临时目录创建本轮测试唯一目录
 fn make_test_root(tag: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!(
+    let dir = mml_testutil::temp_dir().join(format!(
         "mml_sys_win_test_{}_{}_{}",
         tag,
         std::process::id(),

@@ -570,7 +570,7 @@ pub(crate) mod test_util {
     /// 在临时目录下创建唯一的子目录（测试用）
     pub fn make_temp_dir(name: &str) -> PathBuf {
         static COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-        let dir = std::env::temp_dir().join(format!(
+        let dir = mml_testutil::temp_dir().join(format!(
             "mml-downloader-unit-{}-{}-{}",
             name,
             std::process::id(),

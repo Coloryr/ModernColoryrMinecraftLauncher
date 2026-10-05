@@ -312,6 +312,7 @@ function onLoaderPathPick(e: Event) {
   padding: 4px;
   max-height: 220px;
   overflow-y: auto;
+  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
 }
 
 .type-opt {

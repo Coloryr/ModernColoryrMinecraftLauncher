@@ -8,7 +8,7 @@ use uuid::Uuid;
 /// ConfigSaveObj::new 序列化 + save 落盘
 #[test]
 fn save_obj_writes_json() {
-    let dir = std::env::temp_dir().join(format!("mml_config_save_test_{}", std::process::id()));
+    let dir = mml_testutil::temp_dir().join(format!("mml_config_save_test_{}", std::process::id()));
     fs::create_dir_all(&dir).unwrap();
     let file: PathBuf = dir.join("test.json");
 
@@ -26,7 +26,7 @@ fn save_obj_writes_json() {
 #[test]
 fn save_obj_struct() {
     let dir =
-        std::env::temp_dir().join(format!("mml_config_save_test2_{}", std::process::id()));
+        mml_testutil::temp_dir().join(format!("mml_config_save_test2_{}", std::process::id()));
     fs::create_dir_all(&dir).unwrap();
     let file = dir.join("obj.json");
 

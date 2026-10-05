@@ -454,17 +454,14 @@ fn code_color(code: char) -> Option<&'static str> {
 }
 
 /// 把 Chat 树展平成可直接渲染的文字段（子段落继承父段落的样式）
+///
+/// 起始颜色用**空串**（"没指定颜色"）而不是 `#FFFFFF`：MOTD 里没写颜色码时，
+/// 前端应当**继承所在处的文字色**。写死白色的话，浅色主题下这段文字就是白底白字
+/// ——看不见（原先主窗口的 MOTD 卡片在浅色主题下就有这个毛病）。
+/// 空串这个约定由前端的 `lib/motd.ts::motdSegStyle` 处理：为空则不写 `color`。
 pub fn chat_to_segments(chat: &ChatObj) -> Vec<ChatSegment> {
     let mut out = Vec::new();
-    flatten_chat(
-        chat,
-        "#FFFFFF",
-        false,
-        false,
-        false,
-        false,
-        &mut out,
-    );
+    flatten_chat(chat, "", false, false, false, false, &mut out);
     out
 }
 

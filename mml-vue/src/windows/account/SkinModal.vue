@@ -737,6 +737,7 @@ onBeforeUnmount(destroyViewer);
   width: 260px;
   max-height: 430px;
   overflow-y: auto;
+  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
   padding-right: 4px;
 }
 

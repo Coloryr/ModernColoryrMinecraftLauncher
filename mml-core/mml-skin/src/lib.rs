@@ -82,7 +82,7 @@ mod tests {
 
         // 临时目录中的唯一文件名（按进程 ID 区分，测完清理）
         let path =
-            std::env::temp_dir().join(format!("mml_skin_roundtrip_{}.png", std::process::id()));
+            mml_testutil::temp_dir().join(format!("mml_skin_roundtrip_{}.png", std::process::id()));
         save_bitmap(&bm, &path);
 
         let loaded = open_bitmap(&path);
@@ -101,7 +101,7 @@ mod tests {
 
         // open_bitmap 对不存在的文件应返回 None
         let missing =
-            std::env::temp_dir().join(format!("mml_skin_missing_{}.png", std::process::id()));
+            mml_testutil::temp_dir().join(format!("mml_skin_missing_{}.png", std::process::id()));
         assert!(open_bitmap(&missing).is_none());
     }
 
@@ -109,7 +109,7 @@ mod tests {
     #[test]
     fn test_open_bitmap_invalid_file() {
         let path =
-            std::env::temp_dir().join(format!("mml_skin_invalid_{}.txt", std::process::id()));
+            mml_testutil::temp_dir().join(format!("mml_skin_invalid_{}.txt", std::process::id()));
         std::fs::write(&path, b"this is not an image").unwrap();
         let result = open_bitmap(&path);
         let _ = std::fs::remove_file(&path);

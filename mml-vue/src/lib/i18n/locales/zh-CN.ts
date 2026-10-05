@@ -13,6 +13,8 @@ export default {
   "mode.list": "列表",
 
   // 分组 / 列表
+  // 跨窗口共用的界面文案
+  "common.imagePreviewHint": "滚轮缩放 · 放大后可拖动",
   "group.default": "默认分组",
   "group.add": "添加",
   "group.collapse": "收起 / 展开分组",
@@ -269,6 +271,8 @@ export default {
   "resource.modDesc": "简介",
   "resource.modActions": "操作",
   "resource.modBuiltin": "内置",
+  // 内置的库（没有模组元数据的内置 jar，如 asm / mixinextras）：不是模组
+  "resource.modLibrary": "库",
   "resource.modBuiltinExpand": "展开内置模组",
   "resource.modBuiltinCollapse": "收起内置模组",
   // 表格的列（顺序与 ModTable 的 COLUMNS 一致）
@@ -315,7 +319,15 @@ export default {
   "resource.groupName": "分组名",
   "resource.groupPlaceholder": "输入分组名",
   "resource.groupNone": "未分组",
-  "resource.groupEmptyHint": "这个分组还是空的，把模组拖上来即可",
+  // 一个自建分组都没有时的空态（注意与上面的「未分组」不是一回事：
+  // 那个是"这个模组不属于任何分组"，这个是"你还没建过分组"）
+  "resource.groupNoGroups": "无分组",
+  "resource.groupEmptyHint": "该分组没有模组，把模组拖上来即可",
+  // 右键多选 + 顶栏批量操作
+  "resource.selectedCount": "已选 {n} 项",
+  "resource.clearSelection": "取消选择",
+  "resource.batchMoveTo": "移到分组",
+  "resource.batchDeleteConfirm": "确定删除选中的 {n} 个模组吗？将移入回收站。",
   "resource.groupCounts": "{n} 项 · 启用 {on} · 禁用 {off}",
   "resource.groupCountItems": "{n} 项",
   "resource.groupCollapse": "折叠 / 展开",
@@ -340,13 +352,16 @@ export default {
   "resource.modFail": "读取失败",
   "resource.modCore": "核心",
   "resource.modNote": "备注",
-  "resource.modNotePrefix": "备注：",
   "resource.modNoteTitle": "模组备注",
   "resource.modNotePlaceholder": "写点自己的说明，比如为什么装它、要不要更新",
   "resource.modNoteClear": "清空备注",
-  "resource.modNoteHint": "备注存在实例的 guisetting.json 里，与 ColorMC 互通；启用 / 禁用不影响它。",
   "resource.backup": "备份",
   "resource.backupOk": "已备份：{name}",
+  "resource.backupCount": "{n} 个备份",
+  "resource.backupNone": "这个存档还没有备份",
+  "resource.restore": "还原",
+  "resource.restorePickTitle": "选择要还原的备份",
+  "resource.restoreConfirm": "确定用这个备份覆盖「{name}」吗？当前存档会先移入回收站。",
   "resource.clear": "清空",
   "resource.clearConfirm": "确定清空全部截图？将移入回收站。",
   "resource.lastPlayed": "上次游玩：{time}",
@@ -1089,7 +1104,6 @@ export default {
   "modpack.summary": "项目简介",
   "modpack.download": "下载",
   "modpack.back": "返回",
-  "modpack.previewHint": "滚轮缩放 · 放大后可拖动",
   "modpack.groupPlaceholder": "游戏分组",
   "modpack.star": "收藏",
   "modpack.unstar": "取消收藏",

@@ -1,0 +1,7 @@
+[package]
+name = "mml-testutil"
+version = "0.1.0"
+edition = "2024"
+description = "测试专用工具：把临时目录统一放到仓库的 target/temp 下"
+
+[dependencies]

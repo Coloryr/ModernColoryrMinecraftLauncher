@@ -35,7 +35,6 @@ function sub(item: SchematicItemDto): string {
 
 <template>
   <ContentHead :data="data">
-    <h3 class="head-title">{{ t("resource.schematics") }}</h3>
   </ContentHead>
 
   <div v-if="loading" class="item-list">

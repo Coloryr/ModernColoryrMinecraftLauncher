@@ -198,6 +198,7 @@ async function clearDone() {
 
 .mp-bar.fill-h :deep(.collapse.open > .collapse-inner) {
   overflow-y: auto;
+  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
 }
 
 .mp-bar-head {

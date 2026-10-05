@@ -619,7 +619,7 @@ port = 25565
             value: i64,
         }
 
-        let dir = std::env::temp_dir().join(format!(
+        let dir = mml_testutil::temp_dir().join(format!(
             "mml_base_ser_test_{}_{}",
             std::process::id(),
             uuid::Uuid::new_v4().simple()

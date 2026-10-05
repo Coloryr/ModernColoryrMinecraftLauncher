@@ -324,6 +324,7 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 2px;
   overflow-y: auto;
+  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 10px;

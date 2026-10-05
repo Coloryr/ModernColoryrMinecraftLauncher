@@ -104,10 +104,17 @@ const rows = computed(() => {
   return out;
 });
 
-/** 加载器 / 加载侧 / 下载源的显示名（后端出稳定枚举名，文案在前端翻） */
-function loaderName(v: string): string {
-  return v ? t(`resource.loader.${v}`) : "";
+/**
+ * 加载器列的显示名
+ *
+ * **可能不止一个**：一个 jar 里可以有多份元数据（同时带 `fabric.mod.json` 与
+ * `META-INF/mods.toml` 的多加载器包），后端已汇总去重，这里逐个翻译后连起来。
+ */
+function loaderNames(v: string[]): string {
+  return v.map((name) => t(`resource.loader.${name}`)).join(" / ");
 }
+
+/** 加载侧 / 下载源的显示名（后端出稳定枚举名，文案在前端翻） */
 function sideName(v: string): string {
   return v ? t(`resource.side.${v}`) : "";
 }
@@ -119,6 +126,7 @@ function sourceName(v: string): string {
 <template>
   <div class="mod-table">
     <div class="mod-tr mod-th" :class="{ 'mod-th-hidden': hideHeader }">
+      <span class="mod-th-cell mod-th-select"></span>
       <span class="mod-th-cell mod-th-group">{{ t("resource.modName") }}</span>
       <span class="mod-th-cell">{{ t("resource.colEnable") }}</span>
       <span class="mod-th-cell">{{ t("resource.modNote") }}</span>
@@ -142,11 +150,26 @@ function sourceName(v: string): string {
       class="mod-tr"
       :class="{
         'mod-dragging': !!row.item.sha1 && draggingKey === row.item.sha1,
+        'mod-selected': !!row.item.sha1 && selectedKeys.has(row.item.sha1),
+        'mod-selecting': selectedKeys.size > 0,
         'mod-nested': row.depth > 1,
       }"
       :style="{ '--row-depth': row.depth - 1 }"
       @pointerdown="row.depth === 1 ? emit('drag-start', { event: $event, item: row.item }) : undefined"
+      @contextmenu.prevent="row.depth === 1 ? emit('select', row.item) : undefined"
     >
+      <!-- 多选勾选框（与列表视图同一套）：内置行没有 SHA1，留等宽占位保持各列对齐 -->
+      <span class="mod-cell mod-select-cell">
+        <input
+          v-if="row.depth === 1 && row.item.sha1"
+          type="checkbox"
+          class="mod-select"
+          :checked="selectedKeys.has(row.item.sha1)"
+          @pointerdown.stop
+          @change.stop="emit('select', row.item)"
+        />
+        <span v-else class="mod-select-gap" />
+      </span>
       <!-- 第一列：分组名（只在父行上显示，带折叠箭头）。
            箭头与名字**都能点开 / 收起**：和分组头那边同一个口径，
            别让用户猜"到底点哪儿才算数" -->
@@ -161,9 +184,16 @@ function sourceName(v: string): string {
             <GlyphIcon name="chevron-down" :size="13" :weight="2.4" />
           </button>
           <span v-else class="mod-tree-caret-placeholder" />
+          <!--
+            分组名那一格：点 = 折叠 / 展开，按住拖 = 调整分组顺序。
+            `.stop` 是必须的 —— 这一格在数据行（`.mod-tr`）**里面**，
+            而那一行自己也监听 pointerdown（拖模组归组）。不拦住的话一次按下会
+            同时起两个拖拽手势（改分组顺序 + 把模组拖进某个分组）。
+          -->
           <span
             class="mod-group-label"
             :title="groupLabel"
+            @pointerdown.stop="row.depth === 1 ? emit('drag-group', $event) : undefined"
             @click.stop="emit('toggle-group')"
           >{{ groupLabel }}</span>
         </template>
@@ -207,7 +237,13 @@ function sourceName(v: string): string {
         <span class="mod-name" :title="row.item.name || row.item.file">
           {{ row.item.name || row.item.file }}
         </span>
-        <span v-if="row.depth > 1" class="badge badge-dim">{{ t("resource.modBuiltin") }}</span>
+        <!-- 内置的**库**（没有模组元数据的内置 jar）：不是模组，与"内置"分开标 -->
+        <span v-if="row.item.library" class="badge badge-dim">
+          {{ t("resource.modLibrary") }}
+        </span>
+        <span v-else-if="row.depth > 1" class="badge badge-dim">
+          {{ t("resource.modBuiltin") }}
+        </span>
         <span v-if="row.item.jarInJar.length" class="badge">
           {{ t("resource.modBuiltinCount", { n: row.item.jarInJar.length }) }}
         </span>
@@ -215,7 +251,9 @@ function sourceName(v: string): string {
         <span v-if="row.item.core" class="badge">{{ t("resource.modCore") }}</span>
       </span>
       <span class="mod-cell" :title="row.item.version">{{ row.item.version }}</span>
-      <span class="mod-cell">{{ loaderName(row.item.loader) }}</span>
+      <span class="mod-cell" :title="loaderNames(row.item.loaders)">
+        {{ loaderNames(row.item.loaders) }}
+      </span>
       <span class="mod-cell">{{ sideName(row.item.side) }}</span>
       <span class="mod-cell">{{ sourceName(row.item.source) }}</span>
       <span class="mod-cell" :title="row.item.projectId">{{ row.item.projectId }}</span>
@@ -254,6 +292,33 @@ function sourceName(v: string): string {
       </span>
     </div>
 
-    <div v-if="!rows.length" class="empty-tip">{{ t("resource.empty") }}</div>
+    <!--
+      空分组：**也要有一行分组名**。
+      分组名那一格在数据行里，没有数据行就没有它 —— 于是空分组连名字都没有，
+      既不能折叠、也**不能拖动排序**（用户要求"所有分组都能拖动"）。
+      多选列留等宽占位，提示文字跨掉剩下的列。
+    -->
+    <div v-if="!rows.length" class="mod-tr mod-tr-empty">
+      <span class="mod-cell mod-select-cell" />
+      <span class="mod-cell mod-group-cell">
+        <button
+          v-if="groupLabel"
+          class="mod-tree-caret"
+          :class="{ collapsed: !groupOpen }"
+          @click.stop="emit('toggle-group')"
+        >
+          <GlyphIcon name="chevron-down" :size="13" :weight="2.4" />
+        </button>
+        <span
+          v-if="groupLabel"
+          class="mod-group-label"
+          :title="groupLabel"
+          @pointerdown.stop="emit('drag-group', $event)"
+          @click.stop="emit('toggle-group')"
+        >{{ groupLabel }}</span>
+      </span>
+      <!-- 与列表视图的空分组用同一句话，两个视图别各说各的 -->
+      <span class="mod-cell mod-empty-tip">{{ t("resource.groupEmptyHint") }}</span>
+    </div>
   </div>
 </template>

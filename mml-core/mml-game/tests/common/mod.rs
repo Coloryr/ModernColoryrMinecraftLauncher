@@ -19,7 +19,7 @@ use mml_net::modrinth_api::version_obj::ModrinthVersionObj;
 fn init_net() {
     static NET: OnceLock<()> = OnceLock::new();
     NET.get_or_init(|| {
-        let dir = std::env::temp_dir().join("mml-test-net-init");
+        let dir = mml_testutil::temp_dir().join("mml-test-net-init");
         std::fs::create_dir_all(&dir).ok();
         mml_config::init(&dir);
         mml_names::init(&dir);
@@ -41,7 +41,7 @@ fn block_on<F: std::future::Future>(future: F) -> F::Output {
 
 /// 下载缓存目录（系统临时目录下，跨测试与跨进程复用）。
 fn cache_dir() -> PathBuf {
-    let dir = std::env::temp_dir().join("mml-test-data");
+    let dir = mml_testutil::temp_dir().join("mml-test-data");
     std::fs::create_dir_all(&dir).expect("创建测试数据缓存目录失败");
     dir
 }

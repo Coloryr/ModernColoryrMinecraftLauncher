@@ -33,6 +33,7 @@ import type {
   ModGroupDto,
   ResourceViewDto,
   ModItemDto,
+  ModRenameDto,
   ModScanProgressDto,
   MotdDto,
   ModPackStatusDto,
@@ -43,6 +44,7 @@ import type {
   ProjectDto,
   ResourceSaveDto,
   ResourceStatusDto,
+  SaveBackupDto,
   SaveItemDto,
   ScreenshotItemDto,
   ServerItemDto,
@@ -77,7 +79,7 @@ export const api = {
 
   /** 查询服务器 MOTD（地址 host 或 host:port，端口缺省 25565） */
   async getMotd(address: string): Promise<MotdDto> {
-    return commands.main.getMotd(address);
+    return getMotd(address);
   },
 
   /** 获取分组列表（含空分组；uuid 为身份、name 只是显示名，默认分组排在最前且名字为空白） */
@@ -734,12 +736,18 @@ export function listMods(uuid: string): Promise<ModItemDto[]> {
 export function onModScanProgress(cb: (e: ModScanProgressDto) => void): Promise<UnlistenFn> {
   return listen<ModScanProgressDto>(ResourceListModsProgress, (e) => cb(e.payload));
 }
-/** 启用模组（去掉 .disable / .disabled 后缀） */
-export function enableMod(uuid: string, modUuid: string): Promise<void> {
+/**
+ * 启用模组（去掉 .disable / .disabled 后缀）
+ *
+ * 返回**改名后的新身份**（uuid / 文件名 / 相对路径）：文件名变了，uuid（路径的 v5）
+ * 也跟着变，调用方必须拿它更新本地那一条 —— 否则再点一次会按旧 uuid 找不到文件。
+ * 有了它就不必重扫整个 mods 目录。
+ */
+export function enableMod(uuid: string, modUuid: string): Promise<ModRenameDto> {
   return commands.resource.modEnable(uuid, modUuid);
 }
-/** 禁用模组（追加 .disable 后缀） */
-export function disableMod(uuid: string, modUuid: string): Promise<void> {
+/** 禁用模组（追加 .disable 后缀）；返回同上 */
+export function disableMod(uuid: string, modUuid: string): Promise<ModRenameDto> {
   return commands.resource.modDisable(uuid, modUuid);
 }
 /** 删除模组（进回收站） */
@@ -758,6 +766,14 @@ export function addModGroup(uuid: string, name: string): Promise<string> {
 /** 删除模组分组（传分组 uuid；组内模组回到"未分组"，不动磁盘文件） */
 export function removeModGroup(uuid: string, group: string): Promise<void> {
   return commands.resource.modGroupRemove(uuid, group);
+}
+/**
+ * 取分组块的**完整顺序**（含三个状态分组的固定 uuid）
+ *
+ * 必须从后端读：状态分组不在分组表里，前端自己拼不出用户把它们排到了哪儿。
+ */
+export function getModGroupOrder(uuid: string): Promise<string[]> {
+  return commands.resource.modGroupOrder(uuid);
 }
 /** 取收起的分组块键集合（分组 uuid，与分组表同一套键口径） */
 export function getModGroupsCollapsed(uuid: string): Promise<string[]> {
@@ -827,6 +843,18 @@ export function deleteSave(uuid: string, dir: string): Promise<void> {
 export function backupSave(uuid: string, dir: string): Promise<string> {
   return commands.resource.backupSave(uuid, dir);
 }
+/** 某个存档的备份列表（按时间倒序，最近的在最上面） */
+export function listSaveBackups(uuid: string, dir: string): Promise<SaveBackupDto[]> {
+  return commands.resource.listSaveBackups(uuid, dir);
+}
+/**
+ * 还原某个备份
+ *
+ * **破坏性**：当前存档整目录会先移入回收站，再把这个备份解开覆盖上去。
+ */
+export function restoreSaveBackup(uuid: string, dir: string, file: string): Promise<void> {
+  return commands.resource.restoreSaveBackup(uuid, dir, file);
+}
 
 /** 截图列表 */
 export function listScreenshots(uuid: string): Promise<ScreenshotItemDto[]> {
@@ -858,6 +886,17 @@ export function openResourceFolder(
 export function listServers(uuid: string): Promise<ServerItemDto[]> {
   return commands.resource.listServers(uuid);
 }
+/** 添加服务器 */
+/**
+ * 查询服务器 MOTD（地址 host 或 host:port，端口缺省 25565）
+ *
+ * 与上面 `api.getMotd` 是同一个命令；资源窗口的服务器列表用的是这个具名版本
+ * （那一层其它调用都是具名导出）。两边共用这一份实现，别再各写一遍
+ */
+export function getMotd(address: string): Promise<MotdDto> {
+  return commands.main.getMotd(address);
+}
+
 /** 添加服务器 */
 export function addServer(uuid: string, name: string, ip: string): Promise<void> {
   return commands.resource.serverAdd(uuid, name, ip);

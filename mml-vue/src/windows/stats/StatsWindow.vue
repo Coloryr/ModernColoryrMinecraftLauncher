@@ -72,7 +72,7 @@ function fmtTime(ms: number | null) {
 </script>
 
 <template>
-  <WindowFrame :title="t('features.stats')" @close="$emit('close')">
+  <WindowFrame :title="t('features.stats')" body-gutter @close="$emit('close')">
     <div class="summary">
       <div class="summary-card">
         <span class="summary-num">{{ data?.instances.length ?? 0 }}</span>

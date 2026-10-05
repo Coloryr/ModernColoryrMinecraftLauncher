@@ -8,3 +8,6 @@ mml-names = { path = "../mml-names" }
 crossbeam-queue.workspace = true
 semrs.workspace = true
 chrono.workspace = true
+
+[dev-dependencies]
+mml-testutil = { path = "../mml-testutil" }

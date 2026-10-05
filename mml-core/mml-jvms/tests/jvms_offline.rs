@@ -33,7 +33,7 @@ static COUNTER: AtomicU64 = AtomicU64::new(0);
 /// 初始化全局依赖链（进程内只执行一次），返回运行根目录
 fn setup() -> PathBuf {
     INIT.call_once(|| {
-        let dir = std::env::temp_dir().join(format!("mml-jvms-it-{}", uuid_like()));
+        let dir = mml_testutil::temp_dir().join(format!("mml-jvms-it-{}", uuid_like()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         RUN_DIR.set(dir.clone()).unwrap();
@@ -58,7 +58,7 @@ fn uuid_like() -> String {
 
 /// 创建唯一的临时子目录
 fn make_temp_dir(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("mml-jvms-it-{}-{}", name, uuid_like()));
+    let dir = mml_testutil::temp_dir().join(format!("mml-jvms-it-{}-{}", name, uuid_like()));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).unwrap();
     dir

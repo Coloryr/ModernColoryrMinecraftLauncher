@@ -13,7 +13,7 @@ use mml_net::{
 
 /// 初始化全局配置到临时目录。
 fn init_config() {
-    let dir = std::env::temp_dir().join(format!(
+    let dir = mml_testutil::temp_dir().join(format!(
         "mml-net-url-test-{}",
         std::process::id()
     ));

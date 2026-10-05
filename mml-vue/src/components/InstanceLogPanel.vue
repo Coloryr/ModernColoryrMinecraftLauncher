@@ -129,6 +129,7 @@ watch(
   border-radius: 10px;
   padding: 12px 14px;
   overflow-y: auto;
+  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
   font-family: "Cascadia Code", Consolas, "Courier New", monospace;
   font-size: 12.5px;
   line-height: 1.65;

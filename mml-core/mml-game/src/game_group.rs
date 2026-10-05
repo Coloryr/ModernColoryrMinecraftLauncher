@@ -628,7 +628,7 @@ pub fn prune(alive: &[Uuid]) {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::{Mutex, Once};
+    use std::sync::Mutex;
     use std::time::{Duration, Instant};
 
     use super::*;
@@ -796,24 +796,13 @@ mod tests {
     /// （表现为随机失败，单独跑就过）。凡是碰磁盘状态的用例都先拿这把锁。
     static DISK_LOCK: Mutex<()> = Mutex::new(());
 
-    /// 建地基：与 `mml_core::init` 相同的初始化链（异步保存线程必须先起来）
+    /// 建地基：起内核那几个进程级单例（见 [`crate::test_support::boot`]）
     ///
-    /// 用 `Once` 保证只跑一次 —— 这些是进程级单例，多个用例各 init 一次会互踩。
-    /// 需要落盘 / 读盘的用例都先调它。
+    /// **不要在这里自己再写一份**：`mml_log::STREAM` 是 `OnceLock`，第二次
+    /// `mml_log::start()` 会 panic（`STREAM.set(..).unwrap()`）——
+    /// 这正是本模块与 `game_mods::meta_tests` 曾经互相踩挂的原因。
     fn boot() -> std::path::PathBuf {
-        static INIT: Once = Once::new();
-        let run = std::env::temp_dir().join(format!("mml-group-test-{}", std::process::id()));
-        INIT.call_once(|| {
-            let _ = std::fs::remove_dir_all(&run);
-            std::fs::create_dir_all(&run).unwrap();
-
-            mml_base::init(&run);
-            mml_names::init(mml_base::get_base_dir()).unwrap();
-            mml_log::start(mml_base::get_base_dir()).unwrap();
-            mml_config::init(mml_base::get_base_dir()).unwrap();
-            mml_config::config_save::start();
-        });
-        run
+        crate::test_support::boot()
     }
 
     /// 落盘 → 读回：分组顺序与组内次序都必须真的写进文件、重启后还在
@@ -824,7 +813,7 @@ mod tests {
         let _guard = DISK_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         boot();
 
-        let dir = std::env::temp_dir().join(format!("mml-group-store-{}", std::process::id()));
+        let dir = mml_testutil::temp_dir().join(format!("mml-group-store-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
 
@@ -882,16 +871,18 @@ mod tests {
     /// 这是"默认分组拖不动"那个问题的回归测试 —— 它原先被写死在首位
     /// （`keys()` 里无条件 push、`reorder_groups` 里跳过它）。
     ///
-    /// **不自己 `init` 一个目录**：`STORE` / `GROUP_FILE` 是进程级单例，
-    /// 两个用例各 init 一次会互踩（并行跑时 `config_save` 还没起来就写盘 → panic）。
-    /// 所以复用上面那个用例的目录与地基，只补验"默认分组能换位置"这一条。
+    /// **用自己的目录**（不复用上面那个用例的）：落盘是异步的，两个用例共用一个目录时，
+    /// 先跑完的那个可能在另一个 `remove_dir_all` 之后才把文件写出来，
+    /// 于是后者的 `init` 读到了前者的数据（表现为随机失败、单独跑就过）。
+    /// `DISK_LOCK` 已把两个用例串起来，各用各的目录就互不干扰了。
     #[test]
     fn default_group_can_be_reordered() {
         let _guard = DISK_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         boot();
 
-        let dir = std::env::temp_dir().join(format!("mml-group-store-{}", std::process::id()));
-        // 上面那个用例已经 init 过；单独跑本用例时它可能没跑，这里补一次（幂等：同一目录）
+        let dir = mml_testutil::temp_dir().join(format!("mml-group-reorder-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
         init(dir.clone()).unwrap();
 
         let custom = add_group("甲组").expect("建组失败");
@@ -904,12 +895,25 @@ mod tests {
             "默认分组应能排到后面"
         );
 
-        // 再拖回最前，回到原状（避免影响同目录下的其它用例）
-        reorder_groups(&[DEFAULT_GROUP_UUID, custom]);
+        // 落盘是异步的：等文件里真的出现新顺序再重新 init，否则读到的还是旧的一份
+        let file = dir.join(names::GROUP_FILE);
+        let want = vec![custom.to_string(), DEFAULT_GROUP_UUID.to_string()];
+        let saved = || {
+            serialize_tools::json_from_file::<GroupStore>(&file)
+                .is_ok_and(|back| back.group_order == want)
+        };
+        let start = Instant::now();
+        while start.elapsed() < Duration::from_secs(10) && !saved() {
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        assert!(saved(), "分组表未在限时内落盘: {}", file.display());
+
+        // 模拟重启：位置要能从文件读回来（说明存的是"用户排的位置"而不是每次重算）
+        init(dir).unwrap();
         assert_eq!(
             group_list().iter().map(|g| g.uuid).collect::<Vec<_>>(),
-            vec![DEFAULT_GROUP_UUID, custom],
-            "应能再拖回最前"
+            vec![custom, DEFAULT_GROUP_UUID],
+            "重启后仍应保持用户排的位置"
         );
     }
 }

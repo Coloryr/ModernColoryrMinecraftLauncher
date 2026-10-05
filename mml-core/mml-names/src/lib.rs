@@ -265,7 +265,7 @@ mod tests {
 
         // ---------- 语言文件加载 ----------
         // 使用临时目录，测完清理
-        let dir = std::env::temp_dir().join(format!("mml_names_test_{}", std::process::id()));
+        let dir = mml_testutil::temp_dir().join(format!("mml_names_test_{}", std::process::id()));
         fs::create_dir_all(&dir).unwrap();
         let lang_file = dir.join(names::LANG_FILE);
         // 清掉上次运行可能残留的语言文件

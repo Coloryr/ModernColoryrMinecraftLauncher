@@ -883,6 +883,7 @@ select.sel-file-version {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -1137,6 +1138,7 @@ select.sel-file-version {
 .ver-files {
   max-height: 320px;
   overflow-y: auto;
+  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -1204,6 +1206,7 @@ select.sel-file-version {
 .save-list {
   max-height: 280px;
   overflow-y: auto;
+  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
   display: flex;
   flex-direction: column;
   gap: 6px;

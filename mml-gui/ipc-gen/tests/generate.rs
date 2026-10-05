@@ -10,7 +10,7 @@ use gui_ipc_gen::{GenConfig, generate};
 
 /// 建一个空的临时 src 目录（同名目录先清掉）
 fn temp_src(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("gui_ipc_gen_it_{name}"));
+    let dir = mml_testutil::temp_dir().join(format!("gui_ipc_gen_it_{name}"));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).unwrap();
     dir

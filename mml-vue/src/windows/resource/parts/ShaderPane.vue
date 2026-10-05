@@ -36,7 +36,6 @@ function sub(item: ShaderItemDto): string {
 
 <template>
   <ContentHead :data="data">
-    <h3 class="head-title">{{ t("resource.shaders") }}</h3>
   </ContentHead>
 
   <div v-if="loading" class="item-list">

@@ -102,7 +102,7 @@ impl mml_downloader::IDownloadGui for TestDownloader {
 #[tokio::test]
 #[ignore]
 async fn install_curseforge_pack() {
-    let run_dir = env::temp_dir().join("mml-modpack-test");
+    let run_dir = mml_testutil::temp_dir().join("mml-modpack-test");
     std::fs::create_dir_all(&run_dir).unwrap();
     start(&run_dir);
 

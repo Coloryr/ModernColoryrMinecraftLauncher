@@ -104,6 +104,7 @@ const total = computed(() => collectFileKeys(props.tree).length);
 .file-list {
   max-height: 220px;
   overflow-y: auto;
+  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 6px;

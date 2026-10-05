@@ -448,7 +448,7 @@ function tokenLabel(acc: AccountStoreDto): string {
 </script>
 
 <template>
-  <WindowFrame :title="t('account.manage')" :body-fill="view === 'detail'" @close="$emit('close')">
+  <WindowFrame :title="t('account.manage')" :body-fill="view === 'detail'" body-gutter @close="$emit('close')">
     <!-- 工具栏整体搬进标题栏右侧：类型筛选 + 搜索 + 视图切换 + 添加账户。
          「查看皮肤」不在这里 —— 它是针对某个账户的动作，放在各账户条目的操作按钮里。
          标题栏高度是固定的 --titlebar-h，这一排必须比它矮，否则会把整条顶栏撑高。

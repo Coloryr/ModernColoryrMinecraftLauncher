@@ -26,7 +26,7 @@ fn unique_temp_dir(tag: &str) -> PathBuf {
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_nanos();
-    std::env::temp_dir().join(format!(
+    mml_testutil::temp_dir().join(format!(
         "mml-tex-draw-it-{}-{}-{}",
         tag,
         std::process::id(),

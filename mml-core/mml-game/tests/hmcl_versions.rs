@@ -24,7 +24,7 @@ use mml_game::other_launcher::official_obj::OfficialObj;
 
 /// 测试运行目录（临时目录 + 进程号，避免多进程冲突）
 fn run_dir() -> PathBuf {
-    std::env::temp_dir().join(format!("mml-hmcl-versions-{}", std::process::id()))
+    mml_testutil::temp_dir().join(format!("mml-hmcl-versions-{}", std::process::id()))
 }
 
 /// 版本 JSON 样本目录

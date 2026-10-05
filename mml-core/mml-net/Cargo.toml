@@ -16,3 +16,6 @@ serde_json.workspace = true
 scraper.workspace = true
 itertools.workspace = true
 rquickjs.workspace = true
+
+[dev-dependencies]
+mml-testutil = { path = "../mml-testutil" }

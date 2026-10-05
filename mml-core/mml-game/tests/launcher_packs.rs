@@ -20,7 +20,7 @@ use zip::write::SimpleFileOptions;
 
 /// 测试运行目录（系统临时目录 + 进程号，避免多进程冲突）
 fn run_dir() -> PathBuf {
-    std::env::temp_dir().join(format!("mml-launcher-packs-{}", std::process::id()))
+    mml_testutil::temp_dir().join(format!("mml-launcher-packs-{}", std::process::id()))
 }
 
 /// 初始化链（与 mml_core::init 相同），每进程一次
@@ -45,7 +45,7 @@ static TEST_LOCK: Mutex<()> = Mutex::new(());
 
 /// 假包输出目录
 fn pack_dir() -> PathBuf {
-    let dir = std::env::temp_dir()
+    let dir = mml_testutil::temp_dir()
         .join("mml-launcher-packs-packs")
         .join(Uuid::new_v4().to_string());
     std::fs::create_dir_all(&dir).unwrap();

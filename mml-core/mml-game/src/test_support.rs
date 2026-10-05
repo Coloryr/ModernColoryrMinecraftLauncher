@@ -1,0 +1,35 @@
+//! 测试共用的地基（仅 `#[cfg(test)]` 编译）
+//!
+//! 内核这几个系统都是**进程级单例**：`mml_base` 的运行目录、`mml_names` 的路径、
+//! `mml_log` 的日志流、`mml_config` 的保存线程。凡是需要"能落盘 / 能读盘"的用例，
+//! 都得先把它们起来。
+//!
+//! **为什么必须只有一份**：`mml_log::STREAM` 是 `OnceLock`，`start()` 内部是
+//! `STREAM.set(..).unwrap()` —— **第二次调用直接 panic**。所以各测试模块不能各自写
+//! 一份 boot，必须统一走这里。
+//!
+//! 目录固定为 `mml-group-test-<pid>`（`mml-testutil::temp_dir()` 下）：
+//! 同一进程内所有用例共用这一个运行目录，与单例的语义一致；不同进程（并行跑不同
+//! 测试二进制）之间靠 pid 区分。
+
+use std::path::PathBuf;
+use std::sync::Once;
+
+/// 启动全部全局单例，返回本次测试运行的目录
+///
+/// 幂等：重复调用只生效第一次（`Once`）。**不清理目录** —— 日志流可能已经打开，
+/// 删掉会让后续写入失败；需要干净目录的用例请自己用独立子目录。
+pub fn boot() -> PathBuf {
+    static INIT: Once = Once::new();
+    let run = mml_testutil::temp_dir().join(format!("mml-group-test-{}", std::process::id()));
+    INIT.call_once(|| {
+        std::fs::create_dir_all(&run).unwrap();
+
+        mml_base::init(&run);
+        mml_names::init(mml_base::get_base_dir()).unwrap();
+        mml_log::start(mml_base::get_base_dir()).unwrap();
+        mml_config::init(mml_base::get_base_dir()).unwrap();
+        mml_config::config_save::start();
+    });
+    run
+}

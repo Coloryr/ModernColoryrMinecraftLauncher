@@ -272,6 +272,7 @@ function onCellKey(e: KeyboardEvent, i: number) {
   min-width: 0;
   min-height: 0;
   overflow-y: auto;
+  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
   /* 顶部留白 = 窗口内容区原本的上内边距（22px）+ 悬停上浮的 2px 余量：
      它是滚动内容的一部分，所以只在滚到最上面时出现，滚动条轨道仍是整条；
      否则第一排格子悬停上浮时会被裁掉上边缘那条线 */

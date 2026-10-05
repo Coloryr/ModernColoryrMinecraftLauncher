@@ -1910,6 +1910,9 @@ dependencies = [
 [[package]]
 name = "gui-ipc-gen"
 version = "0.1.0"
+dependencies = [
+ "mml-testutil",
+]
 
 [[package]]
 name = "gui-macros"
@@ -2988,6 +2991,7 @@ dependencies = [
  "mml-log",
  "mml-names",
  "mml-net",
+ "mml-testutil",
  "reqwest",
  "serde",
  "serde_json",
@@ -3007,6 +3011,7 @@ dependencies = [
  "md-5",
  "mml-names",
  "mml-sys",
+ "mml-testutil",
  "regex",
  "serde",
  "serde_json",
@@ -3030,6 +3035,7 @@ dependencies = [
  "mml-log",
  "mml-names",
  "mml-sys",
+ "mml-testutil",
  "semrs",
  "serde",
  "serde_json",
@@ -3069,6 +3075,7 @@ dependencies = [
  "mml-names",
  "mml-net",
  "mml-sys",
+ "mml-testutil",
  "reqwest",
  "semka",
  "serde",
@@ -3101,6 +3108,7 @@ dependencies = [
  "mml-nbt",
  "mml-net",
  "mml-sys",
+ "mml-testutil",
  "notify",
  "rayon",
  "regex",
@@ -3173,6 +3181,7 @@ dependencies = [
  "mml-base",
  "mml-log",
  "mml-names",
+ "mml-testutil",
  "tokio",
  "uuid",
 ]
@@ -3185,6 +3194,7 @@ dependencies = [
  "mml-config",
  "mml-names",
  "mml-sys",
+ "mml-testutil",
  "tokio",
 ]
 
@@ -3195,6 +3205,7 @@ dependencies = [
  "chrono",
  "crossbeam-queue",
  "mml-names",
+ "mml-testutil",
  "semrs",
 ]
 
@@ -3202,6 +3213,7 @@ dependencies = [
 name = "mml-names"
 version = "0.1.0"
 dependencies = [
+ "mml-testutil",
  "serde",
  "uuid",
 ]
@@ -3214,6 +3226,7 @@ dependencies = [
  "flate2",
  "lz4_flex",
  "mml-names",
+ "mml-testutil",
  "rayon",
 ]
 
@@ -3227,6 +3240,7 @@ dependencies = [
  "mml-log",
  "mml-names",
  "mml-sys",
+ "mml-testutil",
  "reqwest",
  "rquickjs",
  "scraper",
@@ -3239,6 +3253,7 @@ dependencies = [
 name = "mml-skin"
 version = "0.1.0"
 dependencies = [
+ "mml-testutil",
  "tiny-skia",
 ]
 
@@ -3272,12 +3287,17 @@ dependencies = [
  "clipboard-rs",
  "dbus",
  "mml-names",
+ "mml-testutil",
  "tokio",
  "url",
  "uuid",
  "windows 0.62.2",
  "winreg 0.56.0",
 ]
+
+[[package]]
+name = "mml-testutil"
+version = "0.1.0"
 
 [[package]]
 name = "mml-tex-draw"
@@ -3293,6 +3313,7 @@ dependencies = [
  "mml-names",
  "mml-net",
  "mml-sys",
+ "mml-testutil",
  "png 0.18.1",
  "pollster 1.0.1",
  "rayon",

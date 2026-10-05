@@ -30,7 +30,6 @@ function formatLabel(item: PackItemDto): string {
 
 <template>
   <ContentHead :data="data">
-    <h3 class="head-title">{{ t("resource.resourcepacks") }}</h3>
   </ContentHead>
 
   <div v-if="loading" class="item-list">

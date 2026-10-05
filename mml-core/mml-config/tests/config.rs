@@ -3,7 +3,7 @@
 //! `mml_config::init` / `config_save::start` / `mml_log::start` 都是
 //! 进程级全局一次性操作，因此所有断言集中在一个测试里顺序执行。
 //!
-//! 配置与日志文件统一写入 `std::env::temp_dir()` 下的唯一子目录，
+//! 配置与日志文件统一写入仓库 `target/temp` 下的唯一子目录，
 //! 测试结束后尽力清理（日志文件句柄由全局 `STREAM` 持有，Windows 下
 //! 可能无法删除，清理失败会忽略，不影响测试结果）。
 
@@ -18,7 +18,7 @@ use mml_names::{names, VERSION};
 
 /// 在临时目录下创建唯一的测试目录
 fn temp_dir(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("mml_config_test_{}_{name}", std::process::id()));
+    let dir = mml_testutil::temp_dir().join(format!("mml_config_test_{}_{name}", std::process::id()));
     // 清掉上次运行可能残留的目录
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).unwrap();

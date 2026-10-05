@@ -210,32 +210,35 @@ impl InstanceSettingObj {
         .unwrap_or_default()
     }
 
-    /// 还原备份
+    /// 还原备份（**实例上的方法**：靠 `info.dir` 定位是哪个存档）
     ///
-    /// # 参数
+    /// 备份 zip 在**备份目录**里，而还原目标是**存档目录** `saves/<info.dir>` ——
+    /// 以前这里解压到 `备份目录/<info.dir>`，等于在备份文件夹里又展开一份，
+    /// 真正的存档一点没变（这个方法此前没有任何调用方，所以一直没暴露出来）。
     ///
-    /// - `info`: 备份信息
-    /// - `file`: 备份文件名
+    /// - `info`: 备份信息（`dir` 是存档目录名）
+    /// - `file`: 备份文件名（来自 [`get_backups`](Self::get_backups) 的 `back`）
     /// - `gui`: 压缩进度回调
     ///
     /// # 返回值
     ///
-    /// 成功返回 `Ok(())`；删除旧目录或解压失败返回对应错误
+    /// 成功返回 `Ok(())`；现有存档移入回收站或解压失败返回对应错误
     pub fn restore_backup(
         &self,
         info: &SaveBackupObj,
         file: &str,
         gui: BaseArchiveGui,
     ) -> CoreResult<()> {
-        let dir = self.get_backup_path();
-        let path = dir.join(info.dir.clone());
-        if path.exists() && path.is_dir() {
-            path_helper::move_to_trash(&path)?;
+        let backup_file = self.get_backup_path().join(file);
+        let target = self.get_saves_path().join(&info.dir);
+
+        // 先把现有存档整目录移进回收站（不是直接删）：
+        // 还原是破坏性操作，用户发现选错了还能从回收站捞回来
+        if target.exists() && target.is_dir() {
+            path_helper::move_to_trash(&target)?;
         }
 
-        let backup_file = dir.join(file);
-
-        BaseArchive::decompress(ArchiveType::Zip, &backup_file, &path, gui)
+        BaseArchive::decompress(ArchiveType::Zip, &backup_file, &target, gui)
     }
 
     /// 获取备份文件列表
@@ -487,7 +490,12 @@ impl SaveObj {
                         return;
                     }
                     let json = json.unwrap();
-                    if let Some(data) = read_pack(path.clone(), ens, dis, json) {
+                    // 传**这个包自己的路径**（`item`），不是 `path`（datapacks 目录）——
+                    // `read_pack` 用 `path.file_name()` 拼出 `file/<包名>`，而这个名字
+                    // 既是列表里显示的名字、也是和 `Enabled` / `Disabled` 比对启用状态的键。
+                    // 传父目录的话**每个包都叫 `file/datapacks`**：列表里全显示成 "datapacks"，
+                    // 启用状态也全对不上（改一个的状态等于改全部）。
+                    if let Some(data) = read_pack(item.clone(), ens, dis, json) {
                         list.lock().unwrap().push(data);
                     }
                 }
@@ -513,7 +521,8 @@ impl SaveObj {
                     return;
                 }
                 let json = json.unwrap();
-                if let Some(data) = read_pack(path.clone(), ens, dis, json) {
+                // 同上：目录形式的数据包也传它自己的路径
+                if let Some(data) = read_pack(item.clone(), ens, dis, json) {
                     list.lock().unwrap().push(data);
                 }
             });

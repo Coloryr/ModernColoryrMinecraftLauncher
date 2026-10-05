@@ -23,8 +23,9 @@ use tauri::{Emitter, WebviewWindow};
 use uuid::Uuid;
 
 use crate::dtos::{
-    DataPackItemDto, ModGroupDto, ModItemDto, ModScanProgressDto, PackItemDto, ResourceViewDto,
-    SaveItemDto, SchematicItemDto, ScreenshotItemDto, ServerItemDto, ShaderItemDto,
+    DataPackItemDto, ModGroupDto, ModItemDto, ModRenameDto, ModScanProgressDto, PackItemDto,
+    ResourceViewDto, SaveBackupDto, SaveItemDto, SchematicItemDto, ScreenshotItemDto, ServerItemDto,
+    ShaderItemDto,
 };
 use crate::listens;
 
@@ -225,7 +226,10 @@ pub async fn resource_list_mods(
         game_path: &game_path,
     };
 
-    Ok(list.iter().filter_map(|item| mod_item(item, &ctx)).collect())
+    Ok(list
+        .iter()
+        .filter_map(|item| mod_item(item, &ctx, false))
+        .collect())
 }
 
 /// `mod_item` 需要的几份外部数据（打包传，省得一路加参数）
@@ -240,23 +244,54 @@ struct ModCtx<'a> {
 
 /// 一个（可能带内置模组的）模组条目 → DTO
 ///
-/// 顶层条目取文件名；内置模组（`jar_in_jar`）没有独立文件，用显示名兜底 ——
-/// 它们装在父 jar 里，只用于展示（列表里缩进一层），不提供启用 / 删除。
-fn mod_item(item: &ModObj, ctx: &ModCtx) -> Option<ModItemDto> {
+/// 顶层条目取文件名；内置模组（`jar_in_jar`）没有独立文件路径，用**归档内的条目名**
+/// 当 `file`（后端 `read_jar_in_jar` 填的），只用于展示（列表里缩进一层），
+/// 不提供启用 / 删除。
+///
+/// - `nested`: 是不是内置 jar（`jar_in_jar` 里的那一层）。用来区分"库"与"读不出元数据的顶层包"
+fn mod_item(item: &ModObj, ctx: &ModCtx, nested: bool) -> Option<ModItemDto> {
     let file = item
         .file
         .file_name()
         .map(|name| name.to_string_lossy().to_string())
         .unwrap_or_default();
-    // 顶层条目必须有文件名（拿不到就说明不是 mods 目录下的文件，跳过）；
-    // 内置模组 file 为空，靠 modid / 名字展示
     let info = item.info.first();
     let mod_id = info.map(|i| i.mod_id.clone()).unwrap_or_default();
     let name = info.map(|i| i.name.clone()).unwrap_or_default();
+    // 拿不到文件名才跳过（`file` 为空只可能是"不在 mods 目录下的东西"）
     if file.is_empty() && mod_id.is_empty() && name.is_empty() {
         return None;
     }
+    // **库**：内置 jar 里没有模组元数据的那些。它们是依赖（asm / mixinextras 之类），
+    // 不是模组。以前这类条目被上面那个 `return None` 连同丢弃 —— 现在留着并标出来。
+    // 只对内置 jar 判定：`mods/` 目录下没有元数据的包是"读不出来的坏包"，
+    // 说成"库"会误导（那种情况另有 `fail` 标记）
+    let library = nested && item.info.is_empty();
     let icon = item.info.iter().find_map(|i| i.icon.as_ref());
+
+    // 支持的加载器：汇总**所有**元数据条目去重（一个 jar 可能同时带 fabric.mod.json
+    // 与 META-INF/mods.toml）。以前只取 `info.first()` 的那一个，多加载器的包会漏报。
+    // 按 `LoaderType` 的声明顺序排（不是元数据出现顺序），展示才稳定。
+    //
+    // **`Normal`（原版）要滤掉**：它只表示"这条元数据没说是哪个加载器"（枚举默认值），
+    // 不是"这个模组支持原版"。造出这种条目的地方有两处 ——
+    // `read_core_mod`（MANIFEST.MF 里没有 core mod 标记时）与 `read_mod_icon`
+    // （只认得出图标、没有元数据的包）。列出来会让人以为这包能在原版跑。
+    let loaders: Vec<String> = {
+        let mut list: Vec<(u8, String)> = Vec::new();
+        for entry in &item.info {
+            let name = entry.loaders.to_string();
+            if name == "normal" {
+                continue;
+            }
+            if list.iter().any(|(_, existing)| existing == name) {
+                continue;
+            }
+            list.push((entry.loaders as u8, name.to_string()));
+        }
+        list.sort_by_key(|(order, _)| *order);
+        list.into_iter().map(|(_, name)| name).collect()
+    };
 
     // 在线信息按 SHA1 关联：手动放进 mods 的模组不在表里，那三列就空着
     let sha1 = sha1_of(&item.hash);
@@ -278,12 +313,13 @@ fn mod_item(item: &ModObj, ctx: &ModCtx) -> Option<ModItemDto> {
         disable: item.disable,
         fail: item.fail,
         core: item.core,
+        library,
         mod_id,
         name,
         version: info.and_then(|i| i.version.clone()).unwrap_or_default(),
         author: info.map(|i| i.author.join(", ")).unwrap_or_default(),
         description: info.and_then(|i| i.description.clone()).unwrap_or_default(),
-        loader: info.map(|i| i.loaders.to_string()).unwrap_or_default().to_string(),
+        loaders,
         side: mod_side_name(info.map(|i| i.side)),
         url: info.and_then(|i| i.url.clone()).unwrap_or_default(),
         source,
@@ -294,7 +330,7 @@ fn mod_item(item: &ModObj, ctx: &ModCtx) -> Option<ModItemDto> {
         jar_in_jar: item
             .jar_in_jar
             .iter()
-            .filter_map(|child| mod_item(child, ctx))
+            .filter_map(|child| mod_item(child, ctx, true))
             .collect(),
         file,
     })
@@ -360,35 +396,73 @@ fn sha1_of(hash: &FileHash) -> String {
     }
 }
 
-/// 在 mods 目录扫描结果里按 uuid 找模组（启用 / 禁用 / 删除需要带状态的 ModObj）
+/// 在 mods 目录里按 uuid 找到那个文件（启用 / 禁用 / 删除要用）
 ///
-/// 不报进度（传 `None`）：这是"改一个文件前后的内部查找"，不面向用户，
-/// 报了反而会让界面上的进度指示闪一下。
+/// **只列目录，不读文件内容**：uuid 是**文件路径**的 v5（见 `gen_mod_uuid`），
+/// 所以按 uuid 定位根本用不上哈希，更用不上解析元数据。
+///
+/// 以前这里走 `read_mod_fast`，那会把**每个 jar 完整读一遍算 SHA1** ——
+/// 几百个包要好几秒，而"禁用"只是给一个文件改名。用户要求"禁用之后不要重新读取"，
+/// 这条是后端那一半：真正贵的就是它。
 async fn find_mod(instance: GameInstance, mod_uuid: &str) -> Result<ModObj, String> {
-    let list = block_on_instance(instance, |game| {
-        tokio::runtime::Handle::current().block_on(async { game.read_mod_fast(None).await })
+    let mod_uuid = mod_uuid.to_string();
+    let found = block_on_instance(instance, move |game| {
+        path_helper::get_files(game.get_mods_path())
+            .into_iter()
+            .find(|path| mml_game::game_mods::gen_mod_uuid(path).to_string() == mod_uuid)
     })
     .await?;
 
-    list.into_iter()
-        .find(|item| item.uuid.to_string() == mod_uuid)
-        .ok_or_else(|| "err.fileNotFound".to_string())
+    let path = found.ok_or_else(|| "err.fileNotFound".to_string())?;
+    // 禁用状态由后缀决定，不需要读文件
+    let disable = path.extension().is_some_and(|ext| {
+        ext.eq_ignore_ascii_case(names::DISABLE_EXT) || ext.eq_ignore_ascii_case(names::DISABLED_EXT)
+    });
+
+    Ok(ModObj {
+        file: path,
+        disable,
+        ..Default::default()
+    })
+}
+
+/// 把改名后的路径转成给前端的**新身份**（uuid / 文件名 / 相对路径）
+///
+/// 启用 / 禁用只改文件名，元数据没动 —— 所以前端不必重扫，拿这三个值就地更新那一行即可。
+async fn mod_rename_dto(instance: GameInstance, path: PathBuf) -> Result<ModRenameDto, String> {
+    let game_path = block_on_instance(instance, |game| game.get_game_path()).await?;
+
+    Ok(ModRenameDto {
+        // uuid 是路径的 v5，文件名变了就得重算
+        uuid: mml_game::game_mods::gen_mod_uuid(&path).to_string(),
+        file: path
+            .file_name()
+            .map(|name| name.to_string_lossy().to_string())
+            .unwrap_or_default(),
+        path: mod_rel_path(&path, &game_path),
+    })
 }
 
 /// 启用模组（去掉 .disable / .disabled 后缀）
+///
+/// 返回**改名后的新身份**：前端拿它就地更新那一行，不重扫整个 mods 目录。
 #[tauri::command]
-pub async fn resource_mod_enable(uuid: String, mod_uuid: String) -> Result<(), String> {
+pub async fn resource_mod_enable(uuid: String, mod_uuid: String) -> Result<ModRenameDto, String> {
     let instance = parse_instance(&uuid)?;
-    let obj = find_mod(instance, &mod_uuid).await?;
-    obj.enable().map_err(|err| err.to_string())
+    let obj = find_mod(instance.clone(), &mod_uuid).await?;
+    let new_path = obj.enable().map_err(|err| err.to_string())?;
+    mod_rename_dto(instance, new_path).await
 }
 
 /// 禁用模组（追加 .disable 后缀，已禁用或文件不存在时报错）
+///
+/// 同上，返回改名后的新身份。
 #[tauri::command]
-pub async fn resource_mod_disable(uuid: String, mod_uuid: String) -> Result<(), String> {
+pub async fn resource_mod_disable(uuid: String, mod_uuid: String) -> Result<ModRenameDto, String> {
     let instance = parse_instance(&uuid)?;
-    let obj = find_mod(instance, &mod_uuid).await?;
-    obj.disable().map_err(|err| err.to_string())
+    let obj = find_mod(instance.clone(), &mod_uuid).await?;
+    let new_path = obj.disable().map_err(|err| err.to_string())?;
+    mod_rename_dto(instance, new_path).await
 }
 
 /// 删除模组（进回收站）
@@ -445,7 +519,19 @@ pub async fn resource_delete_resourcepack(uuid: String, file: String) -> Result<
 #[tauri::command]
 pub async fn resource_list_saves(uuid: String) -> Result<Vec<SaveItemDto>, String> {
     let instance = parse_instance(&uuid)?;
-    let list = load_saves(instance).await?;
+    let list = load_saves(instance.clone()).await?;
+
+    // 备份索引只读一次（不是每个存档读一遍）：存档 → 备份数
+    let counts: HashMap<String, u32> = {
+        let game = instance.read().unwrap();
+        game.get_backups()
+            .map(|info| {
+                info.values()
+                    .map(|item| (item.dir.clone(), item.back.len() as u32))
+                    .collect()
+            })
+            .unwrap_or_default()
+    };
 
     Ok(list
         .iter()
@@ -460,7 +546,7 @@ pub async fn resource_list_saves(uuid: String) -> Result<Vec<SaveItemDto>, Strin
                 .as_ref()
                 .and_then(|p| path_helper::read_byte(p).ok());
             Some(SaveItemDto {
-                dir,
+                dir: dir.clone(),
                 level_name: item.level_name.clone(),
                 last_played: item.last_played,
                 game_type: item.game_type,
@@ -468,9 +554,73 @@ pub async fn resource_list_saves(uuid: String) -> Result<Vec<SaveItemDto>, Strin
                 difficulty: item.difficulty,
                 broken: item.broken,
                 icon: data_url(icon.as_ref()),
+                backups: counts.get(&dir).copied().unwrap_or(0),
             })
         })
         .collect())
+}
+
+/// 某个存档的备份列表（按时间倒序，最近的在最上面）
+///
+/// 索引是按**存档名**存的（见 `game_saves::backup`），这里按**目录名**反查 ——
+/// 目录名才是稳定的键（存档可以改名，改名后索引会另起一条）。
+#[tauri::command]
+pub fn resource_list_save_backups(uuid: String, dir: String) -> Result<Vec<SaveBackupDto>, String> {
+    let instance = parse_instance(&uuid)?;
+    let game = instance.read().unwrap();
+
+    let Ok(info) = game.get_backups() else {
+        return Ok(Vec::new());
+    };
+    let Some(entry) = info.values().find(|item| item.dir == dir) else {
+        return Ok(Vec::new());
+    };
+
+    let base = game.get_backup_path();
+    let mut list: Vec<SaveBackupDto> = entry
+        .back
+        .iter()
+        .map(|file| {
+            let meta = std::fs::metadata(base.join(file)).ok();
+            SaveBackupDto {
+                file: file.clone(),
+                size: meta.as_ref().map(|m| m.len()).unwrap_or(0),
+                time: meta
+                    .and_then(|m| m.modified().ok())
+                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                    .map(|d| d.as_millis() as i64)
+                    .unwrap_or(0),
+            }
+        })
+        .collect();
+    list.sort_by(|a, b| b.time.cmp(&a.time));
+    Ok(list)
+}
+
+/// 还原某个备份（**破坏性**：现有存档整目录移入回收站，再解开备份）
+#[tauri::command]
+pub async fn resource_restore_save_backup(
+    uuid: String,
+    dir: String,
+    file: String,
+) -> Result<(), String> {
+    let instance = parse_instance(&uuid)?;
+
+    // 解压耗时较长，与备份同一条路：丢到阻塞线程
+    tauri::async_runtime::spawn_blocking(move || -> Result<(), String> {
+        let game = instance.read().unwrap();
+        let info = game.get_backups().map_err(|err| err.to_string())?;
+        // 索引按存档名存，这里按目录名找（目录名才稳定）
+        let entry = info
+            .values()
+            .find(|item| item.dir == dir)
+            .ok_or_else(|| "err.saveNotFound".to_string())?;
+
+        game.restore_backup(entry, &file, None)
+            .map_err(|err| err.to_string())
+    })
+    .await
+    .map_err(|err| err.to_string())?
 }
 
 /// 删除存档（进回收站）
@@ -1027,6 +1177,24 @@ pub fn resource_mod_groups(uuid: String) -> Result<Vec<ModGroupDto>, String> {
     Ok(mod_groups_of(&game))
 }
 
+/// 取分组块的**完整顺序**（含三个状态分组的固定 uuid）
+///
+/// 前端进模组页时与分组表、收起状态一起读。
+///
+/// **必须从后端读**：状态分组不是用户数据、不进 `Mod.Groups`，`resource_mod_groups`
+/// 里也没有它们。前端自己拼的话，永远拼不出"用户把「已启用」拖到了某个自建分组前面"
+/// 这件事 —— 表现就是拖完松手又弹回原位（用户报的"模组分组无法移动顺序"）。
+///
+/// 返回的就是 [`group_order_of`] 规范化后的结果：与真实存在的分组对齐、
+/// 状态分组按固定顺序补齐，所以前端可以**直接当顺序用**，不用再拼一遍。
+#[tauri::command]
+pub fn resource_mod_group_order(uuid: String) -> Result<Vec<String>, String> {
+    let instance = parse_instance(&uuid)?;
+    let mods = crate::gui_setting::load(&instance.read().unwrap()).mods;
+
+    Ok(group_order_of(&mods))
+}
+
 /// 取**收起**的分组块键集合（与 `resource_mod_groups` 一起在进模组页时读）
 ///
 /// 单独一条命令而不是塞进 `ModGroupDto`：那一份是"分组 → 成员"的数据结构，
@@ -1044,15 +1212,21 @@ pub fn resource_mod_groups_collapsed(uuid: String) -> Result<Vec<String>, String
         .collect())
 }
 
-/// 收起的分组键：没写过就用初值（「已启用」默认收起），写过就照用户存的来
+/// 收起的分组键：没写过就用初值（**默认全部收起**），写过就照用户存的来
+///
+/// 初值直接复用 [`default_group_order`] —— 那一串就是"全部状态分组"，
+/// 免得"有哪些分组"这件事在两个地方各写一份（新增状态分组时容易漏改这里）。
 ///
 /// 为什么不直接把初值写进 `GameModSettingObj::default`：那个默认值只在**整块 `Mod`
 /// 字段缺失**时生效；老文件有 `Mod`、只是没有 `GroupCollapsed`，走的是字段级默认
 /// （空表 = 全展开），用户会觉得"我明明收起过"。所以这里按"有没有写过"分情况。
+///
+/// **自建分组不在初值里**：它们是用户自己建的，建出来时展开更顺手（空组会显示
+/// "把模组拖上来即可"的落点区，一眼知道能往里放）。
 fn collapsed_of(mods: &crate::gui_setting::GameModSettingObj) -> Vec<String> {
     mods.group_collapsed
         .clone()
-        .unwrap_or_else(|| vec![STATE_GROUP_ON.to_string()])
+        .unwrap_or_else(default_group_order)
 }
 
 // ==================== 资源窗口的视图偏好 ====================

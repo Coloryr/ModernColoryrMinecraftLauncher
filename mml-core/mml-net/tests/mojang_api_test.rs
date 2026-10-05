@@ -145,7 +145,7 @@ fn token_res_defaults_on_missing_fields() {
 #[ignore = "需要真实网络：请求 Mojang 版本清单，cargo test -- --ignored 运行"]
 async fn versions_manifest_network() {
     // 初始化配置与 HTTP 客户端（临时目录，测后清理）
-    let dir = std::env::temp_dir().join(format!("mml-net-mojang-test-{}", std::process::id()));
+    let dir = mml_testutil::temp_dir().join(format!("mml-net-mojang-test-{}", std::process::id()));
     std::fs::create_dir_all(&dir).expect("创建临时配置目录失败");
     mml_config::init(&dir);
     mml_net::init();

@@ -16,6 +16,7 @@ import {
 import { commands } from "../../lib/bindings";
 import { loadGuiConfig, type ClientConfig } from "../../lib/guiConfig";
 import { t, tErr } from "../../lib/i18n";
+import { faviconOf, motdSegStyle } from "../../lib/motd";
 import { showToast } from "../../lib/toast";
 import { KEYS, onStorageChange } from "../../lib/storage";
 import { openWindow } from "../windowManager";
@@ -28,7 +29,7 @@ import {
   setViewMode,
   viewMode,
 } from "../../lib/settings";
-import type { AccountStoreDto, CustomHomeInfoDto, GroupDto, InstanceArgsDto, InstanceInfoDto, JavaInfoDto, MotdDto, MotdSegmentDto, NewsItem, VersionInfoDto } from "../../lib/bindings";
+import type { AccountStoreDto, CustomHomeInfoDto, GroupDto, InstanceArgsDto, InstanceInfoDto, JavaInfoDto, MotdDto, NewsItem, VersionInfoDto } from "../../lib/bindings";
 import InstanceIcon from "../../components/InstanceIcon.vue";
 import GlyphIcon from "../../components/ui/GlyphIcon.vue";
 import InstanceSelect from "../../components/InstanceSelect.vue";
@@ -1111,25 +1112,8 @@ watch(
   () => void refreshInstMotd(),
 );
 
-/** MOTD 文字段渲染样式（颜色 + 加粗 / 斜体 / 下划线 / 删除线） */
-function motdSegStyle(seg: MotdSegmentDto): Record<string, string> {
-  const deco = [seg.underlined ? "underline" : "", seg.strikethrough ? "line-through" : ""]
-    .filter(Boolean)
-    .join(" ");
-  return {
-    color: seg.color,
-    fontWeight: seg.bold ? "700" : "inherit",
-    fontStyle: seg.italic ? "italic" : "inherit",
-    textDecoration: deco || "none",
-  };
-}
+// MOTD 的展示辅助（motdSegStyle / faviconOf）在 lib/motd.ts —— 资源窗口的服务器列表共用同一份
 
-/** 服务器图标（Base64 PNG → data URI，直接喂 <img>） */
-function faviconOf(m: MotdDto | null): string | null {
-  const f = m?.favicon;
-  if (!f) return null;
-  return f.startsWith("data:") ? f : `data:image/png;base64,${f}`;
-}
 
 // ---- 客户端设置（gui_config.client）：MOTD 卡片显示与自动刷新间隔 ----
 const clientConfig = ref<ClientConfig>({
@@ -2404,6 +2388,7 @@ onMounted(async () => {
   gap: 16px;
   min-width: 0;
   overflow-y: auto;
+  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
 }
 
 .news-head {
@@ -2445,6 +2430,7 @@ onMounted(async () => {
   gap: 16px;
   padding: 18px 28px 130px;
   overflow-y: auto;
+  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
   min-width: 0;
 }
 
@@ -3048,6 +3034,7 @@ onMounted(async () => {
   gap: 16px;
   padding: 20px 30px 130px;
   overflow-y: auto;
+  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
   min-width: 0;
 }
 

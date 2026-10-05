@@ -323,6 +323,7 @@ function isGroupOpen(id: string) {
 .group-list {
   flex: 1;
   overflow-y: auto;
+  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
   padding: 2px 10px 14px;
   display: flex;
   flex-direction: column;
@@ -553,6 +554,7 @@ function isGroupOpen(id: string) {
 .tile-list {
   flex: 1;
   overflow-y: auto;
+  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
   padding: 6px 10px 14px;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));

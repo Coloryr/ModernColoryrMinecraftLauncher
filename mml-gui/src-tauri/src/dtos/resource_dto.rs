@@ -29,6 +29,13 @@ pub struct ModItemDto {
     pub fail: bool,
     /// 是否为 Core 模组
     pub core: bool,
+    /// 是否是**库**（内置 jar 里没有模组元数据的那些）
+    ///
+    /// 内置 jar 有一大半是"被别的包当依赖带进来"的库（asm / mixinextras 之类），
+    /// 它们没有 `mods.toml` / `fabric.mod.json`。以前这类条目在 DTO 层被整条丢掉
+    /// （file / modid / name 全空就 `return None`），界面上完全看不到 ——
+    /// 用户要求"嵌的内置有可能是库而不是模组，需要体现出来"。
+    pub library: bool,
     /// modid（可能为空）
     pub mod_id: String,
     /// 显示名（元数据缺失时为空，前端回退文件名）
@@ -39,8 +46,15 @@ pub struct ModItemDto {
     pub author: String,
     /// 描述
     pub description: String,
-    /// 支持的加载器（`LoaderType::to_string()`：forge / fabric / quilt / neoforge / …）
-    pub loader: String,
+    /// **支持的加载器**（可能不止一个）
+    ///
+    /// 一个 jar 里可以有多份元数据（例如同时带 `fabric.mod.json` 与 `META-INF/mods.toml`，
+    /// 多加载器发布的包就是这么做的），每一份各自报一个加载器 —— 这里汇总去重后全给出来。
+    ///
+    /// 取值是 `LoaderType::to_string()`：forge / fabric / quilt / neoforge / optifine /
+    /// liteloader / normal / custom；顺序按 `LoaderType` 的声明顺序（不是元数据出现顺序），
+    /// 展示才稳定。读不出元数据时为空数组。
+    pub loaders: Vec<String>,
     /// 加载侧（`LoadSideType` 小写：client / server / both / unknown）
     pub side: String,
     /// 网页链接（元数据里的 url，可能为空）
@@ -90,6 +104,23 @@ pub struct ResourceViewDto {
     pub category: String,
     /// 模组的展示方式：list / table / tree（空串 = 没记过）
     pub mod_view: String,
+}
+
+/// 启用 / 禁用模组之后的**新身份**
+///
+/// 这两个操作只是给文件名加减后缀（`.jar` ↔ `.jar.disabled`），元数据一个字都没变 ——
+/// 但 `uuid` 是**文件路径的 v5**，展示用的文件名与相对路径也都跟着变。
+/// 返回给前端，让它**就地更新那一行**，不必重扫整个 mods 目录
+/// （重扫要把每个 jar 的元数据重新解析一遍，几百个包要好几秒）。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModRenameDto {
+    /// 改名后的 uuid（后续启用 / 禁用 / 删除要用它定位）
+    pub uuid: String,
+    /// 改名后的文件名（`mods` 目录下）
+    pub file: String,
+    /// 改名后相对实例的路径（如 `.minecraft\mods\sodium.jar.disabled`）
+    pub path: String,
 }
 
 /// 模组自定义分组（存在实例的 `guisetting.json` 的 `Mod.Groups` 里）
@@ -144,6 +175,23 @@ pub struct SaveItemDto {
     pub broken: bool,
     /// 图标 data URL（无图标为空串）
     pub icon: String,
+    /// 已有几个备份
+    ///
+    /// 由后端从备份索引里数出来（一次 JSON 读取），前端据此决定**要不要显示「还原」按钮** ——
+    /// 没有备份的存档给个点不动的还原按钮没有意义。
+    pub backups: u32,
+}
+
+/// 一个存档备份
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveBackupDto {
+    /// 备份文件名（还原时原样传回）
+    pub file: String,
+    /// 体积（字节；文件不在时为 0）
+    pub size: u64,
+    /// 落盘时间（Unix 毫秒；取不到时为 0）
+    pub time: i64,
 }
 
 /// 截图条目

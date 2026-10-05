@@ -48,17 +48,26 @@ function normalizeOrder(saved: unknown): CategoryId[] {
   return order;
 }
 
+/**
+ * 默认打开的分类
+ *
+ * 模组是这个窗口最常翻的一类，在 `RESOURCE_CATEGORIES` 里也排第一 ——
+ * 打开就停在模组上，与左侧列表的顺序一致。
+ * 单独抽成常量：它散在 4 处（初值 / 无实例 / 存的值不认识），改的时候容易漏。
+ */
+const DEFAULT_CATEGORY: CategoryId = "mods";
+
 export function useResourceView(data: ReturnType<typeof useResourceData>) {
   const { instanceUuid } = data;
 
   /** 左侧分类的显示顺序（拖一下就会写回实例的 guisetting.json） */
   const order = ref<CategoryId[]>(normalizeOrder([]));
-  /** 上次打开的类别（没有记录时默认存档） */
-  const initialCategory = ref<CategoryId>("saves");
+  /** 上次打开的类别（没有记录时用 [`DEFAULT_CATEGORY`]） */
+  const initialCategory = ref<CategoryId>(DEFAULT_CATEGORY);
   /** 模组的展示方式（列表 / 表格 / 树） */
   const modView = ref<ModView>("list");
   /** 当前类别（保存时要一起写回，和 order 是同一份偏好） */
-  let lastCategory: CategoryId = "saves";
+  let lastCategory: CategoryId = DEFAULT_CATEGORY;
 
   /**
    * 加载代次号
@@ -88,8 +97,8 @@ export function useResourceView(data: ReturnType<typeof useResourceData>) {
       // 没有实例：回到默认顺序与默认类别
       order.value = normalizeOrder([]);
       modView.value = "list";
-      initialCategory.value = "saves";
-      lastCategory = "saves";
+      initialCategory.value = DEFAULT_CATEGORY;
+      lastCategory = DEFAULT_CATEGORY;
       return;
     }
     const seq = ++loadSeq;
@@ -104,7 +113,7 @@ export function useResourceView(data: ReturnType<typeof useResourceData>) {
 
     order.value = normalizeOrder(pref.order);
     modView.value = isModView(pref.modView) ? pref.modView : "list";
-    const category: CategoryId = isCategory(pref.category) ? pref.category : "saves";
+    const category: CategoryId = isCategory(pref.category) ? pref.category : DEFAULT_CATEGORY;
     initialCategory.value = category;
     lastCategory = category;
   }

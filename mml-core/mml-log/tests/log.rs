@@ -3,7 +3,7 @@
 //! 日志系统使用进程级全局状态（`STREAM` 只能初始化一次、日志线程只能启动
 //! 一次），因此在同一个测试里顺序执行完整的启动 → 记录 → 校验 → 停止流程。
 //!
-//! 日志文件统一写入 `std::env::temp_dir()` 下的唯一子目录，测试结束后
+//! 日志文件统一写入仓库 `target/temp` 下的唯一子目录，测试结束后
 //! 尽力清理（日志文件句柄由全局 `STREAM` 持有，Windows 下可能无法删除，
 //! 清理失败会忽略，不影响测试结果）。
 
@@ -19,7 +19,7 @@ use mml_names::{i18_items::info_type::InfoType, names};
 
 /// 在临时目录下创建唯一的测试目录
 fn temp_dir(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("mml_log_test_{}_{name}", std::process::id()));
+    let dir = mml_testutil::temp_dir().join(format!("mml_log_test_{}_{name}", std::process::id()));
     // 清掉上次运行可能残留的目录
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).unwrap();

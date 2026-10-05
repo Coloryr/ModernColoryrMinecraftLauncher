@@ -299,6 +299,7 @@ function pick(account: AccountStoreDto) {
   width: 240px;
   max-height: calc(100vh - var(--titlebar-h) - 16px);
   overflow-y: auto;
+  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 12px;

@@ -384,7 +384,7 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let dir = std::env::temp_dir().join(format!(
+        let dir = mml_testutil::temp_dir().join(format!(
             "mml-nbt-test-{}-{}",
             std::process::id(),
             nanos

@@ -9,7 +9,7 @@
 //
 // 统一 24 视窗 + stroke=currentColor（跟随所在处的字体色）+ 圆头圆角，
 // 与仓库里其它内联图标（86 处 stroke="currentColor"）同一套画法。
-type GlyphName =
+export type GlyphName =
   | "plus"
   | "minus"
   | "check"
@@ -23,7 +23,17 @@ type GlyphName =
   | "news"
   | "check-square"
   | "image"
-  | "download";
+  | "download"
+  | "refresh"
+  | "folder"
+  | "folder-plus"
+  // 资源分类（见 windows/resource/types.ts 的 RESOURCE_CATEGORIES）
+  | "archive"
+  | "package"
+  | "palette"
+  | "server"
+  | "sun"
+  | "cube";
 
 withDefaults(defineProps<{ name: GlyphName; size?: number; weight?: number }>(), {
   size: 14,
@@ -84,6 +94,59 @@ withDefaults(defineProps<{ name: GlyphName; size?: number; weight?: number }>(),
       <path d="M12 3v12" />
       <path d="m7 10 5 5 5-5" />
       <path d="M4 20h16" />
+    </g>
+    <!-- 刷新：一圈带缺口的圆 + 箭头（缺口在右上，箭头落在缺口处） -->
+    <g v-else-if="name === 'refresh'">
+      <path d="M20.5 12a8.5 8.5 0 1 1-2.5-6" />
+      <path d="M20.5 4v5h-5" />
+    </g>
+    <!-- 文件夹（不带加号）：分组相关的"选一个分组"这类动作用它 -->
+    <g v-else-if="name === 'folder'">
+      <path d="M4 7a2 2 0 0 1 2-2h3.2l2 2.4H18a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7z" />
+    </g>
+    <!-- 新建分组：文件夹 + 一个加号（与「添加」系列的 plus 同一套画法） -->
+    <g v-else-if="name === 'folder-plus'">
+      <path d="M4 7a2 2 0 0 1 2-2h3.2l2 2.4H18a2 2 0 0 1 2 2V17a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7z" />
+      <path d="M12 11v6M9 14h6" />
+    </g>
+    <!--
+      资源分类的图标（见 resource/types.ts）：
+      都按"一眼能认出是什么"来画，且与上面那些同一套 24 视窗 + 描边画法。
+    -->
+    <!-- 存档：带盖的箱体 + 中间一道横线（世界存档） -->
+    <g v-else-if="name === 'archive'">
+      <rect x="3" y="4" width="18" height="4" rx="1.5" />
+      <path d="M5 8v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8" />
+      <path d="M10 12h4" />
+    </g>
+    <!-- 模组：立方体包裹（六边形 + 三条棱） -->
+    <g v-else-if="name === 'package'">
+      <path d="M12 2.8 20 7.4v9.2L12 21.2 4 16.6V7.4z" />
+      <path d="M4 7.4l8 4.6 8-4.6" />
+      <path d="M12 12v9.2" />
+    </g>
+    <!-- 资源包：调色盘（画材 = 材质 / 贴图） -->
+    <g v-else-if="name === 'palette'">
+      <path d="M12 3a9 9 0 1 0 0 18c1 0 1.6-.7 1.6-1.5 0-.4-.2-.8-.5-1.1-.3-.3-.4-.6-.4-1 0-.8.7-1.5 1.5-1.5H16a5 5 0 0 0 5-5c0-4.4-4-8-9-8z" />
+      <circle cx="7.5" cy="11.5" r="1.2" />
+      <circle cx="10" cy="7.8" r="1.2" />
+      <circle cx="15" cy="8.2" r="1.2" />
+    </g>
+    <!-- 服务器：两层机架 + 指示灯 -->
+    <g v-else-if="name === 'server'">
+      <rect x="3" y="4" width="18" height="7" rx="2" />
+      <rect x="3" y="13" width="18" height="7" rx="2" />
+      <path d="M7 7.5h.01M7 16.5h.01" />
+    </g>
+    <!-- 光影包：太阳（光照 / 阴影） -->
+    <g v-else-if="name === 'sun'">
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M19.1 4.9l-1.4 1.4M6.3 17.7l-1.4 1.4" />
+    </g>
+    <!-- 结构文件：等距立方体（建筑结构） -->
+    <g v-else-if="name === 'cube'">
+      <path d="M12 2.8 20 7.4v9.2L12 21.2 4 16.6V7.4z" />
+      <path d="M4 7.4l8 4.6 8-4.6M12 12v9.2M8 5.1l8 4.6" />
     </g>
   </svg>
 </template>

@@ -39,6 +39,8 @@ const shellProps = computed(() =>
         title: t("features.download"),
         // 本窗口整页就是下载管理，标题栏不用再放一个下载指示器（整合包那个照留）
         hideDownloadIndicator: true,
+        // 多窗口模式下两段列表都没有自己的高度约束，滚的是内容区本身（见 styles/scrollbar.css）
+        bodyGutter: true,
       }
     : {
         title: t("features.download"),
@@ -415,6 +417,7 @@ onUnmounted(() => {
 .download-body.fill .task-list {
   max-height: 168px;
   overflow-y: auto;
+  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
 }
 
 /* 线程区：吃掉剩余高度，行数变化只影响它自己的滚动条 */
@@ -427,6 +430,7 @@ onUnmounted(() => {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
 }
 
 /* ---------- 总览 ---------- */

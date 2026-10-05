@@ -240,7 +240,7 @@ mod tests {
     /// 内容没变不写（返回 false），变了才写
     #[test]
     fn test_write_if_changed_skips_identical() {
-        let dir = std::env::temp_dir().join("gui_ipc_gen_wic");
+        let dir = mml_testutil::temp_dir().join("gui_ipc_gen_wic");
         let _ = fs::remove_dir_all(&dir);
         let path = dir.join("a/b.ts");
         assert!(write_if_changed(&path, "x").unwrap(), "首次应写入");

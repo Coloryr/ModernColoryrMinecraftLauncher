@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 /// 测试运行目录（系统临时目录 + 进程号，避免多进程冲突）
 fn run_dir() -> PathBuf {
-    std::env::temp_dir().join(format!("mml-instance-lifecycle-{}", std::process::id()))
+    mml_testutil::temp_dir().join(format!("mml-instance-lifecycle-{}", std::process::id()))
 }
 
 /// 初始化链（与 mml_core::init 相同），每进程一次

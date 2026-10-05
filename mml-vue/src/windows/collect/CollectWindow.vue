@@ -631,7 +631,7 @@ function closeMenu() {
 </script>
 
 <template>
-  <WindowFrame :title="t('winTitle.collect')" @close="$emit('close')">
+  <WindowFrame :title="t('winTitle.collect')" body-gutter @close="$emit('close')">
     <!-- 工具栏整体进标题栏（与账户 / 方块 / 设置三个窗口同一套做法）：
          类型开关 + 总计数 + 多选入口，正文直接从折叠分组开始 -->
     <template #head-right>
@@ -1530,6 +1530,7 @@ function closeMenu() {
   gap: 4px;
   max-height: 320px;
   overflow-y: auto;
+  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
 }
 
 .pick-item {

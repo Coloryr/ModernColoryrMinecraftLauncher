@@ -27,7 +27,7 @@ fn string(v: &str) -> NbtType {
 
 /// 写一个根 Compound 到临时文件并返回路径。
 fn write_sample(root: NbtCompound, name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("mml-schematic-{}", std::process::id()));
+    let dir = mml_testutil::temp_dir().join(format!("mml-schematic-{}", std::process::id()));
     std::fs::create_dir_all(&dir).unwrap();
     let path = dir.join(name);
     let file = std::fs::File::create(&path).unwrap();

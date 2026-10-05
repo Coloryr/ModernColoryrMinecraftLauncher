@@ -118,6 +118,9 @@ pub mod player_skin;
 pub mod scan_game;
 pub mod serverpack;
 
+#[cfg(test)]
+mod test_support;
+
 /// 实例共享句柄（全局以 `Arc<RwLock>` 形式持有实例设置）
 pub type GameInstance = Arc<RwLock<InstanceSettingObj>>;
 

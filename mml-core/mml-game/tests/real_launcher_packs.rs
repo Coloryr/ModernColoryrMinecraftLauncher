@@ -44,7 +44,7 @@ fn find_pack(file_name: &str, how_to_make: &str) -> Option<PathBuf> {
 
 /// 测试运行目录（系统临时目录 + 进程号，避免多进程冲突）
 fn run_dir() -> PathBuf {
-    std::env::temp_dir().join(format!("mml-real-launcher-packs-{}", std::process::id()))
+    mml_testutil::temp_dir().join(format!("mml-real-launcher-packs-{}", std::process::id()))
 }
 
 /// 初始化链（与 mml_core::init 相同），每进程一次
@@ -177,7 +177,7 @@ async fn mml_instance_archive_roundtrip() {
     std::fs::write(base.join("mods").join("testmod.jar"), b"test mod").unwrap();
 
     // ---------- 导出为 ColorMC 格式 ----------
-    let export_file = std::env::temp_dir().join(format!("mml-export-{}.zip", Uuid::new_v4()));
+    let export_file = mml_testutil::temp_dir().join(format!("mml-export-{}.zip", Uuid::new_v4()));
     game.read()
         .unwrap()
         .export(ExportArg {

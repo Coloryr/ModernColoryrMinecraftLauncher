@@ -10,3 +10,6 @@ mml-names = { path = "../mml-names" }
 uuid.workspace = true
 tokio = { workspace = true, features = ["net", "sync", "time"] }
 bytes.workspace = true
+
+[dev-dependencies]
+mml-testutil = { path = "../mml-testutil" }

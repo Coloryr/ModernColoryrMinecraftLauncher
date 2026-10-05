@@ -347,6 +347,7 @@ async function loadList() {
   gap: 12px;
   align-content: start;
   overflow-y: auto;
+  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
 }
 
 .item-card {

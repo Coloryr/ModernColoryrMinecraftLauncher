@@ -39,7 +39,7 @@ const props = defineProps<{
 }>();
 
 const { mods, instanceUuid, loading, modProgress } = props.data;
-const { busy, act, askDelete, askConfirm, openFolder } = props.ops;
+const { busy, act, actLocal, askDelete, askConfirm, openFolder } = props.ops;
 const { modView, setModView } = props.view;
 
 const groups = useModGroups(props.data);
@@ -97,13 +97,25 @@ async function afterGroupDrop(keys: string[]) {
  * 把若干模组改成目标启用状态
  *
  * `wantDisable = true` 禁用、`false` 启用；`picked` 里只放"当前状态与目标不同"的那些。
+ *
+ * **不重拉列表**：启用 / 禁用只是给文件名加减后缀，jar 里的元数据一个字都没变 ——
+ * 重扫要把每个包重新解析一遍（几百个包好几秒），纯属白干。
+ * 后端会回**改名后的新身份**（uuid / 文件名 / 路径），就地改那一行即可；
+ * `disable` 一改，`sections` 会把它挪到「已禁用 / 已启用」那一块去。
  */
 async function setState(picked: ModItemDto[], wantDisable: boolean) {
   if (!picked.length) return;
-  await act(async () => {
+  await actLocal(async () => {
     for (const item of picked) {
-      if (wantDisable) await disableMod(instanceUuid.value, item.uuid);
-      else await enableMod(instanceUuid.value, item.uuid);
+      const renamed = wantDisable
+        ? await disableMod(instanceUuid.value, item.uuid)
+        : await enableMod(instanceUuid.value, item.uuid);
+      // uuid 必须换：它是**文件路径的 v5**，文件名一变就变；
+      // 不换的话再点一次"启用"会拿旧 uuid 去找文件，后端直接报找不到
+      item.uuid = renamed.uuid;
+      item.file = renamed.file;
+      item.path = renamed.path;
+      item.disable = wantDisable;
     }
   });
 }
@@ -120,6 +132,105 @@ function pickByState(keys: string[], wantDisable: boolean): ModItemDto[] {
 function onDragStart(payload: { event: PointerEvent; item: ModItemDto }) {
   if (!payload.item.sha1) return;
   onRowPointerDown(payload.event, payload.item.sha1);
+}
+
+// ---------- 右键多选（顶栏批量操作） ----------
+
+/**
+ * 已选中的模组（**SHA1** 集合）
+ *
+ * 用 SHA1 而不是 uuid：启用 / 禁用只是给文件名加减后缀，uuid（文件路径的 v5）会跟着变，
+ * 而 SHA1 是内容哈希、不变 —— 与拖拽归组同一套键。所以"批量启用"之后选中状态仍然有效，
+ * 可以接着"移到分组"。
+ *
+ * 坏 jar 没有 SHA1（读不出内容哈希），不参与多选 —— 它们也做不了启用 / 归组。
+ */
+const selected = ref<Set<string>>(new Set());
+
+/** 选中的那些条目（批量操作要 uuid 去调命令，SHA1 只是选中身份） */
+const selectedItems = computed<ModItemDto[]>(() =>
+  mods.value.filter((item) => !!item.sha1 && selected.value.has(item.sha1)),
+);
+
+/** 右键一行：加进 / 移出选择 */
+function onSelect(item: ModItemDto) {
+  if (!item.sha1) return;
+  const next = new Set(selected.value);
+  if (next.has(item.sha1)) {
+    next.delete(item.sha1);
+  } else {
+    next.add(item.sha1);
+  }
+  selected.value = next;
+}
+
+function clearSelection() {
+  selected.value = new Set();
+}
+
+/** 批量改启用状态：`wantDisable = true` 禁用、`false` 启用 */
+async function batchSetState(wantDisable: boolean) {
+  const picked = selectedItems.value.filter((item) => item.disable !== wantDisable);
+  await setState(picked, wantDisable);
+}
+
+/** 批量删除（进回收站）：删完选中项已经不在列表里了，直接清空选择 */
+function batchRemove() {
+  const picked = selectedItems.value;
+  if (!picked.length) return;
+  askConfirm(
+    t("resource.delete"),
+    t("resource.batchDeleteConfirm", { n: picked.length }),
+    async () => {
+      await act(async () => {
+        for (const item of picked) {
+          await deleteMod(instanceUuid.value, item.uuid);
+        }
+      });
+      clearSelection();
+    },
+    // act 内部已经重拉过列表了，这里别再拉一遍（模组那一次要重解析所有 jar，很慢）
+    { reload: false },
+  );
+}
+
+/**
+ * 批量移到某个分组
+ *
+ * 复用拖拽归组那条路：`groups.setGroup` 本来就收一串 SHA1。
+ * 与拖进自建分组同一口径 —— **顺带启用**（见 [`afterGroupDrop`]）。
+ */
+async function batchMove(group: string) {
+  const keys = [...selected.value];
+  if (!keys.length) return;
+  await groups.setGroup(group, keys);
+  await afterGroupDrop(keys);
+}
+
+/**
+ * 批量"移到分组"的弹窗是否打开
+ *
+ * 用弹窗而不是顶栏下拉：下拉一次只看得见一项，而且"移到分组"这个占位项会以
+ * **选项**的形式混在分组名里，看着像能选的东西（用户点名不要这样）。
+ * 弹窗里把分组一次列全，点哪个就移过去。
+ */
+const groupPickOpen = ref(false);
+
+/** 弹窗里选中某个分组：点完即关，然后移过去 */
+function pickGroup(group: string) {
+  groupPickOpen.value = false;
+  void batchMove(group);
+}
+
+/**
+ * 弹窗里点「新建分组」：先关掉这个弹窗，再开新建分组表单
+ *
+ * 不叠着开两个弹窗（互相压、关闭顺序也乱）。**选中项不会丢** ——
+ * 建完再点一次「移到分组」就能选到刚建的那个。
+ */
+function createGroupFromPick() {
+  groupPickOpen.value = false;
+  openGroupForm();
 }
 
 // ---------- 搜索 ----------
@@ -458,13 +569,8 @@ async function saveNote(text: string) {
 
 function toggle(item: ModItemDto) {
   if (consumeSuppressClick()) return;
-  act(async () => {
-    if (item.disable) {
-      await enableMod(instanceUuid.value, item.uuid);
-    } else {
-      await disableMod(instanceUuid.value, item.uuid);
-    }
-  });
+  // 单个就是"批量传一个"：走同一条路，同样不重扫、就地更新那一行
+  void setState([item], !item.disable);
 }
 
 function remove(item: ModItemDto) {
@@ -476,26 +582,60 @@ onMounted(() => void groups.load());
 
 <template>
   <ContentHead :data="data">
-    <h3 class="head-title">{{ t("resource.mods") }}</h3>
     <template #actions>
-      <input
-        v-model="keyword"
-        class="mod-search"
-        :placeholder="t('resource.searchPlaceholder')"
-        spellcheck="false"
-        autocomplete="off"
-      />
-      <SegmentedTabs
-        :model-value="modView"
-        :options="[
-          { value: 'list', label: t('resource.viewList') },
-          { value: 'table', label: t('resource.viewTable') },
-        ]"
-        @update:model-value="setModView($event as ModView)"
-      />
-      <button class="mini-btn" :disabled="busy" @click="openGroupForm()">
-        {{ t("resource.groupAdd") }}
-      </button>
+      <!--
+        有选中项时顶栏换成批量操作条（用户选的口径："顶栏出现批量按钮"）。
+        整条替换而不是并列：搜索框 + 视图切换 + 新建分组本来就占满一行，
+        再挤进 4 个批量按钮会互相压。
+      -->
+      <template v-if="selected.size">
+        <span class="mod-selected-count">{{ t("resource.selectedCount", { n: selected.size }) }}</span>
+        <button class="mini-btn" :disabled="busy" @click="batchSetState(false)">
+          {{ t("resource.enable") }}
+        </button>
+        <button class="mini-btn" :disabled="busy" @click="batchSetState(true)">
+          {{ t("resource.disable") }}
+        </button>
+        <!-- 归组：开弹窗选目标（不用下拉 —— 下拉一次只看得见一项，
+             而且"移到分组"会以占位项的形式混在选项里，看着像能选的东西）。
+             按钮文字不带省略号（用户要求），与弹窗标题共用同一条文案 -->
+        <button
+          class="mini-btn icon-btn"
+          :disabled="busy"
+          @click="groupPickOpen = true"
+        >
+          <GlyphIcon name="folder" :size="14" />
+          {{ t("resource.batchMoveTo") }}
+        </button>
+        <button class="mini-btn danger" :disabled="busy" @click="batchRemove">
+          {{ t("resource.delete") }}
+        </button>
+        <button class="mini-btn" :disabled="busy" @click="clearSelection">
+          {{ t("resource.clearSelection") }}
+        </button>
+      </template>
+
+      <template v-else>
+        <input
+          v-model="keyword"
+          class="mod-search"
+          :placeholder="t('resource.searchPlaceholder')"
+          spellcheck="false"
+          autocomplete="off"
+        />
+        <SegmentedTabs
+          :model-value="modView"
+          :options="[
+            { value: 'list', label: t('resource.viewList') },
+            { value: 'table', label: t('resource.viewTable') },
+          ]"
+          @update:model-value="setModView($event as ModView)"
+        />
+        <button class="mini-btn icon-btn" :disabled="busy" @click="openGroupForm()">
+          <GlyphIcon name="folder-plus" :size="14" />
+          {{ t("resource.groupAdd") }}
+        </button>
+      </template>
     </template>
   </ContentHead>
 
@@ -535,6 +675,7 @@ onMounted(() => void groups.load());
           :items="sec.items"
           :busy="busy"
           :dragging-key="draggingKey"
+          :selected-keys="selected"
           :group-label="sec.label"
           :group-key="sec.id"
           :group-open="isOpen(sec.id)"
@@ -545,8 +686,10 @@ onMounted(() => void groups.load());
           @remove="remove"
           @note="openNote"
           @toggle-group="onSectionToggle(sec.id)"
+          @drag-group="onSectionPointerDown($event, sec.id)"
           @open-folder="openFolder('mods', $event.file)"
           @drag-start="onDragStart"
+          @select="onSelect"
         />
       </section>
     </template>
@@ -567,6 +710,7 @@ onMounted(() => void groups.load());
         :class="{
           'drop-target': isDropTarget(sec),
           'mod-group-dragging': draggingSection === sec.id,
+          'mod-group-empty': !sec.items.length,
         }"
       >
         <div class="mod-group-head">
@@ -621,11 +765,13 @@ onMounted(() => void groups.load());
           :items="sec.items"
           :busy="busy"
           :dragging-key="draggingKey"
+          :selected-keys="selected"
           @toggle="toggle"
           @remove="remove"
           @note="openNote"
           @open-folder="openFolder('mods', $event.file)"
           @drag-start="onDragStart"
+          @select="onSelect"
         />
         </div>
       </section>
@@ -676,7 +822,6 @@ onMounted(() => void groups.load());
       spellcheck="false"
       @keydown.ctrl.enter="saveNote(noteForm.text)"
     />
-    <p class="mod-note-hint">{{ t("resource.modNoteHint") }}</p>
     <div class="modal-actions">
       <BaseButton
         v-if="noteForm.item.note"
@@ -691,6 +836,50 @@ onMounted(() => void groups.load());
       <BaseButton variant="primary" :disabled="noteBusy" @click="saveNote(noteForm.text)">
         {{ t("resource.save") }}
       </BaseButton>
+    </div>
+  </BaseModal>
+
+  <!--
+    批量「移到分组」：把自建分组一次列全，点哪一行就移到哪一组（点完即关）。
+    比下拉快一步 —— 下拉要先展开、再选、再触发 change。
+
+    **没有「移出分组」那一行**（用户要求）：那是"撤销归组"，把模组拖到状态分组上
+    就能做；混在这里会让"移到分组"多出一个反向选项。
+    一个分组都没有时列表位置写「无分组」，下面用「新建分组」建一个
+  -->
+  <BaseModal
+    v-if="groupPickOpen"
+    :title="t('resource.batchMoveTo')"
+    :closable="false"
+    @close="groupPickOpen = false"
+  >
+    <div class="group-pick-list">
+      <button
+        v-for="g in groups.groups.value"
+        :key="g.uuid"
+        class="group-pick-row"
+        :disabled="busy"
+        @click="pickGroup(g.uuid)"
+      >
+        <GlyphIcon name="folder" :size="14" />
+        <span class="group-pick-name">{{ g.name }}</span>
+        <span class="group-pick-count">
+          {{ t("resource.groupCountItems", { n: g.mods.length }) }}
+        </span>
+      </button>
+
+      <!-- 一个自建分组都没有：写明白"无分组"，别留一块空地看着像没加载出来。
+           下面那个「新建分组」就是这时该做的事（用户要求） -->
+      <p v-if="!groups.groups.value.length" class="empty-tip">
+        {{ t("resource.groupNoGroups") }}
+      </p>
+    </div>
+
+    <div class="modal-actions">
+      <BaseButton :disabled="busy" @click="createGroupFromPick">
+        {{ t("resource.groupAdd") }}
+      </BaseButton>
+      <BaseButton @click="groupPickOpen = false">{{ t("resource.cancel") }}</BaseButton>
     </div>
   </BaseModal>
 </template>
@@ -715,10 +904,58 @@ onMounted(() => void groups.load());
   line-height: 1.5;
 }
 
-.mod-note-hint {
-  margin: 8px 0 0;
-  font-size: 11.5px;
+/* ---------- 批量「移到分组」弹窗 ---------- */
+
+/* 分组列表：整行可点，一行一组（比下拉一次只看得见一项强） */
+.group-pick-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  /* 分组可能很多：给个上限自己滚，别把弹窗撑出屏幕 */
+  max-height: 320px;
+  overflow-y: auto;
+  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
+}
+
+.group-pick-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 11px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-raised);
+  color: var(--text);
+  font-size: 12.5px;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.group-pick-row:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.group-pick-row:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* 分组名可被挤压，数量不缩 */
+.group-pick-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.group-pick-count {
+  flex-shrink: 0;
   color: var(--text-dim);
-  line-height: 1.5;
+  font-size: 11.5px;
 }
 </style>

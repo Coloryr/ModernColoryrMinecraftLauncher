@@ -21,7 +21,7 @@ mod common;
 
 /// 测试运行目录（系统临时目录 + 进程号，避免多进程冲突）
 fn run_dir() -> PathBuf {
-    std::env::temp_dir().join(format!("mml-real-pack-{}", std::process::id()))
+    mml_testutil::temp_dir().join(format!("mml-real-pack-{}", std::process::id()))
 }
 
 /// 初始化链（与 mml_core::init 相同），每进程一次
@@ -88,7 +88,7 @@ async fn download_modrinth_pack(slug: &str, version: &str) -> Option<PathBuf> {
     use mml_base::serialize_tools::json_from_bytes;
     use mml_net::modrinth_api::version_obj::ModrinthVersionObj;
 
-    let cache = std::env::temp_dir().join(format!("mml-real-pack-{slug}-{version}.mrpack"));
+    let cache = mml_testutil::temp_dir().join(format!("mml-real-pack-{slug}-{version}.mrpack"));
     if cache.exists() {
         return Some(cache);
     }

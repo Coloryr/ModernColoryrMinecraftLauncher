@@ -277,6 +277,7 @@ onBeforeUnmount(() => {
   padding: 14px 16px;
   box-sizing: border-box;
   overflow-y: auto;
+  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
 }
 
 .row {

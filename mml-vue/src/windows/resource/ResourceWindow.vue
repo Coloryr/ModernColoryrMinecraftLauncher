@@ -7,9 +7,10 @@
 // - 共用操作          → composables/useResourceOps（忙碌标记 / 确认弹窗 / 打开目录 / 重拉）
 // - 各分类的列表      → parts/*Pane.vue（每类一个，自带的弹窗跟上）
 // - 窗口级样式        → resource.css（非 scoped，拆开的子组件共用；见该文件头部说明）
-import { onMounted, watch } from "vue";
+import { computed, onMounted, watch } from "vue";
 import WindowFrame from "../../components/ui/WindowFrame.vue";
 import BaseButton from "../../components/ui/BaseButton.vue";
+import GlyphIcon from "../../components/ui/GlyphIcon.vue";
 import { t } from "../../lib/i18n";
 import { useWindowRefresh } from "../../composables/useWindowRefresh";
 import { openWindow } from "../windowManager";
@@ -68,6 +69,16 @@ function selectCategory(id: CategoryId) {
   category.value = id;
 }
 
+/**
+ * 内容区切换动画的 key（见模板里的 `<Transition name="pane-swap">`）
+ *
+ * 分类变了才换 key，动画随之触发。**存档那一类的两个子页共用一个分类 id**，
+ * 所以子页也要进 key —— 否则在「存档 ↔ 数据包」之间切换时 key 没变、动画不触发。
+ */
+const paneKey = computed(() =>
+  category.value === "saves" ? `saves:${saveTab.value}` : category.value,
+);
+
 /** 「下载资源」：开「添加资源」窗口（与主窗口侧边栏那个入口同一个去处） */
 function openDownload() {
   openWindow("add_resource");
@@ -79,7 +90,9 @@ function openDownload() {
     <!-- 标题栏：当前实例（原先挤在左侧分类栏顶部）+ 下载资源入口 -->
     <template #head-right>
       <InstanceChip :instance="instance" />
+      <!-- BaseButton 本身就是 inline-flex + gap，图标与文字自然成一行，不用额外类 -->
       <BaseButton size="sm" variant="accent" @click="openDownload">
+        <GlyphIcon name="download" :size="14" />
         {{ t("resource.download") }}
       </BaseButton>
     </template>
@@ -88,18 +101,28 @@ function openDownload() {
       <CategoryRail :data="data" :view="view" @select="selectCategory" />
 
       <section class="cat-content">
-        <!-- 没有选中实例：只给这一条引导（不再顺带铺一个空列表，原先两段会同时出现） -->
-        <div v-if="!instance" class="empty-tip">{{ t("resource.notSelected") }}</div>
-        <template v-else>
-          <ScreenshotPane v-if="category === 'screenshots'" :data="data" :ops="ops" />
-          <ServerPane v-else-if="category === 'servers'" :data="data" :ops="ops" />
-          <ModPane v-else-if="category === 'mods'" :data="data" :ops="ops" :view="view" />
-          <PackPane v-else-if="category === 'resourcepacks'" :data="data" :ops="ops" />
-          <ShaderPane v-else-if="category === 'shaders'" :data="data" :ops="ops" />
-          <SchematicPane v-else-if="category === 'schematics'" :data="data" :ops="ops" />
-          <SavePane v-else-if="saveTab === 'saves'" :data="data" :ops="ops" />
-          <DatapackPane v-else :data="data" :ops="ops" />
-        </template>
+        <!--
+          切分类加一段淡入淡出（与主窗口的 view-swap 同一套观感）。
+          `<Transition>` 不产生 DOM，所以 .cat-content 的 flex 布局不受影响；
+          但里面的 `.pane-swap` 要**复刻**「顶栏 + 列表」之间的纵向间距（gap 12px），
+          否则包一层后间距会丢（主窗口的 .detail-instance 也是这么处理的）。
+        -->
+        <Transition name="pane-swap" mode="out-in">
+          <!-- 没有选中实例：只给这一条引导（不再顺带铺一个空列表，原先两段会同时出现） -->
+          <div v-if="!instance" key="__no-instance" class="empty-tip">
+            {{ t("resource.notSelected") }}
+          </div>
+          <div v-else :key="paneKey" class="pane-swap">
+            <ScreenshotPane v-if="category === 'screenshots'" :data="data" :ops="ops" />
+            <ServerPane v-else-if="category === 'servers'" :data="data" :ops="ops" />
+            <ModPane v-else-if="category === 'mods'" :data="data" :ops="ops" :view="view" />
+            <PackPane v-else-if="category === 'resourcepacks'" :data="data" :ops="ops" />
+            <ShaderPane v-else-if="category === 'shaders'" :data="data" :ops="ops" />
+            <SchematicPane v-else-if="category === 'schematics'" :data="data" :ops="ops" />
+            <SavePane v-else-if="saveTab === 'saves'" :data="data" :ops="ops" />
+            <DatapackPane v-else :data="data" :ops="ops" />
+          </div>
+        </Transition>
       </section>
 
       <!-- 删除 / 清空确认（全窗口共用一份，内容来自 ops） -->

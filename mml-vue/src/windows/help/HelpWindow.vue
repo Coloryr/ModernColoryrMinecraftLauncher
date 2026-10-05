@@ -21,7 +21,7 @@ function toggle(i: number) {
 </script>
 
 <template>
-  <WindowFrame :title="t('features.help')" @close="$emit('close')">
+  <WindowFrame :title="t('features.help')" body-gutter @close="$emit('close')">
     <div class="help-list">
       <div v-for="(item, i) in faqs" :key="i" class="faq-item">
         <button class="faq-q" @click="toggle(i)">

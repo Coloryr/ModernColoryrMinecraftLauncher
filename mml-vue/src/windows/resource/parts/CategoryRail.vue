@@ -7,6 +7,7 @@
 // 这一列是**一维顺序**，没有"投放到哪个容器"的问题，所以只需要一个插入位置。
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import { t } from "../../../lib/i18n";
+import GlyphIcon from "../../../components/ui/GlyphIcon.vue";
 import { RESOURCE_CATEGORIES, type CategoryId } from "../types";
 import type { useResourceData } from "../composables/useResourceData";
 import type { useResourceView } from "../composables/useResourceView";
@@ -147,6 +148,7 @@ onUnmounted(() => {
         @pointerdown="onPointerDown($event, c.id)"
         @click="onClick(c.id)"
       >
+        <GlyphIcon :name="c.icon" :size="15" />
         {{ t(c.labelKey) }}
       </button>
     </template>

@@ -25,5 +25,6 @@ pollster.workspace = true
 bytemuck.workspace = true
 
 [dev-dependencies]
+mml-testutil = { path = "../mml-testutil" }
 tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 mml-log = { path = "../mml-log" }

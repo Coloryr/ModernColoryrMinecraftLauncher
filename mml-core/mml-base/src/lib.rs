@@ -67,7 +67,7 @@ mod tests {
     /// 首次调用的参数生效，重复 init 不会 panic 也不会覆盖。
     #[test]
     fn test_init_and_get_base_dir() {
-        let dir = std::env::temp_dir().join(format!(
+        let dir = mml_testutil::temp_dir().join(format!(
             "mml_base_init_test_{}_{}",
             std::process::id(),
             uuid::Uuid::new_v4().simple()

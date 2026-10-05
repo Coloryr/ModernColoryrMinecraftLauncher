@@ -27,12 +27,15 @@ export interface DragItem {
  * 模组行是找投放容器（两种 `data-*` 属性），分组头与分类栏是找"插到第几项之前"。
  *
  * - `hitTest`: 拖动中每次指针移动调用，返回要提交的落点（null = 不提交）
- * - `onDrop`: 松手时调用（落点非 null 才调）
+ * - `onDrop`: 松手时调用（落点非 null 才调）。**第二个参数是被拖项的 key** ——
+ *   提交前 `dragKey` 已经被 `reset()` 清掉了，调用方**不能**在回调里读 `dragKey`
+ *   （读了必然是 null，于是"拖了却什么都没发生"）。这正是分组头拖不动的根因：
+ *   `useReorderDrag` 的回调读的就是 `dragKey`。
  * - `hitTest` 里也可以做副作用（例如内容区边缘自动滚动）
  */
 export function useDragGesture<T>(deps: {
   hitTest: (e: PointerEvent) => T | null;
-  onDrop: (target: T) => void;
+  onDrop: (target: T, key: string) => void;
 }) {
   /** 真正在拖的项（null = 还没超过阈值，或者没在拖） */
   const dragKey = ref<string | null>(null);
@@ -90,11 +93,13 @@ export function useDragGesture<T>(deps: {
     if (pointerId === null || e.pointerId !== pointerId) return;
     const moving = dragged;
     const target = dropAt.value;
+    // **先把 key 取出来再 reset**：reset 会清掉 dragKey，之后回调里就读不到了
+    const key = candidate;
     reset();
-    if (!moving) return;
+    if (!moving || key === null) return;
     // 拖过了：不论有没有落点，这一次的 click 都不该再触发"切换"（折叠 / 选中）
     suppressClick = true;
-    if (target !== null) deps.onDrop(target);
+    if (target !== null) deps.onDrop(target, key);
   }
 
   /** 消费拖拽后的抑制点击标记；返回 true 表示本次 click 应被忽略 */
@@ -168,16 +173,11 @@ export function useModDrag(deps: ModDragDeps) {
 
   const gesture = useDragGesture<ModDropTarget>({
     hitTest,
-    onDrop: (target) => {
-      const key = gestureKey.value;
-      if (key) deps.onDrop(target, [key]);
-    },
+    // key 由骨架在松手那一刻交过来（**不能**读 gesture.dragKey：那时已被 reset 清掉）
+    onDrop: (target, key) => deps.onDrop(target, [key]),
   });
-  // onDrop 回调不带"拖的是哪一个"，所以单独记一份（gesture.dragKey 在提交前已被 reset 清掉）
-  const gestureKey = ref<string | null>(null);
 
   function onRowPointerDown(e: PointerEvent, key: string) {
-    gestureKey.value = key;
     gesture.onPointerDown(e, key);
   }
 
@@ -215,10 +215,12 @@ export function useReorderDrag(deps: {
         }
       }
       return index;
-    },    onDrop: (index) => {
-      const from = gesture.dragKey.value;
-      if (from) deps.onDrop(from, index);
     },
+    // 被拖项的 key 由骨架交过来。**以前这里读 `gesture.dragKey`**，
+    // 而那时它已被 reset 清成 null —— 于是 `from` 永远是空、
+    // `deps.onDrop` 根本没被调用过：拖分组头看着有插入线，松手却什么都没发生，
+    // 顺序自然也永远没写进 `GroupOrder`（用户报的"模组分组无法移动顺序"）。
+    onDrop: (index, key) => deps.onDrop(key, index),
   });
 
   return {

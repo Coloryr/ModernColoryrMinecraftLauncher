@@ -15,6 +15,12 @@ const props = defineProps<{
   /** 内容区不整页滚动（overflow hidden + flex 列），滚动交给视图内部的容器，
    *  详情表格这类"工具栏固定、表格自己滚"的布局用 */
   bodyFill?: boolean;
+  /** 内容区**整页滚动**、且内容长短会变时开启：给内容区预留纵向滚动条的位置
+   *  （`scrollbar-gutter: stable`），免得滚动条一冒出来整页内容就左移 9px。
+   *  只有"滚动容器就是 `.frame-body` 本身"的窗口才需要开 ——
+   *  内容区是 `height: 100%` 布局、滚动交给内部容器的窗口（资源 / 添加资源 /
+   *  下载 Java）开了只会白窄 9px。判据见 styles/scrollbar.css */
+  bodyGutter?: boolean;
   /** 窗口内子页面的返回键文案（如"返回"）；不传则用单窗口模式那枚「返回上一页」。
    *  按钮本身只画箭头，这段文案作为悬停提示（v-tip）与无障碍名称存在；
    *  两种用法共用同一个 `.back-btn`，外观完全一致 */
@@ -93,7 +99,7 @@ const { decorated } = useWindowDecoration(rootEl);
            所以这里照常渲染，悬停反馈由插件转发的事件驱动 -->
       <WindowControls v-if="titleBarStyle === 'windows'" :style="titleBarStyle" />
     </header>
-    <div class="frame-body" :class="{ fill: props.bodyFill }">
+    <div class="frame-body" :class="{ fill: props.bodyFill, gutter: props.bodyGutter }">
       <slot />
     </div>
   </div>
@@ -167,9 +173,22 @@ const { decorated } = useWindowDecoration(rootEl);
   padding: 22px 26px;
 }
 
+/* 整页滚动的窗口（`body-gutter`）：预留那条 9px，滚动条出现时不挤窄内容。
+   不加在 .frame-body 上无条件生效 —— 多数窗口的内容区是 height: 100% 布局、
+   滚动交给内部容器，那些窗口的 .frame-body 根本不滚，预留只会白窄 9px。
+   判据与踩过的坑见 styles/scrollbar.css */
+.frame-body.gutter {
+  scrollbar-gutter: stable;
+}
+
+/* 不整页滚动的窗口（`body-fill`）：显式取消预留。
+   **必须写**：scrollbar-gutter 不看"这会儿有没有滚动条"，overflow: hidden 一样占位 9px
+   （实测）。账户窗口还会在列表 / 详情之间切换 fill，不取消就会随视图切换忽宽忽窄。
+   这条要放在 .gutter 之后：两者特异性相同，靠顺序让 .fill 赢 */
 .frame-body.fill {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  scrollbar-gutter: auto;
 }
 </style>

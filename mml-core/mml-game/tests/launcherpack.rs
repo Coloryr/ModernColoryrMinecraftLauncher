@@ -17,7 +17,7 @@ use zip::write::SimpleFileOptions;
 
 /// 程序化生成一个 zip 压缩包
 fn make_zip(files: &[(&str, &[u8])]) -> PathBuf {
-    let zip_path = std::env::temp_dir().join(format!("mml-launcherpack-{}.zip", Uuid::new_v4()));
+    let zip_path = mml_testutil::temp_dir().join(format!("mml-launcherpack-{}.zip", Uuid::new_v4()));
     let file = std::fs::File::create(&zip_path).expect("创建测试压缩包失败");
     let mut writer = ZipWriter::new(file);
     let options = SimpleFileOptions::default();

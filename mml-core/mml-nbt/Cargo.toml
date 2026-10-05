@@ -9,3 +9,6 @@ flate2.workspace = true
 lz4_flex.workspace = true
 rayon.workspace = true
 chrono.workspace = true
+
+[dev-dependencies]
+mml-testutil = { path = "../mml-testutil" }

@@ -1,7 +1,7 @@
 //! `InputFile` 的本地文件写入测试（不联网）。
 //!
 //! 验证 `InputFile::Data`、`InputFile::Stream`、`InputFile::Path` 三种来源
-//! 经 `save_file()` 落盘后的内容一致性。全部使用 `std::env::temp_dir()` 下的
+//! 经 `save_file()` 落盘后的内容一致性。全部使用仓库 `target/temp` 下的
 //! 临时目录，测完清理，不硬编码任何绝对路径。
 
 use std::io::Cursor;
@@ -10,7 +10,7 @@ use mml_net::input_file::InputFile;
 
 /// 为当前进程创建唯一的临时目录
 fn make_temp_dir(tag: &str) -> std::path::PathBuf {
-    let dir = std::env::temp_dir().join(format!(
+    let dir = mml_testutil::temp_dir().join(format!(
         "mml-net-input-file-test-{}-{}",
         std::process::id(),
         tag

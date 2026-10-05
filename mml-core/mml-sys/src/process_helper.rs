@@ -703,7 +703,7 @@ mod tests {
 
     /// 拿到一个唯一的临时工作目录
     fn temp_work_dir() -> PathBuf {
-        let dir = std::env::temp_dir().join(format!(
+        let dir = mml_testutil::temp_dir().join(format!(
             "mml_sys_process_test_{}_{}",
             std::process::id(),
             uuid::Uuid::new_v4().simple()

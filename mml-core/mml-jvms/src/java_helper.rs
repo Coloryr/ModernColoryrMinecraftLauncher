@@ -126,7 +126,7 @@ mod tests {
     /// 唯一临时子目录（进程号 + 自增计数，避免并行冲突）
     fn make_temp_dir(name: &str) -> PathBuf {
         static COUNTER: AtomicU64 = AtomicU64::new(0);
-        let dir = std::env::temp_dir().join(format!(
+        let dir = mml_testutil::temp_dir().join(format!(
             "mml-jvms-unit-{}-{}-{}",
             name,
             std::process::id(),

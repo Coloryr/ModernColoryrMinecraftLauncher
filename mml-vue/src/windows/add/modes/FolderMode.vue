@@ -190,6 +190,7 @@ watch(
   margin-top: 6px;
   max-height: 200px;
   overflow-y: auto;
+  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
 }
 
 .found-item {

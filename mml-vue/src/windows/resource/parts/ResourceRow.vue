@@ -28,6 +28,12 @@ withDefaults(
     :class="{ 'mod-nested': depth > 0 }"
     :style="{ '--row-depth': depth }"
   >
+    <!--
+      多选勾选框（模组列表用，见 ModList）：在**最左边**，箭头与图标之前。
+      用户要求"右键用左边加勾选" —— 右键进入多选后，左边出现勾选框继续加选。
+      其它分类不传这个插槽，什么都不渲染
+    -->
+    <slot name="select" />
     <!-- 展开箭头（有下级的行才给）：放在图标之前 -->
     <slot name="lead" />
     <!--
@@ -40,6 +46,10 @@ withDefaults(
     <img v-if="icon" class="item-icon" :src="icon" alt="" />
     <div class="item-main">
       <div class="item-name-line">
+        <!-- 名字**之前**的位置（模组列表把备注放这儿：用户要求"备注放在名字前面"）。
+             单独开一个插槽而不是复用 badges：badges 在名字**之后**，
+             读起来是"名字 + 一串标记"，与"先看到备注"的诉求相反 -->
+        <slot name="name-lead" />
         <!-- 名字默认按纯文本渲染；需要过 `§` 格式码的（存档名）走 name 插槽，
              换 FormattedText 铺进来 —— 与 sub 插槽同一套做法 -->
         <span class="item-name"><slot name="name">{{ name }}</slot></span>

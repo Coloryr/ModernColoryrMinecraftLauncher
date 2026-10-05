@@ -127,6 +127,9 @@ function isCurrent(acc: AccountStoreDto): boolean {
 /* 表格在容器内滚动：上下滚动看行，左右滚动看列（列都是 nowrap，长内容不压缩） */
 .table-wrap {
   overflow: auto;
+  /* 只预留**纵向**那条（scrollbar-gutter 管不到横向）：表格列多是 nowrap，
+     横向滚动条基本常驻，纵向那条随账户数量出现 / 消失，预留它免得行整体左移 */
+  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
   border: 1px solid var(--border);
   border-radius: 12px;
   background: var(--bg-card);

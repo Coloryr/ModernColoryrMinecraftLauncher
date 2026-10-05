@@ -712,7 +712,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <WindowFrame :title="t('add.title')" @close="$emit('close')">
+  <WindowFrame :title="t('add.title')" body-gutter @close="$emit('close')">
     <!-- 内容区：撑满窗口，底部按钮靠 margin-top:auto 钉在右下角 -->
     <div class="add-body">
       <ModeTabs v-model="addMode" :tabs="ADD_MODES" :disabled="busy" />

@@ -12,7 +12,7 @@ use zip::write::SimpleFileOptions;
 
 /// 测试压缩包输出目录（系统临时目录 + 唯一子目录）
 fn work_dir() -> PathBuf {
-    let dir = std::env::temp_dir()
+    let dir = mml_testutil::temp_dir()
         .join("mml-detect-pack-test")
         .join(Uuid::new_v4().to_string());
     std::fs::create_dir_all(&dir).expect("创建测试临时目录失败");

@@ -31,7 +31,7 @@ fn make_mini_resourcepack() -> PathBuf {
 
 /// 生成一个资源包 zip，pack.mcmeta 内容由调用方给（用于覆盖各种写法）。
 fn make_resourcepack_with(meta: &[u8]) -> PathBuf {
-    let path = std::env::temp_dir().join(format!(
+    let path = mml_testutil::temp_dir().join(format!(
         "mml-resourcepack-mini-{}.zip",
         uuid::Uuid::new_v4()
     ));

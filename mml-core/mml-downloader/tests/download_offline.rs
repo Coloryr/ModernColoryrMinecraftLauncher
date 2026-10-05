@@ -62,7 +62,7 @@ fn setup() -> PathBuf {
         return dir.clone();
     }
 
-    let dir = std::env::temp_dir().join(format!("mml-downloader-it-{}", uuid::Uuid::new_v4()));
+    let dir = mml_testutil::temp_dir().join(format!("mml-downloader-it-{}", uuid::Uuid::new_v4()));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).unwrap();
     RUN_DIR.set(dir.clone()).unwrap();

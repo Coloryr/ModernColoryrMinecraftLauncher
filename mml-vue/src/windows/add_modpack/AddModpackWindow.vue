@@ -60,6 +60,7 @@ onMounted(async () => {
     :title="t('winTitle.addModpack')"
     :back="detailOpen ? t('modpack.back') : ''"
     hide-modpack-indicator
+    body-gutter
     @back="modeRef?.closeDetail()"
     @close="$emit('close')"
   >

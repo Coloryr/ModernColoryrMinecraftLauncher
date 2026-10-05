@@ -12,7 +12,7 @@ use mml_net::modrinth_api::{
 fn init() {
     static INIT: std::sync::OnceLock<()> = std::sync::OnceLock::new();
     INIT.get_or_init(|| {
-        let dir = std::env::temp_dir().join(format!("mml-net-api-test-{}", std::process::id()));
+        let dir = mml_testutil::temp_dir().join(format!("mml-net-api-test-{}", std::process::id()));
         std::fs::create_dir_all(&dir).expect("创建临时配置目录失败");
         mml_config::init(&dir);
         mml_net::init();

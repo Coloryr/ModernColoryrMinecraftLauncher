@@ -257,7 +257,7 @@ mod tests {
 
     /// 在临时目录创建内容为 "hello world" 的文件
     fn make_file() -> PathBuf {
-        let dir = std::env::temp_dir().join(format!(
+        let dir = mml_testutil::temp_dir().join(format!(
             "mml_base_file_item_test_{}_{}",
             std::process::id(),
             uuid::Uuid::new_v4().simple()

@@ -25,7 +25,7 @@ use zip::write::SimpleFileOptions;
 
 /// 测试运行目录（系统临时目录 + 进程号，避免多进程冲突）
 fn run_dir() -> PathBuf {
-    std::env::temp_dir().join(format!("mml-modpack-install-{}", std::process::id()))
+    mml_testutil::temp_dir().join(format!("mml-modpack-install-{}", std::process::id()))
 }
 
 /// 初始化链（与 mml_core::init 相同），每进程一次
@@ -139,7 +139,7 @@ impl mml_downloader::IDownloadGui for TestDownloader {
 
 /// 构造一个 CurseForge 整合包（空文件清单 + overrides）
 fn make_curseforge_pack(name: &str) -> (PathBuf, PathBuf) {
-    let dir = std::env::temp_dir()
+    let dir = mml_testutil::temp_dir()
         .join("mml-modpack-install-packs")
         .join(Uuid::new_v4().to_string());
     std::fs::create_dir_all(&dir).unwrap();
@@ -161,7 +161,7 @@ fn make_curseforge_pack(name: &str) -> (PathBuf, PathBuf) {
 
 /// 构造一个 Modrinth 整合包（空文件清单 + overrides）
 fn make_modrinth_pack(name: &str) -> (PathBuf, PathBuf) {
-    let dir = std::env::temp_dir()
+    let dir = mml_testutil::temp_dir()
         .join("mml-modpack-install-packs")
         .join(Uuid::new_v4().to_string());
     std::fs::create_dir_all(&dir).unwrap();

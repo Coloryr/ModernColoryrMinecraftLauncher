@@ -167,15 +167,17 @@ export const commands = {
     listDatapacks: (uuid: string, dir: string) => invoke<DataPackItemDto[]>("resource_list_datapacks", { uuid, dir }),
     listMods: (uuid: string) => invoke<ModItemDto[]>("resource_list_mods", { uuid }),
     listResourcepacks: (uuid: string) => invoke<PackItemDto[]>("resource_list_resourcepacks", { uuid }),
+    listSaveBackups: (uuid: string, dir: string) => invoke<SaveBackupDto[]>("resource_list_save_backups", { uuid, dir }),
     listSaves: (uuid: string) => invoke<SaveItemDto[]>("resource_list_saves", { uuid }),
     listSchematics: (uuid: string) => invoke<SchematicItemDto[]>("resource_list_schematics", { uuid }),
     listScreenshots: (uuid: string) => invoke<ScreenshotItemDto[]>("resource_list_screenshots", { uuid }),
     listServers: (uuid: string) => invoke<ServerItemDto[]>("resource_list_servers", { uuid }),
     listShaderpacks: (uuid: string) => invoke<ShaderItemDto[]>("resource_list_shaderpacks", { uuid }),
-    modDisable: (uuid: string, modUuid: string) => invoke<void>("resource_mod_disable", { uuid, modUuid }),
-    modEnable: (uuid: string, modUuid: string) => invoke<void>("resource_mod_enable", { uuid, modUuid }),
+    modDisable: (uuid: string, modUuid: string) => invoke<ModRenameDto>("resource_mod_disable", { uuid, modUuid }),
+    modEnable: (uuid: string, modUuid: string) => invoke<ModRenameDto>("resource_mod_enable", { uuid, modUuid }),
     modGroupAdd: (uuid: string, name: string) => invoke<string>("resource_mod_group_add", { uuid, name }),
     modGroupCollapsedSet: (uuid: string, collapsed: string[]) => invoke<void>("resource_mod_group_collapsed_set", { uuid, collapsed }),
+    modGroupOrder: (uuid: string) => invoke<string[]>("resource_mod_group_order", { uuid }),
     modGroupOrderSet: (uuid: string, order: string[]) => invoke<void>("resource_mod_group_order_set", { uuid, order }),
     modGroupRemove: (uuid: string, group: string) => invoke<void>("resource_mod_group_remove", { uuid, group }),
     modGroupRename: (uuid: string, group: string, newName: string) => invoke<void>("resource_mod_group_rename", { uuid, group, newName }),
@@ -184,6 +186,7 @@ export const commands = {
     modGroupsCollapsed: (uuid: string) => invoke<string[]>("resource_mod_groups_collapsed", { uuid }),
     modNoteSet: (uuid: string, file: string, note: string) => invoke<void>("resource_mod_note_set", { uuid, file, note }),
     openFolder: (uuid: string, kind: string, name: string | null, parent: string | null) => invoke<void>("resource_open_folder", { uuid, kind, name, parent }),
+    restoreSaveBackup: (uuid: string, dir: string, file: string) => invoke<void>("resource_restore_save_backup", { uuid, dir, file }),
     serverAdd: (uuid: string, name: string, ip: string) => invoke<void>("resource_server_add", { uuid, name, ip }),
     serverDelete: (uuid: string, name: string, ip: string) => invoke<void>("resource_server_delete", { uuid, name, ip }),
     serverUpdate: (uuid: string, name: string, ip: string, newName: string, newIp: string, acceptTextures: boolean) => invoke<void>("resource_server_update", { uuid, name, ip, newName, newIp, acceptTextures }),
@@ -799,12 +802,13 @@ export type ModItemDto = {
   disable: boolean,
   fail: boolean,
   core: boolean,
+  library: boolean,
   modId: string,
   name: string,
   version: string,
   author: string,
   description: string,
-  loader: string,
+  loaders: string[],
   side: string,
   url: string,
   source: string,
@@ -824,6 +828,12 @@ export type ResourceViewDto = {
   order: string[],
   category: string,
   modView: string,
+};
+
+export type ModRenameDto = {
+  uuid: string,
+  file: string,
+  path: string,
 };
 
 export type ModGroupDto = {
@@ -851,6 +861,13 @@ export type SaveItemDto = {
   difficulty: number,
   broken: boolean,
   icon: string,
+  backups: number,
+};
+
+export type SaveBackupDto = {
+  file: string,
+  size: number,
+  time: number,
 };
 
 export type ScreenshotItemDto = {

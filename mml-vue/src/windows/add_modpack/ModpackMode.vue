@@ -6,6 +6,7 @@ import { marked } from "marked";
 import DOMPurify from "dompurify";
 import SegmentedTabs from "../../components/ui/SegmentedTabs.vue";
 import AsyncImage from "../../components/ui/AsyncImage.vue";
+import ImagePreview from "../../components/ui/ImagePreview.vue";
 import { api } from "../../lib/api";
 import { t, tErr } from "../../lib/i18n";
 import { showToast } from "../../lib/toast";
@@ -437,74 +438,20 @@ function svgIcon(svg: string): string {
   return safe;
 }
 
-/** 截图放大预览（当前预览的图片地址，空 = 关闭） */
+/**
+ * 截图放大预览（当前预览的图片地址，空 = 关闭）
+ *
+ * 缩放 / 平移 / 点空白关闭都在共用的 `ImagePreview` 里；这里只留"开哪张 / 关掉"，
+ * 以及 Esc 的分层处理（先关预览、再关详情页，见 [`onDetailKey`]）。
+ */
 const preview = ref("");
-
-/** 预览图缩放倍率（滚轮调节，1 = 适配大小） */
-const previewScale = ref(1);
-
-/** 预览图平移偏移（px，放大后拖动看局部） */
-const previewOffset = ref({ x: 0, y: 0 });
-
-/** 本次按下是否真的拖动过：拖动结束那一下的 click 不该关闭预览 */
-let previewDragged = false;
-let previewFrom = { x: 0, y: 0, ox: 0, oy: 0 };
 
 function openPreview(url: string) {
   preview.value = url;
-  previewScale.value = 1;
-  previewOffset.value = { x: 0, y: 0 };
 }
 
 function closePreview() {
   preview.value = "";
-  previewScale.value = 1;
-  previewOffset.value = { x: 0, y: 0 };
-}
-
-/** 按下开始拖动（未放大时没有可平移的余量，直接返回） */
-function onPreviewDown(e: PointerEvent) {
-  if (previewScale.value <= 1) return;
-  previewDragged = false;
-  previewFrom = {
-    x: e.clientX,
-    y: e.clientY,
-    ox: previewOffset.value.x,
-    oy: previewOffset.value.y,
-  };
-  window.addEventListener("pointermove", onPreviewMove);
-  window.addEventListener("pointerup", onPreviewUp);
-}
-
-function onPreviewMove(e: PointerEvent) {
-  const dx = e.clientX - previewFrom.x;
-  const dy = e.clientY - previewFrom.y;
-  // 3px 阈值：手抖不算拖动
-  if (Math.abs(dx) > 3 || Math.abs(dy) > 3) previewDragged = true;
-  previewOffset.value = { x: previewFrom.ox + dx, y: previewFrom.oy + dy };
-}
-
-function onPreviewUp() {
-  window.removeEventListener("pointermove", onPreviewMove);
-  window.removeEventListener("pointerup", onPreviewUp);
-}
-
-/** 点空白处关闭；刚拖过的那一下不算点击 */
-function onPreviewClick() {
-  if (previewDragged) {
-    previewDragged = false;
-    return;
-  }
-  closePreview();
-}
-
-/** 滚轮缩放预览图（向上放大、向下缩小，1~8 倍） */
-function onPreviewWheel(e: WheelEvent) {
-  const factor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
-  const next = Math.min(8, Math.max(1, previewScale.value * factor));
-  previewScale.value = next;
-  // 缩回适配大小：偏移一并归零，否则图会停在屏幕外看不见
-  if (next === 1) previewOffset.value = { x: 0, y: 0 };
 }
 
 /** Esc：先关截图预览，再关详情页 */
@@ -524,7 +471,6 @@ watch(detailItem, (val) => {
 
 onUnmounted(() => {
   window.removeEventListener("keydown", onDetailKey);
-  onPreviewUp();
 });
 
 function formatDate(date: string): string {
@@ -786,28 +732,12 @@ watch(source, loadSource);
       </button>
     </div>
 
-    <!-- 截图放大预览：滚轮缩放，拖动平移，点空白处或 Esc 关闭 -->
-    <Teleport to="body">
-      <transition name="shot-fade">
-        <div
-          v-if="preview"
-          class="shot-preview"
-          :class="{ pannable: previewScale > 1, panning: previewDragged }"
-          @click="onPreviewClick"
-          @wheel.prevent="onPreviewWheel"
-          @pointerdown="onPreviewDown"
-        >
-          <img
-            :src="preview"
-            alt=""
-            :style="{
-              transform: `translate(${previewOffset.x}px, ${previewOffset.y}px) scale(${previewScale})`,
-            }"
-          />
-          <div class="shot-hint">{{ t("modpack.previewHint") }}</div>
-        </div>
-      </transition>
-    </Teleport>
+    <!--
+      截图放大预览：滚轮缩放、拖动平移、点空白处或 Esc 关闭。
+      UI 与行为都在共用的 `ImagePreview` 里（资源窗口的截图预览用的是同一份）。
+      Esc 仍由本页处理（见 onDetailKey）：这里还有"先关预览、再关详情页"的层次
+    -->
+    <ImagePreview v-if="preview" :src="preview" @close="closePreview" />
 
     <!-- 项目详情（单击列表项打开）：铺满标题栏以下的整个窗口，返回键在标题栏上 -->
     <Teleport to="body">
@@ -1030,6 +960,7 @@ select.sel-file-version {
   z-index: 20;
   max-height: 180px;
   overflow-y: auto;
+  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
   padding: 4px;
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -1122,65 +1053,8 @@ select.sel-file-version {
 
 /* 结果区上方的细进度条与骨架行：样式在 styles/skeleton.css（跨窗口共用） */
 
-/* 截图放大预览 */
-.shot-preview {
-  position: fixed;
-  /* 不盖住标题栏 */
-  inset: var(--titlebar-h) 0 0 0;
-  z-index: 200;
-  background: rgb(0 0 0 / 85%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: zoom-out;
-  /* 放大后溢出部分裁掉 */
-  overflow: hidden;
-  user-select: none;
-  touch-action: none;
-}
+/* 截图放大预览的样式在共用组件 components/ui/ImagePreview.vue 里 */
 
-/* 放大后可拖动看局部：光标换成抓手 */
-.shot-preview.pannable {
-  cursor: grab;
-}
-
-.shot-preview.panning {
-  cursor: grabbing;
-}
-
-.shot-preview img {
-  max-width: 92%;
-  max-height: 92%;
-  object-fit: contain;
-  box-shadow: var(--shadow-lg);
-  /* 拖动时不要触发系统拖图；transform 交给 GPU */
-  -webkit-user-drag: none;
-  will-change: transform;
-}
-
-/* 底部操作提示 */
-.shot-hint {
-  position: absolute;
-  bottom: 14px;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 4px 12px;
-  border-radius: 999px;
-  background: rgb(0 0 0 / 55%);
-  color: rgb(255 255 255 / 85%);
-  font-size: 12px;
-  pointer-events: none;
-}
-
-.shot-fade-enter-active,
-.shot-fade-leave-active {
-  transition: opacity 0.15s ease;
-}
-
-.shot-fade-enter-from,
-.shot-fade-leave-to {
-  opacity: 0;
-}
 
 .modpack-list {
   flex: 1;

@@ -58,7 +58,7 @@ export function useResourceOps(data: ReturnType<typeof useResourceData>) {
     }
   }
 
-  /** 轻操作（启用 / 禁用 / 备份 / 切换光影…）：串行化 + 失败提示 + 成功后重拉 */
+  /** 轻操作（备份 / 切换光影…）：串行化 + 失败提示 + 成功后重拉 */
   async function act(run: () => Promise<void>) {
     if (busy.value) return;
     busy.value = true;
@@ -73,21 +73,34 @@ export function useResourceOps(data: ReturnType<typeof useResourceData>) {
   }
 
   /**
+   * 只做"串行化 + 失败提示"，**不重拉列表**
+   *
+   * 给那些"改完之后调用方自己就地更新"的操作用：打开目录（只读）、启用 / 禁用模组
+   * （只改文件名，元数据一个字没变 —— 调用方拿后端回的新身份改那一行即可）。
+   *
+   * 重拉一次模组要把每个 jar 的元数据重新解析一遍（几百个包要好几秒），
+   * 这两种操作都不需要它。
+   */
+  async function actLocal(run: () => Promise<void>) {
+    if (busy.value) return;
+    busy.value = true;
+    try {
+      await run();
+    } catch (e) {
+      showToast(tErr(e));
+    } finally {
+      busy.value = false;
+    }
+  }
+
+  /**
    * 在文件管理器里打开目录
    *
    * **不重拉列表**：这是只读操作，列表不会变；而重拉一次模组要重新解析每个 jar 的元数据
    * （数秒），原先它和增删走同一条 act()，点一下"打开文件夹"整个列表就白转一圈。
    */
   async function openFolder(kind: string, name: string | null, parent: string | null = null) {
-    if (busy.value) return;
-    busy.value = true;
-    try {
-      await openResourceFolder(instanceUuid.value, kind, name, parent);
-    } catch (e) {
-      showToast(tErr(e));
-    } finally {
-      busy.value = false;
-    }
+    await actLocal(() => openResourceFolder(instanceUuid.value, kind, name, parent));
   }
 
   return {
@@ -98,6 +111,7 @@ export function useResourceOps(data: ReturnType<typeof useResourceData>) {
     askDelete,
     runConfirm,
     act,
+    actLocal,
     openFolder,
   };
 }

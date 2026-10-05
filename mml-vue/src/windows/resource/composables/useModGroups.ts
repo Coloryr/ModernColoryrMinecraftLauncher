@@ -13,6 +13,7 @@ import { tErr } from "../../../lib/i18n";
 import { showToast } from "../../../lib/toast";
 import {
   addModGroup,
+  getModGroupOrder,
   getModGroups,
   getModGroupsCollapsed,
   removeModGroup,
@@ -53,23 +54,12 @@ export function useModGroups(data: ReturnType<typeof useResourceData>) {
    * 分组块的顺序（**含状态分组**，键都是分组 uuid）
    *
    * 与 `groups` 是两份数据：这一份管排列，`groups` 管分组内容。
-   * 后端只在 `resource_mod_groups` 里下发自建分组，所以状态分组的 uuid 要在这里补齐 ——
-   * 顺序表是上下连贯的一串，缺了它们就没法把状态分组拖到前面去。
+   *
+   * **整份都从后端读**（`resource_mod_group_order`），不在这里拼：状态分组不是用户数据、
+   * 不在 `resource_mod_groups` 里，自己拼的话永远拼不出"用户把「已启用」拖到了某个
+   * 自建分组前面"—— 表现就是拖完松手又弹回原位（用户报的"模组分组无法移动顺序"）。
    */
   const order = ref<string[]>([]);
-
-  /** 默认顺序：识别失败 → 已启用 → 已禁用（与后端 `default_group_order` 一致） */
-  const DEFAULT_ORDER = [STATE_GROUP_ID_FAIL, STATE_GROUP_ID_ON, STATE_GROUP_ID_OFF];
-
-  /**
-   * 把后端下发的分组表还原成完整的块顺序
-   *
-   * 后端交给我们的 `groups` 已经是**按顺序排好的**，所以按它遍历就能把自建分组插回原位；
-   * 状态分组的 uuid 不在里面，按默认顺序补在末尾 —— 用户拖过的话会被后面的落盘顺序覆盖。
-   */
-  function composeOrder(list: ModGroupDto[]): string[] {
-    return [...list.map((g) => g.uuid), ...DEFAULT_ORDER];
-  }
 
   /** 模组 SHA1 → 所在分组 uuid（未归组没有条目） */
   const groupOfKey = computed(() => {
@@ -99,14 +89,15 @@ export function useModGroups(data: ReturnType<typeof useResourceData>) {
       return;
     }
     try {
-      // 分组表与收起状态一起拉：同一份 guisetting.json，两次 IPC 不如一次拿到
-      const [list, folded] = await Promise.all([
+      // 三份一起拉：同一份 guisetting.json，三次 IPC 不如一次并发拿到
+      const [list, folded, savedOrder] = await Promise.all([
         getModGroups(instanceUuid.value),
         getModGroupsCollapsed(instanceUuid.value),
+        getModGroupOrder(instanceUuid.value),
       ]);
-      // 后端下发的是"按当前顺序排好的自建分组"，据此拼出完整顺序
       groups.value = list;
-      order.value = composeOrder(list);
+      // 后端给的就是**完整且已规范化**的顺序（含状态分组），直接用
+      order.value = savedOrder;
       collapsed.value = new Set(folded);
     } catch {
       groups.value = [];
@@ -115,13 +106,17 @@ export function useModGroups(data: ReturnType<typeof useResourceData>) {
     }
   }
 
-  /** 保存块顺序（拖完调用；失败只提示，不回滚 —— 下次 load 会拿到后端的真实顺序） */
+  /**
+   * 保存块顺序（拖完调用）
+   *
+   * 只把新顺序写回后端，**不重读**：落盘是异步排队的，立刻读会读到**旧顺序**，
+   * 于是刚拖好的顺序又被拼回去（看着就是"松手弹回原位"）。
+   * 失败只提示，不回滚（下次进模组页 load 会拿到后端的真实顺序）。
+   */
   async function setOrder(next: string[]) {
     order.value = next;
     try {
       await setModGroupOrder(instanceUuid.value, next);
-      // 顺序表落盘时后端会规范化一次，重新拉一遍拿到一致的版本
-      await load();
     } catch (e) {
       showToast(tErr(e));
     }
@@ -149,13 +144,22 @@ export function useModGroups(data: ReturnType<typeof useResourceData>) {
     return collapsed.value.has(key);
   }
 
-  /** 新建分组 */
+  /**
+   * 新建分组
+   *
+   * **写完之后不重读**：落盘是**异步排队**的（`config_save` 后台线程），
+   * 立刻 `load()` 读到的还是旧文件 —— 新分组不出现，用户看到的就是
+   * "新建完了却选不到分组"（踩过）。后端会把新 uuid 回给我们，
+   * 本地按同样的位置（末尾）补一条即可。
+   */
   async function add(name: string): Promise<boolean> {
     const trimmed = name.trim();
     if (!trimmed) return false;
     try {
-      await addModGroup(instanceUuid.value, trimmed);
-      await load();
+      const uuid = await addModGroup(instanceUuid.value, trimmed);
+      // 后端 `group_order_of` 会把没记过的分组补在末尾，本地照做
+      groups.value = [...groups.value, { uuid, name: trimmed, mods: [] }];
+      order.value = [...order.value, uuid];
       return true;
     } catch (e) {
       showToast(tErr(e));
@@ -163,13 +167,13 @@ export function useModGroups(data: ReturnType<typeof useResourceData>) {
     }
   }
 
-  /** 重命名分组（**传 uuid**：只改名字，键与成员都不动） */
+  /** 重命名分组（**传 uuid**：只改名字，键与成员都不动）；同样不重读，本地改名 */
   async function rename(group: string, newName: string): Promise<boolean> {
     const trimmed = newName.trim();
     if (!trimmed) return false;
     try {
       await renameModGroup(instanceUuid.value, group, trimmed);
-      await load();
+      groups.value = groups.value.map((g) => (g.uuid === group ? { ...g, name: trimmed } : g));
       return true;
     } catch (e) {
       showToast(tErr(e));
@@ -177,17 +181,31 @@ export function useModGroups(data: ReturnType<typeof useResourceData>) {
     }
   }
 
-  /** 删除分组（组内模组回到"未分组"，磁盘文件不动） */
+  /**
+   * 删除分组（组内模组回到"未分组"，磁盘文件不动）
+   *
+   * 同样不重读：本地摘掉这条即可（分组数据不在模组列表里，也不用重拉列表）。
+   */
   async function remove(group: string) {
     try {
       await removeModGroup(instanceUuid.value, group);
-      await load();
+      groups.value = groups.value.filter((g) => g.uuid !== group);
+      order.value = order.value.filter((key) => key !== group);
+      const next = new Set(collapsed.value);
+      next.delete(group);
+      collapsed.value = next;
     } catch (e) {
       showToast(tErr(e));
     }
   }
 
-  /** 把若干模组移到某个分组（**传分组 uuid**）；`group` 传 null = 移出所有分组（回到"未分组"） */
+  /**
+   * 把若干模组移到某个分组（**传分组 uuid**）；`group` 传 null = 移出所有分组（回到"未分组"）
+   *
+   * **不重读**：落盘是异步排队的，立刻 `load()` 读到的还是旧成员表 ——
+   * 拖进分组的模组会看着"没进去"。本地按同一套规则改成员即可：
+   * 先从所有分组里摘掉，再进目标组（一个模组同时只属于一个组）。
+   */
   async function setGroup(group: string | null, keys: string[]) {
     if (!keys.length) return;
     // 已经在目标组里的不用动（拖回原组是一次空操作）
@@ -196,7 +214,11 @@ export function useModGroups(data: ReturnType<typeof useResourceData>) {
     if (!moved.length) return;
     try {
       await setModGroup(instanceUuid.value, group, moved);
-      await load();
+      const moving = new Set(moved);
+      groups.value = groups.value.map((g) => {
+        const kept = g.mods.filter((sha1) => !moving.has(sha1));
+        return g.uuid === group ? { ...g, mods: [...kept, ...moved] } : { ...g, mods: kept };
+      });
     } catch (e) {
       showToast(tErr(e));
     }

@@ -5,7 +5,7 @@
 //! - `auths` 模块使用全局内存存储 + 磁盘文件（`auth.json` / `auth_select.json`），
 //!   磁盘路径来自 `mml_base::inner_path`（`LOCALAPPDATA` 或 `HOME`）。
 //!   为避免污染真实用户数据，本测试在访问任何路径前把 `LOCALAPPDATA` / `HOME`
-//!   重定向到 `std::env::temp_dir()` 下的唯一子目录，测试结束后清理。
+//!   重定向到仓库 `target/temp` 下的唯一子目录（`mml_testutil::temp_dir()`），测试结束后清理。
 //! - 全局存储只能初始化一次且 `config_save` / `mml_log` 的后台线程只能 `start`
 //!   一次，因此本文件只用单个顺序执行的 `#[test]` 覆盖全部流程。
 //! - 全程使用假凭据，不访问网络。
@@ -30,7 +30,7 @@ static TEST_DIR: OnceLock<PathBuf> = OnceLock::new();
 /// 重定向内部数据目录到临时目录并初始化日志 / 配置保存线程
 fn setup() -> &'static PathBuf {
     TEST_DIR.get_or_init(|| {
-        let dir = std::env::temp_dir().join(format!("mml_auth_test_{}", std::process::id()));
+        let dir = mml_testutil::temp_dir().join(format!("mml_auth_test_{}", std::process::id()));
         // 清理上次运行残留
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
@@ -79,7 +79,7 @@ fn write_json(dir: &Path, name: &str, json: &str) -> PathBuf {
 fn test_auths_lifecycle() {
     let dir = setup();
     let inner = inner_path::get_inner_path();
-    assert!(dir.starts_with(std::env::temp_dir()), "内部目录应位于临时目录下");
+    assert!(dir.starts_with(mml_testutil::temp_dir()), "内部目录应位于临时目录下");
 
     // ---- 1) 预写 auth.json 后 init，验证从磁盘加载 ----
     let accounts = vec![

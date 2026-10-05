@@ -1,6 +1,7 @@
 // 资源管理窗口的共享类型与分类清单
 
 import type { ModItemDto } from "../../lib/bindings";
+import type { GlyphName } from "../../components/ui/GlyphIcon.vue";
 
 /** 资源分类（左侧导航的一项） */
 export type CategoryId =
@@ -24,21 +25,34 @@ export interface ResourceCategory {
    * 切语言时侧栏文字不跟着变（本窗口原先就是这么冻住的）。渲染时再 `t()` 才跟着走。
    */
   labelKey: string;
+  /**
+   * 图标（`GlyphIcon` 的字形名）
+   *
+   * 放在分类定义里而不是各处硬写：左侧导航与内容区标题都要它，
+   * 两处各写一份迟早会写成两个图标。
+   */
+  icon: GlyphName;
 }
 
+/**
+ * 分类清单：**这里的顺序就是默认顺序**（见 useResourceView 的 normalizeOrder）
+ *
+ * 用户拖过之后以实例里存的那份为准，这里只决定"没拖过时长什么样"。
+ * 模组排在存档前面（用户要求）：模组是最常翻的一类，放第一个。
+ */
 export const RESOURCE_CATEGORIES: ResourceCategory[] = [
-  { id: "saves", labelKey: "resource.saves" },
-  { id: "mods", labelKey: "resource.mods" },
-  { id: "resourcepacks", labelKey: "resource.resourcepacks" },
-  { id: "screenshots", labelKey: "resource.screenshots" },
-  { id: "servers", labelKey: "resource.servers" },
-  { id: "shaders", labelKey: "resource.shaders" },
-  { id: "schematics", labelKey: "resource.schematics" },
+  { id: "mods", labelKey: "resource.mods", icon: "package" },
+  { id: "saves", labelKey: "resource.saves", icon: "archive" },
+  { id: "resourcepacks", labelKey: "resource.resourcepacks", icon: "palette" },
+  { id: "screenshots", labelKey: "resource.screenshots", icon: "image" },
+  { id: "servers", labelKey: "resource.servers", icon: "server" },
+  { id: "shaders", labelKey: "resource.shaders", icon: "sun" },
+  { id: "schematics", labelKey: "resource.schematics", icon: "cube" },
 ];
 
-/** 某个分类的文案键（找不到时返回分类 ID 兜底） */
-export function categoryLabelKey(id: CategoryId): string {
-  return RESOURCE_CATEGORIES.find((c) => c.id === id)?.labelKey ?? id;
+/** 某个分类的图标（找不到时返回 null，调用方不画图标） */
+export function categoryIcon(id: CategoryId): GlyphName | null {
+  return RESOURCE_CATEGORIES.find((c) => c.id === id)?.icon ?? null;
 }
 
 /** 服务器添加 / 编辑的表单草稿（edit=true 时另带原 name/ip 作为定位键） */
@@ -68,6 +82,13 @@ export interface ModViewProps {
   busy: boolean;
   /** 正在被拖拽的模组 SHA1（那行变淡）：归组用 SHA1，与 guisetting.json 的 Groups 同一口径 */
   draggingKey: string | null;
+  /**
+   * 已选中的模组 SHA1 集合（右键多选，供顶栏批量操作）
+   *
+   * 与拖拽、分组同一套键（SHA1 = 内容哈希）：启用 / 禁用只改文件名，
+   * uuid 会跟着变，SHA1 不变，所以刷新列表后选中状态还在。
+   */
+  selectedKeys: Set<string>;
 }
 
 /** 三种模组视图共用的行操作事件 */
@@ -83,8 +104,18 @@ export interface ModViewEmits {
    * 列表视图的折叠在分组头上、树形视图已并入列表，所以只有表格会发这个事件。
    */
   (e: "toggle-group"): void;
+  /**
+   * 分组名那一格按下：交给 ModPane 的**分组排序**拖拽
+   *
+   * 列表视图的分组头本来就能按住拖动排序，表格视图只有"点一下折叠"——
+   * 于是表格里分组顺序改不了（用户报的"模组分组无法移动顺序"）。
+   * 这里把按下抛上去，与列表视图走同一个 `onSectionPointerDown`。
+   */
+  (e: "drag-group", event: PointerEvent): void;
   /** 行按下：交给 ModPane 的拖拽逻辑（拖到分组上即归组） */
   (e: "drag-start", payload: { event: PointerEvent; item: ModItemDto }): void;
+  /** 右键：把这一行加进 / 移出多选（批量操作的选择方式，见 ModPane 的 selected） */
+  (e: "select", item: ModItemDto): void;
 }
 
 /** 一排模组行的通用文案片段：副标题 = 版本 · 作者 · 文件名 */

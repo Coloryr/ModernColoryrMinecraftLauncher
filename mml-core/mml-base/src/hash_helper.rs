@@ -232,7 +232,7 @@ mod tests {
 
     /// 在临时目录创建唯一文件并返回路径
     fn temp_file(tag: &str, content: &[u8]) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!(
+        let dir = mml_testutil::temp_dir().join(format!(
             "mml_base_hash_test_{}_{}",
             std::process::id(),
             uuid::Uuid::new_v4().simple()

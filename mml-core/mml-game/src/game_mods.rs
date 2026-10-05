@@ -481,6 +481,9 @@ fn read_fabric_json(reader: impl Read, mod_info: &mut ModObj) -> CoreResult<()> 
     let obj = MiniJsonObj::from_stream(reader)?;
 
     let mut info = ModItemObj::default();
+    // 加载器表示"这份元数据是哪个加载器的"，与下面各字段解析成功与否无关 ——
+    // 漏了这一句就会留在默认值 `Normal`，界面上把 Fabric 模组显示成「原版」
+    info.loaders = LoaderType::Fabric;
 
     if let Some(map) = obj.as_object() {
         info.mod_id = map.get_string("id");
@@ -551,6 +554,8 @@ fn read_quilt_json(reader: impl Read, mod_info: &mut ModObj) -> CoreResult<()> {
     let obj = MiniJsonObj::from_stream(reader)?;
 
     let mut info = ModItemObj::default();
+    // 同上：不写这一句就会显示成「原版」（Quilt 与 Fabric 是同一个毛病）
+    info.loaders = LoaderType::Quilt;
 
     if let Some(map) = obj
         .as_object()
@@ -685,7 +690,13 @@ fn read_core_mod(
         is_core = true;
     }
 
-    mod_info.info.push(info);
+    // **没识别出 core mod 就不要 push 这条 info**：`META-INF/MANIFEST.MF` 几乎每个 jar 都有，
+    // 无条件 push 会多出一条"空条目"（modid / 名字都空，加载器还是默认的 `Normal`）。
+    // 它以前只是排在真实元数据**后面**、没人看；而界面改成"汇总所有条目的加载器"之后，
+    // **每个模组都会多出一个「原版」**（用户反馈"为什么会有个原版"）。
+    if is_core {
+        mod_info.info.push(info);
+    }
     // 原先这里无条件置 true，而 MANIFEST.MF 几乎每个 Forge / NeoForge jar 都有 ——
     // 结果界面上**每个**模组都挂着"核心"徽标。core 只表示"用老式 core mod 机制加载"，
     // 没有上面两个标记就不是
@@ -704,9 +715,19 @@ fn read_core_mod(
 /// # 返回值
 ///
 /// 成功返回 `Ok(())`；读取失败返回对应错误
+/// 扫描内置的模组（jar-in-jar）
+///
+/// **会递归**：内置 jar 里还能再套内置 jar（`parse_mod_archive` 又会调回这里），
+/// 层数不限。
+///
+/// - `archive`: 当前这一层的压缩包
+/// - `mod_info`: 解析结果追加到其中
+/// - `base`: **当前层在父包里的路径链**（顶层为空）。
+///   内置 jar 没有独立文件路径，得靠它拼出唯一身份，见下面的赋值
 fn read_jar_in_jar(
     archive: &mut ZipArchive<impl Read + Seek>,
     mod_info: &mut ModObj,
+    base: &Path,
 ) -> CoreResult<()> {
     // 收集所有 META-INF/jarjar/ 目录下的 .jar 文件
     let jar_entries: Vec<usize> = (0..archive.len())
@@ -731,6 +752,8 @@ fn read_jar_in_jar(
                 error: err.to_string(),
             })
         })?;
+        // 条目名要留着当身份用，先把它的借用结束掉再读内容
+        let entry_name = entry.name().to_string();
 
         let mut bytes = Vec::new();
         entry.read_to_end(&mut bytes).map_err(|err| {
@@ -747,8 +770,22 @@ fn read_jar_in_jar(
             })
         })?;
 
-        match parse_mod_archive(&mut inner_zip) {
-            Ok(inmod) => {
+        // 这一层在父包里的路径链：顶层 base 为空 → 就是条目名本身；
+        // 再往下一层就是"父条目名/子条目名"，层层累加
+        let rel = base.join(&entry_name);
+
+        match parse_mod_archive(&mut inner_zip, &rel) {
+            Ok(mut inmod) => {
+                // 内置 jar 没有独立文件路径。以前这两个字段就留在默认值上 ——
+                // `file` 空、`uuid` 是 **nil**，于是同一层所有内置 jar 的渲染 key
+                // 完全一样（前端 `modRowKey` 优先取 uuid），**展开一个会把同层的全展开**、
+                // 折叠状态也串在一起。用户反馈的"内置嵌内置展开不了"就是这个。
+                //
+                // `file` 存**条目名**（如 `META-INF/jarjar/foo.jar`）：前端取 `file_name()`
+                // 得到 `foo.jar` 用来显示，取整串用来显示"在父包里的位置"。
+                // `uuid` 由**路径链**生成：不同父包下的同名内置 jar 不会撞。
+                inmod.file = PathBuf::from(&entry_name);
+                inmod.uuid = gen_mod_uuid(&rel);
                 mod_info.jar_in_jar.push(inmod);
             }
             Err(err) => {
@@ -765,23 +802,42 @@ fn read_jar_in_jar(
 /// # 参数
 ///
 /// - `archive`: 压缩包
+/// - `base`: 这个包在**父包里的路径链**（顶层传文件路径；内置 jar 传"父条目名/子条目名"）。
+///   只用来给内置 jar 生成唯一身份，见 [`read_jar_in_jar`]
 ///
 /// # 返回值
 ///
 /// 返回解析出的模组信息；读取或解析失败返回对应错误
-fn parse_mod_archive(archive: &mut ZipArchive<impl Read + Seek>) -> CoreResult<ModObj> {
+fn parse_mod_archive(
+    archive: &mut ZipArchive<impl Read + Seek>,
+    base: &Path,
+) -> CoreResult<ModObj> {
     let mut mod_info = ModObj::default();
 
     // 读取 mcmod.info
-    if let Ok(item) = archive.by_name(names::MC_MOD_INFO_FILE) {
-        read_forge_json(item, &mut mod_info)?;
+    // 与下面的 mods.toml 同一口径：元数据文件坏了只跳过它自己，不牵连整包
+    // （老包里的 mcmod.info 手改坏、编码不对的情况并不少见）
+    if let Ok(item) = archive.by_name(names::MC_MOD_INFO_FILE)
+        && let Err(err) = read_forge_json(item, &mut mod_info)
+    {
+        mml_log::error_type(err);
     }
 
     // 读取 mods.toml
+    //
+    // **单个元数据文件坏了不该让整包失败**：真实案例 `mekanism_lasers-1.1.10.3-a.jar`
+    // 里有两个 toml（`META-INF/neoforge.mods.toml` 与根目录 `neoforge.mods.toml`），
+    // 其中一个语法非法 —— 旧实现用 `?` 把错误抛出去，整包就变成"读取失败"，
+    // 界面上连模组名都看不到，而另一个 toml 其实是好的。
+    //
+    // 现在：坏的那个**记一条日志后跳过**，其余照常解析；全坏时 info 为空，
+    // 由上层按"读不出元数据"处理（仍能显示文件名）。
     macro_rules! try_read_file {
         ($archive:expr, $name:expr, $func:expr, $loader:expr) => {
             if let Ok(item) = $archive.by_name($name) {
-                $func(item, $loader, &mut mod_info)?;
+                if let Err(err) = $func(item, $loader, &mut mod_info) {
+                    mml_log::error_type(err);
+                }
             }
         };
     }
@@ -805,21 +861,25 @@ fn parse_mod_archive(archive: &mut ZipArchive<impl Read + Seek>) -> CoreResult<M
         LoaderType::NeoForge
     );
 
-    // 读取 fabric.mod.json
-    if let Ok(item) = archive.by_name(names::FABRIC_MOD_FILE) {
-        read_fabric_json(item, &mut mod_info)?;
+    // 读取 fabric.mod.json / quilt.mod.json
+    // 同样是"坏了只跳过它自己"（见上面 mods.toml 的说明）
+    if let Ok(item) = archive.by_name(names::FABRIC_MOD_FILE)
+        && let Err(err) = read_fabric_json(item, &mut mod_info)
+    {
+        mml_log::error_type(err);
     }
 
-    // 读取 quilt.mod.json
-    if let Ok(item) = archive.by_name(names::QUILT_MOD_FILE) {
-        read_quilt_json(item, &mut mod_info)?;
+    if let Ok(item) = archive.by_name(names::QUILT_MOD_FILE)
+        && let Err(err) = read_quilt_json(item, &mut mod_info)
+    {
+        mml_log::error_type(err);
     }
 
     // 扫描coremod
     read_core_mod(archive, &mut mod_info)?;
 
-    // 扫描jar-in-jar
-    read_jar_in_jar(archive, &mut mod_info)?;
+    // 扫描jar-in-jar（会递归：内置 jar 里还能再套内置 jar）
+    read_jar_in_jar(archive, &mut mod_info, base)?;
 
     // 读图标（放在最后：此时 info 里的条目已经齐了，图标挂在第一条上）
     read_mod_icon(archive, &mut mod_info);
@@ -1021,6 +1081,125 @@ fn mcmod_logo_file_in(json: &str) -> Option<String> {
     None
 }
 
+/// 模块里某类文件的解析结果不该影响整包
+///
+/// 真实案例：`mekanism_lasers-1.1.10.3-a.jar` 里有**两个** toml，其中一个非法
+/// （打字 / 手改留下的坏文件）。旧实现里 `try_read_file!` 用 `?` 把错误抛出去，
+/// 于是**整包判定为"读取失败"**、界面上连名字都看不到 —— 而另一个 toml 其实是好的。
+/// 正确行为：坏的那个跳过（记一条日志），好的照常读出来。
+#[cfg(test)]
+mod meta_tests {
+    use super::*;
+    use std::io::Write;
+    use zip::write::SimpleFileOptions;
+    use zip::ZipWriter;
+
+    /// 起日志系统：解析失败时我们**故意**要记一条日志，而 `mml_log` 没 start 过就会 panic
+    ///
+    /// （`SEM.get().unwrap()` 在 `error_type` 里）—— 那是"日志系统还没起来"的前提问题，
+    /// 不是被测逻辑的问题。
+    ///
+    /// **走 crate 级的共用 boot**（见 [`crate::test_support::boot`]）：`mml_log::STREAM`
+    /// 是 `OnceLock`，各测试模块自己再写一份就会第二次 `start()` → panic
+    /// （这正是本模块与 `game_group::tests` 曾经互相踩挂的原因）。
+    fn boot_log() {
+        crate::test_support::boot();
+    }
+
+    /// 造一个只含指定条目的 jar
+    fn make_jar(entries: &[(&str, &str)]) -> PathBuf {
+        boot_log();
+        let path = mml_testutil::temp_dir().join(format!("mml-mod-{}.jar", Uuid::new_v4()));
+        let file = std::fs::File::create(&path).unwrap();
+        let mut writer = ZipWriter::new(file);
+        let options = SimpleFileOptions::default();
+        for (name, body) in entries {
+            writer.start_file(*name, options).unwrap();
+            writer.write_all(body.as_bytes()).unwrap();
+        }
+        writer.finish().unwrap();
+        path
+    }
+
+    /// 两个 toml、其中一个非法：整包仍应读出**合法那个**的信息，而不是判失败
+    ///
+    /// 两个路径都必须是**会被扫描的**那三个之一（`META-INF/mods.toml` /
+    /// `META-INF/neoforge.mods.toml` / `neoforge.mods.toml`）——
+    /// 放在别处的 toml 根本不进解析，拿它当样本是测不出问题的。
+    #[test]
+    fn broken_toml_does_not_fail_whole_jar() {
+        let path = make_jar(&[
+            (
+                names::NEO_TOML_FILE,
+                "modLoader=\"javafml\"\nloaderVersion=\"[1,)\"\nlicense=\"MIT\"\n\
+                 [[mods]]\nmodId=\"mekanism_lasers\"\ndisplayName=\"Mekanism Lasers\"\nversion=\"1.1.10.3\"\n",
+            ),
+            // 非法：`[[mods]` 少一个方括号（toml 语法错误）。
+            // 用**根目录的 neoforge.mods.toml**（第三个扫描路径）——
+            // 这正是"一个包里有两个 toml、坏的那个把整包带崩"的真实形态
+            (names::NEO_TOML1_FILE, "[[mods]\nmodId=\"whatever\"\n"),
+        ]);
+
+        let info = read_mod_info(&path).expect("坏 toml 不该让整包解析失败");
+        assert!(!info.fail, "不该被判为读取失败");
+        let first = info.info.first().expect("应读出合法 toml 的条目");
+        assert_eq!(first.mod_id, "mekanism_lasers");
+        assert_eq!(first.name, "Mekanism Lasers");
+        assert_eq!(first.version.as_deref(), Some("1.1.10.3"));
+    }
+
+    /// 只有非法 toml：当作"读不出元数据"，但不 panic、也不报错
+    #[test]
+    fn only_broken_toml_yields_empty_info() {
+        let path = make_jar(&[(names::MC_MOD_TOML_FILE, "[[mods]\n")]);
+
+        let info = read_mod_info(&path).expect("坏 toml 不该让整包解析失败");
+        assert!(info.info.is_empty(), "解析不出条目时 info 应为空");
+    }
+
+    /// MANIFEST.MF 里**没有** core mod 标记时，不该多出一条空 info
+    ///
+    /// `META-INF/MANIFEST.MF` 几乎每个 jar 都有，而 `read_core_mod` 以前无条件 push 一条
+    /// info —— 那条的加载器是枚举默认值 `Normal`。界面改成"汇总**所有**条目的加载器"之后，
+    /// **每个模组都会多出一个「原版」**（用户反馈"为什么会有个原版"）。
+    #[test]
+    fn manifest_without_core_marker_adds_no_info() {
+        let path = make_jar(&[
+            (
+                names::FABRIC_MOD_FILE,
+                r#"{"id":"demo","name":"Demo","version":"1.0"}"#,
+            ),
+            (
+                "META-INF/MANIFEST.MF",
+                "Manifest-Version: 1.0\nCreated-By: Gradle\n",
+            ),
+        ]);
+
+        let info = read_mod_info(&path).expect("应能解析");
+        assert_eq!(info.info.len(), 1, "只该有 fabric 那一条，不该多出空条目");
+        assert_eq!(
+            info.info[0].loaders.to_string(),
+            "fabric",
+            "不该是默认的 normal"
+        );
+        assert!(!info.core, "没有 core mod 标记就不该判成 core");
+    }
+
+    /// 真的带 core mod 标记时，那条 info 仍要保留（别把功能一起改掉）
+    #[test]
+    fn manifest_with_core_marker_keeps_info() {
+        let path = make_jar(&[(
+            "META-INF/MANIFEST.MF",
+            "Manifest-Version: 1.0\nFMLCorePlugin: com.example.CorePlugin\n",
+        )]);
+
+        let info = read_mod_info(&path).expect("应能解析");
+        assert!(info.core, "有 FMLCorePlugin 就该判成 core");
+        let first = info.info.first().expect("core mod 的 info 不该被丢掉");
+        assert_eq!(first.loaders.to_string(), "forge");
+    }
+}
+
 /// 读取模组信息
 ///
 /// # 参数
@@ -1039,7 +1218,9 @@ pub fn read_mod_info<P: AsRef<Path>>(path: P) -> CoreResult<ModObj> {
         })
     })?;
 
-    let mut mod_info = parse_mod_archive(&mut zip)?;
+    // base 传文件路径本身：内置 jar 的路径链就是"文件路径/父条目名/子条目名"，
+    // 这样不同模组里的同名内置 jar 也能区分开
+    let mut mod_info = parse_mod_archive(&mut zip, path.as_ref())?;
     mod_info.file = path.as_ref().to_path_buf();
 
     // 从注解扫描 side（仅文件类模组可用）
@@ -1098,7 +1279,10 @@ const MOD_UUID_NAMESPACE: Uuid = Uuid::from_u128(0x9d1a_2f3e_4c5b_6a70_8192_a3b4
 /// # 返回值
 ///
 /// 返回模组的稳定标识
-fn gen_mod_uuid(path: &Path) -> Uuid {
+///
+/// **注意文件名一变 uuid 就变**（它是路径的哈希）：启用 / 禁用只是给文件名加减后缀，
+/// 所以那两个操作之后 uuid 会变成另一个值 —— 需要同步身份的地方都靠这个函数重算。
+pub fn gen_mod_uuid(path: &Path) -> Uuid {
     Uuid::new_v5(&MOD_UUID_NAMESPACE, path.to_string_lossy().as_bytes())
 }
 
@@ -1187,8 +1371,9 @@ where
 ///
 /// # 返回值
 ///
-/// 成功返回 `Ok(())`；重命名失败返回对应错误
-pub fn add_disable_suffix(path: &Path) -> CoreResult<()> {
+/// 成功返回**改名后的新路径**（调用方要拿它更新身份 —— 模组的 uuid 是路径的 v5，
+/// 文件名一变 uuid 就变）；重命名失败返回对应错误
+pub fn add_disable_suffix(path: &Path) -> CoreResult<PathBuf> {
     let file_name = path
         .file_name()
         .ok_or_else(|| ErrorType::InvalidOperation)?;
@@ -1197,7 +1382,8 @@ pub fn add_disable_suffix(path: &Path) -> CoreResult<()> {
     new_name.push(names::DISABLE_DOT_EXT);
     let new_path = path.with_file_name(new_name);
 
-    path_helper::move_file(path, &new_path)
+    path_helper::move_file(path, &new_path)?;
+    Ok(new_path)
 }
 
 /// 移除文件的禁用后缀
@@ -1208,8 +1394,9 @@ pub fn add_disable_suffix(path: &Path) -> CoreResult<()> {
 ///
 /// # 返回值
 ///
-/// 成功返回 `Ok(())`；重命名失败返回对应错误（无后缀时无操作）
-pub fn remove_disable_suffix(path: &Path) -> CoreResult<()> {
+/// 成功返回**改名后的新路径**（无后缀时原样返回，什么都没改）；
+/// 重命名失败返回对应错误
+pub fn remove_disable_suffix(path: &Path) -> CoreResult<PathBuf> {
     let file_name = path
         .file_name()
         .ok_or_else(|| ErrorType::InvalidOperation)?;
@@ -1220,14 +1407,14 @@ pub fn remove_disable_suffix(path: &Path) -> CoreResult<()> {
 
     if let Some(stripped) = name_str.strip_suffix(names::DISABLE_DOT_EXT) {
         let new_path = path.with_file_name(stripped);
-        path_helper::move_file(path, &new_path)
+        path_helper::move_file(path, &new_path)?;
+        Ok(new_path)
+    } else if let Some(stripped) = name_str.strip_suffix(names::DISABLED_DOT_EXT) {
+        let new_path = path.with_file_name(stripped);
+        path_helper::move_file(path, &new_path)?;
+        Ok(new_path)
     } else {
-        if let Some(stripped) = name_str.strip_suffix(names::DISABLED_DOT_EXT) {
-            let new_path = path.with_file_name(stripped);
-            path_helper::move_file(path, &new_path)
-        } else {
-            Ok(())
-        }
+        Ok(path.to_path_buf())
     }
 }
 
@@ -1245,8 +1432,9 @@ impl ModObj {
     ///
     /// # 返回值
     ///
-    /// 成功返回 `Ok(())`；已禁用、文件不存在或重命名失败返回对应错误
-    pub fn disable(&self) -> CoreResult<()> {
+    /// 成功返回**改名后的新路径**（前端要拿它更新那一行的 uuid / 文件名 / 路径）；
+    /// 已禁用、文件不存在或重命名失败返回对应错误
+    pub fn disable(&self) -> CoreResult<PathBuf> {
         if self.disable || !self.file.exists() {
             return Err(ErrorType::InvalidOperation);
         }
@@ -1258,8 +1446,8 @@ impl ModObj {
     ///
     /// # 返回值
     ///
-    /// 成功返回 `Ok(())`；未禁用、文件不存在或重命名失败返回对应错误
-    pub fn enable(&self) -> CoreResult<()> {
+    /// 成功返回**改名后的新路径**（同上）；未禁用、文件不存在或重命名失败返回对应错误
+    pub fn enable(&self) -> CoreResult<PathBuf> {
         if !self.disable || !self.file.exists() {
             return Err(ErrorType::InvalidOperation);
         }

@@ -528,7 +528,7 @@ mod tests {
     /// 初始化全局依赖（配置系统 + 后台保存线程），返回运行根目录
     fn ensure_env() -> PathBuf {
         INIT.call_once(|| {
-            let dir = std::env::temp_dir().join(format!("mml-jvms-unit-{}", std::process::id()));
+            let dir = mml_testutil::temp_dir().join(format!("mml-jvms-unit-{}", std::process::id()));
             let _ = std::fs::remove_dir_all(&dir);
             std::fs::create_dir_all(&dir).unwrap();
 

@@ -12,7 +12,7 @@ use mml_net::{url_helper, urls};
 /// 初始化全局配置到临时目录，返回目录路径供测后清理
 /// （与其它测试文件互不冲突：每个测试二进制独立进程）。
 fn init_config() -> std::path::PathBuf {
-    let dir = std::env::temp_dir().join(format!(
+    let dir = mml_testutil::temp_dir().join(format!(
         "mml-net-source-switch-test-{}",
         std::process::id()
     ));

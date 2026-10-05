@@ -190,6 +190,7 @@ const emit = defineEmits<{
   word-break: break-all;
   max-height: 180px;
   overflow-y: auto;
+  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
 }
 
 .boot-error-btn {

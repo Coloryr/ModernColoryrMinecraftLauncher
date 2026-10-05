@@ -28,7 +28,7 @@ static LOG_STARTED: OnceLock<()> = OnceLock::new();
 
 fn ensure_log() {
     LOG_STARTED.get_or_init(|| {
-        let dir = std::env::temp_dir().join(format!("mml_ipc_test_{}", std::process::id()));
+        let dir = mml_testutil::temp_dir().join(format!("mml_ipc_test_{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         mml_log::start(dir);
     });

@@ -6,3 +6,6 @@ edition = "2024"
 [dependencies]
 uuid.workspace = true
 serde.workspace = true
+
+[dev-dependencies]
+mml-testutil = { path = "../mml-testutil" }

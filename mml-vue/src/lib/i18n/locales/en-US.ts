@@ -13,6 +13,8 @@ export default {
   "mode.list": "List",
 
   // Groups / list
+  // Shared UI text used across windows
+  "common.imagePreviewHint": "Scroll to zoom · drag to pan when zoomed",
   "group.default": "Default",
   "group.add": "Add",
   "group.collapse": "Collapse / expand group",
@@ -269,6 +271,8 @@ export default {
   "resource.modDesc": "Description",
   "resource.modActions": "Actions",
   "resource.modBuiltin": "Bundled",
+  // Bundled library (a nested jar with no mod metadata, e.g. asm / mixinextras)
+  "resource.modLibrary": "Library",
   "resource.modBuiltinExpand": "Show bundled mods",
   "resource.modBuiltinCollapse": "Hide bundled mods",
   // Table columns (order matches ModTable's COLUMNS)
@@ -315,7 +319,14 @@ export default {
   "resource.groupName": "Group name",
   "resource.groupPlaceholder": "Enter a group name",
   "resource.groupNone": "Ungrouped",
-  "resource.groupEmptyHint": "This group is empty — drag mods onto it",
+  // Empty state when no custom groups exist yet (not the same as "Ungrouped" above)
+  "resource.groupNoGroups": "No groups",
+  "resource.groupEmptyHint": "This group has no mods — drag mods onto it",
+  // Right-click multi-select + batch actions in the header
+  "resource.selectedCount": "{n} selected",
+  "resource.clearSelection": "Clear selection",
+  "resource.batchMoveTo": "Move to group",
+  "resource.batchDeleteConfirm": "Delete the {n} selected mods? They go to the recycle bin.",
   "resource.groupCounts": "{n} items · {on} enabled · {off} disabled",
   "resource.groupCountItems": "{n} items",
   "resource.groupCollapse": "Collapse / expand",
@@ -340,13 +351,16 @@ export default {
   "resource.modFail": "Failed to read",
   "resource.modCore": "Core",
   "resource.modNote": "Note",
-  "resource.modNotePrefix": "Note: ",
   "resource.modNoteTitle": "Mod note",
   "resource.modNotePlaceholder": "Your own note — why it is installed, whether it needs an update…",
   "resource.modNoteClear": "Clear note",
-  "resource.modNoteHint": "Notes live in the instance's guisetting.json and are shared with ColorMC; enabling or disabling does not affect them.",
   "resource.backup": "Backup",
   "resource.backupOk": "Backed up: {name}",
+  "resource.backupCount": "{n} backups",
+  "resource.backupNone": "This world has no backups yet",
+  "resource.restore": "Restore",
+  "resource.restorePickTitle": "Pick a backup to restore",
+  "resource.restoreConfirm": "Overwrite \"{name}\" with this backup? The current world goes to the recycle bin first.",
   "resource.clear": "Clear all",
   "resource.clearConfirm": "Clear all screenshots? They will be moved to the recycle bin.",
   "resource.lastPlayed": "Last played: {time}",
@@ -1089,7 +1103,6 @@ export default {
   "modpack.summary": "Summary",
   "modpack.download": "Download",
   "modpack.back": "Back",
-  "modpack.previewHint": "Scroll to zoom · drag to pan when zoomed",
   "modpack.groupPlaceholder": "Game Group",
   "modpack.star": "Star",
   "modpack.unstar": "Unstar",

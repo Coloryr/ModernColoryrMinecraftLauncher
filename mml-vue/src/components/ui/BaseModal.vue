@@ -86,6 +86,7 @@ const active = usePageActive();
   max-width: 92vw;
   max-height: 85vh;
   overflow-y: auto;
+  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 14px;

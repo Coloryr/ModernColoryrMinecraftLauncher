@@ -84,6 +84,7 @@ function pick(name: string) {
   z-index: 20;
   max-height: 180px;
   overflow-y: auto;
+  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
   padding: 4px;
   background: var(--bg-card);
   border: 1px solid var(--border);

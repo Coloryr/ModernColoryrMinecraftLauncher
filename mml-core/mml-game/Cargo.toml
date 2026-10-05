@@ -35,3 +35,6 @@ toml.workspace = true
 if-addrs.workspace = true
 socket2.workspace = true
 hickory-resolver.workspace = true
+
+[dev-dependencies]
+mml-testutil = { path = "../mml-testutil" }

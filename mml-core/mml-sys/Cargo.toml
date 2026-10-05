@@ -16,3 +16,6 @@ dbus.workspace = true
 [target.'cfg(windows)'.dependencies]
 windows.workspace = true
 winreg.workspace = true
+
+[dev-dependencies]
+mml-testutil = { path = "../mml-testutil" }

@@ -42,6 +42,7 @@ const emit = defineEmits<{ (e: "pick", id: string): void }>();
   flex-direction: column;
   gap: 2px;
   overflow-y: auto;
+  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
   /* 上下留白跟着窗口内容区的原内边距（22px）走，且放进滚动内容里：
      空档只在滚到两端时出现，分类栏的滚动条轨道保持整条 */
   padding: 22px 2px 22px 0;

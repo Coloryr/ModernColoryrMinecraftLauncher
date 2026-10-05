@@ -10,3 +10,5 @@ mml-base = { path = "../mml-base" }
 mml-sys = { path = "../mml-sys" }
 tokio.workspace = true
 
+[dev-dependencies]
+mml-testutil = { path = "../mml-testutil" }

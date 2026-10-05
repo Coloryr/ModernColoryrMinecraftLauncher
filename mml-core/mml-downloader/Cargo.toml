@@ -20,3 +20,6 @@ serde_repr.workspace = true
 zip.workspace = true
 semka.workspace = true
 uuid.workspace = true
+
+[dev-dependencies]
+mml-testutil = { path = "../mml-testutil" }

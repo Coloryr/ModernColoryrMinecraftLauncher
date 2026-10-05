@@ -3,7 +3,7 @@
 //! 覆盖 Zip / 7z / Tar / TarGz / TarXz 的压缩-解压往返、
 //! [`BaseArchive`] 的打开/读取/提取/追加，以及排除与剥离目录等场景。
 //!
-//! 全部使用 `std::env::temp_dir()` 下按进程 id + UUID 命名的唯一临时目录，
+//! 全部使用仓库 `target/temp` 下按进程 id + UUID 命名的唯一临时目录，
 //! 测试结束自动清理，不依赖网络与固定路径。
 
 use std::{
@@ -23,7 +23,7 @@ use mml_sys::path_helper;
 
 /// 在临时目录下创建本轮测试唯一根目录
 fn make_test_root() -> PathBuf {
-    let dir = std::env::temp_dir().join(format!(
+    let dir = mml_testutil::temp_dir().join(format!(
         "mml_base_archives_test_{}_{}",
         std::process::id(),
         uuid::Uuid::new_v4().simple()
