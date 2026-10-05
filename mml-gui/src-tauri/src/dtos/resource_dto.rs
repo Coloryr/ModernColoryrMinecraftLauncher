@@ -18,6 +18,11 @@ pub struct ModItemDto {
     pub sha1: String,
     /// mods 目录下的文件名（显示与打开文件夹定位用）
     pub file: String,
+    /// 相对实例的路径（如 `.minecraft\mods\sodium.jar`）
+    ///
+    /// 比文件名多一点定位信息、又不像绝对路径那样长到看不完；
+    /// 内置模组（jar-in-jar）没有独立文件，为空串。
+    pub path: String,
     /// 是否被禁用
     pub disable: bool,
     /// 是否读取失败（元数据解析出错）
@@ -34,6 +39,23 @@ pub struct ModItemDto {
     pub author: String,
     /// 描述
     pub description: String,
+    /// 支持的加载器（`LoaderType::to_string()`：forge / fabric / quilt / neoforge / …）
+    pub loader: String,
+    /// 加载侧（`LoadSideType` 小写：client / server / both / unknown）
+    pub side: String,
+    /// 网页链接（元数据里的 url，可能为空）
+    pub url: String,
+    /// 下载源（`get_source_type(pid, fid)`：curseforge / modrinth；不是从平台下的为空串）
+    pub source: String,
+    /// 项目编号（来自实例的 `online_info.json`，按 SHA1 关联；空串 = 不是从平台下的）
+    pub project_id: String,
+    /// 文件编号（同上）
+    pub file_id: String,
+    /// 用户写的备注（`guisetting.json` 的 `Mod.ModName`，没有则为空串）
+    ///
+    /// 键按**去掉禁用后缀的文件名**归一（见 `resource.rs::mod_note_key`）：
+    /// 启用 / 禁用只给文件名加减 `.disabled`，不归一的话一禁用备注就丢了。
+    pub note: String,
     /// 图标 data URL（无图标为空串）
     pub icon: String,
     /// 内置模组（jar-in-jar / jarjar，递归）
@@ -42,13 +64,43 @@ pub struct ModItemDto {
     pub jar_in_jar: Vec<ModItemDto>,
 }
 
-/// 模组自定义分组（存在实例的 `guisetting.json` 里，与 ColorMC 互通）
+/// 模组扫描进度（事件 `resource-list-mods-progress` 的负载）
+///
+/// 解析一个 jar 要读元数据 / 图标 / 扫 class，几百个包要好几秒 ——
+/// 界面靠它显示 `x/x`，否则用户面对空列表不知道是在跑还是卡住了。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModScanProgressDto {
+    /// 已完成的文件数
+    pub done: usize,
+    /// 需要处理的文件总数
+    pub total: usize,
+}
+
+/// 资源窗口的视图偏好（存在**实例**的 `guisetting.json` 里，跟着实例走）
+///
+/// 与 `gui_config.json` 那份全局界面状态分开：这一份是"这个实例我习惯怎么看"，
+/// 换个实例就该换一套（见 `gui_setting::GameViewSettingObj`）。
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ResourceViewDto {
+    /// 左侧分类的显示顺序（分类 id 字符串；空数组 = 没存过，前端补默认顺序）
+    pub order: Vec<String>,
+    /// 上次打开的类别（空串 = 没记过）
+    pub category: String,
+    /// 模组的展示方式：list / table / tree（空串 = 没记过）
+    pub mod_view: String,
+}
+
+/// 模组自定义分组（存在实例的 `guisetting.json` 的 `Mod.Groups` 里）
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModGroupDto {
-    /// 分组名
+    /// 分组 uuid（**稳定标识**：改名不影响它，也是顺序 / 折叠状态用的键）
+    pub uuid: String,
+    /// 分组名（用户可见，可改）
     pub name: String,
-    /// 组内模组的 **SHA1** 列表（有序：下发前排过序，`Groups` 本身是无序集合）
+    /// 组内模组的 **SHA1** 列表（有序：下发前排过序，底层是无序集合）
     pub mods: Vec<String>,
 }
 

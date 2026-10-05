@@ -35,12 +35,25 @@ import "./resource.css";
 // 第二遍时 currentKind 已经回到 main，于是"返回"变成退出应用
 defineEmits<{ (e: "close"): void }>();
 
-/** 视图偏好（分类顺序 / 上次打开的类别）：先建，好把上次的类别喂给数据层当初始值 */
-const view = useResourceView();
-const data = useResourceData(view.initialCategory);
+/**
+ * 视图偏好（分类顺序 / 上次打开的类别 / 模组展示方式）
+ *
+ * 存在**实例**的 `guisetting.json` 里，所以要先有实例才能读 —— 数据层建好之后
+ * 把"读偏好"挂成它的实例就绪回调（见 useResourceData 的 setInstanceReadyHook），
+ * 在它拉列表**之前**跑，第一次就按记住的顺序与类别显示。
+ */
+const data = useResourceData();
+const view = useResourceView(data);
 const ops = useResourceOps(data);
 const { category, saveTab, instance, sync } = data;
 const { confirmBox } = ops;
+const { load: loadView } = view;
+
+data.setInstanceReadyHook(async () => {
+  await loadView();
+  // 读回来的"上次类别"要落到当前选择上（数据层的 watch 会跟着拉对应列表）
+  category.value = view.initialCategory.value;
+});
 
 // 记住这次看的是哪一类：下次打开直接停在这儿
 watch(category, (id) => view.rememberCategory(id));

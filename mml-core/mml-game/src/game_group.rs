@@ -16,7 +16,8 @@
 //! }
 //! ```
 //! 四列各管一件事：
-//! - `group_order` — 分组 uuid 的显示顺序（默认分组恒在首位，不进这一列）
+//! - `group_order` — 分组 uuid 的显示顺序（**含默认分组**：它只是初始排首位，
+//!   之后可以和别的分组一样换位置）
 //! - `names` — 分组 uuid → 组名（**显示数据**；空白名字就是默认分组）
 //! - `groups` — 分组 uuid → 组内实例（**只表达归属**，先后一律看 `order`）
 //! - `order` — 实例 uuid → 组内次序
@@ -59,7 +60,11 @@ pub struct GroupInfoObj {
 /// 所以 `Default`（空表）与 `Serialize` / `Deserialize`（文件）都落在本类型上。
 #[derive(Debug, Default, Serialize, Deserialize)]
 struct GroupStore {
-    /// 非默认分组的显示顺序（分组 uuid；默认分组恒在首位，不在这个列表里）
+    /// 分组的显示顺序（分组 uuid，**含默认分组**）
+    ///
+    /// 默认分组只是**初始排在首位**（见 `normalize`：顺序表里没有它时补在最前），
+    /// 之后用户可以把它拖到任意位置 —— 它的特殊之处是"未分组"这个身份
+    /// （固定 uuid + 空白名字），不是"位置固定"。
     #[serde(default)]
     group_order: Vec<String>,
     /// 分组 uuid → 组名
@@ -97,15 +102,26 @@ impl GroupStore {
             self.groups.entry(key).or_default();
         }
 
-        // 分组顺序：默认分组不进这一列；不存在的名字丢掉，存在但漏掉的补在末尾
-        let mut next: Vec<String> = Vec::with_capacity(self.names.len());
+        // 分组顺序：默认分组**初始排首位**（顺序表里没有它时补在最前，已有则尊重用户排的位置）；
+        // 不存在的名字丢掉，存在但漏掉的补在末尾
+        let mut next: Vec<String> = Vec::with_capacity(self.names.len() + 1);
+        let mut has_default = false;
         for key in &self.group_order {
-            if key != &default && self.names.contains_key(key) && !next.contains(key) {
-                next.push(key.clone());
+            if !self.names.contains_key(key) || next.contains(key) {
+                continue;
             }
+            if key == &default {
+                has_default = true;
+            }
+            next.push(key.clone());
+        }
+        if !has_default {
+            // 老文件（默认分组不在顺序表里）：补到最前 —— 这正是"默认初始位置"，
+            // 用户之后拖到哪儿就存哪儿，下次读出来 has_default 为真、不再挪
+            next.insert(0, default.clone());
         }
         for key in self.names.keys() {
-            if key != &default && !next.contains(key) {
+            if !next.contains(key) {
                 next.push(key.clone());
             }
         }
@@ -150,19 +166,21 @@ impl GroupStore {
             .unwrap_or(i32::MAX)
     }
 
-    /// 全部分组 uuid（默认分组恒在首位）
+    /// 全部分组 uuid（顺序 = `group_order`，默认分组只是初始排在首位）
     fn keys(&self) -> Vec<Uuid> {
         let mut list = Vec::with_capacity(self.group_order.len() + 1);
-        list.push(DEFAULT_GROUP_UUID);
         for key in &self.group_order {
             if let Ok(uuid) = Uuid::parse_str(key)
-                && uuid != DEFAULT_GROUP_UUID
                 && !list.contains(&uuid)
             {
                 list.push(uuid);
             }
         }
-        // 兜底：表里有、顺序表里没有的分组也得能被看到。
+        // 兜底一：默认分组必须始终可见（老文件 / 手改过的文件可能没记它）
+        if !list.contains(&DEFAULT_GROUP_UUID) {
+            list.insert(0, DEFAULT_GROUP_UUID);
+        }
+        // 兜底二：表里有、顺序表里没有的分组也得能被看到。
         // 正常路径（init 的 normalize / new_group）不会出现这种状态，这里只是别让它悄悄消失
         for key in self.names.keys() {
             if let Ok(uuid) = Uuid::parse_str(key)
@@ -306,15 +324,19 @@ impl GroupStore {
         self.groups.insert(group.to_string(), items);
     }
 
-    /// 按给定顺序重排分组（默认分组恒在首位，不参与排序）
+    /// 按给定顺序重排分组
     ///
+    /// 默认分组**不特殊对待**：它只是初始排在首位，之后可以和别的分组一样换位置。
     /// 传进来的 uuid 里不存在的忽略；表里存在但没提到的保持原相对顺序、排在后面。
     fn reorder_groups(&mut self, order: &[Uuid]) {
         let mut next: Vec<String> = Vec::with_capacity(self.group_order.len());
+        let default = DEFAULT_GROUP_UUID.to_string();
 
         for uuid in order {
             let key = uuid.to_string();
-            if *uuid != DEFAULT_GROUP_UUID && self.names.contains_key(&key) && !next.contains(&key) {
+            // 默认分组恒是合法成员（names 里一定有它，但别依赖这一点 —— 直接放行，
+            // 否则一个没跑过 normalize 的 store 会把它悄悄丢掉）
+            if (self.names.contains_key(&key) || key == default) && !next.contains(&key) {
                 next.push(key);
             }
         }
@@ -606,7 +628,7 @@ pub fn prune(alive: &[Uuid]) {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::Once;
+    use std::sync::{Mutex, Once};
     use std::time::{Duration, Instant};
 
     use super::*;
@@ -678,7 +700,7 @@ mod tests {
         store.normalize();
 
         let keys = store.keys();
-        assert_eq!(keys[0], DEFAULT_GROUP_UUID, "默认分组恒在首位");
+        assert_eq!(keys[0], DEFAULT_GROUP_UUID, "顺序表里没记默认分组时，补在最前（初始位置）");
         assert_eq!(keys[1], pack);
         assert_eq!(keys[2], test);
         assert_eq!(store.groups[&pack.to_string()], vec![b, a], "组内数组应排成次序");
@@ -688,9 +710,12 @@ mod tests {
         assert!(!store.order.contains_key(&dead.to_string()), "悬空次序应清掉");
     }
 
-    /// 重排：默认分组恒在首位；提到的不存在的组忽略；未提到的组保持在后
+    /// 重排：传入的顺序生效（默认分组不特殊对待）；不存在 / 没提到的按原相对顺序排在后面
     #[test]
-    fn reorder_groups_keeps_default_first() {
+    /// 重排：传入的顺序生效，没提到的组保持原相对顺序排在后面；
+    /// 默认分组不在传入列表里时补到**最前**（"默认初始位置"）
+    #[test]
+    fn reorder_groups_applies_order() {
         let a = Uuid::new_v4();
         let b = Uuid::new_v4();
         let c = Uuid::new_v4();
@@ -702,9 +727,13 @@ mod tests {
             store.group_order.push(uuid.to_string());
         }
 
+        // 默认分组不在 store.group_order 里（老数据形态）→ 补到最前
         store.reorder_groups(&[c, Uuid::new_v4(), a]);
-
         assert_eq!(store.keys(), vec![DEFAULT_GROUP_UUID, c, a, b]);
+
+        // 一旦用户把它排到别处，就照用户的来（本次改动之前它会一直被钉在首位）
+        store.reorder_groups(&[c, DEFAULT_GROUP_UUID, a]);
+        assert_eq!(store.keys(), vec![c, DEFAULT_GROUP_UUID, a, b]);
     }
 
     /// 跨组移动必须从原组摘掉，并在目标组末尾拿到次序
@@ -760,15 +789,21 @@ mod tests {
         assert_eq!(store.position_of(&uuid), Some(0));
     }
 
-    /// 落盘 → 读回：分组顺序与组内次序都必须真的写进文件、重启后还在
+    /// 落盘 / 读盘类用例的**串行锁**
     ///
-    /// 覆盖"拖完看着对了、重启就乱"的完整链路 —— 只断言内存里的顺序是抓不到这类问题的。
-    #[test]
-    fn orders_survive_save_and_reload() {
-        // 与 mml_core::init 相同的初始化链：异步保存线程必须先起来
+    /// `STORE` 与 `GROUP_FILE` 是进程级单例，而 cargo 默认并行跑用例 ——
+    /// 两个用例各 `init` 一次同一个目录，会互相把对方的分组表覆盖掉
+    /// （表现为随机失败，单独跑就过）。凡是碰磁盘状态的用例都先拿这把锁。
+    static DISK_LOCK: Mutex<()> = Mutex::new(());
+
+    /// 建地基：与 `mml_core::init` 相同的初始化链（异步保存线程必须先起来）
+    ///
+    /// 用 `Once` 保证只跑一次 —— 这些是进程级单例，多个用例各 init 一次会互踩。
+    /// 需要落盘 / 读盘的用例都先调它。
+    fn boot() -> std::path::PathBuf {
         static INIT: Once = Once::new();
+        let run = std::env::temp_dir().join(format!("mml-group-test-{}", std::process::id()));
         INIT.call_once(|| {
-            let run = std::env::temp_dir().join(format!("mml-group-test-{}", std::process::id()));
             let _ = std::fs::remove_dir_all(&run);
             std::fs::create_dir_all(&run).unwrap();
 
@@ -778,6 +813,16 @@ mod tests {
             mml_config::init(mml_base::get_base_dir()).unwrap();
             mml_config::config_save::start();
         });
+        run
+    }
+
+    /// 落盘 → 读回：分组顺序与组内次序都必须真的写进文件、重启后还在
+    ///
+    /// 覆盖"拖完看着对了、重启就乱"的完整链路 —— 只断言内存里的顺序是抓不到这类问题的。
+    #[test]
+    fn orders_survive_save_and_reload() {
+        let _guard = DISK_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        boot();
 
         let dir = std::env::temp_dir().join(format!("mml-group-store-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
@@ -786,8 +831,9 @@ mod tests {
         init(dir.clone()).unwrap();
         let first = add_group("甲组").expect("建组失败");
         let second = add_group("乙组").expect("建组失败");
-        // 乙组拖到默认分组之后（非默认组的第一位）
-        reorder_groups(&[second, first]);
+        // 乙组拖到默认分组之后（非默认组的第一位）。
+        // 顺序表**含默认分组**：把它一起传进去，它才不会被甩到末尾
+        reorder_groups(&[DEFAULT_GROUP_UUID, second, first]);
 
         // 两个实例进乙组，再把 a 挪到 b 前面
         let a = Uuid::new_v4();
@@ -797,9 +843,14 @@ mod tests {
 
         // 保存走异步线程，而且要等**内容**到位：文件可能先被前一次 save 建出来
         let file = dir.join(names::GROUP_FILE);
+        let expect_order = vec![
+            DEFAULT_GROUP_UUID.to_string(),
+            second.to_string(),
+            first.to_string(),
+        ];
         let saved = || {
             serialize_tools::json_from_file::<GroupStore>(&file).is_ok_and(|back| {
-                back.group_order == vec![second.to_string(), first.to_string()]
+                back.group_order == expect_order
                     && back.names.get(&second.to_string()) == Some(&"乙组".to_string())
                     && back.order.get(&a.to_string()) == Some(&0)
                     && back.order.get(&b.to_string()) == Some(&1)
@@ -816,12 +867,49 @@ mod tests {
         let list = group_list();
         assert_eq!(
             list.iter().map(|g| g.uuid).collect::<Vec<_>>(),
-            vec![DEFAULT_GROUP_UUID, second, first]
+            vec![DEFAULT_GROUP_UUID, second, first],
+            "顺序应原样保留（默认分组第一，但它是被**记下来**的位置，不是被钉住的）"
         );
         assert_eq!(list[1].name, "乙组");
         assert_eq!(group_items(&second), vec![a, b], "组内次序应保持 a、b");
         assert_eq!(index_of(&a), Some(0));
         assert_eq!(index_of(&b), Some(1));
         assert_eq!(group_of(&a), second);
+    }
+
+    /// 默认分组只是**初始**排首位：拖到后面应生效，且重启后保持
+    ///
+    /// 这是"默认分组拖不动"那个问题的回归测试 —— 它原先被写死在首位
+    /// （`keys()` 里无条件 push、`reorder_groups` 里跳过它）。
+    ///
+    /// **不自己 `init` 一个目录**：`STORE` / `GROUP_FILE` 是进程级单例，
+    /// 两个用例各 init 一次会互踩（并行跑时 `config_save` 还没起来就写盘 → panic）。
+    /// 所以复用上面那个用例的目录与地基，只补验"默认分组能换位置"这一条。
+    #[test]
+    fn default_group_can_be_reordered() {
+        let _guard = DISK_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        boot();
+
+        let dir = std::env::temp_dir().join(format!("mml-group-store-{}", std::process::id()));
+        // 上面那个用例已经 init 过；单独跑本用例时它可能没跑，这里补一次（幂等：同一目录）
+        init(dir.clone()).unwrap();
+
+        let custom = add_group("甲组").expect("建组失败");
+
+        // 把默认分组拖到甲组后面
+        reorder_groups(&[custom, DEFAULT_GROUP_UUID]);
+        assert_eq!(
+            group_list().iter().map(|g| g.uuid).collect::<Vec<_>>(),
+            vec![custom, DEFAULT_GROUP_UUID],
+            "默认分组应能排到后面"
+        );
+
+        // 再拖回最前，回到原状（避免影响同目录下的其它用例）
+        reorder_groups(&[DEFAULT_GROUP_UUID, custom]);
+        assert_eq!(
+            group_list().iter().map(|g| g.uuid).collect::<Vec<_>>(),
+            vec![DEFAULT_GROUP_UUID, custom],
+            "应能再拖回最前"
+        );
     }
 }

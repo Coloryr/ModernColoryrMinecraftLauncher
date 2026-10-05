@@ -3,7 +3,10 @@ use std::{
     collections::HashMap,
     io::{Cursor, Read, Seek},
     path::{Path, PathBuf},
-    sync::Mutex,
+    sync::{
+        Mutex,
+        atomic::{AtomicUsize, Ordering},
+    },
 };
 
 use mml_base::{
@@ -20,7 +23,12 @@ use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use uuid::Uuid;
 use zip::ZipArchive;
 
-use crate::{class_scan, launcher::instance_setting_obj::InstanceSettingObj, loader::LoaderType};
+use crate::{
+    class_scan,
+    gui_hook::ProgressGui,
+    launcher::instance_setting_obj::InstanceSettingObj,
+    loader::LoaderType,
+};
 
 /// 加载侧类型
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -860,8 +868,9 @@ fn read_mod_icon(archive: &mut ZipArchive<impl Read + Seek>, mod_info: &mut ModO
 
 /// 找出图标在包里的条目名（没有返回 `None`）
 ///
-/// 支持：Fabric / Quilt 的 `icon`（字符串，或 `{"64": "…png"}` 这种按尺寸分的对象）、
-/// Forge / NeoForge 的 `logoFile`。
+/// 支持：Forge / NeoForge 的 `mods.toml` `logoFile`、1.12 及更早 Forge 老包的
+/// `mcmod.info` `logoFile`、Fabric / Quilt 的 `icon`（字符串，或 `{"64": "…png"}`
+/// 这种按尺寸分的对象）。
 ///
 /// # 参数
 ///
@@ -887,6 +896,11 @@ fn find_mod_icon_path(archive: &mut ZipArchive<impl Read + Seek>) -> Option<Stri
         if let Some(path) = forge_logo_file(&text) {
             return Some(path);
         }
+    }
+
+    // 1.12 及更早的 Forge 老包：mcmod.info 的 logoFile（这类包没有 mods.toml）
+    if let Some(path) = mcmod_logo_file(archive) {
+        return Some(path);
     }
 
     // Fabric / Quilt：JSON 的 icon（quilt 在 quilt_loader.metadata.icon 下）
@@ -955,27 +969,56 @@ fn forge_logo_file(text: &str) -> Option<String> {
     None
 }
 
-#[cfg(test)]
-mod icon_tests {
-    use super::*;
+/// 从 `mcmod.info` 里取 `logoFile`（1.12 及更早的 Forge 老包）
+///
+/// # 参数
+///
+/// - `archive`: 模组压缩包
+///
+/// # 返回值
+///
+/// 返回包内条目名；没有 `mcmod.info`、读取失败或谁都没写 `logoFile` 时返回 `None`
+fn mcmod_logo_file(archive: &mut ZipArchive<impl Read + Seek>) -> Option<String> {
+    let mut file = archive.by_name(names::MC_MOD_INFO_FILE).ok()?;
+    let mut json = String::new();
+    file.read_to_string(&mut json).ok()?;
 
-    /// 模板里被注释掉的 logoFile 必须跳过（这是最常见的形态）
-    #[test]
-    fn logo_file_ignores_comments() {
-        let text = "#logoFile=\"examplemod.png\"\nmodId=\"demo\"\n";
-        assert_eq!(forge_logo_file(text), None);
+    mcmod_logo_file_in(&json)
+}
+
+/// 从 `mcmod.info` 的**文本**里取 `logoFile`（[`mcmod_logo_file`] 的纯文本部分）
+///
+/// 形态与 [`read_forge_json`] 一致：顶层是数组，或带 `modList` 数组的对象。
+/// 逐条看 `logoFile`，取第一个非空的 —— 图标是装饰性的，多条目包认第一个就够。
+///
+/// 容错也照 [`read_forge_json`] 那条路：先直接解析，失败再用 [`sanitize_mcmod_json`]
+/// 修一遍单引号 / 数组里未加引号的裸标识符。
+fn mcmod_logo_file_in(json: &str) -> Option<String> {
+    let obj = match MiniJsonObj::from_str(json) {
+        Ok(obj) => obj,
+        Err(_) => MiniJsonObj::from_str(&sanitize_mcmod_json(json)).ok()?,
+    };
+
+    let values = if obj.is_list() {
+        obj.as_list()
+    } else {
+        obj.as_object().and_then(|map| map.get_list("modList"))
+    }?;
+
+    for value in values.iter() {
+        let Some(map) = value.as_object() else {
+            continue;
+        };
+        let Some(path) = map.get_opt_string("logoFile") else {
+            continue;
+        };
+        let path = path.trim();
+        if !path.is_empty() {
+            return Some(path.to_string());
+        }
     }
 
-    /// 真写上的 logoFile 取得到，引号与行内注释都去掉
-    #[test]
-    fn logo_file_reads_value() {
-        assert_eq!(
-            forge_logo_file("modId=\"demo\"\nlogoFile=\"icon/logo.png\"\n").unwrap(),
-            "icon/logo.png"
-        );
-        assert_eq!(forge_logo_file("logoFile = 'a.png' # 图标").unwrap(), "a.png");
-        assert_eq!(forge_logo_file("  logoFile=\"b.png\"  ").unwrap(), "b.png");
-    }
+    None
 }
 
 /// 读取模组信息
@@ -1065,15 +1108,31 @@ fn gen_mod_uuid(path: &Path) -> Uuid {
 ///
 /// - `files`: 文件列表
 /// - `process_fn`: 处理的函数
+/// - `gui`: 进度回调（可选，见 [`ProgressGui`]）：每完成一个文件报一次 `(已完成, 总数)`
 ///
 /// # 返回值
 ///
 /// 返回扫描出的模组列表（读取失败的文件标记 `fail`）
-fn scan_mod_files<F>(files: Vec<PathBuf>, process_fn: F) -> Vec<ModObj>
+fn scan_mod_files<F>(files: Vec<PathBuf>, process_fn: F, gui: ProgressGui) -> Vec<ModObj>
 where
     F: Fn(&PathBuf) -> CoreResult<ModObj> + Send + Sync,
 {
     let list = Mutex::new(Vec::new());
+
+    // 总数只算**真正要处理的**（.jar / .disable / .disabled）：
+    // 目录里可能有 .txt、.DS_Store 之类，拿文件总数当中会导致进度永远到不了 x/x
+    let total = files
+        .iter()
+        .filter(|item| {
+            item.extension().is_some_and(|ext| {
+                ext.eq_ignore_ascii_case(names::JAR_EXT)
+                    || ext.eq_ignore_ascii_case(names::DISABLE_EXT)
+                    || ext.eq_ignore_ascii_case(names::DISABLED_EXT)
+            })
+        })
+        .count();
+    // 并行完成数（rayon 里各线程都会加）
+    let done = AtomicUsize::new(0);
 
     files.par_iter().for_each(|item| {
         if let Some(ext) = item.extension() {
@@ -1102,9 +1161,20 @@ where
                 entry.uuid = gen_mod_uuid(item);
 
                 list.lock().unwrap().push(entry);
+
+                if let Some(gui) = &gui {
+                    // 完成一个报一次（顺序不定，界面只关心计数）
+                    gui.set_progress_now(done.fetch_add(1, Ordering::Relaxed) + 1, Some(total));
+                }
             }
         }
     });
+
+    // 收尾对齐到 x/x：总数只统计了要处理的文件，正常已经在循环里报满；
+    // 万一过滤与实际处理有出入，这里保证进度不会停在 x-1/x
+    if let Some(gui) = &gui {
+        gui.set_progress_now(total, Some(total));
+    }
 
     list.into_inner().unwrap()
 }
@@ -1201,22 +1271,30 @@ impl ModObj {
 impl InstanceSettingObj {
     /// 扫描模组
     ///
+    /// # 参数
+    ///
+    /// - `gui`: 进度回调（可选）：每完成一个文件报一次 `(已完成, 总数)`
+    ///
     /// # 返回值
     ///
     /// 返回模组列表（仅哈希，不解析模组信息；失败文件标记 `fail`）
-    pub async fn read_mod_fast(&self) -> Vec<ModObj> {
+    pub async fn read_mod_fast(&self, gui: ProgressGui) -> Vec<ModObj> {
         let dir = self.get_mods_path();
         let files = path_helper::get_files(dir);
 
         tokio::task::spawn_blocking(move || {
-            scan_mod_files(files, |item| {
-                let hash = hash_helper::gen_hash_from_file(HashType::Sha1, item)?;
-                Ok(ModObj {
-                    hash: FileHash::Sha1(hash),
-                    file: item.clone(),
-                    ..Default::default()
-                })
-            })
+            scan_mod_files(
+                files,
+                |item| {
+                    let hash = hash_helper::gen_hash_from_file(HashType::Sha1, item)?;
+                    Ok(ModObj {
+                        hash: FileHash::Sha1(hash),
+                        file: item.clone(),
+                        ..Default::default()
+                    })
+                },
+                gui,
+            )
         })
         .await
         .unwrap_or_default()
@@ -1227,16 +1305,78 @@ impl InstanceSettingObj {
     /// # 参数
     ///
     /// - `sha256`: 是否计算SHA256
+    /// - `gui`: 进度回调（可选）：每完成一个文件报一次 `(已完成, 总数)`
     ///
     /// # 返回值
     ///
     /// 返回模组列表（含解析出的模组信息；失败文件标记 `fail`）
-    pub async fn read_mod(&self, sha256: bool) -> Vec<ModObj> {
+    pub async fn read_mod(&self, sha256: bool, gui: ProgressGui) -> Vec<ModObj> {
         let dir = self.get_mods_path();
         let files = path_helper::get_files(dir);
 
-        tokio::task::spawn_blocking(move || scan_mod_files(files, |item| read_mod(item, sha256)))
-            .await
-            .unwrap_or_default()
+        tokio::task::spawn_blocking(move || {
+            scan_mod_files(files, |item| read_mod(item, sha256), gui)
+        })
+        .await
+        .unwrap_or_default()
+    }
+}
+
+
+#[cfg(test)]
+mod icon_tests {
+    use super::*;
+
+    /// 模板里被注释掉的 logoFile 必须跳过（这是最常见的形态）
+    #[test]
+    fn logo_file_ignores_comments() {
+        let text = "#logoFile=\"examplemod.png\"\nmodId=\"demo\"\n";
+        assert_eq!(forge_logo_file(text), None);
+    }
+
+    /// 真写上的 logoFile 取得到，引号与行内注释都去掉
+    #[test]
+    fn logo_file_reads_value() {
+        assert_eq!(
+            forge_logo_file("modId=\"demo\"\nlogoFile=\"icon/logo.png\"\n").unwrap(),
+            "icon/logo.png"
+        );
+        assert_eq!(forge_logo_file("logoFile = 'a.png' # 图标").unwrap(), "a.png");
+        assert_eq!(forge_logo_file("  logoFile=\"b.png\"  ").unwrap(), "b.png");
+    }
+
+    /// mcmod.info 顶层数组形态：取第一条写了 logoFile 的
+    #[test]
+    fn mcmod_logo_file_reads_array() {
+        let json = r#"[
+            {"modid": "demo", "name": "Demo"},
+            {"modid": "other", "logoFile": "assets/logo.png"}
+        ]"#;
+        assert_eq!(mcmod_logo_file_in(json).unwrap(), "assets/logo.png");
+    }
+
+    /// 带 `modList` 的对象形态（部分老包这么写），空值跳过
+    #[test]
+    fn mcmod_logo_file_reads_mod_list() {
+        let json = r#"{"modListVersion": 2, "modList": [
+            {"modid": "demo", "logoFile": ""},
+            {"modid": "other", "logoFile": "icon.png"}
+        ]}"#;
+        assert_eq!(mcmod_logo_file_in(json).unwrap(), "icon.png");
+    }
+
+    /// 非法的单引号 JSON 也能读（走 sanitize_mcmod_json 那条容错路径）
+    #[test]
+    fn mcmod_logo_file_sanitizes_single_quotes() {
+        let json = "[{'modid': 'demo', 'logoFile': 'logo.png'}]";
+        assert_eq!(mcmod_logo_file_in(json).unwrap(), "logo.png");
+    }
+
+    /// 没写 logoFile / 结构不认识 / 文本不是 JSON 时返回 None，不 panic
+    #[test]
+    fn mcmod_logo_file_absent() {
+        assert_eq!(mcmod_logo_file_in(r#"[{"modid": "demo"}]"#), None);
+        assert_eq!(mcmod_logo_file_in("{}"), None);
+        assert_eq!(mcmod_logo_file_in("not a json"), None);
     }
 }

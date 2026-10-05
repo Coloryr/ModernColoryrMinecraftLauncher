@@ -69,15 +69,15 @@ watch(
 <template>
   <div class="inst-log" :class="{ fill: props.fill }">
     <div class="filter-bar">
-      <select v-model="threadFilter" class="filter-select" v-tip="t('launch.filterThread')">
+      <select v-model="threadFilter" class="field-select filter-select" v-tip="t('launch.filterThread')">
         <option value="">{{ t("launch.filterThread") }} · {{ t("launch.filterAll") }}</option>
         <option v-for="th in threadOptions" :key="th" :value="th">{{ th }}</option>
       </select>
-      <select v-model="levelFilter" class="filter-select" v-tip="t('launch.filterLevel')">
+      <select v-model="levelFilter" class="field-select filter-select" v-tip="t('launch.filterLevel')">
         <option value="">{{ t("launch.filterLevel") }} · {{ t("launch.filterAll") }}</option>
         <option v-for="lv in levelOptions" :key="lv" :value="lv">{{ lv }}</option>
       </select>
-      <select v-model="categoryFilter" class="filter-select" v-tip="t('launch.filterCategory')">
+      <select v-model="categoryFilter" class="field-select filter-select" v-tip="t('launch.filterCategory')">
         <option value="">{{ t("launch.filterCategory") }} · {{ t("launch.filterAll") }}</option>
         <option v-for="c in categoryOptions" :key="c" :value="c">{{ c }}</option>
       </select>

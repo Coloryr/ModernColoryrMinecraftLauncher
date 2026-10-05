@@ -11,8 +11,8 @@ use mml_net::modrinth_api::search_obj::HitObj;
 use tauri::{AppHandle, Emitter};
 
 use crate::collect_utils::{self, CollectItemObj};
-use crate::dtos::add_resource_dto::ProjectItemDto;
 use crate::dtos::CollectDataDto;
+use crate::dtos::add_resource_dto::ProjectItemDto;
 use crate::image_manager;
 use crate::listens;
 
@@ -136,7 +136,8 @@ pub fn collect_star(
 /// 收藏时图标是从列表项里顺手存下的，早期条目可能为空 —— 这种就按 下载源 + 项目 ID
 /// 去对应平台的 API 补一次；地址同样经 image_manager 转发（与列表页一致）。
 #[tauri::command]
-pub async fn collect_project_icon(source: String, pid: String) -> Result<Option<String>, String> {    match ModPackType::from_string(&source) {
+pub async fn collect_project_icon(source: String, pid: String) -> Result<Option<String>, String> {
+    match ModPackType::from_string(&source) {
         ModPackType::CurseForge => {
             let data = curseforge_api::get_mod_info(&pid)
                 .await

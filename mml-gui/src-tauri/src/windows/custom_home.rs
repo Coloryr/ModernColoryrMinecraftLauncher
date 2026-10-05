@@ -315,15 +315,11 @@ fn import_archive(path: &Path) -> Result<CustomHomeInfoDto, String> {
     Ok(current_info())
 }
 
-
 /// 从 zip 导入自定义主页面（全量替换），返回新的状态
 ///
 /// 只校验 + 复制压缩包，**不落盘解压**：请求时直接从包内按条目读。
 #[tauri::command]
-pub async fn custom_home_import(
-    app: AppHandle,
-    path: String,
-) -> Result<CustomHomeInfoDto, String> {
+pub async fn custom_home_import(app: AppHandle, path: String) -> Result<CustomHomeInfoDto, String> {
     let info = tauri::async_runtime::spawn_blocking(move || import_archive(Path::new(&path)))
         .await
         .map_err(|err| err.to_string())??;
@@ -557,6 +553,10 @@ pub async fn url_custom_home(req: Request<Vec<u8>>, res: UriSchemeResponder) {
     };
 
     let mime = mime_of(&name);
-    let data = if mime == "text/html" { inject_bridge(data) } else { data };
+    let data = if mime == "text/html" {
+        inject_bridge(data)
+    } else {
+        data
+    };
     send_ok(res, data, mime);
 }

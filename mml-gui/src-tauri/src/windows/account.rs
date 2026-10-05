@@ -6,9 +6,16 @@ use std::fmt::Display;
 use std::path::Path;
 use std::sync::RwLock;
 
-use mml_auth::{AuthType, LoginObj, auths, legacy::{authlib_injector, little_skin, nide8}, oauth};
+use mml_auth::{
+    AuthType, LoginObj, auths,
+    legacy::{authlib_injector, little_skin, nide8},
+    oauth,
+};
 use mml_names::i18_items::error_type::{CoreResult, ErrorType};
-use mml_net::{mojang_api::{self, MinecraftProfileObj, SkinObj}, urls};
+use mml_net::{
+    mojang_api::{self, MinecraftProfileObj, SkinObj},
+    urls,
+};
 use mml_sys::open_helper;
 use tauri::{AppHandle, Emitter};
 use tokio_util::sync::CancellationToken;
@@ -135,7 +142,8 @@ pub async fn account_add_account(
             if auth_type == AuthType::SelfLittleSkin && server.is_none() {
                 return Err("err.serverEmpty".to_string());
             }
-            little_skin::authenticate(Uuid::new_v4().to_string(), user, password, server, None).await
+            little_skin::authenticate(Uuid::new_v4().to_string(), user, password, server, None)
+                .await
         }
         AuthType::AuthlibInjector => {
             let Some(server) = server else {
@@ -216,11 +224,11 @@ async fn microsoft_login(app: &AppHandle) -> Result<AccountStoreDto, String> {
     };
 
     emit_oauth_state(app, "token", None);
-    let (token, expires_in) = match mojang_api::get_minecraft_token(&xsts.xbl_uhs, &xsts.xbl_token).await
-    {
-        Ok(ok) => ok,
-        Err(err) => return Err(oauth_fail(app, err)),
-    };
+    let (token, expires_in) =
+        match mojang_api::get_minecraft_token(&xsts.xbl_uhs, &xsts.xbl_token).await {
+            Ok(ok) => ok,
+            Err(err) => return Err(oauth_fail(app, err)),
+        };
 
     emit_oauth_state(app, "profile", None);
     let profile = match mojang_api::get_minecraft_profile(&token).await {

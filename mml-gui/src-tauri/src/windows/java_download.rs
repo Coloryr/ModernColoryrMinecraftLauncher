@@ -248,7 +248,7 @@ pub async fn java_download_get_list(
                         later: LaterRun::None,
                     },
                 );
-                
+
                 out.push(JavaDownloadItemDto {
                     uuid: uuid.to_string(),
                     name,
@@ -335,7 +335,11 @@ pub async fn java_download_get_list(
                     continue;
                 }
                 // 每个条目 jdk / jre 各一个直链，按所选类型取对应侧
-                let side = if java_type == "jre" { item.jre } else { item.jdk };
+                let side = if java_type == "jre" {
+                    item.jre
+                } else {
+                    item.jdk
+                };
                 if side.opt1.download_link.is_empty() {
                     continue;
                 }

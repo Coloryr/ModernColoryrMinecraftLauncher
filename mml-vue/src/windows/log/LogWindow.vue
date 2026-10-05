@@ -220,7 +220,7 @@ onBeforeUnmount(() => {
   <WindowFrame body-fill :title="t('logWindow.title')" @close="$emit('close')">
     <div class="log-window">
       <div class="topbar">
-        <select v-model="currentUuid" class="inst-select" v-tip="t('logWindow.instance')">
+        <select v-model="currentUuid" class="field-select inst-select" v-tip="t('logWindow.instance')">
           <option value="">{{ t("logWindow.runningProcess") }}</option>
           <option v-for="i in instances" :key="i.uuid" :value="i.uuid">{{ i.name }}</option>
         </select>
@@ -298,23 +298,12 @@ onBeforeUnmount(() => {
 .inst-select {
   flex: 1;
   min-width: 0;
-  /* 与 .filter-select 对齐（同箭头 / 不透明底 / 主题边框），只保留自己的字号：
-     原来没有 appearance: none 也没配箭头，用的是系统原生下拉箭头，和别处不是一个观感 */
+  /* 外观全部走 .field-select（同箭头 / 不透明底 / 主题边框 / 手型光标），这里只覆盖尺寸：
+     原来自己抄了一整份外观，字号也是单独一份，改成"挂 .field-select + 只改尺寸"免得再走偏 */
   padding: 6px 24px 6px 8px;
   font-size: 13px;
-  color: var(--text);
-  background: var(--bg-solid, var(--bg-card));
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  cursor: pointer;
-  outline: none;
-  font-family: inherit;
-  appearance: none;
-  -webkit-appearance: none;
-  background-image: var(--select-arrow);
-  background-repeat: no-repeat;
+  min-height: 0;
   background-position: right 6px center;
-  background-size: 12px;
 }
 
 .topbar .seg-tabs {

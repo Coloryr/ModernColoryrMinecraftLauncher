@@ -30,6 +30,7 @@ import {
   answerNameConflict,
 } from "../../lib/api";
 import { showToast } from "../../lib/toast";
+import { KEYS, emitChange, writeRaw } from "../../lib/storage";
 import { usePageActive } from "../../lib/pageActive";
 import { t, tErr } from "../../lib/i18n";
 import { isTauri, openWindow } from "../windowManager";
@@ -542,7 +543,8 @@ async function create() {
     }
     if (isLeaving()) return;
     // 通知主窗口选中新实例（后端已发 instance-change 刷新列表），然后询问是否继续添加
-    localStorage.setItem("mml.addedInstance", uuid);
+    writeRaw(KEYS.addedInstance, uuid);
+    emitChange(KEYS.addedInstance, uuid);
     addedName.value = doneName;
     askContinue.value = true;
   } catch (e) {

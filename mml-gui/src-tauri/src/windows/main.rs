@@ -20,15 +20,15 @@ use crate::dtos::{
 };
 use crate::{image_manager, listens, windows};
 use mml_config::config_obj::{GCType, RunArgObj, WindowSettingObj};
-use mml_game::game_log::{GameLog, GameLogItemObj};
 use mml_game::GameInstance;
+use mml_game::game_log::{GameLog, GameLogItemObj};
 use mml_game::launcher::instance_setting_obj::{
     AdvanceJvmObj, InstanceSettingObj, ProxyHostObj, ServerObj,
 };
 use mml_game::launcher::{LogEncoding, ModPackType};
-use mml_game::{InstanceLog, InstanceLogType};
 use mml_game::loader::LoaderType;
 use mml_game::mojang::VersionType;
+use mml_game::{InstanceLog, InstanceLogType};
 use uuid::Uuid;
 
 /// 核心加载完成事件（ok：加载成功；error：失败信息，前端据此显示错误页）
@@ -561,7 +561,13 @@ pub(crate) fn log_line_from_item(item: &GameLogItemObj) -> LogLine {
             obj.level.as_str().to_string(),
             obj.category.clone(),
         ),
-        GameLog::Text(s) => (item_time(item), s.clone(), String::new(), String::new(), String::new()),
+        GameLog::Text(s) => (
+            item_time(item),
+            s.clone(),
+            String::new(),
+            String::new(),
+            String::new(),
+        ),
         GameLog::RuntimeLib(p) => (
             item_time(item),
             format!("运行库：{}", p.display()),
@@ -741,7 +747,7 @@ pub fn main_remove_group(app: AppHandle, uuid: String) -> Result<bool, String> {
     Ok(true)
 }
 
-/// 调整分组显示顺序（默认分组恒在首位，不参与排序）
+/// 调整分组显示顺序（默认分组只是初始排首位，同样可以换位置）
 ///
 /// 顺序由内核分组表保存：拿当前顺序、把该组挪到 `index` 位，再整表提交。
 /// 只改内存里的数组是不行的 —— 文件里存的还是旧顺序，重启就回来了。
@@ -751,7 +757,10 @@ pub fn main_move_group(app: AppHandle, uuid: String, index: i64) -> Result<bool,
         return Err("err.uuid".to_string());
     };
 
-    let mut list: Vec<Uuid> = mml_game::get_group_list().into_iter().map(|g| g.uuid).collect();
+    let mut list: Vec<Uuid> = mml_game::get_group_list()
+        .into_iter()
+        .map(|g| g.uuid)
+        .collect();
     let from = list
         .iter()
         .position(|g| *g == uuid)
@@ -1024,11 +1033,7 @@ pub fn main_move_instance(
 ///
 /// 启动用户名由后端自己从当前账户解析（`auths::get_current()`），前端不传
 #[tauri::command]
-pub fn main_launch_game(
-    app: AppHandle,
-    window: WebviewWindow,
-    uuid: String,
-) -> Result<(), String> {
+pub fn main_launch_game(app: AppHandle, window: WebviewWindow, uuid: String) -> Result<(), String> {
     println!("[launch_game] uuid={uuid}");
     let store = model(&window)?;
     {
@@ -1174,9 +1179,18 @@ mod tests {
 
     #[test]
     fn test_parse_motd_addr() {
-        assert_eq!(parse_motd_addr("mc.example.com"), ("mc.example.com".into(), 25565));
-        assert_eq!(parse_motd_addr("mc.example.com:25566"), ("mc.example.com".into(), 25566));
-        assert_eq!(parse_motd_addr("  mc.example.com:25566 "), ("mc.example.com".into(), 25566));
+        assert_eq!(
+            parse_motd_addr("mc.example.com"),
+            ("mc.example.com".into(), 25565)
+        );
+        assert_eq!(
+            parse_motd_addr("mc.example.com:25566"),
+            ("mc.example.com".into(), 25566)
+        );
+        assert_eq!(
+            parse_motd_addr("  mc.example.com:25566 "),
+            ("mc.example.com".into(), 25566)
+        );
         assert_eq!(parse_motd_addr("[::1]:25565"), ("::1".into(), 25565));
         assert_eq!(parse_motd_addr("::1"), ("::1".into(), 25565));
         assert_eq!(parse_motd_addr(""), (String::new(), 25565));

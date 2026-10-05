@@ -14,6 +14,7 @@ import { ref, watch } from "vue";
 import { t, tErr } from "../../lib/i18n";
 import { commands } from "../../lib/bindings";
 import { showToast } from "../../lib/toast";
+import { KEYS, readNumber, writeNumber } from "../../lib/storage";
 import BaseModal from "../../components/ui/BaseModal.vue";
 import BaseButton from "../../components/ui/BaseButton.vue";
 import IconCropStage from "./IconCropStage.vue";
@@ -30,11 +31,9 @@ const emit = defineEmits<{ (e: "close"): void }>();
 
 /** 可选输出边长（px）：图标最大显示 84px，256 已足够；大档给需要高清图标的场合 */
 const SIZES = [64, 128, 256, 512];
-/** 记住上次选的边长（纯前端偏好，与主题 / 侧栏一样走 localStorage） */
-const SIZE_KEY = "mml.iconPickSize";
-
+/** 记住上次选的边长（纯前端偏好，与主题 / 侧栏一样走本地存储） */
 function readSize(): number {
-  const n = Number(localStorage.getItem(SIZE_KEY));
+  const n = readNumber(KEYS.iconPickSize, 256);
   return SIZES.includes(n) ? n : 256;
 }
 
@@ -42,7 +41,7 @@ const size = ref(readSize());
 
 function setSize(v: number) {
   size.value = v;
-  localStorage.setItem(SIZE_KEY, String(v));
+  writeNumber(KEYS.iconPickSize, v);
 }
 
 /** 预览图 data URL 与**原图**尺寸（选区按原图像素算，后端裁的也是原图） */

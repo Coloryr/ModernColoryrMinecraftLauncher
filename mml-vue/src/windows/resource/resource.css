@@ -17,6 +17,11 @@
   display: flex;
   gap: 18px;
   height: 100%;
+  /* 右边**不加**滚动条宽度的内边距：滚动条占位交给 `.item-list` 的
+     `scrollbar-gutter: stable` 处理（按需占位），这里加死宽度会在"没有滚动条"
+     时把内容顶出去（用户看到的：右边被切掉）。
+     窗口内边距（.frame-body 的 22px 26px）由内容区用负外边距还回来，
+     于是内容右边缘顶到窗口右边、滚动条正好落在最右。 */
 }
 
 /* ---------- 左侧分类栏 ---------- */
@@ -69,9 +74,25 @@
 
 /* ---------- 右侧内容区 ---------- */
 
+/*
+  右边缘的三层关系（**改之前先读这段**，这里踩过两次坑）：
+
+  1. 窗口内边距 26px（`.frame-body` 的 `22px 26px`）—— 用 `margin-right: -26px` 抵消，
+     内容区右边缘才顶得到窗口边（否则整块离右边一道 26px 的缝）；
+  2. 滚动条占位 9px —— 交给 `.item-list` / `.shot-list` 的 `scrollbar-gutter: stable`
+     （按需占位）。**不要手写 `padding-right: 9px`**：那个值只在"有滚动条"时成立，
+     没滚动条时会把内容顶出去（踩过一次）；
+  3. 卡片自己的留白 26px —— 由**滚动容器的 `padding-right`** 给（见 `.item-list`），
+     不是给 `.cat-content`。这一步是"滚动条贴窗口边"的关键：
+     留白若加在 `.cat-content` 上，滚动条会跟着缩到留白里侧（离窗口边 26px）；
+     加在滚动容器上，滚动条仍贴在容器最右 = 窗口右边，而**内容盒**才向内收 26px。
+
+  别把 1 和 3 合并成"都不做"：那样卡片就**直接贴到窗口边**（踩过的第二次）。
+*/
 .resource-layout .cat-content {
   flex: 1;
   min-width: 0;
+  margin-right: -26px;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -82,6 +103,17 @@
   align-items: center;
   justify-content: space-between;
   gap: 10px;
+  /* 顶栏不是滚动容器，自己让出留白（26px，与下方卡片左对齐），
+     再加 9px 让开滚动条 —— 滚动条贴在窗口最右，正好压在顶栏这一条的右侧；
+     不让开的话「刷新」会紧贴 / 压住滚动条（用户要求"往左一点"）。
+     9px 与 styles/scrollbar.css 的滚动条宽度同源，那边改了这里要一起改。 */
+  padding-right: calc(26px + 9px);
+}
+
+/* 左侧（标题 + 搜索框 + 视图切换…）可被挤压，按钮组不缩 */
+.resource-layout .content-head > :first-child {
+  flex: 1;
+  min-width: 0;
 }
 
 .resource-layout .head-title {
@@ -90,11 +122,16 @@
   padding: 4px 0;
 }
 
+/* 右侧按钮组：`margin-left: auto` 把它顶到最右 ——
+   `.content-head` 虽是 space-between，但模组那页左边还有搜索框 + 视图切换 + 新建分组，
+   加起来会把按钮组挤在中间（用户看到"刷新没贴在分组右侧"）。
+   整组靠右、组内顺序不变，刷新才真正贴住右边缘 */
 .resource-layout .head-actions {
   display: flex;
   align-items: center;
   gap: 6px;
   flex-shrink: 0;
+  margin-left: auto;
 }
 
 /* 工具条里的控件统一 35px：视图切换（SegmentedTabs）就是 35，
@@ -114,8 +151,18 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  /* 右边留一点：卡片描边不被滚动条压住 */
-  padding-right: 2px;
+  /* 左边留出「落点描边」溢出的那圈：`.mod-group.drop-target` 用 outline-offset 向外描边，
+     而滚动容器会把内容盒之外的绘制裁掉（overflow-y: auto 时另一轴也按 auto 处理）——
+     不留这边距的话，**拖拽时左边那条蓝框正好被切掉**。
+     宽度 = outline-offset 4 + outline 1 = 5，见 .mod-group.drop-target */
+  padding-left: 5px;
+  /* 右边让出卡片的留白（26px，与窗口其它三边一致）。
+     加在**滚动容器**上而不是 `.cat-content` 上，是为了让滚动条仍贴在容器最右
+     （= 窗口右边）：滚动条的 gutter 在 padding box 之外，内容盒才受 padding 影响。 */
+  padding-right: 26px;
+  /* 滚动条占位由浏览器按需决定：写死 padding-right 会在没有滚动条时把内容顶出去，
+     而"要不要占位"正随内容长短变化（踩过的坑，见上面那段说明） */
+  scrollbar-gutter: stable;
 }
 
 .resource-layout .item-row {
@@ -124,6 +171,9 @@
   align-items: center;
   gap: 10px;
   padding: 10px 12px;
+  /* 内置模组的缩进：由 ResourceRow 传进来的 --row-depth 决定（每级 22px，与原来树形视图同步长）。
+     用 padding 而不是 margin：行的底色/描边仍然铺满整宽，看着还是一张卡片 */
+  padding-left: calc(12px + var(--row-depth, 0) * 22px);
   border-radius: 9px;
   /* 行自己就是卡片：用"抬起来的面"（--bg-card）而不是 --bg-side ——
      去掉外层容器之后，行直接贴在窗口底色上，--bg-side 在亮色下跟页面底几乎一样 */
@@ -131,6 +181,16 @@
   border: 1px solid var(--border);
 }
 
+/* 内置模组的行：底色压暗一档（它在父 jar 里面，视觉上"凹进去"），
+   与父行拉开层次 —— 缩进之外再给一个底色差，扫一眼就知道哪几行是"包里的"。
+   类由 ResourceRow 按 depth 挂上（.mod-nested），不依赖内联样式的序列化形式 */
+.resource-layout .item-row.mod-nested {
+  background: var(--bg-side);
+  border-style: dashed;
+}
+
+/* 行图标：**没有图标时这一格整个不渲染**（见 ResourceRow 的模板），
+   所以这里不需要"占位"样式 —— 名字会直接靠左，不再有大片灰框 */
 .resource-layout .item-icon {
   width: 36px;
   height: 36px;
@@ -138,15 +198,6 @@
   object-fit: cover;
   flex-shrink: 0;
   background: var(--bg-hover);
-}
-
-.resource-layout .item-icon-empty {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 15px;
-  font-weight: 700;
-  color: var(--text-dim);
 }
 
 .resource-layout .item-main {
@@ -181,6 +232,20 @@
   text-overflow: ellipsis;
 }
 
+/* 资源列表的骨架行 —— **各分类的通用加载占位**（形状见 parts/ListSkeleton.vue，
+   呼吸动画在 styles/skeleton.css）：
+   图标换成真行的 36×36 / 7px 圆角（.sk-icon 默认 48），左右内边距也照真行来 ——
+   骨架与真内容逐行等高，加载完切换时列表不跳 */
+.resource-layout .sk-row {
+  padding: 10px 12px;
+}
+
+.resource-layout .sk-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 7px;
+}
+
 .resource-layout .badge {
   flex-shrink: 0;
   padding: 1px 7px;
@@ -206,12 +271,11 @@
   flex-shrink: 0;
 }
 
-/* 列表行与树行的操作按钮：**浮**在行的右端，平时不占宽度
+/* 列表行的操作按钮：**浮**在行的右端，平时不占宽度
    （三个文字按钮横着一排会把名字/副标题挤窄，见用户截图），
    悬停该行才淡入；同时用 pointer-events 挡住"看不见却能点"的误触。
    表格视图不适用：那里本来就有独立的操作列 */
-.resource-layout .item-row .item-actions,
-.resource-layout .mod-tree-row .item-actions {
+.resource-layout .item-row .item-actions {
   position: absolute;
   right: 10px;
   top: 50%;
@@ -226,9 +290,7 @@
 }
 
 .resource-layout .item-row:hover .item-actions,
-.resource-layout .item-row:focus-within .item-actions,
-.resource-layout .mod-tree-row:hover .item-actions,
-.resource-layout .mod-tree-row:focus-within .item-actions {
+.resource-layout .item-row:focus-within .item-actions {
   opacity: 1;
   pointer-events: auto;
 }
@@ -263,11 +325,13 @@
 
 /* ---------- 截图网格 ---------- */
 
-/* 同样不套外框：格子自己就是框 */
+/* 同样不套外框：格子自己就是框。
+   滚动条占位与留白口径同 .item-list（按需占位 + 26px 内容留白） */
 .resource-layout .shot-list {
   flex: 1;
   overflow-y: auto;
-  padding-right: 2px;
+  padding-right: 26px;
+  scrollbar-gutter: stable;
 }
 
 .resource-layout .shot-grid {
@@ -331,7 +395,9 @@
   border-radius: 12px;
 }
 
-/* 拖拽落点：整块描一圈虚线强调色（松手就把拖着的模组归到这一组） */
+/* 拖拽落点：整块描一圈虚线强调色（松手就把拖着的模组归到这一组）
+   向外偏 4px 描：`.item-list` 留了对应的左 / 右内边距，否则滚动容器会把这一圈裁掉
+   （左边原本就是被切掉的那一条） */
 .resource-layout .mod-group.drop-target {
   outline: 1px dashed var(--accent);
   outline-offset: 4px;
@@ -348,15 +414,87 @@
   outline-offset: -1px;
 }
 
+/* 分组头的「把手 + 箭头 + 名字」：
+   - 点一下 = 折叠 / 展开（与箭头同一个动作）；
+   - 按住拖动 = 调整分组顺序（与左侧分类栏同一套）。
+   两种交互同一个目标，所以光标用 pointer（可点）而不是 grab ——
+   光标是用户唯一能预判"按下去会怎样"的线索，标着"抓取"会让人以为只能拖、不敢点。
+   flex: 1 是为了让名字后面那段空白也属于这个区域（否则折叠区就在眼前却点不动） */
+.resource-layout .mod-group-handle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+  /* 分组头会拖动排序：别把文字选上（选中后再拖会变成拖选文本） */
+  user-select: none;
+}
+
+.resource-layout .mod-group-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.resource-layout .mod-group-toggle:hover {
+  background: var(--bg-hover);
+}
+
+.resource-layout .mod-group-caret {
+  flex: none;
+  color: var(--text-dim);
+  transition: transform 0.15s, color 0.12s;
+}
+
+/* 收起时箭头转成"向右" */
+.resource-layout .mod-group-caret.collapsed {
+  transform: rotate(-90deg);
+}
+
+.resource-layout .mod-group-head:hover .mod-group-caret {
+  color: var(--accent);
+}
+
+/* 正被拖动的分组块：留在原位但淡下去（与左侧分类栏的 .cat-item.dragging 同一观感），
+   落到哪里由下面那条插入线表达 */
+.resource-layout .mod-group.mod-group-dragging {
+  opacity: 0.45;
+}
+
+/* 分组排序的插入线：一条 2px 强调色横线（与左侧分类栏的 .cat-insert 同一套） */
+.resource-layout .mod-group-insert {
+  display: block;
+  height: 2px;
+  margin: 1px 6px;
+  border-radius: 1px;
+  background: var(--accent);
+}
+
 .resource-layout .mod-group-name {
   font-size: 13px;
   font-weight: 600;
   color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .resource-layout .mod-group-count {
+  flex: none;
   font-size: 11.5px;
   color: var(--text-dim);
+  white-space: nowrap;
 }
 
 /* 分组操作：悬停该行才浮出来 */
@@ -452,11 +590,17 @@
   gap: 4px;
 }
 
-/* 表头行 + 数据行同一套栅格：名称 / 版本 / 作者 / 文件名 / 简介 / 操作 */
+/* 表头行 + 数据行同一套栅格（15 列，与 ModTable 的列顺序一致）：
+   分组名 | 启用 | 备注 | modid | 名字 | 版本 | 加载器类型 | 加载侧
+         | 下载源 | 项目编号 | 文件编号 | 路径 | 作者 | 网页链接 | 操作
+
+   窄列给固定宽、宽列给 fr：这张表列多，容器宽度有限，全部 minmax 会让每列都挤成省略号。
+   总宽超出时由外层 .item-list 横向不滚动、靠列内的 ellipsis 收尾（见 .mod-cell）。 */
 .resource-layout .mod-tr {
   display: grid;
   grid-template-columns:
-    minmax(150px, 1.3fr) 82px 100px minmax(120px, 1.1fr) minmax(110px, 1fr) auto;
+    132px 40px minmax(70px, 0.8fr) minmax(90px, 1fr) minmax(110px, 1.2fr) 78px
+    92px 64px 84px 96px 92px minmax(150px, 1.6fr) 100px minmax(120px, 1.2fr) auto;
   align-items: center;
   gap: 8px;
   padding: 7px 10px;
@@ -464,6 +608,62 @@
   border: 1px solid var(--border);
   background: var(--bg-card);
   font-size: 12px;
+}
+
+/* 内置模组的行：底色压暗一档 + 缩进（--row-depth 由 ModTable 按层级给） */
+.resource-layout .mod-tr.mod-nested {
+  background: var(--bg-side);
+  border-style: dashed;
+}
+
+/* 名字列里的缩进：内置模组比父行往里收一级 */
+.resource-layout .mod-name-cell.mod-indent {
+  padding-left: calc(var(--row-depth, 0) * 16px);
+}
+
+/* 分组名那一列：折叠箭头 + 名字。第一列是"这一行属于哪个组"，
+   只在每个分组的首行出现（表格里一片连续的组名看着像重复数据） */
+.resource-layout .mod-group-cell {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.resource-layout .mod-group-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text);
+  font-weight: 600;
+  /* 点名字也能折叠 / 展开（与箭头同一个动作），所以给可点光标 */
+  cursor: pointer;
+}
+
+/* 启用列的复选框 */
+.resource-layout .mod-enable-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.resource-layout .mod-check {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.resource-layout .mod-check:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+/* 路径列等宽字符更整齐（反斜杠与字母等宽，扫起来成列） */
+.resource-layout .mod-path {
+  font-size: 11px;
 }
 
 .resource-layout .mod-tr.mod-th {
@@ -475,8 +675,14 @@
   border-color: transparent;
 }
 
+/* 表格视图下每块只剩"一张表"：15 列表头只画一次（后续块的表头由 ModTable 传
+   `hideHeader` 关掉），否则重复 15 列会变成一堵墙 */
+.resource-layout .mod-tr.mod-th-hidden {
+  display: none;
+}
+
 /* 分组模式下每组各有一张表：表头再做「浮起来的条」就成三层框了，
-   所以这里只留列名（不吸顶、不铺底），排序照旧可以点 */
+   所以这里只留列名（不吸顶、不铺底） */
 .resource-layout .mod-groups .mod-tr.mod-th {
   position: static;
   background: transparent;
@@ -540,6 +746,22 @@
   color: var(--text-dim);
 }
 
+/* 表格里的备注列：用户自己写的，比周围那几列元数据提一档 */
+.resource-layout .mod-note-cell {
+  color: var(--text);
+}
+
+/* ---------- 模组备注 ---------- */
+
+/* 列表里行内那条备注：淡底小标签，与"版本 · 作者 · 文件名"的副标题区分开 */
+.resource-layout .mod-note {
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--bg-hover);
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
 .resource-layout .mod-actions {
   display: flex;
   gap: 6px;
@@ -552,24 +774,9 @@
   gap: 6px;
 }
 
-/* ---------- 模组：树视图（jar-in-jar） ---------- */
-
-.resource-layout .mod-tree-row {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--bg-card);
-}
-
-/* 内置模组的行：底色压暗一档（它在父 jar 里面，视觉上"凹进去"），缩进由行内 paddingLeft 控制 */
-.resource-layout .mod-tree-row.child {
-  background: var(--bg-side);
-  border-style: dashed;
-}
+/* ---------- 模组：内置模组（jar-in-jar）的展开 ----------
+   树形视图已并入列表（见 mod/ModList.vue）：层级就展开在同一列里，
+   这里只剩"展开箭头"与"没有下级时的占位"两条 —— 行本身仍是 .item-row */
 
 .resource-layout .mod-tree-caret {
   width: 18px;
@@ -583,60 +790,30 @@
   background: transparent;
   color: var(--text-dim);
   cursor: pointer;
-  transition: transform 0.15s;
+  transition: transform 0.15s, color 0.12s;
 }
 
+.resource-layout .mod-tree-caret:hover {
+  color: var(--accent);
+}
+
+/* 收起时箭头转成"向右" */
 .resource-layout .mod-tree-caret.collapsed {
   transform: rotate(-90deg);
 }
 
+/* 没有下级的行也占住箭头的宽度：图标与名字才能对齐成一列 */
 .resource-layout .mod-tree-caret-placeholder {
   width: 18px;
   flex-shrink: 0;
 }
 
-.resource-layout .mod-tree-name {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--text);
-  font-weight: 600;
-  font-size: 12.5px;
-}
-
-.resource-layout .mod-tree-sub {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 11px;
-  color: var(--text-dim);
-}
-
 /* ---------- 数据包子页 ---------- */
 
-/* 存档下拉：外观对齐 .field-select（同箭头 / 不透明底 / 主题边框），
-   只是尺寸比表单那条小一号 */
+/* 存档下拉：外观全部走 .field-select（挂两个类，见 DatapackPane），
+   这里只把尺寸压小一号 —— 原先自己抄了一整份外观，改一处漏一处 */
 .resource-layout .dp-select {
   padding: 8px 28px 8px 10px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--bg-solid, var(--bg-card));
-  color: var(--text);
   font-size: 13px;
-  font-family: inherit;
-  cursor: pointer;
-  appearance: none;
-  -webkit-appearance: none;
-  background-image: var(--select-arrow);
-  background-repeat: no-repeat;
-  background-position: right 8px center;
-  background-size: 12px;
-}
-
-.resource-layout .dp-select:focus {
-  outline: none;
-  border-color: var(--accent);
+  min-height: 0;
 }

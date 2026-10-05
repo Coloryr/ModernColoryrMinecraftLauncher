@@ -52,6 +52,12 @@
   border-radius: 10px;
   /* 与真内容卡片同底色，骨架→真内容切换时不跳色 */
   background: var(--bg-card);
+  /* 撑满容器宽度：放在 flex column 的列表里时，不写这句骨架会缩到内容宽度
+     （图标 + 文字），卡片右边比真内容窄一截。
+     **不要用 width: 100%** —— 那样会把纵向滚动条让出的那条 gutter 也算进来，
+     没滚动条时骨架就比真内容宽出一条（用户看到的"被撑开、右边被切掉"）。
+     align-self 由容器（stretch）决定宽度，正好跟随内容盒。 */
+  align-self: stretch;
 }
 
 .sk-row.compact {

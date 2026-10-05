@@ -3,13 +3,11 @@
 import { ref } from "vue";
 import zhCN from "./locales/zh-CN";
 import enUS from "./locales/en-US";
+import { KEYS, readString, writeString, onStorageChange } from "../storage";
 import { saveGuiConfig, type Locale } from "../guiConfig";
 export type { Locale } from "../guiConfig";
 
-const LOCALE_KEY = "mml.locale";
-const stored = localStorage.getItem(LOCALE_KEY);
-
-export const locale = ref<Locale>(stored === "en_us" ? "en_us" : "zh_cn");
+export const locale = ref<Locale>(readString(KEYS.locale) === "en_us" ? "en_us" : "zh_cn");
 
 const messages: Record<Locale, Record<string, string>> = {
   zh_cn: zhCN as Record<string, string>,
@@ -18,7 +16,7 @@ const messages: Record<Locale, Record<string, string>> = {
 
 export function setLocale(l: Locale) {
   locale.value = l;
-  localStorage.setItem(LOCALE_KEY, l);
+  writeString(KEYS.locale, l);
   document.documentElement.lang = l;
   saveGuiConfig({ locale: l });
 }
@@ -28,10 +26,10 @@ export function applyLocale() {
 }
 
 // 跨窗口同步：某个窗口改了语言后，其它已打开的窗口实时生效
-window.addEventListener("storage", (e) => {
-  if (e.key === LOCALE_KEY && (e.newValue === "zh_cn" || e.newValue === "en_us")) {
-    locale.value = e.newValue;
-    document.documentElement.lang = e.newValue;
+onStorageChange(KEYS.locale, (value) => {
+  if (value === "zh_cn" || value === "en_us") {
+    locale.value = value;
+    document.documentElement.lang = value;
   }
 });
 

@@ -15,7 +15,7 @@ import { t, tErr } from "../../lib/i18n";
 import { showToast } from "../../lib/toast";
 import { loadGuiConfig } from "../../lib/guiConfig";
 import { useResourceStatus } from "../../lib/resourceTasks";
-import { projectParamToItem, targetProject, type WindowProjectParam } from "../windowManager";
+import { projectParamToItem, targetProject, targetUuid, type WindowProjectParam } from "../windowManager";
 import type { FileListItemDto, ProjectItemDto, ResourceSaveDto, ResourceTaskDto } from "../../lib/bindings";
 
 defineEmits<{ (e: "close"): void }>();
@@ -462,9 +462,11 @@ onMounted(async () => {
 
   try {
     const cfg = await loadGuiConfig();
-    instanceUuid.value = cfg?.mainWindow.selectedInstance ?? "";
+    // 目标实例：openWindow 带进来的那个优先（收藏窗口点非整合包卡片时，
+    // 那边会先让用户选好实例再跳过来），否则用主窗口选中的那个
+    instanceUuid.value = targetUuid() ?? cfg?.mainWindow.selectedInstance ?? "";
   } catch {
-    instanceUuid.value = "";
+    instanceUuid.value = targetUuid() ?? "";
   }
 
   if (instanceUuid.value) {

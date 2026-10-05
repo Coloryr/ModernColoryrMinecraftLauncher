@@ -8,6 +8,7 @@ import { t, tErr } from "../../../lib/i18n";
 import { showToast } from "../../../lib/toast";
 import { addServer, deleteServer, updateServer } from "../../../lib/api";
 import ContentHead from "./ContentHead.vue";
+import ListSkeleton from "./ListSkeleton.vue";
 import ResourceRow from "./ResourceRow.vue";
 import ServerFormModal from "./ServerFormModal.vue";
 import type { useResourceData } from "../composables/useResourceData";
@@ -88,13 +89,14 @@ function remove(item: ServerItemDto) {
     </template>
   </ContentHead>
 
-  <div v-if="loading" class="empty-tip">{{ t("resource.loading") }}</div>
+  <div v-if="loading" class="item-list">
+    <ListSkeleton />
+  </div>
   <div v-else class="item-list">
     <ResourceRow
       v-for="item in servers"
       :key="`${item.name}|${item.ip}`"
       :icon="item.icon"
-      letter="S"
       :name="item.name"
     >
       <template #badges>

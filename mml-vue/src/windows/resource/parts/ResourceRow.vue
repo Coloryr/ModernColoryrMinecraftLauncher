@@ -1,27 +1,48 @@
 <script setup lang="ts">
-// 资源列表的通用行：图标（图 / 首字母兜底）+ 名称 + 徽标 + 副标题 + 右侧操作
+// 资源列表的通用行：图标（有才显示）+ 名称 + 徽标 + 副标题 + 右侧操作
 //
 // 七个分类的行长得一模一样，差别只在徽标、副标题与操作按钮上，所以那三处走插槽；
 // 行的样式在窗口级 resource.css 里（非 scoped，拆开的子组件共用，见那里的头部说明）。
+//
+// 另有「展开箭头」插槽与缩进：模组列表要把 jar-in-jar 的内置模组**缩进**显示在同一列里
+// （见 ModList），层级与列表合在一处；其它分类不用这两个口子，不传就是原来的样子。
 withDefaults(
   defineProps<{
-    /** 图标地址（没有时退回 letter 占位） */
+    /** 图标地址；**空 / null 时整块不渲染**（不留占位框，见模板注释） */
     icon?: string | null;
-    /** 没有图标时显示的占位字（M / P / S / D…） */
-    letter?: string;
     name?: string;
+    /**
+     * 缩进层级（0 = 顶层）
+     *
+     * 每一级缩进 22px，与原来树形视图的缩进步长一致（见 `resource.css` 的 `--row-indent`）。
+     */
+    depth?: number;
   }>(),
-  { icon: "", letter: "?", name: "" },
+  { icon: "", name: "", depth: 0 },
 );
 </script>
 
 <template>
-  <div class="item-row">
+  <div
+    class="item-row"
+    :class="{ 'mod-nested': depth > 0 }"
+    :style="{ '--row-depth': depth }"
+  >
+    <!-- 展开箭头（有下级的行才给）：放在图标之前 -->
+    <slot name="lead" />
+    <!--
+      图标：**没有就什么都不画**
+      以前这里会补一个占位（先是 M / P / S 首字母，后来换成"无图"图标），
+      但两种都是在给一个本来就不存在的东西占地方 —— 列表里大片灰框/灰图标反而更花。
+      没有图标就让名字直接靠左，版面更干净。图标列的对齐由 `.item-name` 自己保证，
+      不依赖这一格存在（见 resource.css 里的说明）。
+    -->
     <img v-if="icon" class="item-icon" :src="icon" alt="" />
-    <span v-else class="item-icon item-icon-empty">{{ letter }}</span>
     <div class="item-main">
       <div class="item-name-line">
-        <span class="item-name">{{ name }}</span>
+        <!-- 名字默认按纯文本渲染；需要过 `§` 格式码的（存档名）走 name 插槽，
+             换 FormattedText 铺进来 —— 与 sub 插槽同一套做法 -->
+        <span class="item-name"><slot name="name">{{ name }}</slot></span>
         <slot name="badges" />
       </div>
       <span class="item-sub"><slot name="sub" /></span>

@@ -1,8 +1,11 @@
 <script setup lang="ts">
 // 数据包子页：先选存档（下拉），再列该存档里的数据包，可启用 / 禁用 / 删除
 import { t } from "../../../lib/i18n";
+import { stripFormatting } from "../../../lib/formatting";
 import { deleteDatapack, toggleDatapack } from "../../../lib/api";
 import ContentHead from "./ContentHead.vue";
+import FormattedText from "../../../components/ui/FormattedText.vue";
+import ListSkeleton from "./ListSkeleton.vue";
 import ResourceRow from "./ResourceRow.vue";
 import SaveTabs from "./SaveTabs.vue";
 import type { useResourceData } from "../composables/useResourceData";
@@ -39,10 +42,9 @@ function name(item: DataPackItemDto): string {
   return item.name.startsWith("file/") ? item.name.slice(5) : item.file || item.name;
 }
 
-/** 副标题：描述 · 包格式 */
-function sub(item: DataPackItemDto): string {
-  const format = t("resource.packFormat", { format: item.packFormat });
-  return [item.description, format].filter(Boolean).join(" · ");
+/** 包格式那段文案（与描述分开渲染：描述要过格式码，这一句不要） */
+function formatLabel(item: DataPackItemDto): string {
+  return t("resource.packFormat", { format: item.packFormat });
 }
 </script>
 
@@ -52,18 +54,19 @@ function sub(item: DataPackItemDto): string {
   </ContentHead>
 
   <div class="item-list">
-    <select v-model="dpSave" class="dp-select">
+    <select v-model="dpSave" class="field-select dp-select">
       <option value="" disabled>{{ t("resource.selectSave") }}</option>
       <option v-for="s in saves" :key="s.dir" :value="s.dir">
-        {{ s.levelName || s.dir }}
+        {{ stripFormatting(s.levelName || s.dir) }}
       </option>
     </select>
 
     <template v-if="dpSave">
+      <!-- 加载中用骨架行占位：与其它分类同一套（这里只换行，存档下拉要一直留着） -->
+      <ListSkeleton v-if="loading" />
       <ResourceRow
         v-for="item in datapacks"
         :key="item.name"
-        letter="D"
         :name="name(item)"
       >
         <template #badges>
@@ -71,7 +74,11 @@ function sub(item: DataPackItemDto): string {
             {{ state(item) }}
           </span>
         </template>
-        <template #sub>{{ sub(item) }}</template>
+        <template #sub>
+          <!-- 描述过格式码（数据包作者会用 `§a` 上色），包格式那句不过 -->
+          <FormattedText v-if="item.description" :text="item.description" />
+          <template v-if="item.description"> · </template>{{ formatLabel(item) }}
+        </template>
         <template #actions>
           <button class="mini-btn" :disabled="busy" @click="toggle(item)">
             {{ item.enable === false ? t("resource.enable") : t("resource.disable") }}

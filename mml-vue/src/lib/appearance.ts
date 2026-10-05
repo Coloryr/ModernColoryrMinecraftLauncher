@@ -1,66 +1,52 @@
 // 界面外观增强：
-// - 动画开关：全局禁用 CSS 过渡 / 动画（前端自持，localStorage）
+// - 动画开关：全局禁用 CSS 过渡 / 动画（前端自持，本地存储）
 // - 背景图：来源与显示参数存 gui_config.json（Rust 侧持久化），处理后的图片
 //   由后端落盘并经 IPC 下发 dataURL，改动经 bg-change 事件同步到所有窗口；
-//   浏览器环境回退 localStorage（仅 dataURL 直显，无缩放处理）
+//   浏览器环境回退本地存储（仅 dataURL 直显，无缩放处理）
 import { computed, ref, watch } from "vue";
 import { listen } from "@tauri-apps/api/event";
 import { isTauri } from "../windows/windowManager";
 import { commands } from "./bindings";
 import { saveGuiConfig } from "./guiConfig";
+import { KEYS, readFlag, readNumber, readString, writeFlag, writeString } from "./storage";
 import { BgChange } from "./listens";
 import { t } from "./i18n";
 import { showToast } from "./toast";
 
 // ---------------- 动画 ----------------
 
-const ANIM_KEY = "mml.animations";
-
-export const animations = ref(localStorage.getItem(ANIM_KEY) !== "0");
+export const animations = ref(readFlag(KEYS.animations, true));
 
 export function setAnimations(v: boolean) {
   animations.value = v;
-  localStorage.setItem(ANIM_KEY, v ? "1" : "0");
+  writeFlag(KEYS.animations, v);
   document.documentElement.classList.toggle("no-anim", !v);
 }
 
-/** 启动恢复：只同步内存与 DOM，不回写 localStorage */
+/** 启动恢复：只同步内存与 DOM，不回写本地存储 */
 export function applyAnimations() {
   document.documentElement.classList.toggle("no-anim", !animations.value);
 }
 
 // ---------------- 背景图 ----------------
 
-const BG_IMAGE_KEY = "mml.bgImage"; // 浏览器回退用
-const BG_OPACITY_KEY = "mml.bgOpacity"; // 浏览器回退用（Tauri 下以配置为准）
-const BG_BLUR_KEY = "mml.bgBlur";
-
 /** 显示用背景图 dataURL（Tauri 下是后端处理落盘的图） */
-export const bgImage = ref(localStorage.getItem(BG_IMAGE_KEY) ?? "");
+export const bgImage = ref(readString(KEYS.bgImage));
 
 /** 背景图来源（文件路径 / 网址，空串 = 无；与 gui_config.json 的 bgSource 一致） */
 export const bgSource = ref("");
 
 /** 背景图层不透明度（%）：默认 100（完整显示），越高图越显 */
-export const bgOpacity = ref(Number(localStorage.getItem(BG_OPACITY_KEY)) || 100);
+export const bgOpacity = ref(readNumber(KEYS.bgOpacity, 100));
 
 /** 背景模糊（px） */
-export const bgBlur = ref(Number(localStorage.getItem(BG_BLUR_KEY)) || 0);
+export const bgBlur = ref(readNumber(KEYS.bgBlur, 0));
 
 /** 原始分辨率（%）：后端把源图缩放到源图的百分之多少（范围 10–100） */
 export const bgNativeSize = ref(100);
 
 /** 后端正在加载 / 处理背景图（加载提示与按钮禁用用） */
 export const bgLoading = ref(false);
-
-function store(key: string, v: string) {
-  try {
-    if (v) localStorage.setItem(key, v);
-    else localStorage.removeItem(key);
-  } catch {
-    // dataURL 超出 localStorage 配额：保留内存中的图（仅本次会话生效）
-  }
-}
 
 /** 用后端返回的信息更新本地状态（restoreBg / bg-change 共用） */
 function applyBgInfo(info: {
@@ -75,16 +61,16 @@ function applyBgInfo(info: {
   bgOpacity.value = info.opacity;
   bgBlur.value = info.blur;
   bgNativeSize.value = info.nativeSize;
-  // 缓存进 localStorage：下次启动挂载时立即有背景，不闪底色
-  // （超出配额时静默失败，仅当次会话生效，见 store）
-  store(BG_IMAGE_KEY, info.dataUrl);
+  // 缓存一份 dataURL：下次启动挂载时立即有背景，不闪底色
+  // （dataURL 很大，配额写满时静默失败，仅当次会话生效，见 storage.writeRaw）
+  writeString(KEYS.bgImage, info.dataUrl);
 }
 
 /** 清掉本窗口的背景状态（不影响后端配置） */
 function clearLocalBg() {
   bgSource.value = "";
   bgImage.value = "";
-  store(BG_IMAGE_KEY, "");
+  writeString(KEYS.bgImage, "");
 }
 
 /** 启动恢复 / bg-change 刷新：Tauri 下背景图以后端配置为准 */
@@ -104,7 +90,7 @@ export async function setBgImage(v: string) {
   if (v) {
     // 直接给 dataURL（浏览器回退路径）
     bgImage.value = v;
-    store(BG_IMAGE_KEY, v);
+    writeString(KEYS.bgImage, v);
     return;
   }
   clearLocalBg();
@@ -122,7 +108,7 @@ export async function setBgImage(v: string) {
 export async function setBgImageFromOriginal(source: string) {
   if (!isTauri()) {
     bgImage.value = source;
-    store(BG_IMAGE_KEY, source);
+    writeString(KEYS.bgImage, source);
     return;
   }
   bgLoading.value = true;
@@ -155,13 +141,13 @@ export async function resizeBg(percent: number) {
 
 export function setBgOpacity(v: number) {
   bgOpacity.value = v;
-  store(BG_OPACITY_KEY, String(v));
+  writeString(KEYS.bgOpacity, String(v));
   void saveGuiConfig({ bgOpacity: v });
 }
 
 export function setBgBlur(v: number) {
   bgBlur.value = v;
-  store(BG_BLUR_KEY, String(v));
+  writeString(KEYS.bgBlur, String(v));
   void saveGuiConfig({ bgBlur: v });
 }
 

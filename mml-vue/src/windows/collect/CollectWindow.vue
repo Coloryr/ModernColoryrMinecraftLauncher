@@ -10,13 +10,14 @@ import BaseButton from "../../components/ui/BaseButton.vue";
 import BaseModal from "../../components/ui/BaseModal.vue";
 import AsyncImage from "../../components/ui/AsyncImage.vue";
 import GlyphIcon from "../../components/ui/GlyphIcon.vue";
+import InstanceIcon from "../../components/InstanceIcon.vue";
 import { useWindowRefresh } from "../../composables/useWindowRefresh";
 import { useCollectDrag } from "../../composables/useCollectDrag";
 import { api, onCollectChange } from "../../lib/api";
 import { loadGuiConfig, saveGuiConfig, type CollectConfig } from "../../lib/guiConfig";
 import { t, tErr } from "../../lib/i18n";
 import { showToast } from "../../lib/toast";
-import type { CollectItemDto } from "../../lib/bindings";
+import type { CollectItemDto, InstanceInfoDto } from "../../lib/bindings";
 import { openWindow } from "../windowManager";
 
 defineEmits<{ (e: "close"): void }>();
@@ -441,13 +442,17 @@ function openUrl(item: CollectItemDto) {
 
 /** 本次操作的目标项（多选条上的操作会用到） */
 
-/** 点卡片：多选模式下切换勾选；默认模式下按"下载"处理（打开下载窗口并跳到版本列表） */
+/**
+ * 点卡片：多选模式下切换勾选；默认模式下按"下载"处理
+ *
+ * 下载分两条路（见 [`startDownload`]）：整合包不需要实例，其余资源要先选实例。
+ */
 function toggleCard(item: CollectItemDto) {
   if (multiSelect.value) {
     toggleCheck(item.uuid, !checked.value.has(item.uuid));
     return;
   }
-  openDownloadWindow(item);
+  startDownload(item);
 }
 
 // ---------------- 拖拽改分组 ----------------
@@ -512,9 +517,13 @@ function isGhostGroup(key: string): boolean {
  *
  * 两个窗口都是"按实例取数"的（`add_resource_list(game, …)` 必须有实例 uuid），
  * 所以这里只把项目参数送过去，由目标窗口在实例就绪后自己打开版本列表。
+ *
+ * `uuid` 也要送：非整合包那条路已经让用户选好实例了，
+ * 目标窗口会优先用它（见 AddResourceWindow 的 onMounted）。
  */
-function openDownloadWindow(item: CollectItemDto) {
+function openDownloadWindow(item: CollectItemDto, uuid?: string) {
   openWindow(item.fileType === "modpack" ? "add_modpack" : "add_resource", {
+    uuid,
     project: {
       source: item.source,
       pid: item.pid,
@@ -524,6 +533,51 @@ function openDownloadWindow(item: CollectItemDto) {
       url: item.url,
     },
   });
+}
+
+/**
+ * 点卡片后的分流
+ *
+ * - **整合包**：目标窗口自己就是"下载并新建实例"，不需要先有实例，直接跳详情；
+ * - **其余资源**（模组 / 资源包 / 光影包）：要装进某个已有实例，所以**先让用户选实例**
+ *   再跳（在那边选不了 —— 下载资源窗口只有一行只读的实例名，没有选择器）。
+ *   选定后把 uuid 一并带过去，目标窗口就不会再退回主窗口选中的那个。
+ */
+function startDownload(item: CollectItemDto) {
+  if (item.fileType === "modpack") {
+    openDownloadWindow(item);
+    return;
+  }
+  pickItem.value = item;
+  void loadInstances();
+}
+
+/** 正在选实例的那一项（null = 没开选实例弹窗） */
+const pickItem = ref<CollectItemDto | null>(null);
+const pickInstances = ref<InstanceInfoDto[]>([]);
+/** 实例列表拉取中：先别显示「还没有游戏实例」，否则会闪一下错提示 */
+const pickLoading = ref(true);
+/** 主窗口当前选中的实例（列表里高亮它） */
+const currentUuid = ref("");
+
+async function loadInstances() {
+  pickLoading.value = true;
+  try {
+    const [list, cfg] = await Promise.all([api.getInstances(), loadGuiConfig()]);
+    pickInstances.value = list;
+    currentUuid.value = cfg?.mainWindow.selectedInstance ?? "";
+  } catch {
+    pickInstances.value = [];
+  } finally {
+    pickLoading.value = false;
+  }
+}
+
+/** 选定实例：带着它跳过去（下载资源窗口会优先用这个 uuid） */
+function pickInstance(inst: InstanceInfoDto) {
+  const item = pickItem.value;
+  pickItem.value = null;
+  if (item) openDownloadWindow(item, inst.uuid);
 }
 
 /** 开关多选模式；退出时清空勾选（卡片上的勾选框也跟着消失） */
@@ -852,6 +906,48 @@ function closeMenu() {
       <div class="modal-actions">
         <BaseButton @click="addToGroupTarget = ''">{{ t("add.cancel") }}</BaseButton>
         <BaseButton variant="primary" @click="confirmAddToGroup">{{ t("add.yes") }}</BaseButton>
+      </div>
+    </BaseModal>
+
+    <!--
+      选实例再下载（非整合包专用，见 startDownload）
+
+      模组 / 资源包 / 光影包都得装进某个已有实例，而"下载资源"窗口里只有一行只读的实例名、
+      没有选择器，所以实例只能在这儿先选好，再连同 uuid 一起带过去。
+    -->
+    <BaseModal
+      v-if="pickItem"
+      :title="t('collect.pickInstanceTitle')"
+      :width="430"
+      :closable="false"
+      @close="pickItem = null"
+    >
+      <p class="delete-tip">{{ t("collect.pickInstanceDesc", { name: pickItem.name }) }}</p>
+
+      <div v-if="pickInstances.length" class="pick-list">
+        <button
+          v-for="inst in pickInstances"
+          :key="inst.uuid"
+          type="button"
+          class="pick-item"
+          :class="{ on: inst.uuid === currentUuid }"
+          @click="pickInstance(inst)"
+        >
+          <InstanceIcon :name="inst.name" :uuid="inst.uuid" :size="30" />
+          <span class="pick-text">
+            <span class="pick-name">{{ inst.name }}</span>
+            <span class="pick-sub">{{ inst.version }}</span>
+          </span>
+          <span v-if="inst.uuid === currentUuid" class="pick-cur">
+            {{ t("collect.pickInstanceCurrent") }}
+          </span>
+        </button>
+      </div>
+      <div v-else-if="pickLoading" class="empty-tip">{{ t("resource.loading") }}</div>
+      <div v-else class="empty-tip">{{ t("collect.pickInstanceNone") }}</div>
+
+      <div class="modal-actions">
+        <BaseButton @click="pickItem = null">{{ t("add.cancel") }}</BaseButton>
       </div>
     </BaseModal>
   </WindowFrame>
@@ -1424,5 +1520,71 @@ function closeMenu() {
 .ctx-item:disabled {
   opacity: 0.4;
   cursor: not-allowed;
+}
+
+/* ----- 选实例弹窗（与方块窗口的 .pick-* 同规格，那边不在同一作用域内，这里重写一份） ----- */
+
+.pick-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.pick-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s;
+}
+
+.pick-item:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent);
+}
+
+.pick-item.on {
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+}
+
+.pick-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.3;
+}
+
+.pick-name {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pick-sub {
+  font-size: 11.5px;
+  color: var(--text-dim);
+}
+
+.pick-cur {
+  flex-shrink: 0;
+  font-size: 10px;
+  padding: 0 6px;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  line-height: 1.7;
 }
 </style>

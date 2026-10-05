@@ -4,6 +4,7 @@
 // 磁盘 gui_config.json 使用 Rust 命名（snake_case），前端不直接接触。
 // 枚举值即 Rust 变体名：theme/windowMode/sidebarSide 为 PascalCase，locale 为 zh_cn/en_us。
 import { commands } from "./bindings";
+import { KEYS, readFlag, readNumber, readRaw, readString } from "./storage";
 
 export type Theme = "Dark" | "Light" | "System";
 /** 与 core Lang 变体同名：zh_cn / en_us */
@@ -134,7 +135,7 @@ export interface WindowState {
   height: number;
 }
 
-/** 读取 GUI 状态；非 Tauri 环境返回 null（浏览器回退 localStorage） */
+/** 读取 GUI 状态；非 Tauri 环境返回 null（浏览器回退本地存储） */
 export async function loadGuiConfig(): Promise<GuiConfig | null> {
   try {
     return await commands.windows.getGuiConfig();
@@ -177,7 +178,7 @@ export async function saveGuiConfig(patch: GuiConfigPatch): Promise<void> {
   }
 }
 
-/** 把 localStorage 里的登录锁定 JSON 解析成条目列表（兼容旧的纯字符串数组；非法 / 缺省 → 空列表） */
+/** 把本地存储里的登录锁定 JSON 解析成条目列表（兼容旧的纯字符串数组；非法 / 缺省 → 空列表） */
 function safeLockList(raw: string | null): LoginLockItem[] {
   if (!raw) return [];
   try {
@@ -201,65 +202,62 @@ function safeLockList(raw: string | null): LoginLockItem[] {
   }
 }
 
-/** 角度读取：没存过 / 非法值返回默认（与 settings.ts 的 readAngle 同语义） */
-function readAngle(raw: string | null, dflt: number): number {
-  if (raw === null) return dflt;
-  const v = Number(raw);
-  return Number.isFinite(v) ? v : dflt;
-}
-
 /**
  * 默认配置（浏览器回退用；也是设置窗口「恢复默认」的取值来源）
  *
  * 口径与 Rust 侧 `GuiConfig::default()` 一致，改这里要同步那边。
+ *
+ * 每一项都从本地存储的**同名键**取（键登记在 storage.ts 的 `KEYS`），
+ * 所以这里不再手写一串字符串字面量 —— 老版本是手工重列的，加一个键就得记得补一处，
+ * 漏了就静默回落默认值。读取一律走 storage.ts 的便捷函数（默认值口径也在那边）。
  */
 export function defaultConfig(): GuiConfig {
-  const stored = localStorage.getItem("mml.theme");
+  const storedTheme = readString(KEYS.theme);
   return {
     // 没有显式选择时跟随系统深浅色（与 theme.ts 的首绘兜底一致）
     theme:
-      stored === "Light" || stored === "Dark" || stored === "System"
-        ? stored
+      storedTheme === "Light" || storedTheme === "Dark" || storedTheme === "System"
+        ? storedTheme
         : matchMedia("(prefers-color-scheme: dark)").matches
           ? "Dark"
           : "Light",
-    locale: localStorage.getItem("mml.locale") === "en_us" ? "en_us" : "zh_cn",
-    windowMode: localStorage.getItem("mml.windowMode") === "Single" ? "Single" : "Multi",
+    locale: readString(KEYS.locale) === "en_us" ? "en_us" : "zh_cn",
+    windowMode: readString(KEYS.windowMode) === "Single" ? "Single" : "Multi",
     mainWindow: {
-      sidebarSide: localStorage.getItem("mml.sidebarSide") === "Right" ? "Right" : "Left",
-      sidebarCollapsed: localStorage.getItem("mml.sidebarCollapsed") !== "0",
-      viewMode: normalizeViewMode(localStorage.getItem("mml.viewMode")),
-      selectedInstance: localStorage.getItem("mml.selectedInstance") ?? "",
+      sidebarSide: readString(KEYS.sidebarSide) === "Right" ? "Right" : "Left",
+      sidebarCollapsed: readFlag(KEYS.sidebarCollapsed, true),
+      viewMode: normalizeViewMode(readString(KEYS.viewMode)),
+      selectedInstance: readString(KEYS.selectedInstance),
     },
     head: {
-      headType: normalizeHeadType(localStorage.getItem("mml.headType")),
-      // 与 settings.ts readAngle 同语义：没存过 / 非法值回落到默认角度
+      headType: normalizeHeadType(readString(KEYS.headType)),
+      // 与 settings.ts 同语义：没存过 / 非法值回落到默认角度
       // （默认 x 15 / y 65，别用 || 0——未存过时会把默认角度覆盖成 0/0）
-      x: readAngle(localStorage.getItem("mml.headX"), 15),
-      y: readAngle(localStorage.getItem("mml.headY"), 65),
+      x: readNumber(KEYS.headX, 15),
+      y: readNumber(KEYS.headY, 65),
     },
     collect: {
-      modpack: localStorage.getItem("mml.collect.modpack") !== "0",
-      showMod: localStorage.getItem("mml.collect.showMod") !== "0",
-      resourcePack: localStorage.getItem("mml.collect.resourcePack") !== "0",
-      shaderpack: localStorage.getItem("mml.collect.shaderpack") !== "0",
+      modpack: readFlag(KEYS.collectModpack, true),
+      showMod: readFlag(KEYS.collectShowMod, true),
+      resourcePack: readFlag(KEYS.collectResourcePack, true),
+      shaderpack: readFlag(KEYS.collectShaderpack, true),
     },
     client: {
-      motdCard: localStorage.getItem("mml.client.motdCard") !== "0",
-      motdInterval: Number(localStorage.getItem("mml.client.motdInterval")) || 15,
-      loginLockOn: localStorage.getItem("mml.client.loginLockOn") === "1",
-      loginLock: safeLockList(localStorage.getItem("mml.client.loginLock")),
-      autoJoin: localStorage.getItem("mml.client.autoJoin") === "1",
-      autoJoinServer: localStorage.getItem("mml.client.autoJoinServer") ?? "",
-      motdServer: localStorage.getItem("mml.client.motdServer") ?? "",
-      lockInstance: localStorage.getItem("mml.client.lockInstance") ?? "",
-      customHome: localStorage.getItem("mml.client.customHome") === "1",
+      motdCard: readFlag(KEYS.motdCard, true),
+      motdInterval: readNumber(KEYS.motdInterval, 15),
+      loginLockOn: readFlag(KEYS.loginLockOn),
+      loginLock: safeLockList(readRaw(KEYS.loginLock)),
+      autoJoin: readFlag(KEYS.autoJoin),
+      autoJoinServer: readString(KEYS.autoJoinServer),
+      motdServer: readString(KEYS.motdServer),
+      lockInstance: readString(KEYS.lockInstance),
+      customHome: readFlag(KEYS.customHome),
     },
-    font: localStorage.getItem("mml.font") ?? "",
-    skinDisplay: normalizeSkinDisplay(localStorage.getItem("mml.skinDisplay")),
+    font: readString(KEYS.font),
+    skinDisplay: normalizeSkinDisplay(readString(KEYS.skinDisplay)),
     bgSource: "",
-    bgOpacity: Number(localStorage.getItem("mml.bgOpacity")) || 100,
-    bgBlur: Number(localStorage.getItem("mml.bgBlur")) || 0,
+    bgOpacity: readNumber(KEYS.bgOpacity, 100),
+    bgBlur: readNumber(KEYS.bgBlur, 0),
     bgNativeSize: 100,
   };
 }

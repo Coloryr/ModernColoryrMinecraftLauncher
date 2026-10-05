@@ -13,14 +13,15 @@ import { WebviewWindow } from "@tauri-apps/api/webviewWindow";
 import { commands } from "../lib/bindings";
 import type { ProjectItemDto } from "../lib/bindings";
 import { saveGuiConfig } from "../lib/guiConfig";
+import { KEYS, readString, writeString } from "../lib/storage";
+import { isTauri } from "../lib/util";
 import { isWindowKind, type WindowKind, WINDOW_REGISTRY } from "./registry";
 
-const MODE_KEY = "mml.windowMode";
 const WIN_PARAM = "window";
 const UUID_PARAM = "uuid";
 
 /** 是否多窗口模式（默认多窗口） */
-export const multiWindow = ref(localStorage.getItem(MODE_KEY) !== "Single");
+export const multiWindow = ref(readString(KEYS.windowMode) !== "Single");
 
 /**
  * 单窗口模式的返回栈：记着"上一层是谁"，关窗时先回上一层
@@ -114,16 +115,14 @@ export function setMultiWindow(v: boolean): Promise<void> {
   // 换了模式，之前的返回栈与带入参数都不再成立
   backStack.value = [];
   windowParams.value = { uuid: null, project: null };
-  localStorage.setItem(MODE_KEY, v ? "Multi" : "Single");
+  writeString(KEYS.windowMode, v ? "Multi" : "Single");
   // 返回保存的 Promise：要紧接着重启进程的调用方必须等这次写入真的落盘
   // （重启会立刻刷盘并退出，写请求还在路上就丢了 —— 见 useSettingsUi 的窗口模式切换）
   return saveGuiConfig({ windowMode: v ? "Multi" : "Single" });
 }
 
-/** 是否运行在 Tauri 环境 */
-export function isTauri(): boolean {
-  return typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
-}
+/** 是否运行在 Tauri 环境：实现见 lib/util（放那儿是为了不与 lib/storage 形成循环引用） */
+export { isTauri };
 
 /** 当前窗口标识 */
 export const currentKind = ref<WindowKind>(resolveKind());
@@ -275,11 +274,17 @@ export function openWindow(kind: WindowKind, params?: { uuid?: string; project?:
   }
 
   if (isTauri()) {
+    // 新窗口的目标参数（实例 uuid + "要打开哪个项目"）只能靠 URL 送达，而 Rust 那条命令
+    // 原来只认 log / export 的 uuid。所以这里把组装好的 query 一起交过去，由它拼进
+    // WebviewUrl —— 建窗仍然走 Rust（几何恢复 / 句柄表 / 窗口模型都在那边）。
+    const query = new URL(urlFor(kind, params)).search.replace(/^\?/, "");
+    // `instance` 只对 log / export 有意义：那是"窗口已开着时推事件切实例"用的
+    const eventUuid = kind === "log" || kind === "export" ? (params?.uuid ?? null) : null;
     // 统一走 Rust 窗口管理器：创建 / 聚焦在 src-tauri 的 windows/mod.rs 处理。
     // open_window 是 async 命令（不在 Windows 主线程创建窗口，避免冻结）。
     // 命令失败（例如窗口创建被拒）时回退到官方 JS API。
     commands.windows
-      .openWindow(kind, params?.uuid ?? null)
+      .openWindow(kind, eventUuid, query)
       .catch((e) => {
         console.error("[windowManager] Rust 打开窗口失败，回退 JS API", kind, e);
         createViaJs(kind, params);
@@ -292,7 +297,7 @@ export function openWindow(kind: WindowKind, params?: { uuid?: string; project?:
 }
 
 /** 回退路径：用官方 JS API 创建 / 聚焦真实 WebviewWindow */
-function createViaJs(kind: WindowKind, params?: { uuid?: string }) {
+function createViaJs(kind: WindowKind, params?: { uuid?: string; project?: WindowProjectParam }) {
   const label = `mml-${kind}`;
   WebviewWindow.getByLabel(label).then(async (existing) => {
     if (existing) {

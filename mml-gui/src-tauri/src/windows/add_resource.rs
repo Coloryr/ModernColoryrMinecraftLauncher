@@ -50,8 +50,9 @@ static MODRINTH_INFO: LazyLock<AsyncRwLock<HashMap<String, HitObj>>> =
     LazyLock::new(|| AsyncRwLock::new(HashMap::new()));
 
 /// CurseForge 文件缓存（pid → fid → 文件数据，文件列表页请求时填充）
-static CURSEFOGRE_FILE: LazyLock<AsyncRwLock<HashMap<String, HashMap<String, CurseForgeFileDataObj>>>> =
-    LazyLock::new(|| AsyncRwLock::new(HashMap::new()));
+static CURSEFOGRE_FILE: LazyLock<
+    AsyncRwLock<HashMap<String, HashMap<String, CurseForgeFileDataObj>>>,
+> = LazyLock::new(|| AsyncRwLock::new(HashMap::new()));
 /// Modrinth 版本缓存（pid → 版本号 → 版本数据，文件列表页请求时填充）
 static MODRINTH_FILE: LazyLock<AsyncRwLock<HashMap<String, HashMap<String, ModrinthVersionObj>>>> =
     LazyLock::new(|| AsyncRwLock::new(HashMap::new()));
@@ -626,7 +627,11 @@ pub async fn add_resource_download(
     let file_type = file_type.unwrap();
     if !matches!(
         file_type,
-        FileType::Mod | FileType::Resourcepack | FileType::Shaderpack | FileType::Save | FileType::DataPacks
+        FileType::Mod
+            | FileType::Resourcepack
+            | FileType::Shaderpack
+            | FileType::Save
+            | FileType::DataPacks
     ) {
         return Err(String::from("err.fileTypeNotFound"));
     }
@@ -638,7 +643,9 @@ pub async fn add_resource_download(
     if file_type == FileType::Save && !matches!(source, ModPackType::CurseForge) {
         return Err(String::from("addResource.saveSourceLimit"));
     }
-    let world = world.map(|item| item.trim().to_string()).filter(|item| !item.is_empty());
+    let world = world
+        .map(|item| item.trim().to_string())
+        .filter(|item| !item.is_empty());
     // 数据包必须指定目标存档
     if file_type == FileType::DataPacks && world.is_none() {
         return Err(String::from("err.saveNotFound"));
@@ -692,9 +699,7 @@ pub async fn add_resource_download(
                 let mut list = curseforge_api::get_files(vec![fnum])
                     .await
                     .map_err(|err| err.to_string())?;
-                let mut data = list
-                    .pop()
-                    .ok_or_else(|| String::from("err.fileNotFound"))?;
+                let mut data = list.pop().ok_or_else(|| String::from("err.fileNotFound"))?;
                 let obj = curseforge::make_file_item_obj(&mut data, &dir);
                 let info = OnlineInfoObj {
                     path: dir.to_string_lossy().to_string(),
@@ -736,7 +741,12 @@ pub async fn add_resource_download(
     let (obj, online_info) = match res {
         Ok(item) => item,
         Err(err) => {
-            DOWNLOAD_NOW.write().unwrap().entry(uuid).or_default().remove(&key);
+            DOWNLOAD_NOW
+                .write()
+                .unwrap()
+                .entry(uuid)
+                .or_default()
+                .remove(&key);
             emit_add_resource_status(&app, build_status(&app));
             return Err(err);
         }
@@ -797,7 +807,12 @@ pub async fn add_resource_download(
 
         // 完成保留 5 秒、失败保留 15 秒（留时间看清错误）再从任务表移除
         tokio::time::sleep(Duration::from_secs(if ok { 5 } else { 15 })).await;
-        DOWNLOAD_NOW.write().unwrap().entry(uuid).or_default().remove(&key);
+        DOWNLOAD_NOW
+            .write()
+            .unwrap()
+            .entry(uuid)
+            .or_default()
+            .remove(&key);
         emit_add_resource_status(&app2, build_status(&app2));
     });
 

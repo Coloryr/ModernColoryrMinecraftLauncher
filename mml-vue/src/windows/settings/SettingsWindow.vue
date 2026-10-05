@@ -19,6 +19,7 @@ import SkinTab from "./parts/tabs/SkinTab.vue";
 import ClientTab from "./parts/tabs/ClientTab.vue";
 import { t } from "../../lib/i18n";
 import { showToast } from "../../lib/toast";
+import { KEYS, readString, writeString } from "../../lib/storage";
 import { useSettingsUi } from "./composables/useSettingsUi";
 import { useSettingsSkin } from "./composables/useSettingsSkin";
 import { useSettingsNetwork } from "./composables/useSettingsNetwork";
@@ -33,25 +34,15 @@ const emit = defineEmits<{ (e: "close"): void }>();
 
 // ================= 标签（记住上次所在页） =================
 
-const TAB_KEY = "mml.settingsTab";
-
 function storedTab(): SettingsTab {
-  try {
-    const raw = localStorage.getItem(TAB_KEY);
-    return isSettingsTab(raw) ? raw : "ui";
-  } catch {
-    return "ui";
-  }
+  const raw = readString(KEYS.settingsTab);
+  return isSettingsTab(raw) ? raw : "ui";
 }
 
 const tab = ref<SettingsTab>(storedTab());
 
 watch(tab, (v) => {
-  try {
-    localStorage.setItem(TAB_KEY, v);
-  } catch {
-    // 存储不可用不影响使用
-  }
+  writeString(KEYS.settingsTab, v);
 });
 
 // ================= 各区域状态 =================

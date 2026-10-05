@@ -47,10 +47,7 @@ pub fn stats_get_data() -> Result<StatsDataDto, String> {
     for game in mml_game::get_instances() {
         let g = game.read().unwrap();
         seen.insert(g.uuid);
-        let (c, secs, last, running) = agg
-            .get(&g.uuid)
-            .copied()
-            .unwrap_or((0, 0, None, false));
+        let (c, secs, last, running) = agg.get(&g.uuid).copied().unwrap_or((0, 0, None, false));
         items.push(StatsInstanceDto {
             uuid: g.uuid.to_string(),
             name: g.name.clone(),
@@ -78,11 +75,7 @@ pub fn stats_get_data() -> Result<StatsDataDto, String> {
         }
     }
     // 最近游玩的排前面，没记录的按名字排
-    items.sort_by(|a, b| {
-        b.last
-            .cmp(&a.last)
-            .then_with(|| a.name.cmp(&b.name))
-    });
+    items.sort_by(|a, b| b.last.cmp(&a.last).then_with(|| a.name.cmp(&b.name)));
 
     Ok(StatsDataDto {
         launch_count: count.launch_count,

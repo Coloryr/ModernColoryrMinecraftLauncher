@@ -3,6 +3,7 @@
 import { t } from "../../../lib/i18n";
 import { deleteShaderpack, setShader } from "../../../lib/api";
 import ContentHead from "./ContentHead.vue";
+import ListSkeleton from "./ListSkeleton.vue";
 import ResourceRow from "./ResourceRow.vue";
 import type { useResourceData } from "../composables/useResourceData";
 import type { useResourceOps } from "../composables/useResourceOps";
@@ -38,12 +39,13 @@ function sub(item: ShaderItemDto): string {
     <h3 class="head-title">{{ t("resource.shaders") }}</h3>
   </ContentHead>
 
-  <div v-if="loading" class="empty-tip">{{ t("resource.loading") }}</div>
+  <div v-if="loading" class="item-list">
+    <ListSkeleton />
+  </div>
   <div v-else class="item-list">
     <ResourceRow
       v-for="item in shaders"
       :key="item.file"
-      letter="G"
       :name="item.name || item.file"
     >
       <template #badges>

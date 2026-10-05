@@ -527,7 +527,7 @@ pub fn get_instance_order(uuid: &Uuid) -> Option<i32> {
     game_group::index_of(uuid)
 }
 
-/// 按给定顺序重排分组（默认分组恒在首位，不参与排序）
+/// 按给定顺序重排分组（默认分组只是初始排首位，同样可以换位置）
 ///
 /// - `order`: 期望的分组 uuid 顺序；不存在的忽略，没提到的组保持在后
 pub fn reorder_groups(order: &[Uuid]) {

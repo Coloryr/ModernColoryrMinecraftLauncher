@@ -606,6 +606,33 @@ fn create_window(
         .decorations(true)
         .visible(false);
 
+    // WebView2 用户数据目录（EBWebView）搬到缓存目录下
+    //
+    // 不指定的话 Tauri 在 Windows 上会**强制**落到 `%LOCALAPPDATA%\<identifier>\`
+    // （见 tauri 的 manager/webview.rs：`we need to force a data_directory`），
+    // 于是界面的 localStorage / cookie / 缓存全散在系统盘用户目录里，
+    // 与"启动器自带一份便携数据"的预期不符。这里显式指到 `<cache>/webview`：
+    // 用户数据跟运行目录走，卸载 / 拷贝整个目录即可带走。
+    //
+    // 时机是安全的：`cache/` 由 `mml_downloader::init`（经 `mml_core::init`）
+    // 在 main 里创建，而窗口一律在 `run()` 的 setup 之后才建 —— 此时路径已就绪，
+    // 这里再兜一次 create_dir_all 防手删。
+    let builder = match webview_data_dir() {
+        Some(dir) => {
+            if let Err(err) = std::fs::create_dir_all(&dir) {
+                // 建不出来不致命：退回 Tauri 的默认目录总比开不了窗好
+                mml_log::error(format!(
+                    "[window] 创建 webview 数据目录失败，退回默认位置：{} ({err})",
+                    dir.display()
+                ));
+                builder
+            } else {
+                builder.data_directory(dir)
+            }
+        }
+        None => builder,
+    };
+
     let builder = builder.background_color(tauri::window::Color(0x14, 0x16, 0x1a, 0xff));
     let win = match geom {
         Some(g) => {
@@ -673,6 +700,20 @@ fn create_window(
 /// 取某窗口的最小客户区尺寸（注册表口径：逻辑像素）
 fn min_size_of(uuid: &Uuid) -> Option<(f64, f64)> {
     WINDOWS_INFO.get(uuid).map(|e| (e.min_width, e.min_height))
+}
+
+/// WebView2 用户数据目录（EBWebView 的落点）
+///
+/// `<cache>/webview`，其中 `<cache>` 就是下载器的临时目录
+/// （`mml_downloader::get_cache_path()` = `<运行目录>/cache`，见 names::CACHE_DIR）。
+/// 缓存路径的唯一来源是下载器，这里**不**自己拼运行目录。
+///
+/// 还没 init 完（`CACHE_PATH` 未设置）时返回 `None`：正常流程下不会发生
+/// （`mml_core::init` 在 `main` 里先跑完，窗口一律在 `run()` 的 setup 之后才建），
+/// 真发生了就退回 Tauri 的默认目录，不要 panic。
+fn webview_data_dir() -> Option<PathBuf> {
+    let cache = mml_downloader::get_cache_path();
+    Some(cache.join(names::WEBVIEW_DIR))
 }
 
 /// 注册表里的最小客户区尺寸（逻辑像素）→ 物理像素
@@ -952,22 +993,40 @@ pub fn window_get_window_sizes() -> Vec<WindowSizeDto> {
 /// - `kind`: 窗口类型
 /// - `instance`: 目标实例 UUID（游戏日志窗口定位要查看的实例；窗口已存在时
 ///   聚焦并推送 `log-focus` 事件让已开窗口切换实例）
+/// - `query`: 新窗口 URL 上的 query（**不含 `?`**）
+///
+/// `query` 由前端 `windowManager` 组装 —— 目标窗口的实例与"要打开哪个项目"
+/// （`uuid` / `psource` / `ppid` … ）都只能靠 URL 送达，而参数名在前端
+/// （`PROJ_PARAMS`，读那边也用它）只有一份，所以不在 Rust 侧另立一套。
+/// 传空 / 不传时退回下面按 kind 拼的老路子（只有 log / export 带 uuid）。
 #[tauri::command]
 pub async fn window_open_window(
     app: AppHandle,
     kind: String,
     instance: Option<String>,
+    query: Option<String>,
 ) -> Result<(), String> {
     kind_parse_check(&kind, &instance)?;
     let Some(uuid) = uuid_for_kind(&kind) else {
         return Err(format!("unknown window kind: {kind}"));
     };
-    // log / export 窗口按 uuid 定位实例：新窗口靠 URL query 拿目标
-    let url_path = match (&kind[..], &instance) {
-        ("log", Some(instance)) | ("export", Some(instance)) => {
-            format!("index.html?window={kind}&uuid={instance}")
+    // 新窗口的目标参数只能靠 URL 送达：前端组装好了就用它（带 uuid / 项目参数），
+    // 没给就退回老路子 —— 只有 log / export 把 uuid 拼进去
+    let url_path = match query.as_deref().filter(|q| !q.is_empty()) {
+        Some(query) => {
+            // 前端那份 query 是 URLSearchParams 编出来的（不会出现裸 # / 控制字符）；
+            // 这里只做一次兜底，别把畸形串拼进 WebviewUrl
+            if query.contains('#') || query.chars().any(char::is_control) {
+                return Err(String::from("err.windowQuery"));
+            }
+            format!("index.html?{query}")
         }
-        _ => String::from("index.html"),
+        None => match (&kind[..], &instance) {
+            ("log", Some(instance)) | ("export", Some(instance)) => {
+                format!("index.html?window={kind}&uuid={instance}")
+            }
+            _ => String::from("index.html"),
+        },
     };
     open_window_from_uuid(&app, &uuid, &url_path)?;
     // 新创建的窗口靠 URL query 拿目标；已存在的窗口 URL 不变，靠事件切换

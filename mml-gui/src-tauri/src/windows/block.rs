@@ -4,8 +4,8 @@
 //! 前端三态视图（未渲染 / 渲染中 / 已渲染）由状态驱动。
 
 use std::sync::{
-    atomic::{AtomicBool, AtomicU32, Ordering},
     Arc, LazyLock, Mutex,
+    atomic::{AtomicBool, AtomicU32, Ordering},
 };
 
 use tauri::{AppHandle, Emitter};
@@ -185,7 +185,9 @@ pub async fn block_render_start(app: AppHandle, force: bool) -> Result<bool, Str
     tauri::async_runtime::spawn(async move {
         let result = mml_tex_draw::load_blocks(Some(gui), force).await;
         // 主动取消不算失败（渲染循环随后就退出，状态复位交给下面统一做）
-        if let Err(err) = result && !matches!(err, ErrorType::TaskCancel) {
+        if let Err(err) = result
+            && !matches!(err, ErrorType::TaskCancel)
+        {
             *BLOCK_RENDER.error.lock().unwrap() = Some(err.to_string());
         }
         BLOCK_RENDER.running.store(false, Ordering::Release);
@@ -362,9 +364,11 @@ fn render_icon_png(
         let cw = w.min(img_w - cx);
         let ch = h.min(img_h - cy);
         // 选区：等比缩放后居中裁掉多余的边 → 正好是正方形图标
-        image
-            .crop_imm(cx, cy, cw, ch)
-            .resize_to_fill(size, size, image::imageops::FilterType::Lanczos3)
+        image.crop_imm(cx, cy, cw, ch).resize_to_fill(
+            size,
+            size,
+            image::imageops::FilterType::Lanczos3,
+        )
     };
 
     let mut out = std::io::Cursor::new(Vec::new());

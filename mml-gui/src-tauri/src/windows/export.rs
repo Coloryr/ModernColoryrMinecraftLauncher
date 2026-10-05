@@ -7,7 +7,8 @@
 use std::{
     path::PathBuf,
     sync::{
-        Arc, atomic::{AtomicBool, Ordering},
+        Arc,
+        atomic::{AtomicBool, Ordering},
     },
 };
 
@@ -25,9 +26,9 @@ use tauri::{AppHandle, Emitter};
 use uuid::Uuid;
 
 use crate::{
-    listens,
     dtos::export_dto::{ExportConfigDto, ExportInfoDto, ExportModDto, ExportProgressDto},
     dtos::log_dto::LogFocusDto,
+    listens,
 };
 
 /// 导出任务进行中（同时只允许一个导出任务）
@@ -74,8 +75,10 @@ pub fn export_get_info(uuid: String) -> Result<ExportInfoDto, String> {
 
     // mod_info.json 里有来源（modid + fileid 非空）的文件走在线清单，其余进 overrides
     let online_list = game.read_online_info();
-    let mut online: std::collections::HashMap<String, &mml_game::launcher::file_online_info_obj::OnlineInfoObj> =
-        std::collections::HashMap::new();
+    let mut online: std::collections::HashMap<
+        String,
+        &mml_game::launcher::file_online_info_obj::OnlineInfoObj,
+    > = std::collections::HashMap::new();
     for info in online_list.values() {
         if !info.modid.is_empty() && !info.fileid.is_empty() {
             online.insert(info.file.clone(), info);
@@ -203,8 +206,10 @@ pub fn export_run(app: AppHandle, uuid: String, config: ExportConfigDto) -> Resu
 
     // 在线模组：mods 目录文件与 mod_info.json 对上号的（进 manifest / index）
     let online_list = game.read_online_info();
-    let mut online_by_name: std::collections::HashMap<String, mml_game::launcher::file_online_info_obj::OnlineInfoObj> =
-        std::collections::HashMap::new();
+    let mut online_by_name: std::collections::HashMap<
+        String,
+        mml_game::launcher::file_online_info_obj::OnlineInfoObj,
+    > = std::collections::HashMap::new();
     for info in online_list.into_values() {
         if !info.modid.is_empty() && !info.fileid.is_empty() {
             online_by_name.insert(info.file.clone(), info);

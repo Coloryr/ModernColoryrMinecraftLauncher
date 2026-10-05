@@ -17,6 +17,7 @@ import { commands } from "../../lib/bindings";
 import { loadGuiConfig, type ClientConfig } from "../../lib/guiConfig";
 import { t, tErr } from "../../lib/i18n";
 import { showToast } from "../../lib/toast";
+import { KEYS, onStorageChange } from "../../lib/storage";
 import { openWindow } from "../windowManager";
 import {
   selectedInstance,
@@ -144,9 +145,14 @@ const MODE_OPTIONS = computed(() => [
  */
 const groupList = ref<GroupDto[]>([]);
 
-/** 默认分组：后端保证它恒存在、排在首位且名字留白；表拿不到时退回首位那个 */
+/**
+ * 默认分组的 uuid（对不上时回退到"名字为空"那个）
+ *
+ * 默认分组由后端保证恒存在、名字留白；它**只是初始排在首位**，用户能拖到别处，
+ * 所以这里**按名字找**，不能取"表里的第一个"（那会取到恰好排在最前的那一组）。
+ */
 const defaultGroupId = computed(
-  () => groupList.value.find((g) => !g.name.trim())?.uuid ?? groupList.value[0]?.uuid ?? "",
+  () => groupList.value.find((g) => !g.name.trim())?.uuid ?? "",
 );
 
 /**
@@ -942,11 +948,14 @@ async function adoptAddedInstance(uuid: string) {
   if (inst) select(inst);
 }
 
-/** 添加实例窗口创建成功后（跨窗口 storage 事件），刷新并选中新实例 */
-async function onAddedInstanceStorage(e: StorageEvent) {
-  if (e.key !== "mml.addedInstance" || !e.newValue) return;
-  await adoptAddedInstance(e.newValue);
+/** 添加实例窗口创建成功后（跨窗口存储通知），刷新并选中新实例 */
+async function onAddedInstanceStorage(newValue: string | null) {
+  if (!newValue) return;
+  await adoptAddedInstance(newValue);
 }
+
+/** 上面那条通知的退订函数（挂载时订阅，卸载时摘掉） */
+let unlistenAdded: (() => void) | null = null;
 
 // 轻提示（统一使用全局 showToast）
 const showRename = ref(false);
@@ -1415,7 +1424,7 @@ onMounted(async () => {
   initResourceStatus().then((unlisten) => unlistens.push(unlisten));
   document.addEventListener("click", onDocClick);
   document.addEventListener("keydown", onDocKeyDown);
-  window.addEventListener("storage", onAddedInstanceStorage);
+  unlistenAdded = onStorageChange(KEYS.addedInstance, (v) => void onAddedInstanceStorage(v));
   // 客户端设置：初始加载 + 设置窗口保存后实时跟随
   try {
     const cfg = await loadGuiConfig();
@@ -1431,7 +1440,7 @@ onUnmounted(() => {
   if (motdTimer !== null) clearInterval(motdTimer);
   document.removeEventListener("click", onDocClick);
   document.removeEventListener("keydown", onDocKeyDown);
-  window.removeEventListener("storage", onAddedInstanceStorage);
+  unlistenAdded?.();
 });
 
 // 后端核心加载完成事件：决定关闭启动页（进入主界面）还是显示错误页
@@ -1581,6 +1590,7 @@ onMounted(async () => {
               :current-instance="selected"
               @select="(inst: InstanceInfoDto) => select(inst)"
               @quick-launch="quickLaunch"
+              back-label-key="home.backToList"
               @back="newsActive = false"
             />
             </section>
@@ -1725,6 +1735,7 @@ onMounted(async () => {
                 :current-instance="selected"
                 @select="(inst: InstanceInfoDto) => select(inst)"
                 @quick-launch="quickLaunch"
+                back-label-key="home.backToDetail"
                 @back="newsActive = false"
               />
 

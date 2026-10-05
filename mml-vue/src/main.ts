@@ -38,7 +38,7 @@ document.addEventListener("contextmenu", (e) => {
   e.preventDefault();
 });
 
-/** 启动引导：GUI 状态由 Rust（gui_config.json）提供，浏览器回退 localStorage */
+/** 启动引导：GUI 状态由 Rust（gui_config.json）提供，浏览器回退本地存储 */
 async function bootstrap() {
   const cfg = await loadGuiConfig();
   if (cfg) {
@@ -56,7 +56,7 @@ async function bootstrap() {
   }
 
   // 背景图：不阻塞挂载（大图走 base64 IPC 很慢，挂着等它=黑屏一阵）。
-  // 正常启动时背景 dataURL 已从 localStorage 秒取，无闪底色；
+  // 正常启动时背景 dataURL 已从本地存储秒取，无闪底色；
   // 只有首次设置背景的那一次会先出界面、背景随后淡入
   void restoreBg();
 

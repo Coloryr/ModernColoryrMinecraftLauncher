@@ -31,6 +31,20 @@ pub fn settings_get_system_fonts() -> Vec<String> {
     families
 }
 
+// ================= 缓存目录 =================
+
+/// 下载缓存目录（`<运行目录>/cache`，见 mml-downloader）的字符串形式
+///
+/// 前端把 webview 的持久化数据（localStorage 的那份镜像）写在它的 `webview/` 子目录下
+/// —— 那里是启动器自己的缓存区，与下载临时文件同一个根、由内核 `init` 保证存在。
+/// 路径的唯一来源是 `mml_downloader::get_cache_path()`，**不要**在前端另拼一套。
+#[tauri::command]
+pub fn settings_get_cache_path() -> String {
+    mml_downloader::get_cache_path()
+        .to_string_lossy()
+        .to_string()
+}
+
 // ================= 背景图 =================
 
 /// 最近一次下载的原图缓存（网址来源，仅内存）：调「原始大小」时按来源命中缓存，

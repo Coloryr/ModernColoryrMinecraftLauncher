@@ -603,9 +603,9 @@ pub async fn add_get_support_loaders(app: AppHandle, mc: String) -> Result<Vec<S
         let mc_clone = mc.clone();
         let result = cell
             .get_or_try_init(|| async move {
-                let gui: ProgressGui = Some(
-                    Arc::new(SupportLoadersProgressGui { app: gui_app }) as Arc<dyn IProgressGui>
-                );
+                let gui: ProgressGui =
+                    Some(Arc::new(SupportLoadersProgressGui { app: gui_app })
+                        as Arc<dyn IProgressGui>);
                 mml_game::loader::loader_versions::get_support_loaders(&mc_clone, gui).await
             })
             .await;

@@ -576,7 +576,7 @@ impl InstanceSettingObj {
     ///
     /// 成功返回 `Ok(())`；查询或保存失败返回对应错误
     pub async fn auto_mark(&self, over: bool) -> CoreResult<()> {
-        let list = self.read_mod_fast().await;
+        let list = self.read_mod_fast(None).await;
         let mut online = self.read_online_info();
 
         let hashs: Vec<String> = online

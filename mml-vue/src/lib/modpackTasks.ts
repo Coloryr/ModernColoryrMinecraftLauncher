@@ -2,7 +2,7 @@
 //
 // 任务在后端全局表维护，与窗口生命周期解耦；本模块只负责把
 // add-modpack-status 事件 / 初始查询落到本地 ref，并处理终态副作用：
-// - 安装成功 → 写 localStorage 通知主窗口切换选中实例（见 MainWindow 的 storage 监听）
+// - 安装成功 → 写本地存储通知主窗口切换选中实例（见 MainWindow 的存储监听）
 // - 完成 / 失败 → toast；只由当前"负责显示"的窗口弹
 //
 // "谁负责"两种窗口模式下不一样，见 shouldToast：
@@ -13,6 +13,7 @@ import { ref } from "vue";
 import { api, onAddModpackStatus } from "./api";
 import { t, tErr } from "./i18n";
 import { showToast } from "./toast";
+import { KEYS, emitChange, writeRaw } from "./storage";
 import { currentKind, multiWindow } from "../windows/windowManager";
 import type { ModPackStatusDto } from "./bindings";
 
@@ -67,7 +68,9 @@ export function useModpackStatus(
       }
       seenDone.add(task.uuid);
       if (task.instanceUuid) {
-        localStorage.setItem("mml.addedInstance", task.instanceUuid);
+        writeRaw(KEYS.addedInstance, task.instanceUuid);
+        // 通知其它窗口（原生的 storage 事件只跨文档触发，这里显式广播一次）
+        emitChange(KEYS.addedInstance, task.instanceUuid);
       }
       // 初次同步只记录：窗口打开前就结束的任务不再提示，也不把选中实例改过去
       if (silent) {
@@ -75,9 +78,9 @@ export function useModpackStatus(
       }
 
       if (task.done) {
-        // 接管新实例与弹提示分开判：多窗口模式下整合包窗口开着时由它写 localStorage、
-        // 主窗口收跨窗口的 storage 事件接管，这里就不重复通知；单窗口模式没有那个事件
-        // （同一个文档里写 localStorage 不触发 storage），主窗口只能靠这个回调，
+        // 接管新实例与弹提示分开判：多窗口模式下整合包窗口开着时由它写本地存储、
+        // 主窗口收跨窗口的存储通知接管，这里就不重复通知；单窗口模式没有那个事件
+        // （同一个文档里写不触发跨窗口通知），主窗口只能靠这个回调，
         // 所以它不能跟着下面 toast 的门控一起被跳过
         if (task.instanceUuid && !(multiWindow.value && e.windowOpen)) {
           onAddedInstance?.(task.instanceUuid);

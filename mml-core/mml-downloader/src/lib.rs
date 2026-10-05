@@ -142,9 +142,16 @@ pub fn init<P: AsRef<Path>>(path: P) -> CoreResult<()> {
         path_helper::create_dir_all(cache)?;
     } else {
         // 启动时清空下载临时目录：此时没有任何下载任务，目录里只会有
-        // 上次运行残留的临时文件（崩溃 / 断电 / 任务被强杀留下），不清会一直占空间
+        // 上次运行残留的临时文件（崩溃 / 断电 / 任务被强杀留下），不清会一直占空间。
+        //
+        // **跳过 webview 子目录**：界面的 EBWebView 档案（localStorage / cookie / 缓存）
+        // 也放在 cache 下，那是长期数据，清了等于每次启动都"重装一遍界面状态"
+        // （见 names::WEBVIEW_DIR 与 mml-gui 的 windows/mod.rs）。
         if let Ok(entries) = std::fs::read_dir(cache) {
             for entry in entries.flatten() {
+                if entry.file_name() == names::WEBVIEW_DIR {
+                    continue;
+                }
                 let path = entry.path();
                 if path.is_dir() {
                     let _ = std::fs::remove_dir_all(path);

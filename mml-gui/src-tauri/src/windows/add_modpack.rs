@@ -28,11 +28,11 @@ use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
 use crate::collect_utils;
-use crate::listens;
 use crate::dtos::add_modpack_dto::{ModPackStatusDto, ModPackTaskDto};
 use crate::dtos::add_resource_dto::{
     FileListDto, FileListItemDto, ProjectDetailDto, ProjectDto, ProjectItemDto,
 };
+use crate::listens;
 use crate::windows::add_resource::SourceInfo;
 
 use super::add::{instance_gui, pack_state_id};
@@ -358,9 +358,7 @@ pub async fn add_modpack_install(
             tauri::async_runtime::block_on(async {
                 match source.as_str() {
                     "curseforge" => {
-                        let fid: u64 = file_id
-                            .parse()
-                            .map_err(|_| "err.badFileId".to_string())?;
+                        let fid: u64 = file_id.parse().map_err(|_| "err.badFileId".to_string())?;
                         let list = curseforge_api::get_files(vec![fid])
                             .await
                             .map_err(|e| e.to_string())?;
@@ -754,7 +752,11 @@ fn installed_modpack_pids() -> HashSet<String> {
         .iter()
         .filter_map(|item| {
             let temp = item.read().unwrap();
-            if temp.is_modpack { temp.pid.clone() } else { None }
+            if temp.is_modpack {
+                temp.pid.clone()
+            } else {
+                None
+            }
         })
         .collect()
 }

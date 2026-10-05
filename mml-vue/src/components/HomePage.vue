@@ -17,8 +17,19 @@ withDefaults(
     loading?: boolean;
     page?: number;
     hasMore?: boolean;
+    /**
+     * 页头返回按钮的文案键
+     *
+     * 返回的**去处随视图模式而变**（由调用方决定，见 MainWindow）：
+     * - 列表模式：返回的是"实例列表"那一屏（主页与它同为整屏，属于同级切换）；
+     * - 分组 / 平铺模式：实例列表是**常驻的侧栏**，主页只是右侧内容区的一屏，
+     *   返回的是被它盖住的"实例设置"详情。
+     *
+     * 所以文案不能写死 —— 写死会出现"点了'返回实例列表'却回到实例设置"。
+     */
+    backLabelKey?: string;
   }>(),
-  { loading: false, page: 1, hasMore: true },
+  { loading: false, page: 1, hasMore: true, backLabelKey: "home.backToList" },
 );
 
 const emit = defineEmits<{
@@ -42,12 +53,13 @@ function entry(name: string) {
 
 <template>
   <div class="home-page">
-    <!-- 页头：主页标题 + 返回实例列表（主页自己的页面级控件，不占卡片槽位） -->
+    <!-- 页头：主页标题 + 返回（主页自己的页面级控件，不占卡片槽位）。
+         按钮文案随视图模式变，返回的去处见 backLabelKey 的说明 -->
     <div v-if="!empty" class="page-head">
       <h2 class="page-title">{{ t("home.entry") }}</h2>
       <button class="page-back" @click="emit('back')">
         <GlyphIcon class="page-back-arrow" name="chevron-left" :size="16" />
-        {{ t("home.backToList") }}
+        {{ t(backLabelKey) }}
       </button>
     </div>
 

@@ -1,19 +1,24 @@
-// 资源管理窗口的视图偏好：左侧分类顺序 / 上次打开的类别（将来还有模组的展示方式与分组）
+// 资源管理窗口的视图偏好：左侧分类顺序 / 上次打开的类别 / 模组展示方式
 //
-// 纯界面偏好，存 localStorage —— 与方块窗口的 `mml.blockView` 同一做法：
-// 换台机器 / 清了缓存不影响功能，也就没必要塞进 gui_config 那份跨窗口配置里。
+// **存在实例自己的 `guisetting.json` 里**（`Gui` 字段，见后端 `gui_setting::GameViewSettingObj`），
+// 不走前端本地存储：这三项都是"这个实例我习惯怎么看"，换个实例就该换一套 ——
+// 本地存储是每台机器一份，切实例时顺序不变反而奇怪。
+//
+// 与模组分组同一份文件、同一套读改写（load → 改这一块 → 存回），互不覆盖。
+// **排序口径与默认值全在这里**：后端只保管"一串分类 id"，不认识有哪几个分类
+// （新增分类时只改这个文件，不用动 Rust）。
 import { ref } from "vue";
+import { getResourceView, setResourceView } from "../../../lib/api";
 import { RESOURCE_CATEGORIES, type CategoryId, type ModView } from "../types";
-
-const VIEW_KEY = "mml.resourceView";
+import type { useResourceData } from "./useResourceData";
 
 interface ViewPref {
   /** 左侧分类的顺序（用户拖出来的；只认已知分类，新增分类自动补在末尾） */
-  order: CategoryId[];
+  order: string[];
   /** 上次打开的类别 */
-  category: CategoryId;
+  category: string;
   /** 模组的展示方式：列表 / 表格 / 树 */
-  modView: ModView;
+  modView: string;
 }
 
 function isCategory(value: unknown): value is CategoryId {
@@ -21,22 +26,14 @@ function isCategory(value: unknown): value is CategoryId {
 }
 
 function isModView(value: unknown): value is ModView {
-  return value === "list" || value === "table" || value === "tree";
-}
-
-function readPref(): Partial<ViewPref> {
-  try {
-    const raw: unknown = JSON.parse(localStorage.getItem(VIEW_KEY) ?? "{}");
-    return raw && typeof raw === "object" ? (raw as Partial<ViewPref>) : {};
-  } catch {
-    return {};
-  }
+  return value === "list" || value === "table";
 }
 
 /**
  * 把存下来的顺序补齐成"完整且不重复"的一份
  *
  * 只认已知分类：版本升级后新增了分类，它会自动补在末尾；删掉的分类直接从顺序里消失。
+ * 空数组（没存过）也走这条路，得到的就是全部分类的默认顺序。
  */
 function normalizeOrder(saved: unknown): CategoryId[] {
   const all = RESOURCE_CATEGORIES.map((c) => c.id);
@@ -51,29 +48,65 @@ function normalizeOrder(saved: unknown): CategoryId[] {
   return order;
 }
 
-export function useResourceView() {
-  const pref = readPref();
+export function useResourceView(data: ReturnType<typeof useResourceData>) {
+  const { instanceUuid } = data;
 
-  /** 左侧分类的显示顺序（拖一下就会写回 localStorage） */
-  const order = ref<CategoryId[]>(normalizeOrder(pref.order));
+  /** 左侧分类的显示顺序（拖一下就会写回实例的 guisetting.json） */
+  const order = ref<CategoryId[]>(normalizeOrder([]));
   /** 上次打开的类别（没有记录时默认存档） */
-  const initialCategory: CategoryId = isCategory(pref.category) ? pref.category : "saves";
+  const initialCategory = ref<CategoryId>("saves");
   /** 模组的展示方式（列表 / 表格 / 树） */
-  const modView = ref<ModView>(isModView(pref.modView) ? pref.modView : "list");
-  /** 当前类别（save 时要一起写回，和 order 是同一份偏好） */
-  let lastCategory: CategoryId = initialCategory;
+  const modView = ref<ModView>("list");
+  /** 当前类别（保存时要一起写回，和 order 是同一份偏好） */
+  let lastCategory: CategoryId = "saves";
 
+  /**
+   * 加载代次号
+   *
+   * 实例可以切换，而每次加载都要等后端读文件；只有最新一发算数，
+   * 否则先发后到的会把新实例的偏好覆盖成旧实例的（与 useResourceData 的 loadSeq 同一做法）。
+   */
+  let loadSeq = 0;
+
+  /** 存一份到实例设置（后端整份覆盖这一块，未改的项照传） */
   function save() {
+    const uuid = instanceUuid.value;
+    if (!uuid) return;
     const value: ViewPref = {
       order: order.value,
       category: lastCategory,
       modView: modView.value,
     };
-    try {
-      localStorage.setItem(VIEW_KEY, JSON.stringify(value));
-    } catch {
-      /* 隐私模式等写不了：偏好记不住不影响用 */
+    // 失败只提示、不回滚：偏好记不住不该打断使用
+    void setResourceView(uuid, value.order, value.category, value.modView).catch(() => {});
+  }
+
+  /** 读该实例的偏好（进入资源窗口 / 切换实例时调用） */
+  async function load() {
+    const uuid = instanceUuid.value;
+    if (!uuid) {
+      // 没有实例：回到默认顺序与默认类别
+      order.value = normalizeOrder([]);
+      modView.value = "list";
+      initialCategory.value = "saves";
+      lastCategory = "saves";
+      return;
     }
+    const seq = ++loadSeq;
+    let pref: ViewPref;
+    try {
+      pref = await getResourceView(uuid);
+    } catch {
+      pref = { order: [], category: "", modView: "" };
+    }
+    // 慢的那一发回来时可能已经切到别的实例了：丢弃
+    if (seq !== loadSeq) return;
+
+    order.value = normalizeOrder(pref.order);
+    modView.value = isModView(pref.modView) ? pref.modView : "list";
+    const category: CategoryId = isCategory(pref.category) ? pref.category : "saves";
+    initialCategory.value = category;
+    lastCategory = category;
   }
 
   /** 记住这次打开的是哪一类（切换分类时由外壳调用） */
@@ -98,6 +131,7 @@ export function useResourceView() {
     order,
     initialCategory,
     modView,
+    load,
     rememberCategory,
     setOrder,
     setModView,

@@ -1,18 +1,16 @@
 // 界面字体设置：选择系统字体族后全局应用（CSS 变量 --app-font）
 // 字体列表经 settings_get_system_fonts 从 Rust 侧枚举（font-kit）
 import { ref } from "vue";
+import { KEYS, readString, writeString } from "./storage";
 import { saveGuiConfig } from "./guiConfig";
 
-const FONT_KEY = "mml.font";
-
 /** 当前字体族名（空串 = 默认字体栈） */
-export const fontFamily = ref(localStorage.getItem(FONT_KEY) ?? "");
+export const fontFamily = ref(readString(KEYS.font));
 
-/** 设置界面字体：空串恢复默认；持久化到 localStorage + gui_config.json */
+/** 设置界面字体：空串恢复默认；持久化到本地存储 + gui_config.json */
 export function setFontFamily(family: string) {
   fontFamily.value = family;
-  if (family) localStorage.setItem(FONT_KEY, family);
-  else localStorage.removeItem(FONT_KEY);
+  writeString(KEYS.font, family);
   applyFont();
   saveGuiConfig({ font: family });
 }
@@ -20,8 +18,7 @@ export function setFontFamily(family: string) {
 /** 启动恢复：只同步内存与镜像，不回写 gui_config.json */
 export function restoreFontFamily(family: string) {
   fontFamily.value = family;
-  if (family) localStorage.setItem(FONT_KEY, family);
-  else localStorage.removeItem(FONT_KEY);
+  writeString(KEYS.font, family);
   applyFont();
 }
 
@@ -40,5 +37,5 @@ export function applyFont() {
   root.style.setProperty("--app-font-en", `${f}, "Segoe UI", "Microsoft YaHei", "PingFang SC", system-ui, sans-serif`);
 }
 
-// 窗口启动即应用（配置恢复前的兜底用 localStorage 值）
+// 窗口启动即应用（配置恢复前的兜底用本地存储值）
 applyFont();

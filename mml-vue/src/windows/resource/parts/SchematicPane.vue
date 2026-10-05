@@ -3,6 +3,7 @@
 import { t } from "../../../lib/i18n";
 import { deleteSchematic } from "../../../lib/api";
 import ContentHead from "./ContentHead.vue";
+import ListSkeleton from "./ListSkeleton.vue";
 import ResourceRow from "./ResourceRow.vue";
 import type { useResourceData } from "../composables/useResourceData";
 import type { useResourceOps } from "../composables/useResourceOps";
@@ -37,12 +38,13 @@ function sub(item: SchematicItemDto): string {
     <h3 class="head-title">{{ t("resource.schematics") }}</h3>
   </ContentHead>
 
-  <div v-if="loading" class="empty-tip">{{ t("resource.loading") }}</div>
+  <div v-if="loading" class="item-list">
+    <ListSkeleton />
+  </div>
   <div v-else class="item-list">
     <ResourceRow
       v-for="item in schematics"
       :key="item.file"
-      letter="B"
       :name="item.name || item.file"
     >
       <template #badges>

@@ -41,6 +41,8 @@
   appearance: none;
   -webkit-appearance: none;
   padding-right: 28px;
+  /* 下拉是可点的控件，给个手型光标（原生 <select> 默认是箭头光标） */
+  cursor: pointer;
   /* 箭头是 data-URI 图片，颜色按主题各嵌一份（见 themes.css 的 --select-arrow）：
      内联 SVG 图片拿不到 currentColor，所以走变量而不是写死 gray */
   background-image: var(--select-arrow);
@@ -148,30 +150,17 @@ select.field-select {
   cursor: not-allowed;
 }
 
-/* 紧凑场景（日志工具条等）的小号下拉：外观对齐 field-select（同箭头 / 不透明底 / 主题边框），
-   只缩小尺寸；弹层保持原生（高度太小不适合页内渲染） */
+/* 紧凑场景（日志工具条等）的小号下拉：**挂 `.field-select` 再只覆盖尺寸**，
+   不另抄一份外观 —— 箭头 / 不透明底 / 主题边框 / 行高 / 禁用态都在那边一份。
+   弹层仍是系统原生的：控件太小，不适合 `appearance: base-select` 的页内渲染。 */
 .filter-select {
   flex: 1;
   min-width: 0;
   padding: 6px 24px 6px 8px;
   font-size: 12px;
-  color: var(--text);
-  background: var(--bg-solid, var(--bg-card));
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  cursor: pointer;
-  outline: none;
-  font-family: inherit;
-  appearance: none;
-  -webkit-appearance: none;
-  background-image: var(--select-arrow);
-  background-repeat: no-repeat;
+  /* .field-select 的 min-height 是表单规格（42px），工具条里要矮一档 */
+  min-height: 0;
   background-position: right 6px center;
-  background-size: 12px;
-}
-
-.filter-select:focus {
-  border-color: var(--accent);
 }
 
 .range {

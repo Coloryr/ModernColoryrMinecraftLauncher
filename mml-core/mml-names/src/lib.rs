@@ -242,11 +242,11 @@ mod tests {
         });
         assert_eq!(
             i18::get_error(err.clone()),
-            String::from("配置文件 a.json 保存失败：boom")
+            String::from("配置文件 a.json 处理失败：boom")
         );
 
         // Display 实现（走同一条 i18 路径）
-        assert_eq!(err.to_string(), "配置文件 a.json 保存失败：boom");
+        assert_eq!(err.to_string(), "配置文件 a.json 处理失败：boom");
         assert_eq!(ErrorType::TaskCancel.to_string(), "任务已取消");
         assert_eq!(ErrorType::TaskTimeout.to_string(), "任务执行超时");
 

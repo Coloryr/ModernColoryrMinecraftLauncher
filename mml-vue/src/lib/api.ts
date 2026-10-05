@@ -31,7 +31,9 @@ import type {
   LogEvent,
   LogFocusDto,
   ModGroupDto,
+  ResourceViewDto,
   ModItemDto,
+  ModScanProgressDto,
   MotdDto,
   ModPackStatusDto,
   NewsItem,
@@ -51,7 +53,7 @@ import type {
   SystemMemoryDto,
   VersionInfoDto,
 } from "./bindings";
-import { AddLoaderProgress, AddModpackStatus, AddNameConflict, AddPackProgress, AddResourceStatus, BlockRender, ClientConfigChange, CloseBlocked, CollectChange, CustomHomeChange, DownloadItem, DownloadTask, ExportFocus, ExportProgress, GameExit, GameLog, InstanceChange, JavaChange, LaunchError, LaunchState, LogFocus } from "./listens";
+import { AddLoaderProgress, AddModpackStatus, AddNameConflict, AddPackProgress, AddResourceStatus, BlockRender, ClientConfigChange, CloseBlocked, CollectChange, CustomHomeChange, DownloadItem, DownloadTask, ExportFocus, ExportProgress, GameExit, GameLog, InstanceChange, JavaChange, LaunchError, LaunchState, LogFocus, ResourceListModsProgress } from "./listens";
 
 export interface CreateInstanceOpts {
   loader?: string;
@@ -728,6 +730,10 @@ export function getLoadState(): Promise<LoadState> {
 export function listMods(uuid: string): Promise<ModItemDto[]> {
   return commands.resource.listMods(uuid);
 }
+/** 模组扫描进度事件（`x/x`）：只在扫描期间来，用于加载占位上显示进度 */
+export function onModScanProgress(cb: (e: ModScanProgressDto) => void): Promise<UnlistenFn> {
+  return listen<ModScanProgressDto>(ResourceListModsProgress, (e) => cb(e.payload));
+}
 /** 启用模组（去掉 .disable / .disabled 后缀） */
 export function enableMod(uuid: string, modUuid: string): Promise<void> {
   return commands.resource.modEnable(uuid, modUuid);
@@ -741,25 +747,63 @@ export function deleteMod(uuid: string, modUuid: string): Promise<void> {
   return commands.resource.deleteMod(uuid, modUuid);
 }
 
-/** 取该实例的模组自定义分组（按用户建立顺序） */
+/** 取该实例的模组自定义分组（按用户拖出来的顺序；分组用 uuid 作键） */
 export function getModGroups(uuid: string): Promise<ModGroupDto[]> {
   return commands.resource.modGroups(uuid);
 }
-/** 新建模组分组（重名会抛错） */
-export function addModGroup(uuid: string, name: string): Promise<void> {
+/** 新建模组分组（重名会抛错）；**返回新分组的 uuid**，顺序表 / 折叠集合要用它 */
+export function addModGroup(uuid: string, name: string): Promise<string> {
   return commands.resource.modGroupAdd(uuid, name);
 }
-/** 删除模组分组（组内模组回到"未分组"，不动磁盘文件） */
-export function removeModGroup(uuid: string, name: string): Promise<void> {
-  return commands.resource.modGroupRemove(uuid, name);
+/** 删除模组分组（传分组 uuid；组内模组回到"未分组"，不动磁盘文件） */
+export function removeModGroup(uuid: string, group: string): Promise<void> {
+  return commands.resource.modGroupRemove(uuid, group);
 }
-/** 重命名模组分组（重名会抛错） */
-export function renameModGroup(uuid: string, name: string, newName: string): Promise<void> {
-  return commands.resource.modGroupRename(uuid, name, newName);
+/** 取收起的分组块键集合（分组 uuid，与分组表同一套键口径） */
+export function getModGroupsCollapsed(uuid: string): Promise<string[]> {
+  return commands.resource.modGroupsCollapsed(uuid);
 }
-/** 把若干模组移到某个分组；group 传 null = 移出所有分组（回到"未分组"） */
+/** 保存收起的分组块键集合（分组 uuid；空数组 = 全展开） */
+export function setModGroupsCollapsed(uuid: string, collapsed: string[]): Promise<void> {
+  return commands.resource.modGroupCollapsedSet(uuid, collapsed);
+}
+/** 重命名模组分组（传分组 uuid；只改名字，键与成员都不动） */
+export function renameModGroup(uuid: string, group: string, newName: string): Promise<void> {
+  return commands.resource.modGroupRename(uuid, group, newName);
+}
+/** 把若干模组移到某个分组（传分组 uuid）；group 传 null = 移出所有分组 */
 export function setModGroup(uuid: string, group: string | null, keys: string[]): Promise<void> {
   return commands.resource.modGroupSet(uuid, group, keys);
+}
+/**
+ * 某实例的资源窗口视图偏好（左侧分类顺序 / 上次类别 / 模组展示方式）
+ *
+ * 存在**实例**的 `guisetting.json` 里（跟着实例走），不是全局界面状态。
+ */
+export function getResourceView(uuid: string): Promise<ResourceViewDto> {
+  return commands.resource.viewGet(uuid);
+}
+/** 保存资源窗口视图偏好（整份覆盖这一块；排序与默认值的口径在前端 useResourceView） */
+export function setResourceView(
+  uuid: string,
+  order: string[],
+  category: string,
+  modView: string,
+): Promise<void> {
+  return commands.resource.viewSet(uuid, order, category, modView);
+}
+/**
+ * 保存分组块的显示顺序
+ *
+ * `order` 是**分组 uuid**（状态分组用 `STATE_GROUP_ID_*` 那几个固定 uuid，
+ * 与后端 `resource.rs::STATE_GROUP_*` 同源），自建分组就是它自己的 uuid。
+ */
+export function setModGroupOrder(uuid: string, order: string[]): Promise<void> {
+  return commands.resource.modGroupOrderSet(uuid, order);
+}
+/** 写模组备注（传空串 = 删掉这条备注）；file 传列表里的原始文件名即可 */
+export function setModNote(uuid: string, file: string, note: string): Promise<void> {
+  return commands.resource.modNoteSet(uuid, file, note);
 }
 
 /** 材质包列表 */

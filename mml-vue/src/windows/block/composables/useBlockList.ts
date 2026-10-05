@@ -5,11 +5,12 @@
 // 2. 三态派生（未渲染 / 渲染中 / 已渲染）与进度；
 // 3. 分类聚合、搜索过滤、详情选中与前后切换；
 // 4. 渲染与玩家头颅操作（带提示）；
-// 5. 视图偏好记忆（分类 / 图标尺寸档，存 localStorage；**搜索词离开本页即清空**）。
+// 5. 视图偏好记忆（分类 / 图标尺寸档，存本地存储；**搜索词离开本页即清空**）。
 import { computed, onDeactivated, onMounted, ref, watch } from "vue";
 import { locale, t, tErr } from "../../../lib/i18n";
 import { showToast } from "../../../lib/toast";
 import { useUnlisteners } from "../../../composables/useUnlisteners";
+import { KEYS, readJson, writeJson } from "../../../lib/storage";
 import {
   api,
   blockRenderCancel,
@@ -26,9 +27,6 @@ import { openWindow } from "../../windowManager";
 import type { BlockItemDto, BlockStatusDto } from "../../../lib/bindings";
 import { isBlockSize, type BlockSize } from "../types";
 
-/** 视图偏好（分类 / 搜索词 / 图标尺寸档）的存储键：重开窗口时恢复上次的样子 */
-const VIEW_KEY = "mml.blockView";
-
 interface ViewPref {
   cat: string;
   keyword: string;
@@ -36,12 +34,7 @@ interface ViewPref {
 }
 
 function readPref(): Partial<ViewPref> {
-  try {
-    const raw: unknown = JSON.parse(localStorage.getItem(VIEW_KEY) ?? "{}");
-    return raw && typeof raw === "object" ? (raw as Partial<ViewPref>) : {};
-  } catch {
-    return {};
-  }
+  return readJson<ViewPref>(KEYS.blockView);
 }
 
 export function useBlockList() {
@@ -187,14 +180,7 @@ export function useBlockList() {
   const size = ref<BlockSize>(isBlockSize(pref.size) ? pref.size : "md");
 
   watch([cat, keyword, size], () => {
-    try {
-      localStorage.setItem(
-        VIEW_KEY,
-        JSON.stringify({ cat: cat.value, keyword: keyword.value, size: size.value }),
-      );
-    } catch {
-      // 存储不可用（隐私模式等）时不影响使用
-    }
+    writeJson(KEYS.blockView, { cat: cat.value, keyword: keyword.value, size: size.value });
   });
 
   // 离开方块列表时清掉搜索词（分类 / 图标尺寸档留着：那是浏览上下文）。

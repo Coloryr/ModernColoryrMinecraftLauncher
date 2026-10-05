@@ -1,7 +1,7 @@
 // 设置窗口 · 界面标签（含窗口设置）
 //
 // 这些设置的"真源"分散在 lib/{i18n,fonts,theme,settings,appearance}.ts 里
-// （各家自己负责 localStorage + saveGuiConfig 双写），这里只收成窗口要用的接口：
+// （各家自己负责本地存储 + saveGuiConfig 双写），这里只收成窗口要用的接口：
 // 1. 分段控件的快照 ref（windowMode / side / themeValue / fontPick）；
 // 2. 系统字体的懒加载（font-kit 扫字体是重活，进界面页才拉）；
 // 3. 背景图的加载 / 清除 / 缩放，以及滑杆草稿（拖动过程中不逐次落盘）；

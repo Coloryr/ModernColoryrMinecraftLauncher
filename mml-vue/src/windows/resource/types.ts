@@ -51,8 +51,14 @@ export interface ServerFormDraft {
   origIp: string;
 }
 
-/** 模组的展示方式（三种视图，见 parts/mod/） */
-export type ModView = "list" | "table" | "tree";
+/**
+ * 模组的展示方式（两种视图，见 parts/mod/）
+ *
+ * 原先还有第三种「树形」：按 jar-in-jar 展开层级。它已**并入列表** ——
+ * 层级现在就在列表列里展开（有下级的行前面是展开箭头，下一层缩进显示），
+ * 所以"看得见层级"与"看得见图标/副标题"不再需要二选一。
+ */
+export type ModView = "list" | "table";
 
 /** 三种模组视图共用的 props */
 export interface ModViewProps {
@@ -69,6 +75,14 @@ export interface ModViewEmits {
   (e: "toggle", item: ModItemDto): void;
   (e: "remove", item: ModItemDto): void;
   (e: "open-folder", item: ModItemDto): void;
+  /** 编辑备注：弹窗在 ModPane，三种视图只管把要编辑的那一条抛上来 */
+  (e: "note", item: ModItemDto): void;
+  /**
+   * 折叠 / 展开所在分组（表格视图的第一列有折叠箭头）
+   *
+   * 列表视图的折叠在分组头上、树形视图已并入列表，所以只有表格会发这个事件。
+   */
+  (e: "toggle-group"): void;
   /** 行按下：交给 ModPane 的拖拽逻辑（拖到分组上即归组） */
   (e: "drag-start", payload: { event: PointerEvent; item: ModItemDto }): void;
 }
@@ -87,4 +101,33 @@ export function modSub(item: ModItemDto): string {
  */
 export function modRowKey(item: ModItemDto): string {
   return item.sha1 || item.uuid || item.modId || item.name;
+}
+
+/**
+ * 模组的显示排序：**按 modid 正序**
+ *
+ * 列表与表格两个视图共用这一份 —— 各自写一遍的话迟早会漂移成两种顺序，
+ * 用户在两个视图之间切换就会看到"同一个分组、变了顺序"。
+ *
+ * 规则：
+ * 1. modid 字典序（`localeCompare` 固定 `en`，避免跟随系统区域导致顺序不稳）；
+ * 2. **没有 modid 的沉到末尾**（用 `\uffff` 当哨兵：它比任何常规字符都大。
+ *    不能拿空串比 —— 空串会排到最前面，让"识别失败的包"挤在正常模组之前）；
+ * 3. modid 相同时按显示名（缺失时用文件名）兜底，保证顺序是全序、不抖动。
+ */
+export function compareMod(a: ModItemDto, b: ModItemDto): number {
+  const ka = a.modId || "\uffff";
+  const kb = b.modId || "\uffff";
+  const byId = ka.localeCompare(kb, "en");
+  if (byId !== 0) return byId;
+  return (a.name || a.file).localeCompare(b.name || b.file, "en");
+}
+
+/**
+ * 排好序的模组副本（**不改原数组**）
+ *
+ * 调用方拿到的 `items` 是分组计算出来的切片，直接 `sort` 会就地把上游数据改掉。
+ */
+export function sortedMods(items: ModItemDto[]): ModItemDto[] {
+  return [...items].sort(compareMod);
 }

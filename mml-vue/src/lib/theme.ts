@@ -1,5 +1,6 @@
 // 主题管理：暗色 / 亮色 + 强调色预设（状态持久化到 gui_config.json）
 import { ref } from "vue";
+import { KEYS, readString, writeString, onStorageChange } from "./storage";
 import { saveGuiConfig, type Theme } from "./guiConfig";
 export type { Theme } from "./guiConfig";
 
@@ -36,16 +37,12 @@ export const ACCENTS: { id: AccentId; color: string; check: string }[] = [
   { id: "indigo", color: "#818cf8", check: "#fff" },
 ];
 
-const THEME_KEY = "mml.theme";
-const ACCENT_KEY = "mml.accent";
-const CUSTOM_ACCENT_KEY = "mml.accentCustom";
-
 /** 系统当前的应用深浅色（无显式选择时的默认来源） */
 export function systemTheme(): Theme {
   return matchMedia("(prefers-color-scheme: dark)").matches ? "Dark" : "Light";
 }
 
-const storedTheme = localStorage.getItem(THEME_KEY) as Theme | null;
+const storedTheme = readString(KEYS.theme);
 // 显式存过的用存储值（含 System），否则跟随系统（配置加载前先用它首绘，避免闪一下错误主题）
 export const theme = ref<Theme>(
   storedTheme === "Light" || storedTheme === "Dark" || storedTheme === "System"
@@ -53,13 +50,13 @@ export const theme = ref<Theme>(
     : systemTheme(),
 );
 
-const storedAccent = localStorage.getItem(ACCENT_KEY) as AccentId | null;
+const storedAccent = readString(KEYS.accent);
 export const accent = ref<AccentId>(
   ACCENTS.some((a) => a.id === storedAccent) ? (storedAccent as AccentId) : "blue",
 );
 
 /** 自定义强调色（#rrggbb）：accent === "custom" 时生效 */
-export const customAccent = ref(localStorage.getItem(CUSTOM_ACCENT_KEY) || "#4f8cff");
+export const customAccent = ref(readString(KEYS.accentCustom, "#4f8cff"));
 
 // ---------- 自定义强调色的派生色计算 ----------
 
@@ -129,7 +126,7 @@ export function applyTheme() {
 /** 显式设置主题（设置窗口用；主页面不再提供切换入口） */
 export function setTheme(v: Theme) {
   theme.value = v;
-  localStorage.setItem(THEME_KEY, v);
+  writeString(KEYS.theme, v);
   applyTheme();
   saveGuiConfig({ theme: v });
 }
@@ -137,36 +134,36 @@ export function setTheme(v: Theme) {
 /** 设置强调色：预设 id 或 "custom"（用已存的自定义色） */
 export function setAccent(a: AccentId) {
   accent.value = a;
-  localStorage.setItem(ACCENT_KEY, a);
+  writeString(KEYS.accent, a);
   applyTheme();
 }
 
 /** 设置自定义强调色：存色值并把当前强调色切到 custom */
 export function setCustomAccent(hex: string) {
   customAccent.value = hex;
-  localStorage.setItem(CUSTOM_ACCENT_KEY, hex);
+  writeString(KEYS.accentCustom, hex);
   accent.value = "custom";
-  localStorage.setItem(ACCENT_KEY, "custom");
+  writeString(KEYS.accent, "custom");
   applyTheme();
 }
 
 // 跨窗口同步：某个窗口改了主题/颜色后，其它已打开的窗口实时生效
-window.addEventListener("storage", (e) => {
-  if (e.key === THEME_KEY && (e.newValue === "Dark" || e.newValue === "Light" || e.newValue === "System")) {
-    theme.value = e.newValue;
-    applyTheme();
-  } else if (e.key === ACCENT_KEY) {
-    if (e.newValue === "custom") {
-      // 其它窗口切到了自定义色：同步色值再应用
-      customAccent.value = localStorage.getItem(CUSTOM_ACCENT_KEY) || customAccent.value;
-      accent.value = "custom";
-    } else {
-      accent.value = ACCENTS.some((x) => x.id === e.newValue)
-        ? (e.newValue as AccentId)
-        : "blue";
-    }
+onStorageChange(KEYS.theme, (value) => {
+  if (value === "Dark" || value === "Light" || value === "System") {
+    theme.value = value;
     applyTheme();
   }
+});
+
+onStorageChange(KEYS.accent, (value) => {
+  if (value === "custom") {
+    // 其它窗口切到了自定义色：同步色值再应用
+    customAccent.value = readString(KEYS.accentCustom, customAccent.value);
+    accent.value = "custom";
+  } else {
+    accent.value = ACCENTS.some((x) => x.id === value) ? (value as AccentId) : "blue";
+  }
+  applyTheme();
 });
 
 // 跟随系统模式：系统深浅色切换时实时重应用
