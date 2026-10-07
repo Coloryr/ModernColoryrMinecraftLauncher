@@ -1,10 +1,10 @@
 <!--
-  M²L 程序图标 · 方案 I「品牌渐变底 + 草方块」
+  M²L 程序图标 · 方案 J「淡天蓝底 + 草方块（无描边）」
 
-  B 的品牌渐变底最好认，C 的草方块最有 Minecraft 味 —— 把 C 的草方块放进 B 的底里，替掉原来那个白方块。
+  淡色路线：浅底上草方块的绿顶与棕土比在蓝紫底上更干净、更\"Minecraft\"。这里选淡天蓝，是三个淡色候选里在白底上最有存在感的一个。
 
   规格：
-  - 画布 512×512；底 24/24/464/464、rx=108：品牌渐变 #4f8cff → #7c5cff（与 b-cube / 前端默认主题色一致）
+  - 画布 512×512；底 24/24/464/464、rx=108：淡天蓝渐变 #dceeff → #b7d9ff
   - 底上叠一层顶部高光（url(#gloss)，白色 22% → 45% 处归零），与 B 的底同一套处理；
     草方块画在它之后，所以高光只作用在底上，不会给草方块本身着色
   - 草方块绘制内容**原样来自 c-grass.svg**（三条 userSpaceOnUse 渐变 + 三个颗粒 pattern，
@@ -19,16 +19,16 @@
   - C 原本那个 translate(-11.38 16.41) 没有沿用 —— 它来自早先版本里"草皮凸起顶出包围盒"的补偿，
     现在凸起都在面内，照搬会让方块偏左下
 
-  关于高光：曾经为了「绿顶对蓝底的反差」把它去掉过一版，那会让底的观感与 B 不一致 ——
-  合并的是 B 的底，就得连高光一起搬，所以这里带高光。
+  已知取舍：**不带内描边**。白页 / 浅灰任务栏（#f3f3f3）上，方块的圆角边界几乎看不出来，
+  只剩草方块浮着；深色背景上没有问题。要边界清楚就用 k-grass-on-pale-green 那版的处理。
 
   ⚠ 这是"搬一次"的静态产物：以后 C 改了草方块，这里不会自动跟着变，得重跑 gen-grass-icons.ps1。
 -->
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#4f8cff" />
-      <stop offset="1" stop-color="#7c5cff" />
+      <stop offset="0" stop-color="#dceeff" />
+      <stop offset="1" stop-color="#b7d9ff" />
     </linearGradient>
     <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#ffffff" stop-opacity="0.22" />
