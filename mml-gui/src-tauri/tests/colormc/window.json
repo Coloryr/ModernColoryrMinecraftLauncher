@@ -1,0 +1,331 @@
+{
+  "ColorMC.Gui.UI.Controls.Main.MainControl": {
+    "X": -2174,
+    "Y": 936,
+    "Width": 776,
+    "Height": 489,
+    "WindowState": 0
+  },
+  "ColorMC.Gui.UI.Controls.Setting.SettingControl": {
+    "X": -956,
+    "Y": 916,
+    "Width": 947,
+    "Height": 626,
+    "WindowState": 0
+  },
+  "ColorMC.Gui.UI.Controls.User.UsersControl": {
+    "X": 62,
+    "Y": 1022,
+    "Width": 776,
+    "Height": 489,
+    "WindowState": 0
+  },
+  "AddGameControl": {
+    "X": 284,
+    "Y": 485,
+    "Width": 776,
+    "Height": 489,
+    "WindowState": 0
+  },
+  "ColorMC.Gui.UI.Controls.GameEdit.GameEditControl:bd588658-d575-4de3-9ae8-32a501b7d4c5": {
+    "X": 68,
+    "Y": 246,
+    "Width": 760,
+    "Height": 489,
+    "WindowState": 0
+  },
+  "ColorMC.Gui.UI.Controls.LuckBlock.LuckBlockControl": {
+    "X": 662,
+    "Y": 863,
+    "Width": 776,
+    "Height": 489,
+    "WindowState": 0
+  },
+  "ColorMC.Gui.UI.Controls.Add.AddModPackControl": {
+    "X": 88,
+    "Y": 690,
+    "Width": 842,
+    "Height": 627,
+    "WindowState": 0
+  },
+  "ColorMC.Gui.UI.Controls.Download.DownloadControl": {
+    "X": 1673,
+    "Y": 337,
+    "Width": 776,
+    "Height": 489,
+    "WindowState": 0
+  },
+  "ColorMC.Gui.UI.Controls.News.MinecraftNewsControl": {
+    "X": 228,
+    "Y": 202,
+    "Width": 776,
+    "Height": 489,
+    "WindowState": 0
+  },
+  "ColorMC.Gui.UI.Controls.GameEdit.GameEditControl:2db0bd03-acf7-4eec-8fd0-85137ceb5f54": {
+    "X": 389,
+    "Y": 340,
+    "Width": 776,
+    "Height": 489,
+    "WindowState": 0
+  },
+  "ColorMC.Gui.UI.Controls.Add.AddResourceControl:2db0bd03-acf7-4eec-8fd0-85137ceb5f54": {
+    "X": 1060,
+    "Y": 127,
+    "Width": 776,
+    "Height": 489,
+    "WindowState": 0
+  },
+  "ColorMC.Gui.UI.Controls.Add.AddJavaControl": {
+    "X": 226,
+    "Y": 299,
+    "Width": 776,
+    "Height": 489,
+    "WindowState": 0
+  },
+  "ColorMC.Gui.UI.Controls.ServerPack.ServerPackControl:03c175e1-eafb-48f7-8ab3-2af022f7ecb2": {
+    "X": 507,
+    "Y": 268,
+    "Width": 776,
+    "Height": 489,
+    "WindowState": 0
+  },
+  "ColorMC.Gui.UI.Controls.GameExport.GameExportControl:03c175e1-eafb-48f7-8ab3-2af022f7ecb2": {
+    "X": 400,
+    "Y": 253,
+    "Width": 776,
+    "Height": 489,
+    "WindowState": 0
+  },
+  "ColorMC.Gui.UI.Controls.GameEdit.GameEditControl:03c175e1-eafb-48f7-8ab3-2af022f7ecb2": {
+    "X": 507,
+    "Y": 40,
+    "Width": 776,
+    "Height": 489,
+    "WindowState": 0
+  },
+  "ColorMC.Gui.UI.Controls.Collect.CollectControl": {
+    "X": 715,
+    "Y": 743,
+    "Width": 776,
+    "Height": 489,
+    "WindowState": 0
+  },
+  "ColorMC.Gui.UI.Controls.Add.AddResourceControl:03c175e1-eafb-48f7-8ab3-2af022f7ecb2": {
+    "X": 507,
+    "Y": 40,
+    "Width": 776,
+    "Height": 489,
+    "WindowState": 0
+  },
+  "ColorMC.Gui.UI.Controls.Count.CountControl": {
+    "X": 815,
+    "Y": 857,
+    "Width": 776,
+    "Height": 489,
+    "WindowState": 0
+  },
+  "ColorMC.Gui.UI.Controls.Skin.SkinControl": {
+    "X": 367,
+    "Y": 830,
+    "Width": 776,
+    "Height": 489,
+    "WindowState": 0
+  },
+  "ColorMC.Gui.UI.Controls.Error.ErrorControl": {
+    "X": 897,
+    "Y": 866,
+    "Width": 776,
+    "Height": 489,
+    "WindowState": 0
+  },
+  "ColorMC.Gui.UI.Controls.GameLog.GameLogControl:042e6372-ed3d-4e13-bc82-4abff6d26fb5": {
+    "X": 401,
+    "Y": 700,
+    "Width": 776,
+    "Height": 489,
+    "WindowState": 0
+  },
+  "ColorMC.Gui.UI.Controls.Add.AddResourceControl:db41e81f-66a1-4e3a-aba4-76f717e7b745": {
+    "X": 1005,
+    "Y": 735,
+    "Width": 776,
+    "Height": 489,
+    "WindowState": 0
+  },
+  "ColorMC.Gui.UI.Controls.GameEdit.GameEditControl:db41e81f-66a1-4e3a-aba4-76f717e7b745": {
+    "X": 505,
+    "Y": 484,
+    "Width": 1162,
+    "Height": 739,
+    "WindowState": 0
+  },
+  "ColorMC.Gui.UI.Controls.GameEdit.GameEditControl:95c4e51a-0cb3-453f-847d-f2738464137d": {
+    "X": 588,
+    "Y": 725,
+    "Width": 1083,
+    "Height": 614,
+    "WindowState": 0
+  },
+  "ColorMC.Gui.UI.Controls.GameLog.GameLogControl:95c4e51a-0cb3-453f-847d-f2738464137d": {
+    "X": 1005,
+    "Y": 735,
+    "Width": 776,
+    "Height": 489,
+    "WindowState": 0
+  },
+  "ColorMC.Gui.UI.Controls.GameEdit.GameEditControl:49899c17-f4ba-4598-989d-b9d693a16e1f": {
+    "X": 1227,
+    "Y": 752,
+    "Width": 776,
+    "Height": 489,
+    "WindowState": 0
+  },
+  "ColorMC.Gui.UI.Controls.LuckBlock.BlockBackpackControl": {
+    "X": 471,
+    "Y": 248,
+    "Width": 776,
+    "Height": 489,
+    "WindowState": 0
+  },
+  "ColorMC.Gui.UI.Controls.GameEdit.GameEditControl:41d8a0bf-d521-40ab-a4df-f524ea1e073a": {
+    "X": 958,
+    "Y": 884,
+    "Width": 776,
+    "Height": 489,
+    "WindowState": 0
+  },
+  "ColorMC.Gui.UI.Controls.NetFrp.NetFrpControl": {
+    "X": 751,
+    "Y": 821,
+    "Width": 776,
+    "Height": 489,
+    "WindowState": 0
+  },
+  "ColorMC.Gui.UI.Controls.GameEdit.GameEditControl:7b3c4a76-1389-49ed-94f0-1c443999f378": {
+    "X": 665,
+    "Y": 862,
+    "Width": 776,
+    "Height": 489,
+    "WindowState": 0
+  },
+  "ColorMC.Gui.UI.Controls.GameEdit.GameEditControl:de8b10ad-da04-42d1-8295-6d4c9181e78a": {
+    "X": 977,
+    "Y": 777,
+    "Width": 776,
+    "Height": 489,
+    "WindowState": 0
+  },
+  "ColorMC.Gui.UI.Controls.GameEdit.GameEditControl:18774196-45ba-4ac1-bb23-031c43f48053": {
+    "X": 1093,
+    "Y": 714,
+    "Width": 776,
+    "Height": 489,
+    "WindowState": 0
+  },
+  "ColorMC.Gui.UI.Controls.GameExport.GameExportControl:18774196-45ba-4ac1-bb23-031c43f48053": {
+    "X": 1198,
+    "Y": 785,
+    "Width": 776,
+    "Height": 489,
+    "WindowState": 0
+  },
+  "ColorMC.Gui.UI.Controls.GameExport.GameExportControl:49e7de19-5993-4099-af25-6e4adb971ce2": {
+    "X": 462,
+    "Y": 919,
+    "Width": 776,
+    "Height": 489,
+    "WindowState": 0
+  },
+  "ColorMC.Gui.UI.Controls.GameEdit.GameEditControl:2c1cb225-cbea-4386-812f-83f453c069ec": {
+    "X": 885,
+    "Y": 848,
+    "Width": 776,
+    "Height": 489,
+    "WindowState": 0
+  },
+  "ColorMC.Gui.UI.Controls.GameEdit.GameEditControl:98286f42-ed03-4b42-876f-d6f3cc2af79a": {
+    "X": 365,
+    "Y": 633,
+    "Width": 776,
+    "Height": 489,
+    "WindowState": 0
+  },
+  "ColorMC.Gui.UI.Controls.GameEdit.GameEditControl:d47a732f-07bd-4dfb-b58d-ccafa193a19e": {
+    "X": 344,
+    "Y": 921,
+    "Width": 776,
+    "Height": 489,
+    "WindowState": 0
+  },
+  "ColorMC.Gui.UI.Controls.Add.AddResourceControl:d47a732f-07bd-4dfb-b58d-ccafa193a19e": {
+    "X": 1342,
+    "Y": 377,
+    "Width": 776,
+    "Height": 489,
+    "WindowState": 0
+  },
+  "ColorMC.Gui.UI.Controls.GameLog.GameLogControl:d47a732f-07bd-4dfb-b58d-ccafa193a19e": {
+    "X": 673,
+    "Y": 547,
+    "Width": 1011,
+    "Height": 658,
+    "WindowState": 0
+  },
+  "ColorMC.Gui.UI.Controls.GameLog.GameLogControl:98286f42-ed03-4b42-876f-d6f3cc2af79a": {
+    "X": 351,
+    "Y": 250,
+    "Width": 1188,
+    "Height": 822,
+    "WindowState": 0
+  },
+  "ColorMC.Gui.UI.Controls.GameLog.GameLogControl:dff17100-b207-461a-92ac-ddb3b1dceed9": {
+    "X": 0,
+    "Y": 0,
+    "Width": 1881,
+    "Height": 763,
+    "WindowState": 0
+  },
+  "ColorMC.Gui.UI.Controls.GameEdit.GameEditControl:a6939b1a-a00f-4105-aacc-9ca51d886c08": {
+    "X": 271,
+    "Y": 450,
+    "Width": 776,
+    "Height": 489,
+    "WindowState": 0
+  },
+  "ColorMC.Gui.UI.Controls.GameEdit.GameEditControl:6d6571ce-17d1-480c-99eb-4ccd11ff7043": {
+    "X": 1153,
+    "Y": 569,
+    "Width": 776,
+    "Height": 489,
+    "WindowState": 0
+  },
+  "ColorMC.Gui.UI.Controls.GameLog.GameLogControl:6d6571ce-17d1-480c-99eb-4ccd11ff7043": {
+    "X": 153,
+    "Y": 667,
+    "Width": 1424,
+    "Height": 764,
+    "WindowState": 0
+  },
+  "ColorMC.Gui.UI.Controls.Add.AddResourceControl:88449c7b-969a-41dd-b28c-300c74713d89": {
+    "X": 66,
+    "Y": 528,
+    "Width": 776,
+    "Height": 489,
+    "WindowState": 0
+  },
+  "ColorMC.Gui.UI.Controls.GameEdit.GameEditControl:2a3ba275-086b-4d7c-9550-6beba89152f7": {
+    "X": 677,
+    "Y": 812,
+    "Width": 760,
+    "Height": 450,
+    "WindowState": 0
+  },
+  "ColorMC.Gui.UI.Controls.GameEdit.GameEditControl:88449c7b-969a-41dd-b28c-300c74713d89": {
+    "X": 677,
+    "Y": 812,
+    "Width": 760,
+    "Height": 450,
+    "WindowState": 0
+  }
+}

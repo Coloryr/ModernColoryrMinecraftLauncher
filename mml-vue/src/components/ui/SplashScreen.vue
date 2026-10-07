@@ -1,22 +1,10 @@
 <script setup lang="ts">
 // 启动画面：初始化中显示 splash，初始化失败显示错误页（splashError）+ 问题反馈入口
 //
-// 初始化期间主窗口已关掉系统装饰、又还没渲染自己的顶栏，所以要单独给一个关闭按钮
-// （只给关闭，不放整条标题栏——这段界面保持干净）
+// 加载期间**主窗口顶栏照常渲染**（见 MainWindow 模板），所以这里不需要自己的关闭按钮：
+// 系统装饰在窗口一出现就被插件摘掉，关闭由顶栏那三个窗口按钮负责。
 import { t } from "../../lib/i18n";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import BaseButton from "./BaseButton.vue";
-import { closeWindow, isTauri } from "../../windows/windowManager";
-
-/** 关闭窗口：走真实关闭（主窗口关闭 = 退出应用）。
- *  不走 closeWindow()——它在单窗口模式下是「切回主页」，对启动画面不适用 */
-function onClose() {
-  if (isTauri()) {
-    getCurrentWindow().close().catch(() => {});
-    return;
-  }
-  closeWindow();
-}
 
 withDefaults(
   defineProps<{
@@ -35,13 +23,6 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <!-- 初始化期间只给一个关闭按钮，不铺整条标题栏 -->
-  <button class="splash-close" v-tip="t('titlebar.close')" @click="onClose">
-    <svg viewBox="0 0 12 12" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round">
-      <path d="m3 3 6 6M9 3l-6 6" />
-    </svg>
-  </button>
-
   <!-- 启动画面（初始化中，由 closeSplash() 关闭） -->
   <div v-if="splashVisible" class="splash">
     <div class="splash-logo">MC</div>

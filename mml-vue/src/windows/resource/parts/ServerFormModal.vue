@@ -3,6 +3,10 @@
 //
 // 只管排版与输入：草稿对象与保存逻辑在 ServerPane（它是列表的拥有者），
 // 保存中不关弹窗 —— 失败提示已由调用方弹出，输入内容留着让用户改。
+//
+// 两个"别关"一起给上：`closable=false` 去掉右上角 ✕，`overlay-close=false` 让点遮罩
+// 也不关 —— 这是个**输入类**弹窗，误触一下就白填了（BaseModal 的 overlayClose 就是
+// 为这种情况留的）。要取消就点左下角的「取消」
 import BaseButton from "../../../components/ui/BaseButton.vue";
 import BaseModal from "../../../components/ui/BaseModal.vue";
 import { t } from "../../../lib/i18n";
@@ -16,6 +20,7 @@ const emit = defineEmits<{ (e: "submit"): void; (e: "close"): void }>();
   <BaseModal
     :title="form.edit ? t('resource.serverEdit') : t('resource.serverAdd')"
     :closable="false"
+    :overlay-close="false"
     @close="emit('close')"
   >
     <div class="form-grid">
@@ -26,7 +31,7 @@ const emit = defineEmits<{ (e: "submit"): void; (e: "close"): void }>();
       <!-- 接受材质是客户端选项，只在编辑已有条目时出现（新增走客户端默认） -->
       <template v-if="form.edit">
         <label class="form-label">{{ t("resource.acceptTextures") }}</label>
-        <input v-model="form.acceptTextures" type="checkbox" />
+        <input v-model="form.acceptTextures" class="form-check" type="checkbox" />
       </template>
     </div>
     <div class="modal-actions">
@@ -66,5 +71,17 @@ const emit = defineEmits<{ (e: "submit"): void; (e: "close"): void }>();
 .form-input:focus {
   outline: none;
   border-color: var(--accent);
+}
+
+/* 复选框：grid 里默认 `justify-self: normal` 会把它**拉伸**到整列宽，
+   浏览器又把那个小方框画在拉伸框的正中间 —— 看着就是"开关居中"。
+   钉到列首，与上面两个输入框左对齐 */
+.form-check {
+  justify-self: start;
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  cursor: pointer;
+  accent-color: var(--accent);
 }
 </style>

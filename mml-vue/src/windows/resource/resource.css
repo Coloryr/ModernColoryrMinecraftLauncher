@@ -679,6 +679,29 @@
   outline-offset: -1px;
 }
 
+/* ---------- 服务器列表的行 ----------
+   整行可点：点哪一行，列表上方那张 MOTD 卡就换成哪一台（那把"当前选中"从多选里
+   拆出来单独用，见 ServerPane）。选中观感与模组的右键选中一致 —— 内描边 + 叠一层
+   强调色底，理由同上面那段（外描边会糊到相邻行上） */
+.resource-layout .item-row.sv-row {
+  cursor: pointer;
+}
+
+.resource-layout .item-row.sv-selected {
+  --row-tint: var(--accent-soft);
+  outline: 1px solid var(--accent-border);
+  outline-offset: -1px;
+}
+
+/* 列表上方那张 MOTD 卡的横向对齐。
+   卡片是 `.pane-swap` 的直接子节点，不在滚动容器里，拿不到 `.item-list` 的内边距 ——
+   这里照抄一份：左 5px 对齐行的描边留白（见 `.item-list` 的 padding-left），
+   右 26px + 9px 与 `.content-head` 同一口径（卡片留白 + 滚动条占位） */
+.resource-layout .sv-motd {
+  padding-left: 5px;
+  padding-right: calc(26px + 9px);
+}
+
 /* ---------- 多选勾选框（列表与表格的最左边那一格） ----------
    位置始终占着（固定宽 + gap），所以出现 / 消失都不会让整行左右跳动；
    只在三种情况下露出来：鼠标悬停该行、该行已选中、或**已经在多选状态**

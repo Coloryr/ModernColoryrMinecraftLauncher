@@ -99,6 +99,11 @@ export const commands = {
     setGroupItems: (group: string, uuids: string[]) => invoke<void>("collect_set_group_items", { group, uuids }),
     star: (source: string, fileType: string, pid: string, name: string, icon: string | null, url: string, star: boolean) => invoke<void>("collect_star", { source, fileType, pid, name, icon, url, star }),
   },
+  colormc: {
+    checkColormc: () => invoke<ColorMcInfoDto | null>("window_check_colormc"),
+    migrateColormc: (source: string, mode: string) => invoke<ColorMcReportDto>("window_migrate_colormc", { source, mode }),
+    skipColormc: () => invoke<void>("window_skip_colormc"),
+  },
   customHome: {
     import: (path: string) => invoke<CustomHomeInfoDto>("custom_home_import", { path }),
     openDir: () => invoke<void>("custom_home_open_dir"),
@@ -166,7 +171,7 @@ export const commands = {
     deleteShaderpack: (uuid: string, file: string) => invoke<void>("resource_delete_shaderpack", { uuid, file }),
     listDatapacks: (uuid: string, dir: string) => invoke<DataPackItemDto[]>("resource_list_datapacks", { uuid, dir }),
     listMods: (uuid: string) => invoke<ModItemDto[]>("resource_list_mods", { uuid }),
-    listResourcepacks: (uuid: string) => invoke<PackItemDto[]>("resource_list_resourcepacks", { uuid }),
+    listResourcepacks: (uuid: string, lang: string) => invoke<PackItemDto[]>("resource_list_resourcepacks", { uuid, lang }),
     listSaveBackups: (uuid: string, dir: string) => invoke<SaveBackupDto[]>("resource_list_save_backups", { uuid, dir }),
     listSaves: (uuid: string) => invoke<SaveItemDto[]>("resource_list_saves", { uuid }),
     listSchematics: (uuid: string) => invoke<SchematicItemDto[]>("resource_list_schematics", { uuid }),
@@ -186,6 +191,8 @@ export const commands = {
     modGroupsCollapsed: (uuid: string) => invoke<string[]>("resource_mod_groups_collapsed", { uuid }),
     modNoteSet: (uuid: string, file: string, note: string) => invoke<void>("resource_mod_note_set", { uuid, file, note }),
     openFolder: (uuid: string, kind: string, name: string | null, parent: string | null) => invoke<void>("resource_open_folder", { uuid, kind, name, parent }),
+    resourcepackDisable: (uuid: string, file: string) => invoke<void>("resource_resourcepack_disable", { uuid, file }),
+    resourcepackEnable: (uuid: string, file: string) => invoke<void>("resource_resourcepack_enable", { uuid, file }),
     restoreSaveBackup: (uuid: string, dir: string, file: string) => invoke<void>("resource_restore_save_backup", { uuid, dir, file }),
     serverAdd: (uuid: string, name: string, ip: string) => invoke<void>("resource_server_add", { uuid, name, ip }),
     serverDelete: (uuid: string, name: string, ip: string) => invoke<void>("resource_server_delete", { uuid, name, ip }),
@@ -464,6 +471,39 @@ export type CollectItemDto = {
 export type CollectDataDto = {
   items: CollectItemDto[],
   groups: Record<string, string[]>,
+};
+
+export type ColorMcInfoDto = {
+  path: string,
+  from: string,
+  instances: number,
+  entries: string[],
+  authPath: string,
+};
+
+export type ColorMcProgressDto = {
+  stage: string,
+  done: number,
+  total: number,
+  text: string,
+};
+
+export type ColorMcCompatDto = {
+  name: string,
+  level: string,
+  note: string,
+};
+
+export type ColorMcReportDto = {
+  moved: boolean,
+  source: string,
+  entries: number,
+  failed: string[],
+  instancesOk: string[],
+  instancesBad: string[],
+  instancesLegacyGui: string[],
+  compat: ColorMcCompatDto[],
+  authOutside: boolean,
 };
 
 export type CustomHomeInfoDto = {
@@ -849,6 +889,7 @@ export type PackItemDto = {
   minFormat: number,
   maxFormat: number,
   fail: boolean,
+  enable: boolean,
   icon: string,
 };
 

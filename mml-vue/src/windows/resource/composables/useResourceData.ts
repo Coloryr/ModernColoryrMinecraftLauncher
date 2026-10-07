@@ -7,7 +7,7 @@
 // 列表组件想拿数据只能整份 prop 传下去；现在按 `windows/block` 的写法
 // （薄窗口 + parts/ + composables/）拆开，语义边界清楚。
 import { ref, watch } from "vue";
-import { tErr } from "../../../lib/i18n";
+import { locale, tErr } from "../../../lib/i18n";
 import { showToast } from "../../../lib/toast";
 import {
   api,
@@ -116,7 +116,8 @@ export function useResourceData(initialCategory: CategoryId = "saves") {
           }
           break;
         case "resourcepacks":
-          packs.value = await listResourcepacks(instanceUuid.value);
+          // 带上界面语言：简介写成 `translate` 组件时，后端按它查资源包自带的语言表
+          packs.value = await listResourcepacks(instanceUuid.value, locale.value);
           break;
         case "saves":
           saves.value = await listSaves(instanceUuid.value);

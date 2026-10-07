@@ -17,6 +17,7 @@ pub mod add_modpack;
 pub mod add_resource;
 pub mod block;
 pub mod collect;
+pub mod colormc;
 pub mod custom_home;
 pub mod download;
 pub mod export;
@@ -165,6 +166,11 @@ const ACCOUNT_MIN_WIDTH: f64 = 800.0;
 const ACCOUNT_MIN_HEIGHT: f64 = 650.0;
 
 /// 添加实例窗口最小宽度
+const RESOURCE_MIN_WIDTH: f64 = 800.0;
+/// 添加实例窗口最小高度
+const RESOURCE_MIN_HEIGHT: f64 = 510.0;
+
+/// 添加实例窗口最小宽度
 const ADD_MIN_WIDTH: f64 = 700.0;
 /// 添加实例窗口最小高度
 const ADD_MIN_HEIGHT: f64 = 585.0;
@@ -251,8 +257,8 @@ const WINDOWS_INFO: LazyLock<HashMap<Uuid, WindowEntry>> = LazyLock::new(|| {
             RESOURCE_WINDOW_UUID,
             WindowEntry {
                 label: "mml-resource",
-                min_width: MIN_WIDTH,
-                min_height: MIN_HEIGHT,
+                min_width: RESOURCE_MIN_WIDTH,
+                min_height: RESOURCE_MIN_HEIGHT,
             },
         ),
         (

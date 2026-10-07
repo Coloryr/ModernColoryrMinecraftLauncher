@@ -49,7 +49,7 @@ pub const LOG_FILE: &str = "logs.log";
 pub const LANG_FILE: &str = "lang.txt";
 pub const MOD_INFO_FILE: &str = "modfileinfo.json";
 pub const GAME_FILE: &str = "game.json";
-pub const GUI_SETTING_FILE: &str = "guisetting.json";
+pub const GUI_SETTING_FILE: &str = "gui_setting.json";
 pub const GROUP_FILE: &str = "group_save.json";
 pub const MOD_PACK_FILE: &str = "Modpack.json";
 pub const CONFIG_FILE: &str = "config.json";
@@ -93,6 +93,8 @@ pub const BLOCK_FILE: &str = "block.json";
 pub const ITEM_FILE: &str = "items.json";
 pub const GUI_CONFIG_FILE: &str = "gui_config.json";
 pub const COLLECT_FILE:&str = "collect.json";
+/// 从 ColorMC 迁移的"已询问过"标记（运行目录根，见 windows/colormc.rs）
+pub const COLORMC_MIGRATE_FILE: &str = "colormc_migrate.json";
 
 pub const MINECRAFT_KEY: &str = "minecraft";
 pub const LANG_KEY1: &str = "minecraft/lang/";
@@ -315,6 +317,7 @@ mod tests {
             BLOCK_FILE,
             ITEM_FILE,
             GUI_CONFIG_FILE,
+            COLORMC_MIGRATE_FILE,
         ] {
             assert!(!name.is_empty(), "文件常量不应为空: {name:?}");
             assert!(!name.contains('/'), "{name:?} 不应包含 '/'");

@@ -346,12 +346,81 @@ async fn srv_lookup(host: &str) -> Option<(String, u16)> {
     Some((target, srv.port))
 }
 
-/// description 解析：纯字符串按 § 颜色码切段，对象按 Chat JSON 解析
+/// description 解析：按**形状**取值，各种写法都收得下
+///
+/// 顶层三种形态（真实服务器上都出现过）：
+/// - **纯字符串** —— 旧写法，按 `§` 颜色码切段（见 [`chat_from_plain`]）；
+/// - **对象** —— Chat JSON；
+/// - **数组** —— 整段就是一串子组件。
+///
+/// 以前这里对对象直接 `serde_json::from_value::<ChatObj>()`，**`extra` 里混了裸字符串
+/// 就整体失败**、`unwrap_or_default()` 成空组件 —— 于是 MOTD 一个字都不显示，而同一张
+/// 卡片上人数照常（真实样本：2b2t 的
+/// `{"text":"","extra":[{"text":"2B "},"\n",{"text":"2T "}, …]}`）。
+/// 现在逐层按形状走，认不出的部分最多丢那一小段。
 fn chat_from_value(value: &serde_json::Value) -> ChatObj {
+    // 顶层纯字符串是"旧写法"：里面的 `§` 颜色码要认
     if let Some(text) = value.as_str() {
         return chat_from_plain(text);
     }
-    serde_json::from_value(value.clone()).unwrap_or_default()
+
+    chat_from_component(value)
+}
+
+/// 组件 → Chat（递归）
+///
+/// 与顶层那条的区别：**这里的字符串是字面量**，不再解释 `§` 颜色码 ——
+/// 组件树里的字符串只是文字，游戏也是这么处理的（`§` 只在顶层纯字符串那一支生效）。
+fn chat_from_component(value: &serde_json::Value) -> ChatObj {
+    match value {
+        serde_json::Value::String(text) => ChatObj {
+            text: text.clone(),
+            ..Default::default()
+        },
+        serde_json::Value::Array(list) => ChatObj {
+            extra: Some(list.iter().map(chat_from_component).collect()),
+            ..Default::default()
+        },
+        serde_json::Value::Object(map) => chat_from_object(map),
+        _ => ChatObj::default(),
+    }
+}
+
+/// 组件对象 → Chat
+///
+/// 逐字段取、不认识的字段直接忽略 —— 比"整份交给 serde"宽容（理由见 [`chat_from_value`]）。
+///
+/// `translate` 这类要查语言表的组件启动器翻不出来（手里没有客户端语言表），
+/// 按资源包简介那套口径退：有 `fallback` 用它，没有就把 key 原样显示出来。
+fn chat_from_object(map: &serde_json::Map<String, serde_json::Value>) -> ChatObj {
+    let flag = |key: &str| map.get(key).and_then(|value| value.as_bool());
+    let string = |key: &str| {
+        map.get(key)
+            .and_then(|value| value.as_str())
+            .map(str::to_string)
+    };
+
+    let text = match string("text") {
+        Some(text) => text,
+        None => match string("translate") {
+            Some(key) => string("fallback").unwrap_or(key),
+            None => string("fallback").unwrap_or_default(),
+        },
+    };
+
+    ChatObj {
+        text,
+        color: string("color"),
+        bold: flag("bold"),
+        italic: flag("italic"),
+        underlined: flag("underlined"),
+        strikethrough: flag("strikethrough"),
+        obfuscated: flag("obfuscated"),
+        extra: map
+            .get("extra")
+            .and_then(|value| value.as_array())
+            .map(|list| list.iter().map(chat_from_component).collect()),
+    }
 }
 
 /// 纯字符串（带 § 颜色码）转 Chat（算法同 ColorMC 的 StringToChar）：
@@ -561,5 +630,57 @@ mod tests {
         // 子段落继承颜色，覆盖加粗
         assert_eq!(segs[1].color, "#FFAA00");
         assert!(segs[1].bold);
+    }
+
+    /// `extra` 里混**裸字符串**
+    ///
+    /// 真实样本就是 2b2t 的 `{"text":"","extra":[{"text":"2B "},"\n",{"text":"2T "}, …]}`：
+    /// 以前整份交给 serde，遇到字符串元素就整体失败、`unwrap_or_default()` 成空组件 ——
+    /// MOTD 一个字都不显示，而同一张卡片上人数照常，看着就是"连不上但有人数"。
+    #[test]
+    fn test_chat_from_value_extra_with_plain_strings() {
+        let v: serde_json::Value = serde_json::from_str(
+            r#"{"text":"","extra":[{"bold":true,"color":"gray","text":"2B "},{"color":"gold","text":"Updated"},"\n",{"color":"green","text":"2b2t.org"}]}"#,
+        )
+        .unwrap();
+
+        let segs = chat_to_segments(&chat_from_value(&v));
+        let text: String = segs.iter().map(|s| s.text.as_str()).collect();
+
+        assert_eq!(text, "2B Updated\n2b2t.org");
+        // 颜色名照旧翻译，子段落继承父段落的样式
+        assert!(segs.iter().any(|s| s.color == "#AAAAAA"));
+        assert!(segs.iter().any(|s| s.bold));
+    }
+
+    /// 顶层写成**数组**：整段就是一串子组件（数组里的裸字符串是字面量）
+    #[test]
+    fn test_chat_from_value_array() {
+        let v: serde_json::Value =
+            serde_json::from_str(r#"[{"text":"A","color":"red"},"B",{"text":"C"}]"#).unwrap();
+
+        let segs = chat_to_segments(&chat_from_value(&v));
+        let text: String = segs.iter().map(|s| s.text.as_str()).collect();
+
+        assert_eq!(text, "ABC");
+        assert_eq!(segs[0].color, "#FF5555");
+    }
+
+    /// `translate`：没有 `text` 时退到 `fallback`，连 `fallback` 都没有就把 key 原样显示
+    #[test]
+    fn test_chat_from_value_translate() {
+        let flatten = |json: &str| -> String {
+            let v: serde_json::Value = serde_json::from_str(json).unwrap();
+            chat_to_segments(&chat_from_value(&v))
+                .iter()
+                .map(|s| s.text.as_str())
+                .collect()
+        };
+
+        assert_eq!(
+            flatten(r#"{"translate":"some.key","fallback":"兜底文字"}"#),
+            "兜底文字"
+        );
+        assert_eq!(flatten(r#"{"translate":"some.key"}"#), "some.key");
     }
 }

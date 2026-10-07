@@ -7,11 +7,43 @@
 mod common;
 
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
+use std::sync::Once;
 
-use mml_game::game_resourcepacks::{ResourcepackObj, process_resourcepack};
+use mml_game::game_resourcepacks::{
+    ResourcepackObj, process_resourcepack as process_resourcepack_raw,
+};
 use zip::write::SimpleFileOptions;
 use zip::ZipWriter;
+
+/// 测试里固定的界面语言（与前端 `locale` 同值）
+const LANG: &str = "zh_cn";
+
+/// 网络样本用例的启动链（每进程一次）
+///
+/// **必须先把日志系统起来**：`common::init_net` 里的 `mml_net::init` 会打日志，
+/// 而 `mml_log` 没 `start()` 过时 `info()` 直接 panic（`SEM` / `STREAM` 都是
+/// `OnceLock`，见 AGENTS.md §6）。与 `real_pack_download.rs` 的 `ensure_init` 同一口径。
+///
+/// 只给走网络的那条用例用：纯本地用例（`make_resourcepack_with*` 自己造 zip）
+/// 不碰日志，也就没有这个前置要求。
+fn ensure_init() {
+    static INIT: Once = Once::new();
+    INIT.call_once(|| {
+        let dir = mml_testutil::temp_dir().join(format!("mml-resourcepack-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+
+        mml_base::init(&dir);
+        mml_names::init(mml_base::get_base_dir()).unwrap();
+        mml_log::start(mml_base::get_base_dir()).unwrap();
+    });
+}
+
+/// 按界面语言解析资源包（省得每个用例都写第二个参数；错误转成可读字符串）
+fn process_resourcepack<P: AsRef<Path>>(path: P) -> Result<ResourcepackObj, String> {
+    process_resourcepack_raw(path, LANG).map_err(|err| err.to_string())
+}
 
 /// 1×1 透明 PNG（最小有效文件）。
 const PACK_PNG: &[u8] = &[
@@ -43,6 +75,29 @@ fn make_resourcepack_with(meta: &[u8]) -> PathBuf {
     writer.write_all(meta).unwrap();
     writer.start_file("pack.png", options).unwrap();
     writer.write_all(PACK_PNG).unwrap();
+    writer.finish().unwrap();
+
+    path
+}
+
+/// 生成一个带**自带语言表**的资源包 zip（`assets/<命名空间>/lang/<语言代码>.json`）
+fn make_resourcepack_with_lang(meta: &[u8], lang_files: &[(&str, &str)]) -> PathBuf {
+    let path = mml_testutil::temp_dir().join(format!(
+        "mml-resourcepack-lang-{}.zip",
+        uuid::Uuid::new_v4()
+    ));
+    let file = std::fs::File::create(&path).unwrap();
+    let mut writer = ZipWriter::new(file);
+    let options = SimpleFileOptions::default();
+
+    writer.start_file("pack.mcmeta", options).unwrap();
+    writer.write_all(meta).unwrap();
+
+    for (name, text) in lang_files {
+        writer.start_file(*name, options).unwrap();
+        writer.write_all(text.as_bytes()).unwrap();
+    }
+
     writer.finish().unwrap();
 
     path
@@ -182,10 +237,86 @@ fn read_description_variants() {
     assert_eq!(obj.description, "ab");
 }
 
+/// 简介里的 `translate` 键用**资源包自带**的语言表翻
+///
+/// 样本是 FO 整合包里的 "Chat Reporting Helper"（真实 pack.mcmeta）：它写的是
+/// `{"translate":"fo.resourcePack.chatreportinghelper","fallback":"§7Explains…§r"}`，
+/// 同时包自带 `assets/fo/lang/zh_cn.json` 写着中文译文。命中语言表时应当用**译文**，
+/// 而不是 fallback —— 与游戏里的表现一致。
+///
+/// 注意这里走的是 `process_resourcepack` 的完整路径：语言表要从**同一个 zip** 里读，
+/// 所以这条用例同时钉住了"读语言表"与"展平组件"两步的衔接。
+#[test]
+fn read_translate_from_pack_lang() {
+    // 简介里的 `§` 是**字面字符**（真实文件就是 UTF-8 的 §），所以这里用普通原始字符串
+    // 而不是 `br#""#`（字节串只能是 ASCII）
+    let meta = r#"{"pack":{"pack_format":18,"min_format":18,"max_format":97,"description":{"translate":"fo.resourcePack.chatreportinghelper","fallback":"§7Explains chat reporting with simple phrases and icons§r"}}}"#;
+    let path = make_resourcepack_with_lang(
+        meta.as_bytes(),
+        &[(
+            "assets/fo/lang/zh_cn.json",
+            r#"{"fo.resourcePack.chatreportinghelper":"§7用简单的短语与图标说明聊天举报机制§r"}"#,
+        )],
+    );
+
+    let obj = process_resourcepack(&path).expect("应能解析带语言表的资源包");
+    assert!(!obj.fail);
+    assert_eq!(obj.description, "§7用简单的短语与图标说明聊天举报机制§r");
+}
+
+/// 语言表里没有界面语言时用 `en_us` 兜底（包的作者一般都会写英文）
+#[test]
+fn read_translate_falls_back_to_en_us_lang() {
+    let meta = br#"{"pack":{"pack_format":15,"description":{"translate":"sodium.resource_pack.unofficial","fallback":"Unofficial translations for Sodium"}}}"#;
+    let path = make_resourcepack_with_lang(
+        meta,
+        &[(
+            "assets/sodium/lang/en_us.json",
+            r#"{"sodium.resource_pack.unofficial":"EN text"}"#,
+        )],
+    );
+
+    // 界面语言是 zh_cn，包里只有 en_us → 用 en_us 那份
+    let obj = process_resourcepack(&path).expect("应能解析");
+    assert_eq!(obj.description, "EN text");
+}
+
+/// 语言表里没这个 key（或整包没有语言表）：退回 `fallback`，再没有就原样显示 key
+#[test]
+fn read_translate_without_lang_falls_back() {
+    // 整包没有语言表 → 用 fallback
+    let obj = process_resourcepack(&make_resourcepack_with(
+        r#"{"pack":{"pack_format":15,"description":{"translate":"some.key","fallback":"兜底文字"}}}"#
+            .as_bytes(),
+    ))
+    .unwrap();
+    assert_eq!(obj.description, "兜底文字");
+
+    // 有语言表、但表里没有这个 key → 还是 fallback
+    let other_key = make_resourcepack_with_lang(
+        r#"{"pack":{"pack_format":15,"description":{"translate":"some.key","fallback":"兜底文字"}}}"#
+            .as_bytes(),
+        &[("assets/fo/lang/zh_cn.json", r#"{"other.key":"别的"}"#)],
+    );
+    assert_eq!(
+        process_resourcepack(&other_key).unwrap().description,
+        "兜底文字"
+    );
+
+    // 连 fallback 都没有 → 把 key 原样给出来（比留空强）
+    let bare = make_resourcepack_with_lang(
+        r#"{"pack":{"pack_format":15,"description":{"translate":"some.key"}}}"#.as_bytes(),
+        &[("assets/fo/lang/zh_cn.json", r#"{"other.key":"别的"}"#)],
+    );
+    assert_eq!(process_resourcepack(&bare).unwrap().description, "some.key");
+}
+
 /// 从 Modrinth 下载多个常用资源包并解析。
 /// 网络不可用时整体跳过；单个样本下载失败跳过，其余继续。
 #[test]
 fn read_real_resourcepacks() {
+    ensure_init();
+
     let mut downloaded = 0;
     let mut parsed = 0;
 

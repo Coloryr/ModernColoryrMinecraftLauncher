@@ -8,6 +8,9 @@ import type {
   BlockItemDto,
   BlockStatusDto,
   CollectDataDto,
+  ColorMcInfoDto,
+  ColorMcProgressDto,
+  ColorMcReportDto,
   DataPackItemDto,
   DetectedPackDto,
   LogLine,
@@ -55,7 +58,7 @@ import type {
   SystemMemoryDto,
   VersionInfoDto,
 } from "./bindings";
-import { AddLoaderProgress, AddModpackStatus, AddNameConflict, AddPackProgress, AddResourceStatus, BlockRender, ClientConfigChange, CloseBlocked, CollectChange, CustomHomeChange, DownloadItem, DownloadTask, ExportFocus, ExportProgress, GameExit, GameLog, InstanceChange, JavaChange, LaunchError, LaunchState, LogFocus, ResourceListModsProgress } from "./listens";
+import { AddLoaderProgress, AddModpackStatus, AddNameConflict, AddPackProgress, AddResourceStatus, BlockRender, ClientConfigChange, CloseBlocked, CollectChange, ColormcProgress, CustomHomeChange, DownloadItem, DownloadTask, ExportFocus, ExportProgress, GameExit, GameLog, InstanceChange, JavaChange, LaunchError, LaunchState, LogFocus, ResourceListModsProgress } from "./listens";
 
 export interface CreateInstanceOpts {
   loader?: string;
@@ -572,6 +575,23 @@ export const api = {
   ): Promise<void> {
     return commands.collect.star(source, fileType, pid, name, icon, url, star);
   },
+
+  // ---------------- 从 ColorMC 迁移（首次启动，见 windows/colormc.rs） ----------------
+
+  /** 探测本机的 ColorMC 工作目录；已经问过（或本机没有）返回 null */
+  async checkColorMc(): Promise<ColorMcInfoDto | null> {
+    return commands.colormc.checkColormc();
+  },
+
+  /** 执行迁移（copy = 复制并保留源目录 / move = 按条目重命名搬走并删掉空源目录） */
+  async migrateColorMc(source: string, mode: "copy" | "move"): Promise<ColorMcReportDto> {
+    return commands.colormc.migrateColormc(source, mode);
+  },
+
+  /** 选择「不迁移」：记下标记，以后不再询问 */
+  async skipColorMc(): Promise<void> {
+    return commands.colormc.skipColormc();
+  },
 };
 
 // ---------------- 事件订阅（Rust emit → 前端 listen） ----------------
@@ -579,6 +599,12 @@ export const api = {
 /** 游戏日志事件（uuid + 日志行；clear = true 时前端清屏） */
 export function onGameLog(cb: (e: LogEvent) => void): Promise<UnlistenFn> {
   return listen<LogEvent>(GameLog, (e) => cb(e.payload));
+}
+/** ColorMC 迁移进度事件（stage：scan / copy / move / check） */
+export function onColormcProgress(
+  cb: (e: ColorMcProgressDto) => void,
+): Promise<UnlistenFn> {
+  return listen<ColorMcProgressDto>(ColormcProgress, (e) => cb(e.payload));
 }
 /** 日志窗口切换目标实例事件（窗口已存在时再次打开，壳层推送新目标） */
 export function onLogFocus(cb: (uuid: string) => void): Promise<UnlistenFn> {
@@ -794,7 +820,7 @@ export function setModGroup(uuid: string, group: string | null, keys: string[]):
 /**
  * 某实例的资源窗口视图偏好（左侧分类顺序 / 上次类别 / 模组展示方式）
  *
- * 存在**实例**的 `guisetting.json` 里（跟着实例走），不是全局界面状态。
+ * 存在**实例**的 `gui_setting.json` 里（跟着实例走），不是全局界面状态。
  */
 export function getResourceView(uuid: string): Promise<ResourceViewDto> {
   return commands.resource.viewGet(uuid);
@@ -822,13 +848,35 @@ export function setModNote(uuid: string, file: string, note: string): Promise<vo
   return commands.resource.modNoteSet(uuid, file, note);
 }
 
-/** 材质包列表 */
-export function listResourcepacks(uuid: string): Promise<PackItemDto[]> {
-  return commands.resource.listResourcepacks(uuid);
+/**
+ * 材质包列表
+ *
+ * `lang` 传当前界面语言（`locale.value`）：简介写成 `translate` 组件时，
+ * 后端按它查资源包自带的语言表
+ */
+export function listResourcepacks(uuid: string, lang: string): Promise<PackItemDto[]> {
+  return commands.resource.listResourcepacks(uuid, lang);
 }
 /** 删除材质包（进回收站） */
 export function deleteResourcepack(uuid: string, file: string): Promise<void> {
   return commands.resource.deleteResourcepack(uuid, file);
+}
+
+/**
+ * 启用材质包（把这一条加进 options.txt 的 `resourcePacks`）
+ *
+ * `file` 传列表里的文件名（`PackItemDto.file`）。
+ * 只动 options.txt，**列表里那一行的 `enable` 要调用方自己就地改** —— 重拉一次列表
+ * 要把每个包重新算 SHA1 / SHA256 并解一遍 `pack.mcmeta`，而启用状态只跟 options.txt
+ * 有关，包本身一个字都没变。
+ */
+export function enableResourcepack(uuid: string, file: string): Promise<void> {
+  return commands.resource.resourcepackEnable(uuid, file);
+}
+
+/** 禁用材质包（上面那条的反向操作，口径见 [`enableResourcepack`]） */
+export function disableResourcepack(uuid: string, file: string): Promise<void> {
+  return commands.resource.resourcepackDisable(uuid, file);
 }
 
 /** 存档列表 */

@@ -85,47 +85,86 @@ fn read_data<R: Read>(stream: R, obj: &mut ShaderpackObj) {
 ///
 /// 返回光影包信息；不是 zip 文件返回 `ArgError`
 pub fn read_shaderpacks<P: AsRef<Path>>(path: P) -> CoreResult<ShaderpackObj> {
-    if let Some(ext) = path.as_ref().extension() {
-        if ext.eq_ignore_ascii_case(names::ZIP_EXT) {
-            let mut obj = ShaderpackObj {
-                file: path.as_ref().to_path_buf(),
-                ..Default::default()
-            };
+    if let Some(ext) = path.as_ref().extension()
+        && ext.eq_ignore_ascii_case(names::ZIP_EXT)
+    {
+        let mut obj = ShaderpackObj {
+            file: path.as_ref().to_path_buf(),
+            ..Default::default()
+        };
 
-            let stream = path_helper::open_read(path.as_ref())?;
-            let mut zip = ZipArchive::new(&stream).map_err(|err| {
-                ErrorType::ArchiveOpenError(FileSystemErrorData {
-                    path: path.as_ref().to_path_buf(),
-                    error: err.to_string(),
-                })
-            })?;
+        let stream = path_helper::open_read(path.as_ref())?;
+        let mut zip = ZipArchive::new(&stream).map_err(|err| {
+            ErrorType::ArchiveOpenError(FileSystemErrorData {
+                path: path.as_ref().to_path_buf(),
+                error: err.to_string(),
+            })
+        })?;
 
-            for index in 0..zip.len() {
-                let temp = zip.by_index(index);
-                if let Ok(file) = temp {
-                    let lang = mml_names::get_lang(mml_names::get_lang_type());
-                    if file.is_file() && file.name().ends_with(&format!("lang/{lang}.lang")) {
-                        read_data(file, &mut obj);
-                    } else if file.is_file() && file.name().ends_with("lang/en_US.lang") {
-                        read_data(file, &mut obj);
-                    }
+        for index in 0..zip.len() {
+            let temp = zip.by_index(index);
+            if let Ok(file) = temp {
+                let lang = mml_names::get_lang(mml_names::get_lang_type());
+                if file.is_file() && file.name().ends_with(&format!("lang/{lang}.lang")) {
+                    read_data(file, &mut obj);
+                } else if file.is_file() && file.name().ends_with("lang/en_US.lang") {
+                    read_data(file, &mut obj);
                 }
             }
-
-            if obj.name.is_empty() {
-                obj.name = path
-                    .as_ref()
-                    .file_name()
-                    .unwrap_or_default()
-                    .to_string_lossy()
-                    .to_string();
-            }
-
-            return Ok(obj);
         }
+
+        if obj.name.is_empty() {
+            obj.name = path
+                .as_ref()
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string();
+        }
+
+        return Ok(obj);
     }
 
     Err(ErrorType::ArgError(ArgErrorData::ArchiveType))
+}
+
+/// 读取光影包信息
+///
+/// # 参数
+///
+/// - `path`: 光影包文件路径
+///
+/// # 返回值
+///
+/// 返回光影包信息
+fn read_shaderpacks_dir<P: AsRef<Path>>(path: P) -> CoreResult<ShaderpackObj> {
+    let mut obj = ShaderpackObj {
+        file: path.as_ref().to_path_buf(),
+        ..Default::default()
+    };
+
+    let lang = mml_names::get_lang(mml_names::get_lang_type());
+    let files = path_helper::get_all_files(&path);
+    for file in files {
+        if file.is_file() && file.ends_with(format!("lang/{lang}.lang")) {
+            let stream = path_helper::open_read(file)?;
+            read_data(stream, &mut obj);
+        } else if file.is_file() && file.ends_with("lang/en_US.lang") {
+            let stream = path_helper::open_read(file)?;
+            read_data(stream, &mut obj);
+        }
+    }
+
+    if obj.name.is_empty() {
+        obj.name = path
+            .as_ref()
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
+    }
+
+    return Ok(obj);
 }
 
 impl InstanceSettingObj {
@@ -136,14 +175,24 @@ impl InstanceSettingObj {
     /// 返回光影包列表（读取失败的文件会记录日志并跳过）
     pub async fn get_shaderpacks(&self) -> Vec<ShaderpackObj> {
         let path = self.get_shaderpacks_path();
-        let files = path_helper::get_files(path);
 
         tokio::task::spawn_blocking(move || {
             let list = Mutex::new(Vec::new());
-
+            let files = path_helper::get_files(&path);
             files
                 .par_iter()
                 .for_each(|item| match read_shaderpacks(item) {
+                    Ok(obj) => {
+                        list.lock().unwrap().push(obj);
+                    }
+                    Err(err) => {
+                        mml_log::error_type(err);
+                    }
+                });
+
+            let dirs = path_helper::get_dirs(&path);
+            dirs.par_iter()
+                .for_each(|item| match read_shaderpacks_dir(item) {
                     Ok(obj) => {
                         list.lock().unwrap().push(obj);
                     }

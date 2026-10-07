@@ -519,7 +519,7 @@ pub fn get_instance_group(uuid: &Uuid) -> Option<Uuid> {
 /// 取某个实例在它所属分组里的显示次序（0 起）
 ///
 /// 组内次序存在独立的 `group_save.json` 里（`order`：实例 uuid → 次序），
-/// 不再写各实例的 `guisetting.json`。
+/// 不再写各实例的 `gui_setting.json`。
 ///
 /// - `uuid`: 实例 UUID
 ///

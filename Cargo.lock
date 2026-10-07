@@ -3159,6 +3159,7 @@ dependencies = [
  "mml-skin",
  "mml-skin-draw",
  "mml-sys",
+ "mml-testutil",
  "mml-tex-draw",
  "rfd 0.17.2",
  "serde",

@@ -1,6 +1,6 @@
 // 资源管理窗口的视图偏好：左侧分类顺序 / 上次打开的类别 / 模组展示方式
 //
-// **存在实例自己的 `guisetting.json` 里**（`Gui` 字段，见后端 `gui_setting::GameViewSettingObj`），
+// **存在实例自己的 `gui_setting.json` 里**（`Gui` 字段，见后端 `gui_setting::GameViewSettingObj`），
 // 不走前端本地存储：这三项都是"这个实例我习惯怎么看"，换个实例就该换一套 ——
 // 本地存储是每台机器一份，切实例时顺序不变反而奇怪。
 //
@@ -60,7 +60,7 @@ const DEFAULT_CATEGORY: CategoryId = "mods";
 export function useResourceView(data: ReturnType<typeof useResourceData>) {
   const { instanceUuid } = data;
 
-  /** 左侧分类的显示顺序（拖一下就会写回实例的 guisetting.json） */
+  /** 左侧分类的显示顺序（拖一下就会写回实例的 gui_setting.json） */
   const order = ref<CategoryId[]>(normalizeOrder([]));
   /** 上次打开的类别（没有记录时用 [`DEFAULT_CATEGORY`]） */
   const initialCategory = ref<CategoryId>(DEFAULT_CATEGORY);

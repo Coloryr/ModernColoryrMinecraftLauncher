@@ -6,7 +6,7 @@
 //! | [`dtos`] | 跨 IPC DTO（Rust 结构转 camelCase） |
 //! | [`err_box`] | 致命错误弹窗 |
 //! | [`gui_config`] | GUI 配置读写 |
-//! | [`gui_setting`] | 实例 GUI 设置读写（guisetting.json，归属 GUI 而非内核） |
+//! | [`gui_setting`] | 实例 GUI 设置读写（gui_setting.json，归属 GUI 而非内核） |
 //! | [`image_manager`] | 图片资源加载（`mml-image://` 协议） |
 //! | [`windows`] | 各窗口的规格 / IPC 命令 / 事件，窗口创建 / 聚焦 / 关闭统一处理 |
 //!
@@ -24,6 +24,10 @@ pub mod gui_config;
 pub mod gui_setting;
 pub mod image_manager;
 pub mod windows;
+
+/// 单元测试的共用启动（内核单例每进程只 boot 一次，见 AGENTS.md §6）
+#[cfg(test)]
+mod test_support;
 
 include!(concat!(env!("OUT_DIR"), "/invokes_gen.rs"));
 

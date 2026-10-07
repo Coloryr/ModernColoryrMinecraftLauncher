@@ -80,7 +80,7 @@ export interface ModViewProps {
   items: ModItemDto[];
   /** 有操作在跑：按钮统一置灰 */
   busy: boolean;
-  /** 正在被拖拽的模组 SHA1（那行变淡）：归组用 SHA1，与 guisetting.json 的 Groups 同一口径 */
+  /** 正在被拖拽的模组 SHA1（那行变淡）：归组用 SHA1，与 gui_setting.json 的 Groups 同一口径 */
   draggingKey: string | null;
   /**
    * 已选中的模组 SHA1 集合（右键多选，供顶栏批量操作）
@@ -127,7 +127,7 @@ export function modSub(item: ModItemDto): string {
  * 模组行的渲染标识（v-for 的 key）
  *
  * 内置模组（jar-in-jar）没有 sha1 也没有 uuid，退回 modid / 名字。
- * **分组用的是 `sha1`**（内容哈希，与 guisetting.json 的 Groups 一致），
+ * **分组用的是 `sha1`**（内容哈希，与 gui_setting.json 的 Groups 一致），
  * 这个只是行身份，两件事别混。
  */
 export function modRowKey(item: ModItemDto): string {

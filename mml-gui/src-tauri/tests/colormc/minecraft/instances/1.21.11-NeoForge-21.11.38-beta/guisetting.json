@@ -1,0 +1,18 @@
+{
+  "Log": {
+    "WordWrap": true,
+    "Auto": true,
+    "EnableNone": true,
+    "EnableInfo": true,
+    "EnableWarn": true,
+    "EnableError": true,
+    "EnableDebug": true
+  },
+  "Mod": {
+    "Groups": {},
+    "ModName": {}
+  },
+  "Block": null,
+  "LogAutoShow": false,
+  "Order": 0
+}

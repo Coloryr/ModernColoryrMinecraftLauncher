@@ -156,6 +156,13 @@ impl MiniJsonMap {
         self.map.get(key).and_then(|item| item.as_i64())
     }
 
+    /// 取出某个键的**原始值**（类型事先不知道时用它，由调用方自己判断形状）
+    ///
+    /// - `key`: 需要取出的键
+    pub fn get(&self, key: &str) -> Option<&MiniJsonObj> {
+        self.map.get(key)
+    }
+
     /// 获取键值对
     ///
     /// - `key`: 需要取出的键

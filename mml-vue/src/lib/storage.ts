@@ -102,7 +102,7 @@ export const KEYS = {
    * 方块窗口：分类 / 搜索词 / 图标尺寸档
    *
    * **资源窗口**的分类顺序 / 上次类别 / 模组展示方式**不在这里** —— 那三项跟着实例走，
-   * 存在实例自己的 `guisetting.json`（见 `windows/resource/composables/useResourceView`）。
+   * 存在实例自己的 `gui_setting.json`（见 `windows/resource/composables/useResourceView`）。
    */
   blockView: "mml.blockView",
 

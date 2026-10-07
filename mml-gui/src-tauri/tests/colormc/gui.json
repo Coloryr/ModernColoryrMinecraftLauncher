@@ -1,0 +1,110 @@
+{
+  "Language": 0,
+  "LastUser": {
+    "UUID": "cced95f30a844377b8c18e60cf1b3fea",
+    "Type": 1
+  },
+  "EnableBG": false,
+  "BackImage": "C:\\Users\\40206\\Desktop\\illust_115401255_20240123_233846.png",
+  "BackEffect": 0,
+  "BackTran": 0,
+  "BackLimit": true,
+  "BackLimitValue": 50,
+  "WindowTran": false,
+  "WindowTranType": 0,
+  "ServerCustom": {
+    "IP": null,
+    "Port": 0,
+    "Motd": false,
+    "JoinServer": false,
+    "MotdColor": "White",
+    "MotdBackColor": "Black",
+    "LockGame": false,
+    "GameName": "00000000-0000-0000-0000-000000000000",
+    "EnableUI": false,
+    "PlayMusic": false,
+    "Music": null,
+    "Volume": 30,
+    "SlowVolume": false,
+    "MusicLoop": false,
+    "RunPause": false,
+    "LockLogin": false,
+    "LockLogins": [],
+    "CustomIcon": false,
+    "IconFile": null,
+    "CustomStart": false,
+    "StartIconFile": null,
+    "DisplayType": 0,
+    "StartText": null
+  },
+  "Render": {
+    "Windows": {
+      "ShouldRenderOnUIThread": null,
+      "OverlayPopups": null,
+      "Wgl": null,
+      "UseVulkan": null,
+      "UseSoftware": null
+    },
+    "X11": {
+      "UseDBusMenu": null,
+      "UseDBusFilePicker": null,
+      "OverlayPopups": null,
+      "UseEgl": null,
+      "UseVulkan": null,
+      "UseSoftware": null
+    }
+  },
+  "LogColor": {
+    "Warn": "#8B8B00",
+    "Error": "#FF0000",
+    "Debug": "#BEBEBE"
+  },
+  "Card": {
+    "News": true,
+    "Online": true,
+    "Last": true,
+    "Block": true
+  },
+  "ColorType": 0,
+  "ColorMain": "#FF5ABED6",
+  "RGB": false,
+  "RGBS": 100,
+  "RGBV": 100,
+  "FontName": "\u5FAE\u8F6F\u96C5\u9ED1",
+  "FontDefault": true,
+  "CloseBeforeLaunch": false,
+  "WindowMode": false,
+  "LastLaunch": "2a3ba275-086b-4d7c-9550-6beba89152f7",
+  "Head": {
+    "Type": 2,
+    "X": 15,
+    "Y": 65
+  },
+  "Style": {
+    "AmTime": 500,
+    "AmFade": true,
+    "EnableAm": true
+  },
+  "Input": {
+    "Enable": false,
+    "Disable": false,
+    "NowConfig": null
+  },
+  "LaunchCheck": {
+    "CheckUser": true,
+    "CheckLoader": true,
+    "CheckMemory": true
+  },
+  "ServerKey": null,
+  "CheckUpdate": true,
+  "LauncherFunction": {
+    "FastLaunch": false,
+    "FastModrinth": false,
+    "AdminLaunch": false,
+    "GameAdminLaunch": false
+  },
+  "WindowState": {
+    "MainWindowState": 3,
+    "UserWindowState": 2
+  }
+}

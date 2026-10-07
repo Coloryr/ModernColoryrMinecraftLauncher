@@ -281,7 +281,7 @@ impl InstanceSettingObj {
             .join(names::GAME_FILE)
     }
 
-    /// 获取实例 GUI 设置文件（guisetting.json，与 game.json 并列）
+    /// 获取实例 GUI 设置文件（gui_setting.json，与 game.json 并列）
     ///
     /// **归属 GUI**：实例 GUI 设置（日志窗口 / 模组分组 / 方块背景 / 自开日志窗 /
     /// 排列顺序）是界面状态，内核不读也不写它，读写实现在

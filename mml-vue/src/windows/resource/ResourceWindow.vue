@@ -39,7 +39,7 @@ defineEmits<{ (e: "close"): void }>();
 /**
  * 视图偏好（分类顺序 / 上次打开的类别 / 模组展示方式）
  *
- * 存在**实例**的 `guisetting.json` 里，所以要先有实例才能读 —— 数据层建好之后
+ * 存在**实例**的 `gui_setting.json` 里，所以要先有实例才能读 —— 数据层建好之后
  * 把"读偏好"挂成它的实例就绪回调（见 useResourceData 的 setInstanceReadyHook），
  * 在它拉列表**之前**跑，第一次就按记住的顺序与类别显示。
  */

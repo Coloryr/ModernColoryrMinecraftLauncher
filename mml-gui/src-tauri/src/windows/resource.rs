@@ -2,8 +2,9 @@
 //!
 //! 列表复用 mml-game 的扫描（模组元数据、材质包 pack.mcmeta、存档 level.dat、
 //! servers.dat、光影包语言文件、结构文件 NBT）；模组启用 / 禁用 / 删除按 uuid 定位后走
-//! `ModObj` 方法；其余类型按「目录 + 纯文件名」直接操作（回收站）。图标在列表 DTO 里转
-//! base64 data URL（条目少、体积小，不走图片协议）。
+//! `ModObj` 方法；材质包启用 / 禁用按文件名定位后走 `InstanceSettingObj` 的
+//! enable / disable_resourcepacks（options.txt 的读写在那儿）；其余类型按「目录 + 纯文件名」
+//! 直接操作（回收站）。图标在列表 DTO 里转 base64 data URL（条目少、体积小，不走图片协议）。
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -13,6 +14,7 @@ use mml_base::file_item::FileHash;
 use mml_base::hash_helper;
 use mml_game::GameInstance;
 use mml_game::game_mods::{LoadSideType, ModObj};
+use mml_game::game_resourcepacks::ResourcepackObj;
 use mml_game::game_saves::SaveObj;
 use mml_game::game_schematics::SchematicType;
 use mml_game::gui_hook::{IProgressGui, ProgressGui};
@@ -200,7 +202,7 @@ pub async fn resource_list_mods(
     }) as Arc<dyn IProgressGui>);
 
     // 四份附带数据都在这一步一起读，省掉前端额外的往返与按文件名 / SHA1 的合并：
-    // - 备注：`guisetting.json` 的 `Mod.ModName`
+    // - 备注：`gui_setting.json` 的 `Mod.ModName`
     // - 在线信息：实例的 `online_info.json`（下载源 / 项目编号 / 文件编号）
     // - 游戏根目录：把绝对路径裁成 `.minecraft\mods\xxx.jar` 这种相对路径
     let (list, notes, online, game_path) = block_on_instance(instance, move |game| {
@@ -234,7 +236,7 @@ pub async fn resource_list_mods(
 
 /// `mod_item` 需要的几份外部数据（打包传，省得一路加参数）
 struct ModCtx<'a> {
-    /// `guisetting.json` 的 `Mod.ModName`（文件名 → 说明）
+    /// `gui_setting.json` 的 `Mod.ModName`（文件名 → 说明）
     notes: &'a HashMap<String, Option<String>>,
     /// 实例的在线信息表，按 **SHA1** 索引
     online: &'a HashMap<String, mml_game::launcher::file_online_info_obj::OnlineInfoObj>,
@@ -359,7 +361,7 @@ fn mod_side_name(side: Option<LoadSideType>) -> String {
 
 /// 备注的定位键：**去掉禁用后缀**的模组文件名
 ///
-/// `Mod.ModName` 的键是文件名（与 ColorMC 互通），而启用 / 禁用只给文件名加减
+/// `Mod.ModName` 的键是文件名（沿用 ColorMC 的写法），而启用 / 禁用只给文件名加减
 /// `.disabled`（见 `mml_game::game_mods::add_disable_suffix`）—— 不归一的话
 /// "禁用一下就找不到自己的备注了"。
 fn mod_note_key(file: &str) -> &str {
@@ -385,7 +387,7 @@ fn mod_note(notes: &HashMap<String, Option<String>>, file: &str) -> String {
 
 /// 取文件 SHA1（没有哈希时返回空串）
 ///
-/// 模组的自定义分组按 SHA1 记（与 `guisetting.json` 的 `Mod.Groups` 一致）：
+/// 模组的自定义分组按 SHA1 记（与 `gui_setting.json` 的 `Mod.Groups` 一致）：
 /// 它是**内容哈希**，启用 / 禁用（改文件名）之后不变，而 uuid 会跟着路径变。
 fn sha1_of(hash: &FileHash) -> String {
     match hash {
@@ -476,12 +478,19 @@ pub async fn resource_delete_mod(uuid: String, mod_uuid: String) -> Result<(), S
 // ==================== 材质包 ====================
 
 /// 材质包列表（解析 pack.mcmeta + 图标）
+///
+/// `lang` 是界面语言代码（`zh_cn` / `en_us`，与前端 `locale` 同值）：
+/// 简介写成 `translate` 组件时，按它去查**资源包自带**的
+/// `assets/<命名空间>/lang/<语言>.json`（见 `mml_game::game_resourcepacks`）。
 #[tauri::command]
-pub async fn resource_list_resourcepacks(uuid: String) -> Result<Vec<PackItemDto>, String> {
+pub async fn resource_list_resourcepacks(
+    uuid: String,
+    lang: String,
+) -> Result<Vec<PackItemDto>, String> {
     let instance = parse_instance(&uuid)?;
 
-    let list = block_on_instance(instance, |game| {
-        tokio::runtime::Handle::current().block_on(async { game.get_resourcepacks().await })
+    let list = block_on_instance(instance, move |game| {
+        tokio::runtime::Handle::current().block_on(async { game.get_resourcepacks(&lang).await })
     })
     .await?;
 
@@ -499,6 +508,7 @@ pub async fn resource_list_resourcepacks(uuid: String) -> Result<Vec<PackItemDto
                 min_format: item.min_format,
                 max_format: item.max_format,
                 fail: item.fail,
+                enable: item.enable,
                 icon: data_url(item.icon.as_ref()),
             })
         })
@@ -511,6 +521,48 @@ pub async fn resource_delete_resourcepack(uuid: String, file: String) -> Result<
     let instance = parse_instance(&uuid)?;
     let file = resource_file(&instance, KIND_RESOURCEPACKS, &file)?;
     path_helper::move_to_trash(&file).map_err(|err| err.to_string())
+}
+
+/// 启用材质包（把这一条加进 options.txt 的 `resourcePacks`）
+///
+/// **薄封装**：改 options.txt 的逻辑在 `mml_game::game_resourcepacks` 的
+/// `InstanceSettingObj::enable_resourcepacks` 里，这里只做两件事 —— 按文件名定位包
+/// （[`resource_file`]，防路径穿越）、把结果转成 IPC 错误串。
+///
+/// 给内核的 `ResourcepackObj` 只填了 `path`：开 / 关一个包只需要知道是哪一个文件，
+/// 而拿文件全名（options.txt 里写的是 `file/<文件名>`）从路径就能推出来，
+/// 不必为一次改名把整份列表的哈希重算一遍。
+#[tauri::command]
+pub async fn resource_resourcepack_enable(uuid: String, file: String) -> Result<(), String> {
+    resourcepack_set(uuid, file, true).await
+}
+
+/// 禁用材质包（把这一条从 options.txt 的 `resourcePacks` 里摘掉）
+///
+/// 与 [`resource_resourcepack_enable`] 同一条路径，见那边的说明。
+#[tauri::command]
+pub async fn resource_resourcepack_disable(uuid: String, file: String) -> Result<(), String> {
+    resourcepack_set(uuid, file, false).await
+}
+
+/// 启用 / 禁用材质包的公共实现（`enable` 决定走内核哪一个方法）
+async fn resourcepack_set(uuid: String, file: String, enable: bool) -> Result<(), String> {
+    let instance = parse_instance(&uuid)?;
+    let path = resource_file(&instance, KIND_RESOURCEPACKS, &file)?;
+    let pack = ResourcepackObj {
+        path,
+        ..Default::default()
+    };
+
+    block_on_instance(instance, move |game| {
+        if enable {
+            game.enable_resourcepacks(&pack)
+        } else {
+            game.disable_resourcepacks(&pack)
+        }
+        .map_err(|err| err.to_string())
+    })
+    .await?
 }
 
 // ==================== 存档 ====================
@@ -1045,17 +1097,17 @@ pub fn resource_open_folder(
 
 // ==================== 模组自定义分组 ====================
 //
-// 分组**不是这里的数据**：它属于实例的 GUI 设置（`guisetting.json` 的 `Mod.Groups`，
-// 分组名 → 模组 SHA1 集合，见 crate::gui_setting），与 ColorMC 互通。
+// 分组**不是这里的数据**：它属于实例的 GUI 设置（`gui_setting.json` 的 `Mod.Groups`，
+// 分组 uuid → 分组对象，见 crate::gui_setting）。
 // 这里只做"读-改-写 + 转 DTO"：
 // - 每个命令都是 load → 改 → save（那份文件还存着日志设置、方块图标等，不能整份覆盖）
-// - 分组顺序 = 用户自己拖出来的（存在 `guisetting.json` 的 `Mod.GroupOrder`；
+// - 分组顺序 = 用户自己拖出来的（存在 `gui_setting.json` 的 `Mod.GroupOrder`；
 //   没存过则用默认顺序：识别失败 → 已启用 → 已禁用 → 自建分组按名字）
 // - 成员用 SHA1 而不是 uuid：启用/禁用会改文件名，uuid 跟着变，SHA1 不变
 
 /// 三个**状态分组**的固定 uuid
 ///
-/// 它们不是用户数据，所以不进 `guisetting.json` 的 `Mod.Groups`；但要参与"顺序"与
+/// 它们不是用户数据，所以不进 `gui_setting.json` 的 `Mod.Groups`；但要参与"顺序"与
 /// "收起状态"（用户能拖、能折叠），所以需要**稳定的键**。用固定 uuid 而不是
 /// 原先的 `$on` / `$off` / `$fail` 字符串：
 /// - 与自建分组同一套键形状（都是 uuid），前端不必维护"两套键"的映射；
@@ -1092,7 +1144,7 @@ fn is_state_group(key: &str) -> bool {
 /// 分组块的完整顺序：状态分组 + 自建分组，**与真实存在的分组对齐**
 ///
 /// 入参是 `GameModSettingObj`（模组设置本体，也就是 `GameGuiSettingObj::mods`），
-/// 不是整份 `guisetting.json`。
+/// 不是整份 `gui_setting.json`。
 ///
 /// 存下来的顺序可能过时（分组删了 / 换了台机器 / 手改过文件），所以这里以"当前真实存在
 /// 的分组"为准做一次规范化：丢掉不存在的、补上没记的（自建分组按名字排在后面）。
@@ -1156,7 +1208,7 @@ fn mod_groups_of(instance: &InstanceSettingObj) -> Vec<ModGroupDto> {
 
 /// 读出实例设置 → 交给 `edit` 改 → 存回去
 ///
-/// 注意 `guisetting.json` 里除分组外还存着备注、日志设置、方块图标等，
+/// 注意 `gui_setting.json` 里除分组外还存着备注、日志设置、方块图标等，
 /// 所以每个命令都是 load → 改 → save，**不能整份覆盖**。
 fn edit_mod_setting(
     instance: &GameInstance,
@@ -1232,7 +1284,7 @@ fn collapsed_of(mods: &crate::gui_setting::GameModSettingObj) -> Vec<String> {
 // ==================== 资源窗口的视图偏好 ====================
 //
 // 跟**实例**走的那部分界面设置（左侧分类顺序 / 上次类别 / 模组展示方式），
-// 存在实例的 `guisetting.json`（`Gui` 字段，见 crate::gui_setting::GameViewSettingObj）。
+// 存在实例的 `gui_setting.json`（`Gui` 字段，见 crate::gui_setting::GameViewSettingObj）。
 // 不做成前端本地存储：换个实例就该换一套，本地存储是"每台机器一份"，
 // 两处口径不同会出现"切了实例顺序却没变"。
 

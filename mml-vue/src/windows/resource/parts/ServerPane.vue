@@ -1,16 +1,22 @@
 <script setup lang="ts">
-// 服务器列表（servers.dat）：添加 / 编辑 / 删除、打开目录 + **每行的 MOTD 状态**
+// 服务器列表（servers.dat）：添加 / 编辑 / 删除、打开目录 + **每行的连接状态**
 //
 // 添加/编辑的表单状态属于本分类，就放在这一层（草稿 + 保存中标记），
 // 弹窗排版在 ServerFormModal。
 //
-// MOTD 也是这一层：进分类 / 刷新列表时**并发查全部服务器**，结果填进对应那一行。
+// MOTD 分成两处（与主窗口的 MOTD 卡同一套观感）：
+// - **列表上方一张卡**，显示当前**选中**那一台的完整 MOTD（彩色分段、保留换行、人数/版本/延迟）；
+//   点列表里的行切换。卡片是 `components/MotdCard.vue`，与主窗口那两张是同一个组件。
+// - **行里只说"能不能连上"** + 地址 —— 一行一句话，扫一眼就知道哪台连得上。
+//
+// MOTD 查询也是这一层：进分类 / 刷新列表时**并发查全部服务器**，结果填进对应那一行。
 // 并发是必须的 —— 连不上的服要等到超时，串行的话后面的行全被它堵住。
-import { ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { t, tErr } from "../../../lib/i18n";
 import { showToast } from "../../../lib/toast";
 import { addServer, deleteServer, getMotd, updateServer } from "../../../lib/api";
-import { faviconOf, motdSegStyle } from "../../../lib/motd";
+import { faviconOf } from "../../../lib/motd";
+import MotdCard from "../../../components/MotdCard.vue";
 import ContentHead from "./ContentHead.vue";
 import ListSkeleton from "./ListSkeleton.vue";
 import ResourceRow from "./ResourceRow.vue";
@@ -26,7 +32,8 @@ const props = defineProps<{
 }>();
 
 const { servers, instanceUuid, loading, reloadCurrent } = props.data;
-const { busy, askDelete, openFolder } = props.ops;
+// 行的操作只剩「编辑 / 删除」：服务器行没有"打开文件夹"这一项（用户点名去掉）
+const { busy, askDelete } = props.ops;
 
 /** 表单草稿（null = 没开弹窗） */
 const form = ref<ServerFormDraft | null>(null);
@@ -75,8 +82,85 @@ async function queryAll() {
   );
 }
 
-// 列表一换（首次加载、点刷新、增删改之后重拉）就重查一遍
-watch(servers, () => void queryAll(), { immediate: true });
+/**
+ * 列表上方那张 MOTD 卡显示哪一台：存 `keyOf`，`null` = 还没选
+ *
+ * 默认选中第一台（列表一加载上方就有内容，不用先点一下）；选中的那台被删掉或改名
+ * 之后键会落空，也在下面退回第一台。
+ */
+const selectedKey = ref<string | null>(null);
+
+/** 选中的条目（列表为空时 `null`，上方卡片随之整块不渲染） */
+const selected = computed<ServerItemDto | null>(() => {
+  const list = servers.value;
+  if (!list.length) {
+    return null;
+  }
+  // 选中的那台还在就用它，找不到（删了 / 改名了）先退回第一台
+  return list.find((item) => keyOf(item) === selectedKey.value) ?? list[0];
+});
+
+/**
+ * 卡片上"刷新中…"至少露这么久
+ *
+ * 查本机 / 局域网的服务器常常几十毫秒就回来了，不压住时间的话"刷新中…"一闪而过、
+ * 数据又没变，点下去看着就跟没点一样（用户反馈过"点了刷新卡片没有反应"）。
+ * 500ms 是"能看清有这么一下"又不拖沓的量
+ */
+const REFRESH_MIN_MS = 500;
+
+/**
+ * 只重查一台（上方卡片上的刷新按钮）
+ *
+ * 与 [`queryAll`] 的区别只在范围：别的行保持原样、也不进"刷新中"，
+ * 所以翻到哪台点刷新，动的就只有那一台
+ */
+async function queryOne(item: ServerItemDto) {
+  const key = keyOf(item);
+  const next = new Set(pending.value);
+  next.add(key);
+  pending.value = next; // → 卡片立刻显示"刷新中…"（meta 那一行优先显示它）
+
+  const started = Date.now();
+  let ok = false;
+  let result: MotdDto | null = null;
+
+  try {
+    result = await getMotd(item.ip);
+    ok = true;
+  } catch {
+    // 与 queryAll 同一口径：失败也落一条 null，否则这一行会永远停在"刷新中…"
+  }
+
+  // 先补足最短展示时间，再落结果 —— 否则这一下眨眼就过去了
+  const rest = REFRESH_MIN_MS - (Date.now() - started);
+  if (rest > 0) {
+    await new Promise((resolve) => setTimeout(resolve, rest));
+  }
+
+  motds.value.set(key, result);
+
+  const after = new Set(pending.value);
+  after.delete(key);
+  pending.value = after;
+
+  // 数据可能一点没变（服务器信息本来就那样），给一条"确实刷新过"的回执
+  if (ok) {
+    showToast(t("tip.refreshed"));
+  }
+}
+
+// 列表一换（首次加载、点刷新、增删改之后重拉）就重查一遍，并把选中项落到仍然有效的那台
+watch(
+  servers,
+  () => {
+    void queryAll();
+    if (!servers.value.some((item) => keyOf(item) === selectedKey.value)) {
+      selectedKey.value = servers.value.length ? keyOf(servers.value[0]) : null;
+    }
+  },
+  { immediate: true },
+);
 
 /** 这一行的 MOTD（没查到 / 还在查时返回 null） */
 function motdOf(item: ServerItemDto): MotdDto | null {
@@ -93,11 +177,13 @@ function isOnline(item: ServerItemDto): boolean {
 }
 
 /**
- * 行图标：优先用 `servers.dat` 里存的那个（玩家自己设的），
- * 没存就用 MOTD 带回的服务器图标 —— 真实服务器列表就是这么显示的
+ * 行图标：**只用服务器查询带回来的 favicon**
+ *
+ * `servers.dat` 里存的那个（`item.icon`，后端已转成 data URL）直接跳过 —— 用户口径。
+ * 查不到 / 还在查时为 `""`，`ResourceRow` 对空图标是"整块不渲染"，不留占位框
  */
 function iconOf(item: ServerItemDto): string {
-  return item.icon || faviconOf(motdOf(item)) || "";
+  return faviconOf(motdOf(item)) || "";
 }
 
 function openForm(item: ServerItemDto | null) {
@@ -160,6 +246,22 @@ function remove(item: ServerItemDto) {
     </template>
   </ContentHead>
 
+  <!--
+    上方 MOTD 卡：显示**当前选中**那一台（点列表里的行切换）。
+    与主窗口底部那张、实例详情里那张是同一个组件，所以观感完全一致；
+    右上角的刷新按钮**只重查这一台**（别的行不动），见 queryOne。
+    外面这层只做横向对齐 —— 卡片不在滚动容器里，拿不到 `.item-list` 的内边距
+  -->
+  <div v-if="selected" class="sv-motd">
+    <MotdCard
+      refreshable
+      :motd="motdOf(selected)"
+      :loading="isLoading(selected)"
+      :name="selected.name || selected.ip"
+      @refresh="queryOne(selected)"
+    />
+  </div>
+
   <div v-if="loading" class="item-list">
     <ListSkeleton />
   </div>
@@ -167,14 +269,17 @@ function remove(item: ServerItemDto) {
     <ResourceRow
       v-for="item in servers"
       :key="keyOf(item)"
+      class="sv-row"
+      :class="{ 'sv-selected': keyOf(item) === selectedKey }"
       :icon="iconOf(item)"
       :name="item.name"
+      @click="selectedKey = keyOf(item)"
     >
       <template #badges>
         <span v-if="item.acceptTextures" class="badge badge-dim">
           {{ t("resource.acceptTextures") }}
         </span>
-        <!-- 在线人数：查到了才显示（查不到时那一行下面会写"离线"） -->
+        <!-- 在线人数：查到了才显示（查不到时那一行下面会写连不上的原因） -->
         <span v-if="isOnline(item)" class="badge">
           {{
             t("server.players", {
@@ -186,38 +291,21 @@ function remove(item: ServerItemDto) {
       </template>
 
       <!--
-        副标题：MOTD（彩色段）优先，后面跟版本 / 延迟；查不到就退回地址 + 一句状态。
-        地址**始终留在最后** —— 它是这一行的定位信息，不能因为查到了就不显示
+        副标题：**这一行自己回答"能不能连上"** + 地址。
+        MOTD 搬去上方那张卡了，这里不再铺彩色分段 —— 一行只有一句话，扫一眼就分得清。
+        地址**始终留着**：它是这一行的定位信息，与连不连得上无关
       -->
       <template #sub>
-        <template v-if="isOnline(item)">
-          <span
-            v-for="(seg, i) in motdOf(item)?.segments ?? []"
-            :key="i"
-            :style="motdSegStyle(seg)"
-          >{{ seg.text }}</span>
-          <span class="sep">·</span>
-          <span>{{ motdOf(item)?.version || t("server.unknown") }}</span>
-          <span class="sep">·</span>
-          <span>{{ t("server.ping", { ms: motdOf(item)?.ping ?? 0 }) }}</span>
-          <span class="sep">·</span>
-        </template>
+        <span v-if="isLoading(item)" class="sv-state wait">{{ t("server.refreshing") }}</span>
+        <span v-else-if="isOnline(item)" class="sv-state ok">{{ t("server.online") }}</span>
+        <span v-else class="sv-state off">{{ motdOf(item)?.message || t("server.offline") }}</span>
+        <span class="sep">·</span>
         <span>{{ item.ip }}</span>
-        <template v-if="isLoading(item)">
-          <span class="sep">·</span><span>{{ t("server.refreshing") }}</span>
-        </template>
-        <template v-else-if="!isOnline(item)">
-          <span class="sep">·</span>
-          <span>{{ motdOf(item)?.message || t("server.offline") }}</span>
-        </template>
       </template>
 
       <template #actions>
         <button class="mini-btn" :disabled="busy" @click="openForm(item)">
           {{ t("resource.serverEdit") }}
-        </button>
-        <button class="mini-btn" :disabled="busy" @click="openFolder('servers', null)">
-          {{ t("resource.openFolder") }}
         </button>
         <button class="mini-btn danger" :disabled="busy" @click="remove(item)">
           {{ t("resource.delete") }}
@@ -242,5 +330,19 @@ function remove(item: ServerItemDto) {
   margin: 0 5px;
   color: var(--text-dim);
   opacity: 0.7;
+}
+
+/* 行里的连接状态：能连上给绿、连不上给红、查询中压暗。
+   MOTD 搬去上方卡片之后，这一句就是整行的主要信息，得能一眼扫出来 */
+.sv-state.ok {
+  color: var(--green);
+}
+
+.sv-state.off {
+  color: var(--red);
+}
+
+.sv-state.wait {
+  color: var(--text-dim);
 }
 </style>

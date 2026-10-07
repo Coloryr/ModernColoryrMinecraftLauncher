@@ -10,6 +10,7 @@ pub mod add_modpack_dto;
 pub mod add_resource_dto;
 pub mod args_dto;
 pub mod collect_dto;
+pub mod colormc_dto;
 pub mod custom_home_dto;
 pub mod download_dto;
 pub mod export_dto;
@@ -46,6 +47,7 @@ pub use add_resource_dto::{
     ProjectItemDto, ResourceSaveDto, ResourceStatusDto, ResourceTaskDto, SourceTypeDto, TagDto,
 };
 pub use collect_dto::{CollectDataDto, CollectItemDto};
+pub use colormc_dto::{ColorMcCompatDto, ColorMcInfoDto, ColorMcProgressDto, ColorMcReportDto};
 pub use custom_home_dto::CustomHomeInfoDto;
 pub use settings_dto::{
     BgInfoDto, DnsSettingDto, GameCheckSettingDto, LaunchSettingDto, NetworkSettingDto,

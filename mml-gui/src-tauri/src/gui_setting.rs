@@ -1,12 +1,16 @@
-//! 实例 GUI 设置（guisetting.json）
+//! 实例 GUI 设置（gui_setting.json）
 //!
 //! **归属 GUI，不属于内核**：日志窗口开关、模组分组与备注、方块背景、启动后自开日志窗、
 //! 排列顺序 —— 这些都是"界面怎么看"，与启动流程无关，所以内核不读也不写它
 //! （`InstanceSettingObj` 里没有对应字段，内核只提供 `get_gui_setting_file()` 定位路径）。
 //!
-//! 存在实例目录下、与 `game.json` 并列的独立文件 `guisetting.json`，
-//! 结构与 ColorMC 的 `GameGuiSettingObj` 保持一致（字段名大写开头），
-//! 这样两个启动器的实例目录可以互认。
+//! 存在实例目录下、与 `game.json` 并列的独立文件 `gui_setting.json`。
+//!
+//! **文件名是 M²L 自己的，与 ColorMC 的 `guisetting.json` 故意不同**：字段名（大写开头）虽然
+//! 抄的是 ColorMC 的结构，但 `Mod.Groups` 的形状已经改过（对方是"组名 → SHA1 数组"，M²L 是
+//! "分组 uuid → 对象"）。若沿用同名文件，从 ColorMC 搬过来的实例会让 M²L 整份解析失败、
+//! 回落成默认值，随后又把它覆盖掉 —— 改名之后，ColorMC 那份 `guisetting.json` 只是
+//! 一个 M²L 不读的额外文件，迁移不会毁掉它（见 `windows/colormc.rs`）。
 
 use std::collections::{HashMap, HashSet};
 
@@ -121,8 +125,8 @@ pub struct GameModSettingObj {
 /// 全局性的界面设置（主题、颜色、字体、语言、窗口模式…）**不在这里** ——
 /// 它们与实例无关，放在 `gui_config.json`（跨窗口那份"界面状态"）里。
 ///
-/// 与 ColorMC 的互认：这是本启动器自己的扩展字段（对方结构里没有），
-/// 存成 `Gui`；对方解析到不认识的字段会忽略，不影响共用同一个实例目录。
+/// 这是本启动器自己的扩展字段（ColorMC 的结构里没有），存在 `Gui` 之下 ——
+/// 文件名与对方不同（见文件头），所以这份数据只在 M²L 这边有意义。
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 #[serde(default)]
 pub struct GameViewSettingObj {

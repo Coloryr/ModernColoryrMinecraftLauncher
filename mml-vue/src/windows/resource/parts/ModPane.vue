@@ -393,7 +393,7 @@ function counts(sec: ModSection): string {
 /**
  * 分组块的收起 / 展开
  *
- * 状态存在**实例的 `guisetting.json`**（`Mod.GroupCollapsed`，见 useModGroups）：
+ * 状态存在**实例的 `gui_setting.json`**（`Mod.GroupCollapsed`，见 useModGroups）：
  * 用户明确要求记住（"已启用默认不展开"），而且换实例各记各的。
  * 键就是分组 uuid —— 与顺序表同一套，不必再转换。
  */
@@ -537,7 +537,7 @@ function removeGroup(id: string, name: string) {
 /**
  * 备注弹窗的草稿（`item` 是列表里那一条的引用，存完直接改它）
  *
- * 备注存在 `guisetting.json` 的 `Mod.ModName`（与 ColorMC 互通），
+ * 备注存在 `gui_setting.json` 的 `Mod.ModName`（与 ColorMC 互通），
  * **不在模组列表里**，所以存完**不能重拉列表** —— 重拉一次要重新解析每个 jar
  * 的元数据（数秒），用户只是写一句备注而已。改本地那一份就够。
  */

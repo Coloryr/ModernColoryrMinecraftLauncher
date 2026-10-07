@@ -1,0 +1,65 @@
+{
+  "Items": {
+    "d98ce004-227e-40df-99dd-9be5f6b42f08": {
+      "Source": 0,
+      "FileType": 0,
+      "Name": "Cursed Walking",
+      "Pid": "682001",
+      "Icon": "https://media.forgecdn.net/avatars/614/500/637998216126755132.png",
+      "Url": "https://www.curseforge.com/minecraft/modpacks/cursed-walking-a-modern-zombie-apocalypse"
+    },
+    "19fcfddc-1968-4dbd-b6c9-9571c7c3682e": {
+      "Source": 0,
+      "FileType": 0,
+      "Name": "All the Mods 10: To the Sky",
+      "Pid": "1298402",
+      "Icon": "https://media.forgecdn.net/avatars/1389/739/638901033593272382.png",
+      "Url": "https://www.curseforge.com/minecraft/modpacks/all-the-mods-10-sky"
+    },
+    "f1dff004-3c03-4c12-8377-7ce3c9453936": {
+      "Source": 0,
+      "FileType": 1,
+      "Name": "[JEI]JEI\u7269\u54C1\u7BA1\u7406\u5668 (Just Enough Items)",
+      "Pid": "238222",
+      "Icon": "https://media.forgecdn.net/avatars/29/69/635838945588716414.jpeg",
+      "Url": "https://www.curseforge.com/minecraft/mc-mods/jei"
+    },
+    "54481473-6533-4fb7-8349-918ac083b88f": {
+      "Source": 0,
+      "FileType": 1,
+      "Name": "GeckoLib",
+      "Pid": "388172",
+      "Icon": "https://media.forgecdn.net/avatars/1081/393/638621132937140582.png",
+      "Url": "https://www.curseforge.com/minecraft/mc-mods/geckolib"
+    },
+    "fbd08326-f2c5-4ad9-b63c-441ed30314e3": {
+      "Source": 0,
+      "FileType": 1,
+      "Name": "Cloth Config API",
+      "Pid": "348521",
+      "Icon": "https://media.forgecdn.net/avatars/282/467/637289313020452406.png",
+      "Url": "https://www.curseforge.com/minecraft/mc-mods/cloth-config"
+    },
+    "74475a7b-8de5-4cde-b18e-c560a23472df": {
+      "Source": 0,
+      "FileType": 1,
+      "Name": "Architectury API",
+      "Pid": "419699",
+      "Icon": "https://media.forgecdn.net/avatars/313/420/637408811378175814.png",
+      "Url": "https://www.curseforge.com/minecraft/mc-mods/architectury-api"
+    },
+    "fcbe8fa7-0197-4027-919b-db047e1cfe3f": {
+      "Source": 0,
+      "FileType": 0,
+      "Name": "All the Mods 10",
+      "Pid": "925200",
+      "Icon": "https://media.forgecdn.net/avatars/1182/438/638755918649288941.png",
+      "Url": "https://www.curseforge.com/minecraft/modpacks/all-the-mods-10"
+    }
+  },
+  "Groups": {},
+  "Modpack": true,
+  "Mod": false,
+  "ResourcePack": false,
+  "Shaderpack": false
+}

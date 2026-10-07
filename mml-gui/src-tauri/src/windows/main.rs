@@ -116,7 +116,7 @@ pub fn main_get_instances() -> Vec<InstanceInfoDto> {
                 uuid: inst.uuid.to_string(),
                 name: inst.name.clone(),
                 // 分组归属与组内次序都在 mml-game 的分组表里（group_save.json）：
-                // 实例配置（game.json）与 guisetting.json 都没有这两个字段了
+                // 实例配置（game.json）与 gui_setting.json 都没有这两个字段了
                 group: mml_game::get_instance_group(&inst.uuid).map(|g| g.to_string()),
                 version: inst.version.clone(),
                 version_type: Some(inst.game_type.id().to_string()),
@@ -1004,7 +1004,7 @@ pub async fn main_delete_instance(
 /// 归属与组内次序都在内核分组表（`group_save.json`）：内核一次完成"落组 + 插到 index 位"，
 /// 前端下次拉列表就按表的数组顺序拿到新的 `order`。
 ///
-/// 这里不再改各实例的 `guisetting.json` —— 那个 `Order` 已经是旧机制，
+/// 这里不再改各实例的 `gui_setting.json` —— 那个 `Order` 已经是旧机制，
 /// 两份顺序各写各的正是"拖完看着对了、重启就乱"的来源。
 #[tauri::command]
 pub fn main_move_instance(

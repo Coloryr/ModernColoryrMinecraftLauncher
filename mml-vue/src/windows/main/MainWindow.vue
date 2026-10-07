@@ -16,7 +16,6 @@ import {
 import { commands } from "../../lib/bindings";
 import { loadGuiConfig, type ClientConfig } from "../../lib/guiConfig";
 import { t, tErr } from "../../lib/i18n";
-import { faviconOf, motdSegStyle } from "../../lib/motd";
 import { showToast } from "../../lib/toast";
 import { KEYS, onStorageChange } from "../../lib/storage";
 import { openWindow } from "../windowManager";
@@ -36,6 +35,7 @@ import InstanceSelect from "../../components/InstanceSelect.vue";
 import InstanceMetaPanel from "../../components/InstanceMetaPanel.vue";
 import LaunchArgsPanel from "../../components/LaunchArgsPanel.vue";
 import HomePage from "../../components/HomePage.vue";
+import MotdCard from "../../components/MotdCard.vue";
 import CustomHomePage from "../../components/CustomHomePage.vue";
 import CustomExecPanel from "../../components/CustomExecPanel.vue";
 import ProxyPanel from "../../components/ProxyPanel.vue";
@@ -47,16 +47,18 @@ import MainTopbar from "./topbar/MainTopbar.vue";
 import MainSidebar from "./sidebar/MainSidebar.vue";
 import MainCtxMenu from "./ctxmenu/MainCtxMenu.vue";
 import IconPickModal from "./IconPickModal.vue";
+import ColorMcMigrateModal from "./ColorMcMigrateModal.vue";
 import { useInstanceDrag } from "../../composables/useInstanceDrag";
 import { useMultiSelect } from "../../composables/useMultiSelect";
 import { useFileDrop } from "../../composables/useFileDrop";
-import type { ViewMode } from "../../lib/bindings";
+import type { ColorMcInfoDto, ViewMode } from "../../lib/bindings";
 import type { CtxMenuState, FeatureId, GroupView, InstMenuAction } from "./types";
 import BaseButton from "../../components/ui/BaseButton.vue";
 import BaseModal from "../../components/ui/BaseModal.vue";
+import WindowControls from "../../components/ui/WindowControls.vue";
 import SegmentedTabs from "../../components/ui/SegmentedTabs.vue";
 import CollapsePanel from "../../components/ui/CollapsePanel.vue";
-import { useWindowTitle } from "../../lib/titlebar";
+import { titleBarStyle, onTitleBarPointerDown, useWindowTitle } from "../../lib/titlebar";
 import { useWindowDecoration } from "../../lib/useWindowDecoration";
 
 // 注意：不能用顶层 await —— 会让 <script setup> 变成 async setup，
@@ -1112,8 +1114,8 @@ watch(
   () => void refreshInstMotd(),
 );
 
-// MOTD 的展示辅助（motdSegStyle / faviconOf）在 lib/motd.ts —— 资源窗口的服务器列表共用同一份
-
+// MOTD 卡片的展示（图标 / 彩色分段 / 人数-版本-延迟）在 components/MotdCard.vue ——
+// 本窗口的悬浮卡与实例详情卡、资源窗口服务器列表上方那张，三处共用同一份
 
 // ---- 客户端设置（gui_config.client）：MOTD 卡片显示与自动刷新间隔 ----
 const clientConfig = ref<ClientConfig>({
@@ -1265,12 +1267,63 @@ async function subscribeEvents() {
 // 只初始化一次：load-done 事件与下面的状态查询兜底可能先后到达
 let inited = false;
 
+/** 首次启动的 ColorMC 迁移弹窗数据（非空 = 弹窗显示中） */
+const colorMcInfo = ref<ColorMcInfoDto | null>(null);
+/** 弹窗"已结束"信号：答完（复制 / 移动 / 不迁移）或直接关掉时解开 */
+let colorMcSettled: (() => void) | null = null;
+
+/**
+ * 问后端有没有可迁移的 ColorMC 数据（**在加载期间问，主页面之前**）
+ *
+ * 探测只读几个目录项、不依赖内核，所以挂载时就能发起（见 onMounted），与核心加载并行；
+ * 一旦要弹窗，就**等用户答完**才放行主界面（加载页继续盖着，见 doInit）。
+ * 后端已问过（标记文件存在）或本机没有 ColorMC 时返回 null，直接放行。
+ */
+async function checkColorMc() {
+  try {
+    const info = await api.checkColorMc();
+    if (!info) return;
+    colorMcInfo.value = info;
+    await new Promise<void>((resolve) => {
+      colorMcSettled = resolve;
+    });
+  } catch {
+    colorMcInfo.value = null;
+  }
+}
+
+/** 弹窗关闭（三种选择任一，或右上角直接关掉）：放行主界面 */
+function onColorMcClosed() {
+  colorMcInfo.value = null;
+  colorMcSettled?.();
+  colorMcSettled = null;
+}
+
+/**
+ * 迁移完成
+ *
+ * 实例是"文件夹搬进来"的，运行中的核心**不会**重新扫实例目录（见 windows/colormc.rs），
+ * 所以权威结果是重启后再看；这里先把列表拉一次，万一被文件监听捡到了也能立刻显示。
+ */
+function onColorMcDone() {
+  void loadInstances();
+  void loadGroups();
+}
+
+/**
+ * 迁移探测任务：**建组件时就发起**（此刻还在加载页上），与核心加载并行；
+ * `doInit` 里 await 它，答完（或关掉弹窗）才关启动页 —— 于是"搬运在主页面之前"。
+ */
+const colorMcReady = checkColorMc();
+
 async function doInit() {
   if (inited) return;
   inited = true;
   try {
     await Promise.all([loadInstances(), loadGroups(), loadJava(), loadCustomHome()]);
     restoreSelection();
+    // ColorMC 迁移在主页面**之前**：加载期间就弹了，这里等它答完再关启动页
+    await colorMcReady;
     closeSplash();
     loadVersions();
     loadNews();
@@ -1453,6 +1506,32 @@ onMounted(async () => {
 
 <template>
   <div class="main-window" ref="rootEl">
+    <!-- 加载期间：**只画一个关闭按钮**的标题栏（不放整条顶栏）。
+         两颗不画的按钮用 visibility 占位（见 .boot-head 的样式）—— 自绘装饰激活要量
+         "最大化按钮"的矩形（lib/decoration.ts 的 findMaximizeBtn），量不到插件会退回
+         原生 frame、系统标题栏就又冒出来。 -->
+    <header
+      v-if="splashVisible || splashError"
+      class="boot-head"
+      :class="titleBarStyle"
+      @pointerdown="onTitleBarPointerDown"
+    >
+      <span class="spacer" />
+      <WindowControls :style="titleBarStyle" />
+    </header>
+
+    <!-- 主界面顶栏：加载完成后才出现（加载期间上面那条只给关闭按钮） -->
+    <MainTopbar
+      v-else
+      :features="features"
+      :news-active="newsActive"
+      :current-account="currentAccount"
+      :accounts="visibleAccounts"
+      @toggle-news="toggleNews"
+      @feature="openWindow"
+      @update:account="onAccountChange"
+    />
+
     <!-- ===== 启动画面 / 初始化失败错误页（SplashScreen 组件） ===== -->
     <SplashScreen
       v-if="splashVisible || splashError"
@@ -1463,16 +1542,6 @@ onMounted(async () => {
 
     <!-- ===== 主界面 ===== -->
     <template v-else>
-      <!-- 顶部栏 -->
-      <MainTopbar
-        :features="features"
-        :news-active="newsActive"
-        :current-account="currentAccount"
-        :accounts="visibleAccounts"
-        @toggle-news="toggleNews"
-        @feature="openWindow"
-        @update:account="onAccountChange"
-      />
 
       <!-- 整合包安装进度不再内嵌在这里：它改成了标题栏上的指示器 + 弹窗
            （ModpackTitleIndicator / ModpackPopup），否则这条卡片会一直占着内容区的高度、把列表顶下去。
@@ -1897,34 +1966,16 @@ onMounted(async () => {
 
                       <!-- MOTD 展示：只在**填了服务器地址**时出现。
                            没填时整块不显示 —— 原来会渲染一张只有兜底文案的卡片
-                           （"M²L 服务器 / 欢迎来到 M²L 服务器大厅"），看着像查询成功了，其实没查 -->
-                      <div v-if="argsOf(selected.uuid).serverIp.trim()" class="motd-card">
-                        <img v-if="faviconOf(instMotd)" class="motd-icon" :src="faviconOf(instMotd)!" alt="" />
-                        <div v-else class="motd-icon">MC</div>
-                        <div class="motd-info">
-                          <div class="motd-name">{{ instMotd?.ip || argsOf(selected.uuid).serverIp }}</div>
-                          <div class="motd-text">
-                            <template v-if="instMotd && instMotd.state === 'ok' && instMotd.segments.length">
-                              <span v-for="(seg, i) in instMotd.segments" :key="i" :style="motdSegStyle(seg)">{{ seg.text }}</span>
-                            </template>
-                            <span v-else-if="instMotd">{{ instMotd.message || t("server.offline") }}</span>
-                            <!-- 有地址但结果还没回来（这一块只在填了地址时才渲染） -->
-                            <span v-else>{{ t("server.refreshing") }}</span>
-                          </div>
-                          <div class="motd-meta">
-                            <template v-if="instMotd && instMotd.state === 'ok'">
-                              <span class="motd-online">{{
-                                t("server.players", { now: instMotd.playersOnline ?? 0, max: instMotd.playersMax ?? 0 })
-                              }}</span>
-                              <span class="sep">·</span>
-                              <span>{{ instMotd.version || t("server.unknown") }}</span>
-                              <span class="sep">·</span>
-                              <span>{{ t("server.ping", { ms: instMotd.ping }) }}</span>
-                            </template>
-                            <span v-else-if="instMotdLoading" class="motd-online">{{ t("server.refreshing") }}</span>
-                          </div>
-                        </div>
-                      </div>
+                           （"M²L 服务器 / 欢迎来到 M²L 服务器大厅"），看着像查询成功了，其实没查。
+                           卡片本身（图标 / 彩色分段 / 人数-版本-延迟）在 components/MotdCard.vue，
+                           与底部悬浮卡、资源窗口服务器列表上方那张是同一份 -->
+                      <MotdCard
+                        v-if="argsOf(selected.uuid).serverIp.trim()"
+                        compact
+                        :motd="instMotd"
+                        :loading="instMotdLoading"
+                        :name="instMotd?.ip || argsOf(selected.uuid).serverIp"
+                      />
                     </div>
                   </CollapsePanel>
                 </div>
@@ -1972,51 +2023,17 @@ onMounted(async () => {
 
       </main>
 
-      <!-- 服务器 MOTD 悬浮卡片（启动器下方；客户端设置里配置地址与开关） -->
+      <!-- 服务器 MOTD 悬浮卡片（启动器下方；客户端设置里配置地址与开关）。
+           `.motd-float` 只管固定摆位，卡片外观与内容在 components/MotdCard.vue —
+           与实例详情里的那张、资源窗口服务器列表上方那张是同一份 -->
       <div v-if="motdCardVisible" class="motd-float">
-        <button
-          class="motd-refresh"
-          v-tip="t('server.refresh')"
-          @click="refreshMotd"
-        >
-          <svg
-            viewBox="0 0 24 24"
-            width="13"
-            height="13"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-            :class="{ spin: motdLoading }"
-          >
-            <path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6" />
-          </svg>
-        </button>
-        <img v-if="faviconOf(motdInfo)" class="motd-float-icon" :src="faviconOf(motdInfo)!" alt="" />
-        <div v-else class="motd-float-icon">MC</div>
-        <div class="motd-float-info">
-          <div class="motd-float-name">{{ motdInfo?.ip || t("server.name") }}</div>
-          <div class="motd-float-text">
-            <template v-if="motdInfo && motdInfo.state === 'ok' && motdInfo.segments.length">
-              <span v-for="(seg, i) in motdInfo.segments" :key="i" :style="motdSegStyle(seg)">{{ seg.text }}</span>
-            </template>
-            <span v-else-if="motdInfo">{{ motdInfo.message || t("server.offline") }}</span>
-            <span v-else>{{ t("server.refreshing") }}</span>
-          </div>
-          <div class="motd-float-meta">
-            <template v-if="motdInfo && motdInfo.state === 'ok'">
-              <span class="motd-online">{{
-                t("server.players", { now: motdInfo.playersOnline ?? 0, max: motdInfo.playersMax ?? 0 })
-              }}</span>
-              <span class="sep">·</span>
-              <span>{{ motdInfo.version || t("server.unknown") }}</span>
-              <span class="sep">·</span>
-              <span>{{ t("server.ping", { ms: motdInfo.ping }) }}</span>
-            </template>
-            <span v-else-if="motdLoading" class="motd-online">{{ t("server.refreshing") }}</span>
-          </div>
-        </div>
+        <MotdCard
+          refreshable
+          :motd="motdInfo"
+          :loading="motdLoading"
+          :name="motdInfo?.ip || t('server.name')"
+          @refresh="refreshMotd"
+        />
       </div>
 
       <!-- ===== 右键菜单（MainCtxMenu 组件） ===== -->
@@ -2096,6 +2113,14 @@ onMounted(async () => {
       :name="iconPickInst.name"
       :path="iconPickPath"
       @close="((iconPickInst = null), (iconPickPath = ''))"
+    />
+
+    <!-- ===== 首次启动：把 ColorMC 的数据搬过来（见 doInit 的探测）===== -->
+    <ColorMcMigrateModal
+      v-if="colorMcInfo"
+      :info="colorMcInfo"
+      @close="onColorMcClosed"
+      @done="onColorMcDone"
     />
 
     <!-- ===== 选择目标分组（转移分组 / 移动选中实例共用）===== -->
@@ -2507,7 +2532,9 @@ onMounted(async () => {
   min-height: 46px;
 }
 
-/* 服务器 MOTD 悬浮卡片（启动器下方居中，左图标右信息） */
+/* 服务器 MOTD 悬浮卡片的**摆位**（启动器下方居中）。
+   卡片本身的外观与内容（图标 / 彩色分段 / 人数-版本-延迟 / 刷新按钮）在
+   components/MotdCard.vue —— 这里只负责把它钉在哪儿 */
 .motd-float {
   position: fixed;
   left: 50%;
@@ -2515,154 +2542,8 @@ onMounted(async () => {
   transform: translateX(-50%);
   /* 低于账户下拉菜单（200）：菜单展开时悬浮卡片不能压住列表 */
   z-index: 150;
-  display: flex;
-  align-items: center;
-  gap: 12px;
   max-width: 560px;
-  padding: 12px 16px;
-  border-radius: 14px;
-  border: 1px solid var(--border);
-  background: var(--bg-card);
-  box-shadow: var(--shadow-lg);
   cursor: default;
-}
-
-.motd-float:hover .motd-refresh {
-  opacity: 1;
-}
-
-.motd-refresh {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  width: 24px;
-  height: 24px;
-  border-radius: 7px;
-  border: 1px solid var(--border);
-  background: var(--bg-side);
-  color: var(--text-dim);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0;
-  transition: opacity 0.15s, color 0.15s;
-}
-
-.motd-refresh:hover {
-  color: var(--accent);
-}
-
-.motd-refresh .spin {
-  animation: motd-spin 0.8s linear infinite;
-}
-
-@keyframes motd-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.motd-float-icon {
-  width: 60px;
-  height: 60px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, #3ecf8e, #22d3ee);
-  color: #fff;
-  font-weight: 800;
-  font-size: 13px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.motd-float-info {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  min-width: 0;
-}
-
-.motd-float-name {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--text);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.motd-float-text {
-  font-size: 12.5px;
-  font-weight: 500;
-  color: var(--text-dim);
-  /* MOTD 可能多行，保留 \n 换行 */
-  white-space: pre-wrap;
-  word-break: break-all;
-  overflow: hidden;
-}
-
-.motd-float-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  color: var(--text-dim);
-  white-space: nowrap;
-}
-
-/* 自定义服务器 MOTD 卡片 */
-.motd-card {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 14px 16px;
-  border-radius: 12px;
-  border: 1px solid var(--border);
-  background: var(--bg-card);
-}
-
-.motd-icon {
-  width: 46px;
-  height: 46px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, #3ecf8e, #22d3ee);
-  color: #fff;
-  font-weight: 800;
-  font-size: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.motd-info {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  min-width: 0;
-}
-
-.motd-text {
-  font-size: 13.5px;
-  font-weight: 600;
-  color: var(--text);
-  /* MOTD 可能多行，保留 \n 换行 */
-  white-space: pre-wrap;
-  word-break: break-all;
-}
-
-.motd-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  color: var(--text-dim);
-}
-
-.motd-online {
-  color: var(--green);
 }
 
 /* 元信息行右侧快捷操作 */
@@ -2913,12 +2794,6 @@ onMounted(async () => {
   accent-color: var(--accent);
   margin-left: 12px;
   white-space: nowrap;
-}
-
-.motd-name {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--text);
 }
 
 .args-toggle {
@@ -3273,5 +3148,33 @@ onMounted(async () => {
   to {
     transform: rotate(360deg);
   }
+}
+/* ================= 加载期间的标题栏 =================
+   只显示关闭按钮：最小化 / 最大化两颗用 visibility 占位而不是 display: none ——
+   自绘装饰激活时要量最大化按钮的矩形（lib/decoration.ts 的 findMaximizeBtn），
+   量不到插件会以 kind="disabled" 收场（原生 frame 不摘，系统标题栏与自绘按钮并存）。
+   位置与主界面顶栏同一套：高 --titlebar-h、右侧留出窗口按钮的余地 */
+.boot-head {
+  height: var(--titlebar-h);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 18px;
+  background: var(--bg-side);
+  border-bottom: 1px solid var(--border);
+}
+
+.boot-head.windows {
+  padding-right: 10px;
+}
+
+.boot-head .spacer {
+  flex: 1;
+}
+
+.boot-head .wc-btn.minimize,
+.boot-head .wc-btn.maximize {
+  visibility: hidden;
+  pointer-events: none;
 }
 </style>

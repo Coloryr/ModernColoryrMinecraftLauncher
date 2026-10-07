@@ -1,6 +1,6 @@
 // 模组的自定义分组：分组表的加载、增删改，"把模组归到某个组"，以及**分组块的显示顺序**
 //
-// 分组数据属于实例的 GUI 设置：`guisetting.json` 的 `Mod.Groups`（见后端 crate::gui_setting）。
+// 分组数据属于实例的 GUI 设置：`gui_setting.json` 的 `Mod.Groups`（见后端 crate::gui_setting）。
 // **分组用 uuid 作键**，名字只是对象里的一个字段（可以随便改，键不动）；成员按模组
 // **SHA1** 记 —— 它是内容哈希，启用/禁用（改文件名）之后不变。
 //
@@ -44,7 +44,7 @@ export function useModGroups(data: ReturnType<typeof useResourceData>) {
   /**
    * 分组表（顺序 = 后端下发的顺序 = 用户拖出来的顺序；没拖过则是默认顺序）
    *
-   * `guisetting.json` 的 `Groups` 是 HashMap，没有"建立顺序"可言，所以顺序由后端
+   * `gui_setting.json` 的 `Groups` 是 HashMap，没有"建立顺序"可言，所以顺序由后端
    * `resource.rs::group_order_of` 统一决定再下发；前端**不要**再排一次
    * （两处排序规则一旦不一致，就会出现"看着没变但顺序变了"）。
    */
@@ -76,7 +76,7 @@ export function useModGroups(data: ReturnType<typeof useResourceData>) {
    * **收起**的分组块键集合（分组 uuid，与 `order` 同一套口径）
    *
    * 存"收起的那些"：默认全展开，空集合即初始状态。落盘在实例的
-   * `guisetting.json`（`Mod.GroupCollapsed`），所以切换实例各记各的。
+   * `gui_setting.json`（`Mod.GroupCollapsed`），所以切换实例各记各的。
    */
   const collapsed = ref<Set<string>>(new Set());
 
@@ -89,7 +89,7 @@ export function useModGroups(data: ReturnType<typeof useResourceData>) {
       return;
     }
     try {
-      // 三份一起拉：同一份 guisetting.json，三次 IPC 不如一次并发拿到
+      // 三份一起拉：同一份 gui_setting.json，三次 IPC 不如一次并发拿到
       const [list, folded, savedOrder] = await Promise.all([
         getModGroups(instanceUuid.value),
         getModGroupsCollapsed(instanceUuid.value),

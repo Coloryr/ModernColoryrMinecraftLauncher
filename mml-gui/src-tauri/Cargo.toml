@@ -53,3 +53,6 @@ rfd = "~0.17"
 tokio = "~1.53.1"
 tokio-util = "~0.7.19"
 
+[dev-dependencies]
+# 测试临时目录统一放 target/temp（AGENTS.md §6）：不要用系统 %TEMP%，也不要自己拼仓库根
+mml-testutil = { path = "../../mml-core/mml-testutil" }

@@ -11,7 +11,7 @@ pub struct ModItemDto {
     /// 注意：启用 / 禁用会改文件名 → 这个 uuid 跟着变，**不能拿它存分组**（见 `key`）。
     /// 内置模组（`jar_in_jar` 里的）没有独立文件，这里为空串。
     pub uuid: String,
-    /// 文件 SHA1：**自定义分组的键**（与 `guisetting.json` 的 `Mod.Groups` 一致）
+    /// 文件 SHA1：**自定义分组的键**（与 `gui_setting.json` 的 `Mod.Groups` 一致）
     ///
     /// 用内容哈希而不是 uuid：启用 / 禁用只是给文件名加减后缀，uuid（文件路径的 v5）会变，
     /// 而 SHA1 不变 —— 否则一禁用就掉出分组。读不出元数据的坏 jar 没有哈希，为空串（不可归组）。
@@ -65,7 +65,7 @@ pub struct ModItemDto {
     pub project_id: String,
     /// 文件编号（同上）
     pub file_id: String,
-    /// 用户写的备注（`guisetting.json` 的 `Mod.ModName`，没有则为空串）
+    /// 用户写的备注（`gui_setting.json` 的 `Mod.ModName`，没有则为空串）
     ///
     /// 键按**去掉禁用后缀的文件名**归一（见 `resource.rs::mod_note_key`）：
     /// 启用 / 禁用只给文件名加减 `.disabled`，不归一的话一禁用备注就丢了。
@@ -91,7 +91,7 @@ pub struct ModScanProgressDto {
     pub total: usize,
 }
 
-/// 资源窗口的视图偏好（存在**实例**的 `guisetting.json` 里，跟着实例走）
+/// 资源窗口的视图偏好（存在**实例**的 `gui_setting.json` 里，跟着实例走）
 ///
 /// 与 `gui_config.json` 那份全局界面状态分开：这一份是"这个实例我习惯怎么看"，
 /// 换个实例就该换一套（见 `gui_setting::GameViewSettingObj`）。
@@ -123,7 +123,7 @@ pub struct ModRenameDto {
     pub path: String,
 }
 
-/// 模组自定义分组（存在实例的 `guisetting.json` 的 `Mod.Groups` 里）
+/// 模组自定义分组（存在实例的 `gui_setting.json` 的 `Mod.Groups` 里）
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ModGroupDto {
@@ -151,6 +151,8 @@ pub struct PackItemDto {
     pub max_format: i64,
     /// 是否读取失败
     pub fail: bool,
+    /// 是否启用（由 options.txt 的 `resourcePacks` 判定，见 `mml_game::game_resourcepacks`）
+    pub enable: bool,
     /// 图标 data URL（无图标为空串）
     pub icon: String,
 }
