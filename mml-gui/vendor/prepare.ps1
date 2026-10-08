@@ -82,13 +82,35 @@ foreach ($p in $patches) {
     # 不用 [System.IO.Path]::GetRelativePath —— 那是 .NET Core 的 API，
     # Windows PowerShell 5.1（.NET Framework）没有，会报 MethodNotFound。
     $rel = $outDir.Substring($repoRoot.Length).TrimStart('\', '/').Replace('\', '/')
+
+    # 打之前先把补丁的行尾归一化成 LF 再交给 git apply。
+    #
+    # 上游源码是 **LF**（它自带 .gitattributes：`* text=auto eol=lf`），而本机
+    # （Git for Windows 默认）`core.autocrlf=true` 会在检出时把仓库里的 `*.patch`
+    # 也转成 CRLF —— 那时 git apply 连一行上下文都匹配不上，报的正是
+    # `error: patch failed: .../src/js/controls.js:67`（实测踩过）。
+    #
+    # 仓库根 .gitattributes 已把 `*.patch` 钉成 eol=lf，这里再兜一层：
+    # 手工编辑过补丁（编辑器写回 CRLF）、或在别的 core.autocrlf 环境下都不会炸。
+    # 中转文件按约定放 target/temp（见 AGENTS.md §6）。
+    $tmpDir = Join-Path $repoRoot "target/temp"
+    New-Item -ItemType Directory -Force $tmpDir | Out-Null
+    $tmpPatch = Join-Path $tmpDir $p.Name
+    $patchText = [System.IO.File]::ReadAllText($p.FullName).Replace("`r`n", "`n")
+    [System.IO.File]::WriteAllText($tmpPatch, $patchText, [System.Text.UTF8Encoding]::new($false))
+
     Push-Location $repoRoot
     try {
-        $result = & git apply --whitespace=nowarn --directory=$rel $p.FullName 2>&1
+        $result = & git apply --whitespace=nowarn --directory=$rel $tmpPatch 2>&1
         $code = $LASTEXITCODE
     } finally {
         Pop-Location
     }
+
+    # git 的报错走 stderr，PowerShell 会把它包成 ErrorRecord；直接内插进字符串会连
+    # "所在位置 / + CategoryInfo" 那一整块格式化文本一起打出来 —— 屏幕上只见红块，
+    # 我们自己那句 "patch 应用失败" 反而被淹没（实测）。这里先摊平成普通文本。
+    $result = @($result | ForEach-Object { "$_" })
     if ($code -ne 0) {
         throw "patch 应用失败：$($p.Name)`n$($result -join "`n")"
     }

@@ -86,7 +86,16 @@ for p in "${PATCHES[@]}"; do
     # 而且这种"找不到"是**静默返回 0**的（实测）。所以显式 --directory 指定基准。
     rel="${OUT_DIR#"$REPO_ROOT"/}"
 
-    if ! result="$(cd "$REPO_ROOT" && git apply --whitespace=nowarn --directory="$rel" "$p" 2>&1)"; then
+    # 打之前先把补丁的行尾归一化成 LF（理由见 ps1 版同名注释）：上游源码是 LF，
+    # 而 Windows 上 core.autocrlf=true 会把仓库里的 *.patch 也检出成 CRLF，
+    # 那样 git apply 一行上下文都匹配不上。仓库根 .gitattributes 已钉 eol=lf，
+    # 这里再兜一层。中转文件按约定放 target/temp（见 AGENTS.md §6）。
+    tmp_dir="$REPO_ROOT/target/temp"
+    mkdir -p "$tmp_dir"
+    tmp_patch="$tmp_dir/$name"
+    sed 's/\r$//' "$p" > "$tmp_patch"
+
+    if ! result="$(cd "$REPO_ROOT" && git apply --whitespace=nowarn --directory="$rel" "$tmp_patch" 2>&1)"; then
         echo "patch 应用失败：$name" >&2
         echo "$result" >&2
         exit 1
