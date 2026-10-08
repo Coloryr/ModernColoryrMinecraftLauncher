@@ -17,6 +17,15 @@ npm install
 npm run build      # 产出 dist/ 与 mml-ui-demo.zip
 ```
 
+可用的 npm 脚本：
+
+| 脚本 | 说明 |
+| --- | --- |
+| `npm run dev` | 浏览器预览（`http://localhost:1520`，无 IPC 数据） |
+| `npm run build` | 类型检查 + 构建 + 打包 zip（= `build:only` + `pack`） |
+| `npm run build:only` | 只构建出 `dist/`，跳过类型检查与打包 |
+| `npm run pack` | 只把已有的 `dist/` 打包成 zip |
+
 导入：启动器 → **设置 → 客户端设置 → 自定义主页面 → 导入**，选 `mml-ui-demo.zip`，
 再打开「启用自定义主页面」开关 → 回到主窗口的主页即可看到。
 
@@ -117,9 +126,10 @@ mml-ui-demo/
 │   ├── bridge.ts       # window.mml 的使用封装：宿主探测 / 带超时 invoke / 类型化订阅
 │   ├── mml.d.ts        # window.mml 的类型提示（本工程自己维护，不从启动器仓库引）
 │   ├── main.ts
-│   └── style.css       # 全局样式与两套配色变量
+│   ├── style.css       # 全局样式与两套配色变量
+│   └── vite-env.d.ts
 ├── scripts/pack.mjs    # 构建后打包成 zip（零依赖）
-└── vite.config.ts
+└── vite.config.ts      # base: "./"（资源一律相对路径）；预览端口 1520
 ```
 
 ## 打包规则（为什么 zip 根目录必须是 `index.html`）
