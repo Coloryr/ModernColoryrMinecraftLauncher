@@ -300,7 +300,8 @@ fn read_lang_map<Z: Read + std::io::Seek>(
         // `file_names()` 借着 `zip` 不放，先把命中的条目名收下来，再逐个读（要可变借用）
         let names: Vec<String> = zip
             .file_names()
-            .filter(|name| is_pack_lang_file(name, code))
+            .map(|item| item.unwrap_or_default())
+            .filter(|name| is_pack_lang_file(&name.to_string(), code))
             .map(|name| name.to_string())
             .collect();
 

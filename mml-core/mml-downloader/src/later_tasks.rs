@@ -50,7 +50,7 @@ pub fn unpack_native<R: Read + Seek>(native: &Path, read: R) -> CoreResult<()> {
             let mut outfile = path_helper::open_write(&outpath)?;
             io::copy(&mut file, &mut outfile).map_err(|err| {
                 ErrorType::ArchiveError(ArchiveErrorData {
-                    source: file.name().to_string(),
+                    source: file.name().unwrap_or_default().to_string(),
                     target: outpath.display().to_string(),
                     error: err.to_string(),
                 })

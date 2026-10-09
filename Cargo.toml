@@ -34,8 +34,8 @@ members = [
 ]
 
 [workspace.dependencies]
-crossbeam-queue = "~0.3.13"
-tokio = { version = "~1.53.1", features = [
+crossbeam-queue = "~0.3.14"
+tokio = { version = "~1.53.2", features = [
     "rt",
     "macros",
     "io-util",
@@ -44,14 +44,19 @@ tokio = { version = "~1.53.1", features = [
 ] }
 tokio-util = "~0.7.19"
 semrs = "~0.5.2"
-reqwest = { version = "~0.13.4", features = ["json", "stream", "form", "multipart"] }
+reqwest = { version = "~0.13.5", features = [
+    "json",
+    "stream",
+    "form",
+    "multipart",
+] }
 chrono = { version = "~0.4.45", features = ["serde"] }
 serde = { version = "~1.0.229", features = ["derive"] }
 serde_json = "~1.0.151"
 serde_repr = "~0.1.21"
 glow = "~0.18.0"
-glam = "~0.33.6"
-uuid = { version = "~1.26.0", features = ["v4", "v5", "serde"] }
+glam = "~0.34.1"
+uuid = { version = "~1.27.0", features = ["v4", "v5", "serde"] }
 url = "~2.5.8"
 md-5 = "~0.11.0"
 sha1 = "~0.11.0"
@@ -72,7 +77,7 @@ windows = { version = "~0.62.2", features = [
     "Win32_System_Com",
     "Win32_UI_Shell_Common",
 ] }
-zip = { version = "~8.6.0", features = ["chrono"] }
+zip = { version = "~9.0.0", features = ["chrono"] }
 tar = "~0.4.46"
 flate2 = "~1.1.10"
 sevenz-rust2 = "~0.23.0"
@@ -86,23 +91,38 @@ itertools = "~0.15.0"
 semka = "~2.0.7"
 soft-canonicalize = "~0.5.6"
 async-trait = "~0.1.92"
-encoding_rs = "~0.8.35"
+encoding_rs = "~0.8.42"
 encoding_rs_io = "~0.1.8"
 notify = "~8.2.0"
-toml = "~1.1.4"
+toml = "~1.1.8"
 if-addrs = "~0.15.0"
 socket2 = "~0.6.5"
-hickory-resolver = { version = "~0.26.3", default-features = false, features = ["tokio", "system-config"] }
+hickory-resolver = { version = "~0.26.3", default-features = false, features = [
+    "tokio",
+    "system-config",
+] }
 ico = "~0.5.0"
 clipboard-rs = "~0.3.5"
 dbus = "~0.9.12"
 bytes = "~1.12.1"
-png = "~0.18.1"
 tiny-skia = "~0.12.0"
-wgpu = "~30.0"
+wgpu = "~30.0.1"
 pollster = "~1.0.1"
 bytemuck = { version = "~1.25.2", features = ["derive"] }
-rquickjs = { version = "~0.14.0", default-features = false, features = ["std", "futures"] }
+rquickjs = { version = "~0.14.0", default-features = false, features = [
+    "std",
+    "futures",
+] }
+tauri-plugin-dialog = "~2.8.1"
+font-kit = "~0.14.3"
+dirs = "~7.0.0"
+png = "~0.18.1"
+image = { version = "~0.25.10", default-features = false, features = [
+    "png",
+    "jpeg",
+    "webp",
+] }
+rfd = "~0.17.2"
 
 # 正式发布：fat LTO + 单代码生成单元，体积最小、运行最快，但出包慢（单线程合并优化）
 # 命令：cargo build --release / npm run build:release

@@ -19,10 +19,10 @@ glam.workspace = true
 rayon.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-png.workspace = true
 wgpu.workspace = true
 pollster.workspace = true
 bytemuck.workspace = true
+png.workspace = true
 
 [dev-dependencies]
 mml-testutil = { path = "../mml-testutil" }

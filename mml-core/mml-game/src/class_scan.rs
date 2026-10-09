@@ -102,9 +102,9 @@ pub fn scan_jar<P: AsRef<Path>>(path: P) -> Result<JarScanResult, Box<dyn std::e
     let entries: Vec<(usize, String)> = (0..archive.len())
         .filter_map(|i| {
             archive.by_index(i).ok().and_then(|entry| {
-                let name = entry.name().to_string();
+                let name = entry.name().unwrap_or_default();
                 if name.ends_with(".class") && !name.contains("META-INF") {
-                    Some((i, name))
+                    Some((i, name.to_string()))
                 } else {
                     None
                 }

@@ -731,7 +731,7 @@ fn read_jar_in_jar(
     let jar_entries: Vec<usize> = (0..archive.len())
         .filter_map(|i| {
             archive.by_index(i).ok().and_then(|entry| {
-                let name = entry.name();
+                let name = entry.name().unwrap_or_default();
                 if name.ends_with(names::JAR_DOT_EXT)
                     && (name.starts_with(names::MOD_JAR_JAR_DIR)
                         || name.starts_with(names::MOD_JARS_DIR))
@@ -751,7 +751,7 @@ fn read_jar_in_jar(
             })
         })?;
         // 条目名要留着当身份用，先把它的借用结束掉再读内容
-        let entry_name = entry.name().to_string();
+        let entry_name = entry.name().unwrap_or_default().to_string();
 
         let mut bytes = Vec::new();
         entry.read_to_end(&mut bytes).map_err(|err| {
