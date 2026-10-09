@@ -23,7 +23,10 @@ pub(super) const ERR_NO_INDEX: &str = "err.customHomeNoIndex";
 ///
 /// `BaseArchive` 内部是 `Mutex<Box<dyn ArchiveHandle>>` 且 `Send + Sync`，
 /// 所以能常驻一份给协议 handler 反复按条目读；条目表只在打开时读一次。
-pub(super) struct HomeArchive {
+///
+/// `pub(crate)`（而不是 `pub(super)`）是因为 [`open_handle`] 等 `pub(crate)` 接口
+/// 会在签名里出现它 —— 类型比接口更私有会触发 `private_interfaces` 警告。
+pub(crate) struct HomeArchive {
     /// 条目索引：规范化后的名字（正斜杠）→ 包内原始条目名
     ///
     /// 单独建索引是因为 zip 里的名字可能用反斜杠（PowerShell `Compress-Archive`

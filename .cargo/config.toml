@@ -1,0 +1,23 @@
+# 构建期临时目录（TMP/TEMP）指到仓库的 target/ 下
+#
+# 为什么需要：本机系统 %TEMP% 会让 MSVC 的 lib.exe / link.exe 报
+#   LINK : fatal error LNK1104: 无法打开文件 "...\lnk{GUID}.tmp"
+# （MSVC 把 LNK 错误号当退出码返回，于是 cc-rs 报 "exit code 1104"），
+# 表现为 lzma-sys 这类 -sys 依赖的构建脚本失败。改到仓库内的 target/ 即可绕开。
+#
+# 为什么放在这里：[env] 对 **build script 与 rustc** 都生效，所以
+# `npm run tauri build` / `npm run tauri dev` / 直接 `cargo build` / `cargo test`
+# 全都覆盖（cc-rs 是在 build script 里调 lib.exe 的）。
+#
+# `relative = true` 的基准是**包含 `.cargo` 的那个目录**（= 仓库根，实测：
+# 写 `../target` 会解析成 `D:\code\target`），所以这里写 `target` 即 `<仓库根>/target`。
+# 这样配置本身与机器无关，可以直接入库。
+#
+# target/ 由 cargo 创建且已被 git 忽略，所以不需要预先建目录。
+#
+# 注意 `force = true` 是必需的：TMP/TEMP 在系统环境里本来就存在，
+# 而 cargo 的 [env] 默认**不覆盖**已存在的变量（不写 force 就等于没设置，
+# 实测 build script 里读到的仍是系统 %TEMP%）。
+[env]
+TMP = { value = "target", relative = true, force = true }
+TEMP = { value = "target", relative = true, force = true }

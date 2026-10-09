@@ -68,12 +68,13 @@ pub(super) fn percent_decode(s: &str) -> String {
     let mut out: Vec<u8> = Vec::with_capacity(bytes.len());
     let mut i = 0;
     while i < bytes.len() {
-        if bytes[i] == b'%' && i + 2 < bytes.len() {
-            if let (Some(hi), Some(lo)) = (hex_val(bytes[i + 1]), hex_val(bytes[i + 2])) {
-                out.push((hi << 4) | lo);
-                i += 3;
-                continue;
-            }
+        if bytes[i] == b'%'
+            && i + 2 < bytes.len()
+            && let (Some(hi), Some(lo)) = (hex_val(bytes[i + 1]), hex_val(bytes[i + 2]))
+        {
+            out.push((hi << 4) | lo);
+            i += 3;
+            continue;
         }
         out.push(bytes[i]);
         i += 1;
@@ -124,11 +125,11 @@ pub(super) fn resolve_entry<'a>(archive: &'a HomeArchive, raw_path: &str) -> Opt
         return Some(found);
     }
     // 整包套一层目录：把唯一顶层目录名的前缀试一遍（只在根请求时兜底，避免多花开销）
-    if name == INDEX_FILE {
-        if let Some(dir) = archive.single_top_dir() {
-            let wrapped = format!("{dir}/{INDEX_FILE}");
-            return archive.entry_name(&wrapped);
-        }
+    if name == INDEX_FILE
+        && let Some(dir) = archive.single_top_dir()
+    {
+        let wrapped = format!("{dir}/{INDEX_FILE}");
+        return archive.entry_name(&wrapped);
     }
     None
 }
@@ -214,12 +215,12 @@ pub(crate) async fn url_custom_home(req: Request<Vec<u8>>, res: UriSchemeRespond
         send_not_found(res);
         return;
     };
-    let Some(data) = archive.read(&name) else {
+    let Some(data) = archive.read(name) else {
         send_not_found(res);
         return;
     };
 
-    let mime = mime_of(&name);
+    let mime = mime_of(name);
     let data = if mime == "text/html" {
         inject_bridge(data)
     } else {
