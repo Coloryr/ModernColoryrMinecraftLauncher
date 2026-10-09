@@ -28,7 +28,7 @@ import {
   setViewMode,
   viewMode,
 } from "../../lib/settings";
-import type { AccountStoreDto, CustomHomeInfoDto, GroupDto, InstanceArgsDto, InstanceInfoDto, JavaInfoDto, NewsItem, VersionInfoDto } from "../../lib/bindings";
+import type { AccountStoreDto, CustomHomeInfoDto, GroupDto, InstanceInfoDto, JavaInfoDto, NewsItem, VersionInfoDto } from "../../lib/bindings";
 import InstanceIcon from "../../components/InstanceIcon.vue";
 import GlyphIcon from "../../components/ui/GlyphIcon.vue";
 import InstanceSelect from "../../components/InstanceSelect.vue";
@@ -52,6 +52,8 @@ import { useInstanceDrag } from "../../composables/useInstanceDrag";
 import { useMultiSelect } from "../../composables/useMultiSelect";
 import { useFileDrop } from "../../composables/useFileDrop";
 import { useMotd } from "./composables/useMotd";
+import { useInstanceArgs } from "./composables/useInstanceArgs";
+import { usePlayHours } from "./composables/usePlayHours";
 import type { ColorMcInfoDto, ViewMode } from "../../lib/bindings";
 import type { CtxMenuState, FeatureId, GroupView, InstMenuAction } from "./types";
 import BaseButton from "../../components/ui/BaseButton.vue";
@@ -388,100 +390,9 @@ function openLogWindow() {
 function toggleSettings() {
   settingsOpen.value = !settingsOpen.value;
 }
-const argsMap = ref<Record<string, InstanceArgsDto>>({});
-const argsLoaded = ref<Record<string, boolean>>({});
-
-// 加载完成前先用骨架默认值占位（真实值随后端返回覆盖）
-function argsOf(uuid: string): InstanceArgsDto {
-  if (!argsMap.value[uuid]) {
-    argsMap.value[uuid] = {
-      memory: 4096,
-      minMemory: 512,
-      fullscreen: false,
-      width: 1280,
-      height: 720,
-      javaName: "",
-      javaPath: "",
-      gc: "auto",
-      gcCustom: "",
-      mainClass: "",
-      jvmArgs: [],
-      gameArgs: [],
-      classPath: [],
-      envVars: [],
-      lang: "zh_cn",
-      logEncoding: "utf8",
-      preEnabled: false,
-      preCmd: "",
-      postEnabled: false,
-      postCmd: "",
-      proxyIp: "",
-      proxyPort: 1080,
-      proxyUser: "",
-      proxyPass: "",
-      serverIp: "",
-      serverPort: 25565,
-      joinServer: false,
-    };
-  }
-  return argsMap.value[uuid];
-}
-
-async function loadArgs(uuid: string) {
-  try {
-    argsMap.value[uuid] = await api.getInstanceArgs(uuid);
-    argsLoaded.value[uuid] = true;
-  } catch {
-    showToast(t("args.loadFailed"));
-  }
-}
-
-// 切换选中实例后拉取该实例的启动参数
-watch(
-  () => selected.value?.uuid,
-  (uuid) => {
-    if (uuid && !argsLoaded.value[uuid]) loadArgs(uuid);
-  },
-  { immediate: true },
-);
-
-// 修改后防抖写回后端（每个按键都保存会产生大量写盘）
-let argsSaveTimer: ReturnType<typeof setTimeout> | null = null;
-
-function patchArgs(patch: Partial<InstanceArgsDto>) {
-  if (selected.value) updateArgs({ ...argsOf(selected.value.uuid), ...patch });
-}
-
-function onServerIp(value: string) {
-  patchArgs({ serverIp: value });
-}
-
-function onServerJoin(checked: boolean) {
-  patchArgs({ joinServer: checked });
-}
-
-// 累计游戏时间（TEMP 模拟数据，接入后端统计接口后移除）
-const PLAY_HOURS: Record<string, number> = {
-  "11111111-1111-4111-8111-111111111111": 18.5,
-  "22222222-2222-4222-8222-222222222222": 6.8,
-  "33333333-3333-4333-8333-333333333333": 41.2,
-  "44444444-4444-4444-8444-444444444444": 27.4,
-  "55555555-5555-4555-8555-555555555555": 3.1,
-};
-
-function playHoursOf(uuid: string): number {
-  return PLAY_HOURS[uuid] ?? 0;
-}
-
-function updateArgs(v: InstanceArgsDto) {
-  const uuid = selected.value?.uuid;
-  if (!uuid) return;
-  argsMap.value[uuid] = v;
-  if (argsSaveTimer) clearTimeout(argsSaveTimer);
-  argsSaveTimer = setTimeout(() => {
-    api.updateInstanceArgs(uuid, argsMap.value[uuid]).catch((e) => showToast(tErr(e)));
-  }, 600);
-}
+// 启动参数（懒加载骨架值 / 防抖写回）与累计游玩时长：见 composables/ 下的两个组合式函数
+const { argsMap, argsOf, updateArgs, onServerIp, onServerJoin } = useInstanceArgs({ selected });
+const { playHoursOf } = usePlayHours();
 
 // ================= 实例操作 =================
 
@@ -1949,3 +1860,5 @@ onMounted(async () => {
 </template>
 
 <style scoped src="./main-window.css"></style>
+<style scoped src="../../styles/parts/multi-bar.css"></style>
+<style scoped src="../../styles/parts/instance-check.css"></style>

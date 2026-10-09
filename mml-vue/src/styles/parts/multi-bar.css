@@ -1,0 +1,65 @@
+/* 实例多选工具条（顶部浮动条）：主窗口与资源收藏窗口共用的同一套外观。
+ *
+ * 用法：两边各自的 <style scoped src="..."> 引这一份 —— 同一个文件被两个组件
+ * 分别编译，选择器各自带上**自己组件**的 data-v 属性，所以作用域互不干扰，
+ * 而规则只维护一处。（改这里会同时影响两个窗口，这是有意的。）
+ */
+.multi-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 12px;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 12.5px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.multi-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--accent);
+}
+
+.multi-btn.danger:hover {
+  border-color: var(--red);
+  color: var(--red);
+}
+
+.multi-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.multi-btn:disabled:hover {
+  background: var(--bg);
+  border-color: var(--border);
+}
+
+.multi-count {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent);
+  margin-right: 4px;
+  white-space: nowrap;
+}
+
+.multi-exit {
+  padding: 7px 12px;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: var(--bg-raised);
+  color: var(--text-dim);
+  font-size: 12.5px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+
+.multi-exit:hover {
+  color: var(--red);
+  background: rgba(255, 95, 86, 0.1);
+}

@@ -45,7 +45,6 @@ export default {
   "drop.notModpack": "不支持的文件类型，仅支持整合包",
 
   // 多选模式
-  "multi.hint": "右键分组可全选进入多选",
   "multi.selectAll": "全选",
   "multi.selectAllDone": "已选 {count} 个实例",
   "multi.moveGroup": "修改分组",
@@ -53,7 +52,6 @@ export default {
   "multi.launch": "启动全部",
   "multi.exit": "退出多选",
   "multi.selected": "已选 {count} 个",
-  "multi.back": "返回",
   "multi.deleteTitle": "删除选中实例",
   "multi.deleteConfirm": "确定删除选中的 {count} 个实例？",
   "multi.deleting": "正在删除 {done}/{total}…",
@@ -69,10 +67,7 @@ export default {
   "args.loadFailed": "读取实例启动参数失败",
 
   // 新闻
-  "news.title": "Minecraft New",
   "news.head": "Minecraft 最新动态",
-  "news.entry": "新闻",
-  "news.back": "返回",
   "news.refresh": "刷新新闻",
   "news.prev": "上一页",
   "news.next": "下一页",
@@ -85,15 +80,12 @@ export default {
 
   // 右侧视图
   "view.detail": "实例详情",
-  "view.news": "新闻",
 
   // 实例详情
   "detail.selectHint": "从左侧选择一个游戏实例",
   "detail.settings": "实例设置",
   "detail.logs": "实例日志",
-  "detail.group": "分组：{name}",
   "detail.launchCount": "启动 {count} 次",
-  "detail.lastPlay": "上次游玩：{last}",
   "detail.playTime": "累计游戏时间：{hours} 小时",
   "detail.none": "暂无",
 
@@ -110,7 +102,6 @@ export default {
   "logWindow.noFiles": "暂无日志文件",
   "logWindow.selectFile": "从左侧选择一个日志文件查看内容",
   "logWindow.loading": "正在读取…",
-  "logWindow.openInWindow": "独立窗口打开",
 
   "winExport.title": "导出实例",
   "winExport.instance": "实例",
@@ -140,7 +131,6 @@ export default {
   "home.lobbyDesc": "快速加入好友房间与热门服务器",
   "home.blocks": "方块列表",
   "home.blocksDesc": "浏览全部方块贴图，设为实例图标",
-  "blocks.back": "返回主页",
   "blocks.search": "搜索方块…",
   "blocks.catAll": "全部",
   "blocks.renderPromptTitle": "方块贴图未渲染",
@@ -195,14 +185,12 @@ export default {
   "home.lastPlay": "启动",
   "home.backToList": "返回实例列表",
   "home.backToDetail": "返回实例设置",
-  "home.backToListDesc": "查看全部游戏实例",
 
   // 自定义服务器
   "server.title": "自定义服务器",
   "server.name": "M²L 服务器",
   "server.motd": "欢迎来到 M²L 服务器大厅，祝您游戏愉快！",
   "server.players": "在线 {now} / {max} 人",
-  "server.version": "版本 {v}",
   "server.ping": "延迟 {ms}ms",
   "server.ipPlaceholder": "mml.example.com:25565",
   "server.refresh": "刷新服务器信息",
@@ -216,7 +204,6 @@ export default {
   "server.join": "启动时加入",
 
   // 实例设置
-  "settings.instanceTitle": "实例设置",
 
   // 自定义执行
   "exec.title": "自定义执行",
@@ -233,17 +220,11 @@ export default {
   "proxy.password": "密码",
 
   // 游戏版本类型
-  "version.release": "正式版",
-  "version.snapshot": "快照版",
-  "version.other": "其他",
-  "version.all": "全部",
 
   // 加载器显示名
   "loader.normal": "原版",
-  "loader.custom": "自定义",
 
   // 实例元信息（版本 / 加载器 / 分组 / 整合包 / 语言）
-  "meta.title": "游戏版本 · 加载器 · 分组",
   "meta.version": "游戏版本",
   "meta.versionType": "版本类型",
   "meta.loader": "加载器",
@@ -252,7 +233,6 @@ export default {
   "meta.platform": "整合包平台",
   "meta.platformNone": "无",
   "meta.platformOnline": "在线网络整合包",
-  "meta.serverUrl": "网址",
   "meta.pid": "项目 ID",
   "meta.fid": "文件 ID",
   "meta.lang": "游戏内语言",
@@ -260,8 +240,6 @@ export default {
   "meta.logEncoding": "日志编码",
   "meta.utf8": "UTF-8",
   "meta.gbk": "GBK",
-  "meta.modpackTitle": "整合包设置",
-  "meta.modpackDesc": "选择平台并填写项目 / 文件 ID",
 
   // 资源管理窗口
   "resource.title": "资源管理",
@@ -269,8 +247,6 @@ export default {
   "resource.modName": "名字",
   "resource.modVersion": "版本",
   "resource.modAuthor": "作者",
-  "resource.modFile": "文件名",
-  "resource.modDesc": "简介",
   "resource.modActions": "操作",
   "resource.modBuiltin": "内置",
   // 内置的库（没有模组元数据的内置 jar，如 asm / mixinextras）：不是模组
@@ -320,7 +296,6 @@ export default {
   "resource.groupDeleteConfirm": "确定删除分组「{name}」？组内模组会回到「未分组」，磁盘上的文件不受影响。",
   "resource.groupName": "分组名",
   "resource.groupPlaceholder": "输入分组名",
-  "resource.groupNone": "未分组",
   // 一个自建分组都没有时的空态（注意与上面的「未分组」不是一回事：
   // 那个是"这个模组不属于任何分组"，这个是"你还没建过分组"）
   "resource.groupNoGroups": "无分组",
@@ -371,7 +346,6 @@ export default {
   "resource.packOn": "已启用",
   "resource.broken": "已损坏",
   "resource.notSelected": "未选择实例",
-  "resource.fileMissing": "资源文件不存在或已被移动",
   "resource.loading": "正在加载…",
   "resource.readingMods": "读取模组中…",
   "resource.cancel": "取消",
@@ -385,7 +359,6 @@ export default {
   "resource.dims": "尺寸 {w}×{h}×{l}",
   "resource.blockCount": "{count} 个方块",
   "resource.blockTypes": "{count} 种方块",
-  "resource.author": "作者",
   "resource.selectSave": "选择存档…",
   "resource.dpOn": "已启用",
   "resource.dpOff": "已停用",
@@ -395,9 +368,6 @@ export default {
   "actions.addResource": "添加资源",
   "actions.manageResource": "资源管理",
   "actions.export": "导出游戏实例",
-  "actions.exportPack": "导出为整合包",
-  "actions.exportZip": "导出为压缩包",
-  "actions.exportMmc": "导出为 MMC 实例",
   "actions.openFolder": "打开游戏实例文件夹",
   "actions.viewLog": "查看实例日志",
   "actions.editConfig": "修改实例配置",
@@ -461,8 +431,6 @@ export default {
 
   // 启动
   "launch.play": "启动游戏",
-  "launch.settings": "启动设置",
-  "launch.stop": "停止游戏",
   "launch.filterAll": "全部",
   "launch.filterThread": "线程",
   "launch.filterLevel": "级别",
@@ -476,8 +444,6 @@ export default {
   "launch.exited": "已退出",
   "launch.exitedCode": "已退出（代码 {code}）",
   "launch.waitLog": "等待游戏日志输出…",
-  "launch.processExited": "[游戏] 游戏进程已退出",
-  "launch.processExitedCode": "[游戏] 游戏进程已退出，退出码 {code}",
   "launch.error": "[错误] {msg}",
 
   // 启动状态
@@ -498,7 +464,6 @@ export default {
   "settings.memory": "最大内存：{mb} MB",
   "settings.java": "Java 版本",
   "settings.gameArgs": "游戏参数（附加）",
-  "settings.close": "关闭",
   "settings.save": "保存（模拟）",
 
   // 添加实例
@@ -506,7 +471,6 @@ export default {
   "add.name": "实例名称",
   "add.namePlaceholder": "例如：我的世界 1.21",
   "add.version": "游戏版本",
-  "add.versionType": "版本类型",
   "add.verType": "版本类型",
   "add.type.release": "正式版",
   "add.type.snapshot": "快照",
@@ -553,7 +517,6 @@ export default {
   "add.creating": "创建中…",
   "add.nameEmpty": "请输入实例名称",
   "add.versionEmpty": "请选择游戏版本",
-  "add.versionFail": "获取版本列表失败：{msg}",
   "add.createFail": "创建失败：{msg}",
   "add.groupPlaceholder": "默认分组，或输入新分组名",
   "add.groupNone": "无匹配分组，可直接输入自定义分组",
@@ -623,7 +586,6 @@ export default {
   "account.oauthCode": "请求码",
   "account.oauthUrl": "地址",
   "account.openBrowser": "打开浏览器",
-  "account.openBrowserFail": "打开浏览器失败，请手动复制地址",
   "account.oauthHint": "请在浏览器中打开链接，输入请求码完成授权",
   "account.oauthState.waiting": "等待在浏览器中完成授权…",
   "account.oauthState.xbox": "正在验证 Xbox 账户…",
@@ -635,8 +597,6 @@ export default {
   "account.switched": "已切换账户：{name}",
   "account.current": "当前",
   "account.fieldsRequired": "请填写所有必填项",
-  "account.offline": "离线账户",
-  "account.microsoft": "微软账户",
 
   // 账户窗口
   "account.manage": "账户管理",
@@ -645,7 +605,6 @@ export default {
   "account.all": "全部",
   "account.search": "搜索账户",
   "account.searchEmpty": "未找到匹配的账户",
-  "account.empty": "暂无账户",
   "account.noAccount": "未选择账户",
   "account.view.grid": "平铺",
   "account.view.list": "列表",
@@ -676,7 +635,6 @@ export default {
   "account.tokenStatus": "Token 状态",
   "account.tokenValid": "有效",
   "account.tokenExpired": "已过期",
-  "account.capeName": "披风",
   "account.refresh": "刷新 Token",
   "account.reloginOk": "重新登录成功",
   "account.reloginTitle": "重新登录",
@@ -701,7 +659,6 @@ export default {
   "account.typeSelflittleskin": "自定义皮肤站",
   "account.typeAuthlib": "外置登录",
   "account.typeNide8": "统一通行证",
-  "account.detailTitle": "账户详细信息",
 
   // 功能入口
   "features.settings": "启动器设置",
@@ -717,9 +674,6 @@ export default {
 
   // 设置窗口
   "winSettings.windowMode": "窗口模式",
-  "winSettings.tauriFixed": "Tauri 环境固定使用多窗口，功能按钮将打开独立窗口。",
-  "winSettings.windowModeDesc":
-    "单窗口模式：所有页面在当前窗口内切换；多窗口模式：每个功能独立窗口显示。",
   "winSettings.single": "单窗口",
   "winSettings.multi": "多窗口",
   "winSettings.windowModeRestart": "切换窗口模式会立即重启启动器",
@@ -739,9 +693,6 @@ export default {
   "winSettings.bgLoadFailed": "背景图加载失败",
   "winSettings.bgNativeSize": "原始大小",
   "winSettings.bgApply": "应用",
-  "winSettings.current": "当前：{mode}",
-  "winSettings.currentMulti": "多窗口（功能按钮将打开独立窗口）",
-  "winSettings.currentSingle": "单窗口（功能在应用内切换）",
   "winSettings.theme": "外观主题",
   "winSettings.themeDark": "深色",
   "winSettings.themeLight": "浅色",
@@ -749,7 +700,6 @@ export default {
   "winSettings.font": "界面字体",
   "winSettings.fontDesc": "选择系统已安装的字体作为界面字体，留空恢复默认",
   "winSettings.fontDefault": "默认字体",
-  "winSettings.apply": "应用",
   "winSettings.resetPage": "恢复本页默认",
   "winSettings.resetPageHint": "把本页的设置恢复成默认值（其它页不受影响）",
   "winSettings.resetPageTitle": "恢复本页默认值",
@@ -776,10 +726,8 @@ export default {
   "winSettings.proxyUsername": "用户名",
   "winSettings.proxyPassword": "密码",
   "winSettings.save": "保存",
-  "winSettings.saved": "已保存",
   "winSettings.proxyApplied": "已保存并立即生效：正在进行的请求已中断，重试即走新代理",
   "winSettings.tauriOnly": "仅桌面版启动器支持",
-  "winSettings.launch": "游戏启动设置",
   "winSettings.minMemory": "最小内存 (MB)",
   "winSettings.maxMemory": "最大内存 (MB)",
   "winSettings.jvmArgs": "JVM 参数",
@@ -815,7 +763,6 @@ export default {
   "winSettings.randomTitle": "随机标题",
   "winSettings.cycleTitle": "循环切换标题",
   "winSettings.titleDelay": "标题切换间隔（毫秒）",
-  "winSettings.javaList": "Java 运行时",
   "winSettings.javaNone": "尚未添加任何 Java，点下方扫描或手动添加",
   "winSettings.javaScan": "扫描系统 Java",
   "winSettings.javaScanning": "扫描中…",
@@ -879,16 +826,11 @@ export default {
   "winSettings.accent.indigo": "靛蓝",
   "winSettings.accent.custom": "自定义颜色",
   "winSettings.downloadSource": "下载源",
-  "winSettings.downloadSourceDesc": "Mojang 官方 / BMCLAPI 镜像（开发中）",
-  "winSettings.network": "网络与下载",
-  "winSettings.networkDesc": "下载源、并发数、校验、代理、DNS 与游戏文件检查",
   "winSettings.language": "语言",
-  "winSettings.ui": "界面设置",
   "winSettings.secGeneral": "通用",
   "winSettings.secTheme": "主题与颜色",
   "winSettings.secWindow": "窗口",
   "winSettings.secMainWindow": "主窗口",
-  "winSettings.secSkin": "皮肤与头像",
   "winSettings.secDownload": "下载",
   "winSettings.secProxy": "代理",
   "winSettings.tab.ui": "界面",
@@ -959,14 +901,9 @@ export default {
   "winSettings.checkLibSha1": "校验运行库 SHA1",
   "winSettings.checkAssetsSha1": "校验资源文件 SHA1",
   "winSettings.checkModSha1": "校验模组 SHA1",
-  "winSettings.defaultJava": "默认 Java",
-  "winSettings.defaultJavaDesc": "默认 JVM 参数、Java 版本管理（开发中）",
-  "winSettings.interface": "界面",
-  "winSettings.interfaceDesc": "主题、界面语言（开发中）",
 
   // 侧栏设置
   "winSettings.sidebar": "侧栏",
-  "winSettings.sidebarPos": "侧栏位置",
   "winSettings.sidebarLeft": "左侧",
   "winSettings.sidebarRight": "右侧",
   "winSettings.sidebarDesc": "侧栏可收起（主界面顶栏按钮），位置在这里调整。",
@@ -1019,8 +956,6 @@ export default {
   "winDownload.empty": "暂无进行中的下载任务",
   "winDownload.loading": "正在加载任务列表…",
   "winDownload.idle": "所有下载线程空闲",
-  "winDownload.cancel": "取消",
-  "winDownload.counts": "已完成 {done} / {total}（失败 {failed}）",
   "winDownload.taskCount": "共 {n} 个任务",
   "winDownload.files": "文件 {done} / {total}",
   "winDownload.projects": "项目 {done} / {total}",
@@ -1052,7 +987,6 @@ export default {
   "winDownload.state.error": "出错",
 
   // 整合包模式（添加实例窗口）
-  "add.modeModpack": "整合包",
   "add.installing": "正在安装整合包",
   "add.packState.downloadPack": "下载整合包",
   "add.packState.readInfo": "读取信息",
@@ -1093,7 +1027,6 @@ export default {
   "modpack.bar.running": "正在安装 {count} 个整合包",
   "modpack.bar.finished": "{count} 个整合包已结束",
   "modpack.bar.title": "整合包安装",
-  "modpack.bar.open": "整合包安装进度",
   "modpack.bar.clearDone": "清除已完成",
   "modpack.bar.cancel": "取消",
   "modpack.bar.cancelled": "已取消",
@@ -1120,7 +1053,6 @@ export default {
   "addResource.datapacks": "数据包",
   "addResource.searchHint": "搜索资源…",
   "addResource.empty": "没有找到相关资源",
-  "addResource.modLoader": "加载器",
   "addResource.loader.normal": "全部",
   "addResource.chooseSave": "选择存档",
   "addResource.instance": "目标实例",
@@ -1137,13 +1069,11 @@ export default {
 
   // 窗口标题
   "winTitle.main": "ModernMinecraftLauncher",
-  "winTitle.account": "M²L 账户管理",
   "winTitle.addModpack": "下载整合包",
   "winTitle.addResource": "添加资源",
   "winTitle.collect": "资源收藏",
 
   // 收藏窗口
-  "collect.groupLabel": "分组",
   "collect.defaultGroup": "默认分组",
   "collect.addGroup": "添加分组",
   "collect.addGroupTitle": "添加收藏分组",
@@ -1177,7 +1107,6 @@ export default {
   "collect.pickInstanceNone": "还没有游戏实例 —— 先建一个实例再来下载资源",
 
   // 占位窗口
-  "winCommon.pending": "该窗口尚未实现",
 
   // 自绘标题栏
   "titlebar.minimize": "最小化",
@@ -1198,7 +1127,6 @@ export default {
   "err.loginLocked": "登录方式已被锁定，无法添加此类型的账户",
   "err.groupEmpty": "分组名不能为空",
   "err.groupExists": "这个分组已经存在",
-  "err.groupReserved": "这个分组名是保留的（已启用 / 已禁用 / 识别失败），换一个",
   "err.instanceRunning": "实例已在运行中",
   "err.modelMissing": "窗口模型未初始化",
   "err.unknownLoader": "未知的加载器类型",
@@ -1223,7 +1151,6 @@ export default {
 
   // 从 ColorMC 迁移（加载期间问一次）
   "colormc.title": "发现 ColorMC 数据",
-  "colormc.source": "来源目录",
   "colormc.from.run": "run 文件指定",
   "colormc.from.default": "默认位置",
   "colormc.from.fallback": "兜底位置",
@@ -1236,7 +1163,6 @@ export default {
   "colormc.stage.copy": "复制中…",
   "colormc.stage.move": "移动中…",
   "colormc.stage.check": "检测中…",
-  "colormc.done": "迁移完成",
   "colormc.entriesDone": "已搬入 {n} 项",
   "colormc.failedHead": "{n} 项没搬成功：",
   "colormc.instOk": "可用实例 {n} 个",

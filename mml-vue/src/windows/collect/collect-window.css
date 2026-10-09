@@ -65,72 +65,12 @@
   box-shadow: var(--shadow-md);
 }
 
-.multi-count {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--accent);
-  margin-right: 4px;
-  white-space: nowrap;
-}
-
-.multi-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 7px 12px;
-  border-radius: 9px;
-  border: 1px solid var(--border);
-  background: var(--bg);
-  color: var(--text);
-  font-size: 12.5px;
-  font-family: inherit;
-  cursor: pointer;
-  transition: all 0.12s;
-}
-
-.multi-btn:hover {
-  background: var(--bg-hover);
-  border-color: var(--accent);
-}
-
-.multi-btn.danger:hover {
-  border-color: var(--red);
-  color: var(--red);
-}
-
 /* 禁用的按钮（没勾选 / 没有分组可去）：别让它看起来还能点 */
-.multi-btn:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.multi-btn:disabled:hover {
-  background: var(--bg);
-  border-color: var(--border);
-}
-
 .multi-sep {
   width: 1px;
   height: 18px;
   background: var(--border);
   margin-left: auto;
-}
-
-.multi-exit {
-  padding: 7px 12px;
-  border-radius: 9px;
-  border: 1px solid var(--border);
-  background: var(--bg-raised);
-  color: var(--text-dim);
-  font-size: 12.5px;
-  font-family: inherit;
-  cursor: pointer;
-  transition: all 0.12s;
-}
-
-.multi-exit:hover {
-  color: var(--red);
-  background: rgba(255, 95, 86, 0.1);
 }
 
 /* ----- 折叠分组列表 ----- */

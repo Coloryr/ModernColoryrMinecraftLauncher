@@ -867,3 +867,4 @@ watch(source, loadSource);
 </template>
 
 <style scoped src="./modpack-mode.css"></style>
+<style scoped src="../../styles/parts/group-combo.css"></style>

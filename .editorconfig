@@ -1,0 +1,35 @@
+# 编辑器统一约定（EditorConfig，几乎所有编辑器原生支持或一个插件即可）
+#
+# ⚠ 行尾以本仓库 .gitattributes 的约定为准，这里与它保持一致：
+#   - 本机 core.autocrlf=true → 文本文件检出为 CRLF，所以默认 end_of_line = crlf；
+#   - *.patch / *.sh 必须 LF（.gitattributes 里钉死的），否则 vendor 打补丁、
+#     bash 执行脚本都会坏。
+# 不要在这里加 *.bat —— 批处理必须是 CRLF，而默认就是 CRLF，加了反而是多此一举。
+root = true
+
+[*]
+charset = utf-8
+end_of_line = crlf
+insert_final_newline = true
+indent_style = space
+indent_size = 2
+trim_trailing_whitespace = true
+
+# Rust / TOML
+[*.{rs,toml}]
+indent_size = 4
+
+# 补丁与 shell 脚本必须 LF（见 .gitattributes 的说明）
+[*.{patch,sh}]
+end_of_line = lf
+
+# Markdown 里行尾两个空格是有意义的换行
+[*.md]
+trim_trailing_whitespace = false
+
+# 批处理：显式 CRLF，避免有人在别的 core.autocrlf 环境下把它改成 LF
+[*.bat]
+end_of_line = crlf
+
+[Makefile]
+indent_style = tab

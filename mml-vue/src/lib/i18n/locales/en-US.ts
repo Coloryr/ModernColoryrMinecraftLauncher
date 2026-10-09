@@ -45,7 +45,6 @@ export default {
   "drop.notModpack": "Unsupported file type, modpack files only",
 
   // Multi-select
-  "multi.hint": "Right-click a group to select all",
   "multi.selectAll": "Select all",
   "multi.selectAllDone": "{count} instances selected",
   "multi.moveGroup": "Change group",
@@ -53,7 +52,6 @@ export default {
   "multi.launch": "Launch all",
   "multi.exit": "Exit multi-select",
   "multi.selected": "{count} selected",
-  "multi.back": "Back",
   "multi.deleteTitle": "Delete selected instances",
   "multi.deleteConfirm": "Delete the {count} selected instances?",
   "multi.deleting": "Deleting {done}/{total}…",
@@ -69,10 +67,7 @@ export default {
   "args.loadFailed": "Failed to load instance launch args",
 
   // News
-  "news.title": "Minecraft New",
   "news.head": "Latest Minecraft News",
-  "news.entry": "News",
-  "news.back": "Back",
   "news.refresh": "Refresh news",
   "news.prev": "Previous",
   "news.next": "Next",
@@ -85,15 +80,12 @@ export default {
 
   // Right view
   "view.detail": "Instance",
-  "view.news": "News",
 
   // Instance detail
   "detail.selectHint": "Select an instance from the left",
   "detail.settings": "Instance Settings",
   "detail.logs": "Instance logs",
-  "detail.group": "Group: {name}",
   "detail.launchCount": "Launched {count} times",
-  "detail.lastPlay": "Last played: {last}",
   "detail.playTime": "Total playtime: {hours} hours",
   "detail.none": "Never",
 
@@ -110,7 +102,6 @@ export default {
   "logWindow.noFiles": "No log files",
   "logWindow.selectFile": "Select a log file to view its content",
   "logWindow.loading": "Loading…",
-  "logWindow.openInWindow": "Open in window",
 
   "winExport.title": "Export Instance",
   "winExport.instance": "Instance",
@@ -140,7 +131,6 @@ export default {
   "home.lobbyDesc": "Quickly join friend rooms and popular servers",
   "home.blocks": "Block List",
   "home.blocksDesc": "Browse all block textures, set as instance icon",
-  "blocks.back": "Back to Home",
   "blocks.search": "Search blocks…",
   "blocks.catAll": "All",
   "blocks.renderPromptTitle": "Block textures not rendered",
@@ -195,14 +185,12 @@ export default {
   "home.lastPlay": "Launch",
   "home.backToList": "Back to instance list",
   "home.backToDetail": "Back to instance settings",
-  "home.backToListDesc": "Browse all game instances",
 
   // Custom server
   "server.title": "Custom Server",
   "server.name": "M²L Server",
   "server.motd": "Welcome to the M²L server lobby. Enjoy your stay!",
   "server.players": "{now} / {max} online",
-  "server.version": "Version {v}",
   "server.ping": "Ping {ms}ms",
   "server.ipPlaceholder": "mml.example.com:25565",
   "server.refresh": "Refresh server info",
@@ -216,7 +204,6 @@ export default {
   "server.join": "Join on launch",
 
   // Instance settings
-  "settings.instanceTitle": "Instance Settings",
 
   // Custom commands
   "exec.title": "Custom Commands",
@@ -233,17 +220,11 @@ export default {
   "proxy.password": "Password",
 
   // Game version types
-  "version.release": "Release",
-  "version.snapshot": "Snapshot",
-  "version.other": "Other",
-  "version.all": "All",
 
   // Loader display names
   "loader.normal": "Vanilla",
-  "loader.custom": "Custom",
 
   // Instance meta (version / loader / group / modpack / language)
-  "meta.title": "Version · Loader · Group",
   "meta.version": "Game version",
   "meta.versionType": "Version type",
   "meta.loader": "Loader",
@@ -252,7 +233,6 @@ export default {
   "meta.platform": "Modpack platform",
   "meta.platformNone": "None",
   "meta.platformOnline": "Online modpack",
-  "meta.serverUrl": "URL",
   "meta.pid": "Project ID",
   "meta.fid": "File ID",
   "meta.lang": "In-game language",
@@ -260,8 +240,6 @@ export default {
   "meta.logEncoding": "Log encoding",
   "meta.utf8": "UTF-8",
   "meta.gbk": "GBK",
-  "meta.modpackTitle": "Modpack Settings",
-  "meta.modpackDesc": "Choose a platform and fill in project / file IDs",
 
   // Resource window
   "resource.title": "Resource Manager",
@@ -269,8 +247,6 @@ export default {
   "resource.modName": "Name",
   "resource.modVersion": "Version",
   "resource.modAuthor": "Author",
-  "resource.modFile": "File",
-  "resource.modDesc": "Description",
   "resource.modActions": "Actions",
   "resource.modBuiltin": "Bundled",
   // Bundled library (a nested jar with no mod metadata, e.g. asm / mixinextras)
@@ -320,7 +296,6 @@ export default {
   "resource.groupDeleteConfirm": "Delete group “{name}”? Its mods return to “Ungrouped”; files on disk are untouched.",
   "resource.groupName": "Group name",
   "resource.groupPlaceholder": "Enter a group name",
-  "resource.groupNone": "Ungrouped",
   // Empty state when no custom groups exist yet (not the same as "Ungrouped" above)
   "resource.groupNoGroups": "No groups",
   "resource.groupEmptyHint": "This group has no mods — drag mods onto it",
@@ -370,7 +345,6 @@ export default {
   "resource.packOn": "Enabled",
   "resource.broken": "Broken",
   "resource.notSelected": "No instance selected",
-  "resource.fileMissing": "Resource file is missing or was moved",
   "resource.loading": "Loading…",
   "resource.readingMods": "Reading mods…",
   "resource.cancel": "Cancel",
@@ -384,7 +358,6 @@ export default {
   "resource.dims": "Size {w}×{h}×{l}",
   "resource.blockCount": "{count} blocks",
   "resource.blockTypes": "{count} block types",
-  "resource.author": "Author",
   "resource.selectSave": "Select a save…",
   "resource.dpOn": "Enabled",
   "resource.dpOff": "Disabled",
@@ -394,9 +367,6 @@ export default {
   "actions.addResource": "Add Resource",
   "actions.manageResource": "Manage Resources",
   "actions.export": "Export Instance",
-  "actions.exportPack": "Export as Modpack",
-  "actions.exportZip": "Export as Zip",
-  "actions.exportMmc": "Export as MMC Instance",
   "actions.openFolder": "Open Instance Folder",
   "actions.viewLog": "View Instance Logs",
   "actions.editConfig": "Edit Instance Config",
@@ -460,8 +430,6 @@ export default {
 
   // Launch
   "launch.play": "Play",
-  "launch.settings": "Launch Settings",
-  "launch.stop": "Stop",
   "launch.filterAll": "All",
   "launch.filterThread": "Thread",
   "launch.filterLevel": "Level",
@@ -475,8 +443,6 @@ export default {
   "launch.exited": "Exited",
   "launch.exitedCode": "Exited (code {code})",
   "launch.waitLog": "Waiting for game log…",
-  "launch.processExited": "[Game] Game process exited",
-  "launch.processExitedCode": "[Game] Game process exited, code {code}",
   "launch.error": "[Error] {msg}",
 
   // Launch states
@@ -497,7 +463,6 @@ export default {
   "settings.memory": "Max memory: {mb} MB",
   "settings.java": "Java version",
   "settings.gameArgs": "Extra game args",
-  "settings.close": "Close",
   "settings.save": "Save (mock)",
 
   // Add instance
@@ -505,7 +470,6 @@ export default {
   "add.name": "Instance name",
   "add.namePlaceholder": "e.g. Minecraft 1.21",
   "add.version": "Game version",
-  "add.versionType": "Version type",
   "add.verType": "Version type",
   "add.type.release": "Release",
   "add.type.snapshot": "Snapshot",
@@ -552,7 +516,6 @@ export default {
   "add.creating": "Creating…",
   "add.nameEmpty": "Please enter an instance name",
   "add.versionEmpty": "Please choose a game version",
-  "add.versionFail": "Failed to load versions: {msg}",
   "add.createFail": "Create failed: {msg}",
   "add.modeNew": "Create new",
   "add.modeArchive": "Import archive",
@@ -622,7 +585,6 @@ export default {
   "account.oauthCode": "Request code",
   "account.oauthUrl": "Address",
   "account.openBrowser": "Open Browser",
-  "account.openBrowserFail": "Failed to open browser, please copy the address manually",
   "account.oauthHint": "Open the link in your browser and enter the request code to authorize",
   "account.oauthState.waiting": "Waiting for authorization in browser…",
   "account.oauthState.xbox": "Authenticating with Xbox Live…",
@@ -634,8 +596,6 @@ export default {
   "account.switched": "Switched to account: {name}",
   "account.current": "Current",
   "account.fieldsRequired": "Please fill in all required fields",
-  "account.offline": "Offline",
-  "account.microsoft": "Microsoft",
 
   // AccountStoreDto window
   "account.manage": "AccountStoreDto Manager",
@@ -644,7 +604,6 @@ export default {
   "account.all": "All",
   "account.search": "Search accounts",
   "account.searchEmpty": "No matching accounts",
-  "account.empty": "No accounts",
   "account.noAccount": "No account",
   "account.view.grid": "Grid",
   "account.view.list": "List",
@@ -675,7 +634,6 @@ export default {
   "account.tokenStatus": "Token status",
   "account.tokenValid": "Valid",
   "account.tokenExpired": "Expired",
-  "account.capeName": "Cape",
   "account.refresh": "Refresh Token",
   "account.reloginOk": "Re-login successful",
   "account.reloginTitle": "Re-login",
@@ -700,7 +658,6 @@ export default {
   "account.typeSelflittleskin": "Custom skin station",
   "account.typeAuthlib": "Authlib",
   "account.typeNide8": "Nide8",
-  "account.detailTitle": "AccountStoreDto Details",
 
   // Feature entries
   "features.settings": "Launcher Settings",
@@ -716,9 +673,6 @@ export default {
 
   // Settings window
   "winSettings.windowMode": "Window Mode",
-  "winSettings.tauriFixed": "Multi-window is fixed in the Tauri environment; feature buttons open separate windows.",
-  "winSettings.windowModeDesc":
-    "Single window: all pages switch inside the current window; multi window: each feature opens its own window.",
   "winSettings.single": "Single",
   "winSettings.multi": "Multi",
   "winSettings.windowModeRestart": "Switching window mode restarts the launcher immediately",
@@ -738,9 +692,6 @@ export default {
   "winSettings.bgLoadFailed": "Failed to load the image",
   "winSettings.bgNativeSize": "Native Size",
   "winSettings.bgApply": "Apply",
-  "winSettings.current": "Current: {mode}",
-  "winSettings.currentMulti": "Multi-window (feature buttons open separate windows)",
-  "winSettings.currentSingle": "Single-window (features switch in-app)",
   "winSettings.theme": "Theme",
   "winSettings.themeDark": "Dark",
   "winSettings.themeLight": "Light",
@@ -748,7 +699,6 @@ export default {
   "winSettings.font": "Interface font",
   "winSettings.fontDesc": "Pick an installed system font for the interface; leave empty for default",
   "winSettings.fontDefault": "Default font",
-  "winSettings.apply": "Apply",
   "winSettings.resetPage": "Reset this page",
   "winSettings.resetPageHint": "Restore this page's settings to their defaults (other pages are unaffected)",
   "winSettings.resetPageTitle": "Reset this page",
@@ -775,10 +725,8 @@ export default {
   "winSettings.proxyUsername": "Username",
   "winSettings.proxyPassword": "Password",
   "winSettings.save": "Save",
-  "winSettings.saved": "Saved",
   "winSettings.proxyApplied": "Saved and applied: requests in flight were aborted — retry to use the new proxy",
   "winSettings.tauriOnly": "Available in the desktop launcher only",
-  "winSettings.launch": "Game launch",
   "winSettings.minMemory": "Min memory (MB)",
   "winSettings.maxMemory": "Max memory (MB)",
   "winSettings.jvmArgs": "JVM arguments",
@@ -814,7 +762,6 @@ export default {
   "winSettings.randomTitle": "Random title",
   "winSettings.cycleTitle": "Cycle title",
   "winSettings.titleDelay": "Title switch interval (ms)",
-  "winSettings.javaList": "Java runtimes",
   "winSettings.javaNone": "No Java added yet — scan or add one below",
   "winSettings.javaScan": "Scan system Java",
   "winSettings.javaScanning": "Scanning…",
@@ -878,16 +825,11 @@ export default {
   "winSettings.accent.indigo": "Indigo",
   "winSettings.accent.custom": "Custom color",
   "winSettings.downloadSource": "Download Source",
-  "winSettings.downloadSourceDesc": "Mojang official / BMCLAPI mirror (WIP)",
-  "winSettings.network": "Network & Download",
-  "winSettings.networkDesc": "Download source, threads, verification, proxy, DNS and game file checks",
   "winSettings.language": "Language",
-  "winSettings.ui": "Interface",
   "winSettings.secGeneral": "General",
   "winSettings.secTheme": "Theme & Color",
   "winSettings.secWindow": "Window",
   "winSettings.secMainWindow": "Main Window",
-  "winSettings.secSkin": "Skin & Avatar",
   "winSettings.secDownload": "Download",
   "winSettings.secProxy": "Proxy",
   "winSettings.tab.ui": "Interface",
@@ -958,14 +900,9 @@ export default {
   "winSettings.checkLibSha1": "Verify library SHA1",
   "winSettings.checkAssetsSha1": "Verify assets SHA1",
   "winSettings.checkModSha1": "Verify mods SHA1",
-  "winSettings.defaultJava": "Default Java",
-  "winSettings.defaultJavaDesc": "Default JVM args, Java management (WIP)",
-  "winSettings.interface": "Interface",
-  "winSettings.interfaceDesc": "Theme, UI language (WIP)",
 
   // Sidebar settings
   "winSettings.sidebar": "Sidebar",
-  "winSettings.sidebarPos": "Sidebar position",
   "winSettings.sidebarLeft": "Left",
   "winSettings.sidebarRight": "Right",
   "winSettings.sidebarDesc": "The sidebar can be collapsed from the top bar; adjust its position here.",
@@ -1018,8 +955,6 @@ export default {
   "winDownload.empty": "No downloads in progress",
   "winDownload.loading": "Loading task list…",
   "winDownload.idle": "All download threads are idle",
-  "winDownload.cancel": "Cancel",
-  "winDownload.counts": "{done} / {total} done ({failed} failed)",
   "winDownload.taskCount": "{n} task(s)",
   "winDownload.files": "Files {done} / {total}",
   "winDownload.projects": "Items {done} / {total}",
@@ -1051,7 +986,6 @@ export default {
   "winDownload.state.error": "Error",
 
   // Modpack mode (add instance window)
-  "add.modeModpack": "Modpacks",
   "add.installing": "Installing Modpack",
   "add.packState.downloadPack": "Downloading modpack",
   "add.packState.readInfo": "Reading info",
@@ -1092,7 +1026,6 @@ export default {
   "modpack.bar.running": "Installing {count} modpack(s)",
   "modpack.bar.finished": "{count} modpack(s) finished",
   "modpack.bar.title": "Modpack Installation",
-  "modpack.bar.open": "Modpack installation progress",
   "modpack.bar.clearDone": "Clear finished",
   "modpack.bar.cancel": "Cancel",
   "modpack.bar.cancelled": "Cancelled",
@@ -1119,7 +1052,6 @@ export default {
   "addResource.datapacks": "Data Packs",
   "addResource.searchHint": "Search resources…",
   "addResource.empty": "No matching resources found",
-  "addResource.modLoader": "Loader",
   "addResource.loader.normal": "All",
   "addResource.chooseSave": "Choose a World",
   "addResource.instance": "Target instance",
@@ -1136,13 +1068,11 @@ export default {
 
   // Window titles
   "winTitle.main": "ModernMinecraftLauncher",
-  "winTitle.account": "M²L Accounts",
   "winTitle.addModpack": "Download Modpacks",
   "winTitle.addResource": "Add Resources",
   "winTitle.collect": "Favourites",
 
   // Collect window
-  "collect.groupLabel": "Group",
   "collect.defaultGroup": "Default Group",
   "collect.addGroup": "Add Group",
   "collect.addGroupTitle": "Add Collection Group",
@@ -1176,7 +1106,6 @@ export default {
   "collect.pickInstanceNone": "No game instances yet — create one before downloading resources",
 
   // Placeholder windows
-  "winCommon.pending": "This window is not implemented yet",
 
   // Custom title bar
   "titlebar.minimize": "Minimize",
@@ -1197,7 +1126,6 @@ export default {
   "err.loginLocked": "Login methods are locked; this account type cannot be added",
   "err.groupEmpty": "Group name cannot be empty",
   "err.groupExists": "This group already exists",
-  "err.groupReserved": "That name is reserved (Enabled / Disabled / Unreadable) — pick another",
   "err.instanceRunning": "Instance is already running",
   "err.modelMissing": "Window model not initialized",
   "err.unknownLoader": "Unknown loader type",
@@ -1223,7 +1151,6 @@ export default {
 
   // Migrating from ColorMC (asked once while loading)
   "colormc.title": "ColorMC data found",
-  "colormc.source": "Source directory",
   "colormc.from.run": "from run file",
   "colormc.from.default": "default location",
   "colormc.from.fallback": "fallback location",
@@ -1236,7 +1163,6 @@ export default {
   "colormc.stage.copy": "Copying…",
   "colormc.stage.move": "Moving…",
   "colormc.stage.check": "Checking…",
-  "colormc.done": "Migration finished",
   "colormc.entriesDone": "{n} item(s) migrated",
   "colormc.failedHead": "{n} item(s) failed: ",
   "colormc.instOk": "{n} usable instance(s)",

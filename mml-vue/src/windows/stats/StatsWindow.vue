@@ -50,7 +50,23 @@ useWindowRefresh(load);
 onActivated(startTimer);
 onDeactivated(stopTimer);
 
-onBeforeUnmount(stopTimer);
+// 多窗口模式：每个窗口是独立 webview，窗口被最小化 / 隐藏时**不会**触发 onDeactivated，
+// 光靠上面那对钩子会一直空转。这里再按文档可见性停一次；单窗口模式下切页面时
+// document 始终可见，两者互不干扰。
+function onVisibilityChange() {
+  if (document.hidden) {
+    stopTimer();
+  } else {
+    void load();
+    startTimer();
+  }
+}
+onMounted(() => document.addEventListener("visibilitychange", onVisibilityChange));
+
+onBeforeUnmount(() => {
+  stopTimer();
+  document.removeEventListener("visibilitychange", onVisibilityChange);
+});
 
 /** 总游戏时长（小时） */
 const totalHours = computed(() =>

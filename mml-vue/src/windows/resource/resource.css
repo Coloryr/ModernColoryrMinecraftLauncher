@@ -907,10 +907,6 @@
   cursor: default;
 }
 
-.resource-layout .mod-sort {
-  font-size: 9px;
-}
-
 .resource-layout .mod-cell {
   min-width: 0;
   overflow: hidden;
@@ -933,15 +929,6 @@
   color: var(--text);
   font-weight: 600;
   font-size: 12.5px;
-}
-
-.resource-layout .mod-desc {
-  color: var(--text-dim);
-}
-
-/* 表格里的备注列：用户自己写的，比周围那几列元数据提一档 */
-.resource-layout .mod-note-cell {
-  color: var(--text);
 }
 
 /* ---------- 模组备注 ---------- */

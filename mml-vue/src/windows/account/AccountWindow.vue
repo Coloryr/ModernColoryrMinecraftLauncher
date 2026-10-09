@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 账户管理窗口：平铺 / 列表 / 详情 三种展示 + 类型筛选 + 搜索 + 添加账户
-import { computed, onDeactivated, onMounted, ref, watch } from "vue";
+import { computed, defineAsyncComponent, onDeactivated, onMounted, ref, watch } from "vue";
 import WindowFrame from "../../components/ui/WindowFrame.vue";
 import BaseButton from "../../components/ui/BaseButton.vue";
 import GlyphIcon from "../../components/ui/GlyphIcon.vue";
@@ -31,7 +31,9 @@ import { commands } from "../../lib/bindings";
 import type { AccountOAuthDto, AccountOAuthStateDto } from "../../lib/bindings";
 import { loadGuiConfig, type LoginLockItem } from "../../lib/guiConfig";
 import { bumpImageVersion, resetImageState } from "../../lib/accountImages";
-import SkinModal from "./SkinModal.vue";
+// 皮肤预览弹窗按需加载：它静态引入 skinview3d（内含 three.js，整块 ~560 kB）。
+// 账户窗口打开时绝大多数操作是看列表 / 切账户，不该为此先付掉这个体积。
+const SkinModal = defineAsyncComponent(() => import("./SkinModal.vue"));
 
 // 必须显式声明 close：不声明的话 Vue 会把父级的 @close 当 attrs 透传到根组件（WindowFrame），
 // 与模板里的 @close="$emit('close')" 合并成两个处理器 —— 一次"返回"会调两遍 closeWindow()，

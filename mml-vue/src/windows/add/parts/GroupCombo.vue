@@ -58,44 +58,10 @@ function pick(name: string) {
   position: relative;
 }
 
-.group-drop {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
-  z-index: 20;
-  max-height: 180px;
-  overflow-y: auto;
-  scrollbar-gutter: stable;
-  /* 见 styles/scrollbar.css */
-  padding: 4px;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  box-shadow: var(--shadow-lg);
-}
-
-.group-opt {
-  display: block;
-  width: 100%;
-  padding: 8px 10px;
-  border: none;
-  border-radius: 7px;
-  background: transparent;
-  color: var(--text);
-  font-size: 13px;
-  font-family: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.group-opt:hover {
-  background: var(--bg-hover);
-}
-
 .group-opt[aria-selected="true"] {
   background: var(--accent-soft);
   color: var(--accent);
   font-weight: 600;
 }
 </style>
+<style scoped src="../../../styles/parts/group-combo.css"></style>

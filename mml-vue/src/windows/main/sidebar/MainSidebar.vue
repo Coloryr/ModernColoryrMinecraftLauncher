@@ -619,45 +619,10 @@ function isGroupOpen(id: string) {
 }
 
 /* 多选勾选 */
-.row-check {
-  position: absolute;
-  left: 5px;
-  top: 5px;
-  z-index: 3;
-  width: 19px;
-  height: 19px;
-  border-radius: 50%;
-  border: 1.5px solid var(--text-dim);
-  background: var(--bg-card);
-  color: transparent;
-  font-size: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.12s;
-  pointer-events: none;
-}
-
-.row-check.on {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
-}
-
-.inst-row.multi-checked {
-  background: var(--accent-soft);
-  outline: 1px solid var(--accent-border);
-}
-
 /* outline 画在元素外沿，会被分组内容容器的 overflow: hidden（收起动画需要）裁掉，故统一向内收 1px */
 .inst-row.active,
 .inst-row.multi-checked {
   outline-offset: -1px;
-}
-
-.tile.multi-checked {
-  border-color: var(--accent);
-  background: var(--accent-soft);
 }
 
 .loader-text {
@@ -701,3 +666,4 @@ function isGroupOpen(id: string) {
   color: #fff;
 }
 </style>
+<style scoped src="../../../styles/parts/instance-check.css"></style>

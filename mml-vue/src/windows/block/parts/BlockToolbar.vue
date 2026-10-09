@@ -7,7 +7,7 @@ import GlyphIcon from "../../../components/ui/GlyphIcon.vue";
 import SegmentedTabs from "../../../components/ui/SegmentedTabs.vue";
 import { BLOCK_SIZE_ORDER, isBlockSize, type BlockSize } from "../types";
 
-const props = defineProps<{
+defineProps<{
   keyword: string;
   size: BlockSize;
   /** 渲染中：重新渲染禁用 */

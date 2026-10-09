@@ -5,11 +5,14 @@
 // （LaunchState / GameExit 事件驱动列表刷新）。
 // 目标实例来源（按优先级）：openWindow 带入的目标参数（单窗口模式走 windowParams，
 // 多窗口走 URL uuid）→ `log-focus` 事件（窗口已存在时再次打开，壳层推送）→ 空白（运行中的进程）。
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import type { UnlistenFn } from "@tauri-apps/api/event";
 import WindowFrame from "../../components/ui/WindowFrame.vue";
 import SegmentedTabs from "../../components/ui/SegmentedTabs.vue";
-import MonacoLogView from "../../components/MonacoLogView.vue";
+// Monaco 编辑器按需加载：它一块就是 ~2.6 MB（gzip 674 kB）。
+// 异步化不能省掉这次下载（默认就停在"运行日志"页），但能让窗口外壳、实例下拉与
+// 工具条先画出来，Monaco 在这之后流式加载并替换占位；切到"日志文件"页时不加载。
+const MonacoLogView = defineAsyncComponent(() => import("../../components/MonacoLogView.vue"));
 import { t } from "../../lib/i18n";
 import { api, onGameExit, onGameLog, onLaunchState, onLogFocus } from "../../lib/api";
 import { targetUuid, windowParams } from "../windowManager";

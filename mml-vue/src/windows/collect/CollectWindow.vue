@@ -868,3 +868,4 @@ function closeMenu() {
 </template>
 
 <style scoped src="./collect-window.css"></style>
+<style scoped src="../../styles/parts/multi-bar.css"></style>
