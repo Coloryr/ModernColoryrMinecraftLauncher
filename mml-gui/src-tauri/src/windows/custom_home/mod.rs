@@ -1,0 +1,167 @@
+//! 自定义主页面：服主导入的整页 HTML 替换启动器主页
+//!
+//! **压缩包是唯一产物，全程不落盘解压**：服主导入的 zip 存放在 `base_dir/custom_home.zip`，
+//! 启动时打开成一个常驻句柄（[`HomeArchive`]），`mml-home` 协议的每个请求
+//! **直接从包内按条目读取**（[`BaseArchive::read`]，内部 seek 到条目偏移解压到内存，
+//! 不会把文件铺到磁盘上）。页面经自定义协议 `mml-home` 供主窗口的 iframe 加载
+//! （`http://mml-home.localhost/...`，见 [`home_base_url`]）。
+//!
+//! | 部分 | 说明 |
+//! | --- | --- |
+//! | [`custom_home_import`] | 导入 zip：校验入口后原子替换 `custom_home.zip`，并重开句柄 |
+//! | [`HomeArchive`] | 常驻的只读句柄（`BaseArchive` 内部 `Mutex`，逐条目读取） |
+//! | [`custom_home_status`] | 现算状态（zip 的 mtime 即破缓存版本号，磁盘上不存派生状态） |
+//! | [`custom_home_remove`] | 删除 zip 并释放句柄 |
+//! | [`custom_home_open_dir`] | 在文件管理器里定位压缩包（便于服主替换 / 备份） |
+//! | [`url_custom_home`] | `mml-home` 协议 handler（路径穿越防护的唯一强制安全项） |
+//!
+//! 桥接脚本（[`BRIDGE_JS`]，源码在 `src-tauri/resources/custom_home_bridge.js`）是内置资源，
+//! 不在包里：返回 HTML 时注入 `<script src="/__mml_bridge.js">`，
+//! 页面据此拿到 `window.mml`（invoke / on / ready）。
+//!
+//! **安全边界**：自定义页面通过 `invoke` 能调任意已注册命令，这与「服主给的整合包
+//! 本身就是代码」的信任级别一致，是确认过的设计；唯一的强制项是协议层的路径穿越防护。
+
+use std::{
+    path::{Path, PathBuf},
+    time::UNIX_EPOCH,
+};
+
+use tauri::{AppHandle, Emitter};
+
+use crate::dtos::CustomHomeInfoDto;
+use crate::listens;
+
+mod archive;
+mod protocol;
+
+// 按原路径再导出：`lib.rs` 注册协议处理器、配置变更后重载，都用这两个
+pub(crate) use self::archive::{INDEX_FILE, import_archive, open_handle, reload};
+pub(crate) use self::protocol::{ZIP_PREFIX, url_custom_home};
+
+// ================= 路径 =================
+
+/// 运行根目录下的绝对路径
+fn base_path(name: &str) -> PathBuf {
+    mml_base::get_base_dir().join(name)
+}
+
+/// 持久压缩包的路径（带扩展名，`zip` / `7z` 都存成这个）
+fn zip_path() -> PathBuf {
+    base_path(&format!("{ZIP_PREFIX}.zip"))
+}
+
+/// `mml-home` 自定义协议的访问前缀
+///
+/// 与 `image_base_url()` 同规则：Windows / Android 上自定义协议被映射到
+/// `http://<scheme>.localhost`，其余平台是 `<scheme>://localhost`。
+pub fn home_base_url() -> &'static str {
+    if cfg!(windows) || cfg!(target_os = "android") {
+        "http://mml-home.localhost"
+    } else {
+        "mml-home://localhost"
+    }
+}
+
+// ================= 常驻句柄 =================
+
+// ================= 状态 =================
+
+/// 内容版本号：取**压缩包**的 mtime（毫秒时间戳）
+///
+/// zip 只在服主重新导入时变化，正好是「内容变没变」的判据，用来给 iframe 破缓存。
+fn zip_version(zip: &Path) -> String {
+    std::fs::metadata(zip)
+        .and_then(|meta| meta.modified())
+        .ok()
+        .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
+        .map(|dur| dur.as_millis().to_string())
+        .unwrap_or_default()
+}
+
+/// 现算当前状态（入口 URL 由这里拼好，前端不重算 scheme 前缀）
+fn current_info() -> CustomHomeInfoDto {
+    let zip = zip_path();
+    let handle = open_handle();
+    // 句柄能读出来才算「已导入」：包损坏 / 没有入口页时这里就是 false，主窗口会回落
+    let installed = handle.as_ref().is_some_and(|h| h.has_entry());
+    let version = if installed {
+        zip_version(&zip)
+    } else {
+        String::new()
+    };
+    let entry_url = if installed {
+        format!("{}/{INDEX_FILE}?v={version}", home_base_url())
+    } else {
+        String::new()
+    };
+    CustomHomeInfoDto {
+        installed,
+        enabled: crate::gui_config::get().client.custom_home,
+        entry_url,
+        version,
+        file_count: handle.as_ref().map(|h| h.file_count()).unwrap_or(0),
+    }
+}
+
+/// 查询已导入情况与入口 URL
+#[tauri::command]
+pub fn custom_home_status() -> Result<CustomHomeInfoDto, String> {
+    Ok(current_info())
+}
+
+// ================= 导入 =================
+
+/// 自定义主页面内容变更事件（导入 / 删除成功后广播）
+///
+/// 主窗口的 iframe 地址只在导入 / 删除时才变，而这两件事都不会改
+/// `gui_config.client`（`client-config-change` 不会发），所以单独立一个事件，
+/// 主窗口收到后重拉一次 `custom_home_status`。
+#[gui_macros::emit]
+pub fn emit_custom_home_change(app: &AppHandle) {
+    let _ = app.emit(listens::CUSTOM_HOME_CHANGE, ());
+}
+
+/// 从 zip 导入自定义主页面（全量替换），返回新的状态
+///
+/// 只校验 + 复制压缩包，**不落盘解压**：请求时直接从包内按条目读。
+#[tauri::command]
+pub async fn custom_home_import(app: AppHandle, path: String) -> Result<CustomHomeInfoDto, String> {
+    let info = tauri::async_runtime::spawn_blocking(move || import_archive(Path::new(&path)))
+        .await
+        .map_err(|err| err.to_string())??;
+    emit_custom_home_change(&app);
+    Ok(info)
+}
+
+/// 删除已导入的包（配置里的启用开关不动：删掉后主窗口自动回落到内置主页）
+#[tauri::command]
+pub fn custom_home_remove(app: AppHandle) -> Result<(), String> {
+    let zip = zip_path();
+    if zip.exists() {
+        std::fs::remove_file(&zip).map_err(|err| err.to_string())?;
+    }
+    // 句柄指向已删除的文件：直接丢掉，后续请求回 404
+    reload();
+    emit_custom_home_change(&app);
+    Ok(())
+}
+
+/// 在文件管理器里定位压缩包（方便服主替换包或做备份）
+///
+/// 还没导入过时就选中运行根目录，让服主知道包该放哪。
+#[tauri::command]
+pub fn custom_home_open_dir() -> Result<(), String> {
+    let zip = zip_path();
+    let target = if zip.is_file() {
+        zip
+    } else {
+        let dir = mml_base::get_base_dir();
+        std::fs::create_dir_all(&dir).map_err(|err| err.to_string())?;
+        dir
+    };
+    mml_sys::open_helper::open_file(&target);
+    Ok(())
+}
+
+// ================= mml-home 协议 =================

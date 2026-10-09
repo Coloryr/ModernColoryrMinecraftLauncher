@@ -144,30 +144,18 @@ function sourceName(v: string): string {
       <span class="mod-th-cell mod-th-actions">{{ t("resource.modActions") }}</span>
     </div>
 
-    <div
-      v-for="row in rows"
-      :key="modRowKey(row.item)"
-      class="mod-tr"
-      :class="{
-        'mod-dragging': !!row.item.sha1 && draggingKey === row.item.sha1,
-        'mod-selected': !!row.item.sha1 && selectedKeys.has(row.item.sha1),
-        'mod-selecting': selectedKeys.size > 0,
-        'mod-nested': row.depth > 1,
-      }"
-      :style="{ '--row-depth': row.depth - 1 }"
+    <div v-for="row in rows" :key="modRowKey(row.item)" class="mod-tr" :class="{
+      'mod-dragging': !!row.item.sha1 && draggingKey === row.item.sha1,
+      'mod-selected': !!row.item.sha1 && selectedKeys.has(row.item.sha1),
+      'mod-selecting': selectedKeys.size > 0,
+      'mod-nested': row.depth > 1,
+    }" :style="{ '--row-depth': row.depth - 1 }"
       @pointerdown="row.depth === 1 ? emit('drag-start', { event: $event, item: row.item }) : undefined"
-      @contextmenu.prevent="row.depth === 1 ? emit('select', row.item) : undefined"
-    >
+      @contextmenu.prevent="row.depth === 1 ? emit('select', row.item) : undefined">
       <!-- 多选勾选框（与列表视图同一套）：内置行没有 SHA1，留等宽占位保持各列对齐 -->
       <span class="mod-cell mod-select-cell">
-        <input
-          v-if="row.depth === 1 && row.item.sha1"
-          type="checkbox"
-          class="mod-select"
-          :checked="selectedKeys.has(row.item.sha1)"
-          @pointerdown.stop
-          @change.stop="emit('select', row.item)"
-        />
+        <input v-if="row.depth === 1 && row.item.sha1" type="checkbox" class="mod-select"
+          :checked="selectedKeys.has(row.item.sha1)" @pointerdown.stop @change.stop="emit('select', row.item)" />
         <span v-else class="mod-select-gap" />
       </span>
       <!-- 第一列：分组名（只在父行上显示，带折叠箭头）。
@@ -175,12 +163,8 @@ function sourceName(v: string): string {
            别让用户猜"到底点哪儿才算数" -->
       <span class="mod-cell mod-group-cell">
         <template v-if="row.depth === 1">
-          <button
-            v-if="groupLabel"
-            class="mod-tree-caret"
-            :class="{ collapsed: !groupOpen }"
-            @click.stop="emit('toggle-group')"
-          >
+          <button v-if="groupLabel" class="mod-tree-caret" :class="{ collapsed: !groupOpen }"
+            @click.stop="emit('toggle-group')">
             <GlyphIcon name="chevron-down" :size="13" :weight="2.4" />
           </button>
           <span v-else class="mod-tree-caret-placeholder" />
@@ -190,25 +174,16 @@ function sourceName(v: string): string {
             而那一行自己也监听 pointerdown（拖模组归组）。不拦住的话一次按下会
             同时起两个拖拽手势（改分组顺序 + 把模组拖进某个分组）。
           -->
-          <span
-            class="mod-group-label"
-            :title="groupLabel"
+          <span class="mod-group-label" :title="groupLabel"
             @pointerdown.stop="row.depth === 1 ? emit('drag-group', $event) : undefined"
-            @click.stop="emit('toggle-group')"
-          >{{ groupLabel }}</span>
+            @click.stop="emit('toggle-group')">{{ groupLabel }}</span>
         </template>
       </span>
 
       <!-- 启用：复选框（勾 = 启用，取消 = 禁用）；内置模组没有独立文件，不给 -->
       <span class="mod-cell mod-enable-cell" @pointerdown.stop>
-        <input
-          v-if="row.depth === 1"
-          type="checkbox"
-          class="mod-check"
-          :checked="!row.item.disable"
-          :disabled="busy || row.item.fail"
-          @change="emit('toggle', row.item)"
-        />
+        <input v-if="row.depth === 1" type="checkbox" class="mod-check" :checked="!row.item.disable"
+          :disabled="busy || row.item.fail" @change="emit('toggle', row.item)" />
       </span>
 
       <span class="mod-cell" :title="row.item.note">{{ row.item.note }}</span>
@@ -216,24 +191,14 @@ function sourceName(v: string): string {
       <span class="mod-cell mod-name-cell" :class="{ 'mod-indent': row.depth > 1 }">
         <!-- 展开箭头：只有带内置模组的行才有；默认收起（与列表视图同一口径）。
              放在名字**前面**，与分组那一列的箭头排在一起也是一列 -->
-        <button
-          v-if="row.item.jarInJar.length"
-          class="mod-tree-caret"
-          :class="{ collapsed: !isOpen(modRowKey(row.item)) }"
-          v-tip="
-            isOpen(modRowKey(row.item))
+        <button v-if="row.item.jarInJar.length" class="mod-tree-caret"
+          :class="{ collapsed: !isOpen(modRowKey(row.item)) }" v-tip="isOpen(modRowKey(row.item))
               ? t('resource.modBuiltinCollapse')
               : t('resource.modBuiltinExpand')
-          "
-          @click.stop="toggleExpand(modRowKey(row.item))"
-          @pointerdown.stop
-        >
+            " @click.stop="toggleExpand(modRowKey(row.item))" @pointerdown.stop>
           <GlyphIcon name="chevron-down" :size="13" :weight="2.4" />
         </button>
-        <span
-          v-else-if="row.depth > 1 || groupLabel"
-          class="mod-tree-caret-placeholder"
-        />
+        <span v-else-if="row.depth > 1 || groupLabel" class="mod-tree-caret-placeholder" />
         <span class="mod-name" :title="row.item.name || row.item.file">
           {{ row.item.name || row.item.file }}
         </span>
@@ -264,29 +229,14 @@ function sourceName(v: string): string {
       <span class="mod-cell" :title="row.item.url">{{ row.item.url }}</span>
 
       <span class="mod-cell mod-actions" @pointerdown.stop>
-        <button
-          v-if="row.depth === 1"
-          class="mini-btn"
-          :class="{ on: !!row.item.note }"
-          :disabled="busy"
-          @click.stop="emit('note', row.item)"
-        >
+        <button v-if="row.depth === 1" class="mini-btn" :class="{ on: !!row.item.note }" :disabled="busy"
+          @click.stop="emit('note', row.item)">
           {{ t("resource.modNote") }}
         </button>
-        <button
-          v-if="row.depth === 1"
-          class="mini-btn"
-          :disabled="busy"
-          @click.stop="emit('open-folder', row.item)"
-        >
+        <button v-if="row.depth === 1" class="mini-btn" :disabled="busy" @click.stop="emit('open-folder', row.item)">
           {{ t("resource.openFolder") }}
         </button>
-        <button
-          v-if="row.depth === 1"
-          class="mini-btn danger"
-          :disabled="busy"
-          @click.stop="emit('remove', row.item)"
-        >
+        <button v-if="row.depth === 1" class="mini-btn danger" :disabled="busy" @click.stop="emit('remove', row.item)">
           {{ t("resource.delete") }}
         </button>
       </span>
@@ -301,21 +251,12 @@ function sourceName(v: string): string {
     <div v-if="!rows.length" class="mod-tr mod-tr-empty">
       <span class="mod-cell mod-select-cell" />
       <span class="mod-cell mod-group-cell">
-        <button
-          v-if="groupLabel"
-          class="mod-tree-caret"
-          :class="{ collapsed: !groupOpen }"
-          @click.stop="emit('toggle-group')"
-        >
+        <button v-if="groupLabel" class="mod-tree-caret" :class="{ collapsed: !groupOpen }"
+          @click.stop="emit('toggle-group')">
           <GlyphIcon name="chevron-down" :size="13" :weight="2.4" />
         </button>
-        <span
-          v-if="groupLabel"
-          class="mod-group-label"
-          :title="groupLabel"
-          @pointerdown.stop="emit('drag-group', $event)"
-          @click.stop="emit('toggle-group')"
-        >{{ groupLabel }}</span>
+        <span v-if="groupLabel" class="mod-group-label" :title="groupLabel"
+          @pointerdown.stop="emit('drag-group', $event)" @click.stop="emit('toggle-group')">{{ groupLabel }}</span>
       </span>
       <!-- 与列表视图的空分组用同一句话，两个视图别各说各的 -->
       <span class="mod-cell mod-empty-tip">{{ t("resource.groupEmptyHint") }}</span>

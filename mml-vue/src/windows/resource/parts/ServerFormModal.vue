@@ -17,12 +17,8 @@ const emit = defineEmits<{ (e: "submit"): void; (e: "close"): void }>();
 </script>
 
 <template>
-  <BaseModal
-    :title="form.edit ? t('resource.serverEdit') : t('resource.serverAdd')"
-    :closable="false"
-    :overlay-close="false"
-    @close="emit('close')"
-  >
+  <BaseModal :title="form.edit ? t('resource.serverEdit') : t('resource.serverAdd')" :closable="false"
+    :overlay-close="false" @close="emit('close')">
     <div class="form-grid">
       <label class="form-label">{{ t("resource.serverName") }}</label>
       <input v-model="form.name" class="form-input" type="text" />

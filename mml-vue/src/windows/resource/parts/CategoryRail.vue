@@ -142,12 +142,8 @@ onUnmounted(() => {
     <template v-for="(c, idx) in items" :key="c.id">
       <!-- 插入线：松手后这一项会落到这里 -->
       <span v-if="showLine(idx)" class="cat-insert" />
-      <button
-        class="cat-item"
-        :class="{ active: category === c.id, dragging: dragging === c.id }"
-        @pointerdown="onPointerDown($event, c.id)"
-        @click="onClick(c.id)"
-      >
+      <button class="cat-item" :class="{ active: category === c.id, dragging: dragging === c.id }"
+        @pointerdown="onPointerDown($event, c.id)" @click="onClick(c.id)">
         <GlyphIcon :name="c.icon" :size="15" />
         {{ t(c.labelKey) }}
       </button>

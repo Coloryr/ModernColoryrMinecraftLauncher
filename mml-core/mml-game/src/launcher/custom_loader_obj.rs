@@ -1,6 +1,6 @@
 //! 自定义加载器类型定义
 
-use crate::loader::{forge_launch_obj::ForgeLaunchObj};
+use crate::loader::forge_launch_obj::ForgeLaunchObj;
 
 /// 自定义加载器类型
 #[derive(Debug)]

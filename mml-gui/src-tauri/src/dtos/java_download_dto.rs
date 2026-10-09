@@ -16,16 +16,6 @@ pub enum JavaTypes {
 }
 
 impl JavaTypes {
-    /// 源名称（供下载逻辑按源分发）
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::Adoptium => "adoptium",
-            Self::Zulu => "zulu",
-            Self::OpenJ9 => "openj9",
-            Self::Foojay => "foojay",
-        }
-    }
-
     /// 全部搜索源（下拉框候选）
     pub fn all() -> Vec<Self> {
         vec![Self::Adoptium, Self::Zulu, Self::OpenJ9, Self::Foojay]

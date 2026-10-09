@@ -30,40 +30,47 @@ defineEmits<{
 <template>
   <div class="acc-actions">
     <button v-if="canEdit" class="icon-btn" v-tip="t('account.editOffline')" @click="$emit('edit')">
-      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"
+        stroke-linecap="round" stroke-linejoin="round">
         <path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z" />
       </svg>
     </button>
     <!-- 查看皮肤：眼睛图标（"看一眼"的通用语义，与"刷新"的循环箭头不会混）。
          没有皮肤时整个按钮不出现 -->
     <button v-if="hasSkin" class="icon-btn" v-tip="t('account.viewSkin')" @click="$emit('viewSkin')">
-      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"
+        stroke-linecap="round" stroke-linejoin="round">
         <path d="M2 12s3.6-6.5 10-6.5S22 12 22 12s-3.6 6.5-10 6.5S2 12 2 12z" />
         <circle cx="12" cy="12" r="2.6" />
       </svg>
     </button>
     <!-- 刷新皮肤：循环箭头 + 中间一个小人（与「刷新 Token」的纯循环箭头区分开） -->
     <button v-if="hasSkin" class="icon-btn" v-tip="t('account.refreshSkin')" @click="$emit('refreshSkin')">
-      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"
+        stroke-linecap="round" stroke-linejoin="round">
         <path d="M20.5 12a8.5 8.5 0 1 1-2.5-6M20.5 4v5h-5" />
         <circle cx="12" cy="11" r="1.9" />
         <path d="M8.6 16.4c.5-1.7 1.9-2.6 3.4-2.6s2.9.9 3.4 2.6" />
       </svg>
     </button>
     <button v-if="canRefresh" class="icon-btn" v-tip="t('account.refresh')" @click="$emit('refresh')">
-      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"
+        stroke-linecap="round" stroke-linejoin="round">
         <path d="M20.5 12a8.5 8.5 0 1 1-2.5-6M20.5 4v5h-5" />
       </svg>
     </button>
     <button v-if="canRelogin" class="icon-btn" v-tip="t('account.relogin')" @click="$emit('relogin')">
-      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"
+        stroke-linecap="round" stroke-linejoin="round">
         <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
         <path d="M10 17l5-5-5-5M15 12H3" />
       </svg>
     </button>
     <button class="icon-btn danger" v-tip="t('account.delete')" @click="$emit('delete')">
-      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6" />
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"
+        stroke-linecap="round" stroke-linejoin="round">
+        <path
+          d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6" />
       </svg>
     </button>
   </div>

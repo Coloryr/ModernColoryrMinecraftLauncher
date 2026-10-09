@@ -23,13 +23,13 @@ pub mod skin_animation;
 pub mod texture;
 
 use glam::{
-    camera::{lh::proj::directx, rh::view},
     Mat4, Vec2, Vec3, Vec4,
+    camera::{lh::proj::directx, rh::view},
 };
 use mml_skin::SkinType;
-use tiny_skia::Pixmap;
 use std::f32::consts::PI;
 use std::sync::{Arc, Mutex};
+use tiny_skia::Pixmap;
 
 use crate::skin_animation::SkinAnimation;
 

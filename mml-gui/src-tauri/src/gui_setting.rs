@@ -146,7 +146,7 @@ pub struct GameViewSettingObj {
 }
 
 /// 实例 GUI 设置（对应 ColorMC `GameGuiSettingObj`）
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 #[serde(default)]
 pub struct GameGuiSettingObj {
     /// 日志设置
@@ -164,18 +164,6 @@ pub struct GameGuiSettingObj {
     /// 界面视图设置（跟实例走的那部分，见 [`GameViewSettingObj`]）
     #[serde(rename = "Gui")]
     pub view: GameViewSettingObj,
-}
-
-impl Default for GameGuiSettingObj {
-    fn default() -> Self {
-        Self {
-            log: Default::default(),
-            mods: Default::default(),
-            block: None,
-            log_auto_show: false,
-            view: Default::default(),
-        }
-    }
 }
 
 /// 读取某实例的 GUI 设置
@@ -199,7 +187,7 @@ pub fn load(instance: &InstanceSettingObj) -> GameGuiSettingObj {
 /// - `instance`: 实例配置（用它的目录定位文件）
 /// - `obj`: 待保存的设置
 pub fn save(instance: &InstanceSettingObj, obj: &GameGuiSettingObj) {
-    config_save::save(instance.uuid, obj, &instance.get_gui_setting_file());
+    config_save::save(instance.uuid, obj, instance.get_gui_setting_file());
 }
 
 /// 读-改-写：把方块 ID 设为 `block`，并按二选一规则清掉 `Icon`

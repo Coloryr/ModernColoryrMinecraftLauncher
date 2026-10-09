@@ -121,14 +121,8 @@ async function apply() {
       <div class="pick-size">
         <span class="pick-size-label">{{ t("iconPick.size") }}</span>
         <div class="pick-size-opts">
-          <button
-            v-for="s in SIZES"
-            :key="s"
-            class="pick-size-opt"
-            :class="{ active: s === size }"
-            :disabled="applying"
-            @click="setSize(s)"
-          >
+          <button v-for="s in SIZES" :key="s" class="pick-size-opt" :class="{ active: s === size }" :disabled="applying"
+            @click="setSize(s)">
             {{ s }}px
           </button>
         </div>

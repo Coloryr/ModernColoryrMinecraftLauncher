@@ -70,7 +70,6 @@ const VERTEX_LAYOUT: wgpu::VertexBufferLayout<'static> = wgpu::VertexBufferLayou
     ],
 };
 
-
 /// wgpu 渲染上下文（离屏管线 + 采样器）
 pub struct GpuCtx {
     /// 逻辑设备
@@ -178,7 +177,10 @@ impl GpuCtx {
                 else {
                     continue;
                 };
-                println!("[渲染] GPU后端 {name}：{}（{:?}）", info.name, info.device_type);
+                println!(
+                    "[渲染] GPU后端 {name}：{}（{:?}）",
+                    info.name, info.device_type
+                );
                 return Some(Self::build(device, queue));
             }
         }
@@ -450,10 +452,22 @@ impl GpuCtx {
             * Mat4::from_scale(Vec3::new(slot, -slot, slot))
             * item_transform_matrix(&model.transform);
         let mvp = Mat4::from_cols_array(&[
-            2.0 / slot, 0.0, 0.0, 0.0,
-            0.0, -2.0 / slot, 0.0, 0.0,
-            0.0, 0.0, -1.0 / 2000.0, 0.0,
-            -1.0, 1.0, 0.5, 1.0,
+            2.0 / slot,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            -2.0 / slot,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            -1.0 / 2000.0,
+            0.0,
+            -1.0,
+            1.0,
+            0.5,
+            1.0,
         ]) * model_m;
 
         // 法线矩阵 = 逆转置（逐顶点归一化，等价MC normal matrix + trustedNormals规则）
@@ -551,7 +565,11 @@ impl GpuCtx {
             let (w, h) = (w as u32, h as u32);
             let texture = self.device.create_texture(&wgpu::TextureDescriptor {
                 label: Some("sprite"),
-                size: wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 },
+                size: wgpu::Extent3d {
+                    width: w,
+                    height: h,
+                    depth_or_array_layers: 1,
+                },
                 mip_level_count: 1,
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
@@ -572,7 +590,11 @@ impl GpuCtx {
                     bytes_per_row: Some(stride as u32),
                     rows_per_image: Some(h),
                 },
-                wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 },
+                wgpu::Extent3d {
+                    width: w,
+                    height: h,
+                    depth_or_array_layers: 1,
+                },
             );
             let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
             let bind = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -605,7 +627,11 @@ impl GpuCtx {
             let (w, h) = (w as u32, h as u32);
             let texture = self.device.create_texture(&wgpu::TextureDescriptor {
                 label: Some("glint"),
-                size: wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 },
+                size: wgpu::Extent3d {
+                    width: w,
+                    height: h,
+                    depth_or_array_layers: 1,
+                },
                 mip_level_count: 1,
                 sample_count: 1,
                 dimension: wgpu::TextureDimension::D2,
@@ -626,7 +652,11 @@ impl GpuCtx {
                     bytes_per_row: Some(stride as u32),
                     rows_per_image: Some(h),
                 },
-                wgpu::Extent3d { width: w, height: h, depth_or_array_layers: 1 },
+                wgpu::Extent3d {
+                    width: w,
+                    height: h,
+                    depth_or_array_layers: 1,
+                },
             );
             let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
             let bind = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -653,7 +683,11 @@ impl GpuCtx {
         // 离屏目标 + 深度
         let color_tex = self.device.create_texture(&wgpu::TextureDescriptor {
             label: Some("target"),
-            size: wgpu::Extent3d { width: size, height: size, depth_or_array_layers: 1 },
+            size: wgpu::Extent3d {
+                width: size,
+                height: size,
+                depth_or_array_layers: 1,
+            },
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
@@ -664,7 +698,11 @@ impl GpuCtx {
         let color_view = color_tex.create_view(&wgpu::TextureViewDescriptor::default());
         let depth_tex = self.device.create_texture(&wgpu::TextureDescriptor {
             label: Some("depth"),
-            size: wgpu::Extent3d { width: size, height: size, depth_or_array_layers: 1 },
+            size: wgpu::Extent3d {
+                width: size,
+                height: size,
+                depth_or_array_layers: 1,
+            },
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
@@ -746,7 +784,11 @@ impl GpuCtx {
                     rows_per_image: Some(size),
                 },
             },
-            wgpu::Extent3d { width: size, height: size, depth_or_array_layers: 1 },
+            wgpu::Extent3d {
+                width: size,
+                height: size,
+                depth_or_array_layers: 1,
+            },
         );
         self.queue.submit(Some(encoder.finish()));
 

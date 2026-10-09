@@ -17,7 +17,7 @@ fn main() {
 
     let path = get_run_path();
 
-    println!("Run path: {}", path.display().to_string());
+    println!("Run path: {}", path.display());
 
     let temp = path.join("test");
     let res = path_helper::write_text(temp, "test write");

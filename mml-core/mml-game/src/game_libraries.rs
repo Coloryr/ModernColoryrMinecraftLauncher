@@ -6,9 +6,7 @@ use std::{
     sync::Mutex,
 };
 
-use mml_base::{
-    file_item::{FileHash, FileItemObj, LaterRun},
-};
+use mml_base::file_item::{FileHash, FileItemObj, LaterRun};
 use mml_names::names;
 use mml_net::{maven_utils, url_helper};
 use mml_sys::{ArchEnum, Os};

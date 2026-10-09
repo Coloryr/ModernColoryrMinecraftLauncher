@@ -84,7 +84,17 @@ fn normalize_texture(image: &Pixmap) -> Option<Pixmap> {
         copy_face(&mut out, dx, dy + 4, image, sx + 8, sy + 4, 4, 12, false)?;
         copy_face(&mut out, dx + 4, dy + 4, image, sx + 4, sy + 4, 4, 12, true)?; // 前
         copy_face(&mut out, dx + 8, dy + 4, image, sx, sy + 4, 4, 12, false)?;
-        copy_face(&mut out, dx + 12, dy + 4, image, sx + 12, sy + 4, 4, 12, true)?; // 后
+        copy_face(
+            &mut out,
+            dx + 12,
+            dy + 4,
+            image,
+            sx + 12,
+            sy + 4,
+            4,
+            12,
+            true,
+        )?; // 后
     }
 
     Some(out)
@@ -197,7 +207,11 @@ fn parts(skin_type: SkinType) -> Vec<Part> {
     let enlarge = 1.125; // overlay 层放大系数
 
     let mk = |dims: [i32; 3], center: [f32; 3], base_block: [i32; 2], overlay_block: [i32; 2]| {
-        let half = [dims[0] as f32 / 2.0, dims[1] as f32 / 2.0, dims[2] as f32 / 2.0];
+        let half = [
+            dims[0] as f32 / 2.0,
+            dims[1] as f32 / 2.0,
+            dims[2] as f32 / 2.0,
+        ];
         Part {
             dims,
             base_center: center,
@@ -217,8 +231,18 @@ fn parts(skin_type: SkinType) -> Vec<Part> {
         mk([4, 12, 4], [-2.0, -10.0, 0.0], [0, 16], [0, 32]),
         mk([4, 12, 4], [2.0, -10.0, 0.0], [16, 48], [0, 48]),
         // 右臂 / 左臂：整段贴在身体侧面之外
-        mk([aw, 12, 4], [-4.0 - aw as f32 / 2.0, 2.0, 0.0], [40, 16], [40, 32]),
-        mk([aw, 12, 4], [4.0 + aw as f32 / 2.0, 2.0, 0.0], [32, 48], [48, 48]),
+        mk(
+            [aw, 12, 4],
+            [-4.0 - aw as f32 / 2.0, 2.0, 0.0],
+            [40, 16],
+            [40, 32],
+        ),
+        mk(
+            [aw, 12, 4],
+            [4.0 + aw as f32 / 2.0, 2.0, 0.0],
+            [32, 48],
+            [48, 48],
+        ),
     ]
 }
 
@@ -232,11 +256,7 @@ fn create_tran(pitch: f32, yaw: f32) -> Mat4 {
 
     let scale = Mat4::from_scale(Vec3::new(SCALE, -SCALE, SCALE));
 
-    let tran = Mat4::from_translation(Vec3::new(
-        SIZE_W as f32 / 2.0,
-        SIZE_H as f32 / 2.0,
-        0.0,
-    ));
+    let tran = Mat4::from_translation(Vec3::new(SIZE_W as f32 / 2.0, SIZE_H as f32 / 2.0, 0.0));
 
     tran * scale * rotx * roty
 }
@@ -267,33 +287,61 @@ pub fn draw_skin_3d_typeb(
     for part in &part_list {
         for &d in &face::ALL {
             base.extend_from_slice(&face_verts(
-                face_corners(part.base_half, d)
-                    .map(|(pos, uv)| {
-                        (
-                            [pos[0] + part.base_center[0], pos[1] + part.base_center[1], pos[2] + part.base_center[2]],
-                            uv,
-                        )
-                    }),
-                face_rect(part.dims[0], part.dims[1], part.dims[2], part.base_block[0], part.base_block[1], d),
+                face_corners(part.base_half, d).map(|(pos, uv)| {
+                    (
+                        [
+                            pos[0] + part.base_center[0],
+                            pos[1] + part.base_center[1],
+                            pos[2] + part.base_center[2],
+                        ],
+                        uv,
+                    )
+                }),
+                face_rect(
+                    part.dims[0],
+                    part.dims[1],
+                    part.dims[2],
+                    part.base_block[0],
+                    part.base_block[1],
+                    d,
+                ),
                 tw,
                 th,
             ));
             overlay.extend_from_slice(&face_verts(
-                face_corners(part.overlay_half, d)
-                    .map(|(pos, uv)| {
-                        (
-                            [pos[0] + part.base_center[0], pos[1] + part.base_center[1], pos[2] + part.base_center[2]],
-                            uv,
-                        )
-                    }),
-                face_rect(part.dims[0], part.dims[1], part.dims[2], part.overlay_block[0], part.overlay_block[1], d),
+                face_corners(part.overlay_half, d).map(|(pos, uv)| {
+                    (
+                        [
+                            pos[0] + part.base_center[0],
+                            pos[1] + part.base_center[1],
+                            pos[2] + part.base_center[2],
+                        ],
+                        uv,
+                    )
+                }),
+                face_rect(
+                    part.dims[0],
+                    part.dims[1],
+                    part.dims[2],
+                    part.overlay_block[0],
+                    part.overlay_block[1],
+                    d,
+                ),
                 tw,
                 th,
             ));
         }
     }
 
-    render_3d(&texture, &base, &overlay, create_tran(pitch, yaw), SIZE_W, SIZE_H, SUPERSAMPLE)
+    render_3d(
+        &texture,
+        &base,
+        &overlay,
+        create_tran(pitch, yaw),
+        SIZE_W,
+        SIZE_H,
+        SUPERSAMPLE,
+    )
 }
 
 /// 渲染 3D 等距全身图（固定角度：水平 45°、面朝上 30°，仰视）

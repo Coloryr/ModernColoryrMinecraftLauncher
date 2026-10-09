@@ -59,26 +59,17 @@ const { decorated } = useWindowDecoration(rootEl);
 
       <!-- 窗口内子页面的返回键（如整合包详情）：与下面的单窗口返回按钮共用一套外观。
            按钮只画箭头，文案改由悬停提示给出（见 .back-btn 的说明） -->
-      <button
-        v-if="props.back"
-        class="back-btn"
-        v-tip="props.back"
-        :aria-label="props.back"
-        @click="emit('back')"
-      >
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+      <button v-if="props.back" class="back-btn" v-tip="props.back" :aria-label="props.back" @click="emit('back')">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2"
+          stroke-linecap="round">
           <path d="m15 18-6-6 6-6" />
         </svg>
       </button>
       <!-- 单窗口模式才显示返回按钮；子页面自带返回键时让位 -->
-      <button
-        v-else-if="showBack"
-        class="back-btn"
-        v-tip="t('winCommon.back')"
-        :aria-label="t('winCommon.back')"
-        @click="emit('close')"
-      >
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+      <button v-else-if="showBack" class="back-btn" v-tip="t('winCommon.back')" :aria-label="t('winCommon.back')"
+        @click="emit('close')">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.2"
+          stroke-linecap="round">
           <path d="m15 18-6-6 6-6" />
         </svg>
       </button>

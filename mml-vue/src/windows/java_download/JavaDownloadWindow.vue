@@ -188,12 +188,7 @@ async function loadList() {
   <WindowFrame :title="t('winJavaDownload.title')" @close="$emit('close')">
     <div class="java-download-body">
       <!-- 切换搜索源 / 加载选项或列表时弹窗提示，加载完自动消失 -->
-      <BaseModal
-        v-if="optionsLoading || listLoading"
-        :width="300"
-        :closable="false"
-        :overlay-close="false"
-      >
+      <BaseModal v-if="optionsLoading || listLoading" :width="300" :closable="false" :overlay-close="false">
         <div class="loading-modal">
           <span class="loading-spin" />
           <span>{{ t("winJavaDownload.loadingTitle") }}</span>
@@ -203,60 +198,35 @@ async function loadList() {
       <div class="field-row">
         <div class="field">
           <label class="field-label">{{ t("winJavaDownload.source") }}</label>
-          <select
-            v-model="source"
-            class="field-select"
-            :disabled="optionsLoading"
-            @change="loadOptions"
-          >
+          <select v-model="source" class="field-select" :disabled="optionsLoading" @change="loadOptions">
             <option v-for="s in sources" :key="s" :value="s">{{ s }}</option>
           </select>
         </div>
 
         <div class="field">
           <label class="field-label">{{ t("winJavaDownload.type") }}</label>
-          <select
-            v-model="javaType"
-            class="field-select"
-            :disabled="optionsLoading"
-            @change="loadList"
-          >
+          <select v-model="javaType" class="field-select" :disabled="optionsLoading" @change="loadList">
             <option v-for="tp in options?.types ?? []" :key="tp" :value="tp">{{ tp }}</option>
           </select>
         </div>
 
         <div class="field">
           <label class="field-label">{{ t("winJavaDownload.major") }}</label>
-          <select
-            v-model="major"
-            class="field-select"
-            :disabled="optionsLoading"
-            @change="loadList"
-          >
+          <select v-model="major" class="field-select" :disabled="optionsLoading" @change="loadList">
             <option v-for="m in options?.majors ?? []" :key="m" :value="m">{{ m }}</option>
           </select>
         </div>
 
         <div class="field">
           <label class="field-label">{{ t("winJavaDownload.system") }}</label>
-          <select
-            v-model="system"
-            class="field-select"
-            :disabled="optionsLoading"
-            @change="loadList"
-          >
+          <select v-model="system" class="field-select" :disabled="optionsLoading" @change="loadList">
             <option v-for="s in options?.systems ?? []" :key="s" :value="s">{{ s }}</option>
           </select>
         </div>
 
         <div class="field">
           <label class="field-label">{{ t("winJavaDownload.arch") }}</label>
-          <select
-            v-model="arch"
-            class="field-select"
-            :disabled="optionsLoading"
-            @change="loadList"
-          >
+          <select v-model="arch" class="field-select" :disabled="optionsLoading" @change="loadList">
             <option v-for="a in options?.archs ?? []" :key="a" :value="a">{{ a }}</option>
           </select>
         </div>
@@ -267,11 +237,7 @@ async function loadList() {
         <div v-for="item in items" :key="item.uuid" class="item-card">
           <div class="item-head">
             <div class="item-title">{{ item.javaVersion }}</div>
-            <BaseButton
-              variant="accent"
-              :disabled="starting !== null"
-              @click="startDownload(item.uuid)"
-            >
+            <BaseButton variant="accent" :disabled="starting !== null" @click="startDownload(item.uuid)">
               {{ t("winJavaDownload.download") }}
             </BaseButton>
           </div>
@@ -347,7 +313,8 @@ async function loadList() {
   gap: 12px;
   align-content: start;
   overflow-y: auto;
-  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
+  scrollbar-gutter: stable;
+  /* 见 styles/scrollbar.css */
 }
 
 .item-card {

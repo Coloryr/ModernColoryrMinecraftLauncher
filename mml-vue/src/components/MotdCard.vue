@@ -65,23 +65,9 @@ const iconUrl = computed(() => (iconFailed.value ? "" : faviconOf(props.motd)));
 
 <template>
   <div class="motd-card" :class="{ compact }">
-    <button
-      v-if="refreshable"
-      class="motd-refresh"
-      v-tip="t('server.refresh')"
-      @click="$emit('refresh')"
-    >
-      <svg
-        viewBox="0 0 24 24"
-        width="13"
-        height="13"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-        :class="{ spin: loading }"
-      >
+    <button v-if="refreshable" class="motd-refresh" v-tip="t('server.refresh')" @click="$emit('refresh')">
+      <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round" :class="{ spin: loading }">
         <path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6" />
       </svg>
     </button>
@@ -90,14 +76,7 @@ const iconUrl = computed(() => (iconFailed.value ? "" : faviconOf(props.motd)));
          没有 / 加载失败就什么都不画 —— 与资源列表的行同一口径。
          `data-no-fallback` 是必须的：全局兜底（lib/imageFallback.ts）会把加载失败的图
          换成灰底占位图，那正是这里要避免的"占位符" -->
-    <img
-      v-if="iconUrl"
-      class="motd-icon"
-      :src="iconUrl"
-      alt=""
-      data-no-fallback
-      @error="iconFailed = true"
-    />
+    <img v-if="iconUrl" class="motd-icon" :src="iconUrl" alt="" data-no-fallback @error="iconFailed = true" />
 
     <div class="motd-info">
       <div class="motd-name">{{ name }}</div>

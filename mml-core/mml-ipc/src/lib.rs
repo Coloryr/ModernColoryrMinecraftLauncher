@@ -51,7 +51,8 @@ use std::{
 use bytes::{Buf, BufMut, BytesMut};
 use mml_base::events::{EventArgHandler, EventHandler};
 use mml_names::i18_items::error_type::{
-    CoreResult, ErrorData, ErrorType::{SocketError, ThreadError},
+    CoreResult, ErrorData,
+    ErrorType::{SocketError, ThreadError},
 };
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
@@ -223,7 +224,10 @@ pub fn notify_existing(port: u16, args: Vec<String>) -> bool {
     let Ok(mut stream) = std::net::TcpStream::connect(("127.0.0.1", port)) else {
         return false;
     };
-    if stream.set_write_timeout(Some(Duration::from_secs(2))).is_err() {
+    if stream
+        .set_write_timeout(Some(Duration::from_secs(2)))
+        .is_err()
+    {
         return false;
     }
 
@@ -287,12 +291,18 @@ pub fn init(port: Option<u16>) -> CoreResult<Option<u16>> {
     thread::Builder::new()
         .name("Mml Ipc Server".to_string())
         .spawn(move || run_server(port_tx))
-        .map_err(|err| ThreadError(ErrorData { error: err.to_string() }))?;
+        .map_err(|err| {
+            ThreadError(ErrorData {
+                error: err.to_string(),
+            })
+        })?;
 
     // 等待服务绑定端口；若线程启动后立即失败（发送端被丢弃），返回错误
-    let port = port_rx
-        .recv()
-        .map_err(|err| SocketError(ErrorData { error: err.to_string() }))?;
+    let port = port_rx.recv().map_err(|err| {
+        SocketError(ErrorData {
+            error: err.to_string(),
+        })
+    })?;
 
     let _ = IPC_PORT.set(port);
     mml_log::info(format!("IPC server start on 127.0.0.1:{}", port));
@@ -425,8 +435,7 @@ fn message_len(buf: &[u8]) -> Option<usize> {
         if buf.len() < *offset + 4 {
             return None;
         }
-        let len =
-            i32::from_be_bytes(buf[*offset..*offset + 4].try_into().unwrap()) as usize;
+        let len = i32::from_be_bytes(buf[*offset..*offset + 4].try_into().unwrap()) as usize;
         *offset += 4 + len;
         if *offset > buf.len() {
             return None;
@@ -447,8 +456,7 @@ fn message_len(buf: &[u8]) -> Option<usize> {
             if buf.len() < offset + 4 {
                 return None;
             }
-            let count =
-                i32::from_be_bytes(buf[offset..offset + 4].try_into().unwrap()) as usize;
+            let count = i32::from_be_bytes(buf[offset..offset + 4].try_into().unwrap()) as usize;
             offset += 4;
             for _ in 0..count {
                 string_field(buf, &mut offset)?;
@@ -489,8 +497,11 @@ async fn process_message(
     match msg_type {
         TYPE_GAME_MOUSE_STATE => {
             let uuid_str = data.read_string();
-            let guid = Uuid::parse_str(&uuid_str)
-                .map_err(|err| SocketError(ErrorData { error: err.to_string() }))?;
+            let guid = Uuid::parse_str(&uuid_str).map_err(|err| {
+                SocketError(ErrorData {
+                    error: err.to_string(),
+                })
+            })?;
             let value = data.read_bool();
             MOUSE_STATES.write().unwrap().insert(guid, value);
         }
@@ -507,8 +518,11 @@ async fn process_message(
         }
         TYPE_GAME_CHANNEL => {
             let uuid_str = data.read_string();
-            let guid = Uuid::parse_str(&uuid_str)
-                .map_err(|err| SocketError(ErrorData { error: err.to_string() }))?;
+            let guid = Uuid::parse_str(&uuid_str).map_err(|err| {
+                SocketError(ErrorData {
+                    error: err.to_string(),
+                })
+            })?;
             GAME_CHANNELS
                 .write()
                 .unwrap()
@@ -517,8 +531,11 @@ async fn process_message(
         }
         TYPE_GAME_WINDOW_SIZE => {
             let uuid_str = data.read_string();
-            let guid = Uuid::parse_str(&uuid_str)
-                .map_err(|err| SocketError(ErrorData { error: err.to_string() }))?;
+            let guid = Uuid::parse_str(&uuid_str).map_err(|err| {
+                SocketError(ErrorData {
+                    error: err.to_string(),
+                })
+            })?;
             let width = data.get_i32();
             let height = data.get_i32();
             WINDOW_SIZES.write().unwrap().insert(guid, (width, height));
@@ -559,10 +576,7 @@ async fn broadcast_servers() {
 
 /// 清理已关闭的客户端通道
 fn cleanup() {
-    CLIENTS
-        .write()
-        .unwrap()
-        .retain(|tx| !tx.is_closed());
+    CLIENTS.write().unwrap().retain(|tx| !tx.is_closed());
     GAME_CHANNELS
         .write()
         .unwrap()
@@ -751,9 +765,11 @@ mod tests {
         let mut buf = msg_with_string(TYPE_GAME_MOUSE_STATE, "not-a-uuid");
         buf.put_u8(1);
 
-        assert!(process_message(&mut buf, &mpsc::unbounded_channel().0)
-            .await
-            .is_err());
+        assert!(
+            process_message(&mut buf, &mpsc::unbounded_channel().0)
+                .await
+                .is_err()
+        );
     }
 
     /// 窗口大小消息应记录到全局表

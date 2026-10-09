@@ -82,14 +82,8 @@ watchEffect(async () => {
 </script>
 
 <template>
-  <div
-    v-if="menu"
-    ref="el"
-    class="ctx-menu"
-    :style="{ left: pos.x + 'px', top: pos.y + 'px' }"
-    @contextmenu.prevent
-    @click.stop
-  >
+  <div v-if="menu" ref="el" class="ctx-menu" :style="{ left: pos.x + 'px', top: pos.y + 'px' }" @contextmenu.prevent
+    @click.stop>
     <!-- 分组菜单：全选 / 启动全部 / 转移分组 / 删除分组
          空分组时"全选 / 启动全部"没有实例可操作，置灰而不是让用户点了没反应；
          "转移分组"还要多一条：除本组外得有别的组可去（见 canMoveGroup）；
@@ -105,11 +99,7 @@ watchEffect(async () => {
         {{ t("group.moveTo") }}
       </button>
       <div class="ctx-sep"></div>
-      <button
-        class="ctx-item danger"
-        :disabled="!canDeleteGroup"
-        @click="emit('delete-group', menu.groupId)"
-      >
+      <button class="ctx-item danger" :disabled="!canDeleteGroup" @click="emit('delete-group', menu.groupId)">
         {{ t("group.delete") }}
       </button>
     </template>
@@ -174,6 +164,7 @@ watchEffect(async () => {
     opacity: 0;
     transform: translateY(-4px) scale(0.98);
   }
+
   to {
     opacity: 1;
     transform: none;

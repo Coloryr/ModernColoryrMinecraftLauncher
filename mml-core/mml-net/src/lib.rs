@@ -36,7 +36,7 @@
 use mml_base::serialize_tools;
 use mml_config::config_obj::{HttpObj, ProxyState, ProxyType};
 use mml_names::i18_items::error_type::{CoreResult, ErrorType, HttpErrorData};
-use reqwest::header::{HeaderMap, HeaderValue, IF_NONE_MATCH, ETAG, USER_AGENT};
+use reqwest::header::{ETAG, HeaderMap, HeaderValue, IF_NONE_MATCH, USER_AGENT};
 use reqwest::{Proxy, Request, Response, StatusCode};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -52,12 +52,12 @@ pub mod chunkbase_api;
 pub mod coloryr_api;
 pub mod curseforge_api;
 pub mod fabric_api;
+pub mod foojay_api;
 pub mod input_file;
 pub mod liteloader_api;
 pub mod maven_utils;
 pub mod modrinth_api;
 pub mod mojang_api;
-pub mod foojay_api;
 pub mod nide8_api;
 pub mod openfrp_api;
 pub mod openj9_api;
@@ -812,8 +812,6 @@ async fn wait_abort(entered_gen: u64) {
     }
 }
 
-
-
 /// 按当前配置构建一个客户端
 ///
 /// 抽出来是为了让 [`init`] 与 [`rebuild`] 共用同一套「读配置 → 选代理」逻辑：
@@ -845,7 +843,11 @@ fn describe_proxy(state: ProxyState, ptype: ProxyType, http: &HttpObj) -> String
             },
             http.proxy_ip,
             http.proxy_port,
-            if http.proxy_user.is_empty() { "无" } else { "有" }
+            if http.proxy_user.is_empty() {
+                "无"
+            } else {
+                "有"
+            }
         ),
         ProxyState::None => "None（禁用代理）".to_string(),
         ProxyState::Auto => "Auto（跟随系统）".to_string(),
@@ -904,21 +906,13 @@ pub fn rebuild() {
     let http = &config.http;
 
     if let Some(lock) = WORK_CLIENT.get() {
-        let client = Arc::new(build_client(
-            http.work_proxy,
-            http.work_proxy_type,
-            http,
-        ));
+        let client = Arc::new(build_client(http.work_proxy, http.work_proxy_type, http));
         if let Ok(mut guard) = lock.write() {
             *guard = client;
         }
     }
     if let Some(lock) = LOGIN_CLIENT.get() {
-        let client = Arc::new(build_client(
-            http.login_proxy,
-            http.login_proxy_type,
-            http,
-        ));
+        let client = Arc::new(build_client(http.login_proxy, http.login_proxy_type, http));
         if let Ok(mut guard) = lock.write() {
             *guard = client;
         }
@@ -1010,4 +1004,3 @@ pub fn serialize_err_context<T>(err: ErrorType, url: &str) -> ErrorType {
         other => other,
     }
 }
-

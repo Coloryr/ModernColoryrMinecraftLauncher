@@ -65,48 +65,28 @@ function keyOf(item: ModViewProps["items"][number]): string {
 
 <template>
   <template v-for="item in rows" :key="keyOf(item)">
-    <ResourceRow
-      :icon="item.icon"
-      :name="item.name || item.file"
-      :depth="depth"
-      :class="{
-        'mod-dragging': !!item.sha1 && draggingKey === item.sha1,
-        'mod-selected': !!item.sha1 && selectedKeys.has(item.sha1),
-        'mod-selecting': selectedKeys.size > 0,
-      }"
-      @pointerdown="depth === 0 ? emit('drag-start', { event: $event, item }) : undefined"
-      @contextmenu.prevent="depth === 0 ? emit('select', item) : undefined"
-    >
+    <ResourceRow :icon="item.icon" :name="item.name || item.file" :depth="depth" :class="{
+      'mod-dragging': !!item.sha1 && draggingKey === item.sha1,
+      'mod-selected': !!item.sha1 && selectedKeys.has(item.sha1),
+      'mod-selecting': selectedKeys.size > 0,
+    }" @pointerdown="depth === 0 ? emit('drag-start', { event: $event, item }) : undefined"
+      @contextmenu.prevent="depth === 0 ? emit('select', item) : undefined">
       <!--
         多选勾选框（最左边）。只在顶层且拿得到 SHA1 的行上给 —— 内置模组没有 SHA1，
         选中了也没法批量操作，给个勾选框只会误导。
         内置行留一个等宽占位，父行与子行的名字才不会错位。
       -->
       <template #select>
-        <input
-          v-if="depth === 0 && item.sha1"
-          type="checkbox"
-          class="mod-select"
-          :checked="selectedKeys.has(item.sha1)"
-          @pointerdown.stop
-          @change.stop="emit('select', item)"
-        />
+        <input v-if="depth === 0 && item.sha1" type="checkbox" class="mod-select" :checked="selectedKeys.has(item.sha1)"
+          @pointerdown.stop @change.stop="emit('select', item)" />
         <span v-else class="mod-select-gap" />
       </template>
       <!-- 展开箭头：只有带内置模组的行才有（内置行自己没有下级）；默认收起 -->
       <template #lead>
-        <button
-          v-if="item.jarInJar.length"
-          class="mod-tree-caret"
-          :class="{ collapsed: !isOpen(keyOf(item)) }"
-          v-tip="
-            isOpen(keyOf(item))
-              ? t('resource.modBuiltinCollapse')
-              : t('resource.modBuiltinExpand')
-          "
-          @click.stop="toggleExpand(keyOf(item))"
-          @pointerdown.stop
-        >
+        <button v-if="item.jarInJar.length" class="mod-tree-caret" :class="{ collapsed: !isOpen(keyOf(item)) }" v-tip="isOpen(keyOf(item))
+            ? t('resource.modBuiltinCollapse')
+            : t('resource.modBuiltinExpand')
+          " @click.stop="toggleExpand(keyOf(item))" @pointerdown.stop>
           <GlyphIcon name="chevron-down" :size="13" :weight="2.4" />
         </button>
         <!-- 占位：没有下级的行也留出箭头的宽度，图标与名字才能对齐成一列 -->
@@ -116,11 +96,7 @@ function keyOf(item: ModViewProps["items"][number]): string {
       <template #badges>
         <!-- 支持的加载器：一个包可能不止一个（同时带 fabric.mod.json 与 mods.toml），
              后端已汇总去重，这里逐个显示 -->
-        <span
-          v-for="name in item.loaders"
-          :key="name"
-          class="badge badge-dim"
-        >{{ t(`resource.loader.${name}`) }}</span>
+        <span v-for="name in item.loaders" :key="name" class="badge badge-dim">{{ t(`resource.loader.${name}`) }}</span>
         <!-- 内置的**库**（没有模组元数据的内置 jar，如 asm / mixinextras）：
              它不是模组，标出来免得和真正的内置模组混在一起 -->
         <span v-if="item.library" class="badge badge-dim">{{ t("resource.modLibrary") }}</span>
@@ -153,12 +129,7 @@ function keyOf(item: ModViewProps["items"][number]): string {
           <button class="mini-btn" :disabled="busy" @click.stop="emit('toggle', item)">
             {{ item.disable ? t("resource.enable") : t("resource.disable") }}
           </button>
-          <button
-            class="mini-btn"
-            :class="{ on: !!item.note }"
-            :disabled="busy"
-            @click.stop="emit('note', item)"
-          >
+          <button class="mini-btn" :class="{ on: !!item.note }" :disabled="busy" @click.stop="emit('note', item)">
             {{ t("resource.modNote") }}
           </button>
           <button class="mini-btn" :disabled="busy" @click.stop="emit('open-folder', item)">
@@ -172,19 +143,9 @@ function keyOf(item: ModViewProps["items"][number]): string {
     </ResourceRow>
 
     <!-- 内置模组：递归展开下一层（默认展开，跟着父条目的折叠状态） -->
-    <ModList
-      v-if="item.jarInJar.length && isOpen(keyOf(item))"
-      :items="item.jarInJar"
-      :busy="busy"
-      :dragging-key="draggingKey"
-      :selected-keys="selectedKeys"
-      :depth="depth + 1"
-      @toggle="emit('toggle', $event)"
-      @remove="emit('remove', $event)"
-      @note="emit('note', $event)"
-      @open-folder="emit('open-folder', $event)"
-      @drag-start="emit('drag-start', $event)"
-      @select="emit('select', $event)"
-    />
+    <ModList v-if="item.jarInJar.length && isOpen(keyOf(item))" :items="item.jarInJar" :busy="busy"
+      :dragging-key="draggingKey" :selected-keys="selectedKeys" :depth="depth + 1" @toggle="emit('toggle', $event)"
+      @remove="emit('remove', $event)" @note="emit('note', $event)" @open-folder="emit('open-folder', $event)"
+      @drag-start="emit('drag-start', $event)" @select="emit('select', $event)" />
   </template>
 </template>

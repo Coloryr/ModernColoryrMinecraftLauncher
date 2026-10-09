@@ -139,7 +139,11 @@ pub mod skin_draw {
             out[i] = (over[i] as f32 * ap + under[i] as f32 * dp) as u8;
         }
 
-        out[3] = if under[3] == 0 && over[3] == 0 { 0 } else { 255 };
+        out[3] = if under[3] == 0 && over[3] == 0 {
+            0
+        } else {
+            255
+        };
 
         out
     }
@@ -187,7 +191,8 @@ pub mod skin_draw {
         for j in 0..height {
             for i in 0..width {
                 let src_offset = (src_y + j) as usize * src_row_bytes + (src_x + i) as usize * BPP;
-                let dst_offset = (dest_y + j) as usize * dst_row_bytes + (dest_x + i) as usize * BPP;
+                let dst_offset =
+                    (dest_y + j) as usize * dst_row_bytes + (dest_x + i) as usize * BPP;
 
                 let mut src_px = [0u8; 4];
                 src_px.copy_from_slice(&source.data()[src_offset..src_offset + BPP]);
@@ -273,11 +278,7 @@ pub mod skin_draw {
             return Some(());
         }
 
-        if x < 0
-            || y < 0
-            || x + width > dest.width() as i32
-            || y + height > dest.height() as i32
-        {
+        if x < 0 || y < 0 || x + width > dest.width() as i32 || y + height > dest.height() as i32 {
             return None;
         }
 
@@ -316,11 +317,7 @@ pub mod skin_draw {
             return Some(());
         }
 
-        if x < 0
-            || y < 0
-            || x + width > dest.width() as i32
-            || y + height > dest.height() as i32
-        {
+        if x < 0 || y < 0 || x + width > dest.width() as i32 || y + height > dest.height() as i32 {
             return None;
         }
 
@@ -328,8 +325,7 @@ pub mod skin_draw {
 
         for j in 0..height {
             for i in 0..width {
-                let dst_offset =
-                    (y + j) as usize * dst_row_bytes + (x + i) as usize * BPP;
+                let dst_offset = (y + j) as usize * dst_row_bytes + (x + i) as usize * BPP;
 
                 let mut dst_px = [0u8; 4];
                 dst_px.copy_from_slice(&dest.data()[dst_offset..dst_offset + BPP]);
@@ -388,18 +384,15 @@ pub mod skin_draw {
 
         for i in 0..swidth {
             for j in 0..sheight {
-                let src_offset =
-                    (sy + j) as usize * src_row_bytes + (sx + i) as usize * BPP;
+                let src_offset = (sy + j) as usize * src_row_bytes + (sx + i) as usize * BPP;
                 let mut color = [0u8; 4];
                 color.copy_from_slice(&source.data()[src_offset..src_offset + BPP]);
 
                 let dest_x = i * width + x;
                 let dest_y = j * height + y;
                 for fy in 0..height {
-                    let dst_offset =
-                        (dest_y + fy) as usize * dst_row_bytes + dest_x as usize * BPP;
-                    let row = &mut dest.data_mut()
-                        [dst_offset..dst_offset + width as usize * BPP];
+                    let dst_offset = (dest_y + fy) as usize * dst_row_bytes + dest_x as usize * BPP;
+                    let row = &mut dest.data_mut()[dst_offset..dst_offset + width as usize * BPP];
                     for chunk in row.chunks_exact_mut(BPP) {
                         chunk.copy_from_slice(&color);
                     }
@@ -455,8 +448,7 @@ pub mod skin_draw {
 
         for i in 0..swidth {
             for j in 0..sheight {
-                let src_offset =
-                    (sy + j) as usize * src_row_bytes + (sx + i) as usize * BPP;
+                let src_offset = (sy + j) as usize * src_row_bytes + (sx + i) as usize * BPP;
                 let mut src_px = [0u8; 4];
                 src_px.copy_from_slice(&source.data()[src_offset..src_offset + BPP]);
 
@@ -464,8 +456,8 @@ pub mod skin_draw {
                 let dest_y = j * height + y;
                 for fy in 0..height {
                     for fx in 0..width {
-                        let dst_offset = (dest_y + fy) as usize * dst_row_bytes
-                            + (dest_x + fx) as usize * BPP;
+                        let dst_offset =
+                            (dest_y + fy) as usize * dst_row_bytes + (dest_x + fx) as usize * BPP;
 
                         let mut dst_px = [0u8; 4];
                         dst_px.copy_from_slice(&dest.data()[dst_offset..dst_offset + BPP]);
@@ -513,7 +505,12 @@ mod tests {
 
     /// 根据坐标生成一个唯一且不透明的字节模式（避免全图同色掩盖拷贝错位）
     fn pattern(x: i32, y: i32) -> [u8; 4] {
-        [(x * 7 + 1) as u8, (y * 11 + 2) as u8, (x * 13 + 3) as u8, 255]
+        [
+            (x * 7 + 1) as u8,
+            (y * 11 + 2) as u8,
+            (x * 13 + 3) as u8,
+            255,
+        ]
     }
 
     /// draw 应按行复制源区域像素到目标位置
@@ -578,7 +575,10 @@ mod tests {
     #[test]
     fn test_color_mix() {
         // 不透明源覆盖：黑底 + 白源 = 白
-        assert_eq!(mix_pixel([0, 0, 0, 255], [255, 255, 255, 255]), [255, 255, 255, 255]);
+        assert_eq!(
+            mix_pixel([0, 0, 0, 255], [255, 255, 255, 255]),
+            [255, 255, 255, 255]
+        );
 
         // 半透明混合：黑底 + 50% 白源，各通道约为 128
         let mixed = mix_pixel([0, 0, 0, 255], [255, 255, 255, 128]);

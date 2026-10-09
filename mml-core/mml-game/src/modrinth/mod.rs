@@ -7,7 +7,9 @@ use std::{
 };
 
 use mml_base::{
-    archives::{BaseArchive, BaseArchiveGui}, file_item::{FileHash, FileItemObj, LaterRun}, tools,
+    archives::{BaseArchive, BaseArchiveGui},
+    file_item::{FileHash, FileItemObj, LaterRun},
+    tools,
 };
 use mml_names::{
     i18_items::error_type::{CoreResult, ErrorType},
@@ -57,7 +59,7 @@ pub fn to_loader_id(loader: &LoaderType) -> Option<String> {
         LoaderType::Fabric => Some(loader.to_string().to_string()),
         LoaderType::Quilt => Some(loader.to_string().to_string()),
         LoaderType::NeoForge => Some(loader.to_string().to_string()),
-        _ => None
+        _ => None,
     }
 }
 

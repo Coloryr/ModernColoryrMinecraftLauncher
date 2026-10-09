@@ -52,24 +52,6 @@ pub struct DetectedPackDto {
     pub name: String,
 }
 
-/// 整合包搜索结果条目（id 为项目 ID，来源内唯一）
-#[derive(Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ModpackItemDto {
-    /// 项目 ID
-    pub id: String,
-    /// 项目名
-    pub name: String,
-    /// 简介
-    pub desc: String,
-    /// 图标地址
-    pub icon: String,
-    /// 作者
-    pub author: String,
-    /// 下载量
-    pub downloads: u64,
-}
-
 /// 整合包安装进度（state：downloadPack / readInfo / getInfo / downloadFile / extract / done）
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]

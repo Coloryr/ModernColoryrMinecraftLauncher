@@ -409,7 +409,10 @@ mod tests {
             parse_game_version("1.20.4-pre1"),
             Some(vec![-5, 1, 20, 4, 1])
         );
-        assert_eq!(parse_game_version("1.20.4-rc1"), Some(vec![-3, 1, 20, 4, 1]));
+        assert_eq!(
+            parse_game_version("1.20.4-rc1"),
+            Some(vec![-3, 1, 20, 4, 1])
+        );
         // 现状记录（疑似 bug）：pre/rc 缺编号时该分支返回 None，
         // 随后由 parse_old_release 的 filter_map 兜底解析成正式版 1.20.0，
         // 预发布标记被静默丢弃

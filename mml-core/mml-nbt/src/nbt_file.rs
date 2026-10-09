@@ -384,11 +384,8 @@ mod tests {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let dir = mml_testutil::temp_dir().join(format!(
-            "mml-nbt-test-{}-{}",
-            std::process::id(),
-            nanos
-        ));
+        let dir =
+            mml_testutil::temp_dir().join(format!("mml-nbt-test-{}-{}", std::process::id(), nanos));
         fs::create_dir_all(&dir).unwrap();
 
         let path: PathBuf = dir.join("test.dat");

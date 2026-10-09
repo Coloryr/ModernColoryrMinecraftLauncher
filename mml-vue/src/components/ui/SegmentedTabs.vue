@@ -30,27 +30,10 @@ const ICONS: Record<string, string> = {
 
 <template>
   <div class="seg-tabs">
-    <button
-      v-for="opt in options"
-      :key="opt.value"
-      class="seg-btn"
-      :class="{ active: current === opt.value }"
-      :disabled="props.disabled"
-      v-tip="opt.label"
-      @click="emit('update:modelValue', opt.value)"
-    >
-      <svg
-        v-if="opt.icon && ICONS[opt.icon]"
-        class="seg-icon"
-        viewBox="0 0 24 24"
-        width="14"
-        height="14"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-        stroke-linecap="round"
-        v-html="ICONS[opt.icon]"
-      />
+    <button v-for="opt in options" :key="opt.value" class="seg-btn" :class="{ active: current === opt.value }"
+      :disabled="props.disabled" v-tip="opt.label" @click="emit('update:modelValue', opt.value)">
+      <svg v-if="opt.icon && ICONS[opt.icon]" class="seg-icon" viewBox="0 0 24 24" width="14" height="14" fill="none"
+        stroke="currentColor" stroke-width="2" stroke-linecap="round" v-html="ICONS[opt.icon]" />
       <span>{{ opt.label }}</span>
     </button>
   </div>

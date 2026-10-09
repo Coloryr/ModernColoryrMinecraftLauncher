@@ -169,7 +169,7 @@ impl Default for CollectConfig {
 }
 
 /// 登录方式锁定的一个条目
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 #[serde(default)]
 pub struct LoginLockObj {
     /// 账户添加类型（offline / microsoft / littleskin / selflittleskin / authlib / nide8）
@@ -178,16 +178,6 @@ pub struct LoginLockObj {
     pub name: String,
     /// 锁定的服务器（authlib = 认证服务器地址，nide8 = 服务器 ID，空 = 不指定）
     pub server: String,
-}
-
-impl Default for LoginLockObj {
-    fn default() -> Self {
-        Self {
-            ty: String::new(),
-            name: String::new(),
-            server: String::new(),
-        }
-    }
 }
 
 /// 旧版兼容：锁定列表曾是纯字符串数组（无服务器信息）

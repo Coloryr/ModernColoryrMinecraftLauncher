@@ -23,11 +23,11 @@
  * 例外只有两条，都是"附着在上面那一行"的状态文字：提示 .hint 8px、校验红字 6px。
  * 需要新的例外就加在本节里并写清原因，别回模板写 margin。
  */
-.settings-layout .setting-group > * {
+.settings-layout .setting-group>* {
   margin-top: 0;
 }
 
-.settings-layout .setting-group > * + * {
+.settings-layout .setting-group>*+* {
   margin-top: 16px;
 }
 
@@ -35,39 +35,39 @@
    上边距**必须留着**：标签往往跟在别的东西后面（GC 模式那行、＋添加按钮……），
    归零会让它贴在上一个控件上，"JVM 环境变量 / JVM 参数"这类标签就看着很挤。
    真正的首行标签由最后那条 :first-child 顶格 */
-.settings-layout .setting-group > .field-label {
+.settings-layout .setting-group>.field-label {
   margin-bottom: 0;
 }
 
-.settings-layout .setting-group > .field-label + * {
+.settings-layout .setting-group>.field-label+* {
   margin-top: 8px;
 }
 
 /* 说明是标签的补充：跟标签更近（此时它是"标签 → 说明 → 控件"里的中间那行） */
-.settings-layout .setting-group > .field-label + .field-desc {
+.settings-layout .setting-group>.field-label+.field-desc {
   margin-top: 4px;
 }
 
 /* 说明跟在控件后面时，贴住上面那个控件 */
-.settings-layout .setting-group > .field-desc {
+.settings-layout .setting-group>.field-desc {
   margin-top: 6px;
 }
 
-.settings-layout .setting-group > .field-desc + * {
+.settings-layout .setting-group>.field-desc+* {
   margin-top: 8px;
 }
 
 /* 首行不留白（说明或标签开头的分组） */
-.settings-layout .setting-group > .field-desc:first-child {
+.settings-layout .setting-group>.field-desc:first-child {
   margin-top: 0;
 }
 
 /* 附着在上面那一行的状态文字 */
-.settings-layout .setting-group > .hint {
+.settings-layout .setting-group>.hint {
   margin-top: 8px;
 }
 
-.settings-layout .setting-group > .lock-server-hint {
+.settings-layout .setting-group>.lock-server-hint {
   margin-top: 6px;
 }
 
@@ -97,6 +97,7 @@
   from {
     transform: translateX(-100%);
   }
+
   to {
     transform: translateX(300%);
   }
@@ -118,7 +119,8 @@
   flex: 1;
   min-width: 0;
   overflow-y: auto;
-  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
+  scrollbar-gutter: stable;
+  /* 见 styles/scrollbar.css */
   padding: 18px 22px 24px;
 }
 
@@ -135,7 +137,7 @@
 }
 
 /* 标题行右侧：全部恢复默认 */
-.settings-layout .set-content-head > .ui-btn {
+.settings-layout .set-content-head>.ui-btn {
   flex-shrink: 0;
 }
 
@@ -164,7 +166,8 @@
   right: 0;
   max-height: 320px;
   overflow-y: auto;
-  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
+  scrollbar-gutter: stable;
+  /* 见 styles/scrollbar.css */
   padding: 4px;
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -237,7 +240,7 @@
 }
 
 /* 每个标签的第一个分组不额外留上边距 */
-.settings-layout .setting-group:first-child > .group-title {
+.settings-layout .setting-group:first-child>.group-title {
   margin-top: 10px;
 }
 
@@ -258,6 +261,7 @@
   from {
     background: var(--accent-soft);
   }
+
   to {
     background: transparent;
   }
@@ -267,6 +271,7 @@
   from {
     background: var(--accent-soft);
   }
+
   to {
     background: transparent;
   }

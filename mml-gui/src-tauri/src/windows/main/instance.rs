@@ -1,0 +1,366 @@
+//! 主窗口的实例与分组写操作：新建 / 改名 / 改配置 / 删除 / 移动
+//!
+//! 从 `main/mod.rs` 拆出来的（`main_update_instance` 一个人就 106 行）。命令带
+//! `#[gui_macros::ipc_group("main")]` 把组键钉回 `main`（见 AGENTS.md §4）。
+
+use tauri::{AppHandle, WebviewWindow};
+use uuid::Uuid;
+
+use mml_game::launcher::{LogEncoding, ModPackType};
+use mml_game::loader::LoaderType;
+use mml_game::mojang::VersionType;
+
+use crate::dtos::{InstanceArgsDto, InstanceInfoDto, InstancePatch};
+use crate::windows;
+
+use super::{emit_instance_change, model};
+
+/// 新建分组
+///
+/// 分组表在 mml-game（`group_save.json`），GUI 不再自己另存一份 ——
+/// 之前模型里那份 `extra_groups` 既不落盘、又与内核表各说各话，
+/// 新建的空分组下一次 `getGroups` 就被内核列表覆盖掉了。
+///
+/// # 返回值
+///
+/// 返回新分组的 uuid；名字为空或重名返回 `None`（前端据此提示"已存在"）
+#[gui_macros::ipc_group("main")]
+#[tauri::command]
+pub fn main_add_group(app: AppHandle, name: String) -> Result<Option<String>, String> {
+    let Some(uuid) = mml_game::add_group(&name) else {
+        return Ok(None);
+    };
+    emit_instance_change(&app, "group");
+    Ok(Some(uuid.to_string()))
+}
+
+/// 删除分组（组内实例移入默认分组）
+#[gui_macros::ipc_group("main")]
+#[tauri::command]
+pub fn main_remove_group(app: AppHandle, uuid: String) -> Result<bool, String> {
+    // 空白 uuid 就是默认分组，不允许删除
+    let Some(uuid) = windows::parse_group_id(Some(uuid)) else {
+        return Ok(false);
+    };
+    // 核心分组表：组内实例移入默认分组，并逐个发变更通知
+    if !mml_game::remove_group(&uuid) {
+        return Ok(false);
+    }
+    emit_instance_change(&app, "group");
+    Ok(true)
+}
+
+/// 调整分组显示顺序（默认分组只是初始排首位，同样可以换位置）
+///
+/// 顺序由内核分组表保存：拿当前顺序、把该组挪到 `index` 位，再整表提交。
+/// 只改内存里的数组是不行的 —— 文件里存的还是旧顺序，重启就回来了。
+#[gui_macros::ipc_group("main")]
+#[tauri::command]
+pub fn main_move_group(app: AppHandle, uuid: String, index: i64) -> Result<bool, String> {
+    // 这里**不**按 `parse_group_id` 的"非法 = 默认分组"兜底：本命令要挪的就是这个组，
+    // 空 / 非法的 uuid 指不到任何组（不像 `main_move_instance`，那里的"默认分组"是个
+    // 有意义的落点），所以直接报错，免得悄悄把默认分组挪走。
+    let Some(uuid) = windows::parse_group_id(Some(uuid)) else {
+        return Err("err.uuid".to_string());
+    };
+
+    let mut list: Vec<Uuid> = mml_game::get_group_list()
+        .into_iter()
+        .map(|g| g.uuid)
+        .collect();
+    let from = list
+        .iter()
+        .position(|g| *g == uuid)
+        .ok_or_else(|| "err.groupNotFound".to_string())?;
+    list.remove(from);
+    let at = (index.max(0) as usize).min(list.len());
+    list.insert(at, uuid);
+
+    mml_game::reorder_groups(&list);
+    emit_instance_change(&app, "group");
+    Ok(true)
+}
+
+/// 创建实例
+#[allow(clippy::too_many_arguments)]
+#[gui_macros::ipc_group("main")]
+#[tauri::command]
+pub fn main_create_instance(
+    app: AppHandle,
+    window: WebviewWindow,
+    name: String,
+    version: String,
+    loader: Option<String>,
+    loader_version: Option<String>,
+    group: Option<String>,
+    modpack_type: Option<String>,
+    source: Option<String>,
+) -> Result<InstanceInfoDto, String> {
+    let uuid = format!("mml-{}", uuid_short());
+    let dir = name.clone();
+    let inst = InstanceInfoDto {
+        uuid: uuid.clone(),
+        name,
+        group,
+        version,
+        version_type: Some("release".into()),
+        loader: loader.unwrap_or_else(|| "normal".into()),
+        loader_version,
+        dir,
+        running: false,
+        modpack_type,
+        pid: None,
+        fid: None,
+        server_url: None,
+        lang: None,
+        log_encoding: None,
+        source,
+        // 新建的实例排到组末：给一个足够大的值，下次整组重编号时会被压回正常区间
+        order: i32::MAX,
+    };
+    let store = model(&window)?;
+    let mut store = store.lock().unwrap();
+    store.instances.insert(0, inst.clone());
+    store.args.insert(uuid, InstanceArgsDto::default());
+    drop(store);
+    emit_instance_change(&app, "add");
+    Ok(inst)
+}
+
+/// 重命名实例（核心实例走 mml-game：重名报错、实例目录跟随改名）
+#[gui_macros::ipc_group("main")]
+#[tauri::command]
+pub fn main_rename_instance(
+    app: AppHandle,
+    window: WebviewWindow,
+    uuid: String,
+    name: String,
+) -> Result<bool, String> {
+    let n = name.trim().to_string();
+    if n.is_empty() {
+        return Ok(false);
+    }
+    // 核心实例：mml-game 重命名（重名返回 Err 由前端提示）
+    if let Ok(id) = Uuid::parse_str(&uuid)
+        && mml_game::get_instance(&id).is_some()
+    {
+        mml_game::rename_instance(&id, &n).map_err(|e| e.to_string())?;
+        emit_instance_change(&app, "edit");
+        return Ok(true);
+    }
+    // 遗留数据（假 uuid）：只改本地存储
+    let store = model(&window)?;
+    let mut store = store.lock().unwrap();
+    let Some(inst) = store.instances.iter_mut().find(|i| i.uuid == uuid) else {
+        return Ok(false);
+    };
+    inst.name = n.clone();
+    inst.dir = n;
+    emit_instance_change(&app, "edit");
+    Ok(true)
+}
+
+/// 更新实例元信息（补丁式；核心实例直接写配置并保存，遗留数据只改本地存储）
+#[gui_macros::ipc_group("main")]
+#[tauri::command]
+pub fn main_update_instance(
+    app: AppHandle,
+    window: WebviewWindow,
+    uuid: String,
+    patch: InstancePatch,
+) -> Result<bool, String> {
+    // 核心实例：写真实配置
+    let core = Uuid::parse_str(&uuid)
+        .ok()
+        .and_then(|id| mml_game::get_instance(&id).map(|inst| (id, inst)));
+    if let Some((id, instance)) = core {
+        // 名字改动走 rename（实例目录跟随改名，重名报错）
+        if let Some(v) = &patch.name {
+            let n = v.trim();
+            if !n.is_empty() && instance.read().unwrap().name != *n {
+                mml_game::rename_instance(&id, n).map_err(|e| e.to_string())?;
+            }
+        }
+        // 分组切换走 mml-game 的分组表（追加到目标组末尾、发事件）
+        if let Some(v) = patch.group.clone() {
+            // 前端传的是分组 uuid；空 / 非法 = 默认分组
+            mml_game::move_group(vec![id], windows::parse_group_id(v));
+        }
+        {
+            let mut obj = instance.write().unwrap();
+            if let Some(v) = &patch.version {
+                obj.version = v.clone();
+            }
+            if let Some(v) = &patch.version_type {
+                obj.game_type = VersionType::from_id(v);
+            }
+            if let Some(v) = &patch.loader
+                && let Some(l) = LoaderType::from_string(v)
+            {
+                obj.loader = l;
+            }
+            if let Some(v) = patch.loader_version.clone() {
+                obj.loader_version = v;
+            }
+            if let Some(v) = patch.modpack_type.clone() {
+                obj.modpack_type = ModPackType::from_string(v.as_deref().unwrap_or("none"));
+                obj.is_modpack = obj.modpack_type != ModPackType::None;
+            }
+            if let Some(v) = patch.pid.clone() {
+                obj.pid = v;
+            }
+            if let Some(v) = patch.fid.clone() {
+                obj.fid = v;
+            }
+            if let Some(v) = patch.server_url.clone() {
+                obj.server_url = v;
+            }
+            if let Some(v) = &patch.log_encoding {
+                obj.encoding = match v.as_str() {
+                    "gbk" => LogEncoding::GBK,
+                    _ => LogEncoding::UTF8,
+                };
+            }
+            // lang 无核心字段，仅前端显示
+            obj.save();
+        }
+    }
+    let store = model(&window)?;
+    let mut store = store.lock().unwrap();
+    if let Some(inst) = store.instances.iter_mut().find(|i| i.uuid == uuid) {
+        if let Some(v) = patch.group {
+            inst.group = v;
+        }
+        if let Some(v) = patch.name {
+            inst.name = v;
+        }
+        if let Some(v) = patch.version {
+            inst.version = v;
+        }
+        if let Some(v) = patch.version_type {
+            inst.version_type = Some(v);
+        }
+        if let Some(v) = patch.loader {
+            inst.loader = v;
+        }
+        if let Some(v) = patch.loader_version {
+            inst.loader_version = v;
+        }
+        if let Some(v) = patch.modpack_type {
+            inst.modpack_type = v;
+        }
+        if let Some(v) = patch.pid {
+            inst.pid = v;
+        }
+        if let Some(v) = patch.fid {
+            inst.fid = v;
+        }
+        if let Some(v) = patch.server_url {
+            inst.server_url = v;
+        }
+        if let Some(v) = patch.lang {
+            inst.lang = Some(v);
+        }
+        if let Some(v) = patch.log_encoding {
+            inst.log_encoding = Some(v);
+        }
+    }
+    drop(store);
+    emit_instance_change(&app, "edit");
+    Ok(true)
+}
+
+/// 删除实例：挪回收站较慢，放后台线程执行避免卡住 UI（前端显示滚动进度条）
+/// （核心实例走 mml-game：删除实例与文件；同时清理本地运行态缓存）
+#[gui_macros::ipc_group("main")]
+#[tauri::command]
+pub async fn main_delete_instance(
+    app: AppHandle,
+    window: WebviewWindow,
+    uuid: String,
+) -> Result<bool, String> {
+    let ok = tauri::async_runtime::spawn_blocking(move || -> Result<bool, String> {
+        // 核心实例：删除实例数据与文件
+        let mut ok = false;
+        if let Ok(id) = Uuid::parse_str(&uuid)
+            && mml_game::get_instance(&id).is_some()
+        {
+            mml_game::delete_instance(&id).map_err(|e| e.to_string())?;
+            ok = true;
+        }
+        // 本地存储：清理遗留实例项与运行态缓存（运行状态 / 日志 / 启动参数）
+        let store = model(&window)?;
+        let mut store = store.lock().unwrap();
+        let before = store.instances.len();
+        store.instances.retain(|i| i.uuid != uuid);
+        store.args.remove(&uuid);
+        store.running.remove(&uuid);
+        if store.instances.len() < before {
+            ok = true;
+        }
+        drop(store);
+        Ok(ok)
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+
+    if ok {
+        emit_instance_change(&app, "remove");
+    }
+    Ok(ok)
+}
+
+/// 移动实例到 (分组, 组内位置)：支持同组排序与跨组移动
+///
+/// 归属与组内次序都在内核分组表（`group_save.json`）：内核一次完成"落组 + 插到 index 位"，
+/// 前端下次拉列表就按表的数组顺序拿到新的 `order`。
+///
+/// 这里不再改各实例的 `gui_setting.json` —— 那个 `Order` 已经是旧机制，
+/// 两份顺序各写各的正是"拖完看着对了、重启就乱"的来源。
+#[gui_macros::ipc_group("main")]
+#[tauri::command]
+pub fn main_move_instance(
+    app: AppHandle,
+    uuid: String,
+    group: Option<String>,
+    index: i64,
+) -> Result<bool, String> {
+    let Ok(id) = Uuid::parse_str(&uuid) else {
+        return Err("err.uuid".to_string());
+    };
+    if mml_game::get_instance(&id).is_none() {
+        return Err("err.gameNotFound".to_string());
+    }
+
+    // 前端传的是分组 uuid；空 / 非法 = 默认分组
+    let group = windows::parse_group_id(group);
+
+    mml_game::move_instance(&id, group, index.max(0) as usize);
+
+    emit_instance_change(&app, "edit");
+    Ok(true)
+}
+
+/// 生成短 uuid（`mml-<16 位十六进制>`，给不落内核的遗留实例用）
+///
+/// 原来是 `subsec_nanos() ^ pid`：Windows 的时钟粒度远粗于 1ns，**同一个 tick 内
+/// 连续创建两个实例会拿到同一个 id**，而本地存储正是按 uuid 索引的，会互相覆盖。
+/// 这里改成完整纳秒 + 进程内自增序号：同 tick 靠序号区分，跨 tick 靠纳秒。
+fn uuid_short() -> String {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    /// 进程内自增序号（乘一个奇数常量后异或，保证 seq 不同则结果必不同）
+    static SEQ: AtomicU64 = AtomicU64::new(0);
+
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_nanos() as u64)
+        .unwrap_or_default();
+    let seq = SEQ.fetch_add(1, Ordering::Relaxed);
+
+    format!(
+        "{:016x}",
+        nanos ^ ((std::process::id() as u64) << 32) ^ seq.wrapping_mul(0x9E37_79B9_7F4A_7C15)
+    )
+}

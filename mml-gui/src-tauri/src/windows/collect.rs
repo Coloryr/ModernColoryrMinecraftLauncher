@@ -92,6 +92,8 @@ pub fn collect_set_group_items(app: AppHandle, group: String, uuids: Vec<String>
 /// 收藏 / 取消收藏在线项目（整合包、资源窗口列表与详情里的星标）
 ///
 /// `star = true` 加入收藏（重复收藏忽略），`false` 移除（按 下载源 + 项目ID 匹配）
+/// 参数是 IPC 契约（`bindings.ts` 由 Rust 源码生成，见 AGENTS.md §4），不能合并成结构体。
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub fn collect_star(
     app: AppHandle,

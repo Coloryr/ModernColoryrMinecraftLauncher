@@ -189,13 +189,13 @@ function iconOf(item: ServerItemDto): string {
 function openForm(item: ServerItemDto | null) {
   form.value = item
     ? {
-        edit: true,
-        name: item.name,
-        ip: item.ip,
-        acceptTextures: item.acceptTextures,
-        origName: item.name,
-        origIp: item.ip,
-      }
+      edit: true,
+      name: item.name,
+      ip: item.ip,
+      acceptTextures: item.acceptTextures,
+      origName: item.name,
+      origIp: item.ip,
+    }
     : { edit: false, name: "", ip: "", acceptTextures: false, origName: "", origIp: "" };
 }
 
@@ -253,28 +253,17 @@ function remove(item: ServerItemDto) {
     外面这层只做横向对齐 —— 卡片不在滚动容器里，拿不到 `.item-list` 的内边距
   -->
   <div v-if="selected" class="sv-motd">
-    <MotdCard
-      refreshable
-      :motd="motdOf(selected)"
-      :loading="isLoading(selected)"
-      :name="selected.name || selected.ip"
-      @refresh="queryOne(selected)"
-    />
+    <MotdCard refreshable :motd="motdOf(selected)" :loading="isLoading(selected)" :name="selected.name || selected.ip"
+      @refresh="queryOne(selected)" />
   </div>
 
   <div v-if="loading" class="item-list">
     <ListSkeleton />
   </div>
   <div v-else class="item-list">
-    <ResourceRow
-      v-for="item in servers"
-      :key="keyOf(item)"
-      class="sv-row"
-      :class="{ 'sv-selected': keyOf(item) === selectedKey }"
-      :icon="iconOf(item)"
-      :name="item.name"
-      @click="selectedKey = keyOf(item)"
-    >
+    <ResourceRow v-for="item in servers" :key="keyOf(item)" class="sv-row"
+      :class="{ 'sv-selected': keyOf(item) === selectedKey }" :icon="iconOf(item)" :name="item.name"
+      @click="selectedKey = keyOf(item)">
       <template #badges>
         <span v-if="item.acceptTextures" class="badge badge-dim">
           {{ t("resource.acceptTextures") }}
@@ -315,13 +304,7 @@ function remove(item: ServerItemDto) {
     <div v-if="!servers.length" class="empty-tip">{{ t("resource.empty") }}</div>
   </div>
 
-  <ServerFormModal
-    v-if="form"
-    :form="form"
-    :busy="saving"
-    @submit="save"
-    @close="form = null"
-  />
+  <ServerFormModal v-if="form" :form="form" :busy="saving" @submit="save" @close="form = null" />
 </template>
 
 <!-- 副标题里的分隔号：与模组行的 `·` 同一套观感（行内间距靠 CSS，不靠空格） -->

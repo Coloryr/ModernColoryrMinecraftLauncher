@@ -35,13 +35,8 @@ withDefaults(
     用全仓通用的 LoaderQueryProgress（添加实例窗口那套），不再自己拼一行数字 ——
     只有数字看不出在干什么，也没有进度条的"走了多少"的观感
   -->
-  <LoaderQueryProgress
-    :visible="total > 0"
-    kind="query"
-    :step="done"
-    :total="total"
-    :label="t('resource.readingMods')"
-  />
+  <LoaderQueryProgress :visible="total > 0" kind="query" :step="done" :total="total"
+    :label="t('resource.readingMods')" />
   <div v-for="n in 5" :key="n" class="sk-row">
     <div class="sk sk-icon"></div>
     <div class="sk-lines">

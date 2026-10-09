@@ -1,7 +1,7 @@
 use std::{env, fs, sync::Arc};
 
 use mml_base::file_item::{FileHash, FileItemObj, LaterRun};
-use mml_downloader::{IDownloadGui, DownloadTaskState, download_item::DownloadItem};
+use mml_downloader::{DownloadTaskState, IDownloadGui, download_item::DownloadItem};
 
 struct GuiRun {}
 

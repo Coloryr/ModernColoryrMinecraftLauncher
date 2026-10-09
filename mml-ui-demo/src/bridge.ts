@@ -30,7 +30,7 @@ export function currentTheme(): MmlTheme {
 
 /** 订阅主题变化（不在启动器里时返回空函数；浏览器预览可自行监听 prefers-color-scheme） */
 export function onTheme(cb: (theme: MmlTheme) => void): () => void {
-  return getMml()?.onTheme(cb) ?? (() => {});
+  return getMml()?.onTheme(cb) ?? (() => { });
 }
 
 /** 带超时的 invoke 超时抛出的错误，用来区分「没人应答」与「命令自己报错」 */
@@ -105,15 +105,15 @@ export const STAGE_LABELS: Record<string, string> = {
 
 /** 订阅启动阶段（launch-state） */
 export function onLaunchState(cb: (e: MmlLaunchState) => void): () => void {
-  return getMml()?.on("launch-state", cb) ?? (() => {});
+  return getMml()?.on("launch-state", cb) ?? (() => { });
 }
 
 /** 订阅游戏退出（game-exit） */
 export function onGameExit(cb: (e: MmlExitEvent) => void): () => void {
-  return getMml()?.on("game-exit", cb) ?? (() => {});
+  return getMml()?.on("game-exit", cb) ?? (() => { });
 }
 
 /** 订阅启动失败（launch-error） */
 export function onLaunchError(cb: (e: MmlErrorEvent) => void): () => void {
-  return getMml()?.on("launch-error", cb) ?? (() => {});
+  return getMml()?.on("launch-error", cb) ?? (() => { });
 }

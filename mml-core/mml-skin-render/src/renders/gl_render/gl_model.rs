@@ -3,7 +3,7 @@
 //! 封装角色模型各部件的 VAO/VBO 缓冲与顶点布局。
 
 use glam::{Vec2, Vec3};
-use glow::{Context, HasContext, Buffer, VertexArray};
+use glow::{Buffer, Context, HasContext, VertexArray};
 
 /// 一个部件的顶点缓冲对象集合
 pub struct VaoItem {
@@ -95,5 +95,5 @@ pub struct VertexOpenGL {
     /// 贴图 UV
     pub uv: Vec2,
     /// 顶点法线
-    pub normal: Vec3
+    pub normal: Vec3,
 }

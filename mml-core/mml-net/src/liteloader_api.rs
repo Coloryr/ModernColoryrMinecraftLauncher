@@ -4,7 +4,7 @@
 
 use mml_names::i18_items::error_type::CoreResult;
 
-use crate::{urls};
+use crate::urls;
 
 /// 获取 LiteLoader 版本元数据（可用版本列表）
 ///

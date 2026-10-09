@@ -11,15 +11,8 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <button
-    type="button"
-    role="switch"
-    class="switch"
-    :class="{ on: modelValue }"
-    :aria-checked="modelValue"
-    :disabled="disabled"
-    @click="emit('update:modelValue', !modelValue)"
-  >
+  <button type="button" role="switch" class="switch" :class="{ on: modelValue }" :aria-checked="modelValue"
+    :disabled="disabled" @click="emit('update:modelValue', !modelValue)">
     <span class="knob" />
   </button>
 </template>

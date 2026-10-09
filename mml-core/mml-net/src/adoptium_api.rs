@@ -8,7 +8,7 @@ use std::sync::OnceLock;
 use mml_names::i18_items::error_type::ErrorType;
 use serde::{Deserialize, Serialize};
 
-use crate::{urls::ADOPTIUM_URL};
+use crate::urls::ADOPTIUM_URL;
 
 /// 可用 Java 主版本缓存
 static JAVA_VERSION: OnceLock<Vec<String>> = OnceLock::new();

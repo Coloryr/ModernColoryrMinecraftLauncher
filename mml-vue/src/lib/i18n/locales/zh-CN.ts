@@ -90,7 +90,7 @@ export default {
   // 实例详情
   "detail.selectHint": "从左侧选择一个游戏实例",
   "detail.settings": "实例设置",
-"detail.logs": "实例日志",
+  "detail.logs": "实例日志",
   "detail.group": "分组：{name}",
   "detail.launchCount": "启动 {count} 次",
   "detail.lastPlay": "上次游玩：{last}",
@@ -1218,6 +1218,8 @@ export default {
   "err.colormcEmpty": "ColorMC 的工作目录是空的",
   "err.colormcMode": "未知的迁移方式",
   "err.colormcBusy": "已经有一次迁移在进行中",
+  // ColorMC 迁移任务失败：原始错误进日志，前端只显示这条
+  "err.colormcTask": "ColorMC 迁移任务失败（详情见日志）",
 
   // 从 ColorMC 迁移（加载期间问一次）
   "colormc.title": "发现 ColorMC 数据",

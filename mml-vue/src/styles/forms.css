@@ -66,6 +66,7 @@ select.field-select {
    关闭态外观刻意保持不变：仍用上面的 data-URI 箭头，隐藏 base-select 自带的 ::picker-icon。
    @supports 兜底——不支持该值的浏览器整块跳过，退回原生外观。 */
 @supports (appearance: base-select) {
+
   /* 限定 select.：.field-select 也被 <button> 借去做样式类（见 NewMode.vue 的 .type-trigger） */
   select.field-select,
   select.field-select::picker(select) {
@@ -239,4 +240,3 @@ select.field-select {
 .hidden-input {
   display: none;
 }
-

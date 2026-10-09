@@ -4,9 +4,7 @@ use crate::i18_items::gui_type::GuiType;
 use crate::{
     i18::I18Lang,
     i18_items::{
-        error_type::{
-            ArgEmptyData, ArgErrorData, DataNotFoundData, ErrorType, SkinBlockErrorData,
-        },
+        error_type::{ArgEmptyData, ArgErrorData, DataNotFoundData, ErrorType, SkinBlockErrorData},
         info_type::InfoType,
         panic_type::PanicType,
         thread_type::ThreadType,
@@ -56,7 +54,11 @@ impl I18Lang for ZhCn {
             ErrorType::OAuthGetTokenEmpty => String::from("OAuth没有获取到登录令牌"),
 
             ErrorType::FileSystemError(data) => {
-                format!("文件 {} 处理失败：{}", data.path.display().to_string(), data.error)
+                format!(
+                    "文件 {} 处理失败：{}",
+                    data.path.display().to_string(),
+                    data.error
+                )
             }
             ErrorType::FileReadError(data) => format!("文件读取失败：{}", data.error),
 
@@ -69,7 +71,10 @@ impl I18Lang for ZhCn {
             }
             ErrorType::ArchiveReadError(data) => format!("压缩包读取失败：{}", data.error),
             ErrorType::ArchiveError(data) => {
-                format!("压缩包处理失败：{} → {}：{}", data.source, data.target, data.error)
+                format!(
+                    "压缩包处理失败：{} → {}：{}",
+                    data.source, data.target, data.error
+                )
             }
             ErrorType::ArchiveWriteError(data) => format!("压缩包写入失败：{}", data.error),
 
@@ -100,7 +105,11 @@ impl I18Lang for ZhCn {
             ErrorType::InstanceNameExists(name) => format!("实例名字 {name} 已存在"),
 
             ErrorType::DownloadFileOverFail(data) => {
-                format!("文件 {} 覆盖失败：{}", data.file.display().to_string(), data.error)
+                format!(
+                    "文件 {} 覆盖失败：{}",
+                    data.file.display().to_string(),
+                    data.error
+                )
             }
             ErrorType::DownloadFileSizeError(data) => {
                 format!(
@@ -171,7 +180,7 @@ impl I18Lang for ZhCn {
 
     fn get_gui(&self, gui: &GuiType) -> String {
         match gui {
-            _ => Default::default()
+            _ => Default::default(),
         }
     }
 }

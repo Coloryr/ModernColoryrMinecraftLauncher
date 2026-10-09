@@ -39,11 +39,7 @@ const percent = computed(() => (props.total ? (props.step / props.total) * 100 :
       <span class="load-progress-spinner"></span>
       <span class="load-progress-label">{{ label }}</span>
       <div class="load-progress-bar">
-        <div
-          v-if="determinate"
-          class="load-progress-fill"
-          :style="{ width: percent + '%' }"
-        ></div>
+        <div v-if="determinate" class="load-progress-fill" :style="{ width: percent + '%' }"></div>
         <div v-else class="load-progress-indet"></div>
       </div>
       <span v-if="determinate" class="load-progress-text">{{ step }} / {{ total }}</span>
@@ -114,6 +110,7 @@ const percent = computed(() => (props.total ? (props.step / props.total) * 100 :
   from {
     transform: translateX(-100%);
   }
+
   to {
     transform: translateX(300%);
   }

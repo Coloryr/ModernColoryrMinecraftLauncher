@@ -31,29 +31,13 @@ watch(
 
 <template>
   <span class="async-img">
-    <img
-      v-if="!failed"
-      :src="src"
-      :alt="alt ?? ''"
-      v-tip="title"
-      loading="lazy"
-      :class="{ show: loaded }"
-      @load="loaded = true"
-      @error="failed = true; emit('error')"
-    />
+    <img v-if="!failed" :src="src" :alt="alt ?? ''" v-tip="title" loading="lazy" :class="{ show: loaded }"
+      @load="loaded = true" @error="failed = true; emit('error')" />
     <span v-if="!loaded && !failed" class="async-shimmer"></span>
     <!-- 加载失败：换成"灰底 + 图片图标"的占位，别留破图图标 -->
     <span v-else-if="failed" class="async-fail" aria-hidden="true">
-      <svg
-        viewBox="0 0 24 24"
-        width="22"
-        height="22"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="1.6"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      >
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.6"
+        stroke-linecap="round" stroke-linejoin="round">
         <rect x="3" y="3" width="18" height="18" rx="3" />
         <circle cx="8.5" cy="9" r="1.5" />
         <path d="m21 15-5-5L5 21" />

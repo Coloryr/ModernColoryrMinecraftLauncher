@@ -10,11 +10,7 @@ defineProps<{ instance: ResourceInstance | null }>();
 </script>
 
 <template>
-  <span
-    v-if="instance"
-    class="inst-chip"
-    :title="`${instance.name} · ${instance.version}`"
-  >
+  <span v-if="instance" class="inst-chip" :title="`${instance.name} · ${instance.version}`">
     <span class="inst-chip-name">{{ instance.name }}</span>
     <span class="inst-chip-ver">{{ instance.version }}</span>
   </span>

@@ -107,10 +107,7 @@ mod tests {
         // META-INF 根下的文件被提取
         assert_eq!(fs::read(native.join("lwjgl.dll")).unwrap(), b"native-data");
         // 子目录文件被展平提取（只保留文件名）
-        assert_eq!(
-            fs::read(native.join("liblwjgl.so")).unwrap(),
-            b"so-data"
-        );
+        assert_eq!(fs::read(native.join("liblwjgl.so")).unwrap(), b"so-data");
         // 非 META-INF 文件不提取
         assert!(!native.join("Main.class").exists());
         assert!(!native.join("net").exists());

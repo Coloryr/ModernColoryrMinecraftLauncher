@@ -38,57 +38,30 @@ function onChevronClick(node: FileNode) {
     <div v-for="node in nodes" :key="node.key" class="ftree-node">
       <div class="ftree-row">
         <!-- 展开 / 收起 -->
-        <span
-          v-if="node.isDir"
-          class="ftree-chevron"
-          :class="{ open: expanded.has(node.key) }"
-          @click="onChevronClick(node)"
-        >
-          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <span v-if="node.isDir" class="ftree-chevron" :class="{ open: expanded.has(node.key) }"
+          @click="onChevronClick(node)">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
             <path d="m6 9 6 6 6-6" />
           </svg>
         </span>
         <span v-else class="ftree-chevron"></span>
 
         <!-- 勾选 -->
-        <input
-          type="checkbox"
-          :checked="node.isDir ? dirState(node, checked) === 'on' : checked.has(node.key)"
-          :indeterminate="node.isDir && dirState(node, checked) === 'ind'"
-          @change="
+        <input type="checkbox" :checked="node.isDir ? dirState(node, checked) === 'on' : checked.has(node.key)"
+          :indeterminate="node.isDir && dirState(node, checked) === 'ind'" @change="
             node.isDir
               ? emit('toggle-dir', node, ($event.target as HTMLInputElement).checked)
               : emit('toggle-file', node.key)
-          "
-        />
+            " />
 
         <!-- 图标 -->
-        <svg
-          v-if="node.isDir"
-          viewBox="0 0 24 24"
-          width="14"
-          height="14"
-          fill="none"
-          stroke="#f5b944"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          class="ftree-ico"
-        >
+        <svg v-if="node.isDir" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#f5b944" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round" class="ftree-ico">
           <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />
         </svg>
-        <svg
-          v-else
-          viewBox="0 0 24 24"
-          width="14"
-          height="14"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          class="ftree-ico"
-        >
+        <svg v-else viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round" class="ftree-ico">
           <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6z" />
           <path d="M14 2v6h6" />
         </svg>
@@ -98,15 +71,10 @@ function onChevronClick(node: FileNode) {
 
       <!-- 子节点（有内容才渲染，避免空白） -->
       <div v-if="node.isDir && expanded.has(node.key) && node.children.length > 0" class="ftree-children">
-        <FileTree
-          :nodes="node.children"
-          :checked="checked"
-          :expanded="expanded"
+        <FileTree :nodes="node.children" :checked="checked" :expanded="expanded"
           @toggle-file="emit('toggle-file', $event)"
           @toggle-dir="(n: FileNode, on: boolean) => emit('toggle-dir', n, on)"
-          @toggle-expand="emit('toggle-expand', $event)"
-          @lazy-load="emit('lazy-load', $event)"
-        />
+          @toggle-expand="emit('toggle-expand', $event)" @lazy-load="emit('lazy-load', $event)" />
       </div>
     </div>
   </div>

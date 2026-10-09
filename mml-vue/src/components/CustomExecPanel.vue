@@ -16,41 +16,21 @@ function update(patch: Partial<InstanceArgsDto>) {
   <div class="exec-panel">
     <div class="exec-row">
       <span class="exec-label">{{ t("exec.pre") }}</span>
-      <input
-        type="checkbox"
-        class="exec-chk"
-        :checked="args.preEnabled"
-        @change="update({ preEnabled: ($event.target as HTMLInputElement).checked })"
-      />
+      <input type="checkbox" class="exec-chk" :checked="args.preEnabled"
+        @change="update({ preEnabled: ($event.target as HTMLInputElement).checked })" />
     </div>
-    <textarea
-      class="exec-text"
-      rows="2"
-      :value="args.preCmd"
-      :disabled="!args.preEnabled"
-      :placeholder="t('exec.preContent')"
-      spellcheck="false"
-      @input="update({ preCmd: ($event.target as HTMLTextAreaElement).value })"
-    ></textarea>
+    <textarea class="exec-text" rows="2" :value="args.preCmd" :disabled="!args.preEnabled"
+      :placeholder="t('exec.preContent')" spellcheck="false"
+      @input="update({ preCmd: ($event.target as HTMLTextAreaElement).value })"></textarea>
 
     <div class="exec-row">
       <span class="exec-label">{{ t("exec.post") }}</span>
-      <input
-        type="checkbox"
-        class="exec-chk"
-        :checked="args.postEnabled"
-        @change="update({ postEnabled: ($event.target as HTMLInputElement).checked })"
-      />
+      <input type="checkbox" class="exec-chk" :checked="args.postEnabled"
+        @change="update({ postEnabled: ($event.target as HTMLInputElement).checked })" />
     </div>
-    <textarea
-      class="exec-text"
-      rows="2"
-      :value="args.postCmd"
-      :disabled="!args.postEnabled"
-      :placeholder="t('exec.postContent')"
-      spellcheck="false"
-      @input="update({ postCmd: ($event.target as HTMLTextAreaElement).value })"
-    ></textarea>
+    <textarea class="exec-text" rows="2" :value="args.postCmd" :disabled="!args.postEnabled"
+      :placeholder="t('exec.postContent')" spellcheck="false"
+      @input="update({ postCmd: ($event.target as HTMLTextAreaElement).value })"></textarea>
   </div>
 </template>
 

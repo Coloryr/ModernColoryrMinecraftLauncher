@@ -5,6 +5,7 @@
 //!   （download-task / download-item），同时维护线程状态表（当前文件、状态、速度采样）
 //! - `download_get_status` 查询任务 + 线程 + 总体速度快照（前端按固定间隔轮询）
 //! - `download_pause_all` / `download_resume_all` / `download_cancel_all` 全局控制下载
+//!
 //! 窗口本身由 `windows`（`create_window`）统一创建。
 
 use std::{

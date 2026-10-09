@@ -83,37 +83,14 @@ onUnmounted(() => {
 
 <template>
   <div class="window-controls" :class="style" data-no-drag>
-    <button
-      v-for="btn in buttons"
-      :key="btn.id"
-      class="wc-btn"
-      :class="btn.id"
-      v-tip="btn.label()"
-      @click="btn.run()"
-    >
-      <svg
-        v-if="btn.id === 'minimize'"
-        viewBox="0 0 12 12"
-        width="12"
-        height="12"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="1.1"
-        stroke-linecap="round"
-      >
+    <button v-for="btn in buttons" :key="btn.id" class="wc-btn" :class="btn.id" v-tip="btn.label()" @click="btn.run()">
+      <svg v-if="btn.id === 'minimize'" viewBox="0 0 12 12" width="12" height="12" fill="none" stroke="currentColor"
+        stroke-width="1.1" stroke-linecap="round">
         <path d="M2.5 6h7" />
       </svg>
 
-      <svg
-        v-else-if="btn.id === 'maximize'"
-        viewBox="0 0 12 12"
-        width="12"
-        height="12"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="1.1"
-        stroke-linejoin="round"
-      >
+      <svg v-else-if="btn.id === 'maximize'" viewBox="0 0 12 12" width="12" height="12" fill="none"
+        stroke="currentColor" stroke-width="1.1" stroke-linejoin="round">
         <rect v-if="!maximized" x="2.5" y="2.5" width="7" height="7" rx="1" />
         <template v-else>
           <rect x="2" y="4" width="6" height="6" rx="1" />
@@ -121,16 +98,8 @@ onUnmounted(() => {
         </template>
       </svg>
 
-      <svg
-        v-else
-        viewBox="0 0 12 12"
-        width="12"
-        height="12"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="1.1"
-        stroke-linecap="round"
-      >
+      <svg v-else viewBox="0 0 12 12" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.1"
+        stroke-linecap="round">
         <path d="m3 3 6 6M9 3l-6 6" />
       </svg>
     </button>

@@ -21,13 +21,8 @@ const subPercent = computed(() =>
     <div class="install-progress">
       <div class="install-state">{{ t(`add.packState.${progress.state}`) }}</div>
 
-      <div
-        class="progress-track"
-        role="progressbar"
-        aria-valuemin="0"
-        :aria-valuemax="progress.total || 1"
-        :aria-valuenow="progress.now"
-      >
+      <div class="progress-track" role="progressbar" aria-valuemin="0" :aria-valuemax="progress.total || 1"
+        :aria-valuenow="progress.now">
         <div class="progress-fill" :style="{ width: percent + '%' }" />
       </div>
       <div v-if="progress.total" class="install-num">{{ progress.now }} / {{ progress.total }}</div>

@@ -18,16 +18,8 @@ const emit = defineEmits<{ (e: "pick", id: string): void }>();
 
 <template>
   <aside class="cat-rail" role="tablist" aria-orientation="vertical">
-    <button
-      v-for="c in items"
-      :key="c.id || '__all'"
-      type="button"
-      role="tab"
-      class="cat-item"
-      :class="{ on: active === c.id }"
-      :aria-selected="active === c.id"
-      @click="emit('pick', c.id)"
-    >
+    <button v-for="c in items" :key="c.id || '__all'" type="button" role="tab" class="cat-item"
+      :class="{ on: active === c.id }" :aria-selected="active === c.id" @click="emit('pick', c.id)">
       <span class="cat-name">{{ c.label }}</span>
       <span class="cat-num">{{ c.count }}</span>
     </button>
@@ -42,7 +34,8 @@ const emit = defineEmits<{ (e: "pick", id: string): void }>();
   flex-direction: column;
   gap: 2px;
   overflow-y: auto;
-  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
+  scrollbar-gutter: stable;
+  /* 见 styles/scrollbar.css */
   /* 上下留白跟着窗口内容区的原内边距（22px）走，且放进滚动内容里：
      空档只在滚到两端时出现，分类栏的滚动条轨道保持整条 */
   padding: 22px 2px 22px 0;

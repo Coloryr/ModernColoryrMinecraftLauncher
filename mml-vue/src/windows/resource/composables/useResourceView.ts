@@ -87,7 +87,7 @@ export function useResourceView(data: ReturnType<typeof useResourceData>) {
       modView: modView.value,
     };
     // 失败只提示、不回滚：偏好记不住不该打断使用
-    void setResourceView(uuid, value.order, value.category, value.modView).catch(() => {});
+    void setResourceView(uuid, value.order, value.category, value.modView).catch(() => { });
   }
 
   /** 读该实例的偏好（进入资源窗口 / 切换实例时调用） */

@@ -119,17 +119,8 @@ watch(
 
 <template>
   <div class="inst-icon" :class="{ 'has-icon': loaded }" :style="iconStyle">
-    <img
-      v-if="url && !failed"
-      class="inst-icon-img"
-      :src="url"
-      alt=""
-      loading="lazy"
-      decoding="async"
-      data-no-fallback
-      @load="onLoad"
-      @error="onError"
-    />
+    <img v-if="url && !failed" class="inst-icon-img" :src="url" alt="" loading="lazy" decoding="async" data-no-fallback
+      @load="onLoad" @error="onError" />
     <!-- 字母只是回退：真图加载成功后必须移除，透明处不会再透出占位 -->
     <span v-if="!loaded" class="inst-icon-char">{{ char }}</span>
   </div>

@@ -152,7 +152,8 @@ async fn load_blocks_impl(gui: gui_hook::ProgressGui, force: bool) -> CoreResult
         later: LaterRun::None,
     };
     if !item.check_hash()
-        && !mml_downloader::start_download_task_cancellable(vec![item.clone()], cancel.clone()).await
+        && !mml_downloader::start_download_task_cancellable(vec![item.clone()], cancel.clone())
+            .await
     {
         return Err(cancel_or(ErrorType::DownloadFileFail, &cancel));
     }
@@ -341,10 +342,9 @@ pub fn get_block_path_form(id: &str, form: SpecialForm) -> Option<PathBuf> {
     }
     let base = id.strip_prefix("minecraft:").unwrap_or(id);
     Some(
-        BLOCK_DIR.get()?.join(format!(
-            "minecraft_{base}_{}.png",
-            form.suffix()
-        )),
+        BLOCK_DIR
+            .get()?
+            .join(format!("minecraft_{base}_{}.png", form.suffix())),
     )
 }
 
@@ -377,9 +377,9 @@ pub(crate) fn extract_langs(
         let Ok(buf) = String::from_utf8(data) else {
             continue;
         };
-        let Ok(lang) = serialize_tools::json_from_str::<
-            std::collections::HashMap<String, String>,
-        >(&buf) else {
+        let Ok(lang) =
+            serialize_tools::json_from_str::<std::collections::HashMap<String, String>>(&buf)
+        else {
             continue;
         };
         // 方块/物品ID → 语言键：block.minecraft.stone / item.minecraft.apple → minecraft:stone / minecraft:apple
@@ -396,7 +396,10 @@ pub(crate) fn extract_langs(
         }
         return (block_map, item_map);
     }
-    (std::collections::HashMap::new(), std::collections::HashMap::new())
+    (
+        std::collections::HashMap::new(),
+        std::collections::HashMap::new(),
+    )
 }
 
 /// 需要从资源索引补下的语言文件
@@ -517,6 +520,14 @@ pub fn blocks() -> Vec<String> {
 /// 方块数据的渲染版本（未渲染过为空串）
 pub fn block_version() -> String {
     BLOCKS.read().unwrap().id.clone()
+}
+
+/// 是否已有渲染结果（方块或物品任一非空）
+///
+/// 给"只想知道有没有渲染过"的调用方用：[`blocks`] / [`items`] 都是**整表克隆**，
+/// 拿它们判空等于每次白拷两份全表（mml-gui 的方块状态快照就在每个进度回调里调）。
+pub fn has_rendered() -> bool {
+    !BLOCKS.read().unwrap().tex.is_empty() || !ITEMS.read().unwrap().tex.is_empty()
 }
 
 /// 方块ID → 语言键（block.minecraft.stone 之类，翻译经 `get_lang`）

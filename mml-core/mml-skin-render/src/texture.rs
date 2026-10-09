@@ -220,7 +220,14 @@ mod tests {
         assert_ne!(new.left_arm, slim.left_arm);
 
         // 每个部件都应有完整的 24 个顶点 x 2 的 UV 数据
-        for part in [&new.head, &new.body, &new.left_arm, &new.right_arm, &new.left_leg, &new.right_leg] {
+        for part in [
+            &new.head,
+            &new.body,
+            &new.left_arm,
+            &new.right_arm,
+            &new.left_leg,
+            &new.right_leg,
+        ] {
             assert_eq!(part.len(), 48);
         }
     }

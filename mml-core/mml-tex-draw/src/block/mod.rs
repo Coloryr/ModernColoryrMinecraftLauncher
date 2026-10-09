@@ -15,7 +15,10 @@ use std::{
     cell::RefCell,
     collections::HashMap,
     io::Cursor,
-    sync::{LazyLock, atomic::{AtomicU64, AtomicUsize, Ordering}},
+    sync::{
+        LazyLock,
+        atomic::{AtomicU64, AtomicUsize, Ordering},
+    },
 };
 
 use crate::block::icons::{BLOCK_ICONS, IconSpec};
@@ -24,9 +27,9 @@ use crate::model::{BakedModel, Quad, bake_model};
 
 use mml_base::{archives::BaseArchive, serialize_tools};
 use mml_game::gui_hook::ProgressGui;
-use rayon::prelude::*;
 use mml_names::i18_items::error_type::{CoreResult, ErrorType};
 use mml_sys::path_helper;
+use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use tiny_skia::Pixmap;
 
@@ -137,12 +140,15 @@ impl AnimTimeline {
             .collect::<Option<Vec<_>>>()?;
         let frametime = meta.frametime.max(1);
         // frames列表优先（帧号越界取模兼容）；缺省按0..n顺序、每帧frametime刻
-        let entries = meta.frames.as_ref().map(|list| {
-            list.iter()
-                .map(|f| (f.index % src.len() as u32, f.time.max(1)))
-                .collect::<Vec<_>>()
-        })
-        .unwrap_or_else(|| (0..src.len() as u32).map(|i| (i, frametime)).collect());
+        let entries = meta
+            .frames
+            .as_ref()
+            .map(|list| {
+                list.iter()
+                    .map(|f| (f.index % src.len() as u32, f.time.max(1)))
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_else(|| (0..src.len() as u32).map(|i| (i, frametime)).collect());
         Some(Self {
             src,
             entries,
@@ -275,7 +281,6 @@ fn encode_apng(size: u32, frames: Vec<(Vec<u8>, u16)>) -> Option<Vec<u8>> {
     Some(cursor.into_inner())
 }
 
-
 /// textures表的值：老版为字符串，新版可为对象（如glass的force_translucent）
 /// （公开供手动测试调试单个方块用）
 #[derive(Serialize, Deserialize)]
@@ -376,26 +381,19 @@ fn push_head_cube(quads: &mut Vec<Quad>, tex: &Pixmap, path: &str, tex_off: [f32
 
     // (顶点, 模型空间法线, uv矩形[left,top,right,bottom])，面顺序同 ModelPart.Cube
     let faces: [([[f32; 3]; 4], [f32; 3], [f32; 4]); 6] = [
-        ([l1, l0, t0, t1], [0.0, -1.0, 0.0], [u1, v, u2, v1]),  // 底
-        ([t2, t3, l3, l2], [0.0, 1.0, 0.0], [u2, v1, u3, v]),   // 顶（矩形上下颠倒）
-        ([t0, l0, l3, t3], [-1.0, 0.0, 0.0], [u, v1, u1, v2]),  // 西
+        ([l1, l0, t0, t1], [0.0, -1.0, 0.0], [u1, v, u2, v1]), // 底
+        ([t2, t3, l3, l2], [0.0, 1.0, 0.0], [u2, v1, u3, v]),  // 顶（矩形上下颠倒）
+        ([t0, l0, l3, t3], [-1.0, 0.0, 0.0], [u, v1, u1, v2]), // 西
         ([t1, t0, t3, t2], [0.0, 0.0, -1.0], [u1, v1, u2, v2]), // 北
-        ([l1, t1, t2, l2], [1.0, 0.0, 0.0], [u2, v1, u3, v2]),  // 东
-        ([l0, l1, l2, l3], [0.0, 0.0, 1.0], [u3, v1, u4, v2]),  // 南
+        ([l1, t1, t2, l2], [1.0, 0.0, 0.0], [u2, v1, u3, v2]), // 东
+        ([l0, l1, l2, l3], [0.0, 0.0, 1.0], [u3, v1, u4, v2]), // 南
     ];
 
     for (verts, normal, rect) in faces {
         let (left, top, right, bottom) = (rect[0], rect[1], rect[2], rect[3]);
         // 顶点i的uv角（照 Polygon 构造： [0]→(right,top) [1]→(left,top) [2]→(left,bottom) [3]→(right,bottom)）
-        let corners = [
-            [right, top],
-            [left, top],
-            [left, bottom],
-            [right, bottom],
-        ];
-        let pos = verts.map(|p| {
-            [p[0] / 16.0 + 0.5, -p[1] / 16.0, -p[2] / 16.0 + 0.5]
-        });
+        let corners = [[right, top], [left, top], [left, bottom], [right, bottom]];
+        let pos = verts.map(|p| [p[0] / 16.0 + 0.5, -p[1] / 16.0, -p[2] / 16.0 + 0.5]);
         let uv = corners.map(|c| [c[0] / tw, c[1] / th]);
         let uv_rect = [
             left.min(right) / tw,
@@ -618,7 +616,10 @@ pub(crate) fn render_baked(
     // 渲染上传用首帧（quad 的 uv 是单帧空间）
     use_first_frame(&mut textures);
     if timelines.is_empty() {
-        return encode_png(BLOCK_SIZE as u32, &render_once(gpu, &model, &textures, glint)?);
+        return encode_png(
+            BLOCK_SIZE as u32,
+            &render_once(gpu, &model, &textures, glint)?,
+        );
     }
 
     // 最多渲染MAX_APNG_FRAMES帧，对逐刻时间线等距采样，
@@ -819,7 +820,7 @@ pub fn render_blocks(archive: &BaseArchive, gui: ProgressGui) -> CoreResult<()> 
                     // Form形态：只出图不注册（ID非真实方块名，不进blocks()列表）
                     out.filter(|_| !matches!(spec, IconSpec::Form(..)))
                         .map(|(id, out_name)| (id, out_name, *cat))
-                        })
+                })
             })
         })
         .collect();
@@ -946,7 +947,6 @@ pub(crate) fn mml_tex_draw_id() -> String {
     crate::blocks_read().id.clone()
 }
 
-
 #[cfg(test)]
 mod icon_table_tests {
     use super::*;
@@ -991,16 +991,30 @@ mod icon_table_tests {
     /// 抽查关键行：渲染规格与分类应与游戏创造栏一致
     #[test]
     fn icon_table_spot_checks() {
-        let table: HashMap<&str, (&str, &IconSpec)> =
-            BLOCK_ICONS.iter().map(|(id, cat, spec)| (*id, (*cat, spec))).collect();
-        assert!(matches!(table["minecraft:stone"].1, IconSpec::Model("block/stone")));
+        let table: HashMap<&str, (&str, &IconSpec)> = BLOCK_ICONS
+            .iter()
+            .map(|(id, cat, spec)| (*id, (*cat, spec)))
+            .collect();
+        assert!(matches!(
+            table["minecraft:stone"].1,
+            IconSpec::Model("block/stone")
+        ));
         assert_eq!(table["minecraft:stone"].0, "buildingBlocks");
-        assert!(matches!(table["minecraft:white_bed"].1, IconSpec::Composite(_)));
+        assert!(matches!(
+            table["minecraft:white_bed"].1,
+            IconSpec::Composite(_)
+        ));
         // special实体渲染跳过
         assert!(matches!(table["minecraft:chest"].1, IconSpec::Skip));
         // 头颅走手工立方体几何（骷髅头单层、玩家头带帽子层）
-        assert!(matches!(table["minecraft:skeleton_skull"].1, IconSpec::Head(_, false)));
-        assert!(matches!(table["minecraft:player_head"].1, IconSpec::Head(_, true)));
+        assert!(matches!(
+            table["minecraft:skeleton_skull"].1,
+            IconSpec::Head(_, false)
+        ));
+        assert!(matches!(
+            table["minecraft:player_head"].1,
+            IconSpec::Head(_, true)
+        ));
         // 原木在游戏的建筑方块栏
         assert_eq!(table["minecraft:oak_log"].0, "buildingBlocks");
         assert_eq!(table["minecraft:grass_block"].0, "natural");
@@ -1010,11 +1024,23 @@ mod icon_table_tests {
     #[test]
     fn special_form_lookup() {
         assert_eq!(special_form("minecraft:furnace"), Some(SpecialForm::Lit));
-        assert_eq!(special_form("minecraft:redstone_lamp"), Some(SpecialForm::Lit));
-        assert_eq!(special_form("minecraft:oak_button"), Some(SpecialForm::Pressed));
-        assert_eq!(special_form("minecraft:oak_pressure_plate"), Some(SpecialForm::Down));
+        assert_eq!(
+            special_form("minecraft:redstone_lamp"),
+            Some(SpecialForm::Lit)
+        );
+        assert_eq!(
+            special_form("minecraft:oak_button"),
+            Some(SpecialForm::Pressed)
+        );
+        assert_eq!(
+            special_form("minecraft:oak_pressure_plate"),
+            Some(SpecialForm::Down)
+        );
         assert_eq!(special_form("minecraft:oak_door"), Some(SpecialForm::Open));
-        assert_eq!(special_form("minecraft:piston"), Some(SpecialForm::Extended));
+        assert_eq!(
+            special_form("minecraft:piston"),
+            Some(SpecialForm::Extended)
+        );
         assert_eq!(special_form("minecraft:vault"), Some(SpecialForm::Active));
         assert_eq!(special_form("minecraft:campfire"), Some(SpecialForm::Off));
         // 无特殊形态的方块
@@ -1045,10 +1071,12 @@ mod head_render_tests {
     #[test]
     #[ignore]
     fn head_render_smoke() {
-        let jar = std::env::var("MML_TEST_JAR").map(std::path::PathBuf::from).unwrap_or_else(|_| {
-            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .join("tests/out/tools/client-26.3.jar")
-        });
+        let jar = std::env::var("MML_TEST_JAR")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|_| {
+                std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                    .join("tests/out/tools/client-26.3.jar")
+            });
         assert!(jar.exists(), "客户端jar不存在：{}", jar.display());
 
         let archive = BaseArchive::open(&jar).unwrap();
@@ -1070,16 +1098,30 @@ mod head_render_tests {
             assert_eq!(model.quads.len(), if hat { 12 } else { 6 }, "{id} 面数不符");
 
             // 带帽子层的贴图必须是 humanoidHeadLayer 的 64×64（mobHeadLayer 是 64×32）
-            let tex_size = textures.values().map(|p| (p.width(), p.height())).next().unwrap();
-            assert_eq!(tex_size, if hat { (64, 64) } else { (64, 32) }, "{id} 贴图尺寸不符");
-            let rgba = gpu.render(&model, &textures, None, 256).expect("GPU渲染失败");
+            let tex_size = textures
+                .values()
+                .map(|p| (p.width(), p.height()))
+                .next()
+                .unwrap();
+            assert_eq!(
+                tex_size,
+                if hat { (64, 64) } else { (64, 32) },
+                "{id} 贴图尺寸不符"
+            );
+            let rgba = gpu
+                .render(&model, &textures, None, 256)
+                .expect("GPU渲染失败");
 
             let path = dir.join(format!("head_{id}.png"));
             let file = std::fs::File::create(&path).unwrap();
             let mut encoder = png::Encoder::new(file, 256, 256);
             encoder.set_color(png::ColorType::Rgba);
             encoder.set_depth(png::BitDepth::Eight);
-            encoder.write_header().unwrap().write_image_data(&rgba).unwrap();
+            encoder
+                .write_header()
+                .unwrap()
+                .write_image_data(&rgba)
+                .unwrap();
             println!("输出：{}", path.display());
         }
     }
@@ -1101,7 +1143,9 @@ mod head_render_tests {
         let model = bake_head_model(tex.clone(), true, "skin");
         assert_eq!(model.quads.len(), 12, "面数不符");
         let textures = HashMap::from([("skin".to_string(), tex)]);
-        let rgba = gpu.render(&model, &textures, None, 256).expect("GPU渲染失败");
+        let rgba = gpu
+            .render(&model, &textures, None, 256)
+            .expect("GPU渲染失败");
 
         let dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/out");
         std::fs::create_dir_all(&dir).unwrap();
@@ -1110,7 +1154,11 @@ mod head_render_tests {
         let mut encoder = png::Encoder::new(file, 256, 256);
         encoder.set_color(png::ColorType::Rgba);
         encoder.set_depth(png::BitDepth::Eight);
-        encoder.write_header().unwrap().write_image_data(&rgba).unwrap();
+        encoder
+            .write_header()
+            .unwrap()
+            .write_image_data(&rgba)
+            .unwrap();
         println!("输出：{}", path.display());
     }
 }

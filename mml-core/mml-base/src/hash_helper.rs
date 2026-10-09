@@ -6,9 +6,9 @@
 use std::{io::Read, path::Path};
 
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
+use md5::Md5;
 use mml_names::i18_items::error_type::{CoreResult, ErrorData, ErrorType};
 use mml_sys::path_helper;
-use md5::Md5;
 use sha1::Sha1;
 use sha2::{Sha256, Sha512};
 use tokio::io::{AsyncRead, AsyncReadExt};
@@ -258,7 +258,9 @@ mod tests {
         assert_eq!(hash, "900150983cd24fb0d6963f7d28e17f72");
 
         // 不存在的文件报错
-        assert!(gen_hash_from_file(HashType::Md5, file.parent().unwrap().join("no_such_file")).is_err());
+        assert!(
+            gen_hash_from_file(HashType::Md5, file.parent().unwrap().join("no_such_file")).is_err()
+        );
 
         cleanup(&file);
     }
@@ -266,7 +268,9 @@ mod tests {
     #[tokio::test]
     async fn test_gen_hash_from_file_async() {
         let file = temp_file("b.txt", b"abc");
-        let hash = gen_hash_from_file_async(HashType::Sha1, &file).await.unwrap();
+        let hash = gen_hash_from_file_async(HashType::Sha1, &file)
+            .await
+            .unwrap();
         assert_eq!(hash, "a9993e364706816aba3e25717850c26c9cd0d89d");
         cleanup(&file);
     }

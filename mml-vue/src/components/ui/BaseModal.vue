@@ -41,17 +41,10 @@ const active = usePageActive();
 
 <template>
   <Teleport to="body">
-    <div
-      v-if="active"
-      class="modal-mask"
-      :class="{ 'below-titlebar': props.belowTitlebar }"
-      @click.self="props.overlayClose && emit('close')"
-    >
-      <div
-        class="modal"
-        :class="{ 'fixed-h': !!props.fixedHeight }"
-        :style="{ width: width + 'px', height: props.fixedHeight || undefined }"
-      >
+    <div v-if="active" class="modal-mask" :class="{ 'below-titlebar': props.belowTitlebar }"
+      @click.self="props.overlayClose && emit('close')">
+      <div class="modal" :class="{ 'fixed-h': !!props.fixedHeight }"
+        :style="{ width: width + 'px', height: props.fixedHeight || undefined }">
         <div v-if="title" class="modal-head">
           <h3>{{ title }}</h3>
           <button v-if="closable" class="modal-x" @click="emit('close')">
@@ -86,7 +79,8 @@ const active = usePageActive();
   max-width: 92vw;
   max-height: 85vh;
   overflow-y: auto;
-  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
+  scrollbar-gutter: stable;
+  /* 见 styles/scrollbar.css */
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 14px;

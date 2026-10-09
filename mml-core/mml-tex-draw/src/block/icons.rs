@@ -4961,7 +4961,8 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         "minecraft:vault_active",
         "functional",
         IconSpec::Form(SpecialForm::Active, &IconSpec::Model("block/vault_active")),
-    ),    (
+    ),
+    (
         "minecraft:verdant_froglight",
         "natural",
         IconSpec::Model("block/verdant_froglight"),
@@ -5754,5 +5755,4 @@ pub const BLOCK_ICONS: &[(&str, &str, IconSpec)] = &[
         "coloredBlocks",
         IconSpec::Model("block/yellow_wool_stairs"),
     ),
-
 ];

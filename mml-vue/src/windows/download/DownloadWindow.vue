@@ -36,24 +36,24 @@ const shell = computed(() => (multiWindow.value ? WindowFrame : BaseModal));
 const shellProps = computed(() =>
   multiWindow.value
     ? {
-        title: t("features.download"),
-        // 本窗口整页就是下载管理，标题栏不用再放一个下载指示器（整合包那个照留）
-        hideDownloadIndicator: true,
-        // 多窗口模式下两段列表都没有自己的高度约束，滚的是内容区本身（见 styles/scrollbar.css）
-        bodyGutter: true,
-      }
+      title: t("features.download"),
+      // 本窗口整页就是下载管理，标题栏不用再放一个下载指示器（整合包那个照留）
+      hideDownloadIndicator: true,
+      // 多窗口模式下两段列表都没有自己的高度约束，滚的是内容区本身（见 styles/scrollbar.css）
+      bodyGutter: true,
+    }
     : {
-        title: t("features.download"),
-        // 线程行是固定列宽的网格（26 + 文件名 + 116 + 124 + 78 + 88，加间距与内边距约 612），
-        // 700 刚好还给文件名留一截；再窄就被压成省略号了（独立窗口最小宽是 670）
-        width: 700,
-        // 锁死高度：线程表每 700ms 都在增删行，不锁的话弹窗会跟着一直长高变矮
-        fixedHeight: "520px",
-        // 贴着自绘标题栏下沿，别盖住窗口按钮
-        belowTitlebar: true,
-        // 点遮罩不关：正在下载时误触一下就把任务面板关了很烦，关它有右上角的 ✕
-        overlayClose: false,
-      },
+      title: t("features.download"),
+      // 线程行是固定列宽的网格（26 + 文件名 + 116 + 124 + 78 + 88，加间距与内边距约 612），
+      // 700 刚好还给文件名留一截；再窄就被压成省略号了（独立窗口最小宽是 670）
+      width: 700,
+      // 锁死高度：线程表每 700ms 都在增删行，不锁的话弹窗会跟着一直长高变矮
+      fixedHeight: "520px",
+      // 贴着自绘标题栏下沿，别盖住窗口按钮
+      belowTitlebar: true,
+      // 点遮罩不关：正在下载时误触一下就把任务面板关了很烦，关它有右上角的 ✕
+      overlayClose: false,
+    },
 );
 
 const status = ref<DownloadStatusDto>({ tasks: [], threads: [], speed: 0, paused: false });
@@ -286,20 +286,10 @@ onUnmounted(() => {
           </span>
           <!-- 全局控制：暂停 / 继续 / 停止（作用于所有下载任务） -->
           <span class="ov-actions">
-            <button
-              v-if="!allPaused"
-              class="mini-btn"
-              :disabled="!hasTasks"
-              @click="pauseAll"
-            >
+            <button v-if="!allPaused" class="mini-btn" :disabled="!hasTasks" @click="pauseAll">
               {{ t("winDownload.pause") }}
             </button>
-            <button
-              v-else
-              class="mini-btn primary"
-              :disabled="!hasTasks"
-              @click="resumeAll"
-            >
+            <button v-else class="mini-btn primary" :disabled="!hasTasks" @click="resumeAll">
               {{ t("winDownload.resume") }}
             </button>
             <button class="mini-btn danger" :disabled="!hasTasks" @click="requestStop">
@@ -342,11 +332,8 @@ onUnmounted(() => {
             </div>
             <div class="task-foot">
               <span class="progress-track">
-                <span
-                  class="progress-fill"
-                  :class="{ failed: task.failed > 0, paused: task.paused }"
-                  :style="{ width: downloadTaskPercent(task) + '%' }"
-                />
+                <span class="progress-fill" :class="{ failed: task.failed > 0, paused: task.paused }"
+                  :style="{ width: downloadTaskPercent(task) + '%' }" />
               </span>
               <span class="task-percent">{{ downloadTaskPercent(task).toFixed(1) }}%</span>
             </div>
@@ -417,7 +404,8 @@ onUnmounted(() => {
 .download-body.fill .task-list {
   max-height: 168px;
   overflow-y: auto;
-  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
+  scrollbar-gutter: stable;
+  /* 见 styles/scrollbar.css */
 }
 
 /* 线程区：吃掉剩余高度，行数变化只影响它自己的滚动条 */
@@ -430,7 +418,8 @@ onUnmounted(() => {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
+  scrollbar-gutter: stable;
+  /* 见 styles/scrollbar.css */
 }
 
 /* ---------- 总览 ---------- */

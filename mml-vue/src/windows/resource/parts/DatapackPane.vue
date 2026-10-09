@@ -64,11 +64,7 @@ function formatLabel(item: DataPackItemDto): string {
     <template v-if="dpSave">
       <!-- 加载中用骨架行占位：与其它分类同一套（这里只换行，存档下拉要一直留着） -->
       <ListSkeleton v-if="loading" />
-      <ResourceRow
-        v-for="item in datapacks"
-        :key="item.name"
-        :name="name(item)"
-      >
+      <ResourceRow v-for="item in datapacks" :key="item.name" :name="name(item)">
         <template #badges>
           <span class="badge" :class="{ 'badge-red': item.enable === false }">
             {{ state(item) }}

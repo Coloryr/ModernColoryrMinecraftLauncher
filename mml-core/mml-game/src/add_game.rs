@@ -3,7 +3,9 @@
 use std::path::{Path, PathBuf};
 
 use mml_base::{
-    archives::{ArchiveEntryInfo, BaseArchive, BaseArchiveGui}, file_item::{FileHash, FileItemObj, LaterRun}, serialize_tools::{self, MiniJsonObj},
+    archives::{ArchiveEntryInfo, BaseArchive, BaseArchiveGui},
+    file_item::{FileHash, FileItemObj, LaterRun},
+    serialize_tools::{self, MiniJsonObj},
 };
 use mml_names::{
     i18,
@@ -380,9 +382,8 @@ async fn modpack<P: AsRef<Path>>(
     // 装了一半的实例，用户还得自己去删。所以把剩下的步骤收进一个块，统一收拾残局
     let res: CoreResult<()> = async {
         // 把新实例交给 worker（extract / get_info 都依赖 worker 里的 game）
-        let game = crate::get_instance(&uuid).ok_or_else(|| {
-            ErrorType::DataNotFound(DataNotFoundData::GameInstance)
-        })?;
+        let game = crate::get_instance(&uuid)
+            .ok_or_else(|| ErrorType::DataNotFound(DataNotFoundData::GameInstance))?;
         work.update_game(&game);
 
         if let Some(pack_gui) = &pack_gui {

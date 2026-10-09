@@ -10,12 +10,8 @@ const { saveTab } = props.data;
 </script>
 
 <template>
-  <SegmentedTabs
-    :model-value="saveTab"
-    :options="[
-      { value: 'saves', label: t('resource.saves') },
-      { value: 'datapacks', label: t('resource.datapacks') },
-    ]"
-    @update:model-value="saveTab = $event as SaveTab"
-  />
+  <SegmentedTabs :model-value="saveTab" :options="[
+    { value: 'saves', label: t('resource.saves') },
+    { value: 'datapacks', label: t('resource.datapacks') },
+  ]" @update:model-value="saveTab = $event as SaveTab" />
 </template>

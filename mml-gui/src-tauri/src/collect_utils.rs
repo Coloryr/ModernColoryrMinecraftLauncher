@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 /// 收藏项目
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 #[serde(default)]
 pub struct CollectItemObj {
     /// 收藏项 uuid（加载时由 `CollectObj::items` 的 key 回填，不落盘）
@@ -40,22 +40,8 @@ pub struct CollectItemObj {
     pub url: String,
 }
 
-impl Default for CollectItemObj {
-    fn default() -> Self {
-        Self {
-            uuid: Default::default(),
-            source: Default::default(),
-            file_type: Default::default(),
-            name: Default::default(),
-            pid: Default::default(),
-            icon: Default::default(),
-            url: Default::default(),
-        }
-    }
-}
-
 /// 资源收藏
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 #[serde(default)]
 pub struct CollectObj {
     /// 收藏项目列表
@@ -64,15 +50,6 @@ pub struct CollectObj {
     /// 收藏分组列表
     #[serde(rename = "Groups")]
     pub groups: HashMap<String, HashSet<String>>,
-}
-
-impl Default for CollectObj {
-    fn default() -> Self {
-        Self {
-            items: Default::default(),
-            groups: Default::default(),
-        }
-    }
 }
 
 /// 收藏文件路径（init 时设置）
@@ -318,5 +295,10 @@ pub fn set_group_items(group: &str, uuids: &[String]) {
 ///
 /// 已收藏返回 `true`
 pub fn is_star(pid: &str) -> bool {
-    COLLECT.read().unwrap().items.values().any(|item| item.pid == pid)
+    COLLECT
+        .read()
+        .unwrap()
+        .items
+        .values()
+        .any(|item| item.pid == pid)
 }

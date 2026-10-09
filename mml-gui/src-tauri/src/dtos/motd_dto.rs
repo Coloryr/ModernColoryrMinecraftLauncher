@@ -5,7 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use mml_game::game_motd::{chat_to_segments, ChatSegment, MotdState, ServerMotdObj};
+use mml_game::game_motd::{ChatSegment, MotdState, ServerMotdObj, chat_to_segments};
 
 /// 展平后的一段 MOTD 文字（color 为 #RRGGBB，前端直接上 style）
 #[derive(Debug, Clone, Serialize, Deserialize)]

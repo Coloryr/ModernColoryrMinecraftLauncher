@@ -1,0 +1,89 @@
+//! 添加资源窗口的元数据查询：下载源 / 资源分类 / 排序方式 / 游戏版本
+//!
+//! 都是"问内核要一份静态列表"的薄命令（游戏版本列表走内核缓存）。
+
+use std::collections::HashMap;
+
+use mml_game::launcher::{FileType, ModPackType};
+use mml_game::{curseforge, modrinth};
+use mml_net::curseforge_api::CurseForgeSortType;
+use mml_net::modrinth_api::ModrinthSortType;
+
+/// 获取下载源
+#[gui_macros::ipc_group("add_resource")]
+#[tauri::command]
+pub fn add_resource_source_type() -> Result<Vec<String>, String> {
+    Ok(vec![
+        ModPackType::Modrinth.to_string(),
+        ModPackType::CurseForge.to_string(),
+    ])
+}
+
+/// 获取分组
+#[gui_macros::ipc_group("add_resource")]
+#[tauri::command]
+pub async fn add_resource_categories(
+    source: String,
+    file_type: String,
+) -> Result<HashMap<String, String>, String> {
+    let source = ModPackType::from_string(&source);
+    let file_type = FileType::from_string(&file_type);
+    if file_type.is_none() {
+        return Err(String::from("err.fileTypeNotFound"));
+    }
+    let file_type = file_type.unwrap();
+
+    match source {
+        // CurseForge 的数据包走固定 categoryId，不支持再按分类过滤
+        ModPackType::CurseForge if file_type == FileType::DataPacks => Ok(HashMap::new()),
+        ModPackType::CurseForge => curseforge::get_categories(file_type)
+            .await
+            .map_err(|err| err.to_string()),
+        ModPackType::Modrinth => modrinth::get_categories(file_type)
+            .await
+            .map_err(|err| err.to_string()),
+        _ => Err(String::from("err.sourceType")),
+    }
+}
+
+/// 获取排序方式
+#[gui_macros::ipc_group("add_resource")]
+#[tauri::command]
+pub fn add_resource_sort_type(source: String) -> Result<Vec<String>, String> {
+    let source = ModPackType::from_string(&source);
+
+    match source {
+        ModPackType::CurseForge => Ok(vec![
+            CurseForgeSortType::Popularity.to_string(),
+            CurseForgeSortType::Featured.to_string(),
+            CurseForgeSortType::LastUpdated.to_string(),
+            CurseForgeSortType::Name.to_string(),
+            CurseForgeSortType::TotalDownloads.to_string(),
+        ]),
+        ModPackType::Modrinth => Ok(vec![
+            ModrinthSortType::Relevance.to_string(),
+            ModrinthSortType::Downloads.to_string(),
+            ModrinthSortType::Follows.to_string(),
+            ModrinthSortType::Newest.to_string(),
+            ModrinthSortType::Updated.to_string(),
+        ]),
+        _ => Err(String::from("err.sourceType")),
+    }
+}
+
+/// 获取支持的游戏版本列表
+#[gui_macros::ipc_group("add_resource")]
+#[tauri::command]
+pub async fn add_resource_game_versions(source: String) -> Result<Vec<String>, String> {
+    let source = ModPackType::from_string(&source);
+
+    match source {
+        ModPackType::CurseForge => curseforge::get_game_versions()
+            .await
+            .map_err(|err| err.to_string()),
+        ModPackType::Modrinth => modrinth::get_game_versions()
+            .await
+            .map_err(|err| err.to_string()),
+        _ => Err("err.sourceType".to_string()),
+    }
+}

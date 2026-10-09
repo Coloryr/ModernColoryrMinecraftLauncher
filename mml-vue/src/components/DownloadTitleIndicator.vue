@@ -87,25 +87,11 @@ onUnmounted(() => {
 
 <template>
   <!-- 没有任务时整个入口不存在（任务全部结束后后端会清表，它自己就消失了） -->
-  <button
-    v-if="count > 0"
-    class="dl-indicator"
-    :class="iconState"
-    v-tip="tipText"
-    :aria-label="t('features.download')"
-    @click="openWindow('download')"
-  >
+  <button v-if="count > 0" class="dl-indicator" :class="iconState" v-tip="tipText" :aria-label="t('features.download')"
+    @click="openWindow('download')">
     <span class="dl-ind-icon">
-      <svg
-        viewBox="0 0 24 24"
-        width="17"
-        height="17"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="1.9"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      >
+      <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9"
+        stroke-linecap="round" stroke-linejoin="round">
         <path d="M12 3v12" />
         <path d="m7 12 5 5 5-5" />
         <path d="M4 21h16" />

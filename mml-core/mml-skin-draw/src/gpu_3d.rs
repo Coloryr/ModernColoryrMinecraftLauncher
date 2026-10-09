@@ -35,8 +35,16 @@ pub(crate) fn face_verts(
     tex_w: f32,
     tex_h: f32,
 ) -> [Vert; 6] {
-    let (tx, ty, tw, th) = (rect[0] as f32, rect[1] as f32, rect[2] as f32, rect[3] as f32);
-    let mut out = [Vert { pos: [0.0; 3], uv: [0.0; 2] }; 6];
+    let (tx, ty, tw, th) = (
+        rect[0] as f32,
+        rect[1] as f32,
+        rect[2] as f32,
+        rect[3] as f32,
+    );
+    let mut out = [Vert {
+        pos: [0.0; 3],
+        uv: [0.0; 2],
+    }; 6];
     for (i, &ci) in [0usize, 1, 2, 0, 2, 3].iter().enumerate() {
         let (pos, uv) = corners[ci];
         out[i] = Vert {
@@ -53,10 +61,22 @@ pub(crate) fn face_verts(
 pub(crate) fn ortho(width: u32, height: u32) -> Mat4 {
     let (w, h) = (width as f32, height as f32);
     Mat4::from_cols_array(&[
-        2.0 / w, 0.0, 0.0, 0.0,
-        0.0, -2.0 / h, 0.0, 0.0,
-        0.0, 0.0, -1.0 / 1000.0, 0.0,
-        -1.0, 1.0, 0.5, 1.0,
+        2.0 / w,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        -2.0 / h,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        -1.0 / 1000.0,
+        0.0,
+        -1.0,
+        1.0,
+        0.5,
+        1.0,
     ])
 }
 
@@ -295,8 +315,12 @@ pub(crate) fn render_3d(
 
     // 离屏渲染：先底层（写深度），后顶层（混合、只读深度）
     let target = mml_gpu::offscreen_target(device, w, h);
-    let color_view = target.color.create_view(&wgpu::TextureViewDescriptor::default());
-    let depth_view = target.depth.create_view(&wgpu::TextureViewDescriptor::default());
+    let color_view = target
+        .color
+        .create_view(&wgpu::TextureViewDescriptor::default());
+    let depth_view = target
+        .depth
+        .create_view(&wgpu::TextureViewDescriptor::default());
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
         label: Some("mml-skin-3d"),
     });

@@ -40,30 +40,12 @@ function pick(name: string) {
 
 <template>
   <div class="group-combo">
-    <input
-      :value="modelValue"
-      class="field-input"
-      :placeholder="t('add.groupPlaceholder')"
-      spellcheck="false"
-      autocomplete="off"
-      role="combobox"
-      aria-autocomplete="list"
-      :aria-expanded="open"
-      @input="onInput"
-      @focus="emit('update:open', true)"
-      @blur="emit('update:open', false)"
-    />
+    <input :value="modelValue" class="field-input" :placeholder="t('add.groupPlaceholder')" spellcheck="false"
+      autocomplete="off" role="combobox" aria-autocomplete="list" :aria-expanded="open" @input="onInput"
+      @focus="emit('update:open', true)" @blur="emit('update:open', false)" />
     <div v-if="open" class="group-drop" role="listbox">
-      <button
-        v-for="g in matched"
-        :key="g.uuid"
-        type="button"
-        class="group-opt"
-        role="option"
-        :aria-selected="modelValue === g.name"
-        @mousedown.prevent
-        @click="pick(g.name)"
-      >
+      <button v-for="g in matched" :key="g.uuid" type="button" class="group-opt" role="option"
+        :aria-selected="modelValue === g.name" @mousedown.prevent @click="pick(g.name)">
         {{ g.name }}
       </button>
       <div v-if="!matched.length" class="empty-tip">{{ t("add.groupNone") }}</div>
@@ -84,7 +66,8 @@ function pick(name: string) {
   z-index: 20;
   max-height: 180px;
   overflow-y: auto;
-  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
+  scrollbar-gutter: stable;
+  /* 见 styles/scrollbar.css */
   padding: 4px;
   background: var(--bg-card);
   border: 1px solid var(--border);

@@ -330,10 +330,7 @@ async fn modrinth(game: &InstanceSettingObj, arg: ExportArg) -> CoreResult<()> {
                 downloads: vec![item.url],
                 file_size: item.size as u64,
                 project: Some(MmlProjectSaveObj {
-                    source_type: launcher::get_source_type(
-                        &info.modid,
-                        &info.fileid,
-                    ),
+                    source_type: launcher::get_source_type(&info.modid, &info.fileid),
                     pid: info.modid.clone(),
                     fid: info.fileid.clone(),
                 }),

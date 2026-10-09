@@ -126,10 +126,7 @@ fn read_request_head(stream: &mut TcpStream) {
             Ok(n) => {
                 total += n;
                 // HTTP 头以空行（\r\n\r\n）结束
-                if let Some(pos) = buf[..total]
-                    .windows(4)
-                    .position(|w| w == b"\r\n\r\n")
-                {
+                if let Some(pos) = buf[..total].windows(4).position(|w| w == b"\r\n\r\n") {
                     let _ = pos;
                     break;
                 }

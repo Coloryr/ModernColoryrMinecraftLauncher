@@ -12,9 +12,7 @@ use std::{
     },
 };
 
-use mml_names::{
-    i18_items::error_type::{CoreResult, ErrorData, ErrorType, FileSystemErrorData},
-};
+use mml_names::i18_items::error_type::{CoreResult, ErrorData, ErrorType, FileSystemErrorData};
 use mml_sys::path_helper;
 use uuid::Uuid;
 

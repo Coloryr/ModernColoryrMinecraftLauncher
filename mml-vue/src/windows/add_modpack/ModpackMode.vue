@@ -604,60 +604,42 @@ watch(source, loadSource);
   <div class="modpack-mode">
     <!-- 过滤条件 + 搜索：同一块白底卡片。加载期间整条锁死，避免半途改条件与在途请求打架 -->
     <div class="modpack-top">
-    <div class="modpack-filters">
-      <SegmentedTabs v-model="source" :options="sources" :disabled="searching" />
-      <select v-model="version" class="field-select sel-version" :disabled="searching" @change="submitSearch">
-        <option value="">{{ t("modpack.allVersions") }}</option>
-        <option v-for="v in versions" :key="v" :value="v">{{ v }}</option>
-      </select>
-      <select v-model="sort" class="field-select sel-sort" :disabled="searching" @change="submitSearch">
-        <option v-for="s in sorts" :key="s" :value="s">{{ t(`modpack.sort.${s}`) }}</option>
-      </select>
-      <select v-model="category" class="field-select sel-category" :disabled="searching" @change="submitSearch">
-        <option value="">{{ t("modpack.allCategories") }}</option>
-        <option v-for="c in categories" :key="c.value" :value="c.value">{{ c.label }}</option>
-      </select>
-      <div class="group-combo sel-group">
-        <input
-          :value="props.group"
-          class="field-input"
-          :placeholder="t('modpack.groupPlaceholder')"
-          spellcheck="false"
-          :disabled="searching"
-          @focus="groupOpen = true"
-          @input="onGroupInput"
-          @blur="groupOpen = false"
-        />
-        <div v-if="groupOpen" class="group-drop">
-          <button
-            v-for="g in groupQuery"
-            :key="g.uuid"
-            class="group-opt"
-            @mousedown.prevent
-            @click="pickGroup(g.name)"
-          >
-            {{ g.name }}
-          </button>
-          <div v-if="!groupQuery.length" class="empty-tip">{{ t("add.groupNone") }}</div>
+      <div class="modpack-filters">
+        <SegmentedTabs v-model="source" :options="sources" :disabled="searching" />
+        <select v-model="version" class="field-select sel-version" :disabled="searching" @change="submitSearch">
+          <option value="">{{ t("modpack.allVersions") }}</option>
+          <option v-for="v in versions" :key="v" :value="v">{{ v }}</option>
+        </select>
+        <select v-model="sort" class="field-select sel-sort" :disabled="searching" @change="submitSearch">
+          <option v-for="s in sorts" :key="s" :value="s">{{ t(`modpack.sort.${s}`) }}</option>
+        </select>
+        <select v-model="category" class="field-select sel-category" :disabled="searching" @change="submitSearch">
+          <option value="">{{ t("modpack.allCategories") }}</option>
+          <option v-for="c in categories" :key="c.value" :value="c.value">{{ c.label }}</option>
+        </select>
+        <div class="group-combo sel-group">
+          <input :value="props.group" class="field-input" :placeholder="t('modpack.groupPlaceholder')"
+            spellcheck="false" :disabled="searching" @focus="groupOpen = true" @input="onGroupInput"
+            @blur="groupOpen = false" />
+          <div v-if="groupOpen" class="group-drop">
+            <button v-for="g in groupQuery" :key="g.uuid" class="group-opt" @mousedown.prevent
+              @click="pickGroup(g.name)">
+              {{ g.name }}
+            </button>
+            <div v-if="!groupQuery.length" class="empty-tip">{{ t("add.groupNone") }}</div>
+          </div>
         </div>
       </div>
-    </div>
 
-    <!-- 搜索 -->
-    <div class="modpack-search">
-      <input
-        v-model="filter"
-        class="field-input search-input"
-        :placeholder="t('modpack.searchHint')"
-        spellcheck="false"
-        :disabled="searching"
-        @keydown.enter="submitSearch"
-      />
-      <button class="search-btn" :disabled="searching" @click="submitSearch">
-        <span v-if="searching" class="btn-spinner"></span>
-        {{ t("modpack.search") }}
-      </button>
-    </div>
+      <!-- 搜索 -->
+      <div class="modpack-search">
+        <input v-model="filter" class="field-input search-input" :placeholder="t('modpack.searchHint')"
+          spellcheck="false" :disabled="searching" @keydown.enter="submitSearch" />
+        <button class="search-btn" :disabled="searching" @click="submitSearch">
+          <span v-if="searching" class="btn-spinner"></span>
+          {{ t("modpack.search") }}
+        </button>
+      </div>
     </div>
 
     <!-- 列表加载指示：翻页 / 换筛选只在结果区上方走一条细进度，不再全窗口遮罩 -->
@@ -681,12 +663,8 @@ watch(source, loadSource);
       <template v-else>
         <div v-for="item in items" :key="item.source.pid" class="pack-item">
           <!-- 收藏星标（右上角）：点击收藏 / 取消收藏 -->
-          <button
-            class="pack-star"
-            :class="{ on: item.isStar }"
-            v-tip="item.isStar ? t('modpack.unstar') : t('modpack.star')"
-            @click.stop="toggleStar(item)"
-          >
+          <button class="pack-star" :class="{ on: item.isStar }"
+            v-tip="item.isStar ? t('modpack.unstar') : t('modpack.star')" @click.stop="toggleStar(item)">
             <svg viewBox="0 0 24 24" width="17" height="17" stroke-width="2" stroke-linejoin="round">
               <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
             </svg>
@@ -698,7 +676,7 @@ watch(source, loadSource);
               <div class="pack-name">
                 <span>{{ item.name }}</span>
                 <span v-if="item.authors.length" class="pack-author">
-                  {{ item.authors.map((a) => a.name).join(", ") }}
+                  {{item.authors.map((a) => a.name).join(", ")}}
                 </span>
                 <span v-if="projectInstalled(item)" class="pack-badge">{{ t("modpack.installed") }}</span>
                 <span v-else-if="projectRunning(item)" class="pack-badge busy">{{ t("modpack.downloading") }}</span>
@@ -745,155 +723,142 @@ watch(source, loadSource);
         <div v-if="detailItem" class="detail-page">
           <!-- 头部固定、内容滚动；没有外层卡片，直接用窗口底色 -->
           <div class="detail-panel">
-          <div class="detail-head">
-            <AsyncImage v-if="detailItem.image" class="detail-icon" :src="detailItem.image" alt="" />
-            <div v-else class="detail-icon detail-icon-fallback">
-              {{ detailItem.name.slice(0, 1).toUpperCase() }}
+            <div class="detail-head">
+              <AsyncImage v-if="detailItem.image" class="detail-icon" :src="detailItem.image" alt="" />
+              <div v-else class="detail-icon detail-icon-fallback">
+                {{ detailItem.name.slice(0, 1).toUpperCase() }}
+              </div>
+              <div class="detail-title">
+                <div class="detail-name">
+                  {{ detailItem.name }}
+                  <span v-if="projectInstalled(detailItem)" class="pack-badge">{{ t("modpack.installed") }}</span>
+                  <span v-else-if="projectRunning(detailItem)" class="pack-badge busy">{{ t("modpack.downloading")
+                    }}</span>
+                </div>
+                <div class="detail-sub">
+                  <span v-if="detailItem.authors.length">{{detailItem.authors.map((a) => a.name).join(", ")}}</span>
+                  <span> · {{ t("modpack.downloads", { n: detailItem.downloadCount.toLocaleString() }) }}</span>
+                  <span v-if="detailItem.date"> · {{ formatDate(detailItem.date) }}</span>
+                </div>
+                <div v-if="detail?.tag.length || detailItem.tag.length" class="pack-tags detail-tags">
+                  <span v-for="tag in detail?.tag.length ? detail.tag : detailItem.tag" :key="tag.name"
+                    class="pack-tag">
+                    <span v-if="tag.svg" class="tag-svg" v-html="svgIcon(tag.svg)"></span>
+                    <img v-else-if="tag.logo" class="pack-tag-icon" :src="tag.logo" loading="lazy" alt="" />
+                    {{ tag.name }}
+                  </span>
+                </div>
+              </div>
+              <button class="detail-jump" @click="scrollToVersions">
+                {{ t("modpack.versions") }}
+              </button>
+              <button class="detail-download" :disabled="filesLoading || !latestFile" @click="downloadLatest">
+                {{ t("modpack.download") }}
+              </button>
+              <button class="detail-star" :class="{ on: detailItem.isStar }"
+                v-tip="detailItem.isStar ? t('modpack.unstar') : t('modpack.star')" @click="toggleStar(detailItem)">
+                <svg viewBox="0 0 24 24" width="20" height="20" stroke-width="2" stroke-linejoin="round">
+                  <path
+                    d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
+                </svg>
+              </button>
+              <button v-if="detailItem.url" class="detail-link" v-tip="t('modpack.openPage')"
+                @click="api.openUrl(detailItem.url)">
+                <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"
+                  stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                  <polyline points="15 3 21 3 21 9" />
+                  <line x1="10" y1="14" x2="21" y2="3" />
+                </svg>
+              </button>
             </div>
-            <div class="detail-title">
-              <div class="detail-name">
-                {{ detailItem.name }}
-                <span v-if="projectInstalled(detailItem)" class="pack-badge">{{ t("modpack.installed") }}</span>
-                <span v-else-if="projectRunning(detailItem)" class="pack-badge busy">{{ t("modpack.downloading") }}</span>
-              </div>
-              <div class="detail-sub">
-                <span v-if="detailItem.authors.length">{{ detailItem.authors.map((a) => a.name).join(", ") }}</span>
-                <span> · {{ t("modpack.downloads", { n: detailItem.downloadCount.toLocaleString() }) }}</span>
-                <span v-if="detailItem.date"> · {{ formatDate(detailItem.date) }}</span>
-              </div>
-              <div v-if="detail?.tag.length || detailItem.tag.length" class="pack-tags detail-tags">
-                <span
-                  v-for="tag in detail?.tag.length ? detail.tag : detailItem.tag"
-                  :key="tag.name"
-                  class="pack-tag"
-                >
-                  <span v-if="tag.svg" class="tag-svg" v-html="svgIcon(tag.svg)"></span>
-                  <img v-else-if="tag.logo" class="pack-tag-icon" :src="tag.logo" loading="lazy" alt="" />
-                  {{ tag.name }}
-                </span>
-              </div>
-            </div>
-            <button class="detail-jump" @click="scrollToVersions">
-              {{ t("modpack.versions") }}
-            </button>
-            <button
-              class="detail-download"
-              :disabled="filesLoading || !latestFile"
-              @click="downloadLatest"
-            >
-              {{ t("modpack.download") }}
-            </button>
-            <button
-              class="detail-star"
-              :class="{ on: detailItem.isStar }"
-              v-tip="detailItem.isStar ? t('modpack.unstar') : t('modpack.star')"
-              @click="toggleStar(detailItem)"
-            >
-              <svg viewBox="0 0 24 24" width="20" height="20" stroke-width="2" stroke-linejoin="round">
-                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-              </svg>
-            </button>
-            <button
-              v-if="detailItem.url"
-              class="detail-link"
-              v-tip="t('modpack.openPage')"
-              @click="api.openUrl(detailItem.url)"
-            >
-              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                <polyline points="15 3 21 3 21 9" />
-                <line x1="10" y1="14" x2="21" y2="3" />
-              </svg>
-            </button>
-          </div>
 
-          <div class="detail-scroll">
-            <!-- 详情正文的加载 / 失败只在这里提示一次；版本列表是并行的另一份加载，自己管自己 -->
-            <div v-if="detailLoading" class="empty-tip">{{ t("modpack.loadingDetail") }}</div>
-            <div v-else-if="detailError" class="empty-tip">{{ detailError }}</div>
-            <!-- 简介 / 截图 / 版本列表合并为一块大卡片，分区间距隔开，避免多框割裂 -->
-            <div class="detail-card">
-              <template v-if="detail">
-                <!-- Modrinth：正文；CurseForge：简介。标题都用「项目简介」 -->
-                <div class="detail-section">{{ t("modpack.summary") }}</div>
-                <article v-if="bodyHtml" class="detail-md" v-html="bodyHtml"></article>
-                <div v-else class="detail-summary">{{ detail.summary }}</div>
+            <div class="detail-scroll">
+              <!-- 详情正文的加载 / 失败只在这里提示一次；版本列表是并行的另一份加载，自己管自己 -->
+              <div v-if="detailLoading" class="empty-tip">{{ t("modpack.loadingDetail") }}</div>
+              <div v-else-if="detailError" class="empty-tip">{{ detailError }}</div>
+              <!-- 简介 / 截图 / 版本列表合并为一块大卡片，分区间距隔开，避免多框割裂 -->
+              <div class="detail-card">
+                <template v-if="detail">
+                  <!-- Modrinth：正文；CurseForge：简介。标题都用「项目简介」 -->
+                  <div class="detail-section">{{ t("modpack.summary") }}</div>
+                  <article v-if="bodyHtml" class="detail-md" v-html="bodyHtml"></article>
+                  <div v-else class="detail-summary">{{ detail.summary }}</div>
 
-                <template v-if="detail.screenshots.length">
-                  <div class="detail-section detail-block">{{ t("modpack.screenshots") }}</div>
-                  <div class="detail-shots">
-                    <AsyncImage
-                      v-for="shot in detail.screenshots"
-                      :key="shot.logo"
-                      class="detail-shot"
-                      :src="shot.logo"
-                      v-tip="shot.name || shot.description"
-                      @click="openPreview(shot.logo)"
-                    />
-                  </div>
+                  <template v-if="detail.screenshots.length">
+                    <div class="detail-section detail-block">{{ t("modpack.screenshots") }}</div>
+                    <div class="detail-shots">
+                      <AsyncImage v-for="shot in detail.screenshots" :key="shot.logo" class="detail-shot"
+                        :src="shot.logo" v-tip="shot.name || shot.description" @click="openPreview(shot.logo)" />
+                    </div>
+                  </template>
                 </template>
-              </template>
 
-              <div ref="versionsRef" class="detail-block versions-anchor">
-                <div class="detail-section detail-versions-head">
-                  <span>{{ t("modpack.versions") }}</span>
-                  <div class="version-tools">
-                    <select v-model="fileVersion" class="field-select sel-file-version" :disabled="filesLoading" @change="onFileVersionChange">
-                      <option value="">{{ t("modpack.allVersions") }}</option>
-                      <option v-for="v in versions" :key="v" :value="v">{{ v }}</option>
-                    </select>
-                    <div v-if="fileMaxPage > 1" class="file-page">
-                      <button class="page-btn" :disabled="filePage === 0 || filesLoading" @click="turnFilePage(-1)">
-                        {{ t("modpack.prevPage") }}
-                      </button>
-                      <span class="file-page-num">{{ filePage + 1 }} / {{ fileMaxPage }} · {{ t("modpack.totalItems", { n: fileTotal }) }}</span>
-                      <button class="page-btn" :disabled="filePage >= fileMaxPage - 1 || filesLoading" @click="turnFilePage(1)">
-                        {{ t("modpack.nextPage") }}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-                <div class="detail-files" :class="{ 'is-loading-dim': filesLoading }">
-                  <!-- 首次加载用骨架；翻页时保留旧内容并压暗（结果到了才整体替换） -->
-                  <template v-if="filesLoading && pageFiles.length === 0">
-                    <div v-for="n in 5" :key="n" class="sk-row compact">
-                      <div class="sk-lines">
-                        <div class="sk sk-line w70"></div>
-                        <div class="sk sk-line w45"></div>
+                <div ref="versionsRef" class="detail-block versions-anchor">
+                  <div class="detail-section detail-versions-head">
+                    <span>{{ t("modpack.versions") }}</span>
+                    <div class="version-tools">
+                      <select v-model="fileVersion" class="field-select sel-file-version" :disabled="filesLoading"
+                        @change="onFileVersionChange">
+                        <option value="">{{ t("modpack.allVersions") }}</option>
+                        <option v-for="v in versions" :key="v" :value="v">{{ v }}</option>
+                      </select>
+                      <div v-if="fileMaxPage > 1" class="file-page">
+                        <button class="page-btn" :disabled="filePage === 0 || filesLoading" @click="turnFilePage(-1)">
+                          {{ t("modpack.prevPage") }}
+                        </button>
+                        <span class="file-page-num">{{ filePage + 1 }} / {{ fileMaxPage }} · {{ t("modpack.totalItems",
+                          { n:
+                          fileTotal }) }}</span>
+                        <button class="page-btn" :disabled="filePage >= fileMaxPage - 1 || filesLoading"
+                          @click="turnFilePage(1)">
+                          {{ t("modpack.nextPage") }}
+                        </button>
                       </div>
                     </div>
-                  </template>
-                  <!-- 失败与"没有版本"必须分开：前者可重试，后者是空结果 -->
-                  <div v-else-if="filesError" class="empty-tip">
-                    {{ t("modpack.versionFail") }}
-                    <button class="retry-btn" @click="reloadFiles">{{ t("modpack.retry") }}</button>
                   </div>
-                  <div v-else-if="pageFiles.length === 0" class="empty-tip">{{ t("modpack.noVersions") }}</div>
-                  <template v-else>
-                    <div v-for="file in pageFiles" :key="file.source.fid" class="file-row">
-                      <div class="file-info">
-                        <span class="file-name">
-                          {{ file.name }}
-                          <span v-if="fileInstalled(file)" class="pack-badge">{{ t("modpack.installed") }}</span>
-                          <span v-else-if="fileRunning(file)" class="pack-badge busy">{{ t("modpack.downloading") }}</span>
-                        </span>
-                        <span class="file-meta">
-                          {{ t("modpack.fileMeta", {
-                            n: file.download.toLocaleString(),
-                            date: formatDate(file.time),
-                            size: formatSize(file.size),
-                          }) }}
-                        </span>
+                  <div class="detail-files" :class="{ 'is-loading-dim': filesLoading }">
+                    <!-- 首次加载用骨架；翻页时保留旧内容并压暗（结果到了才整体替换） -->
+                    <template v-if="filesLoading && pageFiles.length === 0">
+                      <div v-for="n in 5" :key="n" class="sk-row compact">
+                        <div class="sk-lines">
+                          <div class="sk sk-line w70"></div>
+                          <div class="sk sk-line w45"></div>
+                        </div>
                       </div>
-                      <button class="install-btn" @click="install(detailItem, file)">
-                        {{ t("modpack.install") }}
-                      </button>
+                    </template>
+                    <!-- 失败与"没有版本"必须分开：前者可重试，后者是空结果 -->
+                    <div v-else-if="filesError" class="empty-tip">
+                      {{ t("modpack.versionFail") }}
+                      <button class="retry-btn" @click="reloadFiles">{{ t("modpack.retry") }}</button>
                     </div>
-                  </template>
+                    <div v-else-if="pageFiles.length === 0" class="empty-tip">{{ t("modpack.noVersions") }}</div>
+                    <template v-else>
+                      <div v-for="file in pageFiles" :key="file.source.fid" class="file-row">
+                        <div class="file-info">
+                          <span class="file-name">
+                            {{ file.name }}
+                            <span v-if="fileInstalled(file)" class="pack-badge">{{ t("modpack.installed") }}</span>
+                            <span v-else-if="fileRunning(file)" class="pack-badge busy">{{ t("modpack.downloading")
+                              }}</span>
+                          </span>
+                          <span class="file-meta">
+                            {{ t("modpack.fileMeta", {
+                              n: file.download.toLocaleString(),
+                              date: formatDate(file.time),
+                              size: formatSize(file.size),
+                            }) }}
+                          </span>
+                        </div>
+                        <button class="install-btn" @click="install(detailItem, file)">
+                          {{ t("modpack.install") }}
+                        </button>
+                      </div>
+                    </template>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
           </div>
         </div>
       </transition>
@@ -960,7 +925,8 @@ select.sel-file-version {
   z-index: 20;
   max-height: 180px;
   overflow-y: auto;
-  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
+  scrollbar-gutter: stable;
+  /* 见 styles/scrollbar.css */
   padding: 4px;
   background: var(--bg-card);
   border: 1px solid var(--border);
@@ -1199,7 +1165,7 @@ select.sel-file-version {
   white-space: nowrap;
 }
 
-.pack-name > span:first-child {
+.pack-name>span:first-child {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1507,7 +1473,7 @@ select.sel-file-version {
   gap: 8px;
 }
 
-.detail-versions-head > span {
+.detail-versions-head>span {
   margin-right: auto;
 }
 
@@ -1747,7 +1713,7 @@ select.sel-file-version {
   transition: background 0.12s ease;
 }
 
-.file-row + .file-row {
+.file-row+.file-row {
   border-top: 1px solid var(--border);
 }
 

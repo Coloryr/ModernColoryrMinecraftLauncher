@@ -105,12 +105,7 @@ function formatSize(bytes: number): string {
     <ListSkeleton />
   </div>
   <div v-else class="item-list">
-    <ResourceRow
-      v-for="item in saves"
-      :key="item.dir"
-      :icon="item.icon"
-      :name="item.levelName || item.dir"
-    >
+    <ResourceRow v-for="item in saves" :key="item.dir" :icon="item.icon" :name="item.levelName || item.dir">
       <!-- 存档名可以带 `§` 格式码（地图作者常用来上色），过一遍显示期解析 -->
       <template #name>
         <FormattedText :text="item.levelName || item.dir" />
@@ -130,12 +125,7 @@ function formatSize(bytes: number): string {
         <button class="mini-btn" :disabled="busy" @click="backup(item)">
           {{ t("resource.backup") }}
         </button>
-        <button
-          v-if="item.backups"
-          class="mini-btn"
-          :disabled="busy"
-          @click="openRestore(item)"
-        >
+        <button v-if="item.backups" class="mini-btn" :disabled="busy" @click="openRestore(item)">
           {{ t("resource.restore") }}
         </button>
         <button class="mini-btn" :disabled="busy" @click="openFolder('saves', item.dir)">
@@ -150,20 +140,10 @@ function formatSize(bytes: number): string {
   </div>
 
   <!-- 选一个备份来还原（破坏性，选中后还会再确认一次） -->
-  <BaseModal
-    v-if="restorePick"
-    :title="t('resource.restorePickTitle')"
-    :closable="false"
-    @close="restorePick = null"
-  >
+  <BaseModal v-if="restorePick" :title="t('resource.restorePickTitle')" :closable="false" @close="restorePick = null">
     <div class="backup-pick-list">
-      <button
-        v-for="b in restorePick.list"
-        :key="b.file"
-        class="backup-pick-row"
-        :disabled="busy"
-        @click="pickRestore(b.file)"
-      >
+      <button v-for="b in restorePick.list" :key="b.file" class="backup-pick-row" :disabled="busy"
+        @click="pickRestore(b.file)">
         <span class="backup-pick-name" :title="b.file">{{ b.file }}</span>
         <span class="backup-pick-meta">{{ formatTime(b.time) }} · {{ formatSize(b.size) }}</span>
       </button>
@@ -184,7 +164,8 @@ function formatSize(bytes: number): string {
   /* 备份可能很多：给个上限自己滚，别把弹窗撑出屏幕 */
   max-height: 320px;
   overflow-y: auto;
-  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
+  scrollbar-gutter: stable;
+  /* 见 styles/scrollbar.css */
 }
 
 .backup-pick-row {

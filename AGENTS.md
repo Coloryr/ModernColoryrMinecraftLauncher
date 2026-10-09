@@ -94,7 +94,29 @@
 - 命令在 `bindings.ts` 里按**来源 .rs 模块**分组（组键取模块最后一段，如
   `windows::account` → `commands.account`），组内剥掉命令名的公共前段
   （`add_modpack_search` → `commands.addModpack.search`）。同一个名字的命令**不能定义两次**，
-  否则 `generate_handler!` 会报重复定义。
+  否则 `generate_handler!` 会报重复定义。组内顺序按**最终方法名**排序，所以命令在文件之间
+  怎么搬都不会改变生成结果 —— 这也正是"拆分是否安全"的判据（拆完 `bindings.ts` 应逐字节不变）。
+- **把命令拆进子模块**时要给它加 `#[gui_macros::ipc_group("原组名")]`（属性宏，仅作扫描标记）：
+  组键默认取"来源 .rs 模块最后一段"，不钉住的话 `windows::resource::mods` 会让组键变成 `mods`，
+  前端 `commands.resource.*` 全断。带命令的子模块还要写成 `pub(crate) mod`（生成的
+  `tauri_commands!` 从 crate 根引用它）。生成器侧实现见 `ipc-gen/src/scan.rs` 的 `group_of`。
+- **`ipc_group` 的值必须是"原始组名"（模块名），不是驼峰后的名字**：合并是按原始字符串做的，
+  而 TS 属性名是 `camel(组键)`。写 `ipc_group("addModpack")` 会与 `add_modpack/mod.rs` 里
+  留下的命令（组键 `add_modpack`）**分成两组**，生成物里出现两个 `addModpack: {` 对象 ——
+  前端 `vue-tsc` 报 TS1117（对象字面量重名属性）。正确写法是 `ipc_group("add_modpack")`
+  （实测踩过：`java_download` 拆分后 `npm run build` 才暴露）。
+  判据：拆完 `npm run build` 必须过，`bindings.ts` 里同一组只能出现一个对象。
+- 扫描是**裸文本**：注释里写出命令属性 / 事件属性的字面量，会让紧随其后的函数被误判成命令
+  （实测踩过：`generate_handler!` 里出现不存在的 `__cmd__xxx`，编译失败）。别在注释里写它们。
+- **命令的可见性不能降**：`#[tauri::command]` 生成的 `__cmd__xxx` / `__tauri_command_name_xxx`
+  会继承函数可见性，把命令写成 `pub(super)` 后 `generate_handler!` 从 crate 根引用不到
+  （E0603 "macro import is private"）。搬命令时统一 `pub(super) fn` 的脚本要把它排除掉。
+- **集成测试按原路径引用命令**：`src-tauri/tests/*.rs` 里 `use mml_gui_lib::windows::<窗口>::<命令>`
+  的地方，命令拆进子模块后要在 `mod.rs` 再导出（`pub use self::<子模块>::<命令>;`），
+  否则 `cargo check --all-targets` 才报错（只跑 `cargo check -p mml-gui` 是发现不了的）。
+- **DTO 换文件会改生成物的顺序**：生成器按**排序后的文件路径**遍历 `dtos/`，把一个 DTO 文件拆成
+  目录后，`bindings.ts` 里类型声明的先后会变（内容不变）。判定"没改契约"要比对**类型块集合**
+  （每个 `export type X = {...}` 归一化后按名字比），而不是看 diff 行数。
 - 磁盘配置用 Rust 命名（snake_case），跨 IPC 传输一律经 `src-tauri/src/dtos/` 转成
   camelCase DTO。
 
@@ -105,6 +127,32 @@
 | `mml-core/` | 启动器内核（多 crate，隶属根目录 workspace） |
 | `mml-gui/` | Tauri 桌面壳；`src-tauri/src/windows/<窗口>.rs` 放该窗口的规格 / 模型 / IPC |
 | `mml-vue/` | 前端（Vue3 + Vite）；窗口在 `src/windows/<kind>/`，通用组件在 `src/components/` |
+
+### 5.1 窗口模块的拆分约定
+
+一个窗口的代码超过**约 400 行**就目录化，别让它长成千行文件：
+
+```
+windows/<窗口>/mod.rs        ← 命令 + 该窗口的对外接口（按原路径再导出下面模块的东西）
+windows/<窗口>/<职责>.rs     ← 一个职责一个文件（如 model / create / loader / list / skin）
+windows/<窗口>/mod.rs 里：
+    pub(crate) mod <带命令的子模块>;   // 生成的 tauri_commands! 从 crate 根引用它
+    mod <纯辅助子模块>;                // 不带命令的可以私有
+```
+
+- **命令留在 `mod.rs` 最省事**；要下沉就必须带 `#[gui_macros::ipc_group("原组名")]`（见 §4），
+  且子模块声明为 `pub(crate) mod`。
+- **窗口之间共用的东西往下沉到 `windows/` 顶层**，不要互相 `use` 成环：
+  `registry.rs`（窗口注册表：uuid / 标签 / 最小尺寸，唯一来源）、`geometry.rs`（几何口径与
+  `window_save.json`）、`lifecycle.rs`（句柄表 / 模型表 / 建窗 / 关窗 / 窗口事件）、
+  `modpack_task.rs`（整合包安装任务注册表，`add` 与 `add_modpack` 共用）。
+- 拆分时按"**一个类型 + 它的所有 `impl`**"整体搬（含反向 `From`）；只搬 `struct` 会把
+  `impl` 留在原地，编译报"找不到类型 / 没有 new"。
+- 被兄弟模块读到的**字段**与 **`impl` 方法**要显式 `pub(super)` / `pub(crate)`（E0616 / E0624）。
+- **`include_str!` / `include_bytes!` 的相对路径**随文件位置变化：文件下沉一层就要多一个 `../`
+  （踩过两次：`image_manager` 的内置预览皮肤、`custom_home` 的桥接脚本）。
+- `dtos/` 也可以按用途目录化，类型在 `mod.rs` 用 `pub use` 再导出，既有路径就不会变
+  （注意 §4 里"生成物顺序会变"那条）。
 
 ## 6. 临时文件
 

@@ -44,15 +44,8 @@ onMounted(async () => {
     <p class="pick-desc">{{ t("blocks.pickInstanceDesc") }}</p>
 
     <div v-if="instances.length" class="pick-list">
-      <button
-        v-for="inst in instances"
-        :key="inst.uuid"
-        type="button"
-        class="pick-item"
-        :class="{ on: inst.uuid === currentUuid }"
-        :disabled="busy"
-        @click="emit('pick', inst)"
-      >
+      <button v-for="inst in instances" :key="inst.uuid" type="button" class="pick-item"
+        :class="{ on: inst.uuid === currentUuid }" :disabled="busy" @click="emit('pick', inst)">
         <InstanceIcon :name="inst.name" :uuid="inst.uuid" :size="30" />
         <span class="pick-text">
           <span class="pick-name">{{ inst.name }}</span>
@@ -81,7 +74,8 @@ onMounted(async () => {
   gap: 4px;
   max-height: 320px;
   overflow-y: auto;
-  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
+  scrollbar-gutter: stable;
+  /* 见 styles/scrollbar.css */
 }
 
 .pick-item {

@@ -19,10 +19,10 @@ use std::sync::LazyLock;
 pub mod clipboard_helper;
 pub mod java_scan_helper;
 pub mod memory_helper;
+pub mod open_helper;
 pub mod path_helper;
 pub mod process_helper;
 pub mod protocol_helper;
-pub mod open_helper;
 pub mod shortcut_helper;
 
 /// 操作系统类型枚举
@@ -211,7 +211,10 @@ mod tests {
 
         // 架构
         assert_eq!(info.is_64_bit, cfg!(target_pointer_width = "64"));
-        assert_eq!(info.is_arm, cfg!(target_arch = "arm") || cfg!(target_arch = "aarch64"));
+        assert_eq!(
+            info.is_arm,
+            cfg!(target_arch = "arm") || cfg!(target_arch = "aarch64")
+        );
         if cfg!(target_pointer_width = "64") {
             assert_eq!(info.system_arch, ArchEnum::X86_64);
         }

@@ -5,7 +5,7 @@
 
 use mml_names::i18_items::error_type::CoreResult;
 
-use crate::{url_helper};
+use crate::url_helper;
 
 /// 获取 Quilt 加载器安装配置（profile JSON）
 ///

@@ -272,7 +272,10 @@ mod tests {
         assert_eq!(json["accessToken"], "fake-access-token");
         assert_eq!(json["clientToken"], "fake-client-token");
         assert_eq!(json["selectedProfile"]["name"], "Steve");
-        assert_eq!(json["selectedProfile"]["id"], "00000000-0000-0000-0000-00000000bbbb");
+        assert_eq!(
+            json["selectedProfile"]["id"],
+            "00000000-0000-0000-0000-00000000bbbb"
+        );
 
         let without_profile = RefreshObj {
             access_token: "fake-access-token".to_string(),

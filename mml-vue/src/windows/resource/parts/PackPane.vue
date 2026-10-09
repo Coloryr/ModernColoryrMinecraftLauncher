@@ -59,12 +59,7 @@ function formatLabel(item: PackItemDto): string {
     <ListSkeleton />
   </div>
   <div v-else class="item-list">
-    <ResourceRow
-      v-for="item in packs"
-      :key="item.file"
-      :icon="item.icon"
-      :name="item.file"
-    >
+    <ResourceRow v-for="item in packs" :key="item.file" :icon="item.icon" :name="item.file">
       <template #badges>
         <span v-if="item.fail" class="badge badge-red">{{ t("resource.modFail") }}</span>
         <span v-if="item.enable" class="badge">{{ t("resource.packOn") }}</span>

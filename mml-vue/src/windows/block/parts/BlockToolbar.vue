@@ -34,23 +34,11 @@ function onSize(v: string) {
 <template>
   <div class="block-top">
     <div class="search-wrap">
-      <input
-        :value="keyword"
-        class="field-input block-search"
-        type="text"
-        :placeholder="t('blocks.search')"
-        spellcheck="false"
-        autocomplete="off"
-        @input="emit('update:keyword', ($event.target as HTMLInputElement).value)"
-        @keydown.esc="emit('update:keyword', '')"
-      />
-      <button
-        v-if="keyword"
-        type="button"
-        class="search-clear"
-        v-tip="t('blocks.searchClear')"
-        @click="emit('update:keyword', '')"
-      >
+      <input :value="keyword" class="field-input block-search" type="text" :placeholder="t('blocks.search')"
+        spellcheck="false" autocomplete="off" @input="emit('update:keyword', ($event.target as HTMLInputElement).value)"
+        @keydown.esc="emit('update:keyword', '')" />
+      <button v-if="keyword" type="button" class="search-clear" v-tip="t('blocks.searchClear')"
+        @click="emit('update:keyword', '')">
         <GlyphIcon name="close" :size="12" :weight="2.4" />
       </button>
     </div>
@@ -59,28 +47,19 @@ function onSize(v: string) {
     <SegmentedTabs :options="sizeOptions" :model-value="size" @update:model-value="onSize" />
 
     <!-- 图标按钮：标题栏里空间紧，文字放提示里（aria-label 给读屏） -->
-    <BaseButton
-      size="sm"
-      variant="ghost"
-      v-tip="t('blocks.addSkin')"
-      :aria-label="t('blocks.addSkin')"
-      @click="emit('add-skin')"
-    >
-      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <BaseButton size="sm" variant="ghost" v-tip="t('blocks.addSkin')" :aria-label="t('blocks.addSkin')"
+      @click="emit('add-skin')">
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"
+        stroke-linecap="round" stroke-linejoin="round">
         <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
         <circle cx="9" cy="7" r="4" />
         <path d="M19 8v6M22 11h-6" />
       </svg>
     </BaseButton>
-    <BaseButton
-      size="sm"
-      variant="ghost"
-      :disabled="running"
-      v-tip="t('blocks.reRender')"
-      :aria-label="t('blocks.reRender')"
-      @click="emit('re-render')"
-    >
-      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <BaseButton size="sm" variant="ghost" :disabled="running" v-tip="t('blocks.reRender')"
+      :aria-label="t('blocks.reRender')" @click="emit('re-render')">
+      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2"
+        stroke-linecap="round" stroke-linejoin="round">
         <path d="M21 12a9 9 0 1 1-2.64-6.36" />
         <polyline points="21 3 21 9 15 9" />
       </svg>

@@ -35,7 +35,8 @@ fn create_shortcut_inner<P: AsRef<Path>>(
         use mml_names::names;
         use windows::Win32::Foundation::S_OK;
         use windows::Win32::System::Com::{
-            CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED, CoCreateInstance, CoInitializeEx, CoUninitialize, IPersistFile,
+            CLSCTX_INPROC_SERVER, COINIT_APARTMENTTHREADED, CoCreateInstance, CoInitializeEx,
+            CoUninitialize, IPersistFile,
         };
         use windows::Win32::UI::Shell::{IShellLinkW, ShellLink};
         use windows::core::{HSTRING, Interface, PCWSTR};
@@ -128,7 +129,6 @@ fn create_shortcut_inner<P: AsRef<Path>>(
     work: P,
     file: P,
 ) -> CoreResult<PathBuf> {
-    
 }
 
 #[cfg(target_os = "macos")]
@@ -138,5 +138,4 @@ fn create_shortcut_inner<P: AsRef<Path>>(
     work: P,
     file: P,
 ) -> CoreResult<PathBuf> {
-    
 }

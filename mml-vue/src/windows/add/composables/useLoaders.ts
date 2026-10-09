@@ -212,7 +212,7 @@ export function useLoaders(gameVersion: Ref<string>, isLeaving: () => boolean) {
    */
   function syncCloseGuard() {
     api.setCloseGuard((loaderLoading.value || loaderVerLoading.value) && !isLeaving()).catch(
-      () => {},
+      () => { },
     );
   }
 

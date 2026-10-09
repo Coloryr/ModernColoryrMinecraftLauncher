@@ -518,23 +518,23 @@ const menuActions: Array<{
   labelKey: string;
   options: Array<{ id: string; labelKey: string }>;
 }> = [
-  {
-    id: "genOnline",
-    labelKey: "actions.genOnline",
-    options: [
-      { id: "share", labelKey: "actions.genShare" },
-      { id: "link", labelKey: "actions.genLink" },
-    ],
-  },
-  {
-    id: "genInfo",
-    labelKey: "actions.genInfo",
-    options: [
-      { id: "json", labelKey: "actions.genInfoJson" },
-      { id: "text", labelKey: "actions.genInfoText" },
-    ],
-  },
-];
+    {
+      id: "genOnline",
+      labelKey: "actions.genOnline",
+      options: [
+        { id: "share", labelKey: "actions.genShare" },
+        { id: "link", labelKey: "actions.genLink" },
+      ],
+    },
+    {
+      id: "genInfo",
+      labelKey: "actions.genInfo",
+      options: [
+        { id: "json", labelKey: "actions.genInfoJson" },
+        { id: "text", labelKey: "actions.genInfoText" },
+      ],
+    },
+  ];
 
 /** 打开实例导出窗口（导出整合包） */
 function openExportWindow() {
@@ -1510,35 +1510,19 @@ onMounted(async () => {
          两颗不画的按钮用 visibility 占位（见 .boot-head 的样式）—— 自绘装饰激活要量
          "最大化按钮"的矩形（lib/decoration.ts 的 findMaximizeBtn），量不到插件会退回
          原生 frame、系统标题栏就又冒出来。 -->
-    <header
-      v-if="splashVisible || splashError"
-      class="boot-head"
-      :class="titleBarStyle"
-      @pointerdown="onTitleBarPointerDown"
-    >
+    <header v-if="splashVisible || splashError" class="boot-head" :class="titleBarStyle"
+      @pointerdown="onTitleBarPointerDown">
       <span class="spacer" />
       <WindowControls :style="titleBarStyle" />
     </header>
 
     <!-- 主界面顶栏：加载完成后才出现（加载期间上面那条只给关闭按钮） -->
-    <MainTopbar
-      v-else
-      :features="features"
-      :news-active="newsActive"
-      :current-account="currentAccount"
-      :accounts="visibleAccounts"
-      @toggle-news="toggleNews"
-      @feature="openWindow"
-      @update:account="onAccountChange"
-    />
+    <MainTopbar v-else :features="features" :news-active="newsActive" :current-account="currentAccount"
+      :accounts="visibleAccounts" @toggle-news="toggleNews" @feature="openWindow" @update:account="onAccountChange" />
 
     <!-- ===== 启动画面 / 初始化失败错误页（SplashScreen 组件） ===== -->
-    <SplashScreen
-      v-if="splashVisible || splashError"
-      :splash-visible="splashVisible"
-      :splash-error="splashError"
-      @feedback="openFeedback"
-    />
+    <SplashScreen v-if="splashVisible || splashError" :splash-visible="splashVisible" :splash-error="splashError"
+      @feedback="openFeedback" />
 
     <!-- ===== 主界面 ===== -->
     <template v-else>
@@ -1548,11 +1532,8 @@ onMounted(async () => {
            状态订阅在各处自己拿（标题栏指示器自包含），弹窗由 App.vue 渲染 -->
 
       <!-- 资源下载进度（添加资源窗口关闭后迁到这里显示） -->
-      <ResourceDownloadBar
-        v-if="resourceStatus?.tasks.length && !resourceStatus.windowOpen"
-        :status="resourceStatus"
-        class="mpbar-in-main"
-      />
+      <ResourceDownloadBar v-if="resourceStatus?.tasks.length && !resourceStatus.windowOpen" :status="resourceStatus"
+        class="mpbar-in-main" />
 
       <!-- 启动进度（启动期间显示：阶段文本 + 进度条；未知阶段走滚动条） -->
       <div v-if="selected?.running" class="mpbar-in-main launch-progress">
@@ -1562,11 +1543,7 @@ onMounted(async () => {
           <span v-if="launchPct !== null" class="launch-pct">{{ launchPct }}%</span>
         </div>
         <div class="launch-progress-track">
-          <div
-            v-if="launchPct !== null"
-            class="launch-progress-bar"
-            :style="{ width: launchPct + '%' }"
-          ></div>
+          <div v-if="launchPct !== null" class="launch-progress-bar" :style="{ width: launchPct + '%' }"></div>
           <div v-else class="launch-progress-bar rolling"></div>
         </div>
       </div>
@@ -1576,12 +1553,8 @@ onMounted(async () => {
         <!-- 多选模式浮动工具栏 -->
         <div v-if="multiSelect" class="multi-bar" @contextmenu.prevent @click.stop>
           <span class="multi-count">{{ t("multi.selected", { count: selectedIds.size }) }}</span>
-          <button
-            class="multi-btn"
-            :disabled="!canChangeGroup"
-            v-tip="canChangeGroup ? '' : t('group.pickNone')"
-            @click="openMoveFromBar"
-          >{{ t("multi.moveGroup") }}</button>
+          <button class="multi-btn" :disabled="!canChangeGroup" v-tip="canChangeGroup ? '' : t('group.pickNone')"
+            @click="openMoveFromBar">{{ t("multi.moveGroup") }}</button>
           <button class="multi-btn danger" @click="onMultiDelete">{{ t("multi.delete") }}</button>
           <button class="multi-btn" @click="multiLaunch">{{ t("multi.launch") }}</button>
           <span class="multi-sep"></span>
@@ -1603,21 +1576,10 @@ onMounted(async () => {
             <CustomHomePage :entry-url="customHome?.entryUrl ?? ''" />
           </section>
           <section v-else class="news-page">
-            <HomePage
-              :items="news"
-              :loading="newsLoading"
-              @refresh="fetchNews(newsPage)"
-              :page="newsPage"
-              :has-more="newsHasMore"
-              @prev="prevNewsPage"
-              @next="nextNewsPage"
-              @open="openNews"
-              :current-instance="null"
-              :empty="true"
-              @add-instance="openAdd"
-              @add-account="openWindow('account')"
-              @add-java="openWindow('settings')"
-            />
+            <HomePage :items="news" :loading="newsLoading" @refresh="fetchNews(newsPage)" :page="newsPage"
+              :has-more="newsHasMore" @prev="prevNewsPage" @next="nextNewsPage" @open="openNews"
+              :current-instance="null" :empty="true" @add-instance="openAdd" @add-account="openWindow('account')"
+              @add-java="openWindow('settings')" />
           </section>
         </template>
 
@@ -1631,87 +1593,55 @@ onMounted(async () => {
             </section>
 
             <section v-else-if="newsActive" key="home" class="news-page">
-            <HomePage
-              :items="news"
-              :loading="newsLoading"
-              @refresh="fetchNews(newsPage)"
-              :page="newsPage"
-              :has-more="newsHasMore"
-              @prev="prevNewsPage"
-              @next="nextNewsPage"
-              @open="openNews"
-              :current-instance="selected"
-              @select="(inst: InstanceInfoDto) => select(inst)"
-              @quick-launch="quickLaunch"
-              back-label-key="home.backToList"
-              @back="newsActive = false"
-            />
+              <HomePage :items="news" :loading="newsLoading" @refresh="fetchNews(newsPage)" :page="newsPage"
+                :has-more="newsHasMore" @prev="prevNewsPage" @next="nextNewsPage" @open="openNews"
+                :current-instance="selected" @select="(inst: InstanceInfoDto) => select(inst)"
+                @quick-launch="quickLaunch" back-label-key="home.backToList" @back="newsActive = false" />
             </section>
 
             <section v-else key="list" class="list-mode">
-            <!-- 实例锁定生效时视图固定为列表，模式切换控件整块隐藏（只留个空工具栏会很怪） -->
-            <div v-if="!lockActive" class="list-toolbar">
-              <SegmentedTabs
-                :model-value="mode"
-                :options="MODE_OPTIONS"
-                @update:model-value="setViewMode($event as ViewMode)"
-              />
-            </div>
-
-            <InstanceIcon
-              :name="selected?.name ?? '—'"
-              :uuid="selected?.uuid ?? '0'"
-              :size="120"
-            />
-            <h2 class="list-title">{{ selected?.name ?? t("launch.selectInstance") }}</h2>
-
-            <!-- 实例锁定生效：只有这一个实例可用，切换入口整块隐藏 -->
-            <InstanceSelect
-              v-if="!lockActive"
-              :instances="instances"
-              :model-value="selected?.uuid ?? null"
-              @update:model-value="onPickInstance"
-              @add="openAdd"
-            />
-
-            <div class="launch-actions">
-              <BaseButton
-                variant="primary"
-                size="lg"
-                class="list-launch-btn"
-                :disabled="!selected || selected.running"
-                @click="launch"
-              >
-                <span v-if="selected?.running" class="btn-spinner"></span>
-                <GlyphIcon v-else name="play" :size="15" /> {{ t("launch.play") }}
-              </BaseButton>
-              <!-- 实例设置：含启动参数（与分组模式下的设置面板一致） -->
-              <BaseButton :disabled="!selected" @click="toggleSettings">
-                <GlyphIcon name="gear" :size="14" :weight="1.8" /> {{ t("detail.settings") }}
-              </BaseButton>
-              <!-- 实例日志：主页面不展示日志内容，直接开独立日志窗口 -->
-              <BaseButton :disabled="!selected" @click="openLogWindow">
-                <GlyphIcon name="document" :size="14" :weight="1.8" /> {{ t("detail.logs") }}
-              </BaseButton>
-            </div>
-            <!-- 设置面板整体展开/收起；宽度与居中由外层槽位承担，与原 .list-args 的占位一致 -->
-            <CollapsePanel :open="settingsOpen && !!selected" class="list-settings-wrap">
-              <div v-if="selected" class="list-args list-settings">
-                <InstanceMetaPanel
-                  :instance="selected"
-                  :versions="versions"
-                  :locked="lockActive"
-                  @update="onMetaUpdate"
-                  @refreshed="onVersionsRefreshed"
-                />
-                <LaunchArgsPanel
-                  :args="argsOf(selected.uuid)"
-                  :javas="javas"
-                  :locked="lockActive"
-                  @update:args="updateArgs"
-                />
+              <!-- 实例锁定生效时视图固定为列表，模式切换控件整块隐藏（只留个空工具栏会很怪） -->
+              <div v-if="!lockActive" class="list-toolbar">
+                <SegmentedTabs :model-value="mode" :options="MODE_OPTIONS"
+                  @update:model-value="setViewMode($event as ViewMode)" />
               </div>
-            </CollapsePanel>
+
+              <InstanceIcon :name="selected?.name ?? '—'" :uuid="selected?.uuid ?? '0'" :size="120" />
+              <h2 class="list-title">{{ selected?.name ?? t("launch.selectInstance") }}</h2>
+
+              <!-- 实例锁定生效：只有这一个实例可用，切换入口整块隐藏 -->
+              <InstanceSelect v-if="!lockActive" :instances="instances" :model-value="selected?.uuid ?? null"
+                @update:model-value="onPickInstance" @add="openAdd" />
+
+              <div class="launch-actions">
+                <BaseButton variant="primary" size="lg" class="list-launch-btn"
+                  :disabled="!selected || selected.running" @click="launch">
+                  <span v-if="selected?.running" class="btn-spinner"></span>
+                  <GlyphIcon v-else name="play" :size="15" /> {{ t("launch.play") }}
+                </BaseButton>
+                <!-- 实例设置：含启动参数（与分组模式下的设置面板一致） -->
+                <BaseButton :disabled="!selected" @click="toggleSettings">
+                  <GlyphIcon name="gear" :size="14" :weight="1.8" /> {{ t("detail.settings") }}
+                </BaseButton>
+                <!-- 实例日志：主页面不展示日志内容，直接开独立日志窗口 -->
+                <BaseButton :disabled="!selected" @click="openLogWindow">
+                  <GlyphIcon name="document" :size="14" :weight="1.8" /> {{ t("detail.logs") }}
+                </BaseButton>
+                <!-- 资源管理：分组 / 平铺模式的右侧详情面板里有这个入口，而列表模式没有详情面板，
+                   这里不补一个就进不去资源管理窗口（添加资源在资源窗口里有自己的入口） -->
+                <BaseButton :disabled="!selected" @click="onAction('manageResource')">
+                  <GlyphIcon name="package" :size="14" :weight="1.8" /> {{ t("actions.manageResource") }}
+                </BaseButton>
+              </div>
+              <!-- 设置面板整体展开/收起；宽度与居中由外层槽位承担，与原 .list-args 的占位一致 -->
+              <CollapsePanel :open="settingsOpen && !!selected" class="list-settings-wrap">
+                <div v-if="selected" class="list-args list-settings">
+                  <InstanceMetaPanel :instance="selected" :versions="versions" :locked="lockActive"
+                    @update="onMetaUpdate" @refreshed="onVersionsRefreshed" />
+                  <LaunchArgsPanel :args="argsOf(selected.uuid)" :javas="javas" :locked="lockActive"
+                    @update:args="updateArgs" />
+                </div>
+              </CollapsePanel>
             </section>
           </Transition>
         </template>
@@ -1720,42 +1650,19 @@ onMounted(async () => {
         <template v-else>
           <!-- 侧栏槽位：宽度在展开(300px) / 收起(24px) 之间过渡，动画期间内容被裁掉而不被压扁 -->
           <div class="sidebar-slot" :class="{ collapsed: sidebarCollapsed }">
-            <MainSidebar
-              :mode="effectiveMode"
-              :mode-options="MODE_OPTIONS"
-              :search-text="searchText"
-              :groups="groups"
-              :filtered-groups="filteredGroups"
-              :filtered-instances="filteredInstances"
-              :searching="searching"
-              :selected="selected"
-              :multi-select="multiSelect"
-              :selected-ids="selectedIds"
-              :collapsed-groups="collapsedGroups"
-              :drag-active="dragActive"
-              :dragging-uuid="draggingUuid"
-              :is-collapsed="isCollapsed"
-              :on-drag-pointer-down="onDragPointerDown"
-              :on-inst-click="onInstClick"
-              :on-inst-context="onInstContext"
-              :on-group-context="onGroupContext"
-              :on-group-title-click="onGroupTitleClick"
-              :is-inst-insert="isInstInsert"
-              :is-inst-insert-end="isInstInsertEnd"
-              :is-group-insert="isGroupInsert"
-              @update:mode="setViewMode($event)"
-              @update:search-text="searchText = $event"
-              @add-instance="openAdd"
-              @add-group="showAddGroup = true"
-              @collapse="collapseSidebar(true)"
-            />
+            <MainSidebar :mode="effectiveMode" :mode-options="MODE_OPTIONS" :search-text="searchText" :groups="groups"
+              :filtered-groups="filteredGroups" :filtered-instances="filteredInstances" :searching="searching"
+              :selected="selected" :multi-select="multiSelect" :selected-ids="selectedIds"
+              :collapsed-groups="collapsedGroups" :drag-active="dragActive" :dragging-uuid="draggingUuid"
+              :is-collapsed="isCollapsed" :on-drag-pointer-down="onDragPointerDown" :on-inst-click="onInstClick"
+              :on-inst-context="onInstContext" :on-group-context="onGroupContext"
+              :on-group-title-click="onGroupTitleClick" :is-inst-insert="isInstInsert"
+              :is-inst-insert-end="isInstInsertEnd" :is-group-insert="isGroupInsert" @update:mode="setViewMode($event)"
+              @update:search-text="searchText = $event" @add-instance="openAdd" @add-group="showAddGroup = true"
+              @collapse="collapseSidebar(true)" />
 
             <!-- 展开把手：绝对定位在槽位外缘，收起时淡入（不占位，避免展开瞬间内容跳动） -->
-            <button
-              class="sidebar-expand"
-              v-tip="t('sidebar.expand')"
-              @click="collapseSidebar(false)"
-            >
+            <button class="sidebar-expand" v-tip="t('sidebar.expand')" @click="collapseSidebar(false)">
               <GlyphIcon name="chevron-right" :size="18" />
             </button>
           </div>
@@ -1766,256 +1673,192 @@ onMounted(async () => {
                  height:100% 解析不出高度（父元素没有确定高度），会把页面压扁；这里单独包一层
                  去掉 padding 的撑满容器，让 iframe 铺满整个内容区 -->
             <Transition name="view-swap" mode="out-in">
-              <div
-                v-if="newsActive && useCustomHome"
-                key="custom-home"
-                class="custom-home-fill"
-              >
+              <div v-if="newsActive && useCustomHome" key="custom-home" class="custom-home-fill">
                 <CustomHomePage :entry-url="customHome?.entryUrl ?? ''" />
               </div>
 
-              <HomePage
-                v-else-if="newsActive"
-                key="home"
-                :items="news"
-                :loading="newsLoading"
-                @refresh="fetchNews(newsPage)"
-                :page="newsPage"
-                :has-more="newsHasMore"
-                @prev="prevNewsPage"
-                @next="nextNewsPage"
-                @open="openNews"
-                :current-instance="selected"
-                @select="(inst: InstanceInfoDto) => select(inst)"
-                @quick-launch="quickLaunch"
-                back-label-key="home.backToDetail"
-                @back="newsActive = false"
-              />
+              <HomePage v-else-if="newsActive" key="home" :items="news" :loading="newsLoading"
+                @refresh="fetchNews(newsPage)" :page="newsPage" :has-more="newsHasMore" @prev="prevNewsPage"
+                @next="nextNewsPage" @open="openNews" :current-instance="selected"
+                @select="(inst: InstanceInfoDto) => select(inst)" @quick-launch="quickLaunch"
+                back-label-key="home.backToDetail" @back="newsActive = false" />
 
               <div v-else key="detail" class="detail-content">
-              <!-- 按实例 uuid 做 key：切换实例时整块详情走进出动画 -->
-              <Transition name="view-swap" mode="out-in">
-              <div v-if="selected" :key="selected.uuid" class="detail-instance">
-                <div class="detail-top">
-                  <InstanceIcon :name="selected.name" :uuid="selected.uuid" :size="84" />
-                  <div class="detail-info">
-                    <h2>{{ selected.name }}</h2>
-                  </div>
-                  <!-- 右侧：启动游戏（大）+ 添加/管理资源（小） -->
-                  <div class="detail-side">
-                    <BaseButton
-                      variant="primary"
-                      size="lg"
-                      class="play-btn"
-                      :disabled="selected.running"
-                      @click="launch"
-                    >
-                      <span v-if="selected.running" class="btn-spinner"></span>
-                      <GlyphIcon v-else name="play" :size="15" /> {{ t("launch.play") }}
-                    </BaseButton>
-                    <div class="side-row">
-                      <BaseButton size="sm" variant="accent" @click="onAction('addResource')">{{ t("actions.addResource") }}</BaseButton>
-                      <BaseButton size="sm" variant="accent" @click="onAction('manageResource')">{{ t("actions.manageResource") }}</BaseButton>
+                <!-- 按实例 uuid 做 key：切换实例时整块详情走进出动画 -->
+                <Transition name="view-swap" mode="out-in">
+                  <div v-if="selected" :key="selected.uuid" class="detail-instance">
+                    <div class="detail-top">
+                      <InstanceIcon :name="selected.name" :uuid="selected.uuid" :size="84" />
+                      <div class="detail-info">
+                        <h2>{{ selected.name }}</h2>
+                      </div>
+                      <!-- 右侧：启动游戏（大）+ 添加/管理资源（小） -->
+                      <div class="detail-side">
+                        <BaseButton variant="primary" size="lg" class="play-btn" :disabled="selected.running"
+                          @click="launch">
+                          <span v-if="selected.running" class="btn-spinner"></span>
+                          <GlyphIcon v-else name="play" :size="15" /> {{ t("launch.play") }}
+                        </BaseButton>
+                        <div class="side-row">
+                          <BaseButton size="sm" variant="accent" @click="onAction('addResource')">{{
+                            t("actions.addResource") }}</BaseButton>
+                          <BaseButton size="sm" variant="accent" @click="onAction('manageResource')">{{
+                            t("actions.manageResource") }}</BaseButton>
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                </div>
 
-                <div class="detail-meta">
-                  <span>{{ t("detail.playTime", { hours: playHoursOf(selected.uuid) }) }}</span>
-                  <span class="sep">·</span>
-                  <span>{{ t("detail.launchCount", { count: 0 }) }}</span>
-                  <!-- 小图标快捷操作（单色 SVG） -->
-                  <div class="meta-actions">
-                    <button class="icon-btn" v-tip="t('actions.openFolder')" @click="onAction('openFolder')">
-                      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />
-                      </svg>
-                    </button>
-                    <button class="icon-btn" v-tip="t('actions.editConfig')" @click="onAction('editConfig')">
-                      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3" />
-                        <path d="M1 14h6M9 8h6M17 16h6" />
-                      </svg>
-                    </button>
-                    <button class="icon-btn" v-tip="t('actions.rename')" @click="onAction('rename')">
-                      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
-                      </svg>
-                    </button>
-                    <button class="icon-btn danger" v-tip="t('actions.delete')" @click="onAction('delete')">
-                      <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6" />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-
-                <!-- 实例操作（导出直接开窗 / 生成为二级菜单） -->
-                <div class="action-grid">
-                  <button class="action-btn" @click="openExportWindow">
-                    {{ t("actions.export") }}
-                  </button>
-                  <div v-for="m in menuActions" :key="m.id" class="menu-wrap">
-                    <button class="action-btn" @click="toggleMenu(m.id)">
-                      {{ t(m.labelKey) }}
-                      <svg
-                        class="export-chevron"
-                        :class="{ flip: openMenu === m.id }"
-                        viewBox="0 0 24 24"
-                        width="11"
-                        height="11"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                      >
-                        <path d="m6 9 6 6 6-6" />
-                      </svg>
-                    </button>
-                    <Transition name="drop">
-                      <div v-if="openMenu === m.id" class="menu-drop">
-                        <button
-                          v-for="opt in m.options"
-                          :key="opt.id"
-                          class="menu-item"
-                          @click="onMenuPick(opt)"
-                        >
-                          {{ t(opt.labelKey) }}
+                    <div class="detail-meta">
+                      <span>{{ t("detail.playTime", { hours: playHoursOf(selected.uuid) }) }}</span>
+                      <span class="sep">·</span>
+                      <span>{{ t("detail.launchCount", { count: 0 }) }}</span>
+                      <!-- 小图标快捷操作（单色 SVG） -->
+                      <div class="meta-actions">
+                        <button class="icon-btn" v-tip="t('actions.openFolder')" @click="onAction('openFolder')">
+                          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
+                            stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />
+                          </svg>
+                        </button>
+                        <button class="icon-btn" v-tip="t('actions.editConfig')" @click="onAction('editConfig')">
+                          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
+                            stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3" />
+                            <path d="M1 14h6M9 8h6M17 16h6" />
+                          </svg>
+                        </button>
+                        <button class="icon-btn" v-tip="t('actions.rename')" @click="onAction('rename')">
+                          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
+                            stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z" />
+                          </svg>
+                        </button>
+                        <button class="icon-btn danger" v-tip="t('actions.delete')" @click="onAction('delete')">
+                          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor"
+                            stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                            <path
+                              d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6" />
+                          </svg>
                         </button>
                       </div>
-                    </Transition>
-                  </div>
-                </div>
+                    </div>
 
-                <!-- 实例设置（直接展示：版本 / 加载器 / 整合包 / 语言 / 内存 / Java / 启动参数） -->
-                <div class="inline-settings">
-                  <InstanceMetaPanel
-                    :instance="selected"
-                    :versions="versions"
-                    :locked="lockActive"
-                    @update="onMetaUpdate"
-                    @refreshed="onVersionsRefreshed"
-                  />
-                  <LaunchArgsPanel
-                    :args="argsOf(selected.uuid)"
-                    :javas="javas"
-                    :locked="lockActive"
-                    @update:args="updateArgs"
-                  />
-                </div>
-
-                <!-- 自定义执行 -->
-                <div class="args-section">
-                  <button class="args-toggle" @click="execOpen = !execOpen">
-                    <span><GlyphIcon name="gear" :size="14" :weight="1.8" /> {{ t("exec.title") }}</span>
-                    <svg
-                      class="args-chevron"
-                      :class="{ flip: execOpen }"
-                      viewBox="0 0 24 24"
-                      width="13"
-                      height="13"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                    >
-                      <path d="m6 9 6 6 6-6" />
-                    </svg>
-                  </button>
-                  <CollapsePanel :open="execOpen">
-                    <CustomExecPanel :args="argsOf(selected.uuid)" @update:args="updateArgs" />
-                  </CollapsePanel>
-                </div>
-
-                <!-- 自定义服务器（自动加入 + MOTD 展示） -->
-                <div class="args-section">
-                  <button class="args-toggle" @click="serverOpen = !serverOpen">
-                    <span><GlyphIcon name="gear" :size="14" :weight="1.8" /> {{ t("server.title") }}</span>
-                    <svg
-                      class="args-chevron"
-                      :class="{ flip: serverOpen }"
-                      viewBox="0 0 24 24"
-                      width="13"
-                      height="13"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                    >
-                      <path d="m6 9 6 6 6-6" />
-                    </svg>
-                  </button>
-                  <CollapsePanel :open="serverOpen">
-                    <div class="server-config">
-                      <!-- 自动加入服务器设置：地址（可带 `:端口`，不写用 25565）+ 启动时加入 -->
-                      <div class="server-row">
-                        <span class="server-label">{{ t("server.ip") }}</span>
-                        <input
-                          class="field-input grow"
-                          :value="argsOf(selected.uuid).serverIp"
-                          :placeholder="t('server.ipPlaceholder')"
-                          spellcheck="false"
-                          @input="onServerIp(($event.target as HTMLInputElement).value)"
-                        />
-                        <label class="chk">
-                          <input
-                            type="checkbox"
-                            :checked="argsOf(selected.uuid).joinServer"
-                            @change="onServerJoin(($event.target as HTMLInputElement).checked)"
-                          />
-                          {{ t("server.join") }}
-                        </label>
+                    <!-- 实例操作（导出直接开窗 / 生成为二级菜单） -->
+                    <div class="action-grid">
+                      <button class="action-btn" @click="openExportWindow">
+                        {{ t("actions.export") }}
+                      </button>
+                      <div v-for="m in menuActions" :key="m.id" class="menu-wrap">
+                        <button class="action-btn" @click="toggleMenu(m.id)">
+                          {{ t(m.labelKey) }}
+                          <svg class="export-chevron" :class="{ flip: openMenu === m.id }" viewBox="0 0 24 24"
+                            width="11" height="11" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="m6 9 6 6 6-6" />
+                          </svg>
+                        </button>
+                        <Transition name="drop">
+                          <div v-if="openMenu === m.id" class="menu-drop">
+                            <button v-for="opt in m.options" :key="opt.id" class="menu-item" @click="onMenuPick(opt)">
+                              {{ t(opt.labelKey) }}
+                            </button>
+                          </div>
+                        </Transition>
                       </div>
+                    </div>
 
-                      <!-- MOTD 展示：只在**填了服务器地址**时出现。
+                    <!-- 实例设置（直接展示：版本 / 加载器 / 整合包 / 语言 / 内存 / Java / 启动参数） -->
+                    <div class="inline-settings">
+                      <InstanceMetaPanel :instance="selected" :versions="versions" :locked="lockActive"
+                        @update="onMetaUpdate" @refreshed="onVersionsRefreshed" />
+                      <LaunchArgsPanel :args="argsOf(selected.uuid)" :javas="javas" :locked="lockActive"
+                        @update:args="updateArgs" />
+                    </div>
+
+                    <!-- 自定义执行 -->
+                    <div class="args-section">
+                      <button class="args-toggle" @click="execOpen = !execOpen">
+                        <span>
+                          <GlyphIcon name="gear" :size="14" :weight="1.8" /> {{ t("exec.title") }}
+                        </span>
+                        <svg class="args-chevron" :class="{ flip: execOpen }" viewBox="0 0 24 24" width="13" height="13"
+                          fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="m6 9 6 6 6-6" />
+                        </svg>
+                      </button>
+                      <CollapsePanel :open="execOpen">
+                        <CustomExecPanel :args="argsOf(selected.uuid)" @update:args="updateArgs" />
+                      </CollapsePanel>
+                    </div>
+
+                    <!-- 自定义服务器（自动加入 + MOTD 展示） -->
+                    <div class="args-section">
+                      <button class="args-toggle" @click="serverOpen = !serverOpen">
+                        <span>
+                          <GlyphIcon name="gear" :size="14" :weight="1.8" /> {{ t("server.title") }}
+                        </span>
+                        <svg class="args-chevron" :class="{ flip: serverOpen }" viewBox="0 0 24 24" width="13"
+                          height="13" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="m6 9 6 6 6-6" />
+                        </svg>
+                      </button>
+                      <CollapsePanel :open="serverOpen">
+                        <div class="server-config">
+                          <!-- 自动加入服务器设置：地址（可带 `:端口`，不写用 25565）+ 启动时加入 -->
+                          <div class="server-row">
+                            <span class="server-label">{{ t("server.ip") }}</span>
+                            <input class="field-input grow" :value="argsOf(selected.uuid).serverIp"
+                              :placeholder="t('server.ipPlaceholder')" spellcheck="false"
+                              @input="onServerIp(($event.target as HTMLInputElement).value)" />
+                            <label class="chk">
+                              <input type="checkbox" :checked="argsOf(selected.uuid).joinServer"
+                                @change="onServerJoin(($event.target as HTMLInputElement).checked)" />
+                              {{ t("server.join") }}
+                            </label>
+                          </div>
+
+                          <!-- MOTD 展示：只在**填了服务器地址**时出现。
                            没填时整块不显示 —— 原来会渲染一张只有兜底文案的卡片
                            （"M²L 服务器 / 欢迎来到 M²L 服务器大厅"），看着像查询成功了，其实没查。
                            卡片本身（图标 / 彩色分段 / 人数-版本-延迟）在 components/MotdCard.vue，
                            与底部悬浮卡、资源窗口服务器列表上方那张是同一份 -->
-                      <MotdCard
-                        v-if="argsOf(selected.uuid).serverIp.trim()"
-                        compact
-                        :motd="instMotd"
-                        :loading="instMotdLoading"
-                        :name="instMotd?.ip || argsOf(selected.uuid).serverIp"
-                      />
+                          <MotdCard v-if="argsOf(selected.uuid).serverIp.trim()" compact :motd="instMotd"
+                            :loading="instMotdLoading" :name="instMotd?.ip || argsOf(selected.uuid).serverIp" />
+                        </div>
+                      </CollapsePanel>
                     </div>
-                  </CollapsePanel>
-                </div>
 
-                <!-- 游戏内代理 -->
-                <div class="args-section">
-                  <button class="args-toggle" @click="proxyOpen = !proxyOpen">
-                    <span><GlyphIcon name="gear" :size="14" :weight="1.8" /> {{ t("proxy.title") }}</span>
-                    <svg
-                      class="args-chevron"
-                      :class="{ flip: proxyOpen }"
-                      viewBox="0 0 24 24"
-                      width="13"
-                      height="13"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                    >
-                      <path d="m6 9 6 6 6-6" />
-                    </svg>
-                  </button>
-                  <CollapsePanel :open="proxyOpen">
-                    <ProxyPanel :args="argsOf(selected.uuid)" @update:args="updateArgs" />
-                  </CollapsePanel>
-                </div>
-              </div>
-              </Transition>
+                    <!-- 游戏内代理 -->
+                    <div class="args-section">
+                      <button class="args-toggle" @click="proxyOpen = !proxyOpen">
+                        <span>
+                          <GlyphIcon name="gear" :size="14" :weight="1.8" /> {{ t("proxy.title") }}
+                        </span>
+                        <svg class="args-chevron" :class="{ flip: proxyOpen }" viewBox="0 0 24 24" width="13"
+                          height="13" fill="none" stroke="currentColor" stroke-width="2">
+                          <path d="m6 9 6 6 6-6" />
+                        </svg>
+                      </button>
+                      <CollapsePanel :open="proxyOpen">
+                        <ProxyPanel :args="argsOf(selected.uuid)" @update:args="updateArgs" />
+                      </CollapsePanel>
+                    </div>
+                  </div>
+                </Transition>
 
-              <!-- 未选中实例：多选提示 / 空提示（保持是 .detail-content 的直接 flex 子节点，
+                <!-- 未选中实例：多选提示 / 空提示（保持是 .detail-content 的直接 flex 子节点，
                    两者都靠 flex:1 垂直居中） -->
-              <template v-if="!selected">
-              <template v-if="multiSelect">
-                <div class="multi-detail">
-                  <div class="multi-detail-icon"><GlyphIcon name="check-square" :size="32" :weight="1.8" /></div>
-                  <h2>{{ t("multi.detailTitle") }}</h2>
-                  <p>{{ t("multi.detailDesc", { count: selectedIds.size }) }}</p>
-                </div>
-              </template>
-              <div v-else class="placeholder">{{ t("detail.selectHint") }}</div>
-              </template>
+                <template v-if="!selected">
+                  <template v-if="multiSelect">
+                    <div class="multi-detail">
+                      <div class="multi-detail-icon">
+                        <GlyphIcon name="check-square" :size="32" :weight="1.8" />
+                      </div>
+                      <h2>{{ t("multi.detailTitle") }}</h2>
+                      <p>{{ t("multi.detailDesc", { count: selectedIds.size }) }}</p>
+                    </div>
+                  </template>
+                  <div v-else class="placeholder">{{ t("detail.selectHint") }}</div>
+                </template>
               </div>
             </Transition>
           </section>
@@ -2027,28 +1870,14 @@ onMounted(async () => {
            `.motd-float` 只管固定摆位，卡片外观与内容在 components/MotdCard.vue —
            与实例详情里的那张、资源窗口服务器列表上方那张是同一份 -->
       <div v-if="motdCardVisible" class="motd-float">
-        <MotdCard
-          refreshable
-          :motd="motdInfo"
-          :loading="motdLoading"
-          :name="motdInfo?.ip || t('server.name')"
-          @refresh="refreshMotd"
-        />
+        <MotdCard refreshable :motd="motdInfo" :loading="motdLoading" :name="motdInfo?.ip || t('server.name')"
+          @refresh="refreshMotd" />
       </div>
 
       <!-- ===== 右键菜单（MainCtxMenu 组件） ===== -->
-      <MainCtxMenu
-        :menu="ctxMenu"
-        :groups="groups"
-        @select-all="onGroupSelectAll"
-        @launch-group="launchGroupAll"
-        @move-group="onMoveGroupClick"
-        @delete-group="onDeleteGroup"
-        @inst-action="onInstMenuAction"
-        @multi-move="openMoveGroupPicker(null)"
-        @multi-delete="onMultiDelete"
-        @multi-launch="multiLaunch"
-      />
+      <MainCtxMenu :menu="ctxMenu" :groups="groups" @select-all="onGroupSelectAll" @launch-group="launchGroupAll"
+        @move-group="onMoveGroupClick" @delete-group="onDeleteGroup" @inst-action="onInstMenuAction"
+        @multi-move="openMoveGroupPicker(null)" @multi-delete="onMultiDelete" @multi-launch="multiLaunch" />
     </template>
 
     <!-- ===== 启动界面：已移除（启动按钮显示加载态，不弹窗） ===== -->
@@ -2056,7 +1885,8 @@ onMounted(async () => {
     <!-- ===== 添加实例：独立窗口（openAdd 打开） ===== -->
 
     <!-- ===== 重命名实例弹窗 ===== -->
-    <BaseModal v-if="showRename && selected" :title="t('actions.renameTitle')" :closable="false" @close="showRename = false">
+    <BaseModal v-if="showRename && selected" :title="t('actions.renameTitle')" :closable="false"
+      @close="showRename = false">
       <label class="field-label">{{ t("add.name") }}</label>
       <input v-model="renameName" class="field-input" @keyup.enter="doRename" spellcheck="false" />
 
@@ -2069,7 +1899,8 @@ onMounted(async () => {
     </BaseModal>
 
     <!-- ===== 删除实例确认 ===== -->
-    <BaseModal v-if="showDelete && selected" :title="t('actions.deleteTitle')" :closable="false" @close="!deleteBusy && (showDelete = false)">
+    <BaseModal v-if="showDelete && selected" :title="t('actions.deleteTitle')" :closable="false"
+      @close="!deleteBusy && (showDelete = false)">
       <p class="delete-tip">{{ t("actions.deleteConfirm", { name: selected.name }) }}</p>
 
       <!-- 删除进度（整目录挪回收站无法取得真实进度，显示滚动动画条） -->
@@ -2087,7 +1918,8 @@ onMounted(async () => {
     </BaseModal>
 
     <!-- ===== 多选删除确认 ===== -->
-    <BaseModal v-if="showMultiDelete" :title="t('multi.deleteTitle')" :closable="false" @close="!multiDeleteBusy && (showMultiDelete = false)">
+    <BaseModal v-if="showMultiDelete" :title="t('multi.deleteTitle')" :closable="false"
+      @close="!multiDeleteBusy && (showMultiDelete = false)">
       <p class="delete-tip">{{ t("multi.deleteConfirm", { count: selectedIds.size }) }}</p>
 
       <!-- 删除进度（真实进度：已完成实例数 / 总数） -->
@@ -2107,37 +1939,19 @@ onMounted(async () => {
     </BaseModal>
 
     <!-- ===== 修改实例图标（右键实例 → 选择图片 → 截图范围）===== -->
-    <IconPickModal
-      v-if="iconPickInst"
-      :uuid="iconPickInst.uuid"
-      :name="iconPickInst.name"
-      :path="iconPickPath"
-      @close="((iconPickInst = null), (iconPickPath = ''))"
-    />
+    <IconPickModal v-if="iconPickInst" :uuid="iconPickInst.uuid" :name="iconPickInst.name" :path="iconPickPath"
+      @close="((iconPickInst = null), (iconPickPath = ''))" />
 
     <!-- ===== 首次启动：把 ColorMC 的数据搬过来（见 doInit 的探测）===== -->
-    <ColorMcMigrateModal
-      v-if="colorMcInfo"
-      :info="colorMcInfo"
-      @close="onColorMcClosed"
-      @done="onColorMcDone"
-    />
+    <ColorMcMigrateModal v-if="colorMcInfo" :info="colorMcInfo" @close="onColorMcClosed" @done="onColorMcDone" />
 
     <!-- ===== 选择目标分组（转移分组 / 移动选中实例共用）===== -->
-    <BaseModal
-      v-if="showMoveGroupPick"
-      :title="t('group.pickTitle')"
-      :closable="false"
-      @close="showMoveGroupPick = false"
-    >
+    <BaseModal v-if="showMoveGroupPick" :title="t('group.pickTitle')" :closable="false"
+      @close="showMoveGroupPick = false">
       <p class="delete-tip">{{ movePickDesc }}</p>
 
       <!-- 目标分组：候选里已排掉源分组自己，所以"确定"下去一定有实际动作 -->
-      <select
-        v-model="moveGroupTarget"
-        class="field-select pick-select"
-        :disabled="!movePickOptions.length"
-      >
+      <select v-model="moveGroupTarget" class="field-select pick-select" :disabled="!movePickOptions.length">
         <option v-for="o in movePickOptions" :key="o.id" :value="o.id">
           {{ t("group.pickOption", { name: o.name, count: o.count }) }}
         </option>
@@ -2146,11 +1960,7 @@ onMounted(async () => {
 
       <div class="modal-actions">
         <BaseButton @click="showMoveGroupPick = false">{{ t("add.cancel") }}</BaseButton>
-        <BaseButton
-          variant="primary"
-          :disabled="!movePickOptions.length"
-          @click="confirmMoveTarget"
-        >
+        <BaseButton variant="primary" :disabled="!movePickOptions.length" @click="confirmMoveTarget">
           {{ t("actions.confirm") }}
         </BaseButton>
       </div>
@@ -2186,7 +1996,8 @@ onMounted(async () => {
     <!-- ===== 拖拽整合包文件遮罩层 ===== -->
     <div v-if="fileDragOver" class="file-drop-layer">
       <div class="file-drop-box">
-        <svg viewBox="0 0 24 24" width="42" height="42" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <svg viewBox="0 0 24 24" width="42" height="42" fill="none" stroke="currentColor" stroke-width="1.6"
+          stroke-linecap="round" stroke-linejoin="round">
           <path d="M21 8v13H3V8" />
           <path d="M1 3h22v5H1z" />
           <path d="M10 12h4" />
@@ -2283,6 +2094,7 @@ onMounted(async () => {
   0% {
     transform: translateX(-100%);
   }
+
   100% {
     transform: translateX(350%);
   }
@@ -2315,6 +2127,7 @@ onMounted(async () => {
   0% {
     transform: translateX(-100%);
   }
+
   100% {
     transform: translateX(350%);
   }
@@ -2347,7 +2160,8 @@ onMounted(async () => {
   position: relative;
   display: flex;
   flex-shrink: 0;
-  width: 300px; /* 与 MainSidebar 的 .sidebar 同宽 */
+  width: 300px;
+  /* 与 MainSidebar 的 .sidebar 同宽 */
   overflow: hidden;
 }
 
@@ -2413,7 +2227,8 @@ onMounted(async () => {
   gap: 16px;
   min-width: 0;
   overflow-y: auto;
-  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
+  scrollbar-gutter: stable;
+  /* 见 styles/scrollbar.css */
 }
 
 .news-head {
@@ -2455,7 +2270,8 @@ onMounted(async () => {
   gap: 16px;
   padding: 18px 28px 130px;
   overflow-y: auto;
-  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
+  scrollbar-gutter: stable;
+  /* 见 styles/scrollbar.css */
   min-width: 0;
 }
 
@@ -2909,7 +2725,8 @@ onMounted(async () => {
   gap: 16px;
   padding: 20px 30px 130px;
   overflow-y: auto;
-  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
+  scrollbar-gutter: stable;
+  /* 见 styles/scrollbar.css */
   min-width: 0;
 }
 
@@ -3149,6 +2966,7 @@ onMounted(async () => {
     transform: rotate(360deg);
   }
 }
+
 /* ================= 加载期间的标题栏 =================
    只显示关闭按钮：最小化 / 最大化两颗用 visibility 占位而不是 display: none ——
    自绘装饰激活时要量最大化按钮的矩形（lib/decoration.ts 的 findMaximizeBtn），

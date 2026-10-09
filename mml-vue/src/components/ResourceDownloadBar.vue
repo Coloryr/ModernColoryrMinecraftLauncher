@@ -53,11 +53,7 @@ function progressText(group: ResourceGroupProgress): string {
       <div v-for="group in groups" :key="group.pid" class="res-task">
         <div class="res-task-head">
           <span class="res-task-name">{{ group.name }}</span>
-          <span
-            v-if="stateTag(group)"
-            class="res-tag"
-            :class="{ done: group.done, failed: group.failed }"
-          >
+          <span v-if="stateTag(group)" class="res-tag" :class="{ done: group.done, failed: group.failed }">
             {{ stateTag(group) }}
           </span>
           <span v-else class="res-task-percent">{{ progressText(group) }}</span>

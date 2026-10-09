@@ -100,7 +100,10 @@ impl IBaseArchiveGui for TestGui {
 /// 验证解压结果目录内容与源目录一致
 fn assert_roundtrip_output(out_dir: &Path) {
     assert_eq!(fs::read(out_dir.join("a.txt")).unwrap(), b"hello");
-    assert_eq!(fs::read(out_dir.join("sub").join("b.txt")).unwrap(), b"world");
+    assert_eq!(
+        fs::read(out_dir.join("sub").join("b.txt")).unwrap(),
+        b"world"
+    );
     assert_eq!(
         fs::read(out_dir.join("sub").join("deep.txt")).unwrap(),
         b"deep"
@@ -127,13 +130,7 @@ fn test_compress_decompress_roundtrip() {
         .unwrap();
         assert!(archive_file.exists(), "{:?} 压缩后文件应存在", archive_type);
 
-        decompress(
-            archive_type,
-            &archive_file,
-            &out_dir,
-            None,
-        )
-        .unwrap();
+        decompress(archive_type, &archive_file, &out_dir, None).unwrap();
         assert_roundtrip_output(&out_dir);
 
         let _ = fs::remove_dir_all(&root);
@@ -204,12 +201,18 @@ fn test_archive_type_try_from_path() {
         TarMode::try_from_path(Path::new("a.tar.gz")),
         Some(TarMode::Gz)
     );
-    assert_eq!(TarMode::try_from_path(Path::new("a.tgz")), Some(TarMode::Gz));
+    assert_eq!(
+        TarMode::try_from_path(Path::new("a.tgz")),
+        Some(TarMode::Gz)
+    );
     assert_eq!(
         TarMode::try_from_path(Path::new("a.tar.xz")),
         Some(TarMode::Xz)
     );
-    assert_eq!(TarMode::try_from_path(Path::new("a.txz")), Some(TarMode::Xz));
+    assert_eq!(
+        TarMode::try_from_path(Path::new("a.txz")),
+        Some(TarMode::Xz)
+    );
     assert_eq!(TarMode::try_from_path(Path::new("a.zip")), None);
 }
 
@@ -262,9 +265,11 @@ fn test_base_archive_open_read_extract() {
         assert_eq!(fs::read(single_out.join("renamed.txt")).unwrap(), b"world");
 
         // 提取不存在的条目
-        assert!(archive
-            .extract_file("no_such.txt", single_out.join("x.txt"), None)
-            .is_err());
+        assert!(
+            archive
+                .extract_file("no_such.txt", single_out.join("x.txt"), None)
+                .is_err()
+        );
 
         // 追加内存数据后重新读取
         archive
@@ -292,7 +297,10 @@ fn test_base_archive_open_read_extract() {
         let extra = root.join("extra.txt");
         fs::write(&extra, b"extra content").unwrap();
         archive
-            .add_files(&[(extra.clone(), PathBuf::from("added/from_disk.txt"))], None)
+            .add_files(
+                &[(extra.clone(), PathBuf::from("added/from_disk.txt"))],
+                None,
+            )
             .unwrap_or_else(|e| panic!("{:?} add_files 失败: {:?}", archive_type, e));
         assert_eq!(
             archive.read("added/from_disk.txt").unwrap(),
@@ -339,12 +347,7 @@ fn test_base_archive_extract_all_options() {
     // 排除指定条目
     let out2 = root.join("out_unselect");
     archive
-        .extract_all(
-            &out2,
-            Some(vec!["sub/deep.txt".to_string()]),
-            None,
-            None,
-        )
+        .extract_all(&out2, Some(vec!["sub/deep.txt".to_string()]), None, None)
         .unwrap();
     assert!(out2.join("a.txt").exists());
     assert!(!out2.join("sub").join("deep.txt").exists());
@@ -390,8 +393,7 @@ fn test_base_archive_create_empty() {
         let root = make_test_root();
         let archive_file = root.join(format!("empty{}", ext_of(archive_type)));
 
-        let mut archive =
-            BaseArchive::create_empty(archive_type, &archive_file).unwrap();
+        let mut archive = BaseArchive::create_empty(archive_type, &archive_file).unwrap();
         assert!(archive.entries().is_empty());
 
         archive
@@ -481,7 +483,10 @@ fn test_compress_with_root_path() {
 
     // 提取时保留 src/ 前缀
     decompress(ArchiveType::Zip, &archive_file, &out_dir, None).unwrap();
-    assert_eq!(fs::read(out_dir.join("src").join("a.txt")).unwrap(), b"hello");
+    assert_eq!(
+        fs::read(out_dir.join("src").join("a.txt")).unwrap(),
+        b"hello"
+    );
 
     let _ = fs::remove_dir_all(&root);
 }
@@ -593,7 +598,10 @@ fn test_extract_file_creates_parent_dirs() {
 
     // path_helper 读写辅助
     path_helper::write_text(root.join("t.txt"), "文本内容").unwrap();
-    assert_eq!(path_helper::read_text(root.join("t.txt")).unwrap(), "文本内容");
+    assert_eq!(
+        path_helper::read_text(root.join("t.txt")).unwrap(),
+        "文本内容"
+    );
 
     let _ = fs::remove_dir_all(&root);
 }

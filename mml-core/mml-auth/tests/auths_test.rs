@@ -79,7 +79,10 @@ fn write_json(dir: &Path, name: &str, json: &str) -> PathBuf {
 fn test_auths_lifecycle() {
     let dir = setup();
     let inner = inner_path::get_inner_path();
-    assert!(dir.starts_with(mml_testutil::temp_dir()), "内部目录应位于临时目录下");
+    assert!(
+        dir.starts_with(mml_testutil::temp_dir()),
+        "内部目录应位于临时目录下"
+    );
 
     // ---- 1) 预写 auth.json 后 init，验证从磁盘加载 ----
     let accounts = vec![
@@ -166,9 +169,11 @@ fn test_auths_lifecycle() {
     let saved: Vec<LoginObj> =
         serialize_tools::json_from_file(inner.join("auth.json")).expect("auth.json 应可解析");
     assert_eq!(saved.len(), 2);
-    assert!(saved
-        .iter()
-        .any(|x| x.uuid == FAKE_UUID_A && x.access_token == "token-a-new"));
+    assert!(
+        saved
+            .iter()
+            .any(|x| x.uuid == FAKE_UUID_A && x.access_token == "token-a-new")
+    );
     assert!(saved.iter().any(|x| x.uuid == FAKE_UUID_B));
 
     // 当前账户选择文件应与最后一次 set_current 一致

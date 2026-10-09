@@ -74,11 +74,7 @@ watch(
 <template>
   <div class="launch-screen">
     <div class="launch-card">
-      <InstanceIcon
-        :name="instance?.name ?? 'M'"
-        :uuid="instance?.uuid ?? '0'"
-        :size="88"
-      />
+      <InstanceIcon :name="instance?.name ?? 'M'" :uuid="instance?.uuid ?? '0'" :size="88" />
       <h2>{{ instance?.name ?? "启动中" }}</h2>
       <div class="status-row">
         <span class="status-dot" :class="{ running: running }"></span>
@@ -101,12 +97,8 @@ watch(
       </div>
 
       <div ref="consoleEl" class="console">
-        <div
-          v-for="(line, i) in filteredLogs"
-          :key="i"
-          class="log-line"
-          :class="{ 'log-error': line.level === 'Error', 'log-warn': line.level === 'Warn' }"
-        >
+        <div v-for="(line, i) in filteredLogs" :key="i" class="log-line"
+          :class="{ 'log-error': line.level === 'Error', 'log-warn': line.level === 'Warn' }">
           {{ line.text }}
         </div>
         <div v-if="filteredLogs.length === 0" class="log-empty">{{ t("launch.waitLog") }}</div>
@@ -182,7 +174,8 @@ watch(
   border-radius: 10px;
   padding: 12px 14px;
   overflow-y: auto;
-  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
+  scrollbar-gutter: stable;
+  /* 见 styles/scrollbar.css */
   font-family: "Cascadia Code", Consolas, "Courier New", monospace;
   font-size: 12.5px;
   line-height: 1.65;
@@ -235,10 +228,12 @@ watch(
 }
 
 @keyframes pulse {
+
   0%,
   100% {
     opacity: 1;
   }
+
   50% {
     opacity: 0.4;
   }

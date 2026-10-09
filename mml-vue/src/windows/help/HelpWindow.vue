@@ -26,15 +26,8 @@ function toggle(i: number) {
       <div v-for="(item, i) in faqs" :key="i" class="faq-item">
         <button class="faq-q" @click="toggle(i)">
           <span>{{ item.q }}</span>
-          <svg
-            viewBox="0 0 24 24"
-            width="14"
-            height="14"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            :style="{ transform: openIndex === i ? 'rotate(180deg)' : 'none' }"
-          >
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"
+            :style="{ transform: openIndex === i ? 'rotate(180deg)' : 'none' }">
             <path d="m6 9 6 6 6-6" />
           </svg>
         </button>

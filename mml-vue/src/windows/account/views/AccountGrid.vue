@@ -97,78 +97,53 @@ function hidePreview() {
       <span class="add-text">{{ t("account.add") }}</span>
     </button>
 
-    <div
-      v-for="acc in accounts"
-      :key="acc.uuid"
-      class="acc-card"
-      :class="{ current: isCurrent(acc) }"
-      @dblclick="emit('switch', acc)"
-    >
-      <div class="acc-images" :class="{ empty: imageFailed(acc, 'avatar') && imageFailed(acc, 'skin') && imageFailed(acc, 'cape') }">
+    <div v-for="acc in accounts" :key="acc.uuid" class="acc-card" :class="{ current: isCurrent(acc) }"
+      @dblclick="emit('switch', acc)">
+      <div class="acc-images"
+        :class="{ empty: imageFailed(acc, 'avatar') && imageFailed(acc, 'skin') && imageFailed(acc, 'cape') }">
         <span v-if="isCurrent(acc)" class="current-badge">{{ t("account.current") }}</span>
         <!-- 加载中：图上叠转圈，onload 后消失（img 先渲染，加载完才能触发事件） -->
         <div v-if="!imageFailed(acc, 'avatar')" class="img-box img-avatar-box">
-          <img
-            :src="acc.avatar || accountAvatarUrl(acc)"
-            class="img-avatar"
-            :class="{ pending: imageLoading(acc, 'avatar') }"
-            :alt="t('account.avatar')"
-            data-no-fallback
-            @load="markImageLoaded(acc, 'avatar')"
-            @error="markImageFailed(acc, 'avatar')"
-            @mouseenter="showPreview($event, acc, 'avatar')"
-            @mousemove="movePreview"
-            @mouseleave="hidePreview"
-          />
+          <img :src="acc.avatar || accountAvatarUrl(acc)" class="img-avatar"
+            :class="{ pending: imageLoading(acc, 'avatar') }" :alt="t('account.avatar')" data-no-fallback
+            @load="markImageLoaded(acc, 'avatar')" @error="markImageFailed(acc, 'avatar')"
+            @mouseenter="showPreview($event, acc, 'avatar')" @mousemove="movePreview" @mouseleave="hidePreview" />
           <div v-if="imageLoading(acc, 'avatar')" class="img-spin" />
         </div>
         <!-- 头像由皮肤渲染而来：皮肤都没有时不再显示"无头像"，只留皮肤/披风占位 -->
         <div v-else-if="!imageFailed(acc, 'skin')" class="img-ph img-avatar-ph">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6"
+            stroke-linecap="round">
             <circle cx="12" cy="8" r="4" />
             <path d="M4 21c0-4 3.6-6.5 8-6.5s8 2.5 8 6.5" />
           </svg>
           <span>{{ t("account.noAvatar") }}</span>
         </div>
         <div v-if="!imageFailed(acc, 'skin')" class="img-box img-skin-box">
-          <img
-            :src="accountSkinUrl(acc)"
-            class="img-skin"
-            :class="{ 'mode-3d': isSkin3D, pending: imageLoading(acc, 'skin') }"
-            :alt="t('account.skin')"
-            data-no-fallback
-            @load="markImageLoaded(acc, 'skin')"
-            @error="markImageFailed(acc, 'skin')"
-            @mouseenter="showPreview($event, acc, 'skin')"
-            @mousemove="movePreview"
-            @mouseleave="hidePreview"
-          />
+          <img :src="accountSkinUrl(acc)" class="img-skin"
+            :class="{ 'mode-3d': isSkin3D, pending: imageLoading(acc, 'skin') }" :alt="t('account.skin')"
+            data-no-fallback @load="markImageLoaded(acc, 'skin')" @error="markImageFailed(acc, 'skin')"
+            @mouseenter="showPreview($event, acc, 'skin')" @mousemove="movePreview" @mouseleave="hidePreview" />
           <div v-if="imageLoading(acc, 'skin')" class="img-spin" />
         </div>
         <div v-else class="img-ph img-skin-ph">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6"
+            stroke-linecap="round">
             <circle cx="12" cy="5" r="2.4" />
             <path d="M9.5 9h5l1.5 6h-2l-.8 7h-2.4l-.8-7h-2z" />
           </svg>
           <span>{{ t("account.noSkin") }}</span>
         </div>
         <div v-if="!imageFailed(acc, 'cape')" class="img-box img-cape-box">
-          <img
-            :src="accountCapeUrl(acc)"
-            class="img-cape"
-            :class="{ pending: imageLoading(acc, 'cape') }"
-            :alt="t('account.cape')"
-            data-no-fallback
-            @load="markImageLoaded(acc, 'cape')"
-            @error="markImageFailed(acc, 'cape')"
-            @mouseenter="showPreview($event, acc, 'cape')"
-            @mousemove="movePreview"
-            @mouseleave="hidePreview"
-          />
+          <img :src="accountCapeUrl(acc)" class="img-cape" :class="{ pending: imageLoading(acc, 'cape') }"
+            :alt="t('account.cape')" data-no-fallback @load="markImageLoaded(acc, 'cape')"
+            @error="markImageFailed(acc, 'cape')" @mouseenter="showPreview($event, acc, 'cape')"
+            @mousemove="movePreview" @mouseleave="hidePreview" />
           <div v-if="imageLoading(acc, 'cape')" class="img-spin" />
         </div>
         <div v-else class="img-ph img-cape-ph">
-          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6"
+            stroke-linecap="round" stroke-linejoin="round">
             <path d="M8 3h8l1 3-1 3v12l-4-2.5L8 21V9L7 6z" />
           </svg>
           <span>{{ t("account.noCape") }}</span>
@@ -177,30 +152,19 @@ function hidePreview() {
       <div class="acc-head">
         <span class="acc-name">{{ acc.userName }}</span>
         <AccountTypeBadge :auth-type="acc.authType" />
-        <AccountActions
-          :can-refresh="acc.canRefresh"
-          :can-relogin="acc.canRelogin"
-          :can-edit="acc.canEdit"
-          :has-skin="!hasNoSkin(acc)"
-          @refresh="emit('refresh', acc)"
-          @view-skin="emit('viewSkin', acc)"
-          @refresh-skin="emit('refreshSkin', acc)"
-          @relogin="emit('relogin', acc)"
-          @edit="emit('edit', acc)"
-          @delete="emit('delete', acc)"
-        />
+        <AccountActions :can-refresh="acc.canRefresh" :can-relogin="acc.canRelogin" :can-edit="acc.canEdit"
+          :has-skin="!hasNoSkin(acc)" @refresh="emit('refresh', acc)" @view-skin="emit('viewSkin', acc)"
+          @refresh-skin="emit('refreshSkin', acc)" @relogin="emit('relogin', acc)" @edit="emit('edit', acc)"
+          @delete="emit('delete', acc)" />
       </div>
     </div>
     <div v-if="accounts.length === 0" class="empty-tip">{{ t("account.searchEmpty") }}</div>
 
     <!-- 悬停图片时的大图预览（跟随鼠标，不拦截事件），尺寸按图片类型区分 -->
     <Teleport to="body">
-      <div
-        v-if="preview"
-        class="skin-float"
+      <div v-if="preview" class="skin-float"
         :class="[preview.kind, preview.kind === 'skin' && isSkin3D ? 'skin3d' : '']"
-        :style="{ left: preview.x + 'px', top: preview.y + 'px' }"
-      >
+        :style="{ left: preview.x + 'px', top: preview.y + 'px' }">
         <img :src="preview.url" alt="" />
         <img v-if="preview.backUrl" :src="preview.backUrl" alt="" />
       </div>
@@ -266,7 +230,8 @@ function hidePreview() {
 }
 
 .img-box img.pending {
-  opacity: 0; /* 加载中先隐藏（遮住 alt 文本），onload 后再显示 */
+  opacity: 0;
+  /* 加载中先隐藏（遮住 alt 文本），onload 后再显示 */
 }
 
 /* 加载中转圈（img 上层居中） */

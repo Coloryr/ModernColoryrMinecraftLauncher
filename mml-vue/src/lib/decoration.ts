@@ -80,13 +80,13 @@ export function registerSnapTarget(root: HTMLElement | null): () => void {
   const runtime = decorationRuntime();
   if (!runtime?.setExternalControlProvider) {
     // 插件没起来（浏览器预览 / 插件版本没这个接口）：什么都不做
-    return () => {};
+    return () => { };
   }
 
   if (!root) {
     runtime.setExternalControlProvider?.(null);
     pluginDecorated.value = false;
-    return () => {};
+    return () => { };
   }
 
   pluginDecorated.value = true;

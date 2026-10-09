@@ -89,26 +89,11 @@ function onClick() {
 
 <template>
   <!-- 没有任务时整块不存在 -->
-  <button
-    v-if="tasks.length"
-    class="mp-indicator"
-    :class="iconState"
-    :disabled="!clickable"
-    v-tip="tipText"
-    :aria-label="tipText"
-    @click="onClick"
-  >
+  <button v-if="tasks.length" class="mp-indicator" :class="iconState" :disabled="!clickable" v-tip="tipText"
+    :aria-label="tipText" @click="onClick">
     <span class="mp-ind-icon">
-      <svg
-        viewBox="0 0 24 24"
-        width="17"
-        height="17"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="1.9"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      >
+      <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9"
+        stroke-linecap="round" stroke-linejoin="round">
         <path d="M21 8v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8" />
         <path d="m3 8 2.5-4h13L21 8" />
         <path d="M12 3v5" />

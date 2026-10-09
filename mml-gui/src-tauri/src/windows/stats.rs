@@ -30,7 +30,7 @@ pub fn stats_get_data() -> Result<StatsDataDto, String> {
             secs += (end - run.start_time).num_seconds().max(0) as u64;
 
             let start_ms = run.start_time.timestamp_millis();
-            if last.map_or(true, |v| start_ms > v) {
+            if last.is_none_or(|v| start_ms > v) {
                 last = Some(start_ms);
             }
             if run.now {

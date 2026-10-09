@@ -105,23 +105,15 @@ async function onDetailRemove() {
     <!-- 已渲染：分类栏 + 网格 -->
     <div v-if="rendered" class="block-main">
       <CategoryRail :items="catItems" :active="cat" @pick="cat = $event" />
-      <BlockGrid
-        :items="filtered"
-        :keyword="keyword"
-        :size="size"
-        :active-id="detail?.id ?? null"
-        :skin-cat="SKIN_CAT"
-        :filtered="isFiltered"
-        @open="openDetail"
-        @remove-skin="removeSkin"
-        @clear-filters="clearFilters"
-      />
+      <BlockGrid :items="filtered" :keyword="keyword" :size="size" :active-id="detail?.id ?? null" :skin-cat="SKIN_CAT"
+        :filtered="isFiltered" @open="openDetail" @remove-skin="removeSkin" @clear-filters="clearFilters" />
     </div>
 
     <!-- 未渲染：提示卡（渲染中显示进度说明，不再给按钮） -->
     <div v-if="!rendered" class="block-prompt">
       <div class="block-prompt-icon">
-        <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.6"
+          stroke-linecap="round" stroke-linejoin="round">
           <path d="M12 3 4.5 7.5v9L12 21l7.5-4.5v-9L12 3z" />
           <path d="M4.5 7.5 12 12l7.5-4.5" />
           <path d="M12 12v9" />
@@ -140,26 +132,13 @@ async function onDetailRemove() {
     </div>
 
     <!-- 设为实例图标：选哪个实例（当前实例高亮，点条目即设） -->
-    <InstancePickModal
-      v-if="iconPick"
-      :current-uuid="currentInstance?.uuid ?? null"
-      :busy="iconBusy"
-      @pick="onIconPick"
-      @close="iconPick = false"
-    />
+    <InstancePickModal v-if="iconPick" :current-uuid="currentInstance?.uuid ?? null" :busy="iconBusy" @pick="onIconPick"
+      @close="iconPick = false" />
 
     <!-- 方块详情：打开选实例弹窗时先让位，避免两层遮罩叠着 -->
-    <BlockDetailModal
-      v-if="detail && !iconPick"
-      :block="detail"
-      :category="catLabel(detail.cat)"
-      :keyword="keyword"
-      :removable="detail.cat === SKIN_CAT"
-      :busy="iconBusy"
-      @close="closeDetail"
-      @remove="onDetailRemove"
-      @set-icon="openIconPick"
-    />
+    <BlockDetailModal v-if="detail && !iconPick" :block="detail" :category="catLabel(detail.cat)" :keyword="keyword"
+      :removable="detail.cat === SKIN_CAT" :busy="iconBusy" @close="closeDetail" @remove="onDetailRemove"
+      @set-icon="openIconPick" />
   </div>
 </template>
 
@@ -189,7 +168,7 @@ async function onDetailRemove() {
 }
 
 .block-progress,
-.block-panel > .block-prompt:first-child {
+.block-panel>.block-prompt:first-child {
   margin-top: 22px;
 }
 

@@ -67,7 +67,7 @@ pub fn get_download_assets(hash: &str) -> String {
 }
 
 /// 获取其他下载源的Minecraft下载地址
-/// 
+///
 /// - `url`: 官方下载地址
 /// - `version`: 游戏版本
 ///
@@ -99,7 +99,7 @@ pub fn change_source(url: &mut String) {
 }
 
 /// 获取forge版本信息获取网址
-/// 
+///
 /// - `version`: 游戏版本
 ///
 /// # 返回值
@@ -184,7 +184,7 @@ pub fn get_optifine_meta() -> String {
 }
 
 /// 获取Forge下载地址
-/// 
+///
 /// - `mc`: 游戏版本
 /// - `version`: forge版本
 ///
@@ -202,7 +202,7 @@ pub fn get_forge_jar(mc: &str, version: &str) -> String {
 }
 
 /// 获取NeoForge下载地址
-/// 
+///
 /// - `v2222`: 是否为1.20.2以上版本
 /// - `mc`: 游戏版本
 /// - `version`: NeoForge 版本
@@ -225,7 +225,7 @@ pub fn get_neoforge_jar(v2222: bool, mc: &str, version: &str) -> String {
 }
 
 /// 外置登录地址
-/// 
+///
 /// - `obj`: 登陆地址
 ///
 /// # 返回值
@@ -243,7 +243,7 @@ pub fn get_authlib_injector(obj: &ArtifactsObj) -> String {
 }
 
 /// 外置登录地址
-/// 
+///
 /// - `obj`: 登陆地址
 ///
 /// # 返回值
@@ -267,7 +267,7 @@ pub fn get_authlib_injector_jar(obj: &AuthlibInjectorObj) -> String {
 }
 
 /// 获取高清修复下载地址
-/// 
+///
 /// - `obj`: 高清修复信息
 ///
 /// # 返回值
@@ -284,7 +284,7 @@ pub fn get_optifine_jar(obj: &OptifineListObj) -> String {
 }
 
 /// 替换运行库下载地址
-/// 
+///
 /// - `url`: 运行库地址
 ///
 /// # 返回值
@@ -301,7 +301,7 @@ pub fn replace_minecraft_libraries(url: &str) -> String {
 }
 
 /// 替换运行库下载地址
-/// 
+///
 /// - `url`: 运行库地址
 ///
 /// # 返回值
@@ -315,7 +315,7 @@ pub fn replace_forge_libraries(url: &str) -> String {
 }
 
 /// 替换运行库下载地址
-/// 
+///
 /// - `url`: 运行库地址
 ///
 /// # 返回值
@@ -343,7 +343,7 @@ pub fn replace_fabric_libraries(url: &str) -> String {
 }
 
 /// 修正Forge下载地址
-/// 
+///
 /// - `version`: 游戏版本
 ///
 /// # 返回值

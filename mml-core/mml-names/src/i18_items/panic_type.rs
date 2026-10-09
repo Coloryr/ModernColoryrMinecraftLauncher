@@ -8,5 +8,5 @@ pub enum PanicType {
     /// 核心启动参数中的程序路径无效
     CoreArgLocalError,
     /// 日志文件打开失败（路径、错误信息）
-    LogOpenFail(String, String)
+    LogOpenFail(String, String),
 }

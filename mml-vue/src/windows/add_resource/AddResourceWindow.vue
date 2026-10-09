@@ -568,17 +568,13 @@ onActivated(consumeTargetProject);
           <select v-model="sort" class="field-select sel-filter" :disabled="searching" @change="submitSearch">
             <option v-for="s in sorts" :key="s" :value="s">{{ t(`modpack.sort.${s}`) }}</option>
           </select>
-          <select
-            v-if="categories.length"
-            v-model="category"
-            class="field-select sel-filter"
-            :disabled="searching"
-            @change="submitSearch"
-          >
+          <select v-if="categories.length" v-model="category" class="field-select sel-filter" :disabled="searching"
+            @change="submitSearch">
             <option value="">{{ t("modpack.allCategories") }}</option>
             <option v-for="c in categories" :key="c.value" :value="c.value">{{ c.label }}</option>
           </select>
-          <select v-if="type === 'mod'" v-model="loader" class="field-select sel-filter" :disabled="searching" @change="submitSearch">
+          <select v-if="type === 'mod'" v-model="loader" class="field-select sel-filter" :disabled="searching"
+            @change="submitSearch">
             <option v-for="l in LOADERS" :key="l" :value="l">
               {{ l === "normal" ? t("addResource.loader.normal") : l }}
             </option>
@@ -586,14 +582,8 @@ onActivated(consumeTargetProject);
         </div>
 
         <div class="res-search">
-          <input
-            v-model="filter"
-            class="field-input search-input"
-            :placeholder="t('addResource.searchHint')"
-            spellcheck="false"
-            :disabled="searching"
-            @keydown.enter="submitSearch"
-          />
+          <input v-model="filter" class="field-input search-input" :placeholder="t('addResource.searchHint')"
+            spellcheck="false" :disabled="searching" @keydown.enter="submitSearch" />
           <button class="search-btn" :disabled="searching" @click="submitSearch">
             <span v-if="searching" class="btn-spinner"></span>
             {{ t("modpack.search") }}
@@ -635,7 +625,7 @@ onActivated(consumeTargetProject);
                 <div class="pack-name">
                   <span>{{ item.name }}</span>
                   <span v-if="item.authors.length" class="pack-author">
-                    {{ item.authors.map((a) => a.name).join(", ") }}
+                    {{item.authors.map((a) => a.name).join(", ")}}
                   </span>
                   <span v-if="projectInstalled(item)" class="pack-badge">{{ t("modpack.installed") }}</span>
                   <span v-else-if="projectRunning(item)" class="pack-badge busy">{{ t("modpack.downloading") }}</span>
@@ -678,7 +668,8 @@ onActivated(consumeTargetProject);
           </div>
         </div>
         <div class="ver-tools">
-          <select v-model="fileVersion" class="field-select sel-file-version" :disabled="filesLoading" @change="onFileVersionChange">
+          <select v-model="fileVersion" class="field-select sel-file-version" :disabled="filesLoading"
+            @change="onFileVersionChange">
             <option value="">{{ t("modpack.allVersions") }}</option>
             <option v-for="v in versions" :key="v" :value="v">{{ v }}</option>
           </select>
@@ -686,7 +677,10 @@ onActivated(consumeTargetProject);
             <button class="page-btn" :disabled="filePage === 0 || filesLoading" @click="turnFilePage(-1)">
               {{ t("modpack.prevPage") }}
             </button>
-            <span class="file-page-num">{{ filePage + 1 }} / {{ fileMaxPage }} · {{ t("modpack.totalItems", { n: fileTotal }) }}</span>
+            <span class="file-page-num">{{ filePage + 1 }} / {{ fileMaxPage }} · {{ t("modpack.totalItems", {
+              n:
+              fileTotal })
+              }}</span>
             <button class="page-btn" :disabled="filePage >= fileMaxPage - 1 || filesLoading" @click="turnFilePage(1)">
               {{ t("modpack.nextPage") }}
             </button>
@@ -734,12 +728,7 @@ onActivated(consumeTargetProject);
         <div class="save-list">
           <div v-if="savesLoading" class="empty-tip">{{ t("modpack.loading") }}</div>
           <div v-else-if="saves.length === 0" class="empty-tip">{{ t("resource.empty") }}</div>
-          <label
-            v-for="save in saves"
-            :key="save.dir"
-            class="save-row"
-            :class="{ on: pickedSave === save.dir }"
-          >
+          <label v-for="save in saves" :key="save.dir" class="save-row" :class="{ on: pickedSave === save.dir }">
             <input v-model="pickedSave" type="radio" name="save-pick" :value="save.dir" />
             <span class="save-name">{{ save.name }}</span>
           </label>
@@ -763,7 +752,7 @@ onActivated(consumeTargetProject);
 }
 
 /* 下载进度条也是这一列里的卡片，同样回缩 8px（与下面筛选卡、资源卡对齐） */
-.res-mode > :deep(.res-bar) {
+.res-mode> :deep(.res-bar) {
   margin: 0 8px;
 }
 
@@ -787,7 +776,7 @@ onActivated(consumeTargetProject);
 }
 
 /* 类型一栏（5 项）可能比窗口宽：允许换行 */
-.res-filters > :deep(.seg-tabs) {
+.res-filters> :deep(.seg-tabs) {
   flex-wrap: wrap;
 }
 
@@ -883,7 +872,8 @@ select.sel-file-version {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
+  scrollbar-gutter: stable;
+  /* 见 styles/scrollbar.css */
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -1138,7 +1128,8 @@ select.sel-file-version {
 .ver-files {
   max-height: 320px;
   overflow-y: auto;
-  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
+  scrollbar-gutter: stable;
+  /* 见 styles/scrollbar.css */
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -1206,7 +1197,8 @@ select.sel-file-version {
 .save-list {
   max-height: 280px;
   overflow-y: auto;
-  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
+  scrollbar-gutter: stable;
+  /* 见 styles/scrollbar.css */
   display: flex;
   flex-direction: column;
   gap: 6px;

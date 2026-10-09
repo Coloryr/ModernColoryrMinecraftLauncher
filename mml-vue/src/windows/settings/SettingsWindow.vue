@@ -180,58 +180,25 @@ function onKeyDown(e: KeyboardEvent) {
             <h2 class="set-content-title">{{ t(`winSettings.tab.${tab}`) }}</h2>
             <p class="set-content-sub">{{ t(`winSettings.tabDesc.${tab}`) }}</p>
           </div>
-          <BaseButton
-            v-if="canResetPage"
-            size="sm"
-            v-tip="t('winSettings.resetPageHint')"
-            @click="confirmResetPage = true"
-          >
+          <BaseButton v-if="canResetPage" size="sm" v-tip="t('winSettings.resetPageHint')"
+            @click="confirmResetPage = true">
             {{ t("winSettings.resetPage") }}
           </BaseButton>
         </header>
 
         <section class="set-panel">
-          <UiTab
-            v-if="tab === 'ui'"
-            :settings="ui"
-            :flash-group="flashGroup"
-          />
-          <JavaTab
-            v-else-if="tab === 'java'"
-            :settings="java"
-            :flash-group="flashGroup"
-          />
-          <NetworkTab
-            v-else-if="tab === 'network'"
-            :settings="network"
-            :flash-group="flashGroup"
-          />
-          <LaunchTab
-            v-else-if="tab === 'launch'"
-            :settings="launch"
-            :flash-group="flashGroup"
-          />
-          <SkinTab
-            v-else-if="tab === 'skin'"
-            :settings="skin"
-            :flash-group="flashGroup"
-          />
-          <ClientTab
-            v-else
-            :settings="client"
-            :win="launchWin"
-            :flash-group="flashGroup"
-          />
+          <UiTab v-if="tab === 'ui'" :settings="ui" :flash-group="flashGroup" />
+          <JavaTab v-else-if="tab === 'java'" :settings="java" :flash-group="flashGroup" />
+          <NetworkTab v-else-if="tab === 'network'" :settings="network" :flash-group="flashGroup" />
+          <LaunchTab v-else-if="tab === 'launch'" :settings="launch" :flash-group="flashGroup" />
+          <SkinTab v-else-if="tab === 'skin'" :settings="skin" :flash-group="flashGroup" />
+          <ClientTab v-else :settings="client" :win="launchWin" :flash-group="flashGroup" />
         </section>
       </div>
     </div>
 
     <!-- 恢复本页默认：只影响当前页，仍先确认一次 -->
-    <BaseModal
-      v-if="confirmResetPage"
-      :title="t('winSettings.resetPageTitle')"
-      @close="confirmResetPage = false"
-    >
+    <BaseModal v-if="confirmResetPage" :title="t('winSettings.resetPageTitle')" @close="confirmResetPage = false">
       <p class="modal-text">
         {{ t("winSettings.resetPageConfirm", { page: t(`winSettings.tab.${tab}`) }) }}
       </p>

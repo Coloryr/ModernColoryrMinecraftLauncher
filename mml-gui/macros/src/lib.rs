@@ -12,3 +12,14 @@ use proc_macro::TokenStream;
 pub fn emit(_attr: TokenStream, item: TokenStream) -> TokenStream {
     item
 }
+
+/// IPC 分组标记（属性宏，原样返回 item，不改动函数）
+///
+/// 只作为源生成器的扫描标记：命令拆进子模块时，靠它把 `bindings.ts` 的组键钉回
+/// 原来的组（否则组键会跟着 .rs 文件变成子模块名，前端 `commands.<组>.*` 全断）。
+/// 生成器侧见 `ipc-gen/src/scan.rs` 的 `group_of`，用法是
+/// `#[gui_macros::ipc_group("resource")]`。
+#[proc_macro_attribute]
+pub fn ipc_group(_attr: TokenStream, item: TokenStream) -> TokenStream {
+    item
+}

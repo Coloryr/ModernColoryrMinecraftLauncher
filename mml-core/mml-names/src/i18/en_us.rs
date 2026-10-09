@@ -1,15 +1,13 @@
 use crate::{
+    VERSION,
     i18::I18Lang,
     i18_items::{
-        error_type::{
-            ArgEmptyData, ArgErrorData, DataNotFoundData, ErrorType, SkinBlockErrorData,
-        },
+        error_type::{ArgEmptyData, ArgErrorData, DataNotFoundData, ErrorType, SkinBlockErrorData},
         gui_type::GuiType,
         info_type::InfoType,
         panic_type::PanicType,
         thread_type::ThreadType,
     },
-    VERSION,
 };
 pub struct EnUs;
 
@@ -152,7 +150,9 @@ impl I18Lang for EnUs {
 
             ErrorType::SkinBlockError(data) => match data {
                 SkinBlockErrorData::NameIllegal(name) => {
-                    format!("Invalid skin block name: {name} (only ASCII letters, digits, '-' and '_', max 64 characters)")
+                    format!(
+                        "Invalid skin block name: {name} (only ASCII letters, digits, '-' and '_', max 64 characters)"
+                    )
                 }
                 SkinBlockErrorData::SkinSize { width, height } => {
                     format!("Skin must be 64x64 (or legacy 64x32), got {width}x{height}")

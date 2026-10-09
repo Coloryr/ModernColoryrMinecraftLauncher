@@ -82,19 +82,9 @@ function onWheel(e: WheelEvent) {
 <template>
   <Teleport to="body">
     <transition name="img-preview-fade">
-      <div
-        v-if="src"
-        class="img-preview"
-        :class="{ pannable: scale > 1, panning: dragged }"
-        @click="onClick"
-        @wheel.prevent="onWheel"
-        @pointerdown="onDown"
-      >
-        <img
-          :src="src"
-          alt=""
-          :style="{ transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})` }"
-        />
+      <div v-if="src" class="img-preview" :class="{ pannable: scale > 1, panning: dragged }" @click="onClick"
+        @wheel.prevent="onWheel" @pointerdown="onDown">
+        <img :src="src" alt="" :style="{ transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})` }" />
         <!--
           底部条：提示 + 调用方自己的操作（截图那边放"打开文件夹 / 删除"）。
           `@click.stop` 是必须的 —— 不然点按钮会顺带触发浮层的"点空白关闭"

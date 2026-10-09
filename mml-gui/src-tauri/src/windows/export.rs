@@ -201,7 +201,9 @@ pub fn export_run(app: AppHandle, uuid: String, config: ExportConfigDto) -> Resu
     };
     if config.file.trim().is_empty() {
         EXPORT_RUNNING.store(false, Ordering::SeqCst);
-        return Err("err.serverEmpty".to_string());
+        // 这里校验的是**导出文件名**，原来报的是 err.serverEmpty（服务器为空），
+        // 前端弹出来的文案牛头不对马嘴
+        return Err("err.fileName".to_string());
     }
 
     // 在线模组：mods 目录文件与 mod_info.json 对上号的（进 manifest / index）

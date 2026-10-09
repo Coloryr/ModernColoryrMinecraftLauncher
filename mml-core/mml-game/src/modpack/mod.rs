@@ -52,11 +52,7 @@ pub(crate) trait ModPackWorker {
     /// # 返回值
     ///
     /// 返回新实例的 UUID；创建失败返回对应错误
-    async fn create_instance(
-        &self,
-        name: Option<String>,
-        group: Option<Uuid>,
-    ) -> CoreResult<Uuid>;
+    async fn create_instance(&self, name: Option<String>, group: Option<Uuid>) -> CoreResult<Uuid>;
     /// 解压文件
     ///
     /// # 参数

@@ -25,7 +25,10 @@
 //! 包括用户名、UUID、access token、client token、认证类型等。
 //! 账户通过 [`UserKeyObj`]（UUID + 认证类型）作为唯一键进行索引。
 
-use std::{collections::HashSet, sync::{LazyLock, RwLock}};
+use std::{
+    collections::HashSet,
+    sync::{LazyLock, RwLock},
+};
 
 use chrono::{DateTime, Duration, FixedOffset, Local};
 use mml_names::i18_items::error_type::CoreResult;
@@ -252,7 +255,8 @@ impl LoginObj {
     ///
     /// 已过期返回 `true`
     pub fn is_expired(&self) -> bool {
-        self.expire_at.is_some_and(|t| Local::now().fixed_offset() > t)
+        self.expire_at
+            .is_some_and(|t| Local::now().fixed_offset() > t)
     }
 
     /// 获取账户的唯一键（UUID + 认证类型）
@@ -322,7 +326,8 @@ pub struct UserKeyObj {
     pub auth_type: AuthType,
 }
 
-static USER_LOCK: LazyLock<RwLock<HashSet<UserKeyObj>>> = LazyLock::new(|| RwLock::new(HashSet::new()));
+static USER_LOCK: LazyLock<RwLock<HashSet<UserKeyObj>>> =
+    LazyLock::new(|| RwLock::new(HashSet::new()));
 
 pub fn have_lock(user: &UserKeyObj) -> bool {
     USER_LOCK.read().unwrap().contains(user)
@@ -379,9 +384,15 @@ mod tests {
         assert_eq!(AuthType::from_str("Offline"), AuthType::Offline);
         assert_eq!(AuthType::from_str("OAuth"), AuthType::OAuth);
         assert_eq!(AuthType::from_str("Nide8"), AuthType::Nide8);
-        assert_eq!(AuthType::from_str("AuthlibInjector"), AuthType::AuthlibInjector);
+        assert_eq!(
+            AuthType::from_str("AuthlibInjector"),
+            AuthType::AuthlibInjector
+        );
         assert_eq!(AuthType::from_str("LittleSkin"), AuthType::LittleSkin);
-        assert_eq!(AuthType::from_str("SelfLittleSkin"), AuthType::SelfLittleSkin);
+        assert_eq!(
+            AuthType::from_str("SelfLittleSkin"),
+            AuthType::SelfLittleSkin
+        );
     }
 
     /// from_str 对未知名称回退为 Offline（文档化现有行为）

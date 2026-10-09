@@ -24,7 +24,7 @@ fn check_word() {
 #[test]
 fn string() {
     let s1 = get_string("abcXYZdef", "abc", "def");
-    assert_eq!("XYZ", s1); 
+    assert_eq!("XYZ", s1);
 
     let s2 = get_string("你好世界abc", "你好", "abc");
     assert_eq!("世界", s2);

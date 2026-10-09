@@ -66,11 +66,7 @@ function metaLabel(item: SchematicItemDto): string {
     <ListSkeleton />
   </div>
   <div v-else class="item-list">
-    <ResourceRow
-      v-for="item in schematics"
-      :key="item.file"
-      :name="titleOf(item)"
-    >
+    <ResourceRow v-for="item in schematics" :key="item.file" :name="titleOf(item)">
       <template #badges>
         <span class="badge badge-dim">{{ item.typeName }}</span>
         <span v-if="item.fail" class="badge badge-red">{{ t("resource.modFail") }}</span>

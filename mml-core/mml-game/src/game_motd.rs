@@ -197,12 +197,16 @@ fn is_host_name(ip: &str) -> bool {
 async fn connect(ip: &str, port: u16) -> CoreResult<TcpStream> {
     timeout(TIMEOUT, TcpStream::connect((ip, port)))
         .await
-        .map_err(|_| ErrorType::SocketError(ErrorData {
-            error: format!("连接超时: {ip}:{port}"),
-        }))?
-        .map_err(|err| ErrorType::SocketError(ErrorData {
-            error: format!("连接失败: {ip}:{port} {err}"),
-        }))
+        .map_err(|_| {
+            ErrorType::SocketError(ErrorData {
+                error: format!("连接超时: {ip}:{port}"),
+            })
+        })?
+        .map_err(|err| {
+            ErrorType::SocketError(ErrorData {
+                error: format!("连接失败: {ip}:{port} {err}"),
+            })
+        })
 }
 
 /// io 错误转 SocketError
@@ -330,13 +334,10 @@ async fn srv_lookup(host: &str) -> Option<(String, u16)> {
         .await
         .ok()?
         .ok()?;
-    let srv = answer
-        .answers()
-        .iter()
-        .find_map(|r| match &r.data {
-            RData::SRV(srv) => Some(srv),
-            _ => None,
-        })?;
+    let srv = answer.answers().iter().find_map(|r| match &r.data {
+        RData::SRV(srv) => Some(srv),
+        _ => None,
+    })?;
     let target = srv.target.to_string();
     // 去掉结尾根点
     let target = target.strip_suffix('.').unwrap_or(&target).to_string();
@@ -441,7 +442,13 @@ fn chat_from_plain(text: &str) -> ChatObj {
     let mut current = String::new();
 
     let mut chars = text.chars().peekable();
-    let flush = |current: &mut String, extra: &mut Vec<ChatObj>, color: &Option<String>, bold: bool, italic: bool, underlined: bool, strikethrough: bool| {
+    let flush = |current: &mut String,
+                 extra: &mut Vec<ChatObj>,
+                 color: &Option<String>,
+                 bold: bool,
+                 italic: bool,
+                 underlined: bool,
+                 strikethrough: bool| {
         if !current.is_empty() {
             extra.push(ChatObj {
                 text: std::mem::take(current),
@@ -464,7 +471,15 @@ fn chat_from_plain(text: &str) -> ChatObj {
         let Some(code) = chars.next() else { break };
         if code == 'r' {
             // 重置全部样式
-            flush(&mut current, extra, &color, bold, italic, underlined, strikethrough);
+            flush(
+                &mut current,
+                extra,
+                &color,
+                bold,
+                italic,
+                underlined,
+                strikethrough,
+            );
             color = None;
             bold = false;
             italic = false;
@@ -473,7 +488,15 @@ fn chat_from_plain(text: &str) -> ChatObj {
             continue;
         }
         if let Some(hex) = code_color(code) {
-            flush(&mut current, extra, &color, bold, italic, underlined, strikethrough);
+            flush(
+                &mut current,
+                extra,
+                &color,
+                bold,
+                italic,
+                underlined,
+                strikethrough,
+            );
             color = Some(hex.to_string());
             // 颜色码会重置字体样式
             bold = false;
@@ -482,7 +505,15 @@ fn chat_from_plain(text: &str) -> ChatObj {
             strikethrough = false;
             continue;
         }
-        flush(&mut current, extra, &color, bold, italic, underlined, strikethrough);
+        flush(
+            &mut current,
+            extra,
+            &color,
+            bold,
+            italic,
+            underlined,
+            strikethrough,
+        );
         match code {
             'l' | 'L' => bold = true,
             'o' | 'O' => italic = true,
@@ -491,11 +522,22 @@ fn chat_from_plain(text: &str) -> ChatObj {
             'k' | 'K' => {} // 混淆字符按普通文字展示
             _ => current.push('§'),
         }
-        if !matches!(code, 'l' | 'L' | 'o' | 'O' | 'n' | 'N' | 'm' | 'M' | 'k' | 'K') {
+        if !matches!(
+            code,
+            'l' | 'L' | 'o' | 'O' | 'n' | 'N' | 'm' | 'M' | 'k' | 'K'
+        ) {
             current.push(code);
         }
     }
-    flush(&mut current, extra, &color, bold, italic, underlined, strikethrough);
+    flush(
+        &mut current,
+        extra,
+        &color,
+        bold,
+        italic,
+        underlined,
+        strikethrough,
+    );
     root
 }
 
@@ -545,7 +587,10 @@ fn flatten_chat(
     strikethrough: bool,
     out: &mut Vec<ChatSegment>,
 ) {
-    let color = chat.color.as_deref().map_or(color, |c| color_hex(c).unwrap_or(c));
+    let color = chat
+        .color
+        .as_deref()
+        .map_or(color, |c| color_hex(c).unwrap_or(c));
     let bold = chat.bold.unwrap_or(bold);
     let italic = chat.italic.unwrap_or(italic);
     let underlined = chat.underlined.unwrap_or(underlined);

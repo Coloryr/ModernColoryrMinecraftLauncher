@@ -66,7 +66,10 @@ mod tests {
         buf.put_u8(0);
 
         assert_eq!(buf.read_string(), "hello");
-        assert_eq!(buf.read_string_list(), vec!["a".to_string(), "b".to_string()]);
+        assert_eq!(
+            buf.read_string_list(),
+            vec!["a".to_string(), "b".to_string()]
+        );
         assert!(buf.read_bool());
         assert!(!buf.read_bool());
         assert!(buf.is_empty());

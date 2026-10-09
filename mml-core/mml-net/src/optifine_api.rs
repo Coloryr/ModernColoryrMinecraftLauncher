@@ -252,9 +252,7 @@ pub async fn get_optifine_download(
 /// 返回支持 OptiFine 的 Minecraft 版本集合（首次查询后缓存）
 pub async fn get_support_version() -> CoreResult<Option<HashSet<String>>> {
     match OPTIFINE_MC_VERSION.get() {
-        Some(data) => {
-            Ok(Some(data.clone()))
-        }
+        Some(data) => Ok(Some(data.clone())),
         None => {
             let list = get_optifine_version().await?;
             let list1 = list.iter().chunk_by(|item| &item.mc_version);
@@ -268,4 +266,3 @@ pub async fn get_support_version() -> CoreResult<Option<HashSet<String>>> {
         }
     }
 }
-

@@ -56,21 +56,11 @@ watch(lockServerError, async (msg) => {
 </script>
 
 <template>
-  <SettingsGroup
-    id="servers"
-    title-key="winSettings.secServers"
-    :flash="flashGroup === 'servers'"
-  >
+  <SettingsGroup id="servers" title-key="winSettings.secServers" :flash="flashGroup === 'servers'">
     <!-- 服务器地址：自动进服与 MOTD 显示共用 -->
     <label class="field-label">{{ t("winSettings.serverAddress") }}</label>
-    <input
-      v-model="serverAddr"
-      class="field-input"
-      spellcheck="false"
-      autocomplete="off"
-      placeholder="mc.example.com:25565"
-      v-tip="t('winSettings.serverAddressHint')"
-    />
+    <input v-model="serverAddr" class="field-input" spellcheck="false" autocomplete="off"
+      placeholder="mc.example.com:25565" v-tip="t('winSettings.serverAddressHint')" />
     <p class="field-desc">{{ t("winSettings.serverAddressHint") }}</p>
 
     <!-- 自动进服：启动时自动进入上面配置的服务器 -->
@@ -103,11 +93,7 @@ watch(lockServerError, async (msg) => {
     </div>
   </SettingsGroup>
 
-  <SettingsGroup
-    id="loginLock"
-    title-key="winSettings.secLoginLock"
-    :flash="flashGroup === 'loginLock'"
-  >
+  <SettingsGroup id="loginLock" title-key="winSettings.secLoginLock" :flash="flashGroup === 'loginLock'">
     <p class="field-desc">{{ t("winSettings.loginLockDesc") }}</p>
     <!-- 总开关：关闭时锁定列表不生效 -->
     <div class="switch-row">
@@ -122,7 +108,8 @@ watch(lockServerError, async (msg) => {
       <div v-if="client.loginLock.length" class="switch-list">
         <div v-for="(e, i) in client.loginLock" :key="e.ty" class="switch-row lock-item">
           <span class="lock-item-text">
-            {{ loginTypeLabel(e.ty) }}<template v-if="e.name"> — {{ e.name }}</template><template v-if="e.server"> — {{ e.server }}</template>
+            {{ loginTypeLabel(e.ty) }}<template v-if="e.name"> — {{ e.name }}</template><template v-if="e.server"> — {{
+              e.server }}</template>
           </span>
           <BaseButton size="sm" variant="danger" @click="removeLock(i)">
             {{ t("winSettings.loginLockRemove") }}
@@ -138,25 +125,11 @@ watch(lockServerError, async (msg) => {
             {{ loginTypeLabel(ty) }}
           </option>
         </select>
-        <input
-          v-if="addLockHasServer"
-          v-model="addLockName"
-          class="field-input lock-add-name"
-          spellcheck="false"
-          autocomplete="off"
-          :placeholder="t('winSettings.lockModelName')"
-        />
-        <input
-          v-if="addLockHasServer"
-          :ref="(el) => (lockServerInput = el as HTMLInputElement | null)"
-          v-model="addLockServer"
-          class="field-input lock-add-server"
-          :class="{ 'lock-server-error': lockServerError }"
-          spellcheck="false"
-          autocomplete="off"
-          :placeholder="lockServerPlaceholder"
-          @input="lockServerError = ''"
-        />
+        <input v-if="addLockHasServer" v-model="addLockName" class="field-input lock-add-name" spellcheck="false"
+          autocomplete="off" :placeholder="t('winSettings.lockModelName')" />
+        <input v-if="addLockHasServer" :ref="(el) => (lockServerInput = el as HTMLInputElement | null)"
+          v-model="addLockServer" class="field-input lock-add-server" :class="{ 'lock-server-error': lockServerError }"
+          spellcheck="false" autocomplete="off" :placeholder="lockServerPlaceholder" @input="lockServerError = ''" />
         <BaseButton size="sm" variant="accent" :disabled="!addLockOptions.length" @click="addLock">
           {{ t("winSettings.loginLockAdd") }}
         </BaseButton>
@@ -165,22 +138,15 @@ watch(lockServerError, async (msg) => {
     </template>
   </SettingsGroup>
 
-  <SettingsGroup
-    id="instanceLock"
-    title-key="winSettings.secInstanceLock"
-    :flash="flashGroup === 'instanceLock'"
-  >
+  <SettingsGroup id="instanceLock" title-key="winSettings.secInstanceLock" :flash="flashGroup === 'instanceLock'">
     <p class="field-desc">{{ t("winSettings.instanceLockDesc") }}</p>
     <div class="switch-row">
       <div class="switch-text">
         <span class="switch-label">{{ t("winSettings.instanceLockOn") }}</span>
         <span class="switch-state">{{ t("winSettings.instanceLockOnDesc") }}</span>
       </div>
-      <select
-        class="field-select lock-select"
-        :value="client.lockInstance"
-        @change="onLockInstanceChange(($event.target as HTMLSelectElement).value)"
-      >
+      <select class="field-select lock-select" :value="client.lockInstance"
+        @change="onLockInstanceChange(($event.target as HTMLSelectElement).value)">
         <option value="">{{ t("winSettings.instanceLockNone") }}</option>
         <option v-for="i in lockInstances" :key="i.uuid" :value="i.uuid">{{ i.name }}</option>
         <!-- 锁定的实例已被删掉：补一条选中项，让用户能看到当前锁的是什么并切回「不锁定」 -->
@@ -191,11 +157,7 @@ watch(lockServerError, async (msg) => {
     </div>
   </SettingsGroup>
 
-  <SettingsGroup
-    id="customHome"
-    title-key="winSettings.secCustomHome"
-    :flash="flashGroup === 'customHome'"
-  >
+  <SettingsGroup id="customHome" title-key="winSettings.secCustomHome" :flash="flashGroup === 'customHome'">
     <p class="field-desc">{{ t("winSettings.customHomeDesc") }}</p>
     <div class="switch-row">
       <div class="switch-text">
@@ -209,12 +171,7 @@ watch(lockServerError, async (msg) => {
         {{ t("winSettings.customHomeImport") }}
       </BaseButton>
       <BaseButton size="sm" @click="openCustomHomeDir">{{ t("winSettings.customHomeOpenDir") }}</BaseButton>
-      <BaseButton
-        size="sm"
-        variant="danger"
-        :disabled="!customHome?.installed"
-        @click="removeCustomHome"
-      >
+      <BaseButton size="sm" variant="danger" :disabled="!customHome?.installed" @click="removeCustomHome">
         {{ t("winSettings.customHomeRemove") }}
       </BaseButton>
       <span class="custom-home-state">{{ customHomeState }}</span>
@@ -230,12 +187,7 @@ watch(lockServerError, async (msg) => {
   </SettingsGroup>
 
   <!-- 游戏标题（游戏窗口标题栏的自定义文字，全局默认值；数据属于 window 设置） -->
-  <SettingsGroup
-    v-if="win"
-    id="gameTitle"
-    title-key="winSettings.secGameTitle"
-    :flash="flashGroup === 'gameTitle'"
-  >
+  <SettingsGroup v-if="win" id="gameTitle" title-key="winSettings.secGameTitle" :flash="flashGroup === 'gameTitle'">
     <div class="switch-list">
       <div class="switch-row">
         <span>{{ t("winSettings.editTitle") }}</span>

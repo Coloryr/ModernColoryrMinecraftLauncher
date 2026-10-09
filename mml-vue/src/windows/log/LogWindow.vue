@@ -46,7 +46,7 @@ const runLogs = computed<LogLine[]>(() => {
 
 async function loadSnapshot(uuid: string) {
   try {
-    segmentLogs.value.set(uuid, await api.getGameLog(uuid));
+    segmentLogs.value.set(uuid, await api.getRuntimeLog(uuid));
   } catch (e) {
     console.error("[LogWindow] 加载运行日志失败", e);
     segmentLogs.value.set(uuid, []);
@@ -228,38 +228,22 @@ onBeforeUnmount(() => {
       </div>
 
       <!-- 运行日志（实时流 + 历史快照；空白 = 运行中的进程聚合） -->
-      <MonacoLogView
-        v-if="view === 'run'"
-        :logs="runLogs"
-        fill
-        :empty-hint="currentUuid ? undefined : t('logWindow.noRunning')"
-      />
+      <MonacoLogView v-if="view === 'run'" :logs="runLogs" fill
+        :empty-hint="currentUuid ? undefined : t('logWindow.noRunning')" />
 
       <!-- 日志文件 / 崩溃报告（需选定具体实例） -->
       <div v-else-if="currentUuid" class="files-view">
         <div class="file-list">
           <template v-if="logFiles.length > 0">
             <div v-if="logGroup.length > 0" class="group-label">{{ t("logWindow.logsDir") }}</div>
-            <button
-              v-for="f in logGroup"
-              :key="f"
-              class="file-item"
-              :class="{ active: f === activeFile }"
-              v-tip="f"
-              @click="openFile(f)"
-            >
+            <button v-for="f in logGroup" :key="f" class="file-item" :class="{ active: f === activeFile }" v-tip="f"
+              @click="openFile(f)">
               {{ fileName(f) }}
             </button>
             <template v-if="crashGroup.length > 0">
               <div class="group-label crash">{{ t("logWindow.crashReports") }}</div>
-              <button
-                v-for="f in crashGroup"
-                :key="f"
-                class="file-item"
-                :class="{ active: f === activeFile }"
-                v-tip="f"
-                @click="openFile(f)"
-              >
+              <button v-for="f in crashGroup" :key="f" class="file-item" :class="{ active: f === activeFile }" v-tip="f"
+                @click="openFile(f)">
                 {{ fileName(f) }}
               </button>
             </template>
@@ -324,7 +308,8 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: 2px;
   overflow-y: auto;
-  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
+  scrollbar-gutter: stable;
+  /* 见 styles/scrollbar.css */
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 10px;

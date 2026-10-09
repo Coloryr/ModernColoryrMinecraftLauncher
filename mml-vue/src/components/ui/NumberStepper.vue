@@ -52,21 +52,15 @@ function onCommit() {
 
 <template>
   <div class="stepper">
-    <button class="step-btn" @click="dec"><GlyphIcon name="minus" :size="14" /></button>
-    <input
-      class="step-input"
-      type="number"
-      :min="min"
-      :max="max"
-      :step="step"
-      :value="editing ? draft : modelValue"
-      @focus="onFocus"
-      @input="onInput"
-      @change="onCommit"
-      @keyup.enter="($event.target as HTMLInputElement).blur()"
-      @blur="onCommit"
-    />
-    <button class="step-btn" @click="inc"><GlyphIcon name="plus" :size="14" /></button>
+    <button class="step-btn" @click="dec">
+      <GlyphIcon name="minus" :size="14" />
+    </button>
+    <input class="step-input" type="number" :min="min" :max="max" :step="step" :value="editing ? draft : modelValue"
+      @focus="onFocus" @input="onInput" @change="onCommit" @keyup.enter="($event.target as HTMLInputElement).blur()"
+      @blur="onCommit" />
+    <button class="step-btn" @click="inc">
+      <GlyphIcon name="plus" :size="14" />
+    </button>
   </div>
 </template>
 

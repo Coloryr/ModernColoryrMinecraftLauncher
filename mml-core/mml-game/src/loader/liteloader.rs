@@ -4,9 +4,7 @@ use mml_base::{
     file_item::{FileHash, FileItemObj, LaterRun},
     serialize_tools,
 };
-use mml_names::i18_items::error_type::{
-    ArgEmptyData, CoreResult, DataNotFoundData, ErrorType,
-};
+use mml_names::i18_items::error_type::{ArgEmptyData, CoreResult, DataNotFoundData, ErrorType};
 use mml_net::{liteloader_api, maven_utils::version_name_to_path};
 
 use crate::{
@@ -36,10 +34,7 @@ pub async fn get_liteloader_meta() -> CoreResult<LiteloaderMetaObj> {
 /// # 返回值
 ///
 /// 返回加载器数据（优先正式版 artefacts，取不到找快照 snapshots）
-pub fn find_loader_obj<'a>(
-    data: &'a LiteloaderVersionObj,
-    version: &str,
-) -> Option<&'a LoaderObj> {
+pub fn find_loader_obj<'a>(data: &'a LiteloaderVersionObj, version: &str) -> Option<&'a LoaderObj> {
     data.artefacts
         .loader
         .get(version)
@@ -69,14 +64,13 @@ pub async fn get_liteloader_lib(mc: &str, version: &str) -> CoreResult<Vec<FileI
     };
 
     // 加载器数据与公共依赖取自同一组（正式版 / 快照），避免两组依赖重复
-    let (loader, common_libs) =
-        if let Some(loader) = data.artefacts.loader.get(version) {
-            (loader, &data.artefacts.libraries)
-        } else if let Some(loader) = data.snapshots.loader.get(version) {
-            (loader, &data.snapshots.libraries)
-        } else {
-            return Err(ErrorType::DataNotFound(DataNotFoundData::Info));
-        };
+    let (loader, common_libs) = if let Some(loader) = data.artefacts.loader.get(version) {
+        (loader, &data.artefacts.libraries)
+    } else if let Some(loader) = data.snapshots.loader.get(version) {
+        (loader, &data.snapshots.libraries)
+    } else {
+        return Err(ErrorType::DataNotFound(DataNotFoundData::Info));
+    };
 
     let mut list = Vec::new();
 

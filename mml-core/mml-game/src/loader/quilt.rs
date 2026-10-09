@@ -1,6 +1,9 @@
 //! Quilt 加载器安装
 
-use mml_base::{file_item::{FileHash, FileItemObj, LaterRun}, serialize_tools};
+use mml_base::{
+    file_item::{FileHash, FileItemObj, LaterRun},
+    serialize_tools,
+};
 use mml_names::i18_items::error_type::{CoreResult, DataNotFoundData, ErrorType};
 use mml_net::{maven_utils::version_name_to_path, quilt_api, url_helper};
 

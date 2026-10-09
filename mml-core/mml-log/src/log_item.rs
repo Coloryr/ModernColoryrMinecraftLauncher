@@ -83,10 +83,22 @@ mod tests {
     /// 日志级别字符串映射
     #[test]
     fn level_names() {
-        assert_eq!(LogItem::new(String::from("a"), LogLevel::Info).get_level(), "Info");
-        assert_eq!(LogItem::new(String::from("a"), LogLevel::Warn).get_level(), "Warn");
-        assert_eq!(LogItem::new(String::from("a"), LogLevel::Error).get_level(), "Error");
-        assert_eq!(LogItem::new(String::from("a"), LogLevel::Fault).get_level(), "Fault");
+        assert_eq!(
+            LogItem::new(String::from("a"), LogLevel::Info).get_level(),
+            "Info"
+        );
+        assert_eq!(
+            LogItem::new(String::from("a"), LogLevel::Warn).get_level(),
+            "Warn"
+        );
+        assert_eq!(
+            LogItem::new(String::from("a"), LogLevel::Error).get_level(),
+            "Error"
+        );
+        assert_eq!(
+            LogItem::new(String::from("a"), LogLevel::Fault).get_level(),
+            "Fault"
+        );
     }
 
     /// 日志条目应保留原文
@@ -101,15 +113,19 @@ mod tests {
     fn time_format() {
         let item = LogItem::new(String::from("t"), LogLevel::Info);
         let time = item.get_time();
-        assert!(
-            (14..=19).contains(&time.len()),
-            "时间长度异常: {time:?}"
-        );
+        assert!((14..=19).contains(&time.len()), "时间长度异常: {time:?}");
         assert_eq!(time.matches('-').count(), 2, "应有 2 个 '-': {time:?}");
         assert_eq!(time.matches(':').count(), 2, "应有 2 个 ':': {time:?}");
-        assert_eq!(time.matches(' ').count(), 1, "日期与时间应以空格分隔: {time:?}");
+        assert_eq!(
+            time.matches(' ').count(),
+            1,
+            "日期与时间应以空格分隔: {time:?}"
+        );
         // 年份是 4 位数字
         let year: String = time.chars().take(4).collect();
-        assert!(year.chars().all(|c| c.is_ascii_digit()), "年份应为数字: {year:?}");
+        assert!(
+            year.chars().all(|c| c.is_ascii_digit()),
+            "年份应为数字: {year:?}"
+        );
     }
 }

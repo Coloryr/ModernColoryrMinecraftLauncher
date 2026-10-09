@@ -11,8 +11,8 @@ use serde::Deserialize;
 use tiny_skia::Pixmap;
 
 use crate::block::{
-    decode_png, read_anim_meta, AnimMeta, TextureRefObj, BIRCH_TINT, FOLIAGE_TINT, GRASS_TINT,
-    SPRUCE_TINT,
+    AnimMeta, BIRCH_TINT, FOLIAGE_TINT, GRASS_TINT, SPRUCE_TINT, TextureRefObj, decode_png,
+    read_anim_meta,
 };
 
 /// 一个渲染 quad（0..1 模型空间）
@@ -104,11 +104,11 @@ const FACE_INDEX: [(&str, usize); 6] = [
 /// 返回 `[u0, v0, u1, v1]`（0..16 像素坐标）
 fn default_face_uv(facing: usize, from: &[f32], to: &[f32]) -> [f32; 4] {
     match facing {
-        0 => [from[0], 16.0 - to[2], to[0], 16.0 - from[2]],   // down
-        1 => [from[0], from[2], to[0], to[2]],                 // up
+        0 => [from[0], 16.0 - to[2], to[0], 16.0 - from[2]], // down
+        1 => [from[0], from[2], to[0], to[2]],               // up
         2 => [16.0 - to[0], 16.0 - to[1], 16.0 - from[0], 16.0 - from[1]], // north
-        3 => [from[0], 16.0 - to[1], to[0], 16.0 - from[1]],   // south
-        4 => [from[2], 16.0 - to[1], to[2], 16.0 - from[1]],   // west
+        3 => [from[0], 16.0 - to[1], to[0], 16.0 - from[1]], // south
+        4 => [from[2], 16.0 - to[1], to[2], 16.0 - from[1]], // west
         _ => [16.0 - to[2], 16.0 - to[1], 16.0 - from[2], 16.0 - from[1]], // east
     }
 }
@@ -148,7 +148,6 @@ fn element_rotation_matrix(origin: [f32; 3], axis: usize, angle_deg: f32, rescal
     let origin = Vec3::from(origin);
     Mat4::from_translation(origin) * rot * Mat4::from_translation(-origin)
 }
-
 
 /// ===== 模型 JSON 结构（自带完整 display 解析，26.3 语义） =====
 
@@ -215,7 +214,11 @@ impl TransformJson {
             }
         };
         GuiTransform {
-            rotation: [take(&self.rotation, 0), take(&self.rotation, 1), take(&self.rotation, 2)],
+            rotation: [
+                take(&self.rotation, 0),
+                take(&self.rotation, 1),
+                take(&self.rotation, 2),
+            ],
             translation,
             scale: [scale(0), scale(1), scale(2)],
         }
@@ -285,7 +288,6 @@ struct FaceJson {
     tintindex: Option<u32>,
 }
 
-
 /// ===== 模型解析与 quad 烘焙（照 FaceBakery/ResolvedModel.findTop 语义） =====
 
 /// 父链解析产物：合并后的贴图表、元素集、gui display、gui_light
@@ -354,13 +356,18 @@ pub(crate) fn resolve(archive: &BaseArchive, rel: &str) -> Option<Resolved> {
         let Some(parent) = model.parent else {
             break;
         };
-        current = parent.strip_prefix("minecraft:").unwrap_or(&parent).to_string();
+        current = parent
+            .strip_prefix("minecraft:")
+            .unwrap_or(&parent)
+            .to_string();
     }
     Some(Resolved {
         textures,
         // generated链（builtin/generated）无elements也有效（extrude路径）；
         // 普通链缺elements视为无效（父模板）
-        elements: elements.filter(|e| !e.is_empty() || generated).unwrap_or_default(),
+        elements: elements
+            .filter(|e| !e.is_empty() || generated)
+            .unwrap_or_default(),
         transform: transform.unwrap_or_default(),
         gui_light_3d: !gui_light.unwrap_or(false),
         generated,
@@ -402,7 +409,6 @@ pub(crate) fn texture_path(value: &str) -> Option<String> {
     }
     Some(format!("assets/minecraft/textures/{path}.png"))
 }
-
 
 /// 加载贴图（带缓存），返回 RGBA 位图
 ///
@@ -474,11 +480,7 @@ pub(crate) fn rect_translucent(tex: &Pixmap, anim: Option<&AnimMeta>, uv: &[f32;
                     seen.push(idx);
                 }
             }
-            if seen.is_empty() {
-                vec![0]
-            } else {
-                seen
-            }
+            if seen.is_empty() { vec![0] } else { seen }
         }
         None => vec![0],
     };
@@ -527,7 +529,6 @@ fn tint_for_path(path: &str) -> [u8; 3] {
         GRASS_TINT
     }
 }
-
 
 /// ===== bake：照 FaceBakery.bakeQuad 逐条对应 =====
 
@@ -598,7 +599,12 @@ pub(crate) fn calculate_facing(pos: &[[f32; 3]; 4]) -> Option<[f32; 3]> {
     }
     let mut best: Option<(f32, [f32; 3])> = None;
     for candidate in [
-        Vec3::NEG_X, Vec3::NEG_Y, Vec3::NEG_Z, Vec3::X, Vec3::Y, Vec3::Z,
+        Vec3::NEG_X,
+        Vec3::NEG_Y,
+        Vec3::NEG_Z,
+        Vec3::X,
+        Vec3::Y,
+        Vec3::Z,
     ] {
         let product = normal.dot(candidate);
         if product >= 0.0 && product > best.map_or(0.0, |(c, _): (f32, [f32; 3])| c) {
@@ -629,9 +635,7 @@ pub(crate) fn recalculate_winding(pos: &mut [[f32; 3]; 4], uv: &mut [[f32; 2]; 4
             select_extent(info.1, &min, &max),
             select_extent(info.2, &min, &max),
         ];
-        let found = (vertex..4).find(|&i| {
-            (0..3).all(|c| (pos[i][c] - want[c]).abs() < 1e-5)
-        });
+        let found = (vertex..4).find(|&i| (0..3).all(|c| (pos[i][c] - want[c]).abs() < 1e-5));
         if let Some(i) = found {
             if i != vertex {
                 pos.swap(i, vertex);
@@ -665,11 +669,7 @@ pub(crate) fn bake_element(
         return quads;
     };
     for (name, face) in faces {
-        let Some(facing) = FACE_INDEX
-            .iter()
-            .find(|(n, _)| n == name)
-            .map(|(_, i)| *i)
-        else {
+        let Some(facing) = FACE_INDEX.iter().find(|(n, _)| n == name).map(|(_, i)| *i) else {
             continue;
         };
         // uv：显式或 defaultFaceUV
@@ -726,7 +726,11 @@ pub(crate) fn bake_element(
         }
 
         // 贴图与透明度
-        let Some(value) = face.texture.as_deref().and_then(|r| resolve_ref(textures, r)) else {
+        let Some(value) = face
+            .texture
+            .as_deref()
+            .and_then(|r| resolve_ref(textures, r))
+        else {
             continue;
         };
         let Some(path) = texture_path(&value) else {
@@ -770,7 +774,6 @@ pub(crate) fn bake_element(
     quads
 }
 
-
 /// 自发光贴图：篝火/灵魂篝火的火焰，渲染时不做方向光衰减
 ///
 /// - `path`: 贴图相对路径（带 .png 后缀）
@@ -796,7 +799,13 @@ pub fn bake_model(
     let resolved = resolve(archive, rel)?;
     let mut quads = Vec::new();
     for element in &resolved.elements {
-        quads.extend(bake_element(element, &resolved.textures, archive, tex_cache, None));
+        quads.extend(bake_element(
+            element,
+            &resolved.textures,
+            archive,
+            tex_cache,
+            None,
+        ));
     }
     if quads.is_empty() {
         return None;

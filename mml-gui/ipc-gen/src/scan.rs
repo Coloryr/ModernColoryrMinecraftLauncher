@@ -176,14 +176,49 @@ pub fn split_top_level(s: &str) -> Vec<String> {
     out
 }
 
-/// 取 `#[tauri::command]` 后面的函数：返回 (函数名, 参数原文, 返回类型原文)
+/// 取命令属性块里的显式分组标记 `#[ipc_group("resource")]`
+///
+/// **为什么需要它**：`bindings.ts` 的命令组键默认取"来源 .rs 模块最后一段"，于是把命令
+/// 拆进子模块（`windows::resource::mods`）会让组键从 `resource` 变成 `mods`，前端所有
+/// `commands.resource.*` 调用点一起断。加上这个标记，命令可以按分类拆文件、组键不变。
+///
+/// 与 `commands_in` 一样是**裸文本**扫描：从命令属性往上逐行看，允许中间夹着别的属性 /
+/// 文档注释 / 空行，遇到别的代码就停（只有 `#[` 开头的行才算，注释里写出来无效）。
+fn group_of(head: &str) -> Option<String> {
+    const KEY: &str = "ipc_group(";
+    for line in head.lines().rev() {
+        let t = line.trim();
+        if t.starts_with("#[") {
+            if let Some(p) = t.find(KEY) {
+                let after = &t[p + KEY.len()..];
+                let q1 = after.find('"')? + 1;
+                let q2 = after[q1..].find('"')? + q1;
+                let name = after[q1..q2].trim();
+                if !name.is_empty() {
+                    return Some(name.to_string());
+                }
+            }
+            continue;
+        }
+        if t.is_empty() || t.starts_with("//") {
+            continue;
+        }
+        break;
+    }
+    None
+}
+
+/// 取 `#[tauri::command]` 后面的函数：返回 (函数名, 参数原文, 返回类型原文, 显式分组)
 ///
 /// 参数/返回按括号与尖括号配平截取，能处理跨多行的签名。
-pub fn commands_in(text: &str) -> Vec<(String, String, String)> {
+/// 显式分组来自属性块里的 `#[ipc_group("...")]`，没有则为 `None`（按来源模块分组）。
+pub fn commands_in(text: &str) -> Vec<(String, String, String, Option<String>)> {
     const MARK: &str = "#[tauri::command]";
     let mut out = Vec::new();
     let mut rest = text;
     while let Some(pos) = rest.find(MARK) {
+        // 分组标记写在命令属性**之前**，所以在 MARK 之前那段文本里找
+        let group = group_of(&rest[..pos]);
         let after = &rest[pos + MARK.len()..];
         let Some(fpos) = after.find("fn ") else {
             rest = after;
@@ -244,7 +279,7 @@ pub fn commands_in(text: &str) -> Vec<(String, String, String)> {
             _ => String::new(),
         };
 
-        out.push((name, params, ret));
+        out.push((name, params, ret, group));
         rest = tail;
     }
     out
@@ -279,11 +314,38 @@ pub async fn add_modpack_search(
     /// 没有返回类型的函数，返回类型原文是空串
     #[test]
     fn test_commands_in_without_return_type() {
-        let src = "#[tauri::command]\npub fn add_set_close_guard(window: WebviewWindow, enabled: bool) {";
+        let src =
+            "#[tauri::command]\npub fn add_set_close_guard(window: WebviewWindow, enabled: bool) {";
         let cmds = commands_in(src);
         assert_eq!(cmds.len(), 1);
         assert_eq!(cmds[0].0, "add_set_close_guard");
         assert_eq!(cmds[0].2, "");
+    }
+
+    /// 显式分组标记：夹在文档注释 / 其它属性之间也要认出来
+    #[test]
+    fn test_commands_in_explicit_group() {
+        let src = r#"
+/// 文档
+#[ipc_group("resource")]
+#[tauri::command]
+pub fn resource_list_mods(uuid: String) -> Result<Vec<ModItemDto>, String> {
+    todo!()
+}
+"#;
+        let cmds = commands_in(src);
+        assert_eq!(cmds.len(), 1);
+        assert_eq!(cmds[0].3.as_deref(), Some("resource"));
+    }
+
+    /// 没有标记就是 None；注释里写出标记**不算**（只认 `#[` 开头的行）
+    #[test]
+    fn test_commands_in_group_absent() {
+        let src = "#[tauri::command]\npub fn a() -> bool { true }";
+        assert_eq!(commands_in(src)[0].3, None);
+
+        let src2 = "// 说明：本来该写 #[ipc_group(\"x\")]，但这只是注释\n#[tauri::command]\npub fn b() -> bool { true }";
+        assert_eq!(commands_in(src2)[0].3, None);
     }
 
     /// 多个命令都要收进来
@@ -298,7 +360,10 @@ pub async fn add_modpack_search(
     #[test]
     fn test_fns_after_emit() {
         let src = "#[gui_macros::emit]\npub fn emit_add_pack_progress(window: &WebviewWindow) {}";
-        assert_eq!(fns_after(src, "#[gui_macros::emit]"), vec!["emit_add_pack_progress"]);
+        assert_eq!(
+            fns_after(src, "#[gui_macros::emit]"),
+            vec!["emit_add_pack_progress"]
+        );
         let event = "emit_add_pack_progress"
             .strip_prefix("emit_")
             .unwrap()
@@ -310,8 +375,14 @@ pub async fn add_modpack_search(
     #[test]
     fn test_module_path() {
         let src = Path::new("/x/src");
-        assert_eq!(module_path(src, Path::new("/x/src/windows/account.rs")), "windows::account");
-        assert_eq!(module_path(src, Path::new("/x/src/windows/mod.rs")), "windows");
+        assert_eq!(
+            module_path(src, Path::new("/x/src/windows/account.rs")),
+            "windows::account"
+        );
+        assert_eq!(
+            module_path(src, Path::new("/x/src/windows/mod.rs")),
+            "windows"
+        );
         assert_eq!(module_path(src, Path::new("/x/src/lib.rs")), "");
         assert_eq!(module_path(src, Path::new("/x/src/main.rs")), "");
     }
@@ -357,7 +428,10 @@ pub enum ViewMode {
     /// 顶层逗号拆分不切泛型内部的逗号
     #[test]
     fn test_split_top_level() {
-        assert_eq!(split_top_level("a: String, b: u32"), vec!["a: String", "b: u32"]);
+        assert_eq!(
+            split_top_level("a: String, b: u32"),
+            vec!["a: String", "b: u32"]
+        );
         assert_eq!(
             split_top_level("HashMap<String, Vec<String>>, u32"),
             vec!["HashMap<String, Vec<String>>", "u32"]

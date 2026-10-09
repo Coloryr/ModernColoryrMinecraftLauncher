@@ -28,7 +28,10 @@ fn generic_inner(ty: &str, name: &str) -> Option<String> {
 pub fn ts_type(ty: &str, ext: &BTreeMap<String, String>) -> String {
     let t = ty.trim();
     // 引用类型（`&str`、`&'static str`）按值处理
-    let t = t.trim_start_matches('&').trim_start_matches("'static").trim();
+    let t = t
+        .trim_start_matches('&')
+        .trim_start_matches("'static")
+        .trim();
 
     if let Some(inner) = generic_inner(t, "Option") {
         return format!("{} | null", ts_type(&inner, ext));
@@ -56,8 +59,8 @@ pub fn ts_type(ty: &str, ext: &BTreeMap<String, String>) -> String {
     match t {
         "String" | "str" => "string".into(),
         "bool" => "boolean".into(),
-        "i8" | "i16" | "i32" | "i64" | "isize" | "u8" | "u16" | "u32" | "u64" | "usize"
-        | "f32" | "f64" => "number".into(),
+        "i8" | "i16" | "i32" | "i64" | "isize" | "u8" | "u16" | "u32" | "u64" | "usize" | "f32"
+        | "f64" => "number".into(),
         // 空串 = Rust 侧写了 `fn f()`（无返回类型），等价于 `()`
         "" | "()" => "void".into(),
         // 本 crate 生成的类型：直接用名字
@@ -158,7 +161,10 @@ mod tests {
         assert_eq!(ts_type("usize", &e), "number");
         assert_eq!(ts_type("Option<String>", &e), "string | null");
         assert_eq!(ts_type("Vec<String>", &e), "string[]");
-        assert_eq!(ts_type("HashMap<String, Vec<String>>", &e), "Record<string, string[]>");
+        assert_eq!(
+            ts_type("HashMap<String, Vec<String>>", &e),
+            "Record<string, string[]>"
+        );
         // 自定义类型原样返回（它由本 crate 生成）
         assert_eq!(ts_type("NewsItem", &e), "NewsItem");
     }
@@ -196,15 +202,27 @@ mod tests {
     /// 三态补丁：Option<Option<T>> 一定可缺省
     #[test]
     fn test_ts_field_tri_state() {
-        assert_eq!(ts_field("Option<Option<String>>", false, &ext()), ("string | null".into(), true));
-        assert_eq!(ts_field("Option<Option<String>>", true, &ext()), ("string | null".into(), true));
+        assert_eq!(
+            ts_field("Option<Option<String>>", false, &ext()),
+            ("string | null".into(), true)
+        );
+        assert_eq!(
+            ts_field("Option<Option<String>>", true, &ext()),
+            ("string | null".into(), true)
+        );
     }
 
     /// 入参 DTO（只 derive Deserialize）的 Option 字段可缺省；输出 DTO 必填
     #[test]
     fn test_ts_field_input_only() {
-        assert_eq!(ts_field("Option<String>", true, &ext()), ("string | null".into(), true));
-        assert_eq!(ts_field("Option<String>", false, &ext()), ("string | null".into(), false));
+        assert_eq!(
+            ts_field("Option<String>", true, &ext()),
+            ("string | null".into(), true)
+        );
+        assert_eq!(
+            ts_field("Option<String>", false, &ext()),
+            ("string | null".into(), false)
+        );
         assert_eq!(ts_field("String", false, &ext()), ("string".into(), false));
     }
 
@@ -219,9 +237,15 @@ mod tests {
         ];
         for case in cases {
             let ps = ts_params(case, &e);
-            assert!(!ps.iter().any(|p| p.0 == "app" || p.0 == "window"), "{case} -> {ps:?}");
+            assert!(
+                !ps.iter().any(|p| p.0 == "app" || p.0 == "window"),
+                "{case} -> {ps:?}"
+            );
         }
-        assert_eq!(ts_params("window: WebviewWindow, app: AppHandle, id: String", &e), vec![("id".into(), "string".into(), false)]);
+        assert_eq!(
+            ts_params("window: WebviewWindow, app: AppHandle, id: String", &e),
+            vec![("id".into(), "string".into(), false)]
+        );
     }
 
     /// 参数名转 camelCase，`r#type` 去掉原始标识符前缀

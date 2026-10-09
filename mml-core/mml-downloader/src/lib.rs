@@ -52,7 +52,7 @@ use std::{
     },
 };
 
-use mml_base::{file_item::FileItemObj};
+use mml_base::file_item::FileItemObj;
 use mml_names::{i18_items::error_type::CoreResult, names};
 use mml_sys::path_helper;
 use tokio_util::sync::CancellationToken;
@@ -185,10 +185,7 @@ pub fn get_download_path() -> PathBuf {
 /// 保证不与已有文件冲突。
 pub fn gen_temp_file() -> PathBuf {
     loop {
-        let file = CACHE_PATH
-            .get()
-            .unwrap()
-            .join(Uuid::new_v4().to_string());
+        let file = CACHE_PATH.get().unwrap().join(Uuid::new_v4().to_string());
         if file.exists() {
             continue;
         }
@@ -541,11 +538,7 @@ pub(crate) mod test_util {
     struct TestGui;
 
     impl super::IDownloadGui for TestGui {
-        fn update(
-            &self,
-            thread: u32,
-            file: &std::sync::Arc<super::download_item::DownloadItem>,
-        ) {
+        fn update(&self, thread: u32, file: &std::sync::Arc<super::download_item::DownloadItem>) {
             let mut events = GUI_EVENTS.get().unwrap().lock().unwrap();
             events.push(format!(
                 "file:{}:{}:{:.1}",
@@ -698,9 +691,7 @@ mod tests {
 
         let events = GUI_EVENTS.get().unwrap().lock().unwrap();
         assert!(
-            events
-                .iter()
-                .any(|e| e == &format!("UpdateTask:{id}:50")),
+            events.iter().any(|e| e == &format!("UpdateTask:{id}:50")),
             "应收到 50% 进度事件，实际事件: {:?}",
             *events
         );

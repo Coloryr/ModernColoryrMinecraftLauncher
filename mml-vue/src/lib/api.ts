@@ -389,7 +389,8 @@ export const api = {
 
   /** 获取压缩包类型 ID 列表 */
   async addGetPackTypes(): Promise<string[]> {
-    return commands.add.getPackTypes();  },
+    return commands.add.getPackTypes();
+  },
 
   /** 获取游戏版本类型 ID 列表（release / snapshot / old_beta / old_alpha） */
   async addGetVersionTypes(): Promise<string[]> {
@@ -461,9 +462,9 @@ export const api = {
     return commands.main.stopGame(uuid);
   },
 
-  /** 获取实例游戏日志（历史行） */
-  async getGameLog(uuid: string): Promise<LogLine[]> {
-    return commands.main.getGameLog(uuid);
+  /** 获取实例的实时运行日志快照（log_get_runtime） */
+  async getRuntimeLog(uuid: string): Promise<LogLine[]> {
+    return commands.log.getRuntime(uuid);
   },
 
   /** 获取运行中实例 uuid 列表 */

@@ -85,23 +85,11 @@ async function clearDone() {
   <div class="mp-bar" :class="{ 'fill-h': fillHeight }">
     <!-- 总览：标题（任务数）+ 展开开关；可折叠时点击整行切换 -->
     <!-- （"清除已完成"在任务列表底部，见下面的 .mp-footer） -->
-    <div
-      class="mp-bar-head"
-      :class="{ 'no-toggle': !collapsible }"
-      @click="collapsible && (open = !open)"
-    >
+    <div class="mp-bar-head" :class="{ 'no-toggle': !collapsible }" @click="collapsible && (open = !open)">
       <span class="mp-bar-title">{{ headText }}</span>
       <span v-if="collapsible" class="mp-bar-chevron" :class="{ up: open }" aria-hidden="true">
-        <svg
-          viewBox="0 0 24 24"
-          width="18"
-          height="18"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round">
           <path d="m6 9 6 6 6-6" />
         </svg>
       </span>
@@ -119,11 +107,8 @@ async function clearDone() {
           <div class="mp-task-head">
             <span class="mp-task-name">{{ task.name }}</span>
             <span v-if="task.done" class="mp-tag done">{{ t("add.packState.done") }}</span>
-            <span
-              v-else-if="task.failed"
-              class="mp-tag failed"
-              v-tip="task.error || ''"
-            >{{ t("modpack.bar.failed") }}</span>
+            <span v-else-if="task.failed" class="mp-tag failed" v-tip="task.error || ''">{{ t("modpack.bar.failed")
+              }}</span>
             <span v-else-if="task.cancelled" class="mp-tag cancelled">{{ t("modpack.bar.cancelled") }}</span>
             <button v-else class="mp-cancel" @click="cancel(task)">{{ t("modpack.bar.cancel") }}</button>
           </div>
@@ -137,18 +122,13 @@ async function clearDone() {
           <!-- 任务进度：失败 / 取消的任务不再画条（原来兜底给 100%，失败的任务下面就挂着一条满格的灰条，
                看着像"下载完了"，与旁边的"失败"标签自相矛盾）。已完成才走 100% -->
           <div v-if="!task.failed && !task.cancelled" class="progress-track sub">
-            <div
-              class="progress-fill"
-              :style="{ width: taskProgress(task) + '%' }"
-            />
+            <div class="progress-fill" :style="{ width: taskProgress(task) + '%' }" />
           </div>
           <template v-if="isRunning(task) && (task.subText || task.subTotal)">
             <div class="mp-task-sub">{{ task.subText || "" }}</div>
             <div class="progress-track sub">
-              <div
-                class="progress-fill"
-                :style="{ width: task.subTotal ? (task.subNow / task.subTotal) * 100 + '%' : '0%' }"
-              />
+              <div class="progress-fill"
+                :style="{ width: task.subTotal ? (task.subNow / task.subTotal) * 100 + '%' : '0%' }" />
             </div>
           </template>
         </div>
@@ -198,7 +178,8 @@ async function clearDone() {
 
 .mp-bar.fill-h :deep(.collapse.open > .collapse-inner) {
   overflow-y: auto;
-  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
+  scrollbar-gutter: stable;
+  /* 见 styles/scrollbar.css */
 }
 
 .mp-bar-head {

@@ -26,16 +26,9 @@ watch(
 
 <template>
   <label class="field-label">{{ t("add.url") }} <span class="req">*</span></label>
-  <input
-    ref="urlInput"
-    :value="url"
-    class="field-input"
-    :class="{ 'is-invalid': invalid }"
-    :placeholder="t('add.urlPlaceholder')"
-    spellcheck="false"
-    autocomplete="off"
-    @input="emit('update:url', ($event.target as HTMLInputElement).value)"
-  />
+  <input ref="urlInput" :value="url" class="field-input" :class="{ 'is-invalid': invalid }"
+    :placeholder="t('add.urlPlaceholder')" spellcheck="false" autocomplete="off"
+    @input="emit('update:url', ($event.target as HTMLInputElement).value)" />
   <p class="field-hint">{{ t("add.urlHint") }}</p>
 </template>
 

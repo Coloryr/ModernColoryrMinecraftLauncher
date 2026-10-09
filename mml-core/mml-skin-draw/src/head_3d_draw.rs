@@ -99,18 +99,54 @@ static FACE_POS_UP: [[i32; 2]; 12] = [
 
 /// 每个面四个角的归一化 uv
 static SOURCE_VERTICES: [[f32; 2]; 48] = [
-    [0.0, 1.0], [1.0, 1.0], [1.0, 0.0], [0.0, 0.0], // 背面
-    [1.0, 0.0], [0.0, 0.0], [0.0, 1.0], [1.0, 1.0], // 底面
-    [1.0, 1.0], [0.0, 1.0], [0.0, 0.0], [1.0, 0.0], // 右面
-    [0.0, 1.0], [1.0, 1.0], [1.0, 0.0], [0.0, 0.0], // 背面
-    [1.0, 0.0], [0.0, 0.0], [0.0, 1.0], [1.0, 1.0], // 底面
-    [1.0, 1.0], [0.0, 1.0], [0.0, 0.0], [1.0, 0.0], // 右面
-    [1.0, 0.0], [0.0, 0.0], [0.0, 1.0], [1.0, 1.0], // 顶面
-    [0.0, 1.0], [1.0, 1.0], [1.0, 0.0], [0.0, 0.0], // 左面
-    [1.0, 1.0], [0.0, 1.0], [0.0, 0.0], [1.0, 0.0], // 前面
-    [1.0, 0.0], [0.0, 0.0], [0.0, 1.0], [1.0, 1.0], // 顶面
-    [0.0, 1.0], [1.0, 1.0], [1.0, 0.0], [0.0, 0.0], // 左面
-    [1.0, 1.0], [0.0, 1.0], [0.0, 0.0], [1.0, 0.0], // 前面
+    [0.0, 1.0],
+    [1.0, 1.0],
+    [1.0, 0.0],
+    [0.0, 0.0], // 背面
+    [1.0, 0.0],
+    [0.0, 0.0],
+    [0.0, 1.0],
+    [1.0, 1.0], // 底面
+    [1.0, 1.0],
+    [0.0, 1.0],
+    [0.0, 0.0],
+    [1.0, 0.0], // 右面
+    [0.0, 1.0],
+    [1.0, 1.0],
+    [1.0, 0.0],
+    [0.0, 0.0], // 背面
+    [1.0, 0.0],
+    [0.0, 0.0],
+    [0.0, 1.0],
+    [1.0, 1.0], // 底面
+    [1.0, 1.0],
+    [0.0, 1.0],
+    [0.0, 0.0],
+    [1.0, 0.0], // 右面
+    [1.0, 0.0],
+    [0.0, 0.0],
+    [0.0, 1.0],
+    [1.0, 1.0], // 顶面
+    [0.0, 1.0],
+    [1.0, 1.0],
+    [1.0, 0.0],
+    [0.0, 0.0], // 左面
+    [1.0, 1.0],
+    [0.0, 1.0],
+    [0.0, 0.0],
+    [1.0, 0.0], // 前面
+    [1.0, 0.0],
+    [0.0, 0.0],
+    [0.0, 1.0],
+    [1.0, 1.0], // 顶面
+    [0.0, 1.0],
+    [1.0, 1.0],
+    [1.0, 0.0],
+    [0.0, 0.0], // 左面
+    [1.0, 1.0],
+    [0.0, 1.0],
+    [0.0, 0.0],
+    [1.0, 0.0], // 前面
 ];
 
 /// 创建固定缩放 / 平移、可指定角度的模型变换矩阵
@@ -200,9 +236,7 @@ pub(crate) fn fill_triangle(
 
     // 注意 `from_row` 的参数是 (sx, ky, kx, sy, tx, ty)，对应矩阵 | sx kx tx ; ky sy ty |，
     // 所以这里不能按行序传（传错等于把矩阵转置，纹理采样会整片错位）
-    let Some(texture_to_screen) =
-        Transform::from_row(m00, m10, m01, m11, m02, m12).invert()
-    else {
+    let Some(texture_to_screen) = Transform::from_row(m00, m10, m01, m11, m02, m12).invert() else {
         return;
     };
 
@@ -230,7 +264,13 @@ pub(crate) fn fill_triangle(
         return;
     };
 
-    pixmap.fill_path(&path, &paint, FillRule::Winding, Transform::identity(), None);
+    pixmap.fill_path(
+        &path,
+        &paint,
+        FillRule::Winding,
+        Transform::identity(),
+        None,
+    );
 }
 
 /// 把立方体全部面投影并逐三角形绘制到目标位图
@@ -311,12 +351,9 @@ pub(crate) fn crop_content(pixmap: &Pixmap, margin: u32) -> Option<Pixmap> {
             }
             bounds = Some(match bounds {
                 None => (x, y, x, y),
-                Some((min_x, min_y, max_x, max_y)) => (
-                    min_x.min(x),
-                    min_y.min(y),
-                    max_x.max(x),
-                    max_y.max(y),
-                ),
+                Some((min_x, min_y, max_x, max_y)) => {
+                    (min_x.min(x), min_y.min(y), max_x.max(x), max_y.max(y))
+                }
             });
         }
     }
@@ -395,7 +432,16 @@ fn draw_head(
     // 新建的位图是全透明的，与旧实现 clear(透明) 一致
     let mut pixmap = Pixmap::new(size, size)?;
 
-    draw_texture_faces(&mut pixmap, image, indices, face_pos, tran, enable_z, texel_eps, scale);
+    draw_texture_faces(
+        &mut pixmap,
+        image,
+        indices,
+        face_pos,
+        tran,
+        enable_z,
+        texel_eps,
+        scale,
+    );
 
     downsample(&pixmap, SUPERSAMPLE).and_then(|out| crop_content(&out, 2))
 }
@@ -440,4 +486,3 @@ pub fn draw_head_3d_typeb(image: &Pixmap, x: f32, y: f32) -> Option<Pixmap> {
     let tran = create_tran(-x, y);
     draw_head(image, &CUBE_INDICES, &FACE_POS, &tran, true, 0.0)
 }
-

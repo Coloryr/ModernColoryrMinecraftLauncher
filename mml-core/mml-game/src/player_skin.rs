@@ -142,7 +142,6 @@ pub async fn download_skin(obj: &LoginObj) -> DownloadSkinRes {
         None => None,
     };
 
-
     DownloadSkinRes {
         skin,
         cape,

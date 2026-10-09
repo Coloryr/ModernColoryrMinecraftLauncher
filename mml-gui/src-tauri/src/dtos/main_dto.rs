@@ -99,7 +99,7 @@ pub struct LogEvent {
     pub clear: bool,
 }
 
-/// 游戏日志行（`main_get_game_log` 返回的历史条目，字段同 LogEvent 去掉事件头）
+/// 游戏日志行（`log_get_runtime` 返回的历史条目，字段同 LogEvent 去掉事件头）
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct LogLine {

@@ -113,41 +113,22 @@ const gcOptions = [
       <div class="args-row">
         <span class="args-label">{{ t("args.windowSize") }}</span>
         <span class="sub-tag">{{ t("args.width") }}</span>
-        <NumberStepper
-          :model-value="args.width"
-          :min="0"
-          :max="9999"
-          :step="10"
-          @update:model-value="(v: number) => update({ width: v })"
-        />
+        <NumberStepper :model-value="args.width" :min="0" :max="9999" :step="10"
+          @update:model-value="(v: number) => update({ width: v })" />
         <span class="sub-tag">{{ t("args.height") }}</span>
-        <NumberStepper
-          :model-value="args.height"
-          :min="0"
-          :max="9999"
-          :step="10"
-          @update:model-value="(v: number) => update({ height: v })"
-        />
+        <NumberStepper :model-value="args.height" :min="0" :max="9999" :step="10"
+          @update:model-value="(v: number) => update({ height: v })" />
         <label class="chk">
-          <input
-            type="checkbox"
-            :checked="args.fullscreen"
-            @change="update({ fullscreen: ($event.target as HTMLInputElement).checked })"
-          />
+          <input type="checkbox" :checked="args.fullscreen"
+            @change="update({ fullscreen: ($event.target as HTMLInputElement).checked })" />
           {{ t("args.fullscreen") }}
         </label>
       </div>
       <!-- 常用分辨率：一点即填宽 / 高（当前值匹配时高亮） -->
       <div class="args-hint res-hint">
         <span class="res-label">{{ t("args.commonRes") }}</span>
-        <button
-          v-for="r in COMMON_RESOLUTIONS"
-          :key="`${r.w}x${r.h}`"
-          type="button"
-          class="res-btn"
-          :class="{ on: args.width === r.w && args.height === r.h }"
-          @click="applyResolution(r.w, r.h)"
-        >
+        <button v-for="r in COMMON_RESOLUTIONS" :key="`${r.w}x${r.h}`" type="button" class="res-btn"
+          :class="{ on: args.width === r.w && args.height === r.h }" @click="applyResolution(r.w, r.h)">
           {{ r.w }}×{{ r.h }}
         </button>
       </div>
@@ -156,21 +137,11 @@ const gcOptions = [
       <div class="args-row">
         <span class="args-label">{{ t("args.memory") }}</span>
         <span class="sub-tag">{{ t("args.minMemory") }}</span>
-        <NumberStepper
-          :model-value="args.minMemory"
-          :min="512"
-          :max="args.memory"
-          :step="256"
-          @update:model-value="(v: number) => update({ minMemory: v })"
-        />
+        <NumberStepper :model-value="args.minMemory" :min="512" :max="args.memory" :step="256"
+          @update:model-value="(v: number) => update({ minMemory: v })" />
         <span class="sub-tag">{{ t("args.maxMemory") }}</span>
-        <NumberStepper
-          :model-value="args.memory"
-          :min="args.minMemory"
-          :max="16384"
-          :step="256"
-          @update:model-value="(v: number) => update({ memory: v })"
-        />
+        <NumberStepper :model-value="args.memory" :min="args.minMemory" :max="16384" :step="256"
+          @update:model-value="(v: number) => update({ memory: v })" />
         <span class="mem-unit">MB</span>
       </div>
       <!-- 本机内存参考值：给设最大内存一个依据（始终占一行，拿不到会写明原因） -->
@@ -178,25 +149,16 @@ const gcOptions = [
       <!-- 常用内存：一点即填最大内存（当前值匹配时高亮），最小内存高于它时一并顶上去 -->
       <div class="args-hint">
         <span class="res-label">{{ t("args.commonMemory") }}</span>
-        <button
-          v-for="m in COMMON_MEMORY"
-          :key="m"
-          type="button"
-          class="res-btn"
-          :class="{ on: args.memory === m }"
-          @click="applyMemory(m)"
-        >
+        <button v-for="m in COMMON_MEMORY" :key="m" type="button" class="res-btn" :class="{ on: args.memory === m }"
+          @click="applyMemory(m)">
           {{ memoryLabel(m) }}
         </button>
       </div>
 
       <div class="args-row">
         <span class="args-label">{{ t("args.java") }}</span>
-        <select
-          class="field-select grow"
-          :value="args.javaName"
-          @change="update({ javaName: ($event.target as HTMLSelectElement).value })"
-        >
+        <select class="field-select grow" :value="args.javaName"
+          @change="update({ javaName: ($event.target as HTMLSelectElement).value })">
           <option v-for="j in javas" :key="j.name" :value="j.name">
             {{ j.name }}（Java {{ j.major }}）
           </option>
@@ -207,13 +169,8 @@ const gcOptions = [
       <!-- 自定义 Java 路径 -->
       <div v-if="args.javaName === 'custom'" class="args-row java-custom">
         <span class="args-label">{{ t("args.javaPath") }}</span>
-        <input
-          class="field-input grow"
-          :value="args.javaPath"
-          placeholder="C:\Program Files\Java\jdk-21\bin\java.exe"
-          spellcheck="false"
-          @input="update({ javaPath: ($event.target as HTMLInputElement).value })"
-        />
+        <input class="field-input grow" :value="args.javaPath" placeholder="C:\Program Files\Java\jdk-21\bin\java.exe"
+          spellcheck="false" @input="update({ javaPath: ($event.target as HTMLInputElement).value })" />
         <BaseButton size="sm" @click="fileInput?.click()">{{ t("args.browse") }}</BaseButton>
         <input ref="fileInput" type="file" class="hidden-file" @change="onBrowseFile" />
       </div>
@@ -223,16 +180,8 @@ const gcOptions = [
     <div v-if="!locked" class="args-block advanced">
       <button class="advanced-toggle" @click="advancedOpen = !advancedOpen">
         <span>{{ t("args.advanced") }}</span>
-        <svg
-          class="args-chevron"
-          :class="{ flip: advancedOpen }"
-          viewBox="0 0 24 24"
-          width="13"
-          height="13"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="2"
-        >
+        <svg class="args-chevron" :class="{ flip: advancedOpen }" viewBox="0 0 24 24" width="13" height="13" fill="none"
+          stroke="currentColor" stroke-width="2">
           <path d="m6 9 6 6 6-6" />
         </svg>
       </button>
@@ -241,7 +190,8 @@ const gcOptions = [
         <div class="advanced-body">
           <div class="args-row">
             <span class="args-label">{{ t("args.gc") }}</span>
-            <select class="field-select grow" :value="args.gc" @change="update({ gc: ($event.target as HTMLSelectElement).value })">
+            <select class="field-select grow" :value="args.gc"
+              @change="update({ gc: ($event.target as HTMLSelectElement).value })">
               <option v-for="g in gcOptions" :key="g.value" :value="g.value">{{ g.label }}</option>
             </select>
           </div>
@@ -249,88 +199,69 @@ const gcOptions = [
           <!-- 自定义 GC 参数 -->
           <div v-if="args.gc === 'custom'" class="args-row">
             <span class="args-label">{{ t("args.gcCustom") }}</span>
-            <input
-              class="field-input grow"
-              :value="args.gcCustom"
-              placeholder="-XX:+UseZGC -XX:ZCollectionInterval=30"
-              spellcheck="false"
-              @input="update({ gcCustom: ($event.target as HTMLInputElement).value })"
-            />
+            <input class="field-input grow" :value="args.gcCustom" placeholder="-XX:+UseZGC -XX:ZCollectionInterval=30"
+              spellcheck="false" @input="update({ gcCustom: ($event.target as HTMLInputElement).value })" />
           </div>
 
           <div class="args-row">
             <span class="args-label">{{ t("args.mainClass") }}</span>
-            <input
-              class="field-input grow"
-              :value="args.mainClass"
-              placeholder="net.minecraft.client.main.Main"
-              spellcheck="false"
-              @input="update({ mainClass: ($event.target as HTMLInputElement).value })"
-            />
+            <input class="field-input grow" :value="args.mainClass" placeholder="net.minecraft.client.main.Main"
+              spellcheck="false" @input="update({ mainClass: ($event.target as HTMLInputElement).value })" />
           </div>
 
           <!-- 附加 JVM 参数 -->
           <label class="args-label">{{ t("args.jvmExtra") }}</label>
           <div v-for="(line, i) in args.jvmArgs" :key="i" class="line-row">
-            <input
-              class="field-input grow"
-              :value="line"
-              placeholder="-XX:+UseG1GC"
-              spellcheck="false"
-              @input="setLine('jvmArgs', i, ($event.target as HTMLInputElement).value)"
-            />
-            <button class="line-del" v-tip="t('args.removeLine')" @click="removeLine('jvmArgs', i)"><GlyphIcon name="close" :size="13" /></button>
+            <input class="field-input grow" :value="line" placeholder="-XX:+UseG1GC" spellcheck="false"
+              @input="setLine('jvmArgs', i, ($event.target as HTMLInputElement).value)" />
+            <button class="line-del" v-tip="t('args.removeLine')" @click="removeLine('jvmArgs', i)">
+              <GlyphIcon name="close" :size="13" />
+            </button>
           </div>
-          <button class="line-add" @click="addLine('jvmArgs')"><GlyphIcon name="plus" :size="13" :weight="2.2" /> {{ t("args.addLine") }}</button>
+          <button class="line-add" @click="addLine('jvmArgs')">
+            <GlyphIcon name="plus" :size="13" :weight="2.2" /> {{ t("args.addLine") }}
+          </button>
 
           <!-- 附加游戏参数 -->
           <label class="args-label">{{ t("args.gameExtra") }}</label>
           <div v-for="(line, i) in args.gameArgs" :key="i" class="line-row">
-            <input
-              class="field-input grow"
-              :value="line"
-              placeholder="--server 127.0.0.1:25565"
-              spellcheck="false"
-              @input="setLine('gameArgs', i, ($event.target as HTMLInputElement).value)"
-            />
-            <button class="line-del" v-tip="t('args.removeLine')" @click="removeLine('gameArgs', i)"><GlyphIcon name="close" :size="13" /></button>
+            <input class="field-input grow" :value="line" placeholder="--server 127.0.0.1:25565" spellcheck="false"
+              @input="setLine('gameArgs', i, ($event.target as HTMLInputElement).value)" />
+            <button class="line-del" v-tip="t('args.removeLine')" @click="removeLine('gameArgs', i)">
+              <GlyphIcon name="close" :size="13" />
+            </button>
           </div>
-          <button class="line-add" @click="addLine('gameArgs')"><GlyphIcon name="plus" :size="13" :weight="2.2" /> {{ t("args.addLine") }}</button>
+          <button class="line-add" @click="addLine('gameArgs')">
+            <GlyphIcon name="plus" :size="13" :weight="2.2" /> {{ t("args.addLine") }}
+          </button>
 
           <!-- 附加 classpath -->
           <label class="args-label">{{ t("args.classPath") }}</label>
           <div v-for="(line, i) in args.classPath" :key="i" class="line-row">
-            <input
-              class="field-input grow"
-              :value="line"
-              placeholder="libraries/xxx.jar"
-              spellcheck="false"
-              @input="setLine('classPath', i, ($event.target as HTMLInputElement).value)"
-            />
-            <button class="line-del" v-tip="t('args.removeLine')" @click="removeLine('classPath', i)"><GlyphIcon name="close" :size="13" /></button>
+            <input class="field-input grow" :value="line" placeholder="libraries/xxx.jar" spellcheck="false"
+              @input="setLine('classPath', i, ($event.target as HTMLInputElement).value)" />
+            <button class="line-del" v-tip="t('args.removeLine')" @click="removeLine('classPath', i)">
+              <GlyphIcon name="close" :size="13" />
+            </button>
           </div>
-          <button class="line-add" @click="addLine('classPath')"><GlyphIcon name="plus" :size="13" :weight="2.2" /> {{ t("args.addLine") }}</button>
+          <button class="line-add" @click="addLine('classPath')">
+            <GlyphIcon name="plus" :size="13" :weight="2.2" /> {{ t("args.addLine") }}
+          </button>
 
           <!-- 附加环境变量（键值对） -->
           <label class="args-label">{{ t("args.env") }}</label>
           <div v-for="(line, i) in args.envVars" :key="i" class="line-row">
-            <input
-              class="field-input env-key"
-              :value="line.key"
-              :placeholder="t('args.envKey')"
-              spellcheck="false"
-              @input="setEnvKey(i, ($event.target as HTMLInputElement).value)"
-            />
-            <input
-              class="field-input grow"
-              :value="line.value"
-              :placeholder="t('args.envValue')"
-              spellcheck="false"
-              @input="setEnvValue(i, ($event.target as HTMLInputElement).value)"
-            />
-            <button class="line-del" v-tip="t('args.removeLine')" @click="removeEnv(i)"><GlyphIcon name="close" :size="13" /></button>
+            <input class="field-input env-key" :value="line.key" :placeholder="t('args.envKey')" spellcheck="false"
+              @input="setEnvKey(i, ($event.target as HTMLInputElement).value)" />
+            <input class="field-input grow" :value="line.value" :placeholder="t('args.envValue')" spellcheck="false"
+              @input="setEnvValue(i, ($event.target as HTMLInputElement).value)" />
+            <button class="line-del" v-tip="t('args.removeLine')" @click="removeEnv(i)">
+              <GlyphIcon name="close" :size="13" />
+            </button>
           </div>
-          <button class="line-add" @click="addEnv"><GlyphIcon name="plus" :size="13" :weight="2.2" /> {{ t("args.addLine") }}</button>
+          <button class="line-add" @click="addEnv">
+            <GlyphIcon name="plus" :size="13" :weight="2.2" /> {{ t("args.addLine") }}
+          </button>
         </div>
       </CollapsePanel>
     </div>
@@ -374,7 +305,7 @@ const gcOptions = [
 }
 
 /* 扩展参数区内的独立标题（列布局）：flex-basis 会作用到高度，需重置，避免 84px 大空白 */
-.advanced-body > .args-label {
+.advanced-body>.args-label {
   flex: none;
 }
 

@@ -90,7 +90,7 @@ export default {
   // Instance detail
   "detail.selectHint": "Select an instance from the left",
   "detail.settings": "Instance Settings",
-"detail.logs": "Instance logs",
+  "detail.logs": "Instance logs",
   "detail.group": "Group: {name}",
   "detail.launchCount": "Launched {count} times",
   "detail.lastPlay": "Last played: {last}",
@@ -1218,6 +1218,8 @@ export default {
   "err.colormcEmpty": "The ColorMC working directory is empty",
   "err.colormcMode": "Unknown migration mode",
   "err.colormcBusy": "A migration is already running",
+  // ColorMC migration task failed: the raw error goes to the log
+  "err.colormcTask": "ColorMC migration task failed (see the log for details)",
 
   // Migrating from ColorMC (asked once while loading)
   "colormc.title": "ColorMC data found",

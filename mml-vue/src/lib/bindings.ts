@@ -128,13 +128,13 @@ export const commands = {
   },
   log: {
     getFiles: (uuid: string) => invoke<string[]>("log_get_files", { uuid }),
+    getRuntime: (uuid: string) => invoke<LogLine[]>("log_get_runtime", { uuid }),
     readFile: (uuid: string, path: string) => invoke<LogLine[]>("log_read_file", { uuid, path }),
   },
   main: {
     addGroup: (name: string) => invoke<string | null>("main_add_group", { name }),
     createInstance: (name: string, version: string, loader: string | null, loaderVersion: string | null, group: string | null, modpackType: string | null, source: string | null) => invoke<InstanceInfoDto>("main_create_instance", { name, version, loader, loaderVersion, group, modpackType, source }),
     deleteInstance: (uuid: string) => invoke<boolean>("main_delete_instance", { uuid }),
-    getGameLog: (uuid: string) => invoke<LogLine[]>("main_get_game_log", { uuid }),
     getGroups: () => invoke<GroupDto[]>("main_get_groups"),
     getInstanceArgs: (uuid: string) => invoke<InstanceArgsDto>("main_get_instance_args", { uuid }),
     getInstanceLangs: (uuid: string) => invoke<InstanceLangDto[]>("main_get_instance_langs", { uuid }),
@@ -285,15 +285,6 @@ export type DetectedPackDto = {
   name: string,
 };
 
-export type ModpackItemDto = {
-  id: string,
-  name: string,
-  desc: string,
-  icon: string,
-  author: string,
-  downloads: number,
-};
-
 export type PackProgressDto = {
   state: string,
   now: number,
@@ -327,6 +318,43 @@ export type ModPackStatusDto = {
   tasks: ModPackTaskDto[],
 };
 
+export type SourceTypeDto = {
+  fileType: string,
+  source: string,
+  pid: string,
+  fid: string,
+};
+
+export type McmodDto = {
+  mcmodId: string,
+  mcmodName: string,
+};
+
+export type PicDto = {
+  name: string,
+  logo: string | null,
+};
+
+export type TagDto = {
+  name: string,
+  logo: string | null,
+  svg: string | null,
+};
+
+export type DecPicDto = {
+  name: string,
+  logo: string,
+  description: string,
+};
+
+export type ProjectDetailDto = {
+  summary: string,
+  body: string | null,
+  authors: PicDto[],
+  tag: TagDto[],
+  screenshots: DecPicDto[],
+};
+
 export type FileListDto = {
   list: FileListItemDto[],
   count: number,
@@ -342,13 +370,6 @@ export type FileListItemDto = {
   isDownload: boolean,
   downloadNow: boolean,
   source: SourceTypeDto,
-};
-
-export type SourceTypeDto = {
-  fileType: string,
-  source: string,
-  pid: string,
-  fid: string,
 };
 
 export type ProjectDto = {
@@ -372,36 +393,6 @@ export type ProjectItemDto = {
   url: string,
   mcmod: McmodDto | null,
   source: SourceTypeDto,
-};
-
-export type ProjectDetailDto = {
-  summary: string,
-  body: string | null,
-  authors: PicDto[],
-  tag: TagDto[],
-  screenshots: DecPicDto[],
-};
-
-export type McmodDto = {
-  mcmodId: string,
-  mcmodName: string,
-};
-
-export type PicDto = {
-  name: string,
-  logo: string | null,
-};
-
-export type TagDto = {
-  name: string,
-  logo: string | null,
-  svg: string | null,
-};
-
-export type DecPicDto = {
-  name: string,
-  logo: string,
-  description: string,
 };
 
 export type ResourceSaveDto = {
@@ -951,6 +942,54 @@ export type DataPackItemDto = {
   enable: boolean | null,
 };
 
+export type RunArgSettingDto = {
+  removeJvmArg: boolean,
+  removeGameArg: boolean,
+  jvmArgs: string,
+  gameArgs: string,
+  jvmEnv: string,
+  gcMode: string,
+  minMemory: number,
+  maxMemory: number,
+  colorasm: boolean,
+  launchPreRun: boolean,
+  preRunWithGame: boolean,
+  launchPostRun: boolean,
+  preRunArg: string,
+  postRunArg: string,
+};
+
+export type SettingsDefaultsDto = {
+  network: NetworkSettingDto,
+  run: RunArgSettingDto,
+  window: WindowSettingDto,
+};
+
+export type WindowSettingDto = {
+  fullScreen: boolean,
+  width: number,
+  height: number,
+  editTitle: boolean,
+  gameTitle: string,
+  randomTitle: boolean,
+  cycleTitle: boolean,
+  titleDelay: number,
+};
+
+export type LaunchSettingDto = {
+  javaList: JavaInfoDto[],
+  run: RunArgSettingDto,
+  window: WindowSettingDto,
+};
+
+export type BgInfoDto = {
+  source: string,
+  dataUrl: string,
+  opacity: number,
+  blur: number,
+  nativeSize: number,
+};
+
 export type NetworkSettingDto = {
   source: string,
   downloadThread: number,
@@ -983,54 +1022,6 @@ export type GameCheckSettingDto = {
   libSha1: boolean,
   assetsSha1: boolean,
   modSha1: boolean,
-};
-
-export type RunArgSettingDto = {
-  removeJvmArg: boolean,
-  removeGameArg: boolean,
-  jvmArgs: string,
-  gameArgs: string,
-  jvmEnv: string,
-  gcMode: string,
-  minMemory: number,
-  maxMemory: number,
-  colorasm: boolean,
-  launchPreRun: boolean,
-  preRunWithGame: boolean,
-  launchPostRun: boolean,
-  preRunArg: string,
-  postRunArg: string,
-};
-
-export type WindowSettingDto = {
-  fullScreen: boolean,
-  width: number,
-  height: number,
-  editTitle: boolean,
-  gameTitle: string,
-  randomTitle: boolean,
-  cycleTitle: boolean,
-  titleDelay: number,
-};
-
-export type SettingsDefaultsDto = {
-  network: NetworkSettingDto,
-  run: RunArgSettingDto,
-  window: WindowSettingDto,
-};
-
-export type LaunchSettingDto = {
-  javaList: JavaInfoDto[],
-  run: RunArgSettingDto,
-  window: WindowSettingDto,
-};
-
-export type BgInfoDto = {
-  source: string,
-  dataUrl: string,
-  opacity: number,
-  blur: number,
-  nativeSize: number,
 };
 
 export type TexturesDto = {

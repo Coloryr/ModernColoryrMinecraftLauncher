@@ -124,25 +124,12 @@ function onLoaderPathPick(e: Event) {
       <label class="field-label">{{ t("add.verType") }}</label>
       <!-- 多选下拉：展开后是复选项，勾选不关闭，点外部关闭 -->
       <div ref="comboEl" class="type-combo">
-        <button
-          type="button"
-          class="field-select type-trigger"
-          :aria-expanded="typeOpen"
-          @click="typeOpen = !typeOpen"
-        >
+        <button type="button" class="field-select type-trigger" :aria-expanded="typeOpen" @click="typeOpen = !typeOpen">
           <span class="type-label">{{ typeLabel }}</span>
         </button>
         <div v-if="typeOpen" class="type-drop" role="listbox" aria-multiselectable="true">
-          <button
-            v-for="vt in versionTypes"
-            :key="vt"
-            type="button"
-            class="type-opt"
-            role="option"
-            :aria-selected="verTypes.includes(vt)"
-            :class="{ selected: verTypes.includes(vt) }"
-            @click="toggleType(vt)"
-          >
+          <button v-for="vt in versionTypes" :key="vt" type="button" class="type-opt" role="option"
+            :aria-selected="verTypes.includes(vt)" :class="{ selected: verTypes.includes(vt) }" @click="toggleType(vt)">
             {{ t(`add.type.${vt}`) }}
           </button>
         </div>
@@ -152,29 +139,16 @@ function onLoaderPathPick(e: Event) {
       <label class="field-label">{{ t("add.version") }} <span class="req">*</span></label>
       <div class="path-row">
         <!-- 选中多个版本类型时按类型分组展示 -->
-        <select
-          ref="versionSelect"
-          :value="newVersion"
-          class="field-select"
-          :class="{ 'is-invalid': invalidVersion }"
-          @change="emit('update:newVersion', ($event.target as HTMLSelectElement).value)"
-        >
-          <optgroup
-            v-for="grp in groupedVersions"
-            :key="grp.type"
-            :label="t(`add.type.${grp.type}`)"
-          >
+        <select ref="versionSelect" :value="newVersion" class="field-select" :class="{ 'is-invalid': invalidVersion }"
+          @change="emit('update:newVersion', ($event.target as HTMLSelectElement).value)">
+          <optgroup v-for="grp in groupedVersions" :key="grp.type" :label="t(`add.type.${grp.type}`)">
             <option v-for="v in grp.items" :key="v.id" :value="v.id">{{ v.id }}</option>
           </optgroup>
         </select>
-        <BaseButton
-          size="sm"
-          variant="ghost"
-          :disabled="verLoading"
-          v-tip="t('add.versionRefresh')"
-          @click="emit('refreshVersions')"
-        >
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <BaseButton size="sm" variant="ghost" :disabled="verLoading" v-tip="t('add.versionRefresh')"
+          @click="emit('refreshVersions')">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 12a9 9 0 1 1-2.64-6.36" />
             <polyline points="21 3 21 9 15 9" />
           </svg>
@@ -191,35 +165,20 @@ function onLoaderPathPick(e: Event) {
       <label class="field-label">{{ t("add.loader") }}</label>
       <div class="path-row">
         <!-- 未选中版本或查询支持列表期间禁用 -->
-        <select
-          :value="loader"
-          class="field-select"
-          :disabled="!newVersion || loaderLoading"
-          @change="onLoaderChange"
-        >
+        <select :value="loader" class="field-select" :disabled="!newVersion || loaderLoading" @change="onLoaderChange">
           <option v-for="l in loaders" :key="l" :value="l">{{ t(`add.loader.${l}`) }}</option>
         </select>
-        <BaseButton
-          size="sm"
-          variant="ghost"
-          :disabled="!newVersion || loaderLoading"
-          v-tip="t('add.loaderRefresh')"
-          @click="emit('refreshLoaders')"
-        >
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <BaseButton size="sm" variant="ghost" :disabled="!newVersion || loaderLoading" v-tip="t('add.loaderRefresh')"
+          @click="emit('refreshLoaders')">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 12a9 9 0 1 1-2.64-6.36" />
             <polyline points="21 3 21 9 15 9" />
           </svg>
         </BaseButton>
       </div>
       <!-- 查询进度就地显示在这里（它属于"加载器类型"这个下拉；原来浮在窗口正上方，离得太远） -->
-      <LoaderQueryProgress
-        v-if="loaderLoading"
-        kind="query"
-        :visible="true"
-        :step="queryStep"
-        :total="queryTotal"
-      />
+      <LoaderQueryProgress v-if="loaderLoading" kind="query" :visible="true" :step="queryStep" :total="queryTotal" />
       <!-- 没选版本时的提示放下拉框下方，不作为列表项 -->
       <div v-else-if="!newVersion" class="field-hint">{{ t("add.pickVersionFirst") }}</div>
     </div>
@@ -227,35 +186,21 @@ function onLoaderPathPick(e: Event) {
       <label class="field-label">{{ t("add.loaderVersion") }}</label>
       <div class="path-row">
         <!-- 始终显示：拉取中 / 原版、自定义等无版本列表的加载器置灰 -->
-        <select
-          :value="loaderVersion"
-          class="field-select"
-          :disabled="loaderVerLoading || !loaderVersions.length"
-          @change="onLoaderVersionChange"
-        >
+        <select :value="loaderVersion" class="field-select" :disabled="loaderVerLoading || !loaderVersions.length"
+          @change="onLoaderVersionChange">
           <option v-for="lv in loaderVersions" :key="lv" :value="lv">{{ lv }}</option>
         </select>
-        <BaseButton
-          size="sm"
-          variant="ghost"
-          :disabled="!newVersion || noLoaderVersion || loaderVerLoading"
-          v-tip="t('add.loaderVerRefresh')"
-          @click="emit('refreshLoaderVersions')"
-        >
-          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <BaseButton size="sm" variant="ghost" :disabled="!newVersion || noLoaderVersion || loaderVerLoading"
+          v-tip="t('add.loaderVerRefresh')" @click="emit('refreshLoaderVersions')">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 12a9 9 0 1 1-2.64-6.36" />
             <polyline points="21 3 21 9 15 9" />
           </svg>
         </BaseButton>
       </div>
       <!-- 拉取加载器版本：进度同样就地显示，别浮到窗口顶上 -->
-      <LoaderQueryProgress
-        v-if="loaderVerLoading"
-        kind="versions"
-        :visible="true"
-        :step="0"
-        :total="0"
-      />
+      <LoaderQueryProgress v-if="loaderVerLoading" kind="versions" :visible="true" :step="0" :total="0" />
     </div>
   </div>
 
@@ -263,14 +208,8 @@ function onLoaderPathPick(e: Event) {
   <template v-if="loader === 'custom'">
     <label class="field-label">{{ t("add.loaderPath") }}</label>
     <div class="path-row">
-      <input
-        :value="loaderPath"
-        class="field-input"
-        :placeholder="t('add.loaderPathPlaceholder')"
-        spellcheck="false"
-        autocomplete="off"
-        @input="emit('update:loaderPath', ($event.target as HTMLInputElement).value)"
-      />
+      <input :value="loaderPath" class="field-input" :placeholder="t('add.loaderPathPlaceholder')" spellcheck="false"
+        autocomplete="off" @input="emit('update:loaderPath', ($event.target as HTMLInputElement).value)" />
       <BaseButton size="sm" variant="accent" @click="loaderPathInput?.click()">…</BaseButton>
       <input ref="loaderPathInput" type="file" accept=".jar" class="hidden-input" @change="onLoaderPathPick" />
     </div>
@@ -312,7 +251,8 @@ function onLoaderPathPick(e: Event) {
   padding: 4px;
   max-height: 220px;
   overflow-y: auto;
-  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
+  scrollbar-gutter: stable;
+  /* 见 styles/scrollbar.css */
 }
 
 .type-opt {

@@ -203,9 +203,6 @@ mod tests {
         let total = get_memory_size();
         let free = get_memory_free();
         assert_ne!(free, u64::MAX, "可用内存查询失败（返回了哨兵值）");
-        assert!(
-            free <= total,
-            "剩余内存 {free} 不应大于总量 {total}"
-        );
+        assert!(free <= total, "剩余内存 {free} 不应大于总量 {total}");
     }
 }

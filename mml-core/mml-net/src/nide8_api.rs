@@ -3,10 +3,10 @@
 //! 提供从 Nide8 服务器获取认证 JAR 版本信息和哈希值的功能。
 //! 用于在游戏启动时注入 Nide8 认证模块。
 
-use mml_names::{i18_items::error_type::CoreResult};
+use mml_names::i18_items::error_type::CoreResult;
 use serde::{Deserialize, Serialize};
 
-use crate::{urls};
+use crate::urls;
 
 /// Nide8 JAR 信息
 #[derive(Serialize, Deserialize, Debug)]

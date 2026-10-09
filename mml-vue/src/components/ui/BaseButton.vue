@@ -12,11 +12,7 @@ withDefaults(
 </script>
 
 <template>
-  <button
-    class="ui-btn"
-    :class="[`v-${variant}`, `s-${size}`, { block }]"
-    :disabled="disabled"
-  >
+  <button class="ui-btn" :class="[`v-${variant}`, `s-${size}`, { block }]" :disabled="disabled">
     <slot />
   </button>
 </template>

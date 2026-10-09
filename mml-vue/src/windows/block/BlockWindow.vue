@@ -86,16 +86,9 @@ async function confirmCloseRender() {
   <WindowFrame body-fill :title="t('home.blocks')" @close="emit('close')">
     <!-- 工具条放进标题栏：不占内容区高度，也不随内容滚动；未渲染时整条不出现 -->
     <template #head-right>
-      <BlockToolbar
-        v-if="rendered"
-        :keyword="keyword"
-        :size="size"
-        :running="running"
-        @update:keyword="keyword = $event"
-        @update:size="size = $event"
-        @add-skin="skinOpen = true"
-        @re-render="startRender(true)"
-      />
+      <BlockToolbar v-if="rendered" :keyword="keyword" :size="size" :running="running"
+        @update:keyword="keyword = $event" @update:size="size = $event" @add-skin="skinOpen = true"
+        @re-render="startRender(true)" />
     </template>
 
     <BlockPanel :settings="list" :current-instance="currentInstance" />
@@ -104,7 +97,8 @@ async function confirmCloseRender() {
     <SkinAddModal v-if="skinOpen" :busy="skinBusy" @submit="onSkinSubmit" @close="skinOpen = false" />
 
     <!-- 渲染中关窗：确认后中断渲染再关 -->
-    <BaseModal v-if="confirmClose" :title="t('blocks.closeRenderTitle')" :closable="false" @close="confirmClose = false">
+    <BaseModal v-if="confirmClose" :title="t('blocks.closeRenderTitle')" :closable="false"
+      @close="confirmClose = false">
       <p class="delete-tip">{{ t("blocks.closeRenderConfirm") }}</p>
       <div class="modal-actions">
         <BaseButton @click="confirmClose = false">{{ t("add.cancel") }}</BaseButton>

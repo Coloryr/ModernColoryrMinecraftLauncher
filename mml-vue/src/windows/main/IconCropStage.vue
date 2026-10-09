@@ -118,16 +118,12 @@ onUnmounted(onUp);
   <div class="stage" :style="{ width: boxW + 'px', height: boxH + 'px' }">
     <img class="stage-img" :src="src" :width="boxW" :height="boxH" alt="" draggable="false" />
     <!-- 选区外压暗：靠一层巨大的 box-shadow 铺满，省掉四块遮罩 -->
-    <div
-      class="sel"
-      :style="{
-        left: sel.x + 'px',
-        top: sel.y + 'px',
-        width: sel.size + 'px',
-        height: sel.size + 'px',
-      }"
-      @pointerdown="onDown($event, 'move')"
-    >
+    <div class="sel" :style="{
+      left: sel.x + 'px',
+      top: sel.y + 'px',
+      width: sel.size + 'px',
+      height: sel.size + 'px',
+    }" @pointerdown="onDown($event, 'move')">
       <span class="sel-handle" @pointerdown.stop="onDown($event, 'resize')"></span>
     </div>
   </div>

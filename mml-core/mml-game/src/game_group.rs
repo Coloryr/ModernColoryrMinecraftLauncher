@@ -679,11 +679,7 @@ mod tests {
         let mut store = GroupStore {
             // "幽灵组"没有名字（只在 groups 里）：视为损坏，连成员一起丢掉
             // "整合包"在顺序表里重复一次；"测试"存在但漏在顺序外
-            group_order: vec![
-                "幽灵组".to_string(),
-                pack.to_string(),
-                pack.to_string(),
-            ],
+            group_order: vec!["幽灵组".to_string(), pack.to_string(), pack.to_string()],
             names: HashMap::from([
                 (pack.to_string(), "整合包".to_string()),
                 (test.to_string(), "测试".to_string()),
@@ -700,14 +696,28 @@ mod tests {
         store.normalize();
 
         let keys = store.keys();
-        assert_eq!(keys[0], DEFAULT_GROUP_UUID, "顺序表里没记默认分组时，补在最前（初始位置）");
+        assert_eq!(
+            keys[0], DEFAULT_GROUP_UUID,
+            "顺序表里没记默认分组时，补在最前（初始位置）"
+        );
         assert_eq!(keys[1], pack);
         assert_eq!(keys[2], test);
-        assert_eq!(store.groups[&pack.to_string()], vec![b, a], "组内数组应排成次序");
+        assert_eq!(
+            store.groups[&pack.to_string()],
+            vec![b, a],
+            "组内数组应排成次序"
+        );
         assert_eq!(store.order.get(&b.to_string()), Some(&0));
-        assert_eq!(store.order.get(&a.to_string()), Some(&1), "缺次序的排到最后");
+        assert_eq!(
+            store.order.get(&a.to_string()),
+            Some(&1),
+            "缺次序的排到最后"
+        );
         assert!(!store.groups.contains_key("幽灵组"), "没名字的分组应清掉");
-        assert!(!store.order.contains_key(&dead.to_string()), "悬空次序应清掉");
+        assert!(
+            !store.order.contains_key(&dead.to_string()),
+            "悬空次序应清掉"
+        );
     }
 
     /// 重排：传入的顺序生效（默认分组不特殊对待）；不存在 / 没提到的按原相对顺序排在后面
@@ -880,7 +890,8 @@ mod tests {
         let _guard = DISK_LOCK.lock().unwrap_or_else(|e| e.into_inner());
         boot();
 
-        let dir = mml_testutil::temp_dir().join(format!("mml-group-reorder-{}", std::process::id()));
+        let dir =
+            mml_testutil::temp_dir().join(format!("mml-group-reorder-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         init(dir.clone()).unwrap();

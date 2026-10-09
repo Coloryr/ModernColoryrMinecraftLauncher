@@ -221,7 +221,7 @@ onMounted(async () => {
   // 赋值与注册分开：onUnmounted 只能在 setup 的同步阶段注册，
   // 写在 await 之后就注册不上了（监听会一直挂着，卸载时摘不掉）
   unlistenCollect = await onCollectChange(() => {
-    reload().catch(() => {});
+    reload().catch(() => { });
   });
 
   reload().catch((e) => showToast(tErr(e)));
@@ -436,7 +436,7 @@ async function confirmRemove() {
 /** 打开项目页面（网址） */
 function openUrl(item: CollectItemDto) {
   if (item.url) {
-    api.openUrl(item.url).catch(() => {});
+    api.openUrl(item.url).catch(() => { });
   }
 }
 
@@ -639,13 +639,11 @@ function closeMenu() {
         <div class="collect-filters">
           <label v-for="f in FILTER_TYPES" :key="f.key" class="filter-item">
             <span class="filter-box">
-              <input
-                type="checkbox"
-                class="filter-check"
-                :checked="filters[f.key]"
-                @change="toggleFilter(f.key, ($event.target as HTMLInputElement).checked)"
-              />
-              <span class="check-mark"><GlyphIcon name="check" :size="11" :weight="3" /></span>
+              <input type="checkbox" class="filter-check" :checked="filters[f.key]"
+                @change="toggleFilter(f.key, ($event.target as HTMLInputElement).checked)" />
+              <span class="check-mark">
+                <GlyphIcon name="check" :size="11" :weight="3" />
+              </span>
             </span>
             {{ f.label() }}
           </label>
@@ -663,20 +661,13 @@ function closeMenu() {
       <div v-if="multiSelect" class="multi-bar">
         <span class="multi-count">{{ t("collect.multiSelected", { count: checked.size }) }}</span>
         <button class="multi-btn" @click="selectAllVisible">{{ t("multi.selectAll") }}</button>
-        <button
-          class="multi-btn"
-          :disabled="checked.size === 0 || groupNames.length === 0"
+        <button class="multi-btn" :disabled="checked.size === 0 || groupNames.length === 0"
           v-tip="checked.size === 0 ? t('collect.multiNoneTip') : groupNames.length === 0 ? t('collect.addToGroupNone') : ''"
-          @click="askAddToGroup"
-        >
+          @click="askAddToGroup">
           {{ t("collect.multiMoveGroup") }}
         </button>
-        <button
-          class="multi-btn danger"
-          :disabled="checked.size === 0"
-          v-tip="checked.size === 0 ? t('collect.multiNoneTip') : ''"
-          @click="askRemove"
-        >
+        <button class="multi-btn danger" :disabled="checked.size === 0"
+          v-tip="checked.size === 0 ? t('collect.multiNoneTip') : ''" @click="askRemove">
           {{ t("collect.multiDelete") }}
         </button>
         <span class="multi-sep"></span>
@@ -688,39 +679,21 @@ function closeMenu() {
 
       <!-- 折叠分组列表：默认分组在前，最后一项是「添加分组」 -->
       <div v-else class="collect-groups">
-        <section
-          v-for="g in groupSections"
-          :key="g.key"
-          class="group-block"
-          :class="{ 'drop-target': dropGroup === g.key }"
-          :data-group="g.key"
-        >
+        <section v-for="g in groupSections" :key="g.key" class="group-block"
+          :class="{ 'drop-target': dropGroup === g.key }" :data-group="g.key">
           <div class="group-head">
             <button class="group-title" @click="toggleGroupOpen(g.key)">
-              <GlyphIcon
-                class="group-chevron"
-                :class="{ collapsed: !isGroupOpen(g.key) }"
-                name="chevron-down"
-                :size="13"
-                :weight="2.4"
-              />
+              <GlyphIcon class="group-chevron" :class="{ collapsed: !isGroupOpen(g.key) }" name="chevron-down"
+                :size="13" :weight="2.4" />
               <span class="group-name">{{ g.label }}</span>
               <span class="group-count">{{ t("collect.count", { n: g.items.length }) }}</span>
             </button>
             <!-- 分组操作：悬停该行才浮出来，免得一排按钮一直在眼前 -->
             <span class="group-acts">
-              <button
-                class="group-act"
-                :disabled="!g.items.length"
-                @click.stop="askClear(g.key)"
-              >
+              <button class="group-act" :disabled="!g.items.length" @click.stop="askClear(g.key)">
                 {{ t("collect.clear") }}
               </button>
-              <button
-                v-if="!g.isDefault"
-                class="group-act danger"
-                @click.stop="deleteGroupTarget = g.key"
-              >
+              <button v-if="!g.isDefault" class="group-act danger" @click.stop="deleteGroupTarget = g.key">
                 {{ t("collect.deleteGroup") }}
               </button>
             </span>
@@ -732,52 +705,31 @@ function closeMenu() {
               {{ g.isDefault ? t("collect.emptyDefault") : t("collect.emptyGroup") }}
             </p>
             <div v-if="g.items.length || isGhostGroup(g.key)" class="collect-grid">
-              <div
-                v-for="item in g.items"
-                :key="item.uuid"
-                class="collect-card"
+              <div v-for="item in g.items" :key="item.uuid" class="collect-card"
                 :class="{ active: checked.has(item.uuid), dragging: draggingUuids.has(item.uuid) }"
-                @pointerdown="onCardPointerDown($event, item)"
-                @click="onCardClick(item)"
-                @mouseenter="focus = item"
-                @mouseleave="focus = null"
-                @contextmenu.prevent="openMenu($event, item)"
-              >
+                @pointerdown="onCardPointerDown($event, item)" @click="onCardClick(item)" @mouseenter="focus = item"
+                @mouseleave="focus = null" @contextmenu.prevent="openMenu($event, item)">
                 <span v-if="multiSelect" class="card-box" @click.stop @pointerdown.stop>
-                  <input
-                    type="checkbox"
-                    class="card-check"
-                    :checked="checked.has(item.uuid)"
-                    @click.stop
-                    @change="toggleCheck(item.uuid, ($event.target as HTMLInputElement).checked)"
-                  />
-                  <span class="check-mark"><GlyphIcon name="check" :size="11" :weight="3" /></span>
+                  <input type="checkbox" class="card-check" :checked="checked.has(item.uuid)" @click.stop
+                    @change="toggleCheck(item.uuid, ($event.target as HTMLInputElement).checked)" />
+                  <span class="check-mark">
+                    <GlyphIcon name="check" :size="11" :weight="3" />
+                  </span>
                 </span>
                 <div class="card-icon">
                   <!-- 用全仓通用的 AsyncImage：加载中是流光占位、失败是灰底占位
                        （与下载整合包窗口的项目图标同一套观感） -->
-                  <AsyncImage
-                    v-if="iconOf(item)"
-                    :src="iconOf(item)"
-                    @error="onIconError(item)"
-                  />
+                  <AsyncImage v-if="iconOf(item)" :src="iconOf(item)" @error="onIconError(item)" />
                   <GlyphIcon v-else class="card-icon-none" name="image" :size="22" :weight="1.6" />
                 </div>
                 <div class="card-text">
                   <div class="card-name" v-tip="item.name">{{ item.name }}</div>
                   <div class="card-meta">{{ item.source }} · {{ item.fileType }}</div>
                 </div>
-                <span
-                  v-if="focus?.uuid === item.uuid || checked.has(item.uuid)"
-                  class="card-acts"
-                  @pointerdown.stop
-                >
-                  <button
-                    class="card-act"
-                    v-tip="t('collect.openUrl')"
-                    @click.stop="openUrl(item)"
-                  >
-                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <span v-if="focus?.uuid === item.uuid || checked.has(item.uuid)" class="card-acts" @pointerdown.stop>
+                  <button class="card-act" v-tip="t('collect.openUrl')" @click.stop="openUrl(item)">
+                    <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.8"
+                      stroke-linecap="round" stroke-linejoin="round">
                       <path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.5 1.5" />
                       <path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7L12 19" />
                     </svg>
@@ -809,24 +761,15 @@ function closeMenu() {
       </div>
 
       <!-- 右键菜单 -->
-      <div
-        v-if="menu"
-        class="ctx-menu"
-        :style="{ left: menu.x + 'px', top: menu.y + 'px' }"
-        @click.stop
-      >
+      <div v-if="menu" class="ctx-menu" :style="{ left: menu.x + 'px', top: menu.y + 'px' }" @click.stop>
         <button class="ctx-item" @click="openUrl(menu.item); closeMenu()">
           {{ t("collect.openUrl") }}
         </button>
         <button class="ctx-item danger" @click="askRemove">
           {{ groupOfUuid.has(menu.item.uuid) ? t("collect.removeFromGroup") : t("collect.deleteFav") }}
         </button>
-        <button
-          class="ctx-item"
-          :disabled="groupNames.length === 0"
-          v-tip="groupNames.length === 0 ? t('collect.addToGroupNone') : ''"
-          @click="askAddToGroup"
-        >
+        <button class="ctx-item" :disabled="groupNames.length === 0"
+          v-tip="groupNames.length === 0 ? t('collect.addToGroupNone') : ''" @click="askAddToGroup">
           {{ t("collect.addToGroup") }}
         </button>
       </div>
@@ -837,13 +780,8 @@ function closeMenu() {
       <!-- 纯文本输入：用 .field-input。别挂 .field-select —— 那个类除了尺寸还带
            右侧下拉箭头（padding-right: 28px + --select-arrow 背景图），输入框上会
            凭空多出一个"能点开下拉"的箭头（主窗口同款弹窗用的就是 .field-input） -->
-      <input
-        v-model="newGroupName"
-        class="field-input"
-        :placeholder="t('collect.groupPlaceholder')"
-        spellcheck="false"
-        @keydown.enter="confirmAddGroup"
-      />
+      <input v-model="newGroupName" class="field-input" :placeholder="t('collect.groupPlaceholder')" spellcheck="false"
+        @keydown.enter="confirmAddGroup" />
       <div class="modal-actions">
         <BaseButton @click="showAddGroup = false">{{ t("add.cancel") }}</BaseButton>
         <BaseButton variant="primary" @click="confirmAddGroup">{{ t("add.yes") }}</BaseButton>
@@ -851,12 +789,8 @@ function closeMenu() {
     </BaseModal>
 
     <!-- 删除分组确认 -->
-    <BaseModal
-      v-if="deleteGroupTarget"
-      :title="t('collect.deleteGroup')"
-      :closable="false"
-      @close="deleteGroupTarget = ''"
-    >
+    <BaseModal v-if="deleteGroupTarget" :title="t('collect.deleteGroup')" :closable="false"
+      @close="deleteGroupTarget = ''">
       <p class="delete-tip">{{ t("collect.deleteGroupConfirm", { name: deleteGroupTarget }) }}</p>
       <div class="modal-actions">
         <BaseButton @click="deleteGroupTarget = ''">{{ t("add.no") }}</BaseButton>
@@ -865,12 +799,7 @@ function closeMenu() {
     </BaseModal>
 
     <!-- 删除收藏确认（多选条与卡片菜单共用；多选条上会更正标题里的数量） -->
-    <BaseModal
-      v-if="removeOpen"
-      :title="t('collect.multiDelete')"
-      :closable="false"
-      @close="removeOpen = false"
-    >
+    <BaseModal v-if="removeOpen" :title="t('collect.multiDelete')" :closable="false" @close="removeOpen = false">
       <p class="delete-tip">{{ t("collect.removeConfirm", { count: actionUuids.length }) }}</p>
       <div class="modal-actions">
         <BaseButton @click="removeOpen = false">{{ t("add.no") }}</BaseButton>
@@ -894,12 +823,8 @@ function closeMenu() {
     </BaseModal>
 
     <!-- 添加到分组 -->
-    <BaseModal
-      v-if="addToGroupTarget !== ''"
-      :title="t('collect.addToGroupTitle')"
-      @close="addToGroupTarget = ''"
-      :closable="false"
-    >
+    <BaseModal v-if="addToGroupTarget !== ''" :title="t('collect.addToGroupTitle')" @close="addToGroupTarget = ''"
+      :closable="false">
       <select v-model="addToGroupTarget" class="field-select">
         <option v-for="g in groupNames" :key="g" :value="g">{{ g }}</option>
       </select>
@@ -915,24 +840,13 @@ function closeMenu() {
       模组 / 资源包 / 光影包都得装进某个已有实例，而"下载资源"窗口里只有一行只读的实例名、
       没有选择器，所以实例只能在这儿先选好，再连同 uuid 一起带过去。
     -->
-    <BaseModal
-      v-if="pickItem"
-      :title="t('collect.pickInstanceTitle')"
-      :width="430"
-      :closable="false"
-      @close="pickItem = null"
-    >
+    <BaseModal v-if="pickItem" :title="t('collect.pickInstanceTitle')" :width="430" :closable="false"
+      @close="pickItem = null">
       <p class="delete-tip">{{ t("collect.pickInstanceDesc", { name: pickItem.name }) }}</p>
 
       <div v-if="pickInstances.length" class="pick-list">
-        <button
-          v-for="inst in pickInstances"
-          :key="inst.uuid"
-          type="button"
-          class="pick-item"
-          :class="{ on: inst.uuid === currentUuid }"
-          @click="pickInstance(inst)"
-        >
+        <button v-for="inst in pickInstances" :key="inst.uuid" type="button" class="pick-item"
+          :class="{ on: inst.uuid === currentUuid }" @click="pickInstance(inst)">
           <InstanceIcon :name="inst.name" :uuid="inst.uuid" :size="30" />
           <span class="pick-text">
             <span class="pick-name">{{ inst.name }}</span>
@@ -1339,8 +1253,8 @@ function closeMenu() {
   transition: opacity 0.12s;
 }
 
-.filter-check:checked + .check-mark,
-.card-check:checked + .check-mark {
+.filter-check:checked+.check-mark,
+.card-check:checked+.check-mark {
   opacity: 1;
 }
 
@@ -1530,7 +1444,8 @@ function closeMenu() {
   gap: 4px;
   max-height: 320px;
   overflow-y: auto;
-  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
+  scrollbar-gutter: stable;
+  /* 见 styles/scrollbar.css */
 }
 
 .pick-item {

@@ -34,15 +34,9 @@ const total = computed(() => collectFileKeys(props.tree).length);
     </span>
   </div>
   <div class="file-list">
-    <FileTree
-      :nodes="tree"
-      :checked="checked"
-      :expanded="expanded"
-      @toggle-file="emit('toggle-file', $event)"
+    <FileTree :nodes="tree" :checked="checked" :expanded="expanded" @toggle-file="emit('toggle-file', $event)"
       @toggle-dir="(n: FileNode, on: boolean) => emit('toggle-dir', n, on)"
-      @toggle-expand="emit('toggle-expand', $event)"
-      @lazy-load="emit('lazy-load', $event)"
-    />
+      @toggle-expand="emit('toggle-expand', $event)" @lazy-load="emit('lazy-load', $event)" />
   </div>
 </template>
 
@@ -104,7 +98,8 @@ const total = computed(() => collectFileKeys(props.tree).length);
 .file-list {
   max-height: 220px;
   overflow-y: auto;
-  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
+  scrollbar-gutter: stable;
+  /* 见 styles/scrollbar.css */
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 6px;

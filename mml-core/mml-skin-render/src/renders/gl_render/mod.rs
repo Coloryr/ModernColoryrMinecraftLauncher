@@ -14,7 +14,11 @@ use mml_skin::SkinType;
 use tiny_skia::Pixmap;
 
 use crate::{
-    BaseSkinRender, ErrorType, ModelPartType, cube, cube_model::CubeModelItemObj, model, renders::gl_render::gl_model::{ModelVao, VaoItem, VertexOpenGL}, texture
+    BaseSkinRender, ErrorType, ModelPartType, cube,
+    cube_model::CubeModelItemObj,
+    model,
+    renders::gl_render::gl_model::{ModelVao, VaoItem, VertexOpenGL},
+    texture,
 };
 
 /// 渲染类型

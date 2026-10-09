@@ -248,7 +248,7 @@ export function useResourceData(initialCategory: CategoryId = "saves") {
       return;
     }
     void load();
-  });  watch(saveTab, (tab) => {
+  }); watch(saveTab, (tab) => {
     if (tab === "datapacks") void enterDatapackTab();
   });
   watch(dpSave, () => void loadDatapacks());

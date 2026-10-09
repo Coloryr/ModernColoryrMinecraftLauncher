@@ -63,27 +63,14 @@ function hidePreview() {
       <span class="row-name add-text">{{ t("account.add") }}</span>
     </button>
 
-    <div
-      v-for="acc in accounts"
-      :key="acc.uuid"
-      class="acc-row"
-      :class="{ current: isCurrent(acc) }"
-      @dblclick="emit('switch', acc)"
-    >
+    <div v-for="acc in accounts" :key="acc.uuid" class="acc-row" :class="{ current: isCurrent(acc) }"
+      @dblclick="emit('switch', acc)">
       <!-- 加载中：图上叠转圈，onload 后消失 -->
       <div v-if="!imageFailed(acc, 'avatar')" class="row-avatar-box">
-        <img
-          :src="acc.avatar || accountAvatarUrl(acc)"
-          class="row-avatar"
-          :class="{ pending: imageLoading(acc, 'avatar') }"
-          alt=""
-          data-no-fallback
-          @load="markImageLoaded(acc, 'avatar')"
-          @error="markImageFailed(acc, 'avatar')"
-          @mouseenter="showPreview($event, acc)"
-          @mousemove="movePreview"
-          @mouseleave="hidePreview"
-        />
+        <img :src="acc.avatar || accountAvatarUrl(acc)" class="row-avatar"
+          :class="{ pending: imageLoading(acc, 'avatar') }" alt="" data-no-fallback
+          @load="markImageLoaded(acc, 'avatar')" @error="markImageFailed(acc, 'avatar')"
+          @mouseenter="showPreview($event, acc)" @mousemove="movePreview" @mouseleave="hidePreview" />
         <div v-if="imageLoading(acc, 'avatar')" class="img-spin" />
       </div>
       <!-- 头像拉取失败回退字母头像（与主页面下拉一致），不显示"无头像"占位 -->
@@ -99,28 +86,16 @@ function hidePreview() {
       </div>
       <span v-if="isCurrent(acc)" class="current-tag">{{ t("account.current") }}</span>
       <span class="token-tag" :class="acc.tokenStatus">{{ tokenLabel(acc) }}</span>
-      <AccountActions
-        :can-refresh="acc.canRefresh"
-        :can-relogin="acc.canRelogin"
-        :can-edit="acc.canEdit"
-        :has-skin="!hasNoSkin(acc)"
-        @refresh="emit('refresh', acc)"
-        @view-skin="emit('viewSkin', acc)"
-        @refresh-skin="emit('refreshSkin', acc)"
-        @relogin="emit('relogin', acc)"
-        @edit="emit('edit', acc)"
-        @delete="emit('delete', acc)"
-      />
+      <AccountActions :can-refresh="acc.canRefresh" :can-relogin="acc.canRelogin" :can-edit="acc.canEdit"
+        :has-skin="!hasNoSkin(acc)" @refresh="emit('refresh', acc)" @view-skin="emit('viewSkin', acc)"
+        @refresh-skin="emit('refreshSkin', acc)" @relogin="emit('relogin', acc)" @edit="emit('edit', acc)"
+        @delete="emit('delete', acc)" />
     </div>
     <div v-if="accounts.length === 0" class="empty-tip">{{ t("account.searchEmpty") }}</div>
 
     <!-- 悬停头像时的头像大图 -->
     <Teleport to="body">
-      <div
-        v-if="preview"
-        class="skin-float"
-        :style="{ left: preview.x + 'px', top: preview.y + 'px' }"
-      >
+      <div v-if="preview" class="skin-float" :style="{ left: preview.x + 'px', top: preview.y + 'px' }">
         <img :src="preview.url" alt="" />
       </div>
     </Teleport>

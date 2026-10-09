@@ -8,7 +8,7 @@ use std::sync::LazyLock;
 use mml_names::i18_items::error_type::{CoreResult, DataNotFoundData, ErrorType};
 use serde::{Deserialize, Serialize};
 
-use crate::{url_helper};
+use crate::url_helper;
 
 /// Authlib-Injector 元数据
 #[derive(Serialize, Deserialize, Debug)]

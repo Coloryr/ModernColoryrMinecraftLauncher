@@ -593,7 +593,7 @@ async function finishAdding() {
   leaving = true;
   // 查询在途时后端有关闭保护（CloseRequested 被拒），先解除再关，否则窗关不掉
   dropPending();
-  await api.setCloseGuard(false).catch(() => {});
+  await api.setCloseGuard(false).catch(() => { });
   emit("close");
 }
 
@@ -607,7 +607,7 @@ async function answerConflict(answer: boolean) {
   const cur = nameConflict.value;
   nameConflict.value = null;
   if (cur) {
-    await answerNameConflict(cur.id, answer).catch(() => {});
+    await answerNameConflict(cur.id, answer).catch(() => { });
   }
 }
 
@@ -655,21 +655,21 @@ function unbindKeys() {
 onActivated(() => {
   bindKeys();
   // 切回来时把模型补回来（切走时释放掉了），再按当时状态恢复守卫
-  void api.ensureWindowModel("add").catch(() => {});
+  void api.ensureWindowModel("add").catch(() => { });
   syncCloseGuard();
 });
 onDeactivated(() => {
   unbindKeys();
-  void api.setCloseGuard(false).catch(() => {});
+  void api.setCloseGuard(false).catch(() => { });
   if (creating.value || packProgress.value) return;
-  void api.dropWindowModel("add").catch(() => {});
+  void api.dropWindowModel("add").catch(() => { });
 });
 
 onMounted(async () => {
   bindKeys();
   // 先把本页的模型准备好：创建 / 取消 / 关闭保护 / 重名确认都依赖它。
   // 多窗口模式下真实窗口由后端建窗时已经建好，这里是幂等的
-  await api.ensureWindowModel("add").catch(() => {});
+  await api.ensureWindowModel("add").catch(() => { });
   // 关闭被拒绝（查询数据期间后端拒关）：弹提示说明原因
   track(onCloseBlocked(() => showToast(t("add.closeBlocked"))));
   // 实例重名确认（后端创建流程暂停等待答复）
@@ -724,19 +724,11 @@ onUnmounted(() => {
             <label class="field-label" for="add-name">
               {{ t("add.name") }} <span v-if="!folderScanned" class="req">*</span>
             </label>
-            <input
-              id="add-name"
-              ref="nameInput"
-              :value="newName"
-              class="field-input"
+            <input id="add-name" ref="nameInput" :value="newName" class="field-input"
               :class="{ 'is-invalid': addErrorField === 'name' }"
               :placeholder="folderScanned ? t('add.folderNameHint') : t('add.namePlaceholder')"
-              :disabled="folderScanned"
-              spellcheck="false"
-              autocomplete="off"
-              @input="onNameInput"
-              @keydown.enter="create"
-            />
+              :disabled="folderScanned" spellcheck="false" autocomplete="off" @input="onNameInput"
+              @keydown.enter="create" />
             <!-- 扫到实例时逐个导入，名字各自取目录名，这里填了也没用 -->
             <p v-if="folderScanned" class="field-hint">{{ t("add.folderNameHint") }}</p>
           </div>
@@ -749,80 +741,28 @@ onUnmounted(() => {
 
       <!-- 模式内容（各模式组件见 modes/ 目录） -->
       <div class="add-card add-card-content">
-        <NewMode
-          v-if="addMode === 'new'"
-          :versions="filteredVersions"
-          :versions-loaded="versions.length > 0"
-          :ver-loading="verLoading"
-          :ver-types="verTypes"
-          :version-types="versionTypes"
-          :new-version="newVersion"
-          :loader="loader"
-          :loaders="loaders"
-          :loader-loading="loaderLoading"
-          :query-step="queryStep"
-          :query-total="queryTotal"
-          :loader-version="loaderVersion"
-          :loader-versions="loaderVersions"
-          :loader-ver-loading="loaderVerLoading"
-          :no-loader-version="NO_VERSION_LOADERS.includes(loader)"
-          :loader-path="loaderPath"
-          :invalid-version="addErrorField === 'version'"
-          @refresh-versions="refreshVersions"
-          @refresh-loaders="refreshSupportLoaders"
-          @refresh-loader-versions="refreshLoaderVersions"
-          @update:ver-types="verTypes = $event"
-          @update:new-version="newVersion = $event"
-          @update:loader="loader = $event"
-          @update:loader-version="loaderVersion = $event"
-          @update:loader-path="loaderPath = $event"
-        />
-        <ArchiveMode
-          v-else-if="addMode === 'archive'"
-          :path="addArchivePath"
-          :tree="archiveTree"
-          :checked="archiveChecked"
-          :expanded="archiveExpanded"
-          :pack-types="packTypes"
-          :pack-type="addPackType"
-          :scanning="archiveScanning"
-          :invalid="addErrorField === 'archive'"
-          @update:path="addArchivePath = $event"
-          @pick="pickArchive"
-          @toggle-file="onArchiveToggleFile"
-          @toggle-dir="onArchiveToggleDir"
-          @toggle-expand="onArchiveToggleExpand"
-          @set-all="setAllArchive"
-          @update:pack-type="addPackType = $event"
-        />
-        <FolderMode
-          v-else-if="addMode === 'folder'"
-          :path="addFolderPath"
-          :tree="folderTree"
-          :checked="folderChecked"
-          :expanded="folderExpanded"
-          :found="folderFound"
-          :picked="folderPicked"
-          :scanning="folderScanning"
-          :scan-error="folderScanError"
-          :invalid="addErrorField === 'folder'"
-          @update:path="addFolderPath = $event"
-          @pick="pickFolder"
-          @rescan="scanFolder"
-          @toggle-instance="toggleFoundInstance"
-          @set-all-instances="setAllFoundInstances"
-          @toggle-file="onFolderToggleFile"
-          @toggle-dir="onFolderToggleDir"
-          @toggle-expand="onFolderToggleExpand"
-          @lazy-load="onFolderLazyLoad"
-          @set-all="setAllFolder"
-        />
-        <OnlineMode
-          v-else
-          :url="addUrl"
-          :invalid="addErrorField === 'url'"
-          @update:url="addUrl = $event"
-        />
+        <NewMode v-if="addMode === 'new'" :versions="filteredVersions" :versions-loaded="versions.length > 0"
+          :ver-loading="verLoading" :ver-types="verTypes" :version-types="versionTypes" :new-version="newVersion"
+          :loader="loader" :loaders="loaders" :loader-loading="loaderLoading" :query-step="queryStep"
+          :query-total="queryTotal" :loader-version="loaderVersion" :loader-versions="loaderVersions"
+          :loader-ver-loading="loaderVerLoading" :no-loader-version="NO_VERSION_LOADERS.includes(loader)"
+          :loader-path="loaderPath" :invalid-version="addErrorField === 'version'" @refresh-versions="refreshVersions"
+          @refresh-loaders="refreshSupportLoaders" @refresh-loader-versions="refreshLoaderVersions"
+          @update:ver-types="verTypes = $event" @update:new-version="newVersion = $event"
+          @update:loader="loader = $event" @update:loader-version="loaderVersion = $event"
+          @update:loader-path="loaderPath = $event" />
+        <ArchiveMode v-else-if="addMode === 'archive'" :path="addArchivePath" :tree="archiveTree"
+          :checked="archiveChecked" :expanded="archiveExpanded" :pack-types="packTypes" :pack-type="addPackType"
+          :scanning="archiveScanning" :invalid="addErrorField === 'archive'" @update:path="addArchivePath = $event"
+          @pick="pickArchive" @toggle-file="onArchiveToggleFile" @toggle-dir="onArchiveToggleDir"
+          @toggle-expand="onArchiveToggleExpand" @set-all="setAllArchive" @update:pack-type="addPackType = $event" />
+        <FolderMode v-else-if="addMode === 'folder'" :path="addFolderPath" :tree="folderTree" :checked="folderChecked"
+          :expanded="folderExpanded" :found="folderFound" :picked="folderPicked" :scanning="folderScanning"
+          :scan-error="folderScanError" :invalid="addErrorField === 'folder'" @update:path="addFolderPath = $event"
+          @pick="pickFolder" @rescan="scanFolder" @toggle-instance="toggleFoundInstance"
+          @set-all-instances="setAllFoundInstances" @toggle-file="onFolderToggleFile" @toggle-dir="onFolderToggleDir"
+          @toggle-expand="onFolderToggleExpand" @lazy-load="onFolderLazyLoad" @set-all="setAllFolder" />
+        <OnlineMode v-else :url="addUrl" :invalid="addErrorField === 'url'" @update:url="addUrl = $event" />
       </div>
 
       <p v-if="addError" class="error-text" role="alert">{{ addError }}</p>
@@ -843,20 +783,11 @@ onUnmounted(() => {
     <input ref="folderInput" type="file" webkitdirectory class="hidden-input" @change="onFolderPick" />
 
     <!-- 实例重名确认（后端创建流程暂停等待答复，关闭视为拒绝） -->
-    <NameConflictModal
-      v-if="nameConflict"
-      :kind="nameConflict.kind"
-      :name="nameConflict.name"
-      @answer="answerConflict"
-    />
+    <NameConflictModal v-if="nameConflict" :kind="nameConflict.kind" :name="nameConflict.name"
+      @answer="answerConflict" />
 
     <!-- 选完目录的二次确认：读目录 = 读磁盘，先问一句再扫 -->
-    <BaseModal
-      v-if="scanAsk"
-      :title="t('add.folderAskTitle')"
-      :closable="false"
-      @close="scanAsk = ''"
-    >
+    <BaseModal v-if="scanAsk" :title="t('add.folderAskTitle')" :closable="false" @close="scanAsk = ''">
       <p class="confirm-text">{{ t("add.folderAskText", { path: scanAsk }) }}</p>
       <div class="modal-actions">
         <BaseButton variant="accent" @click="scanAsk = ''">{{ t("actions.cancel") }}</BaseButton>
@@ -865,12 +796,7 @@ onUnmounted(() => {
     </BaseModal>
 
     <!-- 创建成功：询问是否继续添加 -->
-    <ContinueModal
-      v-if="askContinue"
-      :name="addedName"
-      @continue="continueAdding"
-      @finish="finishAdding"
-    />
+    <ContinueModal v-if="askContinue" :name="addedName" @continue="continueAdding" @finish="finishAdding" />
 
     <!-- 整合包安装进度 -->
     <PackProgressModal v-if="packProgress" :progress="packProgress" />
@@ -888,7 +814,7 @@ onUnmounted(() => {
   min-height: 100%;
 }
 
-.add-body > .modal-actions {
+.add-body>.modal-actions {
   margin-top: auto;
 }
 

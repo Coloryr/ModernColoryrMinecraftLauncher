@@ -35,40 +35,24 @@ const {
 <template>
   <SettingsGroup id="head" title-key="winSettings.headDisplay" :flash="flashGroup === 'head'">
     <p class="field-desc">{{ t("winSettings.headDisplayDesc") }}</p>
-    <SegmentedTabs
-      :model-value="headType"
-      :options="headTypeOptions"
-      @update:model-value="onHeadTypeChange"
-    />
+    <SegmentedTabs :model-value="headType" :options="headTypeOptions" @update:model-value="onHeadTypeChange" />
     <div v-if="offsetAdjustable" class="grid-2">
       <div>
         <label class="field-label">{{ t("winSettings.rotX") }}</label>
-        <NumberStepper
-          v-model="headX"
-          :min="-90"
-          :max="90"
-          @update:model-value="(v) => setHeadConfig(headType, v, headY)"
-        />
+        <NumberStepper v-model="headX" :min="-90" :max="90"
+          @update:model-value="(v) => setHeadConfig(headType, v, headY)" />
       </div>
       <div>
         <label class="field-label">{{ t("winSettings.rotY") }}</label>
-        <NumberStepper
-          v-model="headY"
-          :min="-180"
-          :max="180"
-          @update:model-value="(v) => setHeadConfig(headType, headX, v)"
-        />
+        <NumberStepper v-model="headY" :min="-180" :max="180"
+          @update:model-value="(v) => setHeadConfig(headType, headX, v)" />
       </div>
     </div>
   </SettingsGroup>
 
   <SettingsGroup id="skin" title-key="winSettings.skinDisplay" :flash="flashGroup === 'skin'">
     <p class="field-desc">{{ t("winSettings.skinDisplayDesc") }}</p>
-    <SegmentedTabs
-      :model-value="skinDisplay"
-      :options="skinDisplayOptions"
-      @update:model-value="onSkinDisplayChange"
-    />
+    <SegmentedTabs :model-value="skinDisplay" :options="skinDisplayOptions" @update:model-value="onSkinDisplayChange" />
   </SettingsGroup>
 
   <SettingsGroup id="preview" title-key="winSettings.secPreview">

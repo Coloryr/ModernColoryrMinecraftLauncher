@@ -1,0 +1,49 @@
+//! 添加实例窗口：模型 + 创建操作 + 窗口按钮调用的方法
+//!
+//! 实例创建走 `mml_game::add_game`（新建 / 文件夹导入 / 压缩包 / 在线网址），
+//! 创建成功后发 instance-change 事件通知主窗口刷新列表。
+//! 模型只保存跟随窗口生命周期的运行态：当前安装任务的取消令牌。
+
+use tauri::WebviewWindow;
+// 带命令的子模块必须 `pub(crate)`：生成的 `tauri_commands!` 从 crate 根引用它们
+pub(crate) mod create;
+pub(crate) mod loader;
+pub(crate) mod model;
+
+// 按原路径再导出：窗口生命周期用 `add::AddWindowModel`，下载整合包窗口用 `add::instance_gui`
+pub(crate) use self::model::{AddWindowModel, instance_gui};
+
+use self::model::model;
+
+/// 用户对重名确认对话框的答复（唤醒等待中的创建流程）
+#[tauri::command]
+pub fn add_answer_name_conflict(window: WebviewWindow, id: u32, answer: bool) {
+    if let Ok(store) = model(&window)
+        && let Some(tx) = store.lock().unwrap().take_dialog(id)
+    {
+        let _ = tx.send(answer);
+    }
+}
+
+/// 取消进行中的安装任务
+#[tauri::command]
+pub fn add_cancel(window: WebviewWindow) -> bool {
+    let Ok(store) = model(&window) else {
+        return false;
+    };
+    match store.lock().unwrap().take_cancel() {
+        Some(token) => {
+            token.cancel();
+            true
+        }
+        None => false,
+    }
+}
+
+/// 设置本窗口的关闭保护（查询数据期间开启，`CloseRequested` 阶段拒绝关闭）
+#[tauri::command]
+pub fn add_set_close_guard(window: WebviewWindow, enabled: bool) {
+    if let Ok(store) = model(&window) {
+        store.lock().unwrap().set_close_guard(enabled);
+    }
+}

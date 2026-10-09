@@ -110,12 +110,7 @@ function addNew() {
 <template>
   <div class="instance-select" ref="rootEl">
     <button class="select-btn" ref="btnEl" @click="toggle">
-      <InstanceIcon
-        v-if="selected"
-        :name="selected.name"
-        :uuid="selected.uuid"
-        :size="30"
-      />
+      <InstanceIcon v-if="selected" :name="selected.name" :uuid="selected.uuid" :size="30" />
       <span class="placeholder" v-else>—</span>
       <span class="select-text">
         <span v-if="selected" class="sel-name">{{ selected.name }}</span>
@@ -127,16 +122,8 @@ function addNew() {
           </template>
         </span>
       </span>
-      <svg
-        class="chevron"
-        :class="{ flip: open }"
-        viewBox="0 0 24 24"
-        width="14"
-        height="14"
-        fill="none"
-        stroke="currentColor"
-        stroke-width="2"
-      >
+      <svg class="chevron" :class="{ flip: open }" viewBox="0 0 24 24" width="14" height="14" fill="none"
+        stroke="currentColor" stroke-width="2">
         <path d="m6 9 6 6 6-6" />
       </svg>
     </button>
@@ -146,13 +133,8 @@ function addNew() {
         <!-- 实例列表：整块浮层里**唯一**可滚动的地方，
              所以右侧滚动条只在这一段，不会延伸到下面的"添加实例"上去 -->
         <div class="menu-list">
-          <button
-            v-for="inst in instances"
-            :key="inst.uuid"
-            class="option"
-            :class="{ active: inst.uuid === modelValue }"
-            @click="pick(inst)"
-          >
+          <button v-for="inst in instances" :key="inst.uuid" class="option"
+            :class="{ active: inst.uuid === modelValue }" @click="pick(inst)">
             <InstanceIcon :name="inst.name" :uuid="inst.uuid" :size="30" />
             <span class="option-text">
               <span class="option-name">{{ inst.name }}</span>
@@ -171,7 +153,9 @@ function addNew() {
         <div class="menu-foot">
           <div class="menu-sep"></div>
           <button class="option add-option" @click="addNew">
-            <span class="add-icon"><GlyphIcon name="plus" :size="15" /></span>
+            <span class="add-icon">
+              <GlyphIcon name="plus" :size="15" />
+            </span>
             <span class="option-text">
               <span class="option-name">{{ t("add.title") }}</span>
             </span>
@@ -296,7 +280,8 @@ function addNew() {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
-  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
+  scrollbar-gutter: stable;
+  /* 见 styles/scrollbar.css */
 }
 
 .option {

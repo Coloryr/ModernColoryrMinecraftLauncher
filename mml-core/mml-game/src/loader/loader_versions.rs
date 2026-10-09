@@ -51,7 +51,9 @@ pub async fn get_loader_versions(loader: &LoaderType, mc: &str) -> CoreResult<Ve
         LoaderType::Quilt => quilt_versions().await,
         LoaderType::OptiFine => optifine_versions(mc).await,
         LoaderType::LiteLoader => liteloader_versions(mc).await,
-        LoaderType::Normal | LoaderType::Custom => Err(ErrorType::DataNotFound(DataNotFoundData::Info)),
+        LoaderType::Normal | LoaderType::Custom => {
+            Err(ErrorType::DataNotFound(DataNotFoundData::Info))
+        }
     }
 }
 
@@ -141,9 +143,7 @@ pub async fn get_support_loaders(mc: &str, gui: ProgressGui) -> CoreResult<Vec<S
                 mark_done!(0);
                 return Err(err);
             }
-            Err(e) => {
-                false
-            }
+            Err(e) => false,
         };
         mark_done!(0);
         bump(&done, &gui);
@@ -157,9 +157,7 @@ pub async fn get_support_loaders(mc: &str, gui: ProgressGui) -> CoreResult<Vec<S
                 mark_done!(1);
                 return Err(err);
             }
-            Err(e) => {
-                false
-            }
+            Err(e) => false,
         };
         mark_done!(1);
         bump(&done, &gui);
@@ -173,9 +171,7 @@ pub async fn get_support_loaders(mc: &str, gui: ProgressGui) -> CoreResult<Vec<S
                 mark_done!(2);
                 return Err(err);
             }
-            Err(e) => {
-                false
-            }
+            Err(e) => false,
         };
         mark_done!(2);
         bump(&done, &gui);
@@ -192,9 +188,7 @@ pub async fn get_support_loaders(mc: &str, gui: ProgressGui) -> CoreResult<Vec<S
                     mark_done!(3);
                     return Err(err);
                 }
-                Err(e) => {
-                    false
-                }
+                Err(e) => false,
             }
         };
         mark_done!(3);
@@ -210,9 +204,7 @@ pub async fn get_support_loaders(mc: &str, gui: ProgressGui) -> CoreResult<Vec<S
                 mark_done!(4);
                 return Err(err);
             }
-            Err(e) => {
-                false
-            }
+            Err(e) => false,
         };
         mark_done!(4);
         bump(&done, &gui);
@@ -236,7 +228,12 @@ pub async fn get_support_loaders(mc: &str, gui: ProgressGui) -> CoreResult<Vec<S
     let (forge_ok, fabric_ok, quilt_ok, neoforge_ok, optifine_ok, liteloader_ok) =
         tokio::try_join!(forge, fabric, quilt, neoforge, optifine, liteloader)?;
     let (forge_ok, fabric_ok, quilt_ok, neoforge_ok, optifine_ok, liteloader_ok) = (
-        forge_ok, fabric_ok, quilt_ok, neoforge_ok, optifine_ok, liteloader_ok,
+        forge_ok,
+        fabric_ok,
+        quilt_ok,
+        neoforge_ok,
+        optifine_ok,
+        liteloader_ok,
     );
 
     if forge_ok {
@@ -341,7 +338,10 @@ async fn forge_versions(mc: &str) -> CoreResult<Vec<String>> {
                     .map_err(|_| ErrorType::DataNotFound(DataNotFoundData::Info))?;
                 let mut list = value_versions(&arr);
                 list.reverse();
-                FORGE_BMCLAPI.lock().unwrap().insert(mc.to_string(), list.clone());
+                FORGE_BMCLAPI
+                    .lock()
+                    .unwrap()
+                    .insert(mc.to_string(), list.clone());
                 Ok(list)
             }
             // 被全局中断（用户改了代理）：不能回退——回退会发新请求，本次中断对它无效
@@ -525,7 +525,10 @@ async fn neoforge_versions(mc: &str) -> CoreResult<Vec<String>> {
             .map_err(|_| ErrorType::DataNotFound(DataNotFoundData::Info))?;
         let mut list = value_versions(&obj);
         list.reverse();
-        NEOFORGE_BMCLAPI.lock().unwrap().insert(mc.to_string(), list.clone());
+        NEOFORGE_BMCLAPI
+            .lock()
+            .unwrap()
+            .insert(mc.to_string(), list.clone());
         Ok(list)
     }
 }
@@ -612,9 +615,7 @@ async fn optifine_versions(mc: &str) -> CoreResult<Vec<String>> {
 async fn liteloader_versions(mc: &str) -> CoreResult<Vec<String>> {
     // 版本信息取缓存；无缓存时在线拉取并落盘
     let data = match version_path::get_liteloader(mc) {
-        Some(_) => {
-            version_path::get_liteloader(mc).unwrap()
-        }
+        Some(_) => version_path::get_liteloader(mc).unwrap(),
         None => {
             let meta = mml_net::liteloader_api::get_meta().await?;
             let obj = serialize_tools::json_from_bytes::<LiteloaderMetaObj>(&meta)?;
@@ -649,10 +650,11 @@ fn value_versions(value: &serde_json::Value) -> Vec<String> {
     arr.iter()
         .filter_map(|item| match item {
             serde_json::Value::String(s) => Some(s.clone()),
-            serde_json::Value::Object(map) => map.get("version").and_then(|v| v.as_str()).map(String::from),
+            serde_json::Value::Object(map) => map
+                .get("version")
+                .and_then(|v| v.as_str())
+                .map(String::from),
             _ => None,
         })
         .collect()
 }
-
-

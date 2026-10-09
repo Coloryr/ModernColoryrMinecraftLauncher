@@ -24,12 +24,8 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <iframe
-    ref="frame"
-    class="custom-home-frame"
-    :src="entryUrl"
-    sandbox="allow-scripts allow-forms allow-popups allow-modals"
-  ></iframe>
+  <iframe ref="frame" class="custom-home-frame" :src="entryUrl"
+    sandbox="allow-scripts allow-forms allow-popups allow-modals"></iframe>
 </template>
 
 <style scoped>

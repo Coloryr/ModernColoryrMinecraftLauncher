@@ -32,15 +32,8 @@ function submit() {
 <template>
   <BaseModal :title="t('blocks.addSkin')" :closable="false" @close="!busy && emit('close')">
     <label class="field-label">{{ t("blocks.skinInput") }}</label>
-    <input
-      v-model="input"
-      class="field-input"
-      :placeholder="t('blocks.skinInputHint')"
-      spellcheck="false"
-      autocomplete="off"
-      :disabled="busy"
-      @keyup.enter="submit"
-    />
+    <input v-model="input" class="field-input" :placeholder="t('blocks.skinInputHint')" spellcheck="false"
+      autocomplete="off" :disabled="busy" @keyup.enter="submit" />
 
     <div class="modal-actions">
       <BaseButton :disabled="busy" @click="emit('close')">{{ t("blocks.cancel") }}</BaseButton>

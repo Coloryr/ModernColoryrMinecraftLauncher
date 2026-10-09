@@ -808,7 +808,6 @@ pub const ITEM_ICONS: &[(&str, &str)] = &[
     ("yellow_wool_slab", "coloredBlocks"),
     ("yellow_wool_stairs", "coloredBlocks"),
     ("zombie_head", "functional"),
-
 ];
 
 /// 物品的创造分组（itemGroup lang键尾段），不在任何分组的物品返回None

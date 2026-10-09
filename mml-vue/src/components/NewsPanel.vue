@@ -40,14 +40,10 @@ function tagColor(tag: string) {
   <div class="news-panel">
     <div class="panel-head">
       <h2>{{ t("news.head") }}</h2>
-      <button
-        class="refresh-btn"
-        :class="{ spinning: loading }"
-        :disabled="loading"
-        v-tip="t('news.refresh')"
-        @click="emit('refresh')"
-      >
-        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <button class="refresh-btn" :class="{ spinning: loading }" :disabled="loading" v-tip="t('news.refresh')"
+        @click="emit('refresh')">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round">
           <path d="M21 12a9 9 0 1 1-2.64-6.36" />
           <polyline points="21 3 21 9 15 9" />
         </svg>
@@ -70,12 +66,7 @@ function tagColor(tag: string) {
         </div>
       </template>
       <template v-else>
-        <div
-          v-for="item in items"
-          :key="item.id"
-          class="news-item"
-          @click="emit('open', item.url)"
-        >
+        <div v-for="item in items" :key="item.id" class="news-item" @click="emit('open', item.url)">
           <!-- 新闻配图来自网络，挂了就换成占位（灰底图片图标），不留破图 -->
           <AsyncImage class="banner" :src="item.image" />
           <div class="news-meta">
@@ -85,7 +76,9 @@ function tagColor(tag: string) {
           <h3 class="news-title">{{ item.title }}</h3>
         </div>
         <div v-if="items.length === 0" class="empty-tip">
-          <span class="empty-icon"><GlyphIcon name="news" :size="32" :weight="1.6" /></span>
+          <span class="empty-icon">
+            <GlyphIcon name="news" :size="32" :weight="1.6" />
+          </span>
           <span>{{ t("news.empty") }}</span>
         </div>
       </template>
@@ -93,19 +86,11 @@ function tagColor(tag: string) {
 
     <!-- 分页（页码从 1 开始） -->
     <div v-if="items.length > 0" class="news-pager">
-      <button
-        class="pager-btn"
-        :disabled="page <= 1 || loading"
-        @click="emit('prev')"
-      >
+      <button class="pager-btn" :disabled="page <= 1 || loading" @click="emit('prev')">
         {{ t("news.prev") }}
       </button>
       <span class="pager-info">{{ t("news.page", { n: page }) }}</span>
-      <button
-        class="pager-btn"
-        :disabled="!hasMore || loading"
-        @click="emit('next')"
-      >
+      <button class="pager-btn" :disabled="!hasMore || loading" @click="emit('next')">
         {{ t("news.next") }}
       </button>
     </div>

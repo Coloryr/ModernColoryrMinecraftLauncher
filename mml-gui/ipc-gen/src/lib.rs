@@ -102,9 +102,24 @@ pub(crate) struct Decl {
 pub(crate) struct Sig {
     pub(crate) module: String,
     pub(crate) name: String,
+    /// 显式分组（`#[ipc_group("...")]`）；`None` = 按来源模块最后一段分组
+    pub(crate) group: Option<String>,
     /// (TS 参数名, TS 类型, 是否可缺省)
     pub(crate) params: Vec<(String, String, bool)>,
     pub(crate) ret: String,
+}
+
+impl Sig {
+    /// 生效的组键：显式分组优先，否则取来源模块最后一段（.rs 文件名 / 目录名）
+    ///
+    /// 拆文件时靠它把子模块的命令并回原来的组：`windows::resource::mods` 加上
+    /// `#[ipc_group("resource")]` 之后组键仍是 `resource`，前端调用点不用改。
+    pub(crate) fn group_key(&self) -> &str {
+        match &self.group {
+            Some(g) => g.as_str(),
+            None => self.module.rsplit("::").next().unwrap_or(&self.module),
+        }
+    }
 }
 
 /// 扫源码生成三份文本。纯函数：不写文件、不读环境变量
@@ -155,7 +170,11 @@ pub fn generate(cfg: &GenConfig) -> Result<Generated, GenError> {
             continue;
         };
         let rel = rel_path(src, file);
-        let wanted = cfg.type_sources.dirs.iter().any(|d| rel.starts_with(d.as_str()));
+        let wanted = cfg
+            .type_sources
+            .dirs
+            .iter()
+            .any(|d| rel.starts_with(d.as_str()));
         let enums_only = cfg.type_sources.enum_files.iter().any(|f| f == &rel);
         if !wanted && !enums_only {
             continue;
@@ -184,10 +203,11 @@ pub fn generate(cfg: &GenConfig) -> Result<Generated, GenError> {
             continue;
         };
         let module = module_path(src, file);
-        for (name, params, ret) in commands_in(&text) {
+        for (name, params, ret, group) in commands_in(&text) {
             sigs.push(Sig {
                 module: module.clone(),
                 name,
+                group,
                 params: ts_params(&params, &cfg.external_types),
                 ret: ts_type(&result_ok(&ret), &cfg.external_types),
             });

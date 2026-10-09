@@ -10,15 +10,15 @@
 use std::{fs, path::PathBuf};
 
 use mml_config::{
-    config_save,
     config_obj::{ConfigObj, SourceLocal},
-    init, load, save, save_now, write_config, read_config,
+    config_save, init, load, read_config, save, save_now, write_config,
 };
-use mml_names::{names, VERSION};
+use mml_names::{VERSION, names};
 
 /// 在临时目录下创建唯一的测试目录
 fn temp_dir(name: &str) -> PathBuf {
-    let dir = mml_testutil::temp_dir().join(format!("mml_config_test_{}_{name}", std::process::id()));
+    let dir =
+        mml_testutil::temp_dir().join(format!("mml_config_test_{}_{name}", std::process::id()));
     // 清掉上次运行可能残留的目录
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).unwrap();
@@ -49,8 +49,7 @@ fn config_lifecycle() {
     // ---------- 同步保存 ----------
     write_config().http.check_file = false;
     save_now();
-    let back: ConfigObj =
-        serde_json::from_str(&fs::read_to_string(&config_file).unwrap()).unwrap();
+    let back: ConfigObj = serde_json::from_str(&fs::read_to_string(&config_file).unwrap()).unwrap();
     assert!(!back.http.check_file, "save_now 后修改应落盘");
 
     // ---------- 异步保存（后台线程 + 去重队列） ----------
@@ -59,8 +58,7 @@ fn config_lifecycle() {
     save();
     // stop 会执行最后一次保存并阻塞等待落盘
     config_save::stop();
-    let back: ConfigObj =
-        serde_json::from_str(&fs::read_to_string(&config_file).unwrap()).unwrap();
+    let back: ConfigObj = serde_json::from_str(&fs::read_to_string(&config_file).unwrap()).unwrap();
     assert_eq!(back.http.source, SourceLocal::Bmclapi, "异步保存应落盘");
 
     // ---------- 版本迁移 ----------
@@ -81,8 +79,7 @@ fn config_lifecycle() {
     // 版本变更触发 save_now。注意当前实现中 save_now 写入的是更新前的内存
     // CONFIG（download_thread 仍是 5），而 config_obj 在此之后才写入 CONFIG，
     // 因此磁盘上的 download_thread 与内存不一致——疑似时序 bug，见测试报告。
-    let back: ConfigObj =
-        serde_json::from_str(&fs::read_to_string(&config_file).unwrap()).unwrap();
+    let back: ConfigObj = serde_json::from_str(&fs::read_to_string(&config_file).unwrap()).unwrap();
     assert_eq!(back.version, *VERSION, "config.json 的版本号应已更新");
     assert_eq!(
         back.http.download_thread, 5,

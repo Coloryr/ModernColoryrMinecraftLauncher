@@ -338,7 +338,8 @@ impl LoginObj {
         if cancel.is_cancelled() {
             return Err(ErrorType::TaskCancel);
         }
-        let (token, expires_in) = mojang_api::get_minecraft_token(&xsts.xbl_uhs, &xsts.xbl_token).await?;
+        let (token, expires_in) =
+            mojang_api::get_minecraft_token(&xsts.xbl_uhs, &xsts.xbl_token).await?;
         if cancel.is_cancelled() {
             return Err(ErrorType::TaskCancel);
         }

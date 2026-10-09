@@ -89,7 +89,10 @@ async fn init() -> Option<GpuDevice> {
             else {
                 continue;
             };
-            println!("[渲染] GPU后端 {name}：{}（{:?}）", info.name, info.device_type);
+            println!(
+                "[渲染] GPU后端 {name}：{}（{:?}）",
+                info.name, info.device_type
+            );
             return Some(GpuDevice { device, queue });
         }
     }
@@ -127,7 +130,13 @@ pub fn straight_rgba_to_premul_bgra(rgba: &[u8]) -> Vec<u8> {
     for px in out.chunks_exact_mut(4) {
         let (r, g, b, a) = (px[0], px[1], px[2], px[3]);
         let a = u32::from(a);
-        let mul = |c: u8| if a == 255 { c } else { (u32::from(c) * a / 255) as u8 };
+        let mul = |c: u8| {
+            if a == 255 {
+                c
+            } else {
+                (u32::from(c) * a / 255) as u8
+            }
+        };
         // 内存序 BGRA；rgb 乘回 alpha 变预乘
         px[0] = mul(b);
         px[1] = mul(g);
@@ -204,19 +213,19 @@ pub struct OffscreenTarget {
 pub fn offscreen_target(device: &wgpu::Device, width: u32, height: u32) -> OffscreenTarget {
     let mk = |format, usage, label| {
         device.create_texture(&wgpu::TextureDescriptor {
-                label: Some(label),
-                size: wgpu::Extent3d {
-                    width,
-                    height,
-                    depth_or_array_layers: 1,
-                },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format,
-                usage,
-                view_formats: &[],
-            })
+            label: Some(label),
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format,
+            usage,
+            view_formats: &[],
+        })
     };
     OffscreenTarget {
         color: mk(

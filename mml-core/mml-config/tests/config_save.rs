@@ -43,7 +43,8 @@ fn save_obj_struct() {
     let task = ConfigSaveObj::new(&obj, file.clone(), Uuid::new_v4()).unwrap();
     task.save().unwrap();
 
-    let back: serde_json::Value = serde_json::from_str(&fs::read_to_string(&file).unwrap()).unwrap();
+    let back: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(&file).unwrap()).unwrap();
     assert_eq!(back["name"], "demo");
     assert_eq!(back["count"], 3);
 

@@ -68,7 +68,7 @@ pub enum ArgEmptyData {
 
 #[derive(Clone, Debug)]
 pub enum ArgErrorData {
-    ArchiveType
+    ArchiveType,
 }
 
 #[derive(Clone, Debug)]

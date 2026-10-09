@@ -119,11 +119,7 @@ impl ModPackWorker for ModrinthPackWorker {
     /// # 返回值
     ///
     /// 返回新实例的 UUID；创建失败返回对应错误
-    async fn create_instance(
-        &self,
-        name: Option<String>,
-        group: Option<Uuid>,
-    ) -> CoreResult<Uuid> {
+    async fn create_instance(&self, name: Option<String>, group: Option<Uuid>) -> CoreResult<Uuid> {
         match &self.info {
             Some(info) => {
                 let name = name.unwrap_or(format!("{}-{}", info.name, info.version_id));

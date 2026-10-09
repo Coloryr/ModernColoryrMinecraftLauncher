@@ -10,7 +10,7 @@ use std::sync::OnceLock;
 use mml_names::i18_items::error_type::{CoreResult, DataNotFoundData, ErrorType};
 use serde::{Deserialize, Serialize};
 
-use crate::{urls};
+use crate::urls;
 
 /// 可选项缓存（首次查询后复用）
 static OPTIONS: OnceLock<FoojayOptionsObj> = OnceLock::new();

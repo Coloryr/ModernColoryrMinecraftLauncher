@@ -1,4 +1,3 @@
-
 #[test]
 fn get_java_list() {
     mml_jvms::scan_java();
@@ -6,7 +5,11 @@ fn get_java_list() {
     for item in list2 {
         println!(
             "find java {}: {} {} {} {}",
-            item.major_version, item.name, item.version, item.arch, item.path.to_string_lossy()
+            item.major_version,
+            item.name,
+            item.version,
+            item.arch,
+            item.path.to_string_lossy()
         );
     }
 }

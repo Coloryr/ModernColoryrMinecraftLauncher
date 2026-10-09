@@ -472,33 +472,29 @@ function tokenLabel(acc: AccountStoreDto): string {
           <GlyphIcon name="close" :size="12" :weight="2.4" />
         </button>
       </div>
-      <SegmentedTabs class="head-tabs" :model-value="view" :options="VIEW_OPTIONS" @update:model-value="view = $event as ViewMode" />
+      <SegmentedTabs class="head-tabs" :model-value="view" :options="VIEW_OPTIONS"
+        @update:model-value="view = $event as ViewMode" />
       <!-- 添加账户已移到账户列表里（作为列表的第一项，三种视图都是），
            标题栏只留筛选 / 搜索 / 视图切换这些"看"的控件 -->
     </template>
 
     <!-- 视图：平铺 / 列表 / 详情（见 views/ 目录）；详情模式下视图区自己管理滚动 -->
     <div class="view-area" :class="{ fill: view === 'detail' }">
-      <AccountGrid v-if="view === 'grid'" :accounts="filtered" :current-uuid="currentAccount?.uuid ?? ''"
-        @add="openAdd" @switch="switchAccount" @refresh="refreshToken" @view-skin="viewSkin" @refresh-skin="refreshSkin" @relogin="relogin"
-        @edit="openEdit" @delete="deleteTarget = $event" />
+      <AccountGrid v-if="view === 'grid'" :accounts="filtered" :current-uuid="currentAccount?.uuid ?? ''" @add="openAdd"
+        @switch="switchAccount" @refresh="refreshToken" @view-skin="viewSkin" @refresh-skin="refreshSkin"
+        @relogin="relogin" @edit="openEdit" @delete="deleteTarget = $event" />
       <AccountList v-else-if="view === 'list'" :accounts="filtered" :current-uuid="currentAccount?.uuid ?? ''"
-        :token-label="tokenLabel" :seed-of="seedOf" @add="openAdd" @switch="switchAccount"
-        @refresh="refreshToken" @view-skin="viewSkin" @refresh-skin="refreshSkin" @relogin="relogin" @edit="openEdit" @delete="deleteTarget = $event" />
-      <AccountDetail v-else :accounts="filtered" :current-uuid="currentAccount?.uuid ?? ''"
-        :token-label="tokenLabel" @add="openAdd" @switch="switchAccount" @refresh="refreshToken" @view-skin="viewSkin" @refresh-skin="refreshSkin"
+        :token-label="tokenLabel" :seed-of="seedOf" @add="openAdd" @switch="switchAccount" @refresh="refreshToken"
+        @view-skin="viewSkin" @refresh-skin="refreshSkin" @relogin="relogin" @edit="openEdit"
+        @delete="deleteTarget = $event" />
+      <AccountDetail v-else :accounts="filtered" :current-uuid="currentAccount?.uuid ?? ''" :token-label="tokenLabel"
+        @add="openAdd" @switch="switchAccount" @refresh="refreshToken" @view-skin="viewSkin" @refresh-skin="refreshSkin"
         @relogin="relogin" @edit="openEdit" @delete="deleteTarget = $event" />
     </div>
 
     <!-- 添加账户弹窗（按类型显示不同输入框）：不遮标题栏、点空白不关闭 -->
-    <BaseModal
-      v-if="showAdd"
-      :title="t('account.addTitle')"
-      :closable="false"
-      below-titlebar
-      :overlay-close="false"
-      @close="showAdd = false"
-    >
+    <BaseModal v-if="showAdd" :title="t('account.addTitle')" :closable="false" below-titlebar :overlay-close="false"
+      @close="showAdd = false">
       <label class="field-label">{{ t("account.type") }}</label>
       <select v-model="addType" class="field-select"
         @change="onAddTypeChange(($event.target as HTMLSelectElement).value)">
@@ -531,18 +527,13 @@ function tokenLabel(acc: AccountStoreDto): string {
     </BaseModal>
 
     <!-- 微软登录：请求码 + 地址 + 打开浏览器 / 取消 -->
-    <BaseModal
-      v-if="showOauth"
-      :title="t('account.oauthTitle')"
-      :closable="false"
-      below-titlebar
-      :overlay-close="false"
-      @close="cancelLogin"
-    >
+    <BaseModal v-if="showOauth" :title="t('account.oauthTitle')" :closable="false" below-titlebar :overlay-close="false"
+      @close="cancelLogin">
       <label class="field-label">{{ t("account.oauthCode") }}</label>
       <div class="oauth-code copyable" v-tip="t('account.copy')" @click="copyOauthValue(oauthCode)">
         {{ oauthCode }}
-        <svg class="copy-ico" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <svg class="copy-ico" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
+          stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <rect x="9" y="9" width="12" height="12" rx="2" />
           <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
         </svg>
@@ -551,7 +542,8 @@ function tokenLabel(acc: AccountStoreDto): string {
       <label class="field-label">{{ t("account.oauthUrl") }}</label>
       <div class="oauth-url copyable" v-tip="t('account.copy')" @click="copyOauthValue(oauthUrl)">
         <span class="oauth-url-text">{{ oauthUrl }}</span>
-        <svg class="copy-ico" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+        <svg class="copy-ico" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor"
+          stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
           <rect x="9" y="9" width="12" height="12" rx="2" />
           <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
         </svg>
@@ -565,14 +557,8 @@ function tokenLabel(acc: AccountStoreDto): string {
       </div>
     </BaseModal>
 
-    <BaseModal
-      v-if="showOauthRun"
-      :title="t('account.oauthTitle')"
-      :closable="false"
-      below-titlebar
-      :overlay-close="false"
-      @close="cancelLogin"
-    >
+    <BaseModal v-if="showOauthRun" :title="t('account.oauthTitle')" :closable="false" below-titlebar
+      :overlay-close="false" @close="cancelLogin">
       <p class="hint">{{ oauthState }}</p>
 
       <div class="modal-actions">
@@ -581,7 +567,8 @@ function tokenLabel(acc: AccountStoreDto): string {
     </BaseModal>
 
     <!-- 删除确认 -->
-    <BaseModal v-if="deleteTarget" :title="t('account.delete')" :closable="false" below-titlebar @close="deleteTarget = null">
+    <BaseModal v-if="deleteTarget" :title="t('account.delete')" :closable="false" below-titlebar
+      @close="deleteTarget = null">
       <p class="delete-tip">{{ t("account.deleteConfirm", { name: deleteTarget.userName }) }}</p>
       <div class="modal-actions">
         <BaseButton @click="deleteTarget = null">{{ t("add.cancel") }}</BaseButton>
@@ -590,14 +577,8 @@ function tokenLabel(acc: AccountStoreDto): string {
     </BaseModal>
 
     <!-- 重新登录（非微软账户）：重输密码重新认证，服务器地址预填 -->
-    <BaseModal
-      v-if="reloginTarget"
-      :title="t('account.reloginTitle')"
-      :closable="false"
-      below-titlebar
-      :overlay-close="false"
-      @close="reloginTarget = null"
-    >
+    <BaseModal v-if="reloginTarget" :title="t('account.reloginTitle')" :closable="false" below-titlebar
+      :overlay-close="false" @close="reloginTarget = null">
       <template v-if="reloginTarget.authType === 'nide8'">
         <label class="field-label">{{ t("account.serverId") }}</label>
         <input v-model="reloginFields.server" class="field-input" spellcheck="false" />
@@ -622,14 +603,8 @@ function tokenLabel(acc: AccountStoreDto): string {
     </BaseModal>
 
     <!-- 编辑离线账户：改名 / 改 UUID -->
-    <BaseModal
-      v-if="editTarget"
-      :title="t('account.editOffline')"
-      :closable="false"
-      below-titlebar
-      :overlay-close="false"
-      @close="editTarget = null"
-    >
+    <BaseModal v-if="editTarget" :title="t('account.editOffline')" :closable="false" below-titlebar
+      :overlay-close="false" @close="editTarget = null">
       <label class="field-label">{{ t("account.name") }}</label>
       <input v-model="editFields.name" class="field-input" spellcheck="false" />
 

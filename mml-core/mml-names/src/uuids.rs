@@ -56,7 +56,7 @@ static UUIDS: LazyLock<Vec<Uuid>> = LazyLock::new(|| {
 });
 
 /// 检查是否是配置文件的UUID
-/// 
+///
 /// - `uuid`: 需要检查的uuid
 pub fn check_uuid(uuid: Uuid) -> bool {
     for item in UUIDS.iter() {

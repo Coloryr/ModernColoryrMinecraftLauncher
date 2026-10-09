@@ -66,27 +66,12 @@ function onKey(e: KeyboardEvent) {
 
 <template>
   <div class="set-search">
-    <input
-      v-model="query"
-      class="field-input set-search-input"
-      :placeholder="t('winSettings.searchPlaceholder')"
-      spellcheck="false"
-      autocomplete="off"
-      @focus="open = true"
-      @input="open = true"
-      @blur="open = false"
-      @keydown="onKey"
-    />
+    <input v-model="query" class="field-input set-search-input" :placeholder="t('winSettings.searchPlaceholder')"
+      spellcheck="false" autocomplete="off" @focus="open = true" @input="open = true" @blur="open = false"
+      @keydown="onKey" />
     <div v-if="open && query.trim()" class="set-search-drop">
-      <button
-        v-for="(h, i) in hits"
-        :key="`${h.tab}/${h.group}/${h.label}`"
-        type="button"
-        class="set-search-item"
-        :class="{ on: i === active }"
-        @mousedown.prevent
-        @click="choose(i)"
-      >
+      <button v-for="(h, i) in hits" :key="`${h.tab}/${h.group}/${h.label}`" type="button" class="set-search-item"
+        :class="{ on: i === active }" @mousedown.prevent @click="choose(i)">
         <span class="set-search-label">
           <HighlightText :text="h.label" :query="query" />
         </span>

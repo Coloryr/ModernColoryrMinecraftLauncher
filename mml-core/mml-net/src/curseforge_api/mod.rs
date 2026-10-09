@@ -253,7 +253,7 @@ async fn get_list(
 }
 
 /// 获取整合包列表
-/// 
+///
 /// 需要version page sort filter page_size category
 ///
 /// - `arg`: 搜索参数

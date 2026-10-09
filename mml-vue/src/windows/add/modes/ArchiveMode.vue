@@ -46,46 +46,24 @@ watch(
 <template>
   <label class="field-label">{{ t("add.archive") }} <span class="req">*</span></label>
   <div class="path-row">
-    <input
-      ref="pathInput"
-      :value="path"
-      class="field-input"
-      :class="{ 'is-invalid': invalid }"
-      :placeholder="t('add.archivePlaceholder')"
-      spellcheck="false"
-      autocomplete="off"
-      @input="emit('update:path', ($event.target as HTMLInputElement).value)"
-    />
+    <input ref="pathInput" :value="path" class="field-input" :class="{ 'is-invalid': invalid }"
+      :placeholder="t('add.archivePlaceholder')" spellcheck="false" autocomplete="off"
+      @input="emit('update:path', ($event.target as HTMLInputElement).value)" />
     <BaseButton class="pick-btn" size="sm" variant="accent" @click="emit('pick')">{{ t("add.browse") }}</BaseButton>
   </div>
 
   <!-- 读取条目 / 识别类型中：不确定滚动进度条（与加载器查询、目录扫描同一套观感） -->
-  <LoaderQueryProgress
-    v-if="scanning"
-    kind="versions"
-    :visible="true"
-    :step="0"
-    :total="0"
-    :label="t('add.archiveReading')"
-  />
+  <LoaderQueryProgress v-if="scanning" kind="versions" :visible="true" :step="0" :total="0"
+    :label="t('add.archiveReading')" />
 
   <template v-if="tree.length">
-    <FileTreePanel
-      :tree="tree"
-      :checked="checked"
-      :expanded="expanded"
-      @toggle-file="emit('toggle-file', $event)"
+    <FileTreePanel :tree="tree" :checked="checked" :expanded="expanded" @toggle-file="emit('toggle-file', $event)"
       @toggle-dir="(n: FileNode, on: boolean) => emit('toggle-dir', n, on)"
-      @toggle-expand="emit('toggle-expand', $event)"
-      @set-all="emit('set-all', $event)"
-    />
+      @toggle-expand="emit('toggle-expand', $event)" @set-all="emit('set-all', $event)" />
 
     <label class="field-label">{{ t("add.packType") }}</label>
-    <select
-      :value="packType"
-      class="field-select"
-      @change="emit('update:packType', ($event.target as HTMLSelectElement).value)"
-    >
+    <select :value="packType" class="field-select"
+      @change="emit('update:packType', ($event.target as HTMLSelectElement).value)">
       <option v-for="p in packTypes" :key="p" :value="p">{{ t(`add.pack.${p}`) }}</option>
     </select>
   </template>

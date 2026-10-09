@@ -1,6 +1,9 @@
 //! 检查游戏实例文件
 
-use std::{collections::HashMap, path::{Path, PathBuf}};
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+};
 
 use mml_base::{
     file_item::{FileHash, FileItemObj},
@@ -11,7 +14,8 @@ use mml_sys::path_helper;
 use tokio::task;
 
 use crate::{
-    game_arg::GameLaunchObj, launcher::instance_setting_obj::InstanceSettingObj, launcher_path::assets_path,
+    game_arg::GameLaunchObj, launcher::instance_setting_obj::InstanceSettingObj,
+    launcher_path::assets_path,
 };
 
 /// 检查文件是否需要添加到下载列表

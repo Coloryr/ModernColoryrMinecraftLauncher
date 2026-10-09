@@ -56,27 +56,14 @@ onMounted(async () => {
 </script>
 
 <template>
-  <WindowFrame
-    :title="t('winTitle.addModpack')"
-    :back="detailOpen ? t('modpack.back') : ''"
-    hide-modpack-indicator
-    body-gutter
-    @back="modeRef?.closeDetail()"
-    @close="$emit('close')"
-  >
+  <WindowFrame :title="t('winTitle.addModpack')" :back="detailOpen ? t('modpack.back') : ''" hide-modpack-indicator
+    body-gutter @back="modeRef?.closeDetail()" @close="$emit('close')">
     <div class="modpack-body">
       <!-- 安装任务进度条（多任务，点击展开详情） -->
       <ModpackInstallBar v-if="modpackStatus?.tasks.length" :status="modpackStatus" />
 
-      <ModpackMode
-        ref="modeRef"
-        :group="group"
-        :groups="groups"
-        :status="modpackStatus"
-        @update:group="group = $event"
-        @install="install"
-        @detail="detailOpen = $event"
-      />
+      <ModpackMode ref="modeRef" :group="group" :groups="groups" :status="modpackStatus" @update:group="group = $event"
+        @install="install" @detail="detailOpen = $event" />
     </div>
   </WindowFrame>
 </template>

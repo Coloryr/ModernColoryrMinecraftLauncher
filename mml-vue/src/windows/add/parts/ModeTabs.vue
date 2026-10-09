@@ -15,31 +15,27 @@ const emit = defineEmits<{ (e: "update:modelValue", v: AddMode): void }>();
 
 <template>
   <div class="add-modes" role="tablist">
-    <button
-      v-for="tab in tabs"
-      :key="tab.id"
-      type="button"
-      role="tab"
-      class="add-mode-btn"
-      :class="{ active: modelValue === tab.id }"
-      :aria-selected="modelValue === tab.id"
-      :disabled="disabled"
-      @click="emit('update:modelValue', tab.id)"
-    >
-      <svg v-if="tab.icon === 'cube'" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <button v-for="tab in tabs" :key="tab.id" type="button" role="tab" class="add-mode-btn"
+      :class="{ active: modelValue === tab.id }" :aria-selected="modelValue === tab.id" :disabled="disabled"
+      @click="emit('update:modelValue', tab.id)">
+      <svg v-if="tab.icon === 'cube'" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor"
+        stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <path d="M12 3 4.5 7.5v9L12 21l7.5-4.5v-9L12 3z" />
         <path d="M4.5 7.5 12 12l7.5-4.5" />
         <path d="M12 12v9" />
       </svg>
-      <svg v-else-if="tab.icon === 'box'" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <svg v-else-if="tab.icon === 'box'" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor"
+        stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <path d="M21 8v13H3V8" />
         <path d="M1 3h22v5H1z" />
         <path d="M10 12h4" />
       </svg>
-      <svg v-else-if="tab.icon === 'folder'" viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <svg v-else-if="tab.icon === 'folder'" viewBox="0 0 24 24" width="17" height="17" fill="none"
+        stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
         <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z" />
       </svg>
-      <svg v-else viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+      <svg v-else viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8"
+        stroke-linecap="round" stroke-linejoin="round">
         <circle cx="12" cy="12" r="9" />
         <path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18" />
       </svg>
@@ -76,7 +72,7 @@ const emit = defineEmits<{ (e: "update:modelValue", v: AddMode): void }>();
 }
 
 /* 窗口很窄时标签省略，不撑破按钮 */
-.add-mode-btn > span {
+.add-mode-btn>span {
   overflow: hidden;
   text-overflow: ellipsis;
 }

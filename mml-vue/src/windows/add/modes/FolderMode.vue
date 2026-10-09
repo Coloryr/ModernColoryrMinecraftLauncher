@@ -58,25 +58,12 @@ watch(
 <template>
   <label class="field-label">{{ t("add.folder") }} <span class="req">*</span></label>
   <div class="path-row">
-    <input
-      ref="pathInput"
-      :value="path"
-      class="field-input"
-      :class="{ 'is-invalid': invalid }"
-      :placeholder="t('add.folderPlaceholder')"
-      spellcheck="false"
-      autocomplete="off"
-      @input="emit('update:path', ($event.target as HTMLInputElement).value)"
-    />
+    <input ref="pathInput" :value="path" class="field-input" :class="{ 'is-invalid': invalid }"
+      :placeholder="t('add.folderPlaceholder')" spellcheck="false" autocomplete="off"
+      @input="emit('update:path', ($event.target as HTMLInputElement).value)" />
     <BaseButton class="pick-btn" size="sm" variant="accent" @click="emit('pick')">{{ t("add.browse") }}</BaseButton>
     <!-- 手动输入 / 粘贴路径后用它触发扫描（选目录走确认框，不用点这里） -->
-    <BaseButton
-      v-if="path.trim()"
-      size="sm"
-      variant="ghost"
-      :disabled="scanning"
-      @click="emit('rescan')"
-    >
+    <BaseButton v-if="path.trim()" size="sm" variant="ghost" :disabled="scanning" @click="emit('rescan')">
       {{ t("add.folderScan") }}
     </BaseButton>
   </div>
@@ -87,14 +74,8 @@ watch(
   </p>
 
   <!-- 扫描中：不确定滚动进度条（与加载器查询同一套观感），不是一行干文字 -->
-  <LoaderQueryProgress
-    v-else-if="scanning"
-    kind="versions"
-    :visible="true"
-    :step="0"
-    :total="0"
-    :label="t('add.folderScanning')"
-  />
+  <LoaderQueryProgress v-else-if="scanning" kind="versions" :visible="true" :step="0" :total="0"
+    :label="t('add.folderScanning')" />
 
   <!-- 扫到了实例：列出来勾选（默认全选） -->
   <template v-else-if="found.length">
@@ -111,11 +92,8 @@ watch(
     </div>
     <div class="found-list">
       <label v-for="item in found" :key="item.path" class="found-item">
-        <input
-          type="checkbox"
-          :checked="picked.has(item.path)"
-          @change="emit('toggle-instance', item.path, ($event.target as HTMLInputElement).checked)"
-        />
+        <input type="checkbox" :checked="picked.has(item.path)"
+          @change="emit('toggle-instance', item.path, ($event.target as HTMLInputElement).checked)" />
         <span class="found-name">{{ item.name }}</span>
         <span class="found-path" v-tip="item.path">{{ item.path }}</span>
       </label>
@@ -124,16 +102,10 @@ watch(
 
   <!-- 没扫到实例：目录本身就是实例目录，退回内容树（整目录作为一个实例导入） -->
   <template v-else-if="tree.length">
-    <FileTreePanel
-      :tree="tree"
-      :checked="checked"
-      :expanded="expanded"
-      @toggle-file="emit('toggle-file', $event)"
+    <FileTreePanel :tree="tree" :checked="checked" :expanded="expanded" @toggle-file="emit('toggle-file', $event)"
       @toggle-dir="(n: FileNode, on: boolean) => emit('toggle-dir', n, on)"
-      @toggle-expand="emit('toggle-expand', $event)"
-      @lazy-load="emit('lazy-load', $event)"
-      @set-all="emit('set-all', $event)"
-    />
+      @toggle-expand="emit('toggle-expand', $event)" @lazy-load="emit('lazy-load', $event)"
+      @set-all="emit('set-all', $event)" />
   </template>
 
   <!-- 还没选文件夹 / 选了个没扫到实例又读不出内容的目录 -->
@@ -190,7 +162,8 @@ watch(
   margin-top: 6px;
   max-height: 200px;
   overflow-y: auto;
-  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
+  scrollbar-gutter: stable;
+  /* 见 styles/scrollbar.css */
 }
 
 .found-item {

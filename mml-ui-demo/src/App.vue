@@ -248,11 +248,8 @@ onUnmounted(() => {
           <p class="slogan">{{ SERVER.slogan }}</p>
         </div>
         <div class="hero-actions">
-          <button
-            class="btn hero-btn"
-            :disabled="host !== 'ready' || !mainTarget || anyRunning || launching !== ''"
-            @click="launch(mainTarget)"
-          >
+          <button class="btn hero-btn" :disabled="host !== 'ready' || !mainTarget || anyRunning || launching !== ''"
+            @click="launch(mainTarget)">
             {{
               anyRunning
                 ? "游戏运行中"
@@ -304,11 +301,7 @@ onUnmounted(() => {
         <section class="card">
           <div class="card-head">
             <h2>选择客户端</h2>
-            <button
-              class="btn ghost"
-              :disabled="loading || host !== 'ready'"
-              @click="refreshInstances"
-            >
+            <button class="btn ghost" :disabled="loading || host !== 'ready'" @click="refreshInstances">
               {{ loading ? "读取中…" : "刷新列表" }}
             </button>
           </div>
@@ -331,11 +324,8 @@ onUnmounted(() => {
                   <span v-if="inst.group" class="tag dim">{{ inst.group }}</span>
                 </div>
               </div>
-              <button
-                class="btn primary"
-                :disabled="host !== 'ready' || launching === inst.uuid || inst.running"
-                @click="launch(inst)"
-              >
+              <button class="btn primary" :disabled="host !== 'ready' || launching === inst.uuid || inst.running"
+                @click="launch(inst)">
                 {{ inst.running ? "运行中" : launching === inst.uuid ? "启动中…" : "启动" }}
               </button>
             </li>
@@ -560,7 +550,7 @@ onUnmounted(() => {
   font-size: 13px;
 }
 
-.rules li + li {
+.rules li+li {
   margin-top: 4px;
 }
 
@@ -712,6 +702,7 @@ onUnmounted(() => {
   0% {
     margin-left: -35%;
   }
+
   100% {
     margin-left: 100%;
   }

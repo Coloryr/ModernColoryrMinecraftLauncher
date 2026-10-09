@@ -17,41 +17,20 @@ function update(patch: Partial<InstanceArgsDto>) {
   <div class="proxy-panel">
     <div class="proxy-row">
       <span class="proxy-label">{{ t("proxy.ip") }}</span>
-      <input
-        class="field-input grow"
-        :value="args.proxyIp"
-        placeholder="127.0.0.1"
-        spellcheck="false"
-        @input="update({ proxyIp: ($event.target as HTMLInputElement).value })"
-      />
+      <input class="field-input grow" :value="args.proxyIp" placeholder="127.0.0.1" spellcheck="false"
+        @input="update({ proxyIp: ($event.target as HTMLInputElement).value })" />
       <span class="proxy-label small">{{ t("proxy.port") }}</span>
-      <NumberStepper
-        :model-value="args.proxyPort"
-        :min="1"
-        :max="65535"
-        :step="1"
-        @update:model-value="(v: number) => update({ proxyPort: v })"
-      />
+      <NumberStepper :model-value="args.proxyPort" :min="1" :max="65535" :step="1"
+        @update:model-value="(v: number) => update({ proxyPort: v })" />
     </div>
 
     <div class="proxy-row">
       <span class="proxy-label">{{ t("proxy.user") }}</span>
-      <input
-        class="field-input grow"
-        :value="args.proxyUser"
-        placeholder="user"
-        spellcheck="false"
-        @input="update({ proxyUser: ($event.target as HTMLInputElement).value })"
-      />
+      <input class="field-input grow" :value="args.proxyUser" placeholder="user" spellcheck="false"
+        @input="update({ proxyUser: ($event.target as HTMLInputElement).value })" />
       <span class="proxy-label small">{{ t("proxy.password") }}</span>
-      <input
-        class="field-input grow"
-        type="password"
-        :value="args.proxyPass"
-        placeholder="••••••"
-        spellcheck="false"
-        @input="update({ proxyPass: ($event.target as HTMLInputElement).value })"
-      />
+      <input class="field-input grow" type="password" :value="args.proxyPass" placeholder="••••••" spellcheck="false"
+        @input="update({ proxyPass: ($event.target as HTMLInputElement).value })" />
     </div>
   </div>
 </template>

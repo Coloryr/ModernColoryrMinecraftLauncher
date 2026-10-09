@@ -158,11 +158,7 @@ impl ModPackWorker for CurseForgeWorker {
     }
 
     /// 创建游戏实例
-    async fn create_instance(
-        &self,
-        name: Option<String>,
-        group: Option<Uuid>,
-    ) -> CoreResult<Uuid> {
+    async fn create_instance(&self, name: Option<String>, group: Option<Uuid>) -> CoreResult<Uuid> {
         match &self.info {
             Some(info) => {
                 let name = name.unwrap_or(format!("{}-{}", info.name, info.version));

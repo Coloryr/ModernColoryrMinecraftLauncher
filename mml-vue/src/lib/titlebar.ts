@@ -28,7 +28,7 @@ export type TitleBarStyle = "windows" | "macos";
 export function useWindowTitle(title: () => string) {
   function apply() {
     if (!isTauri()) return;
-    commands.windows.setTitle(title()).catch(() => {});
+    commands.windows.setTitle(title()).catch(() => { });
   }
 
   // 标题本身变化（语言切换 / 窗口内标题变化）
@@ -95,13 +95,13 @@ export function onTitleBarPointerDown(e: PointerEvent) {
     // 双击：只在这一次里最大化，且不再起拖拽
     lastDownAt = 0;
     lastDownTarget = null;
-    commands.windows.toggleMaximize().catch(() => {});
+    commands.windows.toggleMaximize().catch(() => { });
     return;
   }
 
   lastDownAt = now;
   lastDownTarget = e.target;
-  commands.windows.startDragging().catch(() => {});
+  commands.windows.startDragging().catch(() => { });
 }
 
 /** 最小化当前窗口 */
@@ -109,7 +109,7 @@ export function minimizeWindow() {
   if (!isTauri()) {
     return;
   }
-  commands.windows.minimize().catch(() => {});
+  commands.windows.minimize().catch(() => { });
 }
 
 /** 最大化 / 还原当前窗口，返回新状态（非 Tauri 环境返回 null） */

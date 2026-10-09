@@ -21,10 +21,10 @@ use std::{
     sync::{LazyLock, RwLock},
 };
 
+use crate::{AuthType, LoginObj, UserKeyObj};
 use mml_base::{inner_path, serialize_tools};
 use mml_config::config_save;
 use mml_names::{i18_items::error_type::CoreResult, names, uuids};
-use crate::{AuthType, LoginObj, UserKeyObj};
 
 /// 全局账户存储（键 = UUID + 认证类型）
 static AUTHS: LazyLock<RwLock<HashMap<UserKeyObj, LoginObj>>> =

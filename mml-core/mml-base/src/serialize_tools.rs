@@ -178,7 +178,7 @@ impl MiniJsonMap {
     }
 
     /// 是否存在键
-    /// 
+    ///
     /// - `key`: 需要查找的键
     pub fn have_key(&self, key: &str) -> bool {
         self.map.contains_key(key)
@@ -507,8 +507,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io::Cursor;
     use serde::{Deserialize, Serialize};
+    use std::io::Cursor;
 
     /// MiniJsonObj 类型判断与转换
     #[test]
@@ -678,17 +678,48 @@ port = 25565
         }
 
         // 数字直接返回
-        assert_eq!(serde_json::from_str::<MinStruct>(r#"{"v":5}"#).unwrap().v, 5);
-        assert_eq!(serde_json::from_str::<MaxStruct>(r#"{"v":5}"#).unwrap().v, 5);
+        assert_eq!(
+            serde_json::from_str::<MinStruct>(r#"{"v":5}"#).unwrap().v,
+            5
+        );
+        assert_eq!(
+            serde_json::from_str::<MaxStruct>(r#"{"v":5}"#).unwrap().v,
+            5
+        );
         // 数组取最小 / 最大
-        assert_eq!(serde_json::from_str::<MinStruct>(r#"{"v":[9,3,7]}"#).unwrap().v, 3);
-        assert_eq!(serde_json::from_str::<MaxStruct>(r#"{"v":[9,3,7]}"#).unwrap().v, 9);
+        assert_eq!(
+            serde_json::from_str::<MinStruct>(r#"{"v":[9,3,7]}"#)
+                .unwrap()
+                .v,
+            3
+        );
+        assert_eq!(
+            serde_json::from_str::<MaxStruct>(r#"{"v":[9,3,7]}"#)
+                .unwrap()
+                .v,
+            9
+        );
         // 空数组返回 0
-        assert_eq!(serde_json::from_str::<MinStruct>(r#"{"v":[]}"#).unwrap().v, 0);
-        assert_eq!(serde_json::from_str::<MaxStruct>(r#"{"v":[]}"#).unwrap().v, 0);
+        assert_eq!(
+            serde_json::from_str::<MinStruct>(r#"{"v":[]}"#).unwrap().v,
+            0
+        );
+        assert_eq!(
+            serde_json::from_str::<MaxStruct>(r#"{"v":[]}"#).unwrap().v,
+            0
+        );
         // 负数
-        assert_eq!(serde_json::from_str::<MinStruct>(r#"{"v":[-1,-9]}"#).unwrap().v, -9);
-        assert_eq!(serde_json::from_str::<MaxStruct>(r#"{"v":[-1,-9]}"#).unwrap().v, -1);
+        assert_eq!(
+            serde_json::from_str::<MinStruct>(r#"{"v":[-1,-9]}"#)
+                .unwrap()
+                .v,
+            -9
+        );
+        assert_eq!(
+            serde_json::from_str::<MaxStruct>(r#"{"v":[-1,-9]}"#)
+                .unwrap()
+                .v,
+            -1
+        );
     }
-
 }

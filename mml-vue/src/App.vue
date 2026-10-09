@@ -133,17 +133,11 @@ const closeAskButton = computed(() =>
   </Transition>
   <!-- 单窗口模式：下载管理浮在当前页面之上（工具窗口，见 windowManager 的 openWindow 特例）；
        关掉它只是收起弹窗，任务照跑，右下角的入口还在 -->
-  <DownloadWindow
-    v-if="!multiWindow && downloadPopupOpen && currentKind !== 'download'"
-    @close="closeDownloadPopup"
-  />
+  <DownloadWindow v-if="!multiWindow && downloadPopupOpen && currentKind !== 'download'" @close="closeDownloadPopup" />
   <!-- 整合包安装进度弹窗：由标题栏上那个指示器点开（单窗口模式；多窗口模式各窗口
        自己的标题栏里也有指示器，点开同一个弹窗）。关掉它只是收起，安装照常跑 -->
-  <ModpackPopup
-    v-if="modpackPopupOpen && modpackStatus?.tasks.length"
-    :status="modpackStatus"
-    @close="closeModpackPopup"
-  />
+  <ModpackPopup v-if="modpackPopupOpen && modpackStatus?.tasks.length" :status="modpackStatus"
+    @close="closeModpackPopup" />
   <!-- 下载入口不再用右下角浮层：改成主窗口顶栏上的动态图标 + 进度条
        （DownloadTitleIndicator，与整合包那个并排、排在主页按钮左边）；
        下载管理弹窗仍在这里渲染 -->

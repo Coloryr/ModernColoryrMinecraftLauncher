@@ -53,15 +53,3 @@ pub struct GroupDto {
     /// 分组显示名（默认分组是空白，由前端翻译成"默认分组"）
     pub name: String,
 }
-
-impl InstanceInfoDto {
-    /// 是否正在运行
-    pub fn is_running(&self) -> bool {
-        self.running
-    }
-
-    /// 是否为整合包（有平台信息）
-    pub fn is_modpack(&self) -> bool {
-        self.modpack_type.is_some()
-    }
-}

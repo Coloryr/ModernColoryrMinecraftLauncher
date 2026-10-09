@@ -52,7 +52,7 @@ pub fn add_skin_block(name: &str, skin_png: &[u8]) -> CoreResult<String> {
             return Err(ErrorType::SkinBlockError(SkinBlockErrorData::SkinSize {
                 width: w,
                 height: h,
-            }))
+            }));
         }
     };
 
@@ -68,17 +68,18 @@ pub fn add_skin_block(name: &str, skin_png: &[u8]) -> CoreResult<String> {
 
     let mut buf = Vec::new();
     {
-        let mut encoder = png::Encoder::new(
-            &mut buf,
-            super::BLOCK_SIZE as u32,
-            super::BLOCK_SIZE as u32,
-        );
+        let mut encoder =
+            png::Encoder::new(&mut buf, super::BLOCK_SIZE as u32, super::BLOCK_SIZE as u32);
         encoder.set_color(png::ColorType::Rgba);
         encoder.set_depth(png::BitDepth::Eight);
         encoder
             .write_header()
             .and_then(|mut w| w.write_image_data(&rgba))
-            .map_err(|e| ErrorType::TaskError(ErrorData { error: e.to_string() }))?;
+            .map_err(|e| {
+                ErrorType::TaskError(ErrorData {
+                    error: e.to_string(),
+                })
+            })?;
     }
 
     let dir = crate::get_block_dir().ok_or(ErrorType::DownloadFileFail)?;

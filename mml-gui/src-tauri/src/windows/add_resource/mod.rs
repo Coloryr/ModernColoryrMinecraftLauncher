@@ -1,0 +1,71 @@
+//! 添加资源窗口：从 CurseForge / Modrinth 浏览并获取资源
+//!
+//! 与「下载整合包」窗口（`add_modpack`）分开：这里按资源类型
+//! （模组 / 资源包 / 光影包等）走通用的项目与文件列表查询。
+
+use std::{
+    collections::HashMap,
+    path::PathBuf,
+    sync::{LazyLock, RwLock},
+};
+
+use mml_net::curseforge_api::file_obj::CurseForgeFileDataObj;
+use mml_net::curseforge_api::list_obj::CurseForgeListDataObj;
+use mml_net::modrinth_api::search_obj::HitObj;
+use mml_net::modrinth_api::version_obj::ModrinthVersionObj;
+use tokio::sync::RwLock as AsyncRwLock;
+use uuid::Uuid;
+
+pub(crate) mod download;
+pub(crate) mod list;
+pub(crate) mod meta;
+pub(crate) mod status;
+
+// 下载器回调按原路径再导出：`windows/download.rs` 用的是
+// `add_resource::on_download_item`，搬进子模块后调用点不必跟着改
+pub(crate) use self::status::on_download_item;
+
+/// CurseForge 项目列表缓存（pid → 项目数据，列表页请求时填充）
+pub(super) static CURSEFOGRE_INFO: LazyLock<AsyncRwLock<HashMap<String, CurseForgeListDataObj>>> =
+    LazyLock::new(|| AsyncRwLock::new(HashMap::new()));
+/// Modrinth 项目列表缓存（pid → 搜索命中项，列表页请求时填充）
+pub(super) static MODRINTH_INFO: LazyLock<AsyncRwLock<HashMap<String, HitObj>>> =
+    LazyLock::new(|| AsyncRwLock::new(HashMap::new()));
+
+/// CurseForge 文件缓存（pid → fid → 文件数据，文件列表页请求时填充）
+pub(super) static CURSEFOGRE_FILE: LazyLock<
+    AsyncRwLock<HashMap<String, HashMap<String, CurseForgeFileDataObj>>>,
+> = LazyLock::new(|| AsyncRwLock::new(HashMap::new()));
+/// Modrinth 版本缓存（pid → 版本号 → 版本数据，文件列表页请求时填充）
+pub(super) static MODRINTH_FILE: LazyLock<
+    AsyncRwLock<HashMap<String, HashMap<String, ModrinthVersionObj>>>,
+> = LazyLock::new(|| AsyncRwLock::new(HashMap::new()));
+
+/// 资源下载任务表（实例 → 下载条目）。
+/// 下载器的回调是同步的（来自下载线程），这里用 std 锁；命令侧临界区都很短。
+pub(super) static DOWNLOAD_NOW: LazyLock<
+    RwLock<HashMap<Uuid, HashMap<SourceInfo, SourceDownloadInfo>>>,
+> = LazyLock::new(|| RwLock::new(HashMap::new()));
+
+/// 下载源定位信息（pid + fid 唯一确定一个资源 / 文件）
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
+pub struct SourceInfo {
+    /// 项目 ID
+    pub pid: String,
+    /// 文件 ID
+    pub fid: String,
+}
+
+/// 资源下载条目（添加资源窗口顶部进度条的数据源）
+pub struct SourceDownloadInfo {
+    /// 目标文件路径（下载器回调按路径匹配进度）
+    pub file: PathBuf,
+    /// 显示名
+    pub name: String,
+    /// 下载进度（0.0–100.0）
+    pub now: f64,
+    /// 下载完成（保留一段时间后从任务表移除）
+    pub done: bool,
+    /// 下载失败
+    pub failed: bool,
+}

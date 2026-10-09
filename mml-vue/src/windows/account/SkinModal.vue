@@ -338,7 +338,7 @@ function setupViewer() {
   // 没有披风的账户加载失败是正常的，静默忽略
   const capeP =
     showCape.value && caperawUrl.value
-      ? viewer.loadCape(caperawUrl.value).catch(() => {})
+      ? viewer.loadCape(caperawUrl.value).catch(() => { })
       : Promise.resolve();
   Promise.allSettled([skinP, capeP]).finally(() => {
     loading.value = false;
@@ -364,7 +364,7 @@ watch([caperawUrl, showCape], () => {
     loading.value = true;
     viewer
       .loadCape(caperawUrl.value)
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => {
         loading.value = false;
       });
@@ -463,38 +463,17 @@ onBeforeUnmount(destroyViewer);
       <!-- 预览区：2D / 3D 切换在展示区上方 -->
       <div class="preview">
         <!-- 2D / 3D 分段切换（统一 SegmentedTabs） -->
-        <SegmentedTabs
-          class="mode-toggle"
-          :model-value="mode"
-          :options="MODE_OPTIONS"
-          @update:model-value="mode = $event as Mode"
-        />
+        <SegmentedTabs class="mode-toggle" :model-value="mode" :options="MODE_OPTIONS"
+          @update:model-value="mode = $event as Mode" />
 
-        <div
-          ref="stage"
-          class="preview-stage"
-          :class="{ pan: mode === '2d', grabbing: panning }"
-          @wheel.prevent="onWheel"
-          @pointerdown="onPointerDown"
-          @pointermove="onPointerMove"
-          @pointerup="onPointerUp"
-          @pointercancel="onPointerUp"
-          @dblclick="resetView"
-        >
+        <div ref="stage" class="preview-stage" :class="{ pan: mode === '2d', grabbing: panning }"
+          @wheel.prevent="onWheel" @pointerdown="onPointerDown" @pointermove="onPointerMove" @pointerup="onPointerUp"
+          @pointercancel="onPointerUp" @dblclick="resetView">
           <canvas v-show="mode === '3d'" ref="canvas" class="gl-canvas"></canvas>
-          <div
-            v-if="mode === '2d'"
-            class="pan-wrap"
-            :style="{ transform: `translate(${viewX}px, ${viewY}px) scale(${viewScale})` }"
-          >
-            <img
-              v-if="skin2dUrl"
-              :src="skin2dUrl"
-              class="flat-skin"
-              draggable="false"
-              @load="loading = false"
-              @error="noSkin = true, (loading = false)"
-            />
+          <div v-if="mode === '2d'" class="pan-wrap"
+            :style="{ transform: `translate(${viewX}px, ${viewY}px) scale(${viewScale})` }">
+            <img v-if="skin2dUrl" :src="skin2dUrl" class="flat-skin" draggable="false" @load="loading = false"
+              @error="noSkin = true, (loading = false)" />
             <img v-if="showCape && cape2dUrl" :src="cape2dUrl" class="flat-cape" draggable="false" alt="" />
           </div>
           <div v-if="(loading || (listLoading && !selectedSkin)) && !noSkin" class="preview-loading">
@@ -540,13 +519,8 @@ onBeforeUnmount(destroyViewer);
         <!-- 纹理列表：点击切换预览，正版可设为装备 -->
         <h2 class="info-title ctl-title list-head">
           {{ t("account.skinsList") }}
-          <BaseButton
-            v-if="isOauth && base"
-            variant="accent"
-            size="sm"
-            :disabled="listLoading || uploading"
-            @click="pickSkinFile"
-          >
+          <BaseButton v-if="isOauth && base" variant="accent" size="sm" :disabled="listLoading || uploading"
+            @click="pickSkinFile">
             {{ t("account.uploadSkin") }}
           </BaseButton>
           <!-- 第三方：皮肤上传 / 装备在皮肤站网页面板完成 -->
@@ -570,24 +544,15 @@ onBeforeUnmount(destroyViewer);
           </BaseButton>
         </div>
         <div class="tex-list">
-          <div
-            v-for="item in textures?.skins ?? []"
-            :key="item.sha1"
-            class="tex-item"
-            :class="{ selected: item.sha1 === previewSkinSha1 }"
-            @click="previewSkinSha1 = item.sha1"
-          >
+          <div v-for="item in textures?.skins ?? []" :key="item.sha1" class="tex-item"
+            :class="{ selected: item.sha1 === previewSkinSha1 }" @click="previewSkinSha1 = item.sha1">
             <img :src="skinThumbUrl(item)" class="tex-thumb skin" draggable="false" alt="" />
             <div class="tex-meta">
               <span class="tex-name" v-tip="item.name">{{ item.name }}</span>
               <span class="tex-model">{{ modelLabel(item.model) }}</span>
             </div>
-            <BaseButton
-              v-if="isOauth"
-              size="sm"
-              :disabled="item.active || equipBusy === item.sha1"
-              @click.stop="equip('skin', item)"
-            >
+            <BaseButton v-if="isOauth" size="sm" :disabled="item.active || equipBusy === item.sha1"
+              @click.stop="equip('skin', item)">
               {{ item.active ? t("account.equipped") : t("account.equip") }}
             </BaseButton>
           </div>
@@ -597,23 +562,14 @@ onBeforeUnmount(destroyViewer);
 
         <h2 class="info-title ctl-title">{{ t("account.capesList") }}</h2>
         <div class="tex-list">
-          <div
-            v-for="item in textures?.capes ?? []"
-            :key="item.sha1"
-            class="tex-item"
-            :class="{ selected: item.sha1 === previewCapeSha1 }"
-            @click="previewCapeSha1 = item.sha1"
-          >
+          <div v-for="item in textures?.capes ?? []" :key="item.sha1" class="tex-item"
+            :class="{ selected: item.sha1 === previewCapeSha1 }" @click="previewCapeSha1 = item.sha1">
             <img :src="capeThumbUrl(item)" class="tex-thumb cape" draggable="false" alt="" />
             <div class="tex-meta">
               <span class="tex-name" v-tip="item.name">{{ item.name }}</span>
             </div>
-            <BaseButton
-              v-if="isOauth"
-              size="sm"
-              :disabled="item.active || equipBusy === item.sha1"
-              @click.stop="equip('cape', item)"
-            >
+            <BaseButton v-if="isOauth" size="sm" :disabled="item.active || equipBusy === item.sha1"
+              @click.stop="equip('cape', item)">
               {{ item.active ? t("account.equipped") : t("account.equip") }}
             </BaseButton>
           </div>
@@ -737,7 +693,8 @@ onBeforeUnmount(destroyViewer);
   width: 260px;
   max-height: 430px;
   overflow-y: auto;
-  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
+  scrollbar-gutter: stable;
+  /* 见 styles/scrollbar.css */
   padding-right: 4px;
 }
 

@@ -61,16 +61,13 @@ onMounted(() => void loadFonts());
 </script>
 
 <template>
-  <SettingsGroup
-    id="general"
-    title-key="winSettings.secGeneral"
-    :flash="flashGroup === 'general'"
-  >
+  <SettingsGroup id="general" title-key="winSettings.secGeneral" :flash="flashGroup === 'general'">
     <!-- 语言 / 字体：两个下拉并排一行 -->
     <div class="general-row">
       <div class="general-col">
         <label class="field-label">{{ t("winSettings.language") }}</label>
-        <select class="field-select lang-select" :value="locale" @change="onLangChange(($event.target as HTMLSelectElement).value)">
+        <select class="field-select lang-select" :value="locale"
+          @change="onLangChange(($event.target as HTMLSelectElement).value)">
           <option value="zh_cn">简体中文</option>
           <option value="en_us">English</option>
         </select>
@@ -98,70 +95,33 @@ onMounted(() => void loadFonts());
     </div>
   </SettingsGroup>
 
-  <SettingsGroup
-    id="theme"
-    title-key="winSettings.secTheme"
-    :flash="flashGroup === 'theme'"
-  >
+  <SettingsGroup id="theme" title-key="winSettings.secTheme" :flash="flashGroup === 'theme'">
     <!-- 主题：跟随系统 / 浅色 / 深色 -->
     <label class="field-label">{{ t("winSettings.theme") }}</label>
-    <SegmentedTabs
-      :model-value="themeValue"
-      :options="[
-        { value: 'System', label: t('winSettings.themeSystem') },
-        { value: 'Light', label: t('winSettings.themeLight') },
-        { value: 'Dark', label: t('winSettings.themeDark') },
-      ]"
-      @update:model-value="onThemeChange"
-    />
+    <SegmentedTabs :model-value="themeValue" :options="[
+      { value: 'System', label: t('winSettings.themeSystem') },
+      { value: 'Light', label: t('winSettings.themeLight') },
+      { value: 'Dark', label: t('winSettings.themeDark') },
+    ]" @update:model-value="onThemeChange" />
 
     <!-- 强调色 -->
     <label class="field-label">{{ t("winSettings.accent") }}</label>
     <p class="field-desc">{{ t("winSettings.accentDesc") }}</p>
     <div class="accent-list">
-      <button
-        v-for="a in ACCENTS"
-        :key="a.id"
-        class="accent-swatch"
-        :class="{ active: accent === a.id }"
-        :style="{ background: a.color }"
-        :aria-label="t(`winSettings.accent.${a.id}`)"
-        v-tip="t(`winSettings.accent.${a.id}`)"
-        @click="setAccent(a.id)"
-      >
-        <svg
-          v-if="accent === a.id"
-          viewBox="0 0 24 24"
-          width="16"
-          height="16"
-          fill="none"
-          :stroke="a.check"
-          stroke-width="3.5"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
+      <button v-for="a in ACCENTS" :key="a.id" class="accent-swatch" :class="{ active: accent === a.id }"
+        :style="{ background: a.color }" :aria-label="t(`winSettings.accent.${a.id}`)"
+        v-tip="t(`winSettings.accent.${a.id}`)" @click="setAccent(a.id)">
+        <svg v-if="accent === a.id" viewBox="0 0 24 24" width="16" height="16" fill="none" :stroke="a.check"
+          stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round">
           <path d="m5 13 4 4L19 7" />
         </svg>
       </button>
 
       <!-- 自定义：彩虹色块，点击弹出系统取色器 -->
-      <label
-        class="accent-swatch accent-custom"
-        :class="{ active: accent === 'custom' }"
-        v-tip="t('winSettings.accent.custom')"
-      >
-        <svg
-          v-if="accent === 'custom'"
-          viewBox="0 0 24 24"
-          width="16"
-          height="16"
-          fill="none"
-          stroke="#fff"
-          stroke-width="3.5"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          class="accent-check"
-        >
+      <label class="accent-swatch accent-custom" :class="{ active: accent === 'custom' }"
+        v-tip="t('winSettings.accent.custom')">
+        <svg v-if="accent === 'custom'" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="#fff"
+          stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" class="accent-check">
           <path d="m5 13 4 4L19 7" />
         </svg>
         <input type="color" :value="customAccent" @input="setCustomAccent(($event.target as HTMLInputElement).value)" />
@@ -169,115 +129,69 @@ onMounted(() => void loadFonts());
     </div>
   </SettingsGroup>
 
-  <SettingsGroup
-    id="window"
-    title-key="winSettings.secWindow"
-    :flash="flashGroup === 'window'"
-  >
+  <SettingsGroup id="window" title-key="winSettings.secWindow" :flash="flashGroup === 'window'">
     <!-- 两态设置用 Switch 开关 -->
     <div class="switch-row">
       <div class="switch-text">
         <span class="switch-label">{{ t("winSettings.windowMode") }}</span>
-        <span class="switch-state">{{ windowMode === "Multi" ? t("winSettings.multi") : t("winSettings.single") }}</span>
+        <span class="switch-state">{{ windowMode === "Multi" ? t("winSettings.multi") : t("winSettings.single")
+          }}</span>
       </div>
-      <BaseSwitch :model-value="windowMode === 'Multi'" @update:model-value="(v) => onModeChange(v ? 'Multi' : 'Single')" />
+      <BaseSwitch :model-value="windowMode === 'Multi'"
+        @update:model-value="(v) => onModeChange(v ? 'Multi' : 'Single')" />
     </div>
     <p v-if="inTauri" class="hint">{{ t("winSettings.windowModeRestart") }}</p>
   </SettingsGroup>
 
-  <SettingsGroup
-    id="mainWindow"
-    title-key="winSettings.secMainWindow"
-    :flash="flashGroup === 'mainWindow'"
-  >
+  <SettingsGroup id="mainWindow" title-key="winSettings.secMainWindow" :flash="flashGroup === 'mainWindow'">
     <label class="field-label">{{ t("winSettings.sidebar") }}</label>
-    <SegmentedTabs
-      :model-value="side"
-      :options="[
-        { value: 'Left', label: t('winSettings.sidebarLeft') },
-        { value: 'Right', label: t('winSettings.sidebarRight') },
-      ]"
-      @update:model-value="onSideChange"
-    />
+    <SegmentedTabs :model-value="side" :options="[
+      { value: 'Left', label: t('winSettings.sidebarLeft') },
+      { value: 'Right', label: t('winSettings.sidebarRight') },
+    ]" @update:model-value="onSideChange" />
     <p class="field-desc">{{ t("winSettings.sidebarDesc") }}</p>
   </SettingsGroup>
 
-  <SettingsGroup
-    id="bgImage"
-    title-key="winSettings.bgImage"
-    :flash="flashGroup === 'bgImage'"
-  >
+  <SettingsGroup id="bgImage" title-key="winSettings.bgImage" :flash="flashGroup === 'bgImage'">
     <p class="field-desc">{{ t("winSettings.bgImageDesc") }}</p>
     <div class="bg-buttons">
       <!-- 图片地址：本地文件路径或网址 -->
-      <input
-        v-model="bgSourceInput"
-        class="field-input bg-url-input"
-        :placeholder="t('winSettings.bgUrlPlaceholder')"
-        spellcheck="false"
-        autocomplete="off"
-        @keydown.enter="loadBgSource"
-      />
+      <input v-model="bgSourceInput" class="field-input bg-url-input" :placeholder="t('winSettings.bgUrlPlaceholder')"
+        spellcheck="false" autocomplete="off" @keydown.enter="loadBgSource" />
       <BaseButton size="sm" variant="accent" :disabled="bgLoading" @click="loadBgSource">
         {{ bgLoading ? t("winSettings.bgLoading") : t("winSettings.bgLoad") }}
       </BaseButton>
       <BaseButton v-if="bgImage" size="sm" variant="danger" :disabled="bgLoading" @click="setBgImage('')">
         {{ t("winSettings.bgClear") }}
       </BaseButton>
-      <BaseButton size="sm" variant="accent" :disabled="bgLoading" @click="pickBgImage">{{ t("winSettings.bgPick") }}</BaseButton>
+      <BaseButton size="sm" variant="accent" :disabled="bgLoading" @click="pickBgImage">{{ t("winSettings.bgPick") }}
+      </BaseButton>
     </div>
-    <input
-      :ref="(el) => (bgFileInput = el as HTMLInputElement | null)"
-      class="bg-file"
-      type="file"
-      accept="image/*"
-      @change="onBgFile"
-    />
+    <input :ref="(el) => (bgFileInput = el as HTMLInputElement | null)" class="bg-file" type="file" accept="image/*"
+      @change="onBgFile" />
 
     <template v-if="bgImage">
       <div class="range-row row-card">
         <span class="range-label">{{ t("winSettings.bgOpacity") }}</span>
-        <input
-          class="range"
-          type="range"
-          min="5"
-          max="100"
-          :value="bgOpacity"
-          @input="setBgOpacity(Number(($event.target as HTMLInputElement).value))"
-        />
+        <input class="range" type="range" min="5" max="100" :value="bgOpacity"
+          @input="setBgOpacity(Number(($event.target as HTMLInputElement).value))" />
         <span class="range-value">{{ bgOpacity }}%</span>
       </div>
       <div class="range-row row-card">
         <span class="range-label">{{ t("winSettings.bgBlur") }}</span>
-        <input
-          class="range"
-          type="range"
-          min="0"
-          max="40"
-          :value="bgBlur"
-          @input="setBgBlur(Number(($event.target as HTMLInputElement).value))"
-        />
+        <input class="range" type="range" min="0" max="40" :value="bgBlur"
+          @input="setBgBlur(Number(($event.target as HTMLInputElement).value))" />
         <span class="range-value">{{ bgBlur }}px</span>
       </div>
       <!-- 原始大小：后端把图片分辨率缩放到原图的百分之多少（点「应用」才生效，
            且只改分辨率，不改变图在窗口里的显示大小） -->
       <div class="range-row row-card">
         <span class="range-label">{{ t("winSettings.bgNativeSize") }}</span>
-        <input
-          class="range"
-          type="range"
-          min="10"
-          max="100"
-          :value="bgSizeDraft"
-          @input="bgSizeDraft = Number(($event.target as HTMLInputElement).value)"
-        />
+        <input class="range" type="range" min="10" max="100" :value="bgSizeDraft"
+          @input="bgSizeDraft = Number(($event.target as HTMLInputElement).value)" />
         <span class="range-value">{{ bgSizeDraft }}%</span>
-        <BaseButton
-          size="sm"
-          variant="accent"
-          :disabled="bgLoading || bgSizeDraft === bgNativeSize"
-          @click="applyBgSize"
-        >{{ bgLoading ? t("winSettings.bgLoading") : t("winSettings.bgApply") }}</BaseButton>
+        <BaseButton size="sm" variant="accent" :disabled="bgLoading || bgSizeDraft === bgNativeSize"
+          @click="applyBgSize">{{ bgLoading ? t("winSettings.bgLoading") : t("winSettings.bgApply") }}</BaseButton>
       </div>
     </template>
   </SettingsGroup>

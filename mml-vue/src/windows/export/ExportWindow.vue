@@ -246,11 +246,7 @@ onBeforeUnmount(() => {
 
         <!-- 导出按钮 + 进度 -->
         <div class="export-actions">
-          <button
-            class="export-btn"
-            :disabled="running || loadingInfo"
-            @click="startExport"
-          >
+          <button class="export-btn" :disabled="running || loadingInfo" @click="startExport">
             {{ running ? t("winExport.exporting") : t("winExport.exportBtn") }}
           </button>
           <span v-if="running" class="progress-text" v-tip="progress?.text">
@@ -277,7 +273,8 @@ onBeforeUnmount(() => {
   padding: 14px 16px;
   box-sizing: border-box;
   overflow-y: auto;
-  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
+  scrollbar-gutter: stable;
+  /* 见 styles/scrollbar.css */
 }
 
 .row {

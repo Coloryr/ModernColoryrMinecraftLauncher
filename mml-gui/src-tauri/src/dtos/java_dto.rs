@@ -19,13 +19,6 @@ pub struct JavaInfoDto {
     pub arch: String,
 }
 
-impl JavaInfoDto {
-    /// 主版本号字符串（如 "21"）
-    pub fn major_label(&self) -> String {
-        self.major.to_string()
-    }
-}
-
 /// Java 压缩包导入进度（`settings-java-progress` 事件）
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

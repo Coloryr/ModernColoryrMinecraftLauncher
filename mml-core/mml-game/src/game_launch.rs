@@ -681,7 +681,11 @@ impl InstanceSettingObj {
 
         // 有加载器的实例必须填写加载器版本
         if self.loader != LoaderType::Normal && self.loader != LoaderType::Custom {
-            if self.loader_version.as_deref().is_none_or(|data| data.is_empty()) {
+            if self
+                .loader_version
+                .as_deref()
+                .is_none_or(|data| data.is_empty())
+            {
                 return Err(ErrorType::InstanceVersionError);
             }
         }
@@ -762,7 +766,11 @@ impl InstanceSettingObj {
 
         // 有加载器的实例必须填写加载器版本
         if self.loader != LoaderType::Normal && self.loader != LoaderType::Custom {
-            if self.loader_version.as_deref().is_none_or(|data| data.is_empty()) {
+            if self
+                .loader_version
+                .as_deref()
+                .is_none_or(|data| data.is_empty())
+            {
                 return Err(ErrorType::InstanceVersionError);
             }
         }

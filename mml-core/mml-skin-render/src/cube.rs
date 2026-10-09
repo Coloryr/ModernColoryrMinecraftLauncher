@@ -121,10 +121,7 @@ mod tests {
         let v = get_square_default();
         assert_eq!(v.len(), 72, "24 个顶点 x 3 分量");
         for c in &v {
-            assert!(
-                *c == VALUE || *c == -VALUE,
-                "立方体分量应为 ±0.5，实际 {c}"
-            );
+            assert!(*c == VALUE || *c == -VALUE, "立方体分量应为 ±0.5，实际 {c}");
         }
         // 顶点数应为 24
         assert_eq!(v.len() / 3, 24);

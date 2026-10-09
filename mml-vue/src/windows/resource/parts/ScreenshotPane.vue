@@ -71,13 +71,7 @@ function clearAll() {
   <div class="shot-list">
     <div v-if="shots.length" class="shot-grid">
       <div v-for="item in shots" :key="item.name" class="shot-cell">
-        <AsyncImage
-          class="shot-img"
-          :src="shotUrl(item)"
-          :alt="item.name"
-          :title="item.name"
-          @click="preview = item"
-        />
+        <AsyncImage class="shot-img" :src="shotUrl(item)" :alt="item.name" :title="item.name" @click="preview = item" />
         <button class="shot-del" v-tip="t('resource.delete')" @click="remove(item)">
           <GlyphIcon name="close" :size="13" :weight="2.4" />
         </button>

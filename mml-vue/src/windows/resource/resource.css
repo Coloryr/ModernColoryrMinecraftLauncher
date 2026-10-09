@@ -144,7 +144,7 @@
 }
 
 /* 左侧（标题 + 搜索框 + 视图切换…）可被挤压，按钮组不缩 */
-.resource-layout .content-head > :first-child {
+.resource-layout .content-head> :first-child {
   flex: 1;
   min-width: 0;
 }
@@ -791,8 +791,7 @@
   display: grid;
   /* 第一列是多选勾选框（24px，与列表视图同一套交互） */
   grid-template-columns:
-    24px 132px 40px minmax(70px, 0.8fr) minmax(90px, 1fr) minmax(110px, 1.2fr) 78px
-    92px 64px 84px 96px 92px minmax(150px, 1.6fr) 100px minmax(120px, 1.2fr) auto;
+    24px 132px 40px minmax(70px, 0.8fr) minmax(90px, 1fr) minmax(110px, 1.2fr) 78px 92px 64px 84px 96px 92px minmax(150px, 1.6fr) 100px minmax(120px, 1.2fr) auto;
   align-items: center;
   gap: 8px;
   padding: 7px 10px;

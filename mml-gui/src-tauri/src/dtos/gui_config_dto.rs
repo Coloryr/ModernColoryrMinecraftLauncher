@@ -203,12 +203,7 @@ impl From<GuiConfig> for GuiConfigDto {
                 motd_card: c.client.motd_card,
                 motd_interval: c.client.motd_interval,
                 login_lock_on: c.client.login_lock_on,
-                login_lock: c
-                    .client
-                    .login_lock
-                    .into_iter()
-                    .map(Into::into)
-                    .collect(),
+                login_lock: c.client.login_lock.into_iter().map(Into::into).collect(),
                 auto_join: c.client.auto_join,
                 auto_join_server: c.client.auto_join_server,
                 motd_server: c.client.motd_server,
@@ -253,12 +248,7 @@ impl From<GuiConfigDto> for GuiConfig {
                 motd_card: d.client.motd_card,
                 motd_interval: d.client.motd_interval,
                 login_lock_on: d.client.login_lock_on,
-                login_lock: d
-                    .client
-                    .login_lock
-                    .into_iter()
-                    .map(Into::into)
-                    .collect(),
+                login_lock: d.client.login_lock.into_iter().map(Into::into).collect(),
                 auto_join: d.client.auto_join,
                 auto_join_server: d.client.auto_join_server,
                 motd_server: d.client.motd_server,

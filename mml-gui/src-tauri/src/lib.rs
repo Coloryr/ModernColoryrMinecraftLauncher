@@ -67,7 +67,8 @@ pub fn run() {
             // 游戏运行日志（mml-core `add_run_log` 推送）→ 转发为前端 `game-log` 事件
             let handle = app.handle().clone();
             mml_game::add_run_log(move |log| {
-                main::forward_run_log(&handle, log);
+                // 注意用全路径：闭包参数也叫 log，会遮住模块名
+                windows::log::forward_run_log(&handle, log);
             });
 
             // 下载器：挂接 UI 回调（转发为前端事件）并启动下载线程池

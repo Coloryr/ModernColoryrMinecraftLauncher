@@ -1524,10 +1524,7 @@ mod tests {
         back.read(&mut cursor).unwrap();
 
         assert_eq!(back.len(), 3);
-        assert_eq!(
-            back.get_item(1).unwrap().as_short().unwrap().data,
-            -2
-        );
+        assert_eq!(back.get_item(1).unwrap().as_short().unwrap().data, -2);
         assert_eq!(back.iter().count(), 3);
 
         // remove 返回被移除的元素
@@ -1611,12 +1608,12 @@ mod tests {
 
         let mut root = compound();
         root.data.insert("inner".into(), inner.to_nbt());
-        root.data.insert("arr".into(), byte_array(vec![1, 2, 3]).to_nbt());
-        root.data.insert(
-            "ia".into(),
-            int_array(vec![1, 2, 3, -4]).to_nbt(),
-        );
-        root.data.insert("la".into(), long_array(vec![5, -6]).to_nbt());
+        root.data
+            .insert("arr".into(), byte_array(vec![1, 2, 3]).to_nbt());
+        root.data
+            .insert("ia".into(), int_array(vec![1, 2, 3, -4]).to_nbt());
+        root.data
+            .insert("la".into(), long_array(vec![5, -6]).to_nbt());
 
         let bytes = write_to(&root);
         let mut back = NbtCompound::default();
@@ -1624,10 +1621,7 @@ mod tests {
         back.read(&mut cursor).unwrap();
 
         // 先取嵌套数据，再比较整体（to_nbt 会消耗所有权）
-        assert_eq!(
-            back.get_compound("inner").unwrap().get_int("x"),
-            Some(9)
-        );
+        assert_eq!(back.get_compound("inner").unwrap().get_int("x"), Some(9));
         assert_eq!(back.get_byte_array("arr").unwrap().data, vec![1, 2, 3]);
         // Compound 没有 get_int_array，需通过 get + as_int_array 取值
         assert!(back.get_long_array("ia").is_none());
@@ -1743,10 +1737,7 @@ mod tests {
         assert_eq!(string("a\"b").to_nbt().to_string(), "\"a\\\"b\"");
         assert_eq!(NbtType::end().to_string(), "END");
 
-        assert_eq!(
-            byte_array(vec![1, 2]).to_nbt().to_string(),
-            "[B;1B, 2B]"
-        );
+        assert_eq!(byte_array(vec![1, 2]).to_nbt().to_string(), "[B;1B, 2B]");
         assert_eq!(int_array(vec![1, 2]).to_nbt().to_string(), "[I;1, 2]");
         assert_eq!(long_array(vec![3]).to_nbt().to_string(), "[L;3L]");
 
@@ -1765,16 +1756,10 @@ mod tests {
     fn type_orders() {
         assert_eq!(byte(0).to_nbt().get_num(), NBT_BYTE_ORDER);
         assert_eq!(byte_array(vec![]).to_nbt().get_num(), NBT_BYTE_ARRAY_ORDER);
-        assert_eq!(
-            long_array(vec![]).to_nbt().get_num(),
-            NBT_LONG_ARRAY_ORDER
-        );
+        assert_eq!(long_array(vec![]).to_nbt().get_num(), NBT_LONG_ARRAY_ORDER);
         assert_eq!(list(NBT_INT_ORDER).to_nbt().get_num(), NBT_LIST_ORDER);
         assert_eq!(compound().to_nbt().get_num(), NBT_COMPOUND_ORDER);
-        assert_eq!(
-            int_array(vec![]).to_nbt().get_num(),
-            NBT_INT_ARRAY_ORDER
-        );
+        assert_eq!(int_array(vec![]).to_nbt().get_num(), NBT_INT_ARRAY_ORDER);
         assert_eq!(string("").to_nbt().get_num(), NBT_STRING_ORDER);
     }
 }

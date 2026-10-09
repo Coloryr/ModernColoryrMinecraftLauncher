@@ -84,12 +84,8 @@ watch(
     </div>
 
     <div ref="consoleEl" class="console">
-      <div
-        v-for="(line, i) in filteredLogs"
-        :key="i"
-        class="log-line"
-        :class="{ 'log-error': line.level === 'Error', 'log-warn': line.level === 'Warn' }"
-      >
+      <div v-for="(line, i) in filteredLogs" :key="i" class="log-line"
+        :class="{ 'log-error': line.level === 'Error', 'log-warn': line.level === 'Warn' }">
         {{ line.text }}
       </div>
       <div v-if="filteredLogs.length === 0" class="log-empty">{{ t("launch.waitLog") }}</div>
@@ -129,7 +125,8 @@ watch(
   border-radius: 10px;
   padding: 12px 14px;
   overflow-y: auto;
-  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
+  scrollbar-gutter: stable;
+  /* 见 styles/scrollbar.css */
   font-family: "Cascadia Code", Consolas, "Courier New", monospace;
   font-size: 12.5px;
   line-height: 1.65;

@@ -24,9 +24,7 @@ use uuid::Uuid;
 use zip::ZipArchive;
 
 use crate::{
-    class_scan,
-    gui_hook::ProgressGui,
-    launcher::instance_setting_obj::InstanceSettingObj,
+    class_scan, gui_hook::ProgressGui, launcher::instance_setting_obj::InstanceSettingObj,
     loader::LoaderType,
 };
 
@@ -1091,8 +1089,8 @@ fn mcmod_logo_file_in(json: &str) -> Option<String> {
 mod meta_tests {
     use super::*;
     use std::io::Write;
-    use zip::write::SimpleFileOptions;
     use zip::ZipWriter;
+    use zip::write::SimpleFileOptions;
 
     /// 起日志系统：解析失败时我们**故意**要记一条日志，而 `mml_log` 没 start 过就会 panic
     ///
@@ -1510,7 +1508,6 @@ impl InstanceSettingObj {
     }
 }
 
-
 #[cfg(test)]
 mod icon_tests {
     use super::*;
@@ -1529,7 +1526,10 @@ mod icon_tests {
             forge_logo_file("modId=\"demo\"\nlogoFile=\"icon/logo.png\"\n").unwrap(),
             "icon/logo.png"
         );
-        assert_eq!(forge_logo_file("logoFile = 'a.png' # 图标").unwrap(), "a.png");
+        assert_eq!(
+            forge_logo_file("logoFile = 'a.png' # 图标").unwrap(),
+            "a.png"
+        );
         assert_eq!(forge_logo_file("  logoFile=\"b.png\"  ").unwrap(), "b.png");
     }
 

@@ -46,15 +46,9 @@ function pick(account: AccountStoreDto) {
       <template v-if="account">
         <!-- 加载中：头像上叠转圈，onload 后消失 -->
         <span v-if="!imageFailed(account, 'avatar')" class="avatar-box">
-          <img
-            class="avatar avatar-img"
-            :class="{ pending: imageLoading(account, 'avatar') }"
-            :src="accountAvatarUrl(account)"
-            alt=""
-            data-no-fallback
-            @load="markImageLoaded(account, 'avatar')"
-            @error="markImageFailed(account, 'avatar')"
-          />
+          <img class="avatar avatar-img" :class="{ pending: imageLoading(account, 'avatar') }"
+            :src="accountAvatarUrl(account)" alt="" data-no-fallback @load="markImageLoaded(account, 'avatar')"
+            @error="markImageFailed(account, 'avatar')" />
           <span v-if="imageLoading(account, 'avatar')" class="img-spin" />
         </span>
         <span v-else class="avatar" :style="{ background: account.avatarColor }">
@@ -69,7 +63,8 @@ function pick(account: AccountStoreDto) {
         <!-- 加号用 SVG 而非全角“＋”字符：中文字体把该字形画在 em 框偏上位置，
              盒子居中了笔画仍显偏上，SVG 由 flex 居中不受字体度量影响 -->
         <span class="avatar placeholder">
-          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2"
+            stroke-linecap="round">
             <path d="M12 5v14M5 12h14" />
           </svg>
         </span>
@@ -77,7 +72,8 @@ function pick(account: AccountStoreDto) {
           <span class="account-name dim">{{ t("account.noAccount") }}</span>
         </span>
       </template>
-      <svg class="chevron" :class="{ flip: open }" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2">
+      <svg class="chevron" :class="{ flip: open }" viewBox="0 0 24 24" width="14" height="14" fill="none"
+        stroke="currentColor" stroke-width="2">
         <path d="m6 9 6 6 6-6" />
       </svg>
     </button>
@@ -93,23 +89,12 @@ function pick(account: AccountStoreDto) {
       <div v-if="open" class="account-menu" data-no-drag>
         <div class="menu-title">{{ t("account.switch") }}</div>
         <div v-if="accounts.length === 0" class="empty-tip">{{ t("account.noAccount") }}</div>
-        <button
-          v-for="acc in accounts"
-          :key="acc.uuid"
-          class="menu-item"
-          :class="{ active: acc.uuid === account?.uuid }"
-          @click="pick(acc)"
-        >
+        <button v-for="acc in accounts" :key="acc.uuid" class="menu-item"
+          :class="{ active: acc.uuid === account?.uuid }" @click="pick(acc)">
           <span v-if="!imageFailed(acc, 'avatar')" class="avatar-box">
-            <img
-              class="avatar small avatar-img"
-              :class="{ pending: imageLoading(acc, 'avatar') }"
-              :src="accountAvatarUrl(acc)"
-              alt=""
-              data-no-fallback
-              @load="markImageLoaded(acc, 'avatar')"
-              @error="markImageFailed(acc, 'avatar')"
-            />
+            <img class="avatar small avatar-img" :class="{ pending: imageLoading(acc, 'avatar') }"
+              :src="accountAvatarUrl(acc)" alt="" data-no-fallback @load="markImageLoaded(acc, 'avatar')"
+              @error="markImageFailed(acc, 'avatar')" />
             <span v-if="imageLoading(acc, 'avatar')" class="img-spin" />
           </span>
           <span v-else class="avatar small" :style="{ background: acc.avatarColor }">
@@ -120,10 +105,7 @@ function pick(account: AccountStoreDto) {
             <span class="menu-type">{{ t(typeLabelKey(acc.authType)) }}</span>
           </span>
         </button>
-        <div
-          class="menu-footer"
-          @click="open = false; openWindow('account')"
-        >{{ t("account.manage") }}</div>
+        <div class="menu-footer" @click="open = false; openWindow('account')">{{ t("account.manage") }}</div>
       </div>
     </Transition>
   </div>
@@ -299,7 +281,8 @@ function pick(account: AccountStoreDto) {
   width: 240px;
   max-height: calc(100vh - var(--titlebar-h) - 16px);
   overflow-y: auto;
-  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
+  scrollbar-gutter: stable;
+  /* 见 styles/scrollbar.css */
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 12px;

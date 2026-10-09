@@ -599,11 +599,7 @@ onMounted(() => void groups.load());
         <!-- 归组：开弹窗选目标（不用下拉 —— 下拉一次只看得见一项，
              而且"移到分组"会以占位项的形式混在选项里，看着像能选的东西）。
              按钮文字不带省略号（用户要求），与弹窗标题共用同一条文案 -->
-        <button
-          class="mini-btn icon-btn"
-          :disabled="busy"
-          @click="groupPickOpen = true"
-        >
+        <button class="mini-btn icon-btn" :disabled="busy" @click="groupPickOpen = true">
           <GlyphIcon name="folder" :size="14" />
           {{ t("resource.batchMoveTo") }}
         </button>
@@ -616,21 +612,12 @@ onMounted(() => void groups.load());
       </template>
 
       <template v-else>
-        <input
-          v-model="keyword"
-          class="mod-search"
-          :placeholder="t('resource.searchPlaceholder')"
-          spellcheck="false"
-          autocomplete="off"
-        />
-        <SegmentedTabs
-          :model-value="modView"
-          :options="[
-            { value: 'list', label: t('resource.viewList') },
-            { value: 'table', label: t('resource.viewTable') },
-          ]"
-          @update:model-value="setModView($event as ModView)"
-        />
+        <input v-model="keyword" class="mod-search" :placeholder="t('resource.searchPlaceholder')" spellcheck="false"
+          autocomplete="off" />
+        <SegmentedTabs :model-value="modView" :options="[
+          { value: 'list', label: t('resource.viewList') },
+          { value: 'table', label: t('resource.viewTable') },
+        ]" @update:model-value="setModView($event as ModView)" />
         <button class="mini-btn icon-btn" :disabled="busy" @click="openGroupForm()">
           <GlyphIcon name="folder-plus" :size="14" />
           {{ t("resource.groupAdd") }}
@@ -661,36 +648,16 @@ onMounted(() => void groups.load());
     <template v-for="(sec, idx) in sections" :key="sec.id">
       <span v-if="showSectionLine(idx)" class="mod-group-insert" />
 
-      <section
-        :ref="(el) => bindSection(sec.id, el as Element | null)"
-        class="mod-group mod-group-table"
-        :data-mod-group="sec.custom ? sec.id : undefined"
-        :data-state-group="sec.custom ? undefined : sec.state"
-        :class="{
+      <section :ref="(el) => bindSection(sec.id, el as Element | null)" class="mod-group mod-group-table"
+        :data-mod-group="sec.custom ? sec.id : undefined" :data-state-group="sec.custom ? undefined : sec.state" :class="{
           'drop-target': isDropTarget(sec),
           'mod-group-dragging': draggingSection === sec.id,
-        }"
-      >
-        <ModTable
-          :items="sec.items"
-          :busy="busy"
-          :dragging-key="draggingKey"
-          :selected-keys="selected"
-          :group-label="sec.label"
-          :group-key="sec.id"
-          :group-open="isOpen(sec.id)"
-          :custom="sec.custom"
-          :dragging-group="draggingSection"
-          :hide-header="idx > 0"
-          @toggle="toggle"
-          @remove="remove"
-          @note="openNote"
-          @toggle-group="onSectionToggle(sec.id)"
-          @drag-group="onSectionPointerDown($event, sec.id)"
-          @open-folder="openFolder('mods', $event.file)"
-          @drag-start="onDragStart"
-          @select="onSelect"
-        />
+        }">
+        <ModTable :items="sec.items" :busy="busy" :dragging-key="draggingKey" :selected-keys="selected"
+          :group-label="sec.label" :group-key="sec.id" :group-open="isOpen(sec.id)" :custom="sec.custom"
+          :dragging-group="draggingSection" :hide-header="idx > 0" @toggle="toggle" @remove="remove" @note="openNote"
+          @toggle-group="onSectionToggle(sec.id)" @drag-group="onSectionPointerDown($event, sec.id)"
+          @open-folder="openFolder('mods', $event.file)" @drag-start="onDragStart" @select="onSelect" />
       </section>
     </template>
   </div>
@@ -702,17 +669,12 @@ onMounted(() => void groups.load());
       <!-- 拖分组头时的插入线：松手后这一块会落到这里 -->
       <span v-if="showSectionLine(idx)" class="mod-group-insert" />
 
-      <section
-        :ref="(el) => bindSection(sec.id, el as Element | null)"
-        class="mod-group"
-        :data-mod-group="sec.custom ? sec.id : undefined"
-        :data-state-group="sec.custom ? undefined : sec.state"
-        :class="{
+      <section :ref="(el) => bindSection(sec.id, el as Element | null)" class="mod-group"
+        :data-mod-group="sec.custom ? sec.id : undefined" :data-state-group="sec.custom ? undefined : sec.state" :class="{
           'drop-target': isDropTarget(sec),
           'mod-group-dragging': draggingSection === sec.id,
           'mod-group-empty': !sec.items.length,
-        }"
-      >
+        }">
         <div class="mod-group-head">
           <!--
             分组头分两块，**两块都能点开 / 收起**：
@@ -720,26 +682,13 @@ onMounted(() => void groups.load());
             - 名字那一带：既是折叠的点击区，也是拖拽把手（按住拖动即调整分组顺序）。
               拖动结束时那一下 click 由 onSectionToggle 里的抑制标记吞掉。
           -->
-          <button
-            class="mod-group-toggle"
-            :aria-label="t('resource.groupCollapse')"
-            @pointerdown.stop
-            @click.stop="toggleCollapse(sec.id)"
-          >
-            <GlyphIcon
-              class="mod-group-caret"
-              :class="{ collapsed: !isOpen(sec.id) }"
-              name="chevron-down"
-              :size="13"
-              :weight="2.4"
-            />
+          <button class="mod-group-toggle" :aria-label="t('resource.groupCollapse')" @pointerdown.stop
+            @click.stop="toggleCollapse(sec.id)">
+            <GlyphIcon class="mod-group-caret" :class="{ collapsed: !isOpen(sec.id) }" name="chevron-down" :size="13"
+              :weight="2.4" />
           </button>
-          <span
-            class="mod-group-handle"
-            v-tip="t('resource.groupDragTip')"
-            @pointerdown="onSectionPointerDown($event, sec.id)"
-            @click="onSectionToggle(sec.id)"
-          >
+          <span class="mod-group-handle" v-tip="t('resource.groupDragTip')"
+            @pointerdown="onSectionPointerDown($event, sec.id)" @click="onSectionToggle(sec.id)">
             <span class="mod-group-name">{{ sec.label }}</span>
           </span>
           <span class="mod-group-count">{{ counts(sec) }}</span>
@@ -747,32 +696,19 @@ onMounted(() => void groups.load());
             <button class="group-act" :disabled="busy" @click="openGroupForm(sec.id, sec.label)">
               {{ t("resource.groupRename") }}
             </button>
-            <button
-              class="group-act danger"
-              :disabled="busy"
-              @click="removeGroup(sec.id, sec.label)"
-            >
+            <button class="group-act danger" :disabled="busy" @click="removeGroup(sec.id, sec.label)">
               {{ t("resource.groupDelete") }}
             </button>
           </span>
         </div>
 
         <div v-show="isOpen(sec.id)" class="mod-group-body">
-        <p v-if="!sec.items.length" class="empty-tip">
-          {{ t("resource.groupEmptyHint") }}
-        </p>
-        <ModList
-          :items="sec.items"
-          :busy="busy"
-          :dragging-key="draggingKey"
-          :selected-keys="selected"
-          @toggle="toggle"
-          @remove="remove"
-          @note="openNote"
-          @open-folder="openFolder('mods', $event.file)"
-          @drag-start="onDragStart"
-          @select="onSelect"
-        />
+          <p v-if="!sec.items.length" class="empty-tip">
+            {{ t("resource.groupEmptyHint") }}
+          </p>
+          <ModList :items="sec.items" :busy="busy" :dragging-key="draggingKey" :selected-keys="selected"
+            @toggle="toggle" @remove="remove" @note="openNote" @open-folder="openFolder('mods', $event.file)"
+            @drag-start="onDragStart" @select="onSelect" />
         </div>
       </section>
 
@@ -782,20 +718,11 @@ onMounted(() => void groups.load());
   </div>
 
   <!-- 新建 / 重命名分组 -->
-  <BaseModal
-    v-if="groupForm"
-    :title="groupForm.id ? t('resource.groupRenameTitle') : t('resource.groupAddTitle')"
-    :closable="false"
-    @close="groupForm = null"
-  >
+  <BaseModal v-if="groupForm" :title="groupForm.id ? t('resource.groupRenameTitle') : t('resource.groupAddTitle')"
+    :closable="false" @close="groupForm = null">
     <label class="field-label">{{ t("resource.groupName") }}</label>
-    <input
-      v-model="groupForm.name"
-      class="field-input"
-      :placeholder="t('resource.groupPlaceholder')"
-      spellcheck="false"
-      @keydown.enter="saveGroupForm"
-    />
+    <input v-model="groupForm.name" class="field-input" :placeholder="t('resource.groupPlaceholder')" spellcheck="false"
+      @keydown.enter="saveGroupForm" />
     <div class="modal-actions">
       <BaseButton :disabled="groupBusy" @click="groupForm = null">
         {{ t("resource.cancel") }}
@@ -807,27 +734,13 @@ onMounted(() => void groups.load());
   </BaseModal>
 
   <!-- 模组备注：文件名只读展示（用户认的是名字，落盘的键是文件名） -->
-  <BaseModal
-    v-if="noteForm"
-    :title="t('resource.modNoteTitle')"
-    :closable="false"
-    @close="noteForm = null"
-  >
+  <BaseModal v-if="noteForm" :title="t('resource.modNoteTitle')" :closable="false" @close="noteForm = null">
     <label class="field-label">{{ noteForm.item.name || noteForm.item.file }}</label>
     <p class="mod-note-file" :title="noteForm.item.file">{{ noteForm.item.file }}</p>
-    <textarea
-      v-model="noteForm.text"
-      class="field-input mod-note-input"
-      :placeholder="t('resource.modNotePlaceholder')"
-      spellcheck="false"
-      @keydown.ctrl.enter="saveNote(noteForm.text)"
-    />
+    <textarea v-model="noteForm.text" class="field-input mod-note-input" :placeholder="t('resource.modNotePlaceholder')"
+      spellcheck="false" @keydown.ctrl.enter="saveNote(noteForm.text)" />
     <div class="modal-actions">
-      <BaseButton
-        v-if="noteForm.item.note"
-        :disabled="noteBusy"
-        @click="saveNote('')"
-      >
+      <BaseButton v-if="noteForm.item.note" :disabled="noteBusy" @click="saveNote('')">
         {{ t("resource.modNoteClear") }}
       </BaseButton>
       <BaseButton :disabled="noteBusy" @click="noteForm = null">
@@ -847,20 +760,10 @@ onMounted(() => void groups.load());
     就能做；混在这里会让"移到分组"多出一个反向选项。
     一个分组都没有时列表位置写「无分组」，下面用「新建分组」建一个
   -->
-  <BaseModal
-    v-if="groupPickOpen"
-    :title="t('resource.batchMoveTo')"
-    :closable="false"
-    @close="groupPickOpen = false"
-  >
+  <BaseModal v-if="groupPickOpen" :title="t('resource.batchMoveTo')" :closable="false" @close="groupPickOpen = false">
     <div class="group-pick-list">
-      <button
-        v-for="g in groups.groups.value"
-        :key="g.uuid"
-        class="group-pick-row"
-        :disabled="busy"
-        @click="pickGroup(g.uuid)"
-      >
+      <button v-for="g in groups.groups.value" :key="g.uuid" class="group-pick-row" :disabled="busy"
+        @click="pickGroup(g.uuid)">
         <GlyphIcon name="folder" :size="14" />
         <span class="group-pick-name">{{ g.name }}</span>
         <span class="group-pick-count">
@@ -914,7 +817,8 @@ onMounted(() => void groups.load());
   /* 分组可能很多：给个上限自己滚，别把弹窗撑出屏幕 */
   max-height: 320px;
   overflow-y: auto;
-  scrollbar-gutter: stable; /* 见 styles/scrollbar.css */
+  scrollbar-gutter: stable;
+  /* 见 styles/scrollbar.css */
 }
 
 .group-pick-row {

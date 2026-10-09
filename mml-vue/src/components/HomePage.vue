@@ -67,12 +67,15 @@ function entry(name: string) {
     <div v-if="empty" class="empty-block">
       <div class="empty-block-icon">
         <!-- 图标跟随所在色块的文字色（.empty-block-icon 已把 color 定为 #fff） -->
-        <svg viewBox="0 0 24 24" width="44" height="44" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+        <svg viewBox="0 0 24 24" width="44" height="44" fill="none" stroke="currentColor" stroke-width="1.6"
+          stroke-linecap="round" stroke-linejoin="round">
           <path d="M12 3 4.5 7.5v9L12 21l7.5-4.5v-9L12 3z" />
           <path d="M4.5 7.5 12 12l7.5-4.5" />
           <path d="M12 12v9" />
         </svg>
-        <span class="empty-block-badge"><GlyphIcon name="plus" :size="16" :weight="2.6" /></span>
+        <span class="empty-block-badge">
+          <GlyphIcon name="plus" :size="16" :weight="2.6" />
+        </span>
       </div>
       <h2 class="empty-block-title">{{ t("empty.title") }}</h2>
       <p class="empty-block-desc">{{ t("empty.desc") }}</p>
@@ -105,7 +108,8 @@ function entry(name: string) {
       <!-- 联机大厅 -->
       <button class="entry-card lobby" @click="entry(t('home.lobby'))">
         <span class="entry-icon">
-          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round">
             <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
             <circle cx="9" cy="7" r="4" />
             <path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />
@@ -121,7 +125,8 @@ function entry(name: string) {
       <!-- 方块列表：独立窗口 -->
       <button class="entry-card lottery" @click="openWindow('block')">
         <span class="entry-icon">
-          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="1.8"
+            stroke-linecap="round" stroke-linejoin="round">
             <path d="M12 3 4.5 7.5v9L12 21l7.5-4.5v-9L12 3z" />
             <path d="M4.5 7.5 12 12l7.5-4.5" />
             <path d="M12 12v9" />
@@ -136,16 +141,8 @@ function entry(name: string) {
       </button>
     </div>
 
-    <NewsPanel
-      :items="items"
-      :loading="loading"
-      :page="page"
-      :has-more="hasMore"
-      @refresh="emit('refresh')"
-      @prev="emit('prev')"
-      @next="emit('next')"
-      @open="(url: string) => emit('open', url)"
-    />
+    <NewsPanel :items="items" :loading="loading" :page="page" :has-more="hasMore" @refresh="emit('refresh')"
+      @prev="emit('prev')" @next="emit('next')" @open="(url: string) => emit('open', url)" />
   </div>
 </template>
 

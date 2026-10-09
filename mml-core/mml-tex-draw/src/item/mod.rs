@@ -28,12 +28,12 @@ use serde::Deserialize;
 use tiny_skia::Pixmap;
 
 use crate::{
-    block::{fit_composite, read_anim_meta, render_baked, GRASS_TINT},
+    block::{GRASS_TINT, fit_composite, read_anim_meta, render_baked},
     gpu::GpuCtx,
     model::{
-        calculate_facing, face_index_of, face_normal, load_texture, rect_translucent,
-        recalculate_winding, resolve, texture_path, BakedModel, GuiTransform,
-        Quad, FACE_INFO, Resolved, select_extent,
+        BakedModel, FACE_INFO, GuiTransform, Quad, Resolved, calculate_facing, face_index_of,
+        face_normal, load_texture, recalculate_winding, rect_translucent, resolve, select_extent,
+        texture_path,
     },
 };
 use mml_sys::path_helper;
@@ -43,7 +43,6 @@ const GLINT_TEX: &str = "assets/minecraft/textures/misc/enchanted_glint_item.png
 
 /// vanilla 默认注册带附魔光效的物品（Items 类 ENCHANTMENT_GLINT_OVERRIDE）
 const GLINT_IDS: [&str; 2] = ["enchanted_book", "enchanted_golden_apple"];
-
 
 /// ===== items/*.json 定义解析 =====
 
@@ -313,7 +312,6 @@ fn transform_matrix(t: &TransformDefJson) -> Mat4 {
         * Mat4::from_quat(quat(&t.right_rotation))
 }
 
-
 /// ===== bake：extrude 挤出（照反编译 ItemModelGenerator）+ 物品模型烘焙 =====
 
 /// bakeQuad 核心（无元素旋转，照 FaceBakery.bakeQuad）：FaceInfo 角选点/16 → uv 角映射
@@ -430,12 +428,8 @@ fn bake_generated(
             (3usize, [0.0f32, 0.0, 16.0, 16.0]), // SOUTH
             (2usize, [16.0, 0.0, 0.0, 16.0]),    // NORTH
         ] {
-            let (pos, uv, normal) = bake_face(
-                &[0.0, 0.0, MIN_Z],
-                &[16.0, 16.0, MAX_Z],
-                facing,
-                uv16,
-            );
+            let (pos, uv, normal) =
+                bake_face(&[0.0, 0.0, MIN_Z], &[16.0, 16.0, MAX_Z], facing, uv16);
             quads.push(Quad {
                 pos,
                 uv,
@@ -453,10 +447,10 @@ fn bake_generated(
         let (fw, fh) = (w as f32, frame_h as f32);
         let (x_scale, y_scale) = (16.0 / fw, 16.0 / fh);
         for (facing, (dx, dy), horizontal) in [
-            (1usize, (0isize, 1isize), true),    // UP
-            (0usize, (0isize, -1isize), true),   // DOWN
-            (5usize, (1isize, 0isize), false),   // LEFT = EAST
-            (4usize, (-1isize, 0isize), false),  // RIGHT = WEST
+            (1usize, (0isize, 1isize), true),   // UP
+            (0usize, (0isize, -1isize), true),  // DOWN
+            (5usize, (1isize, 0isize), false),  // LEFT = EAST
+            (4usize, (-1isize, 0isize), false), // RIGHT = WEST
         ] {
             for y in 0..frame_h {
                 for x in 0..w {
@@ -465,7 +459,10 @@ fn bake_generated(
                     }
                     // 邻居透明（出界算透明）才生成裙边
                     let (nx, ny) = (x as isize - dx, y as isize - dy);
-                    if nx >= 0 && ny >= 0 && (nx as usize) < w && (ny as usize) < w
+                    if nx >= 0
+                        && ny >= 0
+                        && (nx as usize) < w
+                        && (ny as usize) < w
                         && opaque(nx as usize, ny as usize)
                     {
                         continue;
@@ -493,8 +490,16 @@ fn bake_generated(
                         (1, _) | (0, _) => (
                             x as f32,
                             x as f32 + 1.0,
-                            if facing == 1 { y as f32 } else { y as f32 + 1.0 },
-                            if facing == 1 { y as f32 } else { y as f32 + 1.0 },
+                            if facing == 1 {
+                                y as f32
+                            } else {
+                                y as f32 + 1.0
+                            },
+                            if facing == 1 {
+                                y as f32
+                            } else {
+                                y as f32 + 1.0
+                            },
                         ),
                         (5, _) => (x as f32, x as f32, y as f32, y as f32 + 1.0),
                         _ => (x as f32 + 1.0, x as f32 + 1.0, y as f32, y as f32 + 1.0),
@@ -601,7 +606,6 @@ pub(crate) fn bake_item_model(
         used_textures,
     ))
 }
-
 
 /// ===== 渲染入口 =====
 
@@ -759,8 +763,13 @@ pub fn render_item(
     // composite 子模型带 transformation（床等）超出单格，渲染前按投影包围盒适配画布
     let mut oversized = false;
     for child in &children {
-        let (part, texs) =
-            bake_item_model(archive, &child.model, tex_cache, &child.tints, child.transform)?;
+        let (part, texs) = bake_item_model(
+            archive,
+            &child.model,
+            tex_cache,
+            &child.tints,
+            child.transform,
+        )?;
         textures.extend(texs);
         oversized |= child.transform.is_some();
         if base.is_none() {
@@ -783,7 +792,6 @@ pub fn render_item(
     path_helper::write_bytes(&crate::get_item_dir()?.join(&out_name), &data).ok()?;
     Some((id.to_string(), out_name))
 }
-
 
 #[cfg(test)]
 mod tests {

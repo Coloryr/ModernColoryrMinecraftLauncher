@@ -42,11 +42,7 @@ function sub(item: ShaderItemDto): string {
     <ListSkeleton />
   </div>
   <div v-else class="item-list">
-    <ResourceRow
-      v-for="item in shaders"
-      :key="item.file"
-      :name="item.name || item.file"
-    >
+    <ResourceRow v-for="item in shaders" :key="item.file" :name="item.name || item.file">
       <template #badges>
         <span v-if="item.selected" class="badge">{{ t("resource.shaderOn") }}</span>
       </template>

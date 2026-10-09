@@ -61,11 +61,7 @@ watch(memoryConflict, async (bad) => {
 
 <template>
   <template v-if="run && win">
-    <SettingsGroup
-      id="gameWindow"
-      title-key="winSettings.secGameWindow"
-      :flash="flashGroup === 'gameWindow'"
-    >
+    <SettingsGroup id="gameWindow" title-key="winSettings.secGameWindow" :flash="flashGroup === 'gameWindow'">
       <div class="switch-row">
         <span>{{ t("winSettings.fullScreen") }}</span>
         <BaseSwitch v-model="win!.fullScreen" />
@@ -83,24 +79,14 @@ watch(memoryConflict, async (bad) => {
       <!-- 常用分辨率：一点即填宽 / 高（当前值匹配时高亮），与实例设置里那排共用同一份预设 -->
       <div class="res-row">
         <span class="res-label">{{ t("args.commonRes") }}</span>
-        <button
-          v-for="r in COMMON_RESOLUTIONS"
-          :key="`${r.w}x${r.h}`"
-          type="button"
-          class="res-btn"
-          :class="{ on: win!.width === r.w && win!.height === r.h }"
-          @click="((win!.width = r.w), (win!.height = r.h))"
-        >
+        <button v-for="r in COMMON_RESOLUTIONS" :key="`${r.w}x${r.h}`" type="button" class="res-btn"
+          :class="{ on: win!.width === r.w && win!.height === r.h }" @click="((win!.width = r.w), (win!.height = r.h))">
           {{ r.w }}×{{ r.h }}
         </button>
       </div>
     </SettingsGroup>
 
-    <SettingsGroup
-      id="memory"
-      title-key="winSettings.secMemory"
-      :flash="flashGroup === 'memory'"
-    >
+    <SettingsGroup id="memory" title-key="winSettings.secMemory" :flash="flashGroup === 'memory'">
       <div class="grid-2">
         <div :class="{ 'field-invalid': memoryConflict }">
           <label class="field-label">{{ t("winSettings.minMemory") }}</label>
@@ -117,14 +103,8 @@ watch(memoryConflict, async (bad) => {
            最小内存跟着顶上去，免得点了预设反而触发"最小 > 最大"的冲突 -->
       <div class="res-row">
         <span class="res-label">{{ t("args.commonMemory") }}</span>
-        <button
-          v-for="m in COMMON_MEMORY"
-          :key="m"
-          type="button"
-          class="res-btn"
-          :class="{ on: run!.maxMemory === m }"
-          @click="applyMemory(m)"
-        >
+        <button v-for="m in COMMON_MEMORY" :key="m" type="button" class="res-btn" :class="{ on: run!.maxMemory === m }"
+          @click="applyMemory(m)">
           {{ memoryLabel(m) }}
         </button>
       </div>
@@ -135,11 +115,7 @@ watch(memoryConflict, async (bad) => {
       </div>
     </SettingsGroup>
 
-    <SettingsGroup
-      id="jvm"
-      title-key="winSettings.secJvm"
-      :flash="flashGroup === 'jvm'"
-    >
+    <SettingsGroup id="jvm" title-key="winSettings.secJvm" :flash="flashGroup === 'jvm'">
       <div class="grid-2">
         <div>
           <label class="field-label">{{ t("winSettings.gcMode") }}</label>
@@ -160,21 +136,10 @@ watch(memoryConflict, async (bad) => {
       <label class="field-label">{{ t("winSettings.jvmEnv") }}</label>
       <div class="dns-lines">
         <div v-for="(_, i) in envLines" :key="i" class="line-row">
-          <input
-            v-model="envLines[i].key"
-            class="field-input grow"
-            spellcheck="false"
-            autocomplete="off"
-            :placeholder="t('winSettings.envKey')"
-            @change="commitEnvLines"
-          />
-          <input
-            v-model="envLines[i].value"
-            class="field-input grow"
-            spellcheck="false"
-            autocomplete="off"
-            :placeholder="t('winSettings.envValue')"
-          />
+          <input v-model="envLines[i].key" class="field-input grow" spellcheck="false" autocomplete="off"
+            :placeholder="t('winSettings.envKey')" @change="commitEnvLines" />
+          <input v-model="envLines[i].value" class="field-input grow" spellcheck="false" autocomplete="off"
+            :placeholder="t('winSettings.envValue')" />
           <button class="line-del" aria-label="remove" v-tip="t('args.removeLine')" @click="removeEnvLine(i)">
             <GlyphIcon name="close" :size="13" />
           </button>
@@ -188,11 +153,7 @@ watch(memoryConflict, async (bad) => {
       <textarea v-model="run!.jvmArgs" class="field-input args-input" spellcheck="false" />
     </SettingsGroup>
 
-    <SettingsGroup
-      id="gameArgs"
-      title-key="winSettings.secGameArgs"
-      :flash="flashGroup === 'gameArgs'"
-    >
+    <SettingsGroup id="gameArgs" title-key="winSettings.secGameArgs" :flash="flashGroup === 'gameArgs'">
       <div class="switch-row">
         <span>{{ t("winSettings.removeGameArg") }}</span>
         <BaseSwitch v-model="run!.removeGameArg" />
@@ -201,11 +162,7 @@ watch(memoryConflict, async (bad) => {
       <textarea v-model="run!.gameArgs" class="field-input args-input" spellcheck="false" />
     </SettingsGroup>
 
-    <SettingsGroup
-      id="launchCmd"
-      title-key="winSettings.secLaunchCmd"
-      :flash="flashGroup === 'launchCmd'"
-    >
+    <SettingsGroup id="launchCmd" title-key="winSettings.secLaunchCmd" :flash="flashGroup === 'launchCmd'">
       <div class="switch-list">
         <div class="switch-row">
           <span>{{ t("winSettings.preLaunch") }}</span>

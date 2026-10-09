@@ -71,9 +71,9 @@ pub struct InstanceArgsDto {
     pub join_server: bool,
 }
 
-impl InstanceArgsDto {
-    /// 默认启动参数
-    pub fn default() -> Self {
+impl Default for InstanceArgsDto {
+    /// 默认启动参数（不是全零：内存 2048 / 窗口 854×480 这些是可用初值）
+    fn default() -> Self {
         Self {
             memory: 2048,
             min_memory: 1024,
@@ -103,25 +103,5 @@ impl InstanceArgsDto {
             server_port: 0,
             join_server: false,
         }
-    }
-
-    /// 使用自定义 Java 路径
-    pub fn uses_custom_java(&self) -> bool {
-        self.java_name == "custom"
-    }
-
-    /// 是否自动加入服务器
-    pub fn should_join_server(&self) -> bool {
-        self.join_server && !self.server_ip.is_empty()
-    }
-
-    /// 是否启用启动前执行
-    pub fn has_pre_cmd(&self) -> bool {
-        self.pre_enabled && !self.pre_cmd.is_empty()
-    }
-
-    /// 是否启用启动后执行
-    pub fn has_post_cmd(&self) -> bool {
-        self.post_enabled && !self.post_cmd.is_empty()
     }
 }

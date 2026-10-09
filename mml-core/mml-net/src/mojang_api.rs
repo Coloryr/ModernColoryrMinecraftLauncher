@@ -174,7 +174,11 @@ async fn send_profile_json<T: Serialize>(
         HeaderValue::from_str(&format!("Bearer {token}")).unwrap(),
     );
     let body = serde_json::to_vec(body)
-        .map_err(|err| ErrorType::SerializerError(ErrorData { error: err.to_string() }))?
+        .map_err(|err| {
+            ErrorType::SerializerError(ErrorData {
+                error: err.to_string(),
+            })
+        })?
         .into();
     *req.body_mut() = Some(body);
     let res = client.send(req).await?;
@@ -225,8 +229,13 @@ pub async fn set_minecraft_skin(token: &str, variant: &str, url: &str) -> CoreRe
 ///
 /// 成功返回 `Ok(())`；不拥有该披风（400）等返回对应错误
 pub async fn set_minecraft_cape(token: &str, cape_id: &str) -> CoreResult<()> {
-    send_profile_json(Method::PUT, "/capes/active", token, &serde_json::json!({ "capeId": cape_id }))
-        .await
+    send_profile_json(
+        Method::PUT,
+        "/capes/active",
+        token,
+        &serde_json::json!({ "capeId": cape_id }),
+    )
+    .await
 }
 
 /// 上传本地皮肤文件（正版）
@@ -253,7 +262,11 @@ pub async fn upload_minecraft_skin(
             reqwest::multipart::Part::bytes(data)
                 .file_name(file_name.to_string())
                 .mime_str("image/png")
-                .map_err(|err| ErrorType::SerializerError(ErrorData { error: err.to_string() }))?,
+                .map_err(|err| {
+                    ErrorType::SerializerError(ErrorData {
+                        error: err.to_string(),
+                    })
+                })?,
         );
 
     let res = crate::get_login_client()

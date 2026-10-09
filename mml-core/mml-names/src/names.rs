@@ -92,7 +92,7 @@ pub const WINDOW_SAVE_FILE: &str = "window_save.json";
 pub const BLOCK_FILE: &str = "block.json";
 pub const ITEM_FILE: &str = "items.json";
 pub const GUI_CONFIG_FILE: &str = "gui_config.json";
-pub const COLLECT_FILE:&str = "collect.json";
+pub const COLLECT_FILE: &str = "collect.json";
 /// 从 ColorMC 迁移的"已询问过"标记（运行目录根，见 windows/colormc.rs）
 pub const COLORMC_MIGRATE_FILE: &str = "colormc_migrate.json";
 
@@ -400,7 +400,10 @@ mod tests {
             ARG_GAME_DIR,
             ARG_GAME_BASE_DIR,
         ] {
-            assert!(arg.starts_with('%') && arg.ends_with('%'), "占位符应以 % 包裹: {arg:?}");
+            assert!(
+                arg.starts_with('%') && arg.ends_with('%'),
+                "占位符应以 % 包裹: {arg:?}"
+            );
         }
     }
 }
