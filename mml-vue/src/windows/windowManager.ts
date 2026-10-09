@@ -248,12 +248,6 @@ export function projectParamToItem(p: WindowProjectParam): ProjectItemDto {
  * - `params.uuid`：目标实例 uuid（游戏日志窗口用，定位要查看的实例）
  */
 export function openWindow(kind: WindowKind, params?: { uuid?: string; project?: WindowProjectParam }) {
-  console.log("[windowManager] openWindow", kind, {
-    multiWindow: multiWindow.value,
-    tauri: isTauri(),
-    ...params,
-  });
-
   // 单窗口模式（浏览器 / Tauri 一致）：应用内页面切换
   if (!multiWindow.value) {
     // 下载管理是工具型窗口：浮在当前页面之上，不把页面换掉（关掉它也不会"返回"到哪去）
@@ -315,9 +309,6 @@ function createViaJs(kind: WindowKind, params?: { uuid?: string; project?: Windo
       width: size?.width ?? 900,
       height: size?.height ?? 620,
       resizable: true,
-    });
-    win.once("tauri://created", () => {
-      console.log("[windowManager] 已创建窗口（JS 回退）", label);
     });
     win.once("tauri://error", (e) => {
       console.error("[windowManager] 创建窗口失败，回退到应用内切换", label, e);
