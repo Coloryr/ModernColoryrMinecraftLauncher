@@ -52,3 +52,15 @@
 - 用例**只读**这份样本：移动模式的用例会先把样本复制到 `target/temp` 再搬，不会动这里。
 - 样本里**没有** `auth.json` —— ColorMC 的账户文件不在工作目录里（在
   `%LOCALAPPDATA%\ColorMC\auth.json`），这正是迁移时要提醒用户"账户不会跟着迁移"的原因。
+
+## 用法
+
+用例在 `src/windows/colormc.rs` 的 `#[cfg(test)]` 模块里，模块路径含 `colormc`，按它过滤即可：
+
+```bash
+# 仓库根目录
+cargo test -p mml-gui colormc
+```
+
+用例共用 `crate::test_support` 里的进程级 boot（内核单例每进程只能起一次），临时目录走
+`mml_testutil`、落在仓库的 `target/temp` 下 —— 都不在系统 `%TEMP%`，也都不写回本目录。
