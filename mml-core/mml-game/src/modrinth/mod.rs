@@ -535,7 +535,13 @@ pub async fn upgrade_modpack(
         gui.set_now(3, Some(6));
     }
 
-    worker.extract(None).await?;
+    // **排除包根的 `modrinth.index.json`**：`extract` 会把"不在 `overrides/` 下"的条目写进
+    // 实例的 base 目录，而那份清单正是 `check_upgrade` 要读的"旧清单" —— 被新包覆盖之后
+    // 新旧清单相同，差异算成空，于是既不下载也不删除（升级等于只换了个包）。清单由
+    // `check_upgrade` 末尾统一写回。
+    worker
+        .extract(Some(vec![names::MODRINTH_FILE.to_string()]))
+        .await?;
 
     if let Some(gui) = &pack_gui {
         gui.set_sub_text(None);

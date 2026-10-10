@@ -667,7 +667,12 @@ pub async fn upgrade_modpack(
         gui.set_now(3, Some(6));
     }
 
-    worker.extract(None).await?;
+    // **排除包根的 `manifest.json`**（理由见 modrinth 那边的详细说明）：`extract` 会把
+    // "不在 `overrides/` 下"的条目写进实例 base 目录，而那份清单就是 `check_upgrade` 读的
+    // "旧清单"；被新包覆盖后差异算成空 → 不下载也不删除。清单由 `check_upgrade` 末尾写回。
+    worker
+        .extract(Some(vec![names::MANIFEST_FILE.to_string()]))
+        .await?;
 
     if let Some(gui) = &pack_gui {
         gui.set_sub_text(None);

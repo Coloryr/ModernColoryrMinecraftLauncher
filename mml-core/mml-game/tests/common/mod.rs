@@ -134,6 +134,43 @@ pub fn download_latest(slug: &str) -> Option<PathBuf> {
     download(&file_url)
 }
 
+/// 取项目的全部版本（Modrinth 的返回顺序是**最新在前**）。
+///
+/// 与 [`resolve_project_version`] 的区别：那个只要"某个版本号的主文件地址"，这个要
+/// **完整版本对象**（升级用例需要把它交给 `upgrade_modpack`），并且要能挑出两个版本做比对。
+///
+/// 异步版：`#[tokio::test]` 里必须用这个 —— 同步版走 `block_on`，在异步上下文里会 panic
+/// （"Cannot start a runtime from within a runtime"）。
+pub async fn project_versions_async(slug: &str) -> Option<Vec<ModrinthVersionObj>> {
+    init_net();
+    let data = mml_net::get_work_client()
+        .get_bytes(&format!("https://api.modrinth.com/v2/project/{slug}/version"))
+        .await
+        .ok()?;
+    json_from_bytes(&data).ok()
+}
+
+/// 下载某个版本对象的主文件到缓存目录（已有缓存直接复用）。
+///
+/// 异步版：理由同上。
+pub async fn download_version_async(version: &ModrinthVersionObj) -> Option<PathBuf> {
+    let file = version
+        .files
+        .iter()
+        .find(|f| f.primary || !f.url.is_empty())?;
+    let path = cache_path(&file.url);
+    if path.exists() {
+        return Some(path);
+    }
+    init_net();
+    let data = mml_net::get_work_client().get_bytes(&file.url).await.ok()?;
+    if data.is_empty() {
+        return None;
+    }
+    std::fs::write(&path, &data).ok()?;
+    Some(path)
+}
+
 /// 请求 Modrinth API 并反序列化。
 fn get_json<T: serde::de::DeserializeOwned>(url: &str) -> Option<T> {
     init_net();

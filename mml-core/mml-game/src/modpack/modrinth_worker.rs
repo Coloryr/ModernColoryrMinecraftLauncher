@@ -12,6 +12,8 @@ use mml_net::{input_file::InputFile, urls};
 use mml_sys::path_helper;
 use uuid::Uuid;
 
+use super::diff;
+use super::manifest;
 use crate::{
     GameInstance,
     launcher::{
@@ -22,7 +24,7 @@ use crate::{
     modpack::{BaseModPackWorker, ModPackWorker},
     modrinth::{
         self,
-        pack_obj::{ModrinthPackFileObj, ModrinthPackObj},
+        pack_obj::ModrinthPackObj,
     },
 };
 
@@ -254,14 +256,11 @@ impl ModPackWorker for ModrinthPackWorker {
         };
 
         // 读取上次安装时保存的整合包 manifest（base 目录）
+        // 缺失 / 打不开 / 非法 JSON 一律当作"没有旧清单"（见 `modpack::manifest`）
         let old_info = {
             let game = game.read().unwrap();
             let old_manifest_path = game.get_base_path().join(names::MODRINTH_FILE);
-            path_helper::open_read(&old_manifest_path)
-                .ok()
-                .and_then(|stream| {
-                    serialize_tools::json_from_stream::<ModrinthPackObj>(stream).ok()
-                })
+            manifest::read_manifest::<ModrinthPackObj>(&old_manifest_path)
         };
 
         // 获取新整合包的模组信息（下载列表 + 在线信息）
@@ -280,29 +279,10 @@ impl ModPackWorker for ModrinthPackWorker {
         let mut new_downloads: Vec<FileItemObj> = Vec::new();
 
         if let Some(old_info) = old_info {
-            // 有旧 manifest：按 SHA1 对比新旧文件
-            // temp1 = 新整合包文件，temp2 = 旧整合包文件
-            let mut temp1: Vec<Option<&ModrinthPackFileObj>> =
-                info.files.iter().map(Some).collect();
-            let mut temp2: Vec<Option<&ModrinthPackFileObj>> =
-                old_info.files.iter().map(Some).collect();
-
-            // 相同 SHA1 的文件视为同一文件，从两侧移除
-            for b in 0..temp1.len() {
-                let Some(item) = temp1[b] else { continue };
-                for a in 0..temp2.len() {
-                    let Some(item1) = temp2[a] else { continue };
-                    if item.hashes.sha1 == item1.hashes.sha1 {
-                        temp1[b] = None;
-                        temp2[a] = None;
-                    }
-                }
-            }
-
-            // 新包中有、旧包没有 → 需要下载
-            let add_list: Vec<&ModrinthPackFileObj> = temp1.into_iter().flatten().collect();
-            // 旧包中有、新包没有 → 需要删除
-            let remove_list: Vec<&ModrinthPackFileObj> = temp2.into_iter().flatten().collect();
+            // 差异计算已抽到 `modpack::diff`（纯函数，离线可测）；判定规则一字未改
+            let diff = diff::diff_modrinth_files(&info.files, &old_info.files);
+            let add_list = diff.add;
+            let remove_list = diff.remove;
 
             // 删除被移除的文件
             for item in &remove_list {
@@ -355,36 +335,10 @@ impl ModPackWorker for ModrinthPackWorker {
                 }
             }
         } else {
-            // 无旧 manifest：通过 mod_id 对比在线信息
-            // temp1 = 当前已安装模组，temp2 = 新整合包模组
-            let temp1: Vec<OnlineInfoObj> = online_info.values().cloned().collect();
-            let mut temp2: Vec<Option<OnlineInfoObj>> =
-                res.online.values().cloned().map(Some).collect();
-
-            let mut add_list: Vec<OnlineInfoObj> = Vec::new();
-            let mut remove_list: Vec<OnlineInfoObj> = Vec::new();
-
-            for item in &temp1 {
-                for a in 0..temp2.len() {
-                    let Some(item1) = &temp2[a] else { continue };
-                    if item.modid != item1.modid {
-                        continue;
-                    }
-                    // 同 mod_id → 从新列表中取出该模组
-                    let item1 = temp2[a].take().unwrap();
-                    // 同 mod_id 但 fileid/sha1 不同 → 需要更新
-                    if item.fileid != item1.fileid || item.sha1 != item1.sha1 {
-                        add_list.push(item1);
-                        remove_list.push(item.clone());
-                    }
-                    break;
-                }
-            }
-
-            // 新整合包中有、当前未安装 → 新增
-            for item in temp2.iter().flatten() {
-                add_list.push(item.clone());
-            }
+            // 差异计算已抽到 `modpack::diff`（纯函数，离线可测）；判定规则一字未改
+            let diff = diff::diff_modrinth_online(&res.online, &online_info);
+            let add_list = diff.add;
+            let remove_list = diff.remove;
 
             // 删除旧文件
             for item in &remove_list {
@@ -409,13 +363,10 @@ impl ModPackWorker for ModrinthPackWorker {
         // 保存更新后的在线信息
         game.read().unwrap().save_online_info(&online_info);
 
-        // 写入当前整合包 manifest
-        serialize_tools::json_to_file(
+        // 写入当前整合包 manifest（最后一步：前面任何 `?` 提前返回都不会动到旧清单）
+        manifest::write_manifest(
+            game.read().unwrap().get_base_path().join(names::MODRINTH_FILE),
             info,
-            game.read()
-                .unwrap()
-                .get_base_path()
-                .join(names::MODRINTH_FILE),
         )?;
 
         // 更新下载列表

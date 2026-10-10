@@ -25,6 +25,8 @@ use crate::{
 };
 
 pub mod curseforge_worker;
+pub mod diff;
+pub mod manifest;
 pub mod modrinth_worker;
 
 /// 整合包安装器

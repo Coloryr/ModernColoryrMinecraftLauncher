@@ -19,11 +19,13 @@ use mml_sys::path_helper;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
 
+use super::diff;
+use super::manifest;
 use crate::{
     GameInstance,
     curseforge::{
         self,
-        pack_obj::{CurseForgePackObj, FilesObj},
+        pack_obj::CurseForgePackObj,
     },
     gui_hook::AddModPackGui,
     launcher::{
@@ -270,13 +272,11 @@ impl ModPackWorker for CurseForgeWorker {
             return Err(ErrorType::DataNotFound(DataNotFoundData::Info));
         };
 
+        // 读旧清单：缺失 / 打不开 / 非法 JSON 一律当作"没有旧清单"（见 `modpack::manifest`）
         let old_info = {
             let game = game.read().unwrap();
-            let base_path = game.get_base_path();
-            let old_manifest_path = base_path.join(names::MANIFEST_FILE);
-            path_helper::open_read(&old_manifest_path)
-                .ok()
-                .and_then(|stream| serialize_tools::json_from_stream(&stream).ok())
+            let old_manifest_path = game.get_base_path().join(names::MANIFEST_FILE);
+            manifest::read_manifest::<CurseForgePackObj>(&old_manifest_path)
         };
 
         if let Some(old_info) = old_info {
@@ -303,12 +303,10 @@ impl ModPackWorker for CurseForgeWorker {
         }
 
         // 写入当前整合包 manifest，作为下一次升级比对用的旧清单
-        serialize_tools::json_to_file(
+        // （最后一步：前面任何 `?` 提前返回都不会动到旧清单）
+        manifest::write_manifest(
+            game.read().unwrap().get_base_path().join(names::MANIFEST_FILE),
             info,
-            game.read()
-                .unwrap()
-                .get_base_path()
-                .join(names::MANIFEST_FILE),
         )?;
 
         Ok(())
@@ -343,38 +341,10 @@ async fn check_upgrade_with_old_manifest(
     pack_gui: &AddModPackGui,
     cancel: &CancellationToken,
 ) -> CoreResult<()> {
-    let mut add_list: Vec<&FilesObj> = Vec::new();
-    let mut remove_list: Vec<&FilesObj> = Vec::new();
-
-    let mut old_matched = vec![false; old_info.files.len()];
-
-    // 第一遍：匹配新旧列表中 project_id 相同的文件
-    for new_file in &new_info.files {
-        let mut found = false;
-        for (j, old_file) in old_info.files.iter().enumerate() {
-            if new_file.project_id == old_file.project_id {
-                found = true;
-                old_matched[j] = true;
-                if new_file.file_id != old_file.file_id {
-                    // 同一项目但文件 ID 不同 → 需要更新
-                    add_list.push(new_file);
-                    remove_list.push(old_file);
-                }
-                break;
-            }
-        }
-        if !found {
-            // 仅在新的 manifest 中出现 → 新增
-            add_list.push(new_file);
-        }
-    }
-
-    // 仅在旧的 manifest 中出现 → 删除
-    for (j, old_file) in old_info.files.iter().enumerate() {
-        if !old_matched[j] {
-            remove_list.push(old_file);
-        }
-    }
+    // 差异计算已抽到 `modpack::diff`（纯函数，离线可测）；判定规则一字未改
+    let diff = diff::diff_curseforge_files(&new_info.files, &old_info.files);
+    let add_list = diff.add;
+    let remove_list = diff.remove;
 
     // 检查取消
     if cancel.is_cancelled() {
@@ -589,27 +559,10 @@ async fn check_upgrade_sha1(
         game.read_online_info()
     };
 
-    let mut add_list: Vec<OnlineInfoObj> = Vec::new();
-    let mut remove_list: Vec<OnlineInfoObj> = Vec::new();
-
-    // 遍历现有模组
-    for (mod_id, existing_mod) in online_info.iter() {
-        if let Some(new_mod) = new_online_map.get(mod_id) {
-            // 同 mod_id：检查是否需要更新
-            if existing_mod.fileid != new_mod.fileid || existing_mod.sha1 != new_mod.sha1 {
-                add_list.push(new_mod.clone());
-                remove_list.push(existing_mod.clone());
-            }
-        }
-        // 不在新列表中 → 不删除（SHA1 路径下不作删除，只更新和新增）
-    }
-
-    // 新增：在新列表中但不在现有列表中的模组
-    for (mod_id, new_mod) in &new_online_map {
-        if !online_info.contains_key(mod_id) {
-            add_list.push(new_mod.clone());
-        }
-    }
+    // 差异计算已抽到 `modpack::diff`（纯函数，离线可测）；判定规则一字未改
+    let diff = diff::diff_curseforge_online(&new_online_map, &online_info);
+    let add_list = diff.add;
+    let remove_list = diff.remove;
 
     // 删除旧文件
     for item in &remove_list {
