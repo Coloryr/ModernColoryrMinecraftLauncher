@@ -143,6 +143,12 @@ pub struct GameViewSettingObj {
     /// 资源窗口：模组的展示方式 list / table / tree（空串 = 没记过）
     #[serde(rename = "ResourceModView")]
     pub resource_mod_view: String,
+    /// 资源窗口：**表格视图的列宽**（列 key → 像素宽）
+    ///
+    /// 与 `resource_order` 同理：后端只当它是"一串键值对"保管 —— 不认识有哪几列，
+    /// 也不做范围校验（那是前端 `MOD_COLS` / `normalizeColWidths` 的事，新增列只改前端）。
+    #[serde(rename = "ResourceModColWidths")]
+    pub resource_mod_col_widths: HashMap<String, u32>,
 }
 
 /// 实例 GUI 设置（对应 ColorMC `GameGuiSettingObj`）

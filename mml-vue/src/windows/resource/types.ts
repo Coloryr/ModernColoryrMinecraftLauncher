@@ -89,6 +89,13 @@ export interface ModViewProps {
    * uuid 会跟着变，SHA1 不变，所以刷新列表后选中状态还在。
    */
   selectedKeys: Set<string>;
+  /**
+   * Shift 整段选择的**锚点**：上次点（或勾选）的那一项的键（见 `modSelectKey`）
+   *
+   * 视图在那一行上加个标记（左侧一道强调色竖条），让人看得出"整段从哪儿开始"。
+   * 可空：还没点过任何一行时不标记。
+   */
+  anchorKey?: string | null;
 }
 
 /** 三种模组视图共用的行操作事件 */
@@ -114,8 +121,22 @@ export interface ModViewEmits {
   (e: "drag-group", event: PointerEvent): void;
   /** 行按下：交给 ModPane 的拖拽逻辑（拖到分组上即归组） */
   (e: "drag-start", payload: { event: PointerEvent; item: ModItemDto }): void;
-  /** 右键：把这一行加进 / 移出多选（批量操作的选择方式，见 ModPane 的 selected） */
+  /** 勾选框：把这一行加进 / 移出多选（批量操作的选择方式，见 ModPane 的 selected） */
   (e: "select", item: ModItemDto): void;
+  /**
+   * 右键模组行：交给 ModPane 弹**项目菜单**（启用/禁用、备注、打开文件夹、删除）
+   *
+   * 原来右键是"加选 / 取消多选"，改成菜单后多选交给行左侧的勾选框（悬停即出现）。
+   */
+  (e: "item-menu", payload: { event: MouseEvent; item: ModItemDto }): void;
+  /**
+   * 左键点整行：**已经在多选模式时**用来加选 / 反选；按住 Shift 则是**整段选中**
+   * （从上次点的那一项到这一项，按显示顺序，与资源管理器同一口径）
+   *
+   * 不在多选模式、也没按 Shift 时什么都不做（保持原来的"按下即拖拽归组"）；
+   * 拖拽结束那一下的 click 由 ModPane 用抑制标记吞掉。
+   */
+  (e: "row-click", payload: { event: MouseEvent; item: ModItemDto }): void;
 }
 
 /** 一排模组行的通用文案片段：副标题 = 版本 · 作者 · 文件名 */
@@ -132,6 +153,20 @@ export function modSub(item: ModItemDto): string {
  */
 export function modRowKey(item: ModItemDto): string {
   return item.sha1 || item.uuid || item.modId || item.name;
+}
+
+/**
+ * 多选的键：**优先 SHA1，没有就退回 uuid**
+ *
+ * SHA1 是内容哈希，启用 / 禁用（改文件名）之后不变，所以正常情况下选中状态能扛住刷新；
+ * 但**读取失败的 jar、手动放进 mods 的坏文件没有 SHA1**（内核哈希失败 → `sha1_of` 返回空串），
+ * 一律用 uuid 兜底，否则这些行连勾选框都没有、整段选择也会把它们跳过（用户报过）。
+ *
+ * 注意：分组的键**只能是 SHA1**（内核 `Mod.Groups` 按内容哈希记），
+ * 所以往分组里放之前要换成 SHA1 并丢掉换不出来的（见 ModPane 的 `batchMove`）。
+ */
+export function modSelectKey(item: ModItemDto): string {
+  return item.sha1 || item.uuid;
 }
 
 /**

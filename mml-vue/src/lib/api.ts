@@ -819,7 +819,7 @@ export function setModGroup(uuid: string, group: string | null, keys: string[]):
   return commands.resource.modGroupSet(uuid, group, keys);
 }
 /**
- * 某实例的资源窗口视图偏好（左侧分类顺序 / 上次类别 / 模组展示方式）
+ * 某实例的资源窗口视图偏好（左侧分类顺序 / 上次类别 / 模组展示方式 / 表格列宽）
  *
  * 存在**实例**的 `gui_setting.json` 里（跟着实例走），不是全局界面状态。
  */
@@ -832,8 +832,9 @@ export function setResourceView(
   order: string[],
   category: string,
   modView: string,
+  modColWidths: Record<string, number>,
 ): Promise<void> {
-  return commands.resource.viewSet(uuid, order, category, modView);
+  return commands.resource.viewSet(uuid, order, category, modView, modColWidths);
 }
 /**
  * 保存分组块的显示顺序

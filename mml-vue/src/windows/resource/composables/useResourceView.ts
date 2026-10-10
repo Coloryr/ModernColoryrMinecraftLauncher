@@ -1,14 +1,15 @@
-// 资源管理窗口的视图偏好：左侧分类顺序 / 上次打开的类别 / 模组展示方式
+// 资源管理窗口的视图偏好：左侧分类顺序 / 上次打开的类别 / 模组展示方式 / 表格列宽
 //
 // **存在实例自己的 `gui_setting.json` 里**（`Gui` 字段，见后端 `gui_setting::GameViewSettingObj`），
-// 不走前端本地存储：这三项都是"这个实例我习惯怎么看"，换个实例就该换一套 ——
+// 不走前端本地存储：这几项都是"这个实例我习惯怎么看"，换个实例就该换一套 ——
 // 本地存储是每台机器一份，切实例时顺序不变反而奇怪。
 //
 // 与模组分组同一份文件、同一套读改写（load → 改这一块 → 存回），互不覆盖。
-// **排序口径与默认值全在这里**：后端只保管"一串分类 id"，不认识有哪几个分类
-// （新增分类时只改这个文件，不用动 Rust）。
+// **排序口径与默认值全在这里**：后端只保管"一串分类 id"与"一串列宽键值对"，
+// 不认识有哪几个分类、有哪几列（新增分类 / 新增列时只改前端）。
 import { ref } from "vue";
 import { getResourceView, setResourceView } from "../../../lib/api";
+import { defaultColWidths, normalizeColWidths, type ModSort } from "../modColumns";
 import { RESOURCE_CATEGORIES, type CategoryId, type ModView } from "../types";
 import type { useResourceData } from "./useResourceData";
 
@@ -17,8 +18,10 @@ interface ViewPref {
   order: string[];
   /** 上次打开的类别 */
   category: string;
-  /** 模组的展示方式：列表 / 表格 / 树 */
+  /** 模组的展示方式：列表 / 表格 */
   modView: string;
+  /** 表格视图的列宽（列 key → 像素宽） */
+  modColWidths: Record<string, number>;
 }
 
 function isCategory(value: unknown): value is CategoryId {
@@ -66,8 +69,20 @@ export function useResourceView(data: ReturnType<typeof useResourceData>) {
   const initialCategory = ref<CategoryId>(DEFAULT_CATEGORY);
   /** 模组的展示方式（列表 / 表格 / 树） */
   const modView = ref<ModView>("list");
+  /** 表格视图的列宽（列 key → 像素宽；拖动即改，落盘做了防抖） */
+  const colWidths = ref<Record<string, number>>(defaultColWidths());
+  /**
+   * 表格的表头排序（正序 / 倒序 / 不排序）
+   *
+   * **不落盘**：用户本轮只要求列宽进 `gui_setting`；排序是"这一眼想看什么"，
+   * 属于临时视图状态，切实例 / 重开窗口都回到默认（modid 正序）。
+   */
+  const sort = ref<ModSort | null>(null);
   /** 当前类别（保存时要一起写回，和 order 是同一份偏好） */
   let lastCategory: CategoryId = DEFAULT_CATEGORY;
+
+  /** 拖列宽时的高频写盘节流：拖动过程只改内存，停手 400ms 才存一次 */
+  let widthSaveTimer: ReturnType<typeof setTimeout> | null = null;
 
   /**
    * 加载代次号
@@ -85,9 +100,16 @@ export function useResourceView(data: ReturnType<typeof useResourceData>) {
       order: order.value,
       category: lastCategory,
       modView: modView.value,
+      modColWidths: colWidths.value,
     };
     // 失败只提示、不回滚：偏好记不住不该打断使用
-    void setResourceView(uuid, value.order, value.category, value.modView).catch(() => { });
+    void setResourceView(
+      uuid,
+      value.order,
+      value.category,
+      value.modView,
+      value.modColWidths,
+    ).catch(() => { });
   }
 
   /** 读该实例的偏好（进入资源窗口 / 切换实例时调用） */
@@ -97,6 +119,8 @@ export function useResourceView(data: ReturnType<typeof useResourceData>) {
       // 没有实例：回到默认顺序与默认类别
       order.value = normalizeOrder([]);
       modView.value = "list";
+      colWidths.value = defaultColWidths();
+      sort.value = null;
       initialCategory.value = DEFAULT_CATEGORY;
       lastCategory = DEFAULT_CATEGORY;
       return;
@@ -106,13 +130,17 @@ export function useResourceView(data: ReturnType<typeof useResourceData>) {
     try {
       pref = await getResourceView(uuid);
     } catch {
-      pref = { order: [], category: "", modView: "" };
+      pref = { order: [], category: "", modView: "", modColWidths: {} };
     }
     // 慢的那一发回来时可能已经切到别的实例了：丢弃
     if (seq !== loadSeq) return;
 
     order.value = normalizeOrder(pref.order);
     modView.value = isModView(pref.modView) ? pref.modView : "list";
+    // 列宽：只认已知列 + 夹在合理范围（存过一半 / 存的是旧版本都能安全落地）
+    colWidths.value = normalizeColWidths(pref.modColWidths);
+    // 排序是临时状态，切实例就回到默认
+    sort.value = null;
     const category: CategoryId = isCategory(pref.category) ? pref.category : DEFAULT_CATEGORY;
     initialCategory.value = category;
     lastCategory = category;
@@ -136,13 +164,37 @@ export function useResourceView(data: ReturnType<typeof useResourceData>) {
     save();
   }
 
+  /**
+   * 记下拖出来的列宽（拖动过程高频调用 → **存盘防抖 400ms**）
+   *
+   * 内存里立刻生效（表格实时跟手），落盘等停手 —— 否则一次拖动会写几十次
+   * `gui_setting.json`（后端每次都要 load → 改 → 存回整份）。
+   */
+  function setColWidth(key: string, px: number) {
+    colWidths.value = normalizeColWidths({ ...colWidths.value, [key]: px });
+    if (widthSaveTimer) clearTimeout(widthSaveTimer);
+    widthSaveTimer = setTimeout(() => {
+      widthSaveTimer = null;
+      save();
+    }, 400);
+  }
+
+  /** 记下表头排序（**不落盘**，见 `sort` 的说明） */
+  function setSort(next: ModSort | null) {
+    sort.value = next;
+  }
+
   return {
     order,
     initialCategory,
     modView,
+    colWidths,
+    sort,
     load,
     rememberCategory,
     setOrder,
     setModView,
+    setColWidth,
+    setSort,
   };
 }

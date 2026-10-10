@@ -7,7 +7,7 @@ use std::{
 
 use mml_base::{
     archives::{ArchiveType, BaseArchive},
-    file_item::{FileHash, FileItemObj, LaterRun},
+    file_item::{FileItemObj, LaterRun},
     serialize_tools,
 };
 use mml_config::config_save;
@@ -15,10 +15,7 @@ use mml_names::{
     i18_items::error_type::{CoreResult, ErrorType, FileSystemErrorData},
     names, uuids,
 };
-use mml_net::{
-    curseforge_api,
-    modrinth_api::{self, version_obj::ModrinthVersionObj},
-};
+use mml_net::{curseforge_api, modrinth_api};
 use mml_sys::path_helper;
 use tokio_util::sync::CancellationToken;
 
@@ -27,6 +24,7 @@ use crate::{
     serverpack::serverpack_obj::{ServerArchiveItemObj, ServerItemObj, ServerPackObj},
 };
 
+pub mod plan;
 pub mod serverpack_obj;
 
 impl InstanceSettingObj {
@@ -90,35 +88,23 @@ impl InstanceSettingObj {
         let game_path = self.get_game_path();
 
         if let Some(old) = &old {
+            // 删什么由纯函数算（见 `serverpack::plan`），这里只负责执行
+            let plan = plan::plan_removals(old, &new_pack);
+
             // 删除已移除或已更换路径的文件（`file` 是游戏目录下的相对路径）
-            for item in &old.online_list {
+            for item in &plan.files {
                 if cancel.is_cancelled() {
                     return Err(ErrorType::TaskCancel);
                 }
-                let matched = new_pack
-                    .online_list
-                    .iter()
-                    .find(|n| mod_key(n) == mod_key(item));
-                match matched {
-                    // 旧包中已移除的文件
-                    None => delete_with_disabled(game_path.join(&item.file)),
-                    // 同一文件但路径改变，删除旧文件
-                    Some(n) if n.file != item.file => {
-                        delete_with_disabled(game_path.join(&item.file))
-                    }
-                    _ => {}
-                }
+                delete_with_disabled(game_path.join(&item.file));
             }
 
             // 删除已移除的配置文件（仅删除由该配置独享的目录）
-            for item in &old.archive_list {
+            for item in &plan.dirs {
                 if cancel.is_cancelled() {
                     return Err(ErrorType::TaskCancel);
                 }
-                let removed = !new_pack.archive_list.iter().any(|n| n.file == item.file);
-                if removed && item.delete_old && !item.dir.is_empty() {
-                    path_helper::move_to_trash(game_path.join(&item.dir))?;
-                }
+                path_helper::move_to_trash(game_path.join(&item.dir))?;
             }
         }
 
@@ -134,32 +120,29 @@ impl InstanceSettingObj {
             .collect();
         let url_map = resolve_download_urls(&need_resolve, &cancel).await;
 
+        // 下什么、从哪下、按什么哈希校验：同样由纯函数算
+        let plan = plan::plan_downloads(&new_pack, &url_map);
+
         let mut downloads: Vec<FileItemObj> = Vec::new();
         let mut archives: Vec<(&ServerArchiveItemObj, PathBuf)> = Vec::new();
 
-        for item in &new_pack.online_list {
-            let url = item
-                .url
-                .clone()
-                .filter(|u| !u.is_empty())
-                .or_else(|| item.fid.as_ref().and_then(|f| url_map.get(f).cloned()))
-                .unwrap_or_default();
+        for (item, url) in &plan.files {
             downloads.push(FileItemObj {
-                url,
+                url: url.clone(),
                 name: item.file.clone(),
                 file: game_path.join(&item.file),
-                hash: make_hash(&item.sha1, &item.sha256),
+                hash: plan::make_hash(&item.sha1, &item.sha256),
                 later: LaterRun::None,
             });
         }
 
-        for item in &new_pack.archive_list {
+        for (item, url) in &plan.archives {
             let temp = self.get_temp_path().join(&item.file);
             downloads.push(FileItemObj {
-                url: item.url.clone(),
+                url: url.clone(),
                 name: item.file.clone(),
                 file: temp.clone(),
-                hash: make_hash(&item.sha1, &item.sha256),
+                hash: plan::make_hash(&item.sha1, &item.sha256),
                 later: LaterRun::None,
             });
             archives.push((item, temp));
@@ -200,37 +183,6 @@ impl InstanceSettingObj {
     }
 }
 
-/// 模组身份标识：优先使用项目编号，否则回退到文件名
-///
-/// # 参数
-///
-/// - `item`: 在线文件信息
-///
-/// # 返回值
-///
-/// 返回身份标识字符串
-fn mod_key(item: &ServerItemObj) -> String {
-    item.pid.clone().unwrap_or_else(|| item.file.clone())
-}
-
-/// 根据校验值构建下载哈希
-///
-/// # 参数
-///
-/// - `sha1`: SHA1 校验值
-/// - `sha256`: SHA256 校验值
-///
-/// # 返回值
-///
-/// 返回对应的哈希类型（都缺失为 `FileHash::None`）
-fn make_hash(sha1: &Option<String>, sha256: &Option<String>) -> FileHash {
-    match (sha1, sha256) {
-        (Some(sha1), Some(sha256)) => FileHash::Sha1Sha256(sha1.clone(), sha256.clone()),
-        (Some(sha1), None) => FileHash::Sha1(sha1.clone()),
-        (None, Some(sha256)) => FileHash::Sha256(sha256.clone()),
-        (None, None) => FileHash::None,
-    }
-}
 
 /// 删除文件，若文件已被禁用（追加了 `.disable`/`.disabled` 后缀）则一并删除。
 ///
@@ -271,7 +223,7 @@ async fn resolve_download_urls(
     let mut curseforge: Vec<&ServerItemObj> = Vec::new();
     let mut modrinth: Vec<&ServerItemObj> = Vec::new();
     for item in items {
-        if is_curseforge(item) {
+        if plan::is_curseforge(item) {
             curseforge.push(item);
         } else {
             modrinth.push(item);
@@ -299,7 +251,7 @@ async fn resolve_download_urls(
     if !mo_ids.is_empty() {
         if let Ok(versions) = modrinth_api::get_versions(mo_ids).await {
             for version in versions {
-                if let Some(url) = modrinth_file_url(&version) {
+                if let Some(url) = plan::modrinth_file_url(&version) {
                     urls.insert(version.id, url);
                 }
             }
@@ -316,7 +268,7 @@ async fn resolve_download_urls(
         if urls.contains_key(fid) {
             continue;
         }
-        if is_curseforge(item) {
+        if plan::is_curseforge(item) {
             if let Ok(res) = curseforge_api::get_mod(pid, fid).await {
                 let mut data = res.data;
                 data.fix_download_url();
@@ -325,7 +277,7 @@ async fn resolve_download_urls(
                 }
             }
         } else if let Ok(version) = modrinth_api::get_version(pid, fid).await {
-            if let Some(url) = modrinth_file_url(&version) {
+            if let Some(url) = plan::modrinth_file_url(&version) {
                 urls.insert(fid.clone(), url);
             }
         }
@@ -334,39 +286,4 @@ async fn resolve_download_urls(
     urls
 }
 
-/// 判断文件来源：CurseForge 的项目/文件编号是纯数字，Modrinth 是 base62 字符串
-///
-/// # 参数
-///
-/// - `item`: 在线文件信息
-///
-/// # 返回值
-///
-/// 返回是否来自 CurseForge
-fn is_curseforge(item: &ServerItemObj) -> bool {
-    let Some(pid) = &item.pid else {
-        return item
-            .fid
-            .as_deref()
-            .map_or(false, |f| f.parse::<u64>().is_ok());
-    };
-    pid.parse::<u64>().is_ok()
-}
 
-/// 取 Modrinth 版本的主文件下载地址（无 primary 标记时取第一个）
-///
-/// # 参数
-///
-/// - `version`: Modrinth 版本信息
-///
-/// # 返回值
-///
-/// 返回下载地址；版本没有文件返回 `None`
-fn modrinth_file_url(version: &ModrinthVersionObj) -> Option<String> {
-    version
-        .files
-        .iter()
-        .find(|f| f.primary)
-        .or_else(|| version.files.first())
-        .map(|f| f.url.clone())
-}

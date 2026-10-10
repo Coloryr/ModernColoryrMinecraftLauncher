@@ -452,6 +452,75 @@
   gap: 12px;
 }
 
+/* 表格视图：分组是同一张表里的行，块之间不留缝。
+   外层**不滚**（滚的是白底里面那层 `.mod-table-scroll`）。
+
+   两点口径：
+   - `scrollbar-gutter: auto` 必须显式写：基础样式给 `.item-list` 加了
+     `scrollbar-gutter: stable`，它在 `overflow: hidden` 下照样预留 9px ——
+     这里不滚，滚动条位归里面的滚动容器（见 styles/scrollbar.css）；
+   - `margin-right: 26px` 抵掉 `.cat-content` 的 `-26px`，让白底与**窗口右边**留出
+     边距（用户口径：白底与右/下边框都要留边距）。底部同理不再抵 `.frame-body`
+     的 22px，于是白底距窗口下边 22px。26 / 22 与 WindowFrame.vue 的
+     `.frame-body { padding: 22px 26px }` 同源，那边改了这里要一起改。 */
+.resource-layout .item-list.mod-groups-table {
+  gap: 0;
+  overflow: hidden;
+  padding: 0;
+  scrollbar-gutter: auto;
+  margin-right: 26px;
+}
+
+/* 整张表共用**一块白底**（用户要求：不要一行一个白底）：白底 + 圆角 + 描边，
+   **自己不滚、也不带内边距** —— 左右内边距挪到了内容（`.mod-group-table`）身上，
+   上下呼吸位挪到滚动容器的 `padding-top`。这样滚动容器铺满卡片，
+   两条滚动条都**贴住白底的右边与下边**（否则会被 padding 顶开一段，用户报过两次）。 */
+.resource-layout .mod-table-panel {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 真正的滚动容器：铺满卡片（滚动条落在**白色底里面**、且贴住右边框与下边框）。
+   **不加内边距** —— 内容四边都贴着白底（用户口径：上/下/左/右都不留空）；
+   唯一例外是滚动条自身那 9px，那是浏览器画的，不占内容盒。 */
+.resource-layout .mod-table-scroll {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+/* 滚动条别压住白底的圆角：给滑块的**行程**留出圆角半径那么一段，
+   滑块就永远够不到上/下（竖条）与左/右（横条）那两个圆角。
+   10px 与上面 `.mod-table-panel` 的 `border-radius: 10px` 同源，改了要一起改。 */
+.resource-layout .mod-table-scroll::-webkit-scrollbar-track:vertical {
+  margin-block: 10px;
+}
+
+.resource-layout .mod-table-scroll::-webkit-scrollbar-track:horizontal {
+  margin-inline: 10px;
+}
+
+/* 分组块：**不加内边距** —— 内容四边都贴着白底（用户口径：左、上、右都不留空）。
+   右侧原来给过 32 / 8px：那是"滚到最右时内容与滚动条之间的空白"的来源
+   （padding 属于可滚动区域），所以直接归零。 */
+.resource-layout .mod-group-table {
+  padding: 0;
+}
+
+/* 表格视图里分组块贴着白底左边缘，`.mod-group.drop-target` 那条**向外**的描边会被
+   滚动容器裁掉（列表视图不贴边，所以只在这个视图里改成向内描）。 */
+.resource-layout .mod-groups-table .mod-group.drop-target {
+  outline-offset: -2px;
+}
+
 .resource-layout .mod-group {
   display: flex;
   flex-direction: column;
@@ -561,47 +630,6 @@
   white-space: nowrap;
 }
 
-/* 分组操作：悬停该行才浮出来 */
-.resource-layout .mod-group .group-acts {
-  margin-left: auto;
-  display: flex;
-  gap: 6px;
-  opacity: 0;
-  transition: opacity 0.12s;
-}
-
-.resource-layout .mod-group-head:hover .group-acts,
-.resource-layout .mod-group .group-acts:focus-within {
-  opacity: 1;
-}
-
-.resource-layout .group-act {
-  height: 24px;
-  padding: 0 10px;
-  border-radius: 7px;
-  border: 1px solid var(--border);
-  background: var(--bg-card);
-  color: var(--text-dim);
-  font-size: 11.5px;
-  font-family: inherit;
-  cursor: pointer;
-  transition: all 0.12s;
-}
-
-.resource-layout .group-act:hover:not(:disabled) {
-  color: var(--accent);
-  border-color: var(--accent);
-}
-
-.resource-layout .group-act.danger:hover:not(:disabled) {
-  color: var(--red);
-  border-color: var(--red);
-}
-
-.resource-layout .group-act:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
 
 .resource-layout .mod-group-body {
   display: flex;
@@ -679,6 +707,16 @@
   outline-offset: -1px;
 }
 
+/* 表格的行现在是**白底上的一格**（不再自带底色），所以选中 / 悬停要自己给底色：
+   选中 = 叠一层强调色；悬停 = 浅底，否则鼠标划过去只有勾选框会亮 */
+.resource-layout .mod-tr.mod-selected {
+  background-color: var(--accent-soft);
+}
+
+.resource-layout .mod-tr:hover {
+  background-color: var(--bg-hover);
+}
+
 /* ---------- 服务器列表的行 ----------
    整行可点：点哪一行，列表上方那张 MOTD 卡就换成哪一台（那把"当前选中"从多选里
    拆出来单独用，见 ServerPane）。选中观感与模组的右键选中一致 —— 内描边 + 叠一层
@@ -736,7 +774,7 @@
 
 /* 空分组那一行（表格视图）：提示文字跨掉分组名之后的全部列 */
 .resource-layout .mod-empty-tip {
-  grid-column: 3 / -1;
+  grid-column: 2 / -1;
   color: var(--text-dim);
   font-size: 12px;
 }
@@ -774,44 +812,43 @@
 /* ---------- 模组：表格视图 ---------- */
 
 .resource-layout .mod-table {
+  /* 列宽由 ModTable 的内联 style 给；这里只负责排布 */
   display: flex;
   flex-direction: column;
-  gap: 4px;
 }
 
-/* 表头行 + 数据行同一套栅格（16 列，与 ModTable 的列顺序一致）：
-   多选 | 分组名 | 启用 | 备注 | modid | 名字 | 版本 | 加载器类型 | 加载侧
-        | 下载源 | 项目编号 | 文件编号 | 路径 | 作者 | 网页链接 | 操作
-   （改列数时三处要一起改：这段注释、下面的 grid-template-columns、
-     ModTable.vue 的表头与数据行 —— 数量对不上整张表会错位）
+/* 分组块跟着表格宽度长：横向滚动时行底色要铺满整行，而不是只铺窗口那么宽 */
+.resource-layout .mod-group-table {
+  width: max-content;
+  min-width: 100%;
+}
 
-   窄列给固定宽、宽列给 fr：这张表列多，容器宽度有限，全部 minmax 会让每列都挤成省略号。
-   总宽超出时由外层 .item-list 横向不滚动、靠列内的 ellipsis 收尾（见 .mod-cell）。 */
+/* 表头行 + 数据行同一套栅格：**列宽由 ModTable 的内联 style 给**
+   （`COLS` 一处定义 + 用户拖出来的宽度，见 ModTable.vue 的 `gridTemplate`）。
+   这里不再写 grid-template-columns，也不依赖 subgrid —— 模板是**全 px** 的，
+   每行各自算出来的轨道必然一样，列自然对齐。
+
+   窄列给固定宽：这张表列多，总宽超出时由**白底内部**横向滚动
+   （见 `.mod-table-panel` 的 `overflow: auto`），不再把列挤成省略号。 */
 .resource-layout .mod-tr {
   display: grid;
-  /* 第一列是多选勾选框（24px，与列表视图同一套交互） */
-  grid-template-columns:
-    24px 132px 40px minmax(70px, 0.8fr) minmax(90px, 1fr) minmax(110px, 1.2fr) 78px 92px 64px 84px 96px 92px minmax(150px, 1.6fr) 100px minmax(120px, 1.2fr) auto;
   align-items: center;
   gap: 8px;
   padding: 7px 10px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background-color: var(--row-bg);
-  background-image: linear-gradient(var(--row-tint), var(--row-tint));
   font-size: 12px;
+}
+
+/* 行之间的淡分隔线（白底上一格格地读） */
+.resource-layout .mod-tr + .mod-tr {
+  border-top: 1px solid var(--border);
 }
 
 /* 内置模组的行：底色压暗一档 + 缩进（--row-depth 由 ModTable 按层级给） */
 .resource-layout .mod-tr.mod-nested {
-  --row-bg: var(--bg-side);
-  border-style: dashed;
+  background: var(--bg-side);
 }
 
-/* 名字列里的缩进：内置模组比父行往里收一级 */
-.resource-layout .mod-name-cell.mod-indent {
-  padding-left: calc(var(--row-depth, 0) * 16px);
-}
+/* 名字列：缩进不在这里做 —— 树列的"缩进 + 箭头"在最左边（见 ModTable 的树列注释） */
 
 /* 分组名那一列：折叠箭头 + 名字。第一列是"这一行属于哪个组"，
    只在每个分组的首行出现（表格里一片连续的组名看着像重复数据） */
@@ -859,12 +896,13 @@
   font-size: 11px;
 }
 
+/* 表头：白底内的一行。**不吸顶** —— 滚动容器现在是外层 `.item-list`，
+   吸顶的表头会停在白底上边缘之外（看着像脱离了卡片）。
+   表头与第一行之间的分隔线由 `.mod-tr + .mod-tr` 给。 */
 .resource-layout .mod-tr.mod-th {
-  position: sticky;
-  top: 0;
-  z-index: 1;
+  position: static;
   padding: 0 10px;
-  background: var(--bg-card);
+  background: transparent;
   border-color: transparent;
 }
 
@@ -874,18 +912,53 @@
   display: none;
 }
 
-/* 分组模式下每组各有一张表：表头再做「浮起来的条」就成三层框了，
-   所以这里只留列名（不吸顶、不铺底） */
-.resource-layout .mod-groups .mod-tr.mod-th {
-  position: static;
-  background: transparent;
-  padding-left: 2px;
+/* 一级节点：分组行。比模组行重一档，白底上压一层浅底，把它读成"标题行" */
+.resource-layout .mod-tr.mod-group-row {
+  background: var(--bg-side);
+  font-weight: 600;
 }
+
+/* 备注格：**双击原地书写**（提示走 title，见 ModTable）。
+   `align-self: stretch` 是必须的：行是 `align-items: center`，**空单元格的高度会是 0** ——
+   备注为空时那一格根本没有可点的面积，双击只会落在行背景上，`@dblclick` 不触发
+   （用户报的"双击备注写不进内容"就是这个）。撑满行高后整列都是热区。 */
+.resource-layout .mod-note-cell {
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  cursor: text;
+}
+
+/* 书写中：**不画任何框**（用户口径："不要显示输入框，就是这个圆角框"）——
+   单元格保持表格文字的原样，只是能直接写；底色 / 描边 / 圆角一律不给。
+
+   但**必须切成 `display: block`**：`display: flex` 时文字落在匿名 flex 项里，
+   空内容连行盒都没有 → **闪烁光标不出现**（用户报的"光标不显示"就是这个）。
+   `align-self: center` 让这一格按一行文字的高度垂直居中，与其它格观感一致。 */
+.resource-layout .mod-note-cell.mod-note-editing {
+  display: block;
+  align-self: center;
+  caret-color: var(--accent);
+  /* 浏览器会给可编辑元素画一圈默认聚焦外框（看着就是个黑框）—— 去掉，
+     只留闪烁光标（用户口径："只显示输入，不显示黑色框"）。 */
+  outline: none;
+}
+
+/* ⚠️ 这里原来有一条 `.mod-groups .mod-tr.mod-th { position: static; background: transparent;
+   padding-left: 2px }` —— 那是给早期"每个分组各一张小表"的视图写的。现在表格视图的容器
+   也叫 `.mod-groups`（`.item-list.mod-groups.mod-groups-table`），于是它**误命中新表头**：
+   表头左内边距被压成 2px、而数据行是 10px → 整条表头相对内容**左移 8px**（越往右、轨道越窄
+   越明显，用户报的"modid 右边的列开始偏移"就是这个）。该视图早已并入列表，规则已删除；
+   表头的内边距与吸顶样式统一由上面的 `.mod-tr.mod-th` 给。 */
 
 .resource-layout .mod-th-cell {
   display: flex;
   align-items: center;
   gap: 4px;
+  /* 表头也是栅格项：不给 `min-width: 0` 的话，列名本身会把轨道撑宽 */
+  min-width: 0;
+  /* 拖宽把手要绝对定位在这一格右边缘 */
+  position: relative;
   height: 28px;
   padding: 0;
   border: none;
@@ -895,17 +968,73 @@
   font-weight: 600;
   font-family: inherit;
   text-align: left;
+  cursor: default;
+}
+
+/* 可排序的列：整格是一个按钮（点一下切正序 / 倒序 / 不排序） */
+.resource-layout .mod-th-sort {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
   cursor: pointer;
+}
+
+.resource-layout .mod-th-sort:hover {
+  color: var(--accent);
+}
+
+/* 排序标记（↑ 正序 / ↓ 倒序；不排序时不画） */
+.resource-layout .mod-th-mark {
+  color: var(--accent);
+  font-size: 11px;
+}
+
+/* 右边缘的拖宽把手：平时就画一条**看得见的竖线**（用户要求：竖线要显示出来，
+   不然不知道哪里能拖），悬停时变强调色、加粗到 2px */
+.resource-layout .mod-th-resize {
+  position: absolute;
+  top: 3px;
+  right: -5px;
+  bottom: 3px;
+  width: 9px;
+  cursor: col-resize;
+}
+
+.resource-layout .mod-th-resize::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 4px;
+  width: 1px;
+  background: var(--border);
+}
+
+.resource-layout .mod-th-resize:hover::before {
+  left: 3px;
+  width: 2px;
+  background: var(--accent);
+}
+
+/* 居中的表头（勾选框那列）：`gap: 0` 一并去掉 —— 表头是 flex，`gap` 会把
+   文字往左挤一点，看着就是"离左右两条线不一样远" */
+.resource-layout .mod-th-center {
+  justify-content: center;
+  gap: 0;
+  text-align: center;
 }
 
 .resource-layout .mod-th-cell:hover {
   color: var(--accent);
 }
 
-.resource-layout .mod-th-actions {
-  justify-content: flex-end;
-  cursor: default;
-}
+/* （"操作"列已按用户要求去掉，`.mod-th-actions` 的规则一并删除） */
 
 .resource-layout .mod-cell {
   min-width: 0;
@@ -948,17 +1077,6 @@
   text-overflow: ellipsis;
 }
 
-.resource-layout .mod-actions {
-  display: flex;
-  gap: 6px;
-  flex-shrink: 0;
-}
-
-/* 行操作容器：接住 pointerdown（阻止起拖拽），内部仍是一排按钮 */
-.resource-layout .item-actions .acts-stop {
-  display: flex;
-  gap: 6px;
-}
 
 /* ---------- 模组：内置模组（jar-in-jar）的展开 ----------
    树形视图已并入列表（见 mod/ModList.vue）：层级就展开在同一列里，
@@ -994,6 +1112,11 @@
   flex-shrink: 0;
 }
 
+/* 树列的缩进占位：宽度由 ModTable 按层级内联给（16px 一级） */
+.resource-layout .mod-tree-indent {
+  flex-shrink: 0;
+}
+
 /* ---------- 数据包子页 ---------- */
 
 /* 存档下拉：外观全部走 .field-select（挂两个类，见 DatapackPane），
@@ -1002,4 +1125,65 @@
   padding: 8px 28px 8px 10px;
   font-size: 13px;
   min-height: 0;
+}
+
+/* ---------- 分组右键菜单（ModGroupMenu.vue）----------
+   位置由组件用 `position: fixed` 钉在点击处，这里只管外观。 */
+.resource-layout .mod-ctx-menu {
+  position: fixed;
+  z-index: 40;
+  min-width: 150px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-raised);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.28);
+}
+
+/* 批量菜单顶部的"已选 n 项"（说明动作作用在这一批上） */
+.resource-layout .mod-ctx-menu-title {
+  display: block;
+  padding: 4px 10px 6px;
+  color: var(--text-dim);
+  font-size: 11.5px;
+}
+.resource-layout .mod-ctx-menu-item {
+  display: block;
+  width: 100%;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font-size: 12.5px;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.resource-layout .mod-ctx-menu-item:hover:not(:disabled) {
+  background: var(--bg-hover);
+}
+
+.resource-layout .mod-ctx-menu-item.danger:hover:not(:disabled) {
+  color: var(--red);
+}
+
+.resource-layout .mod-ctx-menu-item:disabled {
+  color: var(--text-dim);
+  cursor: default;
+  opacity: 0.55;
+}
+
+.resource-layout .mod-ctx-menu-sep {
+  display: block;
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--border);
+}
+
+/* Shift 整段选择的**锚点行**：左侧一道强调色竖条，让人看得出"整段从这一项开始"。
+   用 inset 阴影而不是 border —— 不改变行高与列宽，表格不会因此错位。 */
+.resource-layout .mod-anchor {
+  box-shadow: inset 3px 0 0 0 var(--accent);
 }

@@ -25,6 +25,7 @@ import {
   type ModViewEmits,
   type ModViewProps,
 } from "../../types";
+import { modSelectKey } from "../../types";
 
 const props = withDefaults(defineProps<ModViewProps & { depth?: number }>(), { depth: 0 });
 const emit = defineEmits<ModViewEmits>();
@@ -67,18 +68,20 @@ function keyOf(item: ModViewProps["items"][number]): string {
   <template v-for="item in rows" :key="keyOf(item)">
     <ResourceRow :icon="item.icon" :name="item.name || item.file" :depth="depth" :class="{
       'mod-dragging': !!item.sha1 && draggingKey === item.sha1,
-      'mod-selected': !!item.sha1 && selectedKeys.has(item.sha1),
+      'mod-selected': selectedKeys.has(modSelectKey(item)),
+      'mod-anchor': modSelectKey(item) === anchorKey,
       'mod-selecting': selectedKeys.size > 0,
     }" @pointerdown="depth === 0 ? emit('drag-start', { event: $event, item }) : undefined"
-      @contextmenu.prevent="depth === 0 ? emit('select', item) : undefined">
+      @contextmenu.prevent="depth === 0 ? emit('item-menu', { event: $event, item }) : undefined"
+      @click="depth === 0 ? emit('row-click', { event: $event, item }) : undefined">
       <!--
         多选勾选框（最左边）。只在顶层且拿得到 SHA1 的行上给 —— 内置模组没有 SHA1，
         选中了也没法批量操作，给个勾选框只会误导。
         内置行留一个等宽占位，父行与子行的名字才不会错位。
       -->
       <template #select>
-        <input v-if="depth === 0 && item.sha1" type="checkbox" class="mod-select" :checked="selectedKeys.has(item.sha1)"
-          @pointerdown.stop @change.stop="emit('select', item)" />
+        <input v-if="depth === 0" type="checkbox" class="mod-select" :checked="selectedKeys.has(modSelectKey(item))"
+          @pointerdown.stop @change.stop="emit('select', item)" @click.stop />
         <span v-else class="mod-select-gap" />
       </template>
       <!-- 展开箭头：只有带内置模组的行才有（内置行自己没有下级）；默认收起 -->
@@ -123,23 +126,9 @@ function keyOf(item: ModViewProps["items"][number]): string {
         <span>{{ modSub(item) }}</span>
       </template>
 
-      <!-- 只有顶层条目（真实文件）才有操作；按钮上不许起拖拽 -->
-      <template v-if="depth === 0" #actions>
-        <span class="acts-stop" @pointerdown.stop>
-          <button class="mini-btn" :disabled="busy" @click.stop="emit('toggle', item)">
-            {{ item.disable ? t("resource.enable") : t("resource.disable") }}
-          </button>
-          <button class="mini-btn" :class="{ on: !!item.note }" :disabled="busy" @click.stop="emit('note', item)">
-            {{ t("resource.modNote") }}
-          </button>
-          <button class="mini-btn" :disabled="busy" @click.stop="emit('open-folder', item)">
-            {{ t("resource.openFolder") }}
-          </button>
-          <button class="mini-btn danger" :disabled="busy" @click.stop="emit('remove', item)">
-            {{ t("resource.delete") }}
-          </button>
-        </span>
-      </template>
+      <!-- 行操作（启用/禁用、备注、打开文件夹、删除）**不再做成悬浮按钮**：
+           统一走右键菜单（见 ModItemMenu.vue），与表格视图同一个入口，
+           也让行尾不再被一排按钮占掉宽度。 -->
     </ResourceRow>
 
     <!-- 内置模组：递归展开下一层（默认展开，跟着父条目的折叠状态） -->

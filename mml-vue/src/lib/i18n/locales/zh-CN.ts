@@ -263,6 +263,8 @@ export default {
   "resource.colFileId": "文件编号",
   "resource.colPath": "路径",
   "resource.colUrl": "网页链接",
+  "resource.colSortTip": "点击切换：正序 / 倒序 / 不排序",
+  "resource.colResizeTip": "拖动调整列宽",
   // 表格列里的枚举值（后端出稳定英文名，这里翻成中文）
   "resource.side.client": "客户端",
   "resource.side.server": "服务端",
@@ -299,7 +301,15 @@ export default {
   // 一个自建分组都没有时的空态（注意与上面的「未分组」不是一回事：
   // 那个是"这个模组不属于任何分组"，这个是"你还没建过分组"）
   "resource.groupNoGroups": "无分组",
-  "resource.groupEmptyHint": "该分组没有模组，把模组拖上来即可",
+  "resource.groupEmptyHint": "该分组没有模组",
+
+
+  "resource.enableAll": "启用所有",
+  "resource.disableAll": "禁用所有",
+  "resource.moveGroupItems": "转移内容",
+  "resource.deleteGroupMods": "删除所有模组",
+  "resource.deleteGroupModsConfirm": "确定删除「{name}」里的 {n} 个模组？文件会进回收站。",
+  "resource.moveGroupTitle": "把「{name}」里的模组移到…",
   // 右键多选 + 顶栏批量操作
   "resource.selectedCount": "已选 {n} 项",
   "resource.clearSelection": "取消选择",
@@ -329,6 +339,7 @@ export default {
   "resource.modFail": "读取失败",
   "resource.modCore": "核心",
   "resource.modNote": "备注",
+  "resource.modNoteDoubleClick": "双击编辑备注",
   "resource.modNoteTitle": "模组备注",
   "resource.modNotePlaceholder": "写点自己的说明，比如为什么装它、要不要更新",
   "resource.modNoteClear": "清空备注",

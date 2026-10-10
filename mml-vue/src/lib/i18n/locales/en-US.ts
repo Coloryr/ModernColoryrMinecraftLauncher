@@ -263,6 +263,8 @@ export default {
   "resource.colFileId": "File ID",
   "resource.colPath": "Path",
   "resource.colUrl": "Web link",
+  "resource.colSortTip": "Click to cycle: ascending / descending / no sorting",
+  "resource.colResizeTip": "Drag to resize column",
   // Enum values inside the columns (backend emits stable names; translated here)
   "resource.side.client": "Client",
   "resource.side.server": "Server",
@@ -298,7 +300,15 @@ export default {
   "resource.groupPlaceholder": "Enter a group name",
   // Empty state when no custom groups exist yet (not the same as "Ungrouped" above)
   "resource.groupNoGroups": "No groups",
-  "resource.groupEmptyHint": "This group has no mods — drag mods onto it",
+  "resource.groupEmptyHint": "This group has no mods",
+
+
+  "resource.enableAll": "Enable all",
+  "resource.disableAll": "Disable all",
+  "resource.moveGroupItems": "Move contents",
+  "resource.deleteGroupMods": "Delete all mods",
+  "resource.deleteGroupModsConfirm": "Delete all {n} mods in {name}? Files go to the recycle bin.",
+  "resource.moveGroupTitle": "Move mods in {name} to…",
   // Right-click multi-select + batch actions in the header
   "resource.selectedCount": "{n} selected",
   "resource.clearSelection": "Clear selection",
@@ -328,6 +338,7 @@ export default {
   "resource.modFail": "Failed to read",
   "resource.modCore": "Core",
   "resource.modNote": "Note",
+  "resource.modNoteDoubleClick": "Double-click to edit note",
   "resource.modNoteTitle": "Mod note",
   "resource.modNotePlaceholder": "Your own note — why it is installed, whether it needs an update…",
   "resource.modNoteClear": "Clear note",

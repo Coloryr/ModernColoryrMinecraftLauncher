@@ -199,7 +199,7 @@ export const commands = {
     serverUpdate: (uuid: string, name: string, ip: string, newName: string, newIp: string, acceptTextures: boolean) => invoke<void>("resource_server_update", { uuid, name, ip, newName, newIp, acceptTextures }),
     shaderSet: (uuid: string, file: string | null) => invoke<void>("resource_shader_set", { uuid, file }),
     viewGet: (uuid: string) => invoke<ResourceViewDto>("resource_view_get", { uuid }),
-    viewSet: (uuid: string, order: string[], category: string, modView: string) => invoke<void>("resource_view_set", { uuid, order, category, modView }),
+    viewSet: (uuid: string, order: string[], category: string, modView: string, modColWidths: Record<string, number>) => invoke<void>("resource_view_set", { uuid, order, category, modView, modColWidths }),
   },
   settings: {
     addJava: (name: string | null, path: string) => invoke<JavaInfoDto>("settings_add_java", { name, path }),
@@ -859,6 +859,7 @@ export type ResourceViewDto = {
   order: string[],
   category: string,
   modView: string,
+  modColWidths: Record<string, number>,
 };
 
 export type ModRenameDto = {

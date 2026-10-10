@@ -1,5 +1,7 @@
 //! 资源管理窗口 DTO —— 实例的模组 / 材质包 / 存档 / 截图 / 服务器 / 光影包 / 结构 / 数据包列表。
 
+use std::collections::HashMap;
+
 use serde::Serialize;
 
 /// 模组条目
@@ -104,6 +106,10 @@ pub struct ResourceViewDto {
     pub category: String,
     /// 模组的展示方式：list / table / tree（空串 = 没记过）
     pub mod_view: String,
+    /// 表格视图的列宽（列 key → 像素宽；空对象 = 没改过，前端用默认宽度）
+    ///
+    /// 用裸 `HashMap`：IPC 生成器只认裸名（`std::collections::HashMap` 会被原样写进 TS）。
+    pub mod_col_widths: HashMap<String, u32>,
 }
 
 /// 启用 / 禁用模组之后的**新身份**

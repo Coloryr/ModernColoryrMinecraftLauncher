@@ -6,6 +6,8 @@
 //! **不做成前端本地存储**：换个实例就该换一套，而本地存储是"每台机器一份"，
 //! 两处口径不同会出现"切了实例顺序却没变"。
 
+use std::collections::HashMap;
+
 use crate::dtos::ResourceViewDto;
 
 use super::parse_instance;
@@ -24,6 +26,7 @@ pub fn resource_view_get(uuid: String) -> Result<ResourceViewDto, String> {
         order: view.resource_order,
         category: view.resource_category,
         mod_view: view.resource_mod_view,
+        mod_col_widths: view.resource_mod_col_widths,
     })
 }
 
@@ -35,6 +38,7 @@ pub fn resource_view_set(
     order: Vec<String>,
     category: String,
     mod_view: String,
+    mod_col_widths: HashMap<String, u32>,
 ) -> Result<(), String> {
     let instance = parse_instance(&uuid)?;
 
@@ -46,6 +50,7 @@ pub fn resource_view_set(
     setting.view.resource_order = order;
     setting.view.resource_category = category;
     setting.view.resource_mod_view = mod_view;
+    setting.view.resource_mod_col_widths = mod_col_widths;
     crate::gui_setting::save(&game, &setting);
 
     Ok(())
